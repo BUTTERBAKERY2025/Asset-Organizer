@@ -57,3 +57,72 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+@media print {
+  @page {
+    margin: 1cm;
+    size: A4 portrait;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Hide sidebar and non-printable elements */
+  aside, 
+  button, 
+  input, 
+  nav,
+  [role="tablist"],
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset main content layout */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  div[class*="flex"] {
+    display: block !important;
+  }
+
+  /* Ensure cards break properly */
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Custom print styling for tables */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+    text-align: right !important;
+    color: black !important;
+  }
+
+  th {
+    background-color: #f3f3f3 !important;
+    font-weight: bold !important;
+  }
+
+  /* Hide card borders/shadows but keep content */
+  .shadow-sm, .ring-1 {
+    box-shadow: none !important;
+    border: none !important;
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-shadow: 0 0 #0000;
+    --tw-shadow-colored: 0 0 #0000;
+  }
+}
