@@ -41,6 +41,59 @@ export default function InventoryPage() {
     return hasMatchingItems || category.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  const InventoryList = () => (
+    <>
+      {currentBranch.inventory.length === 0 ? (
+        <div className="text-center py-20 bg-muted/20 rounded-lg border border-dashed border-muted-foreground/20">
+          <p className="text-muted-foreground text-lg">لا توجد بيانات متاحة لهذا الفرع حالياً</p>
+        </div>
+      ) : (
+        filteredCategories.map((category) => (
+          <Card key={category} className="overflow-hidden border-none shadow-sm ring-1 ring-border/50">
+            <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl text-primary font-bold">{category}</CardTitle>
+                <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
+                  {groupedInventory[category].length} عنصر
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-right w-[80px]">#</TableHead>
+                    <TableHead className="text-right">البيان / اسم الأصل</TableHead>
+                    <TableHead className="text-right w-[150px]">الكمية</TableHead>
+                    <TableHead className="text-right w-[150px]">الوحدة</TableHead>
+                    <TableHead className="text-right">ملاحظات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupedInventory[category]
+                    .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || category.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map((item, index) => (
+                    <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
+                      <TableCell className="font-medium text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell className="font-semibold text-foreground/90">{item.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-bold min-w-[3rem] justify-center">
+                          {item.quantity}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{item.unit}</TableCell>
+                      <TableCell className="text-muted-foreground italic text-sm">{item.notes || "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </>
+  );
+
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
@@ -83,69 +136,11 @@ export default function InventoryPage() {
           </div>
 
           <TabsContent value="medina" className="mt-6 space-y-8">
-            {currentBranch.inventory.length === 0 ? (
-              <div className="text-center py-20 bg-muted/20 rounded-lg border border-dashed border-muted-foreground/20">
-                <p className="text-muted-foreground text-lg">لا توجد بيانات متاحة لهذا الفرع حالياً</p>
-              </div>
-            ) : (
-              filteredCategories.map((category) => (
-                <Card key={category} className="overflow-hidden border-none shadow-sm ring-1 ring-border/50">
-                  <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xl text-primary font-bold">{category}</CardTitle>
-                      <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
-                        {groupedInventory[category].length} عنصر
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader className="bg-muted/30">
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="text-right w-[80px]">#</TableHead>
-                          <TableHead className="text-right">البيان / اسم الأصل</TableHead>
-                          <TableHead className="text-right w-[150px]">الكمية</TableHead>
-                          <TableHead className="text-right w-[150px]">الوحدة</TableHead>
-                          <TableHead className="text-right">ملاحظات</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {groupedInventory[category]
-                          .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || category.toLowerCase().includes(searchQuery.toLowerCase()))
-                          .map((item, index) => (
-                          <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
-                            <TableCell className="font-medium text-muted-foreground">{index + 1}</TableCell>
-                            <TableCell className="font-semibold text-foreground/90">{item.name}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="font-bold min-w-[3rem] justify-center">
-                                {item.quantity}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">{item.unit}</TableCell>
-                            <TableCell className="text-muted-foreground italic text-sm">{item.notes || "-"}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              ))
-            )}
+            <InventoryList />
           </TabsContent>
 
-          <TabsContent value="tabuk" className="mt-6">
-             <div className="flex flex-col items-center justify-center py-24 bg-card rounded-lg border border-dashed border-muted">
-                <div className="bg-muted/50 p-6 rounded-full mb-6">
-                  <FileText className="w-12 h-12 text-muted-foreground/50" />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">بيانات فرع تبوك غير متوفرة</h3>
-                <p className="text-muted-foreground max-w-md text-center mb-8">
-                  لم نتمكن من قراءة ملف بيانات فرع تبوك. يرجى تزويدنا بالبيانات بتنسيق نصي لإضافتها للنظام.
-                </p>
-                <Button>
-                  رفع ملف البيانات
-                </Button>
-             </div>
+          <TabsContent value="tabuk" className="mt-6 space-y-8">
+            <InventoryList />
           </TabsContent>
         </Tabs>
       </div>
