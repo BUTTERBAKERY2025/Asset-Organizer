@@ -13,9 +13,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Download, Printer, Filter, FileText } from "lucide-react";
+import { Search, Download, Printer, Filter, FileText, CheckCircle2, AlertTriangle, XCircle, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
+import { cn } from "@/lib/utils";
 
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,6 +54,8 @@ export default function InventoryPage() {
       "اسم الصنف": item.name,
       "الكمية": item.quantity,
       "الوحدة": item.unit,
+      "الحالة": getStatusLabel(item.status),
+      "آخر فحص": item.lastCheck || "-",
       "ملاحظات": item.notes || ""
     }));
 
@@ -64,6 +67,8 @@ export default function InventoryPage() {
       {wch: 40}, // Name
       {wch: 10}, // Quantity
       {wch: 10}, // Unit
+      {wch: 15}, // Status
+      {wch: 15}, // Last Check
       {wch: 30}, // Notes
     ];
     ws['!cols'] = wscols;
@@ -77,6 +82,36 @@ export default function InventoryPage() {
     
     XLSX.writeFile(wb, fileName);
   };
+
+  const getStatusLabel = (status?: string) => {
+    switch(status) {
+      case "good": return "جيد";
+      case "maintenance": return "صيانة";
+      case "damaged": return "تالف";
+      case "missing": return "مفقود";
+      default: return "غير محدد";
+    }
+  };
+
+  const getStatusBadge = (status?: string) => {
+    switch(status) {
+      case "good": 
+        return <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200 gap-1"><CheckCircle2 className="w-3 h-3" /> جيد</Badge>;
+      case "maintenance": 
+        return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200 gap-1"><AlertTriangle className="w-3 h-3" /> صيانة</Badge>;
+      case "damaged": 
+        return <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 gap-1"><XCircle className="w-3 h-3" /> تالف</Badge>;
+      case "missing": 
+        return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 gap-1"><HelpCircle className="w-3 h-3" /> مفقود</Badge>;
+      default: 
+        return <Badge variant="outline" className="gap-1">غير محدد</Badge>;
+    }
+  };
+
+  // Calculate stats
+  const totalItems = currentBranch.inventory.reduce((acc, item) => acc + item.quantity, 0);
+  const totalCategories = Object.keys(groupedInventory).length;
+  const maintenanceItems = currentBranch.inventory.filter(i => i.status === "maintenance").length;
 
   const InventoryList = () => (
     <>
@@ -99,10 +134,11 @@ export default function InventoryPage() {
               <Table>
                 <TableHeader className="bg-muted/30 print:bg-transparent">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-right w-[80px] print:text-black font-bold">#</TableHead>
+                    <TableHead className="text-right w-[60px] print:text-black font-bold">#</TableHead>
                     <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
-                    <TableHead className="text-right w-[150px] print:text-black font-bold">الكمية</TableHead>
-                    <TableHead className="text-right w-[150px] print:text-black font-bold">الوحدة</TableHead>
+                    <TableHead className="text-right w-[100px] print:text-black font-bold">الكمية</TableHead>
+                    <TableHead className="text-right w-[100px] print:text-black font-bold">الوحدة</TableHead>
+                    <TableHead className="text-right w-[120px] print:text-black font-bold">الحالة</TableHead>
                     <TableHead className="text-right print:text-black font-bold">ملاحظات</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -112,13 +148,20 @@ export default function InventoryPage() {
                     .map((item, index) => (
                     <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black">
                       <TableCell className="font-medium text-muted-foreground print:text-black">{index + 1}</TableCell>
-                      <TableCell className="font-semibold text-foreground/90 print:text-black">{item.name}</TableCell>
+                      <TableCell className="font-semibold text-foreground/90 print:text-black">
+                        {item.name}
+                        {item.lastCheck && <div className="text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-bold min-w-[3rem] justify-center print:border-black print:text-black">
                           {item.quantity}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground print:text-black">{item.unit}</TableCell>
+                      <TableCell className="print:text-black">
+                        <div className="print:hidden">{getStatusBadge(item.status)}</div>
+                        <div className="hidden print:block">{getStatusLabel(item.status)}</div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground italic text-sm print:text-black">{item.notes || "-"}</TableCell>
                     </TableRow>
                   ))}
@@ -151,11 +194,37 @@ export default function InventoryPage() {
           </div>
         </div>
 
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+          <Card className="bg-primary/5 border-primary/20">
+            <CardHeader className="pb-2">
+              <CardDescription>إجمالي الأصول</CardDescription>
+              <CardTitle className="text-3xl text-primary">{totalItems}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card className="bg-card">
+            <CardHeader className="pb-2">
+              <CardDescription>عدد الفئات</CardDescription>
+              <CardTitle className="text-3xl">{totalCategories}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card className={cn("bg-card", maintenanceItems > 0 && "bg-orange-50 border-orange-200")}>
+            <CardHeader className="pb-2">
+              <CardDescription>تحتاج صيانة</CardDescription>
+              <CardTitle className={cn("text-3xl", maintenanceItems > 0 && "text-orange-600")}>{maintenanceItems}</CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+
         {/* Print Header */}
         <div className="hidden print:flex flex-col items-center mb-8 border-b-2 border-black pb-4">
           <h1 className="text-3xl font-bold mb-2">Butter Bakery</h1>
           <h2 className="text-xl">جرد الأصول والمعدات - {currentBranch.name}</h2>
           <p className="text-sm mt-2">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
+          <div className="flex gap-8 mt-4 text-sm border-t border-black pt-2 w-full justify-center">
+             <span>إجمالي الأصول: {totalItems}</span>
+             <span>عدد الفئات: {totalCategories}</span>
+          </div>
         </div>
 
         <Tabs defaultValue="medina" className="w-full" onValueChange={setActiveBranch} value={activeBranch}>
