@@ -48,7 +48,7 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "b-16", name: "بتشر مقاس 450", quantity: 3, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-17", name: "بتشر مقاس 300", quantity: 2, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-18", name: "بتشر مقاس 600", quantity: 2, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-19", name: "صانعة ثلج ميجل", quantity: 1, unit: "حبة", category: "باريستا", status: "maintenance", notes: "تحتاج صيانة دورية", lastCheck: "2024-01-10" },
+      { id: "b-19", name: "صانعة ثلج ميجل", quantity: 1, unit: "حبة", category: "باريستا", status: "good", lastCheck: "2024-01-10" },
       { id: "b-20", name: "ميزان شحن", quantity: 4, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-21", name: "سيرفر مع القمع", quantity: 5, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-22", name: "كاتل كهربائي 1 لتر", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },

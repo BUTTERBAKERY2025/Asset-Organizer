@@ -195,7 +195,7 @@ export default function InventoryPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="pb-2">
               <CardDescription>إجمالي الأصول</CardDescription>
@@ -206,12 +206,6 @@ export default function InventoryPage() {
             <CardHeader className="pb-2">
               <CardDescription>عدد الفئات</CardDescription>
               <CardTitle className="text-3xl">{totalCategories}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card className={cn("bg-card", maintenanceItems > 0 && "bg-orange-50 border-orange-200")}>
-            <CardHeader className="pb-2">
-              <CardDescription>تحتاج صيانة</CardDescription>
-              <CardTitle className={cn("text-3xl", maintenanceItems > 0 && "text-orange-600")}>{maintenanceItems}</CardTitle>
             </CardHeader>
           </Card>
         </div>
