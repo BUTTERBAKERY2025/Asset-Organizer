@@ -40,7 +40,7 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "b-8", name: "طاحونة Mahlkonig (E80)", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 10450 },
       { id: "b-9", name: "سخان مياه 20 لتر (Johny Samovar)", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 1600 },
       { id: "b-10", name: "مكينة فيتكو (Fetco)", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 9539.13 },
-      { id: "b-11", name: "حافظة قهوه 5 لتر", quantity: 4, unit: "حبة", category: "باريستا", status: "good", price: 1800 },
+      { id: "b-11", name: "حافظة قهوه 5 لتر (L4D-10)", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 1800 },
       { id: "b-12", name: "حافظه قهوه 2.5 لتر (Airpot)", quantity: 2, unit: "حبة", category: "باريستا", status: "good", price: 460 },
       { id: "b-13", name: "حافظه قهوه 4.5", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-14", name: "مكينة برتقال فروكسول صغير", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 5652.17 },
