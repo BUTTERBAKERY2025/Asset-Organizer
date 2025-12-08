@@ -62,6 +62,8 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "b-30", name: "طابعة كاشير", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-31", name: "محطة قهوة مع ترامس (Koz Tree + Thermos)", quantity: 1, unit: "مجموعة", category: "باريستا", status: "good", price: 30000, notes: "عدد 2 كوز تري + 4 ترامس 5 لتر" },
 
+      { id: "b-32", name: "طفريات خشب (48 حبة)", quantity: 48, unit: "حبة", category: "باريستا", status: "good", price: 72 },
+
       // CASHIER
       { id: "c-1", name: "ايباد مع الشاحن", quantity: 1, unit: "حبة", category: "كاشير", status: "good" },
       { id: "c-2", name: "جهاز بيجر مع الشاحن", quantity: 7, unit: "حبة", category: "كاشير", status: "good" },
@@ -82,10 +84,10 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "k-4", name: "ثالجة اندر كاونتر 4 باب", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-5", name: "ثالجة اندر كاونتر 2 باب", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 3900 },
       { id: "k-6", name: "فريزر 2 باب", quantity: 2, unit: "حبة", category: "المطبخ", status: "good" },
-      { id: "k-7", name: "شوك فريزر", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
+      { id: "k-7", name: "شوك فريزر (Mastercool Blast Chiller 5 Trays)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 12000 },
       { id: "k-8", name: "عجان (Mecnosud 60kg)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 16000 },
-      { id: "k-9", name: "ميكسر", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
-      { id: "k-10", name: "فرادة عجين", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
+      { id: "k-9", name: "ميكسر (Mecnosud Planetary Mixer 40 Lt)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 19000 },
+      { id: "k-10", name: "فرادة عجين (Mecnosud Manual Dough Sheeter)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 13914 },
       { id: "k-11", name: "عجان صغير", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-12", name: "مسدس لهب TOTAL", quantity: 2, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-13", name: "ترولى", quantity: 2, unit: "حبة", category: "المطبخ", status: "good" },
@@ -96,6 +98,10 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "k-18", name: "مضرب كهربائي", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-19", name: "شواية سلامندر (Salamander)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 1906.89 },
       { id: "k-20", name: "قطاعة لحوم (Slicer)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 1430.17 },
+      { id: "k-21", name: "فرن هجين (Giorik PoP Speed Steam Hybrid)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 11000 },
+      { id: "k-22", name: "فرن كونفكشن (Unox Convection Oven 10 Trays)", quantity: 2, unit: "حبة", category: "المطبخ", status: "good", price: 15800 },
+      { id: "k-23", name: "خمارة عجين (Unox BakerLux Proofer)", quantity: 2, unit: "حبة", category: "المطبخ", status: "good", price: 5500 },
+      { id: "k-24", name: "غسالة صحون (Dish Washer GS 50 ECO)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 7000 },
 
       // PIZZA
       { id: "p-1", name: "ثالجة اندر كاونتر 2 باب (بانكول)", quantity: 1, unit: "حبة", category: "بيتزا", status: "good", price: 3500 },
