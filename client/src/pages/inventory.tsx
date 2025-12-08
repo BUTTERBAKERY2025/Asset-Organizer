@@ -49,17 +49,27 @@ export default function InventoryPage() {
 
   const handleExport = () => {
     // Flatten data for export
-    const exportData = currentBranch.inventory.map(item => ({
-      "الفئة": item.category,
-      "اسم الصنف": item.name,
-      "الكمية": item.quantity,
-      "الوحدة": item.unit,
-      "السعر الفردي": item.price || 0,
-      "إجمالي القيمة": (item.price || 0) * item.quantity,
-      "الحالة": getStatusLabel(item.status),
-      "آخر فحص": item.lastCheck || "-",
-      "ملاحظات": item.notes || ""
-    }));
+    const exportData = currentBranch.inventory.map(item => {
+      const price = item.price || 0;
+      const quantity = item.quantity;
+      const total = price * quantity;
+      const vat = total * 0.15;
+      const totalWithVat = total + vat;
+
+      return {
+        "الفئة": item.category,
+        "اسم الصنف": item.name,
+        "الكمية": item.quantity,
+        "الوحدة": item.unit,
+        "السعر الفردي": price,
+        "إجمالي القيمة (قبل الضريبة)": total,
+        "الضريبة (15%)": vat,
+        "الإجمالي شامل الضريبة": totalWithVat,
+        "الحالة": getStatusLabel(item.status),
+        "آخر فحص": item.lastCheck || "-",
+        "ملاحظات": item.notes || ""
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     
@@ -70,7 +80,9 @@ export default function InventoryPage() {
       {wch: 10}, // Quantity
       {wch: 10}, // Unit
       {wch: 15}, // Price
-      {wch: 15}, // Total Value
+      {wch: 20}, // Total before VAT
+      {wch: 15}, // VAT
+      {wch: 20}, // Total with VAT
       {wch: 15}, // Status
       {wch: 15}, // Last Check
       {wch: 30}, // Notes
@@ -113,13 +125,26 @@ export default function InventoryPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-SA', { style: 'currency', currency: 'SAR' }).format(amount);
+    // Format number in English locale (US) but keep SAR currency symbol if desired
+    // Or just format as number and append "SAR" manually to ensure English digits
+    // Using en-US locale ensures 123,456.78 format (English digits)
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'SAR',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('en-US').format(num);
   };
 
   // Calculate stats
   const totalItems = currentBranch.inventory.reduce((acc, item) => acc + item.quantity, 0);
   const totalCategories = Object.keys(groupedInventory).length;
   const totalValue = currentBranch.inventory.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
+  const totalVat = totalValue * 0.15;
+  const totalValueWithVat = totalValue + totalVat;
 
   const InventoryList = () => (
     <>
@@ -128,62 +153,92 @@ export default function InventoryPage() {
           <p className="text-muted-foreground text-lg">لا توجد بيانات متاحة لهذا الفرع حالياً</p>
         </div>
       ) : (
-        filteredCategories.map((category) => (
-          <Card key={category} className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6">
-            <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4 print:bg-transparent print:border-b-2 print:border-black">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl text-primary font-bold print:text-black">{category}</CardTitle>
-                <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm print:hidden">
-                  {groupedInventory[category].length} عنصر
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/30 print:bg-transparent">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-right w-[60px] print:text-black font-bold">#</TableHead>
-                    <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
-                    <TableHead className="text-right w-[100px] print:text-black font-bold">الكمية</TableHead>
-                    <TableHead className="text-right w-[120px] print:text-black font-bold">السعر</TableHead>
-                    <TableHead className="text-right w-[120px] print:text-black font-bold">إجمالي القيمة</TableHead>
-                    <TableHead className="text-right w-[120px] print:text-black font-bold">الحالة</TableHead>
-                    <TableHead className="text-right print:text-black font-bold">ملاحظات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupedInventory[category]
-                    .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || category.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((item, index) => (
-                    <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black">
-                      <TableCell className="font-medium text-muted-foreground print:text-black">{index + 1}</TableCell>
-                      <TableCell className="font-semibold text-foreground/90 print:text-black">
-                        {item.name}
-                        {item.lastCheck && <div className="text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-bold min-w-[3rem] justify-center print:border-black print:text-black">
-                          {item.quantity}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground print:text-black font-mono">
-                        {item.price ? formatCurrency(item.price) : "-"}
-                      </TableCell>
-                      <TableCell className="text-foreground font-bold print:text-black font-mono">
-                        {item.price ? formatCurrency(item.price * item.quantity) : "-"}
-                      </TableCell>
-                      <TableCell className="print:text-black">
-                        <div className="print:hidden">{getStatusBadge(item.status)}</div>
-                        <div className="hidden print:block">{getStatusLabel(item.status)}</div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground italic text-sm print:text-black">{item.notes || "-"}</TableCell>
+        filteredCategories.map((category) => {
+          const categoryItems = groupedInventory[category];
+          const categoryTotalValue = categoryItems.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
+          
+          return (
+            <Card key={category} className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6">
+              <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4 print:bg-transparent print:border-b-2 print:border-black">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-baseline gap-4">
+                    <CardTitle className="text-xl text-primary font-bold print:text-black">{category}</CardTitle>
+                    <span className="text-sm text-muted-foreground font-mono print:text-black">
+                       (Total: {formatCurrency(categoryTotalValue)})
+                    </span>
+                  </div>
+                  <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm print:hidden">
+                    {formatNumber(categoryItems.length)} عنصر
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-muted/30 print:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-right w-[50px] print:text-black font-bold">#</TableHead>
+                      <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
+                      <TableHead className="text-right w-[80px] print:text-black font-bold">الكمية</TableHead>
+                      <TableHead className="text-right w-[100px] print:text-black font-bold">السعر</TableHead>
+                      <TableHead className="text-right w-[100px] print:text-black font-bold">الإجمالي</TableHead>
+                      <TableHead className="text-right w-[100px] print:text-black font-bold">الضريبة (15%)</TableHead>
+                      <TableHead className="text-right w-[110px] print:text-black font-bold">الصافي</TableHead>
+                      <TableHead className="text-right w-[100px] print:text-black font-bold">الحالة</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        ))
+                  </TableHeader>
+                  <TableBody>
+                    {categoryItems
+                      .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || category.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map((item, index) => {
+                        const total = (item.price || 0) * item.quantity;
+                        const vat = total * 0.15;
+                        const totalWithVat = total + vat;
+                        
+                        return (
+                          <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black">
+                            <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(index + 1)}</TableCell>
+                            <TableCell className="font-semibold text-foreground/90 print:text-black">
+                              {item.name}
+                              {item.lastCheck && <div className="text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="font-bold min-w-[3rem] justify-center print:border-black print:text-black font-mono">
+                                {formatNumber(item.quantity)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(item.price) : "-"}
+                            </TableCell>
+                            <TableCell className="text-foreground print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(total) : "-"}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(vat) : "-"}
+                            </TableCell>
+                            <TableCell className="font-bold text-green-700 print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(totalWithVat) : "-"}
+                            </TableCell>
+                            <TableCell className="print:text-black">
+                              <div className="print:hidden scale-90 origin-right">{getStatusBadge(item.status)}</div>
+                              <div className="hidden print:block text-xs">{getStatusLabel(item.status)}</div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {/* Category Summary Row */}
+                      <TableRow className="bg-muted/50 font-bold border-t-2 border-primary/20 print:border-black">
+                        <TableCell colSpan={4} className="text-center print:text-black">إجمالي {category}</TableCell>
+                        <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue)}</TableCell>
+                        <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue * 0.15)}</TableCell>
+                        <TableCell className="font-mono text-green-700 print:text-black">{formatCurrency(categoryTotalValue * 1.15)}</TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          );
+        })
       )}
     </>
   );
@@ -209,23 +264,29 @@ export default function InventoryPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 print:hidden">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="pb-2">
               <CardDescription>إجمالي الأصول</CardDescription>
-              <CardTitle className="text-3xl text-primary">{totalItems}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card className="bg-green-50/50 border-green-100">
-            <CardHeader className="pb-2">
-              <CardDescription>إجمالي القيمة</CardDescription>
-              <CardTitle className="text-3xl text-green-700">{formatCurrency(totalValue)}</CardTitle>
+              <CardTitle className="text-3xl text-primary font-mono">{formatNumber(totalItems)}</CardTitle>
             </CardHeader>
           </Card>
           <Card className="bg-card">
             <CardHeader className="pb-2">
-              <CardDescription>عدد الفئات</CardDescription>
-              <CardTitle className="text-3xl">{totalCategories}</CardTitle>
+              <CardDescription>القيمة قبل الضريبة</CardDescription>
+              <CardTitle className="text-2xl font-mono">{formatCurrency(totalValue)}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card className="bg-card">
+            <CardHeader className="pb-2">
+              <CardDescription>قيمة الضريبة (15%)</CardDescription>
+              <CardTitle className="text-2xl font-mono text-muted-foreground">{formatCurrency(totalVat)}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card className="bg-green-50/50 border-green-100">
+            <CardHeader className="pb-2">
+              <CardDescription>الإجمالي شامل الضريبة</CardDescription>
+              <CardTitle className="text-2xl text-green-700 font-mono">{formatCurrency(totalValueWithVat)}</CardTitle>
             </CardHeader>
           </Card>
         </div>
@@ -234,11 +295,11 @@ export default function InventoryPage() {
         <div className="hidden print:flex flex-col items-center mb-8 border-b-2 border-black pb-4">
           <h1 className="text-3xl font-bold mb-2">Butter Bakery</h1>
           <h2 className="text-xl">جرد الأصول والمعدات - {currentBranch.name}</h2>
-          <p className="text-sm mt-2">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
-          <div className="flex gap-8 mt-4 text-sm border-t border-black pt-2 w-full justify-center font-bold">
-             <span>إجمالي الأصول: {totalItems}</span>
-             <span>إجمالي القيمة: {formatCurrency(totalValue)}</span>
-             <span>عدد الفئات: {totalCategories}</span>
+          <p className="text-sm mt-2">تاريخ التقرير: {new Date().toLocaleDateString('en-GB')}</p>
+          <div className="grid grid-cols-3 gap-8 mt-4 text-sm border-t border-black pt-2 w-full text-center font-bold">
+             <span className="font-mono">Total Assets: {formatNumber(totalItems)}</span>
+             <span className="font-mono">Total Value: {formatCurrency(totalValueWithVat)}</span>
+             <span className="font-mono">Categories: {formatNumber(totalCategories)}</span>
           </div>
         </div>
 
