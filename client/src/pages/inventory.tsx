@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { INVENTORY_DATA, type InventoryItem } from "@/lib/data";
+import { useReactToPrint } from "react-to-print";
+import logo from "@assets/generated_images/minimalist_geometric_bakery_logo_with_wheat_and_croissant_elements_in_gold_and_cream.png";
 import {
   Table,
   TableBody,
@@ -43,9 +45,12 @@ export default function InventoryPage() {
     return hasMatchingItems || category.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const componentRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: `جرد الأصول - ${currentBranch.name}`,
+  });
 
   const handleExport = () => {
     // Flatten data for export
@@ -291,47 +296,84 @@ export default function InventoryPage() {
           </Card>
         </div>
 
-        {/* Print Header */}
-        <div className="hidden print:flex flex-col items-center mb-8 border-b-2 border-black pb-4">
-          <h1 className="text-3xl font-bold mb-2">Butter Bakery</h1>
-          <h2 className="text-xl">جرد الأصول والمعدات - {currentBranch.name}</h2>
-          <p className="text-sm mt-2">تاريخ التقرير: {new Date().toLocaleDateString('en-GB')}</p>
-          <div className="grid grid-cols-3 gap-8 mt-4 text-sm border-t border-black pt-2 w-full text-center font-bold">
-             <span className="font-mono">Total Assets: {formatNumber(totalItems)}</span>
-             <span className="font-mono">Total Value: {formatCurrency(totalValueWithVat)}</span>
-             <span className="font-mono">Categories: {formatNumber(totalCategories)}</span>
+        <div ref={componentRef} className="print:w-full">
+          {/* Print Header */}
+          <div className="hidden print:flex flex-col items-center mb-8 border-b-2 border-black pb-4 pt-4">
+            <div className="flex items-center gap-4 mb-4">
+               <img src={logo} alt="Butter Bakery" className="w-20 h-20 rounded-full border-2 border-primary" />
+               <div className="text-center">
+                  <h1 className="text-4xl font-bold mb-2 text-primary">Butter Bakery</h1>
+                  <h2 className="text-2xl font-bold">تقرير جرد الأصول والمعدات</h2>
+               </div>
+            </div>
+            
+            <div className="flex justify-between w-full px-12 mt-4 text-sm font-bold border-t border-black pt-4">
+               <span>الفرع: {currentBranch.name}</span>
+               <span>تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')} ({new Date().toLocaleDateString('en-GB')})</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-8 mt-6 text-base border-2 border-primary/20 bg-primary/5 p-4 rounded-lg w-full text-center font-bold print:border-black print:bg-transparent">
+               <div className="flex flex-col">
+                  <span className="text-muted-foreground print:text-black text-sm">إجمالي الأصول</span>
+                  <span className="text-xl font-mono">{formatNumber(totalItems)}</span>
+               </div>
+               <div className="flex flex-col border-r border-l border-primary/20 print:border-black px-4">
+                  <span className="text-muted-foreground print:text-black text-sm">القيمة قبل الضريبة</span>
+                  <span className="text-xl font-mono">{formatCurrency(totalValue)}</span>
+               </div>
+               <div className="flex flex-col">
+                  <span className="text-muted-foreground print:text-black text-sm">الإجمالي شامل الضريبة</span>
+                  <span className="text-xl font-mono text-green-700 print:text-black">{formatCurrency(totalValueWithVat)}</span>
+               </div>
+            </div>
+          </div>
+
+          <Tabs defaultValue="medina" className="w-full" onValueChange={setActiveBranch} value={activeBranch}>
+            <TabsList className="w-full md:w-auto grid grid-cols-2 md:inline-flex h-auto p-1 bg-muted/50 print:hidden">
+              <TabsTrigger value="medina" className="py-2.5 px-6 text-base">فرع المدينة المنورة</TabsTrigger>
+              <TabsTrigger value="tabuk" className="py-2.5 px-6 text-base">فرع تبوك</TabsTrigger>
+            </TabsList>
+
+            <div className="mt-6 flex items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input 
+                  placeholder="بحث عن أصل أو معدة..." 
+                  className="pr-10 bg-background/50 border-muted"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Button variant="ghost" size="icon">
+                <Filter className="w-4 h-4 text-muted-foreground" />
+              </Button>
+            </div>
+
+            <TabsContent value="medina" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
+              <InventoryList />
+            </TabsContent>
+
+            <TabsContent value="tabuk" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
+              <InventoryList />
+            </TabsContent>
+          </Tabs>
+
+          {/* Print Footer */}
+          <div className="hidden print:flex justify-between items-end mt-12 pt-8 border-t border-black text-sm">
+             <div className="text-center">
+                <p className="mb-8 font-bold">مدير الفرع</p>
+                <p>_________________</p>
+             </div>
+             <div className="text-center">
+                <p className="mb-8 font-bold">المحاسب</p>
+                <p>_________________</p>
+             </div>
+             <div className="text-center">
+                <p className="mb-8 font-bold">الاعتماد</p>
+                <p>_________________</p>
+             </div>
           </div>
         </div>
-
-        <Tabs defaultValue="medina" className="w-full" onValueChange={setActiveBranch} value={activeBranch}>
-          <TabsList className="w-full md:w-auto grid grid-cols-2 md:inline-flex h-auto p-1 bg-muted/50 print:hidden">
-            <TabsTrigger value="medina" className="py-2.5 px-6 text-base">فرع المدينة المنورة</TabsTrigger>
-            <TabsTrigger value="tabuk" className="py-2.5 px-6 text-base">فرع تبوك</TabsTrigger>
-          </TabsList>
-
-          <div className="mt-6 flex items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="بحث عن أصل أو معدة..." 
-                className="pr-10 bg-background/50 border-muted"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <Button variant="ghost" size="icon">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-            </Button>
-          </div>
-
-          <TabsContent value="medina" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
-            <InventoryList />
-          </TabsContent>
-
-          <TabsContent value="tabuk" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
-            <InventoryList />
-          </TabsContent>
-        </Tabs>
       </div>
     </Layout>
   );
