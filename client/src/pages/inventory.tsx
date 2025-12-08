@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { INVENTORY_DATA, type InventoryItem } from "@/lib/data";
 import { useReactToPrint } from "react-to-print";
-import logo from "@assets/generated_images/minimalist_geometric_bakery_logo_with_wheat_and_croissant_elements_in_gold_and_cream.png";
+import logo from "@assets/logo_-5_1765206843638.png";
 import {
   Table,
   TableBody,
@@ -330,11 +330,7 @@ export default function InventoryPage() {
           {/* Print Header */}
           <div className="hidden print:flex flex-col items-center mb-8 border-b-2 border-black pb-4 pt-4">
             <div className="flex items-center gap-4 mb-4">
-               <img src={logo} alt="Butter Bakery" className="w-20 h-20 rounded-full border-2 border-primary" />
-               <div className="text-center">
-                  <h1 className="text-4xl font-bold mb-2 text-primary">Butter Bakery</h1>
-                  <h2 className="text-2xl font-bold">تقرير جرد الأصول والمعدات</h2>
-               </div>
+               <img src={logo} alt="Butter Bakery" className="w-32 h-auto" />
             </div>
             
             <div className="flex justify-between w-full px-12 mt-4 text-sm font-bold border-t border-black pt-4">

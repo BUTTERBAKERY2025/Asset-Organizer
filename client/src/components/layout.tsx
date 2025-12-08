@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import logo from "@assets/generated_images/minimalist_geometric_bakery_logo_with_wheat_and_croissant_elements_in_gold_and_cream.png";
+import logo from "@assets/logo_-5_1765206843638.png";
 import { LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -17,11 +17,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="w-64 bg-card border-l border-border hidden md:flex flex-col sticky top-0 h-screen">
         <div className="p-6 flex flex-col items-center border-b border-border/50">
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-primary/10 mb-3 border-2 border-primary/20">
-            <img src={logo} alt="Butter Bakery" className="w-full h-full object-cover" />
+          <div className="w-full px-4 mb-3">
+            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain" />
           </div>
-          <h1 className="font-bold text-xl text-foreground">Butter Bakery</h1>
-          <p className="text-xs text-muted-foreground">نظام إدارة الأصول</p>
+          <p className="text-xs text-muted-foreground mt-2">نظام إدارة الأصول</p>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
@@ -55,8 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Mobile Header */}
         <header className="md:hidden h-16 border-b border-border bg-card flex items-center px-4 justify-between">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="Logo" className="w-8 h-8 rounded-full" />
-            <span className="font-bold">Butter Bakery</span>
+            <img src={logo} alt="Butter Bakery" className="h-10 w-auto object-contain" />
           </div>
           {/* Mobile menu trigger could go here */}
         </header>
