@@ -60,6 +60,7 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "b-28", name: "صحن خشبي لالسبريسو", quantity: 6, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-29", name: "باسكت للبن", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-30", name: "طابعة كاشير", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
+      { id: "b-31", name: "محطة قهوة مع ترامس (Koz Tree + Thermos)", quantity: 1, unit: "مجموعة", category: "باريستا", status: "good", price: 30000, notes: "عدد 2 كوز تري + 4 ترامس 5 لتر" },
 
       // CASHIER
       { id: "c-1", name: "ايباد مع الشاحن", quantity: 1, unit: "حبة", category: "كاشير", status: "good" },
@@ -93,6 +94,8 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "k-16", name: "راك بالستيك ابيض صغير", quantity: 5, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-17", name: "طابعة كاشير", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-18", name: "مضرب كهربائي", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
+      { id: "k-19", name: "شواية سلامندر (Salamander)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 1906.89 },
+      { id: "k-20", name: "قطاعة لحوم (Slicer)", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 1430.17 },
 
       // PIZZA
       { id: "p-1", name: "ثالجة اندر كاونتر 2 باب (بانكول)", quantity: 1, unit: "حبة", category: "بيتزا", status: "good", price: 3500 },
