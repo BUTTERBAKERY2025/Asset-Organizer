@@ -150,6 +150,22 @@ export default function InventoryPage() {
   const totalValue = currentBranch.inventory.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
   const totalVat = totalValue * 0.15;
   const totalValueWithVat = totalValue + totalVat;
+  
+  // New Stats for Report
+  const unpricedItemsCount = currentBranch.inventory.filter(item => !item.price || item.price === 0).length;
+  
+  const categorySummaries = Object.keys(groupedInventory).map(category => {
+    const items = groupedInventory[category];
+    const value = items.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
+    return {
+      category,
+      count: items.reduce((acc, item) => acc + item.quantity, 0),
+      itemsCount: items.length,
+      value,
+      vat: value * 0.15,
+      total: value * 1.15
+    };
+  });
 
   const InventoryList = () => (
     <>
@@ -294,6 +310,20 @@ export default function InventoryPage() {
               <CardTitle className="text-2xl text-green-700 font-mono">{formatCurrency(totalValueWithVat)}</CardTitle>
             </CardHeader>
           </Card>
+          
+          {unpricedItemsCount > 0 && (
+            <Card className="bg-orange-50/50 border-orange-100 md:col-span-4">
+              <CardContent className="flex items-center gap-4 py-4">
+                <div className="bg-orange-100 p-2 rounded-full">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-orange-800">تنبيه: يوجد {unpricedItemsCount} صنف بدون قيمة مالية</p>
+                  <p className="text-sm text-orange-600">يرجى مراجعة الأصناف وتحديث أسعارها لضمان دقة التقرير المالي.</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div ref={componentRef} className="print:w-full">
@@ -312,18 +342,24 @@ export default function InventoryPage() {
                <span>تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')} ({new Date().toLocaleDateString('en-GB')})</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-8 mt-6 text-base border-2 border-primary/20 bg-primary/5 p-4 rounded-lg w-full text-center font-bold print:border-black print:bg-transparent">
+            <div className="grid grid-cols-4 gap-4 mt-6 text-base border-2 border-primary/20 bg-primary/5 p-4 rounded-lg w-full text-center font-bold print:border-black print:bg-transparent">
                <div className="flex flex-col">
                   <span className="text-muted-foreground print:text-black text-sm">إجمالي الأصول</span>
                   <span className="text-xl font-mono">{formatNumber(totalItems)}</span>
                </div>
-               <div className="flex flex-col border-r border-l border-primary/20 print:border-black px-4">
+               <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
                   <span className="text-muted-foreground print:text-black text-sm">القيمة قبل الضريبة</span>
                   <span className="text-xl font-mono">{formatCurrency(totalValue)}</span>
                </div>
-               <div className="flex flex-col">
+               <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
                   <span className="text-muted-foreground print:text-black text-sm">الإجمالي شامل الضريبة</span>
                   <span className="text-xl font-mono text-green-700 print:text-black">{formatCurrency(totalValueWithVat)}</span>
+               </div>
+               <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
+                  <span className="text-muted-foreground print:text-black text-sm">أصناف غير مسعرة</span>
+                  <span className={`text-xl font-mono ${unpricedItemsCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {unpricedItemsCount}
+                  </span>
                </div>
             </div>
           </div>
@@ -357,6 +393,43 @@ export default function InventoryPage() {
               <InventoryList />
             </TabsContent>
           </Tabs>
+
+          {/* Category Summary Table for Print */}
+          <div className="hidden print:block mt-8 mb-8 break-inside-avoid">
+            <h3 className="text-xl font-bold mb-4 border-b border-black pb-2">ملخص المجموعات</h3>
+            <Table className="border border-black">
+              <TableHeader className="bg-muted/30">
+                <TableRow className="border-black">
+                  <TableHead className="text-right font-bold text-black border-black">المجموعة / الفئة</TableHead>
+                  <TableHead className="text-right font-bold text-black border-black">عدد الأصناف</TableHead>
+                  <TableHead className="text-right font-bold text-black border-black">إجمالي الكميات</TableHead>
+                  <TableHead className="text-right font-bold text-black border-black">القيمة (قبل الضريبة)</TableHead>
+                  <TableHead className="text-right font-bold text-black border-black">الضريبة (15%)</TableHead>
+                  <TableHead className="text-right font-bold text-black border-black">الإجمالي (شامل الضريبة)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {categorySummaries.map((summary) => (
+                  <TableRow key={summary.category} className="border-black">
+                    <TableCell className="font-bold border-black">{summary.category}</TableCell>
+                    <TableCell className="font-mono border-black">{summary.itemsCount}</TableCell>
+                    <TableCell className="font-mono border-black">{summary.count}</TableCell>
+                    <TableCell className="font-mono border-black">{formatCurrency(summary.value)}</TableCell>
+                    <TableCell className="font-mono border-black">{formatCurrency(summary.vat)}</TableCell>
+                    <TableCell className="font-mono font-bold border-black">{formatCurrency(summary.total)}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-muted/50 border-black font-bold text-lg">
+                  <TableCell className="border-black">المجموع الكلي</TableCell>
+                  <TableCell className="font-mono border-black">{categorySummaries.reduce((acc, s) => acc + s.itemsCount, 0)}</TableCell>
+                  <TableCell className="font-mono border-black">{formatNumber(totalItems)}</TableCell>
+                  <TableCell className="font-mono border-black">{formatCurrency(totalValue)}</TableCell>
+                  <TableCell className="font-mono border-black">{formatCurrency(totalVat)}</TableCell>
+                  <TableCell className="font-mono border-black">{formatCurrency(totalValueWithVat)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
 
           {/* Print Footer */}
           <div className="hidden print:flex justify-between items-end mt-12 pt-8 border-t border-black text-sm">
