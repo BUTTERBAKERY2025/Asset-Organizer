@@ -12,10 +12,10 @@ export type InventoryItem = {
   unit: string;
   category: string;
   notes?: string;
-  status?: "good" | "maintenance" | "damaged" | "missing"; // New field
-  lastCheck?: string; // New field
-  price?: number; // New field
-  serialNumber?: string; // New field
+  status?: "good" | "maintenance" | "damaged" | "missing";
+  lastCheck?: string;
+  price?: number;
+  serialNumber?: string;
 };
 
 export type BranchData = {
@@ -30,25 +30,25 @@ export const INVENTORY_DATA: BranchData[] = [
     name: "فرع المدينة المنورة",
     inventory: [
       // BARISTA
-      { id: "b-1", name: "مكينة لامرزوكو 2 جروب", quantity: 1, unit: "حبة", category: "باريستا", status: "good", lastCheck: "2024-01-15" },
+      { id: "b-1", name: "مكينة لامرزوكو 2 جروب", quantity: 1, unit: "حبة", category: "باريستا", status: "good", lastCheck: "2024-01-15", price: 56000 },
       { id: "b-2", name: "بورتا فلتر", quantity: 2, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-3", name: "ستاند اكواب", quantity: 4, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-4", name: "طاحونة اسبريسو", quantity: 1, unit: "حبة", category: "باريستا", status: "good", lastCheck: "2024-01-15" },
-      { id: "b-5", name: "تامبر كهربائي", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-6", name: "طاحونة دريب براتزا", quantity: 2, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-7", name: "مكينة v60 اريا 5 جروب", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-8", name: "طاحونة Mahlkonig", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-9", name: "سخان مياه 20 لتر", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-10", name: "مكينة فيتكو", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-11", name: "حافظة قهوه 5 لتر", quantity: 4, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-12", name: "حافظه قهوه 2.5 لتر", quantity: 2, unit: "حبة", category: "باريستا", status: "good" },
+      { id: "b-4", name: "طاحونة اسبريسو", quantity: 1, unit: "حبة", category: "باريستا", status: "good", lastCheck: "2024-01-15", price: 11500 },
+      { id: "b-5", name: "تامبر كهربائي", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 1000 },
+      { id: "b-6", name: "طاحونة دريب براتزا", quantity: 2, unit: "حبة", category: "باريستا", status: "good", price: 1955 },
+      { id: "b-7", name: "مكينة v60 اريا 5 جروب", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 23000 },
+      { id: "b-8", name: "طاحونة Mahlkonig", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 11500 },
+      { id: "b-9", name: "سخان مياه 20 لتر", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 1840 },
+      { id: "b-10", name: "مكينة فيتكو", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 10970 },
+      { id: "b-11", name: "حافظة قهوه 5 لتر", quantity: 4, unit: "حبة", category: "باريستا", status: "good", price: 2070 },
+      { id: "b-12", name: "حافظه قهوه 2.5 لتر", quantity: 2, unit: "حبة", category: "باريستا", status: "good", price: 529 },
       { id: "b-13", name: "حافظه قهوه 4.5", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-14", name: "مكينة برتقال فروكسول صغير", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
+      { id: "b-14", name: "مكينة برتقال فروكسول صغير", quantity: 1, unit: "حبة", category: "باريستا", status: "good", price: 6500 },
       { id: "b-15", name: "جهاز حساس 4 جروب لقهوة اليوم", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-16", name: "بتشر مقاس 450", quantity: 3, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-17", name: "بتشر مقاس 300", quantity: 2, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-18", name: "بتشر مقاس 600", quantity: 2, unit: "حبة", category: "باريستا", status: "good" },
-      { id: "b-19", name: "صانعة ثلج ميجل", quantity: 1, unit: "حبة", category: "باريستا", status: "good", lastCheck: "2024-01-10" },
+      { id: "b-19", name: "صانعة ثلج ميجل", quantity: 1, unit: "حبة", category: "باريستا", status: "good", lastCheck: "2024-01-10", price: 8500 },
       { id: "b-20", name: "ميزان شحن", quantity: 4, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-21", name: "سيرفر مع القمع", quantity: 5, unit: "حبة", category: "باريستا", status: "good" },
       { id: "b-22", name: "كاتل كهربائي 1 لتر", quantity: 1, unit: "حبة", category: "باريستا", status: "good" },
@@ -78,7 +78,7 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "k-1", name: "جريل غاز 4 عيون", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-2", name: "قالية زيت بالكهرباء", quantity: 2, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-3", name: "جريل", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
-      { id: "k-4", name: "ثالجة اندر كاونتر 4 باب", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
+      { id: "k-4", name: "ثالجة اندر كاونتر 4 باب", quantity: 1, unit: "حبة", category: "المطبخ", status: "good", price: 4485 },
       { id: "k-5", name: "ثالجة اندر كاونتر 2 باب", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-6", name: "فريزر 2 باب", quantity: 2, unit: "حبة", category: "المطبخ", status: "good" },
       { id: "k-7", name: "شوك فريزر", quantity: 1, unit: "حبة", category: "المطبخ", status: "good" },
@@ -96,7 +96,7 @@ export const INVENTORY_DATA: BranchData[] = [
 
       // PIZZA
       { id: "p-1", name: "ثالجة اندر كاونتر 2 باب", quantity: 1, unit: "حبة", category: "بيتزا", status: "good" },
-      { id: "p-2", name: "فرن بيتزا", quantity: 1, unit: "حبة", category: "بيتزا", status: "good" },
+      { id: "p-2", name: "فرن بيتزا", quantity: 1, unit: "حبة", category: "بيتزا", status: "good", price: 4025 },
       { id: "p-3", name: "مكنسة فرن", quantity: 1, unit: "حبة", category: "بيتزا", status: "good" },
       { id: "p-4", name: "بيل التقاط بيتزا", quantity: 2, unit: "حبة", category: "بيتزا", status: "good" },
       { id: "p-5", name: "طابعة كاشير", quantity: 1, unit: "حبة", category: "بيتزا", status: "good" },
@@ -151,8 +151,8 @@ export const INVENTORY_DATA: BranchData[] = [
       { id: "g-47", name: "كشاف طوارئ", quantity: 4, unit: "حبة", category: "أثاث وعام", status: "good" },
       { id: "g-48", name: "كشاف زرع", quantity: 45, unit: "حبة", category: "أثاث وعام", status: "good" },
       { id: "g-49", name: "صندوق خشب بتر بيكرى", quantity: 6, unit: "حبة", category: "أثاث وعام", status: "good" },
-      { id: "g-50", name: "ثالجة عرض 1.5م", quantity: 2, unit: "حبة", category: "أثاث وعام", status: "good" },
-      { id: "g-51", name: "ثالجة عرض 1.2 م", quantity: 1, unit: "حبة", category: "أثاث وعام", status: "good" },
+      { id: "g-50", name: "ثالجة عرض 1.5م", quantity: 2, unit: "حبة", category: "أثاث وعام", status: "good", price: 9487.5 },
+      { id: "g-51", name: "ثالجة عرض 1.2 م", quantity: 1, unit: "حبة", category: "أثاث وعام", status: "good", price: 8510 },
       { id: "g-52", name: "رف ستيل معلق", quantity: 9, unit: "حبة", category: "أثاث وعام", status: "good" },
       { id: "g-53", name: "طاولة ستيل", quantity: 5, unit: "حبة", category: "أثاث وعام", status: "good" },
       { id: "g-54", name: "رف ستيل ارضي", quantity: 3, unit: "حبة", category: "أثاث وعام", status: "good" },

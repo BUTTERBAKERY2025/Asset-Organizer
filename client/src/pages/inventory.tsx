@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Download, Printer, Filter, FileText, CheckCircle2, AlertTriangle, XCircle, HelpCircle } from "lucide-react";
+import { Search, Download, Printer, Filter, FileText, CheckCircle2, AlertTriangle, XCircle, HelpCircle, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import { cn } from "@/lib/utils";
@@ -54,6 +54,8 @@ export default function InventoryPage() {
       "اسم الصنف": item.name,
       "الكمية": item.quantity,
       "الوحدة": item.unit,
+      "السعر الفردي": item.price || 0,
+      "إجمالي القيمة": (item.price || 0) * item.quantity,
       "الحالة": getStatusLabel(item.status),
       "آخر فحص": item.lastCheck || "-",
       "ملاحظات": item.notes || ""
@@ -67,6 +69,8 @@ export default function InventoryPage() {
       {wch: 40}, // Name
       {wch: 10}, // Quantity
       {wch: 10}, // Unit
+      {wch: 15}, // Price
+      {wch: 15}, // Total Value
       {wch: 15}, // Status
       {wch: 15}, // Last Check
       {wch: 30}, // Notes
@@ -108,10 +112,14 @@ export default function InventoryPage() {
     }
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ar-SA', { style: 'currency', currency: 'SAR' }).format(amount);
+  };
+
   // Calculate stats
   const totalItems = currentBranch.inventory.reduce((acc, item) => acc + item.quantity, 0);
   const totalCategories = Object.keys(groupedInventory).length;
-  const maintenanceItems = currentBranch.inventory.filter(i => i.status === "maintenance").length;
+  const totalValue = currentBranch.inventory.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
 
   const InventoryList = () => (
     <>
@@ -137,7 +145,8 @@ export default function InventoryPage() {
                     <TableHead className="text-right w-[60px] print:text-black font-bold">#</TableHead>
                     <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
                     <TableHead className="text-right w-[100px] print:text-black font-bold">الكمية</TableHead>
-                    <TableHead className="text-right w-[100px] print:text-black font-bold">الوحدة</TableHead>
+                    <TableHead className="text-right w-[120px] print:text-black font-bold">السعر</TableHead>
+                    <TableHead className="text-right w-[120px] print:text-black font-bold">إجمالي القيمة</TableHead>
                     <TableHead className="text-right w-[120px] print:text-black font-bold">الحالة</TableHead>
                     <TableHead className="text-right print:text-black font-bold">ملاحظات</TableHead>
                   </TableRow>
@@ -157,7 +166,12 @@ export default function InventoryPage() {
                           {item.quantity}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground print:text-black">{item.unit}</TableCell>
+                      <TableCell className="text-muted-foreground print:text-black font-mono">
+                        {item.price ? formatCurrency(item.price) : "-"}
+                      </TableCell>
+                      <TableCell className="text-foreground font-bold print:text-black font-mono">
+                        {item.price ? formatCurrency(item.price * item.quantity) : "-"}
+                      </TableCell>
                       <TableCell className="print:text-black">
                         <div className="print:hidden">{getStatusBadge(item.status)}</div>
                         <div className="hidden print:block">{getStatusLabel(item.status)}</div>
@@ -195,11 +209,17 @@ export default function InventoryPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="pb-2">
               <CardDescription>إجمالي الأصول</CardDescription>
               <CardTitle className="text-3xl text-primary">{totalItems}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card className="bg-green-50/50 border-green-100">
+            <CardHeader className="pb-2">
+              <CardDescription>إجمالي القيمة</CardDescription>
+              <CardTitle className="text-3xl text-green-700">{formatCurrency(totalValue)}</CardTitle>
             </CardHeader>
           </Card>
           <Card className="bg-card">
@@ -215,8 +235,9 @@ export default function InventoryPage() {
           <h1 className="text-3xl font-bold mb-2">Butter Bakery</h1>
           <h2 className="text-xl">جرد الأصول والمعدات - {currentBranch.name}</h2>
           <p className="text-sm mt-2">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
-          <div className="flex gap-8 mt-4 text-sm border-t border-black pt-2 w-full justify-center">
+          <div className="flex gap-8 mt-4 text-sm border-t border-black pt-2 w-full justify-center font-bold">
              <span>إجمالي الأصول: {totalItems}</span>
+             <span>إجمالي القيمة: {formatCurrency(totalValue)}</span>
              <span>عدد الفئات: {totalCategories}</span>
           </div>
         </div>
