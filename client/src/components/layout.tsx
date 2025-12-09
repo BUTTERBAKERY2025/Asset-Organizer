@@ -1,15 +1,17 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, LogOut, ClipboardEdit, Building2, AlertTriangle } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const navItems = [
-    { href: "/", label: "لوحة التحكم", icon: LayoutDashboard },
+    { href: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
     { href: "/inventory", label: "جرد الأصول", icon: FileText },
-    // { href: "/settings", label: "الإعدادات", icon: Settings },
+    { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit },
+    { href: "/branches", label: "إدارة الفروع", icon: Building2 },
+    { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle },
   ];
 
   return (
@@ -33,6 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                 )}
+                data-testid={`nav-link-${item.href.replace('/', '')}`}
               >
                 <item.icon className="w-5 h-5" />
                 <span>{item.label}</span>

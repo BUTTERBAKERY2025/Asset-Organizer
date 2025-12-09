@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { Layout } from "@/components/layout";
-import { INVENTORY_DATA, type InventoryItem } from "@/lib/data";
+import { useQuery } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
 import logo from "@assets/logo_-5_1765206843638.png";
 import {
@@ -18,10 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Download, Printer, Filter, FileText, CheckCircle2, AlertTriangle, XCircle, HelpCircle, DollarSign } from "lucide-react";
+import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
-import { cn } from "@/lib/utils";
+import type { Branch, InventoryItem } from "@shared/schema";
+
+type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -29,64 +31,91 @@ export default function InventoryPage() {
   const [showPrices, setShowPrices] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  // Global search logic
+  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+    queryFn: async () => {
+      const res = await fetch("/api/branches");
+      if (!res.ok) throw new Error("Failed to fetch branches");
+      return res.json();
+    },
+  });
+
+  const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
+    queryKey: ["/api/inventory"],
+    queryFn: async () => {
+      const res = await fetch("/api/inventory");
+      if (!res.ok) throw new Error("Failed to fetch inventory");
+      return res.json();
+    },
+  });
+
+  const isLoading = branchesLoading || inventoryLoading;
+
+  const branchMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    branches.forEach(b => { map[b.id] = b.name; });
+    return map;
+  }, [branches]);
+
   const isGlobalSearch = activeBranch === "all";
 
-  // Flatten all items for global search
-  const allItems = isGlobalSearch 
-    ? INVENTORY_DATA.flatMap(branch => 
-        branch.inventory.map(item => ({
-          ...item,
-          branchName: branch.name,
-          branchId: branch.id
-        }))
-      )
-    : [];
+  const allItems: InventoryItemWithBranch[] = useMemo(() => {
+    return inventoryItems.map(item => ({
+      ...item,
+      branchName: branchMap[item.branchId] || item.branchId
+    }));
+  }, [inventoryItems, branchMap]);
 
-  // Get current branch data (fallback to first branch if "all" is selected but we need standard branch structure for some reason)
-  const currentBranch = INVENTORY_DATA.find(b => b.id === activeBranch) || INVENTORY_DATA[0];
-  
-  // Determine inventory list based on mode
-  const displayedInventory = isGlobalSearch ? allItems : currentBranch.inventory;
+  const currentBranchItems: InventoryItemWithBranch[] = useMemo(() => {
+    return inventoryItems
+      .filter(item => item.branchId === activeBranch)
+      .map(item => ({
+        ...item,
+        branchName: branchMap[item.branchId] || item.branchId
+      }));
+  }, [inventoryItems, activeBranch, branchMap]);
 
-  // Group items logic - Handle both single branch and global search
-  const groupedInventory = displayedInventory.reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
-    return acc;
-  }, {} as Record<string, (InventoryItem & { branchName?: string })[]>);
+  const currentBranchName = branchMap[activeBranch] || activeBranch;
 
-  // Get all unique categories for the dropdown
-  const allCategories = isGlobalSearch 
-    ? Array.from(new Set(allItems.map(i => i.category)))
-    : Object.keys(groupedInventory);
+  const displayedInventory = isGlobalSearch ? allItems : currentBranchItems;
 
-  // Filter logic
-  const filteredCategories = Object.keys(groupedInventory).filter(category => {
-    // Filter by selected category
-    if (selectedCategory !== "all" && category !== selectedCategory) {
-      return false;
-    }
+  const groupedInventory = useMemo(() => {
+    return displayedInventory.reduce((acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = [];
+      }
+      acc[item.category].push(item);
+      return acc;
+    }, {} as Record<string, InventoryItemWithBranch[]>);
+  }, [displayedInventory]);
 
-    const items = groupedInventory[category];
-    const hasMatchingItems = items.some(item => 
-      item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    return hasMatchingItems || category.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const allCategories = useMemo(() => {
+    return Array.from(new Set(displayedInventory.map(i => i.category)));
+  }, [displayedInventory]);
+
+  const filteredCategories = useMemo(() => {
+    return Object.keys(groupedInventory).filter(category => {
+      if (selectedCategory !== "all" && category !== selectedCategory) {
+        return false;
+      }
+
+      const items = groupedInventory[category];
+      const hasMatchingItems = items.some(item => 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      return hasMatchingItems || category.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }, [groupedInventory, selectedCategory, searchQuery]);
 
   const componentRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: isGlobalSearch ? "بحث شامل - كل الفروع" : `جرد الأصول - ${currentBranch.name}`,
+    documentTitle: isGlobalSearch ? "بحث شامل - كل الفروع" : `جرد الأصول - ${currentBranchName}`,
   });
 
   const handleExport = () => {
-    // Flatten data for export
-    const itemsToExport = isGlobalSearch ? allItems : currentBranch.inventory;
+    const itemsToExport = isGlobalSearch ? allItems : currentBranchItems;
     
     const exportData = itemsToExport.map(item => {
       const price = item.price || 0;
@@ -94,7 +123,7 @@ export default function InventoryPage() {
       const total = price * quantity;
       const vat = total * 0.15;
       const totalWithVat = total + vat;
-      const branchInfo = (item as any).branchName ? { "الفرع": (item as any).branchName } : {};
+      const branchInfo = item.branchName ? { "الفرع": item.branchName } : {};
 
       return {
         ...branchInfo,
@@ -114,34 +143,32 @@ export default function InventoryPage() {
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     
-    // Set column widths
     const wscols = [
-      ...(isGlobalSearch ? [{wch: 20}] : []), // Branch column if global
-      {wch: 20}, // Category
-      {wch: 40}, // Name
-      {wch: 10}, // Quantity
-      {wch: 10}, // Unit
-      {wch: 15}, // Price
-      {wch: 20}, // Total before VAT
-      {wch: 15}, // VAT
-      {wch: 20}, // Total with VAT
-      {wch: 15}, // Status
-      {wch: 15}, // Last Check
-      {wch: 30}, // Notes
+      ...(isGlobalSearch ? [{wch: 20}] : []),
+      {wch: 20},
+      {wch: 40},
+      {wch: 10},
+      {wch: 10},
+      {wch: 15},
+      {wch: 20},
+      {wch: 15},
+      {wch: 20},
+      {wch: 15},
+      {wch: 15},
+      {wch: 30},
     ];
     ws['!cols'] = wscols;
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Inventory");
     
-    // Generate filename with date
     const date = new Date().toISOString().split('T')[0];
-    const fileName = `inventory_${isGlobalSearch ? 'all_branches' : currentBranch.id}_${date}.xlsx`;
+    const fileName = `inventory_${isGlobalSearch ? 'all_branches' : activeBranch}_${date}.xlsx`;
     
     XLSX.writeFile(wb, fileName);
   };
 
-  const getStatusLabel = (status?: string) => {
+  const getStatusLabel = (status?: string | null) => {
     switch(status) {
       case "good": return "جيد";
       case "maintenance": return "صيانة";
@@ -151,7 +178,7 @@ export default function InventoryPage() {
     }
   };
 
-  const getStatusBadge = (status?: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch(status) {
       case "good": 
         return <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200 gap-1"><CheckCircle2 className="w-3 h-3" /> جيد</Badge>;
@@ -167,9 +194,6 @@ export default function InventoryPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    // Format number in English locale (US) but keep SAR currency symbol if desired
-    // Or just format as number and append "SAR" manually to ensure English digits
-    // Using en-US locale ensures 123,456.78 format (English digits)
     return new Intl.NumberFormat('en-US', { 
       style: 'currency', 
       currency: 'SAR',
@@ -181,14 +205,12 @@ export default function InventoryPage() {
     return new Intl.NumberFormat('en-US').format(num);
   };
 
-  // Calculate stats - handle global vs branch
-  const itemsForStats = isGlobalSearch ? allItems : currentBranch.inventory;
+  const itemsForStats = isGlobalSearch ? allItems : currentBranchItems;
   const totalItems = itemsForStats.reduce((acc, item) => acc + item.quantity, 0);
   const totalValue = itemsForStats.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
   const totalVat = totalValue * 0.15;
   const totalValueWithVat = totalValue + totalVat;
   
-  // New Stats for Report
   const unpricedItemsCount = itemsForStats.filter(item => !item.price || item.price === 0).length;
   
   const categorySummaries = Object.keys(groupedInventory).map(category => {
@@ -206,7 +228,7 @@ export default function InventoryPage() {
 
   const InventoryList = () => (
     <>
-      {currentBranch.inventory.length === 0 ? (
+      {displayedInventory.length === 0 ? (
         <div className="text-center py-20 bg-muted/20 rounded-lg border border-dashed border-muted-foreground/20">
           <p className="text-muted-foreground text-lg">لا توجد بيانات متاحة لهذا الفرع حالياً</p>
         </div>
@@ -262,10 +284,10 @@ export default function InventoryPage() {
                         const totalWithVat = total + vat;
                         
                         return (
-                          <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black">
+                          <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black" data-testid={`row-item-${item.id}`}>
                             <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(index + 1)}</TableCell>
                             {isGlobalSearch && (
-                               <TableCell className="font-medium text-primary print:text-black text-sm">{(item as any).branchName}</TableCell>
+                               <TableCell className="font-medium text-primary print:text-black text-sm">{item.branchName}</TableCell>
                             )}
                             <TableCell className="font-semibold text-foreground/90 print:text-black">
                               {item.name}
@@ -299,7 +321,6 @@ export default function InventoryPage() {
                           </TableRow>
                         );
                       })}
-                      {/* Category Summary Row */}
                       {showPrices && (
                         <TableRow className="bg-muted/50 font-bold border-t-2 border-primary/20 print:border-black">
                           <TableCell colSpan={isGlobalSearch ? 5 : 4} className="text-center print:text-black">إجمالي {category}</TableCell>
@@ -319,32 +340,44 @@ export default function InventoryPage() {
     </>
   );
 
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">جاري تحميل البيانات...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="flex flex-col space-y-6 print:space-y-0">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">جرد الأصول والمعدات</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
             <p className="text-muted-foreground mt-1">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2" onClick={handlePrint}>
+            <Button variant="outline" className="gap-2" onClick={handlePrint} data-testid="button-print">
               <Printer className="w-4 h-4" />
               <span>طباعة</span>
             </Button>
-            <Button className="gap-2" onClick={handleExport}>
+            <Button className="gap-2" onClick={handleExport} data-testid="button-export">
               <Download className="w-4 h-4" />
               <span>تصدير Excel</span>
             </Button>
           </div>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 print:hidden">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="pb-2">
               <CardDescription>إجمالي الأصول</CardDescription>
-              <CardTitle className="text-3xl text-primary font-mono">{formatNumber(totalItems)}</CardTitle>
+              <CardTitle className="text-3xl text-primary font-mono" data-testid="text-total-items">{formatNumber(totalItems)}</CardTitle>
             </CardHeader>
           </Card>
           
@@ -353,7 +386,7 @@ export default function InventoryPage() {
               <Card className="bg-card">
                 <CardHeader className="pb-2">
                   <CardDescription>القيمة قبل الضريبة</CardDescription>
-                  <CardTitle className="text-2xl font-mono">{formatCurrency(totalValue)}</CardTitle>
+                  <CardTitle className="text-2xl font-mono" data-testid="text-total-value">{formatCurrency(totalValue)}</CardTitle>
                 </CardHeader>
               </Card>
               <Card className="bg-card">
@@ -365,7 +398,7 @@ export default function InventoryPage() {
               <Card className="bg-green-50/50 border-green-100">
                 <CardHeader className="pb-2">
                   <CardDescription>الإجمالي شامل الضريبة</CardDescription>
-                  <CardTitle className="text-2xl text-green-700 font-mono">{formatCurrency(totalValueWithVat)}</CardTitle>
+                  <CardTitle className="text-2xl text-green-700 font-mono" data-testid="text-total-with-vat">{formatCurrency(totalValueWithVat)}</CardTitle>
                 </CardHeader>
               </Card>
             </>
@@ -387,14 +420,13 @@ export default function InventoryPage() {
         </div>
 
         <div ref={componentRef} className="print:w-full">
-          {/* Print Header */}
           <div className="hidden print:flex flex-col items-center mb-8 border-b-2 border-black pb-4 pt-4">
             <div className="flex items-center gap-4 mb-4">
                <img src={logo} alt="Butter Bakery" className="w-32 h-auto" />
             </div>
             
             <div className="flex justify-between w-full px-12 mt-4 text-sm font-bold border-t border-black pt-4">
-               <span>الفرع: {currentBranch.name}</span>
+               <span>الفرع: {currentBranchName}</span>
                <span>تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')} ({new Date().toLocaleDateString('en-GB')})</span>
             </div>
 
@@ -427,10 +459,12 @@ export default function InventoryPage() {
 
           <Tabs defaultValue="medina" className="w-full" onValueChange={setActiveBranch} value={activeBranch}>
             <TabsList className="w-full md:w-auto grid grid-cols-2 md:inline-flex h-auto p-1 bg-muted/50 print:hidden">
-              <TabsTrigger value="medina" className="py-2.5 px-6 text-base">فرع المدينة المنورة</TabsTrigger>
-              <TabsTrigger value="tabuk" className="py-2.5 px-6 text-base">فرع تبوك</TabsTrigger>
-              <TabsTrigger value="riyadh" className="py-2.5 px-6 text-base">فرع الرياض</TabsTrigger>
-              <TabsTrigger value="all" className="py-2.5 px-6 text-base font-bold text-primary">بحث شامل (كل الفروع)</TabsTrigger>
+              {branches.map(branch => (
+                <TabsTrigger key={branch.id} value={branch.id} className="py-2.5 px-6 text-base" data-testid={`tab-branch-${branch.id}`}>
+                  {branch.name}
+                </TabsTrigger>
+              ))}
+              <TabsTrigger value="all" className="py-2.5 px-6 text-base font-bold text-primary" data-testid="tab-branch-all">بحث شامل (كل الفروع)</TabsTrigger>
             </TabsList>
 
             <div className="mt-6 flex flex-col md:flex-row items-start md:items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
@@ -441,13 +475,14 @@ export default function InventoryPage() {
                   className="pr-10 bg-background/50 border-muted"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  data-testid="input-search"
                 />
               </div>
               
               <div className="flex items-center gap-4 w-full md:w-auto">
                 <div className="w-full md:w-[200px]">
                   <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger>
+                    <SelectTrigger data-testid="select-category">
                       <SelectValue placeholder="تصفية حسب الفئة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -464,23 +499,18 @@ export default function InventoryPage() {
                     id="show-prices" 
                     checked={showPrices}
                     onCheckedChange={setShowPrices}
+                    data-testid="switch-show-prices"
                   />
                   <Label htmlFor="show-prices" className="cursor-pointer">إظهار الأسعار</Label>
                 </div>
               </div>
             </div>
 
-            <TabsContent value="medina" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
-              <InventoryList />
-            </TabsContent>
-
-            <TabsContent value="tabuk" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
-              <InventoryList />
-            </TabsContent>
-
-            <TabsContent value="riyadh" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
-              <InventoryList />
-            </TabsContent>
+            {branches.map(branch => (
+              <TabsContent key={branch.id} value={branch.id} className="mt-6 space-y-8 print:mt-0 print:space-y-4">
+                <InventoryList />
+              </TabsContent>
+            ))}
 
             <TabsContent value="all" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
                {searchQuery.length > 0 || selectedCategory !== 'all' ? (
@@ -495,7 +525,6 @@ export default function InventoryPage() {
             </TabsContent>
           </Tabs>
 
-          {/* Category Summary Table for Print */}
           {showPrices && (
             <div className="hidden print:block mt-8 mb-8 break-inside-avoid">
               <h3 className="text-xl font-bold mb-4 border-b border-black pb-2">ملخص المجموعات</h3>
@@ -534,7 +563,6 @@ export default function InventoryPage() {
             </div>
           )}
 
-          {/* Print Footer */}
           <div className="hidden print:flex justify-between items-end mt-12 pt-8 border-t border-black text-sm">
              <div className="text-center">
                 <p className="mb-8 font-bold">مدير الفرع</p>
