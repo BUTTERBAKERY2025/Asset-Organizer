@@ -399,6 +399,7 @@ export default function InventoryPage() {
             <TabsList className="w-full md:w-auto grid grid-cols-2 md:inline-flex h-auto p-1 bg-muted/50 print:hidden">
               <TabsTrigger value="medina" className="py-2.5 px-6 text-base">فرع المدينة المنورة</TabsTrigger>
               <TabsTrigger value="tabuk" className="py-2.5 px-6 text-base">فرع تبوك</TabsTrigger>
+              <TabsTrigger value="riyadh" className="py-2.5 px-6 text-base">فرع الرياض</TabsTrigger>
             </TabsList>
 
             <div className="mt-6 flex flex-col md:flex-row items-start md:items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
@@ -443,6 +444,10 @@ export default function InventoryPage() {
             </TabsContent>
 
             <TabsContent value="tabuk" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
+              <InventoryList />
+            </TabsContent>
+
+            <TabsContent value="riyadh" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
               <InventoryList />
             </TabsContent>
           </Tabs>
