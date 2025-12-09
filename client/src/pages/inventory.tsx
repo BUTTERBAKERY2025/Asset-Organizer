@@ -15,6 +15,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Search, Download, Printer, Filter, FileText, CheckCircle2, AlertTriangle, XCircle, HelpCircle, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
@@ -23,6 +26,8 @@ import { cn } from "@/lib/utils";
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeBranch, setActiveBranch] = useState("medina");
+  const [showPrices, setShowPrices] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   // Get current branch data
   const currentBranch = INVENTORY_DATA.find(b => b.id === activeBranch) || INVENTORY_DATA[0];
@@ -36,8 +41,16 @@ export default function InventoryPage() {
     return acc;
   }, {} as Record<string, InventoryItem[]>);
 
+  // Get all unique categories for the dropdown
+  const allCategories = Object.keys(groupedInventory);
+
   // Filter logic
   const filteredCategories = Object.keys(groupedInventory).filter(category => {
+    // Filter by selected category
+    if (selectedCategory !== "all" && category !== selectedCategory) {
+      return false;
+    }
+
     const items = groupedInventory[category];
     const hasMatchingItems = items.some(item => 
       item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -184,9 +197,11 @@ export default function InventoryPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-baseline gap-4">
                     <CardTitle className="text-xl text-primary font-bold print:text-black">{category}</CardTitle>
-                    <span className="text-sm text-muted-foreground font-mono print:text-black">
-                       (Total: {formatCurrency(categoryTotalValue)})
-                    </span>
+                    {showPrices && (
+                      <span className="text-sm text-muted-foreground font-mono print:text-black">
+                         (Total: {formatCurrency(categoryTotalValue)})
+                      </span>
+                    )}
                   </div>
                   <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm print:hidden">
                     {formatNumber(categoryItems.length)} عنصر
@@ -200,16 +215,20 @@ export default function InventoryPage() {
                       <TableHead className="text-right w-[50px] print:text-black font-bold">#</TableHead>
                       <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
                       <TableHead className="text-right w-[80px] print:text-black font-bold">الكمية</TableHead>
-                      <TableHead className="text-right w-[100px] print:text-black font-bold">السعر</TableHead>
-                      <TableHead className="text-right w-[100px] print:text-black font-bold">الإجمالي</TableHead>
-                      <TableHead className="text-right w-[100px] print:text-black font-bold">الضريبة (15%)</TableHead>
-                      <TableHead className="text-right w-[110px] print:text-black font-bold">الصافي</TableHead>
+                      {showPrices && (
+                        <>
+                          <TableHead className="text-right w-[100px] print:text-black font-bold">السعر</TableHead>
+                          <TableHead className="text-right w-[100px] print:text-black font-bold">الإجمالي</TableHead>
+                          <TableHead className="text-right w-[100px] print:text-black font-bold">الضريبة (15%)</TableHead>
+                          <TableHead className="text-right w-[110px] print:text-black font-bold">الصافي</TableHead>
+                        </>
+                      )}
                       <TableHead className="text-right w-[100px] print:text-black font-bold">الحالة</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {categoryItems
-                      .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || category.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
                       .map((item, index) => {
                         const total = (item.price || 0) * item.quantity;
                         const vat = total * 0.15;
@@ -227,18 +246,22 @@ export default function InventoryPage() {
                                 {formatNumber(item.quantity)}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
-                              {item.price ? formatCurrency(item.price) : "-"}
-                            </TableCell>
-                            <TableCell className="text-foreground print:text-black font-mono text-xs">
-                              {item.price ? formatCurrency(total) : "-"}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
-                              {item.price ? formatCurrency(vat) : "-"}
-                            </TableCell>
-                            <TableCell className="font-bold text-green-700 print:text-black font-mono text-xs">
-                              {item.price ? formatCurrency(totalWithVat) : "-"}
-                            </TableCell>
+                            {showPrices && (
+                              <>
+                                <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                                  {item.price ? formatCurrency(item.price) : "-"}
+                                </TableCell>
+                                <TableCell className="text-foreground print:text-black font-mono text-xs">
+                                  {item.price ? formatCurrency(total) : "-"}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                                  {item.price ? formatCurrency(vat) : "-"}
+                                </TableCell>
+                                <TableCell className="font-bold text-green-700 print:text-black font-mono text-xs">
+                                  {item.price ? formatCurrency(totalWithVat) : "-"}
+                                </TableCell>
+                              </>
+                            )}
                             <TableCell className="print:text-black">
                               <div className="print:hidden scale-90 origin-right">{getStatusBadge(item.status)}</div>
                               <div className="hidden print:block text-xs">{getStatusLabel(item.status)}</div>
@@ -247,13 +270,15 @@ export default function InventoryPage() {
                         );
                       })}
                       {/* Category Summary Row */}
-                      <TableRow className="bg-muted/50 font-bold border-t-2 border-primary/20 print:border-black">
-                        <TableCell colSpan={4} className="text-center print:text-black">إجمالي {category}</TableCell>
-                        <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue)}</TableCell>
-                        <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue * 0.15)}</TableCell>
-                        <TableCell className="font-mono text-green-700 print:text-black">{formatCurrency(categoryTotalValue * 1.15)}</TableCell>
-                        <TableCell></TableCell>
-                      </TableRow>
+                      {showPrices && (
+                        <TableRow className="bg-muted/50 font-bold border-t-2 border-primary/20 print:border-black">
+                          <TableCell colSpan={4} className="text-center print:text-black">إجمالي {category}</TableCell>
+                          <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue)}</TableCell>
+                          <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue * 0.15)}</TableCell>
+                          <TableCell className="font-mono text-green-700 print:text-black">{formatCurrency(categoryTotalValue * 1.15)}</TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -292,26 +317,31 @@ export default function InventoryPage() {
               <CardTitle className="text-3xl text-primary font-mono">{formatNumber(totalItems)}</CardTitle>
             </CardHeader>
           </Card>
-          <Card className="bg-card">
-            <CardHeader className="pb-2">
-              <CardDescription>القيمة قبل الضريبة</CardDescription>
-              <CardTitle className="text-2xl font-mono">{formatCurrency(totalValue)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card className="bg-card">
-            <CardHeader className="pb-2">
-              <CardDescription>قيمة الضريبة (15%)</CardDescription>
-              <CardTitle className="text-2xl font-mono text-muted-foreground">{formatCurrency(totalVat)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card className="bg-green-50/50 border-green-100">
-            <CardHeader className="pb-2">
-              <CardDescription>الإجمالي شامل الضريبة</CardDescription>
-              <CardTitle className="text-2xl text-green-700 font-mono">{formatCurrency(totalValueWithVat)}</CardTitle>
-            </CardHeader>
-          </Card>
           
-          {unpricedItemsCount > 0 && (
+          {showPrices && (
+            <>
+              <Card className="bg-card">
+                <CardHeader className="pb-2">
+                  <CardDescription>القيمة قبل الضريبة</CardDescription>
+                  <CardTitle className="text-2xl font-mono">{formatCurrency(totalValue)}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card className="bg-card">
+                <CardHeader className="pb-2">
+                  <CardDescription>قيمة الضريبة (15%)</CardDescription>
+                  <CardTitle className="text-2xl font-mono text-muted-foreground">{formatCurrency(totalVat)}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card className="bg-green-50/50 border-green-100">
+                <CardHeader className="pb-2">
+                  <CardDescription>الإجمالي شامل الضريبة</CardDescription>
+                  <CardTitle className="text-2xl text-green-700 font-mono">{formatCurrency(totalValueWithVat)}</CardTitle>
+                </CardHeader>
+              </Card>
+            </>
+          )}
+          
+          {unpricedItemsCount > 0 && showPrices && (
             <Card className="bg-orange-50/50 border-orange-100 md:col-span-4">
               <CardContent className="flex items-center gap-4 py-4">
                 <div className="bg-orange-100 p-2 rounded-full">
@@ -343,20 +373,25 @@ export default function InventoryPage() {
                   <span className="text-muted-foreground print:text-black text-sm">إجمالي الأصول</span>
                   <span className="text-xl font-mono">{formatNumber(totalItems)}</span>
                </div>
-               <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
-                  <span className="text-muted-foreground print:text-black text-sm">القيمة قبل الضريبة</span>
-                  <span className="text-xl font-mono">{formatCurrency(totalValue)}</span>
-               </div>
-               <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
-                  <span className="text-muted-foreground print:text-black text-sm">الإجمالي شامل الضريبة</span>
-                  <span className="text-xl font-mono text-green-700 print:text-black">{formatCurrency(totalValueWithVat)}</span>
-               </div>
-               <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
-                  <span className="text-muted-foreground print:text-black text-sm">أصناف غير مسعرة</span>
-                  <span className={`text-xl font-mono ${unpricedItemsCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {unpricedItemsCount}
-                  </span>
-               </div>
+               
+               {showPrices && (
+                 <>
+                   <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
+                      <span className="text-muted-foreground print:text-black text-sm">القيمة قبل الضريبة</span>
+                      <span className="text-xl font-mono">{formatCurrency(totalValue)}</span>
+                   </div>
+                   <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
+                      <span className="text-muted-foreground print:text-black text-sm">الإجمالي شامل الضريبة</span>
+                      <span className="text-xl font-mono text-green-700 print:text-black">{formatCurrency(totalValueWithVat)}</span>
+                   </div>
+                   <div className="flex flex-col border-r border-primary/20 print:border-black px-4">
+                      <span className="text-muted-foreground print:text-black text-sm">أصناف غير مسعرة</span>
+                      <span className={`text-xl font-mono ${unpricedItemsCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {unpricedItemsCount}
+                      </span>
+                   </div>
+                 </>
+               )}
             </div>
           </div>
 
@@ -366,8 +401,8 @@ export default function InventoryPage() {
               <TabsTrigger value="tabuk" className="py-2.5 px-6 text-base">فرع تبوك</TabsTrigger>
             </TabsList>
 
-            <div className="mt-6 flex items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
-              <div className="relative flex-1 max-w-md">
+            <div className="mt-6 flex flex-col md:flex-row items-start md:items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
+              <div className="relative flex-1 w-full md:w-auto max-w-md">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input 
                   placeholder="بحث عن أصل أو معدة..." 
@@ -376,9 +411,31 @@ export default function InventoryPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button variant="ghost" size="icon">
-                <Filter className="w-4 h-4 text-muted-foreground" />
-              </Button>
+              
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="w-full md:w-[200px]">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="تصفية حسب الفئة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الفئات</SelectItem>
+                      {allCategories.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2 border-r pr-4 mr-4">
+                  <Switch 
+                    id="show-prices" 
+                    checked={showPrices}
+                    onCheckedChange={setShowPrices}
+                  />
+                  <Label htmlFor="show-prices" className="cursor-pointer">إظهار الأسعار</Label>
+                </div>
+              </div>
             </div>
 
             <TabsContent value="medina" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
@@ -391,41 +448,43 @@ export default function InventoryPage() {
           </Tabs>
 
           {/* Category Summary Table for Print */}
-          <div className="hidden print:block mt-8 mb-8 break-inside-avoid">
-            <h3 className="text-xl font-bold mb-4 border-b border-black pb-2">ملخص المجموعات</h3>
-            <Table className="border border-black">
-              <TableHeader className="bg-muted/30">
-                <TableRow className="border-black">
-                  <TableHead className="text-right font-bold text-black border-black">المجموعة / الفئة</TableHead>
-                  <TableHead className="text-right font-bold text-black border-black">عدد الأصناف</TableHead>
-                  <TableHead className="text-right font-bold text-black border-black">إجمالي الكميات</TableHead>
-                  <TableHead className="text-right font-bold text-black border-black">القيمة (قبل الضريبة)</TableHead>
-                  <TableHead className="text-right font-bold text-black border-black">الضريبة (15%)</TableHead>
-                  <TableHead className="text-right font-bold text-black border-black">الإجمالي (شامل الضريبة)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {categorySummaries.map((summary) => (
-                  <TableRow key={summary.category} className="border-black">
-                    <TableCell className="font-bold border-black">{summary.category}</TableCell>
-                    <TableCell className="font-mono border-black">{summary.itemsCount}</TableCell>
-                    <TableCell className="font-mono border-black">{summary.count}</TableCell>
-                    <TableCell className="font-mono border-black">{formatCurrency(summary.value)}</TableCell>
-                    <TableCell className="font-mono border-black">{formatCurrency(summary.vat)}</TableCell>
-                    <TableCell className="font-mono font-bold border-black">{formatCurrency(summary.total)}</TableCell>
+          {showPrices && (
+            <div className="hidden print:block mt-8 mb-8 break-inside-avoid">
+              <h3 className="text-xl font-bold mb-4 border-b border-black pb-2">ملخص المجموعات</h3>
+              <Table className="border border-black">
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="border-black">
+                    <TableHead className="text-right font-bold text-black border-black">المجموعة / الفئة</TableHead>
+                    <TableHead className="text-right font-bold text-black border-black">عدد الأصناف</TableHead>
+                    <TableHead className="text-right font-bold text-black border-black">إجمالي الكميات</TableHead>
+                    <TableHead className="text-right font-bold text-black border-black">القيمة (قبل الضريبة)</TableHead>
+                    <TableHead className="text-right font-bold text-black border-black">الضريبة (15%)</TableHead>
+                    <TableHead className="text-right font-bold text-black border-black">الإجمالي (شامل الضريبة)</TableHead>
                   </TableRow>
-                ))}
-                <TableRow className="bg-muted/50 border-black font-bold text-lg">
-                  <TableCell className="border-black">المجموع الكلي</TableCell>
-                  <TableCell className="font-mono border-black">{categorySummaries.reduce((acc, s) => acc + s.itemsCount, 0)}</TableCell>
-                  <TableCell className="font-mono border-black">{formatNumber(totalItems)}</TableCell>
-                  <TableCell className="font-mono border-black">{formatCurrency(totalValue)}</TableCell>
-                  <TableCell className="font-mono border-black">{formatCurrency(totalVat)}</TableCell>
-                  <TableCell className="font-mono border-black">{formatCurrency(totalValueWithVat)}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {categorySummaries.map((summary) => (
+                    <TableRow key={summary.category} className="border-black">
+                      <TableCell className="font-bold border-black">{summary.category}</TableCell>
+                      <TableCell className="font-mono border-black">{summary.itemsCount}</TableCell>
+                      <TableCell className="font-mono border-black">{summary.count}</TableCell>
+                      <TableCell className="font-mono border-black">{formatCurrency(summary.value)}</TableCell>
+                      <TableCell className="font-mono border-black">{formatCurrency(summary.vat)}</TableCell>
+                      <TableCell className="font-mono font-bold border-black">{formatCurrency(summary.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/50 border-black font-bold text-lg">
+                    <TableCell className="border-black">المجموع الكلي</TableCell>
+                    <TableCell className="font-mono border-black">{categorySummaries.reduce((acc, s) => acc + s.itemsCount, 0)}</TableCell>
+                    <TableCell className="font-mono border-black">{formatNumber(totalItems)}</TableCell>
+                    <TableCell className="font-mono border-black">{formatCurrency(totalValue)}</TableCell>
+                    <TableCell className="font-mono border-black">{formatCurrency(totalVat)}</TableCell>
+                    <TableCell className="font-mono border-black">{formatCurrency(totalValueWithVat)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           {/* Print Footer */}
           <div className="hidden print:flex justify-between items-end mt-12 pt-8 border-t border-black text-sm">
