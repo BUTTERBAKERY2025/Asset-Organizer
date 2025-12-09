@@ -29,20 +29,39 @@ export default function InventoryPage() {
   const [showPrices, setShowPrices] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  // Get current branch data
+  // Global search logic
+  const isGlobalSearch = activeBranch === "all";
+
+  // Flatten all items for global search
+  const allItems = isGlobalSearch 
+    ? INVENTORY_DATA.flatMap(branch => 
+        branch.inventory.map(item => ({
+          ...item,
+          branchName: branch.name,
+          branchId: branch.id
+        }))
+      )
+    : [];
+
+  // Get current branch data (fallback to first branch if "all" is selected but we need standard branch structure for some reason)
   const currentBranch = INVENTORY_DATA.find(b => b.id === activeBranch) || INVENTORY_DATA[0];
   
-  // Group items by category
-  const groupedInventory = currentBranch.inventory.reduce((acc, item) => {
+  // Determine inventory list based on mode
+  const displayedInventory = isGlobalSearch ? allItems : currentBranch.inventory;
+
+  // Group items logic - Handle both single branch and global search
+  const groupedInventory = displayedInventory.reduce((acc, item) => {
     if (!acc[item.category]) {
       acc[item.category] = [];
     }
     acc[item.category].push(item);
     return acc;
-  }, {} as Record<string, InventoryItem[]>);
+  }, {} as Record<string, (InventoryItem & { branchName?: string })[]>);
 
   // Get all unique categories for the dropdown
-  const allCategories = Object.keys(groupedInventory);
+  const allCategories = isGlobalSearch 
+    ? Array.from(new Set(allItems.map(i => i.category)))
+    : Object.keys(groupedInventory);
 
   // Filter logic
   const filteredCategories = Object.keys(groupedInventory).filter(category => {
@@ -62,19 +81,23 @@ export default function InventoryPage() {
 
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: `جرد الأصول - ${currentBranch.name}`,
+    documentTitle: isGlobalSearch ? "بحث شامل - كل الفروع" : `جرد الأصول - ${currentBranch.name}`,
   });
 
   const handleExport = () => {
     // Flatten data for export
-    const exportData = currentBranch.inventory.map(item => {
+    const itemsToExport = isGlobalSearch ? allItems : currentBranch.inventory;
+    
+    const exportData = itemsToExport.map(item => {
       const price = item.price || 0;
       const quantity = item.quantity;
       const total = price * quantity;
       const vat = total * 0.15;
       const totalWithVat = total + vat;
+      const branchInfo = (item as any).branchName ? { "الفرع": (item as any).branchName } : {};
 
       return {
+        ...branchInfo,
         "الفئة": item.category,
         "اسم الصنف": item.name,
         "الكمية": item.quantity,
@@ -93,6 +116,7 @@ export default function InventoryPage() {
     
     // Set column widths
     const wscols = [
+      ...(isGlobalSearch ? [{wch: 20}] : []), // Branch column if global
       {wch: 20}, // Category
       {wch: 40}, // Name
       {wch: 10}, // Quantity
@@ -112,7 +136,7 @@ export default function InventoryPage() {
     
     // Generate filename with date
     const date = new Date().toISOString().split('T')[0];
-    const fileName = `inventory_${currentBranch.id}_${date}.xlsx`;
+    const fileName = `inventory_${isGlobalSearch ? 'all_branches' : currentBranch.id}_${date}.xlsx`;
     
     XLSX.writeFile(wb, fileName);
   };
@@ -157,15 +181,15 @@ export default function InventoryPage() {
     return new Intl.NumberFormat('en-US').format(num);
   };
 
-  // Calculate stats
-  const totalItems = currentBranch.inventory.reduce((acc, item) => acc + item.quantity, 0);
-  const totalCategories = Object.keys(groupedInventory).length;
-  const totalValue = currentBranch.inventory.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
+  // Calculate stats - handle global vs branch
+  const itemsForStats = isGlobalSearch ? allItems : currentBranch.inventory;
+  const totalItems = itemsForStats.reduce((acc, item) => acc + item.quantity, 0);
+  const totalValue = itemsForStats.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
   const totalVat = totalValue * 0.15;
   const totalValueWithVat = totalValue + totalVat;
   
   // New Stats for Report
-  const unpricedItemsCount = currentBranch.inventory.filter(item => !item.price || item.price === 0).length;
+  const unpricedItemsCount = itemsForStats.filter(item => !item.price || item.price === 0).length;
   
   const categorySummaries = Object.keys(groupedInventory).map(category => {
     const items = groupedInventory[category];
@@ -213,6 +237,9 @@ export default function InventoryPage() {
                   <TableHeader className="bg-muted/30 print:bg-transparent">
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-right w-[50px] print:text-black font-bold">#</TableHead>
+                      {isGlobalSearch && (
+                        <TableHead className="text-right w-[120px] print:text-black font-bold text-primary">الفرع</TableHead>
+                      )}
                       <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
                       <TableHead className="text-right w-[80px] print:text-black font-bold">الكمية</TableHead>
                       {showPrices && (
@@ -237,6 +264,9 @@ export default function InventoryPage() {
                         return (
                           <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black">
                             <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(index + 1)}</TableCell>
+                            {isGlobalSearch && (
+                               <TableCell className="font-medium text-primary print:text-black text-sm">{(item as any).branchName}</TableCell>
+                            )}
                             <TableCell className="font-semibold text-foreground/90 print:text-black">
                               {item.name}
                               {item.lastCheck && <div className="text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
@@ -272,7 +302,7 @@ export default function InventoryPage() {
                       {/* Category Summary Row */}
                       {showPrices && (
                         <TableRow className="bg-muted/50 font-bold border-t-2 border-primary/20 print:border-black">
-                          <TableCell colSpan={4} className="text-center print:text-black">إجمالي {category}</TableCell>
+                          <TableCell colSpan={isGlobalSearch ? 5 : 4} className="text-center print:text-black">إجمالي {category}</TableCell>
                           <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue)}</TableCell>
                           <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue * 0.15)}</TableCell>
                           <TableCell className="font-mono text-green-700 print:text-black">{formatCurrency(categoryTotalValue * 1.15)}</TableCell>
@@ -400,6 +430,7 @@ export default function InventoryPage() {
               <TabsTrigger value="medina" className="py-2.5 px-6 text-base">فرع المدينة المنورة</TabsTrigger>
               <TabsTrigger value="tabuk" className="py-2.5 px-6 text-base">فرع تبوك</TabsTrigger>
               <TabsTrigger value="riyadh" className="py-2.5 px-6 text-base">فرع الرياض</TabsTrigger>
+              <TabsTrigger value="all" className="py-2.5 px-6 text-base font-bold text-primary">بحث شامل (كل الفروع)</TabsTrigger>
             </TabsList>
 
             <div className="mt-6 flex flex-col md:flex-row items-start md:items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
@@ -449,6 +480,18 @@ export default function InventoryPage() {
 
             <TabsContent value="riyadh" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
               <InventoryList />
+            </TabsContent>
+
+            <TabsContent value="all" className="mt-6 space-y-8 print:mt-0 print:space-y-4">
+               {searchQuery.length > 0 || selectedCategory !== 'all' ? (
+                 <InventoryList />
+               ) : (
+                 <div className="text-center py-20 bg-muted/20 rounded-lg border border-dashed border-muted-foreground/20">
+                   <p className="text-muted-foreground text-lg font-bold mb-2">البحث الشامل في جميع الفروع</p>
+                   <p className="text-muted-foreground">استخدم شريط البحث أو الفلاتر أعلاه للبحث عن أصل معين في كل الفروع في وقت واحد.</p>
+                   <p className="text-muted-foreground text-sm mt-2">(سيظهر اسم الفرع بجانب كل نتيجة)</p>
+                 </div>
+               )}
             </TabsContent>
           </Tabs>
 
