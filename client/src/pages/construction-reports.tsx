@@ -173,22 +173,29 @@ export default function ConstructionReportsPage() {
   }, [workItems, filteredProjects]);
 
   const workItemsByCategoryData = useMemo(() => {
-    const categoryCount: Record<number, { count: number; cost: number }> = {};
+    const categoryCount: Record<number, { count: number; cost: number; actualCost: number }> = {};
     workItemsByProject.forEach(w => {
       if (w.categoryId) {
         if (!categoryCount[w.categoryId]) {
-          categoryCount[w.categoryId] = { count: 0, cost: 0 };
+          categoryCount[w.categoryId] = { count: 0, cost: 0, actualCost: 0 };
         }
         categoryCount[w.categoryId].count += 1;
-        categoryCount[w.categoryId].cost += Number(w.estimatedCost) || 0;
+        categoryCount[w.categoryId].cost += Number(w.costEstimate) || 0;
+        categoryCount[w.categoryId].actualCost += Number(w.actualCost) || 0;
       }
     });
-    return Object.entries(categoryCount).map(([catId, data], index) => ({
-      name: categoryMap[parseInt(catId)] || `فئة ${catId}`,
-      count: data.count,
-      cost: data.cost,
-      color: CHART_COLORS[index % CHART_COLORS.length],
-    }));
+    const totalActualCost = Object.values(categoryCount).reduce((sum, d) => sum + d.actualCost, 0);
+    return Object.entries(categoryCount)
+      .map(([catId, data], index) => ({
+        id: parseInt(catId),
+        name: categoryMap[parseInt(catId)] || `فئة ${catId}`,
+        count: data.count,
+        cost: data.cost,
+        actualCost: data.actualCost,
+        percentage: totalActualCost > 0 ? (data.actualCost / totalActualCost * 100) : 0,
+        color: CHART_COLORS[index % CHART_COLORS.length],
+      }))
+      .sort((a, b) => b.actualCost - a.actualCost);
   }, [workItemsByProject, categoryMap]);
 
   const workItemsStatusData = useMemo(() => {
@@ -206,12 +213,16 @@ export default function ConstructionReportsPage() {
   const projectWorkItemsSummary = useMemo(() => {
     return filteredProjects.map(project => {
       const projectItems = workItems.filter(w => w.projectId === project.id);
-      const totalCost = projectItems.reduce((sum, w) => sum + (Number(w.estimatedCost) || 0), 0);
+      const totalCost = projectItems.reduce((sum, w) => sum + (Number(w.actualCost) || 0), 0);
       const completedItems = projectItems.filter(w => w.status === "completed").length;
-      const categoryBreakdown: Record<string, number> = {};
+      const categoryBreakdown: Record<string, { count: number; cost: number }> = {};
       projectItems.forEach(w => {
         const catName = w.categoryId ? (categoryMap[w.categoryId] || `فئة ${w.categoryId}`) : "غير محدد";
-        categoryBreakdown[catName] = (categoryBreakdown[catName] || 0) + 1;
+        if (!categoryBreakdown[catName]) {
+          categoryBreakdown[catName] = { count: 0, cost: 0 };
+        }
+        categoryBreakdown[catName].count += 1;
+        categoryBreakdown[catName].cost += Number(w.actualCost) || 0;
       });
       return {
         projectId: project.id,
@@ -515,21 +526,77 @@ export default function ConstructionReportsPage() {
             </TabsContent>
 
             <TabsContent value="workitems" className="mt-4 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>تفصيل التكاليف حسب الفئة</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>الفئة</TableHead>
+                        <TableHead>عدد البنود</TableHead>
+                        <TableHead>إجمالي التكلفة</TableHead>
+                        <TableHead>النسبة</TableHead>
+                        <TableHead className="w-32">التوزيع</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {workItemsByCategoryData.map((cat, index) => (
+                        <TableRow key={cat.id} data-testid={`row-category-${cat.id}`}>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
+                          <TableCell className="font-medium">{cat.name}</TableCell>
+                          <TableCell>{cat.count}</TableCell>
+                          <TableCell className="font-bold text-amber-600">{cat.actualCost.toLocaleString()} ر.س</TableCell>
+                          <TableCell>{cat.percentage.toFixed(1)}%</TableCell>
+                          <TableCell>
+                            <Progress value={cat.percentage} className="w-24" />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {workItemsByCategoryData.length > 0 && (
+                        <TableRow className="bg-muted/50 font-bold">
+                          <TableCell></TableCell>
+                          <TableCell>الإجمالي</TableCell>
+                          <TableCell>{workItemsByCategoryData.reduce((sum, c) => sum + c.count, 0)}</TableCell>
+                          <TableCell className="text-amber-600">{workItemsByCategoryData.reduce((sum, c) => sum + c.actualCost, 0).toLocaleString()} ر.س</TableCell>
+                          <TableCell>100%</TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                  {workItemsByCategoryData.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">لا توجد بنود عمل</p>
+                  )}
+                </CardContent>
+              </Card>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>بنود العمل حسب الفئة</CardTitle>
+                    <CardTitle>توزيع التكاليف حسب الفئة</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {workItemsByCategoryData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={workItemsByCategoryData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="name" />
-                          <YAxis />
-                          <Tooltip />
-                          <Bar dataKey="count" fill="#3b82f6" name="عدد البنود" />
-                        </BarChart>
+                      <ResponsiveContainer width="100%" height={350}>
+                        <PieChart>
+                          <Pie
+                            data={workItemsByCategoryData}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={100}
+                            dataKey="actualCost"
+                            label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                          >
+                            {workItemsByCategoryData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => `${value.toLocaleString()} ر.س`} />
+                          <Legend />
+                        </PieChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">لا توجد بنود عمل</div>
@@ -543,7 +610,7 @@ export default function ConstructionReportsPage() {
                   </CardHeader>
                   <CardContent>
                     {workItemsStatusData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={350}>
                         <PieChart>
                           <Pie
                             data={workItemsStatusData}
@@ -570,17 +637,17 @@ export default function ConstructionReportsPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>تكلفة البنود حسب الفئة</CardTitle>
+                  <CardTitle>مقارنة التكاليف بين الفئات</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {workItemsByCategoryData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={workItemsByCategoryData}>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={workItemsByCategoryData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
+                        <XAxis type="number" tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
+                        <YAxis dataKey="name" type="category" width={120} />
                         <Tooltip formatter={(value: number) => `${value.toLocaleString()} ر.س`} />
-                        <Bar dataKey="cost" fill="#f59e0b" name="التكلفة التقديرية" />
+                        <Bar dataKey="actualCost" fill="#f59e0b" name="التكلفة الفعلية" />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -617,9 +684,12 @@ export default function ConstructionReportsPage() {
                           <TableCell>{summary.totalCost.toLocaleString()} ر.س</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
-                              {Object.entries(summary.categoryBreakdown).slice(0, 3).map(([cat, count]) => (
+                              {Object.entries(summary.categoryBreakdown)
+                                .sort((a, b) => b[1].cost - a[1].cost)
+                                .slice(0, 3)
+                                .map(([cat, data]) => (
                                 <Badge key={cat} variant="outline" className="text-xs">
-                                  {cat}: {count}
+                                  {cat}: {data.cost.toLocaleString()} ر.س
                                 </Badge>
                               ))}
                               {Object.keys(summary.categoryBreakdown).length > 3 && (
