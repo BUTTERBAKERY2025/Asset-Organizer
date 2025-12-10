@@ -29,7 +29,7 @@ export default function UsersPage() {
   const { user: currentUser, isAdmin, isLoading: authLoading, isAuthenticated } = useAuth();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({
-    phone: "",
+    username: "",
     password: "",
     firstName: "",
     lastName: "",
@@ -76,7 +76,7 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "تم إضافة المستخدم بنجاح" });
       setIsAddDialogOpen(false);
-      setNewUser({ phone: "", password: "", firstName: "", lastName: "", role: "viewer" });
+      setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer" });
     },
     onError: (error: Error) => {
       toast({ title: error.message || "فشل إضافة المستخدم", variant: "destructive" });
@@ -144,8 +144,8 @@ export default function UsersPage() {
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUser.phone || !newUser.password) {
-      toast({ title: "رقم الهاتف وكلمة المرور مطلوبان", variant: "destructive" });
+    if (!newUser.username || !newUser.password) {
+      toast({ title: "اسم المستخدم وكلمة المرور مطلوبان", variant: "destructive" });
       return;
     }
     createUserMutation.mutate(newUser);
@@ -195,17 +195,17 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">رقم الهاتف *</Label>
+                  <Label htmlFor="username">اسم المستخدم *</Label>
                   <Input
-                    id="phone"
-                    type="tel"
-                    value={newUser.phone}
-                    onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                    placeholder="05xxxxxxxx"
+                    id="username"
+                    type="text"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    placeholder="username"
                     className="text-left"
                     dir="ltr"
                     required
-                    data-testid="input-phone"
+                    data-testid="input-username"
                   />
                 </div>
                 <div className="space-y-2">
@@ -286,7 +286,7 @@ export default function UsersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">المستخدم</TableHead>
-                    <TableHead className="text-right">رقم الهاتف</TableHead>
+                    <TableHead className="text-right">اسم المستخدم</TableHead>
                     <TableHead className="text-right">تاريخ التسجيل</TableHead>
                     <TableHead className="text-right">الصلاحية</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
@@ -321,7 +321,7 @@ export default function UsersPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground font-mono" dir="ltr">{user.phone || "-"}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono" dir="ltr">{user.username || "-"}</TableCell>
                         <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
                           <Select

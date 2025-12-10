@@ -44,15 +44,15 @@ export async function setupAuth(app: Express) {
   // Login endpoint
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { phone, password } = req.body;
+      const { username, password } = req.body;
       
-      if (!phone || !password) {
-        return res.status(400).json({ error: "رقم الهاتف وكلمة المرور مطلوبان" });
+      if (!username || !password) {
+        return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
       }
 
-      const user = await storage.verifyPassword(phone, password);
+      const user = await storage.verifyPassword(username, password);
       if (!user) {
-        return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
+        return res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" });
       }
 
       req.session.userId = user.id;

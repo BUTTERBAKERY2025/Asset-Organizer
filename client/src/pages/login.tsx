@@ -11,7 +11,7 @@ import logo from "@assets/logo_-5_1765206843638.png";
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login, isLoggingIn, isAuthenticated } = useAuth();
-  const [phone, setPhone] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -25,7 +25,7 @@ export default function LoginPage() {
     setError("");
     
     try {
-      await login({ phone, password });
+      await login({ username, password });
       setLocation("/dashboard");
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول");
@@ -41,22 +41,22 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
           <CardDescription>
-            أدخل رقم الهاتف وكلمة المرور للدخول إلى النظام
+            أدخل اسم المستخدم وكلمة المرور للدخول إلى النظام
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="phone">رقم الهاتف</Label>
+              <Label htmlFor="username">اسم المستخدم</Label>
               <Input
-                id="phone"
-                type="tel"
-                placeholder="05xxxxxxxx"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="text-left"
                 dir="ltr"
-                data-testid="input-phone"
+                data-testid="input-username"
                 required
               />
             </div>

@@ -23,13 +23,13 @@ import bcrypt from "bcrypt";
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
-  getUserByPhone(phone: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
   updateUserRole(id: string, role: string): Promise<User | undefined>;
-  verifyPassword(phone: string, password: string): Promise<User | null>;
+  verifyPassword(username: string, password: string): Promise<User | null>;
   
   // Branches
   getAllBranches(): Promise<Branch[]>;
@@ -63,8 +63,8 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async getUserByPhone(phone: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
     return user || undefined;
   }
 
@@ -116,8 +116,8 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async verifyPassword(phone: string, password: string): Promise<User | null> {
-    const user = await this.getUserByPhone(phone);
+  async verifyPassword(username: string, password: string): Promise<User | null> {
+    const user = await this.getUserByUsername(username);
     if (!user || !user.password) return null;
     
     const isValid = await bcrypt.compare(password, user.password);
