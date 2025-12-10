@@ -1,5 +1,8 @@
 import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { TDocumentDefinitions, Content, TableCell } from "pdfmake/interfaces";
+
+pdfMake.vfs = pdfFonts.vfs;
 
 interface PaymentRequestData {
   id: number;
