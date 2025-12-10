@@ -124,6 +124,16 @@ export function AssetDetailsDialog({ item, open, onOpenChange, branchName }: Ass
           </TabsList>
 
           <TabsContent value="details" className="mt-4">
+            {item.imageUrl && (
+              <div className="mb-4 flex justify-center">
+                <img 
+                  src={item.imageUrl} 
+                  alt={item.name}
+                  className="max-w-full max-h-48 object-contain rounded-lg border border-border shadow-md"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm text-muted-foreground">الكمية</label>
