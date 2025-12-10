@@ -20,6 +20,7 @@ import ConstructionDashboardPage from "@/pages/construction-dashboard";
 import ConstructionReportsPage from "@/pages/construction-reports";
 import ContractsPage from "@/pages/contracts";
 import PaymentRequestsPage from "@/pages/payment-requests";
+import BudgetPlanningPage from "@/pages/budget-planning";
 
 function Router() {
   return (
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/construction-reports" component={ConstructionReportsPage} />
       <Route path="/contracts" component={ContractsPage} />
       <Route path="/payment-requests" component={PaymentRequestsPage} />
+      <Route path="/budget-planning" component={BudgetPlanningPage} />
       <Route path="/reports" component={ReportsPage} />
       <Route component={NotFound} />
     </Switch>
