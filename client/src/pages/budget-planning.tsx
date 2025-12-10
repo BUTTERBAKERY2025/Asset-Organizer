@@ -35,6 +35,7 @@ import type {
   ConstructionCategory, 
   ProjectBudgetAllocation,
   PaymentRequest,
+  ProjectWorkItem,
   Branch
 } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
@@ -99,6 +100,15 @@ export default function BudgetPlanningPage() {
     },
   });
 
+  const { data: allWorkItems = [] } = useQuery<ProjectWorkItem[]>({
+    queryKey: ["/api/construction/work-items"],
+    queryFn: async () => {
+      const res = await fetch("/api/construction/work-items");
+      if (!res.ok) throw new Error("Failed to fetch work items");
+      return res.json();
+    },
+  });
+
   const { data: budgetAllocations = [], isLoading: allocationsLoading } = useQuery<ProjectBudgetAllocation[]>({
     queryKey: ["/api/construction/projects", selectedProjectId, "budget-allocations"],
     queryFn: async () => {
@@ -135,6 +145,14 @@ export default function BudgetPlanningPage() {
     return categories.find(c => c.id === categoryId)?.name || "-";
   };
 
+  const getProjectWorkItems = (projectId: number) => {
+    return allWorkItems.filter(w => w.projectId === projectId);
+  };
+
+  const getProjectActualCostFromWorkItems = (projectId: number) => {
+    return getProjectWorkItems(projectId).reduce((sum, w) => sum + (Number(w.actualCost) || 0), 0);
+  };
+
   const getProjectPayments = (projectId: number) => {
     return paymentRequests.filter(p => p.projectId === projectId && p.status === "paid");
   };
@@ -143,10 +161,18 @@ export default function BudgetPlanningPage() {
     return getProjectPayments(projectId).reduce((sum, p) => sum + p.amount, 0);
   };
 
+  const getCategoryActualCostFromWorkItems = (projectId: number, categoryId: number) => {
+    return allWorkItems
+      .filter(w => w.projectId === projectId && w.categoryId === categoryId)
+      .reduce((sum, w) => sum + (Number(w.actualCost) || 0), 0);
+  };
+
   const getCategoryActualCost = (projectId: number, categoryId: number) => {
-    return paymentRequests
+    const fromWorkItems = getCategoryActualCostFromWorkItems(projectId, categoryId);
+    const fromPayments = paymentRequests
       .filter(p => p.projectId === projectId && p.categoryId === categoryId && p.status === "paid")
       .reduce((sum, p) => sum + p.amount, 0);
+    return Math.max(fromWorkItems, fromPayments);
   };
 
   const getAllocationForCategory = (categoryId: number) => {
@@ -184,22 +210,25 @@ export default function BudgetPlanningPage() {
   };
 
   const totalPlannedBudget = budgetAllocations.reduce((sum, a) => sum + a.plannedAmount, 0);
+  const totalActualFromWorkItems = selectedProjectId ? getProjectActualCostFromWorkItems(selectedProjectId) : 0;
   const totalActualFromPayments = selectedProjectId ? getProjectPaidAmount(selectedProjectId) : 0;
   const totalActualCost = selectedProjectId 
-    ? Math.max(selectedProject?.actualCost || 0, totalActualFromPayments) 
+    ? Math.max(selectedProject?.actualCost || 0, totalActualFromWorkItems)
     : 0;
   const budgetVariance = totalPlannedBudget - totalActualCost;
   const variancePercentage = totalPlannedBudget > 0 ? ((budgetVariance / totalPlannedBudget) * 100) : 0;
 
   const projectsSummary = projects.map(project => {
+    const workItemsCost = getProjectActualCostFromWorkItems(project.id);
     const paidAmount = getProjectPaidAmount(project.id);
     const budget = project.budget || 0;
-    const actualCost = Math.max(project.actualCost || 0, paidAmount);
+    const actualCost = Math.max(project.actualCost || 0, workItemsCost);
     const variance = budget - actualCost;
     const variancePercent = budget > 0 ? ((variance / budget) * 100) : 0;
     
     return {
       ...project,
+      workItemsCost,
       paidAmount,
       actualCost,
       variance,
@@ -211,11 +240,13 @@ export default function BudgetPlanningPage() {
   const categoryVarianceData = categories.map(cat => {
     const allocation = getAllocationForCategory(cat.id);
     const planned = allocation?.plannedAmount || 0;
-    const actual = selectedProjectId ? getCategoryActualCost(selectedProjectId, cat.id) : 0;
+    const actualFromWorkItems = selectedProjectId ? getCategoryActualCostFromWorkItems(selectedProjectId, cat.id) : 0;
+    const actual = actualFromWorkItems;
     const variance = planned - actual;
     
     return {
       name: cat.name,
+      categoryId: cat.id,
       مخطط: planned,
       فعلي: actual,
       variance,
