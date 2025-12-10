@@ -20,6 +20,14 @@ import {
   type InsertProjectWorkItem,
   type ProjectBudgetAllocation,
   type InsertProjectBudgetAllocation,
+  type ConstructionContract,
+  type InsertConstructionContract,
+  type ContractItem,
+  type InsertContractItem,
+  type PaymentRequest,
+  type InsertPaymentRequest,
+  type ContractPayment,
+  type InsertContractPayment,
   branches,
   inventoryItems,
   auditLogs,
@@ -29,7 +37,11 @@ import {
   contractors,
   constructionProjects,
   projectWorkItems,
-  projectBudgetAllocations
+  projectBudgetAllocations,
+  constructionContracts,
+  contractItems,
+  paymentRequests,
+  contractPayments
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -103,6 +115,37 @@ export interface IStorage {
   updateBudgetAllocation(id: number, allocation: Partial<InsertProjectBudgetAllocation>): Promise<ProjectBudgetAllocation | undefined>;
   deleteBudgetAllocation(id: number): Promise<boolean>;
   upsertBudgetAllocation(allocation: InsertProjectBudgetAllocation): Promise<ProjectBudgetAllocation>;
+  
+  // Construction Contracts
+  getAllContracts(): Promise<ConstructionContract[]>;
+  getContractsByProject(projectId: number): Promise<ConstructionContract[]>;
+  getContract(id: number): Promise<ConstructionContract | undefined>;
+  createContract(contract: InsertConstructionContract): Promise<ConstructionContract>;
+  updateContract(id: number, contract: Partial<InsertConstructionContract>): Promise<ConstructionContract | undefined>;
+  deleteContract(id: number): Promise<boolean>;
+  
+  // Contract Items
+  getContractItems(contractId: number): Promise<ContractItem[]>;
+  getContractItem(id: number): Promise<ContractItem | undefined>;
+  createContractItem(item: InsertContractItem): Promise<ContractItem>;
+  updateContractItem(id: number, item: Partial<InsertContractItem>): Promise<ContractItem | undefined>;
+  deleteContractItem(id: number): Promise<boolean>;
+  
+  // Payment Requests
+  getAllPaymentRequests(): Promise<PaymentRequest[]>;
+  getPaymentRequestsByProject(projectId: number): Promise<PaymentRequest[]>;
+  getPaymentRequestsByStatus(status: string): Promise<PaymentRequest[]>;
+  getPaymentRequest(id: number): Promise<PaymentRequest | undefined>;
+  createPaymentRequest(request: InsertPaymentRequest): Promise<PaymentRequest>;
+  updatePaymentRequest(id: number, request: Partial<InsertPaymentRequest>): Promise<PaymentRequest | undefined>;
+  deletePaymentRequest(id: number): Promise<boolean>;
+  approvePaymentRequest(id: number, approvedBy: string): Promise<PaymentRequest | undefined>;
+  rejectPaymentRequest(id: number, reason: string): Promise<PaymentRequest | undefined>;
+  markPaymentRequestAsPaid(id: number): Promise<PaymentRequest | undefined>;
+  
+  // Contract Payments
+  getContractPayments(contractId: number): Promise<ContractPayment[]>;
+  createContractPayment(payment: InsertContractPayment): Promise<ContractPayment>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -472,6 +515,180 @@ export class DatabaseStorage implements IStorage {
       const [newAllocation] = await db.insert(projectBudgetAllocations).values(allocation).returning();
       return newAllocation;
     }
+  }
+
+  // Construction Contracts
+  async getAllContracts(): Promise<ConstructionContract[]> {
+    return await db.select().from(constructionContracts).orderBy(desc(constructionContracts.createdAt));
+  }
+
+  async getContractsByProject(projectId: number): Promise<ConstructionContract[]> {
+    return await db
+      .select()
+      .from(constructionContracts)
+      .where(eq(constructionContracts.projectId, projectId))
+      .orderBy(desc(constructionContracts.createdAt));
+  }
+
+  async getContract(id: number): Promise<ConstructionContract | undefined> {
+    const [contract] = await db.select().from(constructionContracts).where(eq(constructionContracts.id, id));
+    return contract || undefined;
+  }
+
+  async createContract(contract: InsertConstructionContract): Promise<ConstructionContract> {
+    const [newContract] = await db.insert(constructionContracts).values(contract).returning();
+    return newContract;
+  }
+
+  async updateContract(id: number, contract: Partial<InsertConstructionContract>): Promise<ConstructionContract | undefined> {
+    const [updated] = await db
+      .update(constructionContracts)
+      .set({ ...contract, updatedAt: new Date() })
+      .where(eq(constructionContracts.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContract(id: number): Promise<boolean> {
+    const result = await db.delete(constructionContracts).where(eq(constructionContracts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Contract Items
+  async getContractItems(contractId: number): Promise<ContractItem[]> {
+    return await db
+      .select()
+      .from(contractItems)
+      .where(eq(contractItems.contractId, contractId));
+  }
+
+  async getContractItem(id: number): Promise<ContractItem | undefined> {
+    const [item] = await db.select().from(contractItems).where(eq(contractItems.id, id));
+    return item || undefined;
+  }
+
+  async createContractItem(item: InsertContractItem): Promise<ContractItem> {
+    const [newItem] = await db.insert(contractItems).values(item).returning();
+    return newItem;
+  }
+
+  async updateContractItem(id: number, item: Partial<InsertContractItem>): Promise<ContractItem | undefined> {
+    const [updated] = await db
+      .update(contractItems)
+      .set({ ...item, updatedAt: new Date() })
+      .where(eq(contractItems.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContractItem(id: number): Promise<boolean> {
+    const result = await db.delete(contractItems).where(eq(contractItems.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Payment Requests
+  async getAllPaymentRequests(): Promise<PaymentRequest[]> {
+    return await db.select().from(paymentRequests).orderBy(desc(paymentRequests.createdAt));
+  }
+
+  async getPaymentRequestsByProject(projectId: number): Promise<PaymentRequest[]> {
+    return await db
+      .select()
+      .from(paymentRequests)
+      .where(eq(paymentRequests.projectId, projectId))
+      .orderBy(desc(paymentRequests.createdAt));
+  }
+
+  async getPaymentRequestsByStatus(status: string): Promise<PaymentRequest[]> {
+    return await db
+      .select()
+      .from(paymentRequests)
+      .where(eq(paymentRequests.status, status))
+      .orderBy(desc(paymentRequests.createdAt));
+  }
+
+  async getPaymentRequest(id: number): Promise<PaymentRequest | undefined> {
+    const [request] = await db.select().from(paymentRequests).where(eq(paymentRequests.id, id));
+    return request || undefined;
+  }
+
+  async createPaymentRequest(request: InsertPaymentRequest): Promise<PaymentRequest> {
+    const [newRequest] = await db.insert(paymentRequests).values(request).returning();
+    return newRequest;
+  }
+
+  async updatePaymentRequest(id: number, request: Partial<InsertPaymentRequest>): Promise<PaymentRequest | undefined> {
+    const [updated] = await db
+      .update(paymentRequests)
+      .set({ ...request, updatedAt: new Date() })
+      .where(eq(paymentRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deletePaymentRequest(id: number): Promise<boolean> {
+    const result = await db.delete(paymentRequests).where(eq(paymentRequests.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async approvePaymentRequest(id: number, approvedBy: string): Promise<PaymentRequest | undefined> {
+    const [updated] = await db
+      .update(paymentRequests)
+      .set({ 
+        status: 'approved', 
+        approvedBy, 
+        approvedAt: new Date(),
+        updatedAt: new Date() 
+      })
+      .where(eq(paymentRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async rejectPaymentRequest(id: number, reason: string): Promise<PaymentRequest | undefined> {
+    const [updated] = await db
+      .update(paymentRequests)
+      .set({ 
+        status: 'rejected', 
+        rejectionReason: reason,
+        updatedAt: new Date() 
+      })
+      .where(eq(paymentRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markPaymentRequestAsPaid(id: number): Promise<PaymentRequest | undefined> {
+    const [updated] = await db
+      .update(paymentRequests)
+      .set({ 
+        status: 'paid', 
+        paidAt: new Date(),
+        updatedAt: new Date() 
+      })
+      .where(eq(paymentRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Contract Payments
+  async getContractPayments(contractId: number): Promise<ContractPayment[]> {
+    return await db
+      .select()
+      .from(contractPayments)
+      .where(eq(contractPayments.contractId, contractId))
+      .orderBy(desc(contractPayments.createdAt));
+  }
+
+  async createContractPayment(payment: InsertContractPayment): Promise<ContractPayment> {
+    const [newPayment] = await db.insert(contractPayments).values(payment).returning();
+    
+    // Update contract paid amount
+    const payments = await this.getContractPayments(payment.contractId);
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    await this.updateContract(payment.contractId, { paidAmount: totalPaid });
+    
+    return newPayment;
   }
 }
 
