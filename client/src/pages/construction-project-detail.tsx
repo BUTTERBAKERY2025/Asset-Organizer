@@ -40,7 +40,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, Plus, Pencil, Trash2, Loader2, Building2, Calendar, DollarSign, CheckCircle2, Clock, Pause } from "lucide-react";
+import { ArrowRight, Plus, Pencil, Trash2, Loader2, Building2, Calendar, DollarSign, CheckCircle2, Clock, Pause, FileSpreadsheet, Printer, Download, ChevronDown } from "lucide-react";
+import * as XLSX from "xlsx";
+import { useRef, useMemo } from "react";
+import { useReactToPrint } from "react-to-print";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Link, useParams } from "wouter";
 import type { Branch, ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
@@ -277,6 +288,106 @@ export default function ConstructionProjectDetailPage() {
   const totalActualCost = workItems.reduce((sum, item) => sum + (item.actualCost || 0), 0);
   const completedItems = workItems.filter((item) => item.status === "completed").length;
 
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({ contentRef: printRef });
+
+  const [openCategories, setOpenCategories] = useState<Record<number, boolean>>({});
+
+  const workItemsByCategory = useMemo(() => {
+    const grouped: Record<number, { category: ConstructionCategory | null; items: ProjectWorkItem[]; totalCost: number }> = {};
+    const uncategorized: ProjectWorkItem[] = [];
+    
+    workItems.forEach(item => {
+      if (item.categoryId) {
+        if (!grouped[item.categoryId]) {
+          const cat = categories.find(c => c.id === item.categoryId) || null;
+          grouped[item.categoryId] = { category: cat, items: [], totalCost: 0 };
+        }
+        grouped[item.categoryId].items.push(item);
+        grouped[item.categoryId].totalCost += Number(item.actualCost) || 0;
+      } else {
+        uncategorized.push(item);
+      }
+    });
+
+    const result = Object.values(grouped).sort((a, b) => b.totalCost - a.totalCost);
+    if (uncategorized.length > 0) {
+      result.push({
+        category: null,
+        items: uncategorized,
+        totalCost: uncategorized.reduce((sum, item) => sum + (Number(item.actualCost) || 0), 0)
+      });
+    }
+    return result;
+  }, [workItems, categories]);
+
+  const toggleCategory = (categoryId: number) => {
+    setOpenCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
+  };
+
+  const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    const projectInfo = [{
+      "اسم المشروع": project?.title || "",
+      "الفرع": getBranchName(project?.branchId || ""),
+      "الميزانية": project?.budget || 0,
+      "التكلفة الفعلية": totalActualCost,
+      "نسبة التقدم": `${project?.progressPercent || 0}%`,
+      "عدد البنود": workItems.length,
+      "البنود المكتملة": completedItems,
+    }];
+    const infoWs = XLSX.utils.json_to_sheet(projectInfo);
+    XLSX.utils.book_append_sheet(wb, infoWs, "معلومات المشروع");
+
+    const itemsData = workItems.map((item, index) => ({
+      "#": index + 1,
+      "البيان": item.name,
+      "الوصف": item.description || "",
+      "الفئة": getCategoryName(item.categoryId),
+      "المقاول": getContractorName(item.contractorId),
+      "التكلفة التقديرية": Number(item.costEstimate) || 0,
+      "التكلفة الفعلية": Number(item.actualCost) || 0,
+      "الحالة": WORK_ITEM_STATUSES.find(s => s.value === item.status)?.label || item.status,
+      "تاريخ البدء": item.scheduledStart || "-",
+      "تاريخ الانتهاء": item.scheduledEnd || "-",
+      "ملاحظات": item.notes || "",
+    }));
+    const itemsWs = XLSX.utils.json_to_sheet(itemsData);
+    XLSX.utils.book_append_sheet(wb, itemsWs, "بنود العمل");
+
+    const categorySummary = workItemsByCategory.map((group, index) => ({
+      "#": index + 1,
+      "الفئة": group.category?.name || "غير مصنف",
+      "عدد البنود": group.items.length,
+      "إجمالي التكلفة": group.totalCost,
+    }));
+    const categoryWs = XLSX.utils.json_to_sheet(categorySummary);
+    XLSX.utils.book_append_sheet(wb, categoryWs, "ملخص الفئات");
+
+    XLSX.writeFile(wb, `بنود_${project?.title || "المشروع"}_${new Date().toLocaleDateString("ar-SA")}.xlsx`);
+  };
+
+  const exportToCSV = () => {
+    const headers = ["#", "البيان", "الفئة", "المقاول", "التكلفة التقديرية", "التكلفة الفعلية", "الحالة"];
+    const rows = workItems.map((item, index) => [
+      index + 1,
+      item.name,
+      getCategoryName(item.categoryId),
+      getContractorName(item.contractorId),
+      Number(item.costEstimate) || 0,
+      Number(item.actualCost) || 0,
+      WORK_ITEM_STATUSES.find(s => s.value === item.status)?.label || item.status,
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `بنود_${project?.title || "المشروع"}.csv`;
+    link.click();
+  };
+
   const openEditWorkItem = (item: ProjectWorkItem) => {
     setSelectedWorkItem(item);
     form.reset({
@@ -402,17 +513,42 @@ export default function ConstructionProjectDetailPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <CardTitle>بنود العمل</CardTitle>
-                <CardDescription>قائمة بنود العمل والمهام في المشروع</CardDescription>
+                <CardDescription>قائمة بنود العمل مجمعة حسب الفئة ({workItems.length} بند - {formatCurrency(totalActualCost)})</CardDescription>
               </div>
-              {canEdit && (
-                <Button onClick={() => { form.reset({ projectId }); setIsAddWorkItemOpen(true); }} data-testid="button-add-work-item">
-                  <Plus className="w-4 h-4 ml-2" />
-                  إضافة بند
-                </Button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" data-testid="button-export-dropdown">
+                      <Download className="w-4 h-4 ml-2" />
+                      تصدير
+                      <ChevronDown className="w-3 h-3 mr-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={exportToExcel} data-testid="button-export-excel">
+                      <FileSpreadsheet className="w-4 h-4 ml-2" />
+                      تصدير Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exportToCSV} data-testid="button-export-csv">
+                      <FileSpreadsheet className="w-4 h-4 ml-2" />
+                      تصدير CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrint()} data-testid="button-print">
+                      <Printer className="w-4 h-4 ml-2" />
+                      طباعة
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {canEdit && (
+                  <Button size="sm" onClick={() => { form.reset({ projectId }); setIsAddWorkItemOpen(true); }} data-testid="button-add-work-item">
+                    <Plus className="w-4 h-4 ml-2" />
+                    إضافة بند
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -425,52 +561,110 @@ export default function ConstructionProjectDetailPage() {
                 لا توجد بنود عمل في هذا المشروع
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>البند</TableHead>
-                    <TableHead>الفئة</TableHead>
-                    <TableHead>المقاول</TableHead>
-                    <TableHead>التكلفة المقدرة</TableHead>
-                    <TableHead>التكلفة الفعلية</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    {canEdit && <TableHead>إجراءات</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {workItems.map((item) => (
-                    <TableRow key={item.id} data-testid={`row-work-item-${item.id}`}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          {item.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getCategoryName(item.categoryId)}</TableCell>
-                      <TableCell>{getContractorName(item.contractorId)}</TableCell>
-                      <TableCell>{formatCurrency(item.costEstimate)}</TableCell>
-                      <TableCell>{formatCurrency(item.actualCost)}</TableCell>
-                      <TableCell>{getWorkItemStatusBadge(item.status)}</TableCell>
-                      {canEdit && (
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => openEditWorkItem(item)} data-testid={`button-edit-work-item-${item.id}`}>
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            {isAdmin && (
-                              <Button variant="ghost" size="sm" onClick={() => { setSelectedWorkItem(item); setIsDeleteWorkItemOpen(true); }} data-testid={`button-delete-work-item-${item.id}`}>
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div ref={printRef} className="space-y-3 print:space-y-4" dir="rtl">
+                <div className="hidden print:block mb-4">
+                  <h2 className="text-xl font-bold">{project.title}</h2>
+                  <p className="text-sm text-muted-foreground">{getBranchName(project.branchId)} - {new Date().toLocaleDateString("ar-SA")}</p>
+                </div>
+                
+                {workItemsByCategory.map((group, groupIndex) => {
+                  const categoryId = group.category?.id || 0;
+                  const isOpen = openCategories[categoryId] !== false;
+                  const completedInCategory = group.items.filter(i => i.status === "completed").length;
+                  
+                  return (
+                    <Collapsible key={groupIndex} open={isOpen} onOpenChange={() => toggleCategory(categoryId)}>
+                      <Card className="border-amber-200/50">
+                        <CollapsibleTrigger asChild>
+                          <CardHeader className="py-3 cursor-pointer hover:bg-amber-50/30 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+                                <div>
+                                  <CardTitle className="text-base">{group.category?.name || "غير مصنف"}</CardTitle>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {group.items.length} بند • {formatCurrency(group.totalCost)} • {completedInCategory}/{group.items.length} مكتمل
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                {((group.totalCost / totalActualCost) * 100).toFixed(1)}%
+                              </Badge>
+                            </div>
+                          </CardHeader>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <CardContent className="pt-0">
+                            <ScrollArea className="max-h-[400px]">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="text-xs">
+                                    <TableHead className="w-8">#</TableHead>
+                                    <TableHead>البيان</TableHead>
+                                    <TableHead>المقاول</TableHead>
+                                    <TableHead className="text-left">التكلفة</TableHead>
+                                    <TableHead>الحالة</TableHead>
+                                    {canEdit && <TableHead className="w-20">إجراءات</TableHead>}
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {group.items.map((item, itemIndex) => (
+                                    <TableRow key={item.id} className="text-sm" data-testid={`row-work-item-${item.id}`}>
+                                      <TableCell className="text-muted-foreground text-xs">{itemIndex + 1}</TableCell>
+                                      <TableCell>
+                                        <div className="max-w-md">
+                                          <p className="font-medium text-sm truncate" title={item.name}>{item.name}</p>
+                                          {item.description && (
+                                            <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
+                                          )}
+                                          {(item.scheduledStart || item.scheduledEnd) && (
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                              {item.scheduledStart && `من: ${item.scheduledStart}`}
+                                              {item.scheduledStart && item.scheduledEnd && " - "}
+                                              {item.scheduledEnd && `إلى: ${item.scheduledEnd}`}
+                                            </p>
+                                          )}
+                                          {item.notes && (
+                                            <p className="text-xs text-amber-600 mt-0.5 line-clamp-1">📝 {item.notes}</p>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-xs">{getContractorName(item.contractorId)}</TableCell>
+                                      <TableCell className="text-left">
+                                        <div>
+                                          <p className="font-medium text-sm">{formatCurrency(item.actualCost)}</p>
+                                          {item.costEstimate && item.costEstimate !== item.actualCost && (
+                                            <p className="text-xs text-muted-foreground">تقديري: {formatCurrency(item.costEstimate)}</p>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>{getWorkItemStatusBadge(item.status)}</TableCell>
+                                      {canEdit && (
+                                        <TableCell>
+                                          <div className="flex items-center gap-1">
+                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditWorkItem(item)} data-testid={`button-edit-work-item-${item.id}`}>
+                                              <Pencil className="w-3 h-3" />
+                                            </Button>
+                                            {isAdmin && (
+                                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setSelectedWorkItem(item); setIsDeleteWorkItemOpen(true); }} data-testid={`button-delete-work-item-${item.id}`}>
+                                                <Trash2 className="w-3 h-3 text-destructive" />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                      )}
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </ScrollArea>
+                          </CardContent>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
