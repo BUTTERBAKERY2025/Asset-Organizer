@@ -10,11 +10,31 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 import type { Branch, ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem } from "@shared/schema";
+
+function HighlightText({ text, highlight }: { text: string; highlight: string }) {
+  if (!highlight.trim()) return <>{text}</>;
+  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escapedHighlight})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === highlight.toLowerCase() ? (
+          <mark key={i} className="bg-yellow-200 px-0.5 rounded">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
 
 const STATUS_LABELS: Record<string, string> = {
   planned: "مخطط",
@@ -44,6 +64,15 @@ export default function ConstructionReportsPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedProject, setSelectedProject] = useState<string>("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedContractor, setSelectedContractor] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [minCost, setMinCost] = useState<string>("");
+  const [maxCost, setMaxCost] = useState<string>("");
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
+  const [sortField, setSortField] = useState<string>("actualCost");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const printRef = useRef<HTMLDivElement>(null);
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -175,6 +204,82 @@ export default function ConstructionReportsPage() {
     return workItems.filter(w => projectIds.has(w.projectId));
   }, [workItems, filteredProjects]);
 
+  const filteredWorkItems = useMemo(() => {
+    let result = workItemsByProject;
+    
+    if (selectedCategory !== "all") {
+      result = result.filter(w => w.categoryId === parseInt(selectedCategory));
+    }
+    if (selectedContractor !== "all") {
+      result = result.filter(w => w.contractorId === parseInt(selectedContractor));
+    }
+    if (selectedStatus !== "all") {
+      result = result.filter(w => w.status === selectedStatus);
+    }
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(w => 
+        w.name.toLowerCase().includes(query) || 
+        (w.description && w.description.toLowerCase().includes(query))
+      );
+    }
+    if (minCost) {
+      const min = parseFloat(minCost);
+      if (!isNaN(min)) {
+        result = result.filter(w => (Number(w.actualCost) || 0) >= min);
+      }
+    }
+    if (maxCost) {
+      const max = parseFloat(maxCost);
+      if (!isNaN(max)) {
+        result = result.filter(w => (Number(w.actualCost) || 0) <= max);
+      }
+    }
+    
+    result = [...result].sort((a, b) => {
+      let aVal = 0, bVal = 0;
+      if (sortField === "actualCost") {
+        aVal = Number(a.actualCost) || 0;
+        bVal = Number(b.actualCost) || 0;
+      } else if (sortField === "name") {
+        return sortDirection === "asc" 
+          ? a.name.localeCompare(b.name, "ar") 
+          : b.name.localeCompare(a.name, "ar");
+      }
+      return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+    });
+    
+    return result;
+  }, [workItemsByProject, selectedCategory, selectedContractor, selectedStatus, searchQuery, minCost, maxCost, sortField, sortDirection]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (selectedBranch !== "all") count++;
+    if (selectedCategory !== "all") count++;
+    if (selectedContractor !== "all") count++;
+    if (selectedStatus !== "all") count++;
+    if (searchQuery.trim()) count++;
+    if (minCost || maxCost) count++;
+    return count;
+  }, [selectedBranch, selectedCategory, selectedContractor, selectedStatus, searchQuery, minCost, maxCost]);
+
+  const clearAllFilters = () => {
+    setSelectedBranch("all");
+    setSelectedCategory("all");
+    setSelectedContractor("all");
+    setSelectedStatus("all");
+    setSearchQuery("");
+    setMinCost("");
+    setMaxCost("");
+  };
+
+  const filteredWorkItemsStats = useMemo(() => {
+    const totalCost = filteredWorkItems.reduce((sum, w) => sum + (Number(w.actualCost) || 0), 0);
+    const avgCost = filteredWorkItems.length > 0 ? totalCost / filteredWorkItems.length : 0;
+    const completedCount = filteredWorkItems.filter(w => w.status === "completed").length;
+    return { totalCost, avgCost, count: filteredWorkItems.length, completedCount };
+  }, [filteredWorkItems]);
+
   const workItemsByCategoryData = useMemo(() => {
     const categoryCount: Record<number, { count: number; cost: number; actualCost: number }> = {};
     workItemsByProject.forEach(w => {
@@ -273,13 +378,52 @@ export default function ConstructionReportsPage() {
       "متوسط التقدم": `${branch.avgProgress}%`,
     }));
 
+    const workItemsData = filteredWorkItems.map((item, index) => ({
+      "#": index + 1,
+      "البيان": item.name,
+      "الفئة": item.categoryId ? categoryMap[item.categoryId] || '-' : '-',
+      "المقاول": item.contractorId ? contractorMap[item.contractorId] || '-' : '-',
+      "التكلفة التقديرية": Number(item.costEstimate) || 0,
+      "التكلفة الفعلية": Number(item.actualCost) || 0,
+      "الحالة": WORK_STATUS_LABELS[item.status] || item.status,
+    }));
+
+    const categorySummary = workItemsByCategoryData.map((cat, index) => ({
+      "#": index + 1,
+      "الفئة": cat.name,
+      "عدد البنود": cat.count,
+      "إجمالي التكلفة": cat.actualCost,
+      "النسبة المئوية": `${cat.percentage.toFixed(1)}%`,
+    }));
+
+    const filterInfo = [{
+      "تاريخ التقرير": new Date().toLocaleDateString("ar-SA"),
+      "الفرع": selectedBranch === "all" ? "جميع الفروع" : branchMap[selectedBranch] || selectedBranch,
+      "الفئة": selectedCategory === "all" ? "جميع الفئات" : categoryMap[parseInt(selectedCategory)] || selectedCategory,
+      "المقاول": selectedContractor === "all" ? "جميع المقاولين" : contractorMap[parseInt(selectedContractor)] || selectedContractor,
+      "الحالة": selectedStatus === "all" ? "جميع الحالات" : WORK_STATUS_LABELS[selectedStatus] || selectedStatus,
+      "البحث": searchQuery || "-",
+      "نطاق التكلفة": minCost || maxCost ? `${minCost || 0} - ${maxCost || "∞"}` : "غير محدد",
+      "عدد البنود المفلترة": filteredWorkItems.length,
+      "إجمالي التكلفة": filteredWorkItemsStats.totalCost,
+    }];
+
     const wb = XLSX.utils.book_new();
+
+    const filterWs = XLSX.utils.json_to_sheet(filterInfo);
+    XLSX.utils.book_append_sheet(wb, filterWs, "معلومات التقرير");
     
     const projectsWs = XLSX.utils.json_to_sheet(projectsData);
     XLSX.utils.book_append_sheet(wb, projectsWs, "المشاريع");
 
     const summaryWs = XLSX.utils.json_to_sheet(branchSummary);
     XLSX.utils.book_append_sheet(wb, summaryWs, "ملخص الفروع");
+
+    const workItemsWs = XLSX.utils.json_to_sheet(workItemsData);
+    XLSX.utils.book_append_sheet(wb, workItemsWs, "البنود المفلترة");
+
+    const categoryWs = XLSX.utils.json_to_sheet(categorySummary);
+    XLSX.utils.book_append_sheet(wb, categoryWs, "ملخص الفئات");
 
     XLSX.writeFile(wb, `تقرير_المشاريع_${new Date().toLocaleDateString("ar-SA")}.xlsx`);
   };
@@ -293,19 +437,6 @@ export default function ConstructionReportsPage() {
             <p className="text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48" data-testid="select-branch-filter">
-                <SelectValue placeholder="جميع الفروع" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الفروع</SelectItem>
-                {branches.map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Button variant="outline" onClick={() => handlePrint()} data-testid="button-print">
               <Printer className="w-4 h-4 ml-2" />
               طباعة
@@ -317,11 +448,185 @@ export default function ConstructionReportsPage() {
           </div>
         </div>
 
+        <Card className="border-amber-200 bg-amber-50/30">
+          <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-amber-50/50 transition-colors py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-5 h-5 text-amber-600" />
+                    <CardTitle className="text-lg">الفلاتر والبحث</CardTitle>
+                    {activeFiltersCount > 0 && (
+                      <Badge className="bg-amber-500">{activeFiltersCount} فلتر نشط</Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {activeFiltersCount > 0 && (
+                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); clearAllFilters(); }}>
+                        <X className="w-4 h-4 ml-1" />
+                        مسح الكل
+                      </Button>
+                    )}
+                    {filtersOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </div>
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="pt-0 space-y-4">
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="البحث في البنود..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pr-10"
+                    data-testid="input-search"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>الفرع</Label>
+                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                      <SelectTrigger data-testid="select-branch-filter">
+                        <SelectValue placeholder="جميع الفروع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الفروع</SelectItem>
+                        {branches.map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id}>
+                            {branch.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>الفئة</Label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger data-testid="select-category-filter">
+                        <SelectValue placeholder="جميع الفئات" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الفئات</SelectItem>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id.toString()}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>المقاول</Label>
+                    <Select value={selectedContractor} onValueChange={setSelectedContractor}>
+                      <SelectTrigger data-testid="select-contractor-filter">
+                        <SelectValue placeholder="جميع المقاولين" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع المقاولين</SelectItem>
+                        {contractors.map((c) => (
+                          <SelectItem key={c.id} value={c.id.toString()}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>حالة البند</Label>
+                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                      <SelectTrigger data-testid="select-status-filter">
+                        <SelectValue placeholder="جميع الحالات" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الحالات</SelectItem>
+                        <SelectItem value="pending">معلق</SelectItem>
+                        <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
+                        <SelectItem value="completed">مكتمل</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>الحد الأدنى للتكلفة (ر.س)</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={minCost}
+                      onChange={(e) => setMinCost(e.target.value)}
+                      data-testid="input-min-cost"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>الحد الأقصى للتكلفة (ر.س)</Label>
+                    <Input
+                      type="number"
+                      placeholder="غير محدد"
+                      value={maxCost}
+                      onChange={(e) => setMaxCost(e.target.value)}
+                      data-testid="input-max-cost"
+                    />
+                  </div>
+                </div>
+
+                {activeFiltersCount > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t">
+                    <span className="text-sm text-muted-foreground">الفلاتر النشطة:</span>
+                    {selectedBranch !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        {branchMap[selectedBranch]}
+                        <X className="w-3 h-3 cursor-pointer" onClick={() => setSelectedBranch("all")} />
+                      </Badge>
+                    )}
+                    {selectedCategory !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        {categoryMap[parseInt(selectedCategory)]}
+                        <X className="w-3 h-3 cursor-pointer" onClick={() => setSelectedCategory("all")} />
+                      </Badge>
+                    )}
+                    {selectedContractor !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        {contractorMap[parseInt(selectedContractor)]}
+                        <X className="w-3 h-3 cursor-pointer" onClick={() => setSelectedContractor("all")} />
+                      </Badge>
+                    )}
+                    {selectedStatus !== "all" && (
+                      <Badge variant="secondary" className="gap-1">
+                        {WORK_STATUS_LABELS[selectedStatus]}
+                        <X className="w-3 h-3 cursor-pointer" onClick={() => setSelectedStatus("all")} />
+                      </Badge>
+                    )}
+                    {searchQuery.trim() && (
+                      <Badge variant="secondary" className="gap-1">
+                        بحث: {searchQuery}
+                        <X className="w-3 h-3 cursor-pointer" onClick={() => setSearchQuery("")} />
+                      </Badge>
+                    )}
+                    {(minCost || maxCost) && (
+                      <Badge variant="secondary" className="gap-1">
+                        التكلفة: {minCost || 0} - {maxCost || "∞"}
+                        <X className="w-3 h-3 cursor-pointer" onClick={() => { setMinCost(""); setMaxCost(""); }} />
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+
         <div ref={printRef} className="space-y-6 print:p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">إجمالي المشاريع</CardTitle>
+                <CardTitle className="text-sm font-medium">المشاريع</CardTitle>
                 <Hammer className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -339,33 +644,150 @@ export default function ConstructionReportsPage() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">مكتملة</CardTitle>
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <CardTitle className="text-sm font-medium">البنود (مفلترة)</CardTitle>
+                <Search className="w-4 h-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{filteredProjects.filter(p => p.status === "completed").length}</div>
+                <div className="text-2xl font-bold">{filteredWorkItemsStats.count}</div>
+                <p className="text-xs text-muted-foreground">من {workItemsByProject.length}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">إجمالي الميزانية</CardTitle>
+                <CardTitle className="text-sm font-medium">إجمالي التكاليف</CardTitle>
+                <DollarSign className="w-4 h-4 text-amber-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-amber-600">
+                  {filteredWorkItemsStats.totalCost.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">ر.س</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">متوسط التكلفة</CardTitle>
+                <TrendingUp className="w-4 h-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {filteredWorkItemsStats.avgCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+                <p className="text-xs text-muted-foreground">ر.س / بند</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">الميزانية</CardTitle>
                 <Building2 className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {filteredProjects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0).toLocaleString()} ر.س
+                  {filteredProjects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0).toLocaleString()}
                 </div>
+                <p className="text-xs text-muted-foreground">ر.س</p>
               </CardContent>
             </Card>
           </div>
 
-          <Tabs defaultValue="comparison" className="print:hidden">
+          <Tabs defaultValue="search" className="print:hidden">
             <TabsList data-testid="tabs-report-type">
+              <TabsTrigger value="search" data-testid="tab-search">
+                <Search className="w-4 h-4 ml-1" />
+                البحث في البنود
+              </TabsTrigger>
               <TabsTrigger value="comparison" data-testid="tab-comparison">مقارنة المشاريع</TabsTrigger>
               <TabsTrigger value="branches" data-testid="tab-branches">مقارنة الفروع</TabsTrigger>
               <TabsTrigger value="workitems" data-testid="tab-workitems">البنود والفئات</TabsTrigger>
               <TabsTrigger value="details" data-testid="tab-details">تفاصيل المشاريع</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="search" className="mt-4 space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>نتائج البحث ({filteredWorkItems.length} بند)</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm">ترتيب حسب:</Label>
+                      <Select value={sortField} onValueChange={setSortField}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="actualCost">التكلفة</SelectItem>
+                          <SelectItem value="name">الاسم</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setSortDirection(d => d === "asc" ? "desc" : "asc")}
+                      >
+                        {sortDirection === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[500px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">#</TableHead>
+                          <TableHead>البيان</TableHead>
+                          <TableHead>الفئة</TableHead>
+                          <TableHead>المقاول</TableHead>
+                          <TableHead className="w-32">التكلفة</TableHead>
+                          <TableHead className="w-24">الحالة</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredWorkItems.slice(0, 100).map((item, index) => (
+                          <TableRow key={item.id} data-testid={`row-workitem-${item.id}`}>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell className="max-w-md">
+                              <div className="truncate" title={item.name}>
+                                {searchQuery && item.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                  <HighlightText text={item.name} highlight={searchQuery} />
+                                ) : item.name}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {item.categoryId ? categoryMap[item.categoryId] || '-' : '-'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {item.contractorId ? contractorMap[item.contractorId] || '-' : '-'}
+                            </TableCell>
+                            <TableCell className="font-bold text-amber-600">
+                              {Number(item.actualCost || 0).toLocaleString()} ر.س
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={
+                                item.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                item.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                              }>
+                                {WORK_STATUS_LABELS[item.status] || item.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {filteredWorkItems.length > 100 && (
+                      <div className="text-center py-4 text-muted-foreground">
+                        يتم عرض أول 100 نتيجة من {filteredWorkItems.length}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  {filteredWorkItems.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">لا توجد بنود تطابق معايير البحث</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="comparison" className="mt-4 space-y-6">
               <Card>
