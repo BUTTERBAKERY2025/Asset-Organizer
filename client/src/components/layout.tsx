@@ -70,8 +70,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: "المشاريع الإنشائية",
         icon: Hammer,
         items: [
+          { href: "/construction-dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
           { href: "/construction-projects", label: "المشاريع", icon: Hammer },
           { href: "/contractors", label: "المقاولون", icon: HardHat },
+          { href: "/construction-reports", label: "التقارير", icon: FileBarChart },
         ],
       },
     },

@@ -547,6 +547,16 @@ export async function registerRoutes(
   });
 
   // Project Work Items
+  app.get("/api/construction/work-items", async (req, res) => {
+    try {
+      const items = await storage.getAllWorkItems();
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching all work items:", error);
+      res.status(500).json({ error: "Failed to fetch work items" });
+    }
+  });
+
   app.get("/api/construction/projects/:projectId/work-items", async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId, 10);

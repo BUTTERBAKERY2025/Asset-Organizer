@@ -86,6 +86,7 @@ export interface IStorage {
   deleteConstructionProject(id: number): Promise<boolean>;
   
   // Project Work Items
+  getAllWorkItems(): Promise<ProjectWorkItem[]>;
   getWorkItemsByProject(projectId: number): Promise<ProjectWorkItem[]>;
   getWorkItem(id: number): Promise<ProjectWorkItem | undefined>;
   createWorkItem(item: InsertProjectWorkItem): Promise<ProjectWorkItem>;
@@ -365,6 +366,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Project Work Items
+  async getAllWorkItems(): Promise<ProjectWorkItem[]> {
+    return await db
+      .select()
+      .from(projectWorkItems)
+      .orderBy(desc(projectWorkItems.createdAt));
+  }
+
   async getWorkItemsByProject(projectId: number): Promise<ProjectWorkItem[]> {
     return await db
       .select()
