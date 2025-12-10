@@ -11,11 +11,13 @@ import BranchesPage from "@/pages/branches";
 import MaintenancePage from "@/pages/maintenance";
 import InspectionsPage from "@/pages/inspections";
 import UsersPage from "@/pages/users";
+import LoginPage from "@/pages/login";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
+      <Route path="/login" component={LoginPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/inventory" component={InventoryPage} />
       <Route path="/manage" component={ManagePage} />

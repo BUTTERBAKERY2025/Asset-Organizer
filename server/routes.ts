@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
+import { setupAuth, isAuthenticated, requireRole } from "./auth";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -36,43 +36,90 @@ export async function registerRoutes(
   // Setup authentication
   await setupAuth(app);
 
-  // Auth routes
-  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
   // Admin routes for user management
   app.get("/api/users", isAuthenticated, requireRole(["admin"]), async (req, res) => {
     try {
       const users = await storage.getAllUsers();
-      res.json(users);
+      const safeUsers = users.map(({ password, ...user }) => user);
+      res.json(safeUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ error: "Failed to fetch users" });
     }
   });
 
-  app.patch("/api/users/:id/role", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.post("/api/users", isAuthenticated, requireRole(["admin"]), async (req, res) => {
     try {
-      const { role } = req.body;
-      if (!["admin", "employee", "viewer"].includes(role)) {
-        return res.status(400).json({ error: "Invalid role" });
+      const { phone, password, firstName, lastName, role } = req.body;
+      
+      if (!phone || !password) {
+        return res.status(400).json({ error: "رقم الهاتف وكلمة المرور مطلوبان" });
       }
-      const user = await storage.updateUserRole(req.params.id, role);
+      
+      const existingUser = await storage.getUserByPhone(phone);
+      if (existingUser) {
+        return res.status(400).json({ error: "رقم الهاتف مسجل مسبقاً" });
+      }
+      
+      const user = await storage.createUser({
+        phone,
+        password,
+        firstName,
+        lastName,
+        role: role || "viewer",
+      });
+      
+      const { password: _, ...safeUser } = user;
+      res.status(201).json(safeUser);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/users/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { firstName, lastName, role, password } = req.body;
+      const updateData: any = {};
+      
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (role !== undefined) {
+        if (!["admin", "employee", "viewer"].includes(role)) {
+          return res.status(400).json({ error: "Invalid role" });
+        }
+        updateData.role = role;
+      }
+      if (password) updateData.password = password;
+      
+      const user = await storage.updateUser(req.params.id, updateData);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      res.json(user);
+      
+      const { password: _, ...safeUser } = user;
+      res.json(safeUser);
     } catch (error) {
-      console.error("Error updating user role:", error);
-      res.status(500).json({ error: "Failed to update user role" });
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/users/:id", isAuthenticated, requireRole(["admin"]), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      if (currentUser.id === req.params.id) {
+        return res.status(400).json({ error: "لا يمكنك حذف حسابك الخاص" });
+      }
+      
+      const success = await storage.deleteUser(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ error: "Failed to delete user" });
     }
   });
 
@@ -165,7 +212,7 @@ export async function registerRoutes(
     try {
       const validatedData = insertInventoryItemSchema.parse(req.body);
       const normalizedData = normalizeInventoryData(validatedData);
-      const userId = req.user.claims.sub;
+      const userId = req.currentUser.id;
       const item = await storage.createInventoryItem(normalizedData, userId);
       res.status(201).json(item);
     } catch (error) {
@@ -181,7 +228,7 @@ export async function registerRoutes(
     try {
       const partialData = insertInventoryItemSchema.partial().parse(req.body);
       const normalizedData = normalizeInventoryData(partialData);
-      const userId = req.user.claims.sub;
+      const userId = req.currentUser.id;
       const item = await storage.updateInventoryItem(req.params.id, normalizedData, userId);
       if (!item) {
         return res.status(404).json({ error: "Item not found" });
@@ -198,7 +245,7 @@ export async function registerRoutes(
 
   app.delete("/api/inventory/:id", isAuthenticated, requireRole(["admin"]), async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.currentUser.id;
       const success = await storage.deleteInventoryItem(req.params.id, userId);
       if (!success) {
         return res.status(404).json({ error: "Item not found" });
@@ -265,7 +312,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Branch ID is required" });
       }
       
-      const userId = req.user.claims.sub;
+      const userId = req.currentUser.id;
       const results = { success: 0, failed: 0, errors: [] as string[] };
       
       for (const item of items) {

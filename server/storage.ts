@@ -9,6 +9,7 @@ import {
   type InsertSavedFilter,
   type User,
   type UpsertUser,
+  type InsertUser,
   branches,
   inventoryItems,
   auditLogs,
@@ -17,13 +18,18 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
+import bcrypt from "bcrypt";
 
 export interface IStorage {
-  // Users (required for Replit Auth)
+  // Users
   getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
   updateUserRole(id: string, role: string): Promise<User | undefined>;
+  verifyPassword(phone: string, password: string): Promise<User | null>;
   
   // Branches
   getAllBranches(): Promise<Branch[]>;
@@ -51,25 +57,50 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // Users (required for Replit Auth)
+  // Users
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+    return user || undefined;
+  }
+
+  async createUser(userData: InsertUser): Promise<User> {
+    const hashedPassword = userData.password 
+      ? await bcrypt.hash(userData.password, 10) 
+      : null;
+    
     const [user] = await db
       .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
+      .values({
+        ...userData,
+        password: hashedPassword,
       })
       .returning();
     return user;
+  }
+
+  async updateUser(id: string, userData: Partial<InsertUser>): Promise<User | undefined> {
+    const updateData: any = { ...userData, updatedAt: new Date() };
+    
+    if (userData.password) {
+      updateData.password = await bcrypt.hash(userData.password, 10);
+    }
+    
+    const [user] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id)).returning();
+    return result.length > 0;
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -83,6 +114,14 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
+  }
+
+  async verifyPassword(phone: string, password: string): Promise<User | null> {
+    const user = await this.getUserByPhone(phone);
+    if (!user || !user.password) return null;
+    
+    const isValid = await bcrypt.compare(password, user.password);
+    return isValid ? user : null;
   }
 
   // Branches
