@@ -738,14 +738,14 @@ export default function PaymentRequestsPage() {
               <div className="space-y-2">
                 <Label>الفئة</Label>
                 <Select
-                  value={form.watch("categoryId")?.toString() || ""}
-                  onValueChange={(val) => form.setValue("categoryId", val ? parseInt(val, 10) : null)}
+                  value={form.watch("categoryId")?.toString() || "none"}
+                  onValueChange={(val) => form.setValue("categoryId", val === "none" ? null : parseInt(val, 10))}
                 >
                   <SelectTrigger data-testid="select-category">
                     <SelectValue placeholder="اختر الفئة" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">بدون فئة</SelectItem>
+                    <SelectItem value="none">بدون فئة</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
                         {category.name}
@@ -886,14 +886,14 @@ export default function PaymentRequestsPage() {
               <div className="space-y-2">
                 <Label>الفئة</Label>
                 <Select
-                  value={form.watch("categoryId")?.toString() || ""}
-                  onValueChange={(val) => form.setValue("categoryId", val ? parseInt(val, 10) : null)}
+                  value={form.watch("categoryId")?.toString() || "none"}
+                  onValueChange={(val) => form.setValue("categoryId", val === "none" ? null : parseInt(val, 10))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="اختر الفئة" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">بدون فئة</SelectItem>
+                    <SelectItem value="none">بدون فئة</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
                         {category.name}
