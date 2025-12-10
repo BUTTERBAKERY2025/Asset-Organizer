@@ -311,6 +311,7 @@ export default function InventoryPage() {
                   <TableHeader className="bg-muted/30 print:bg-transparent">
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-right w-[50px] print:text-black font-bold">#</TableHead>
+                      <TableHead className="text-right w-[60px] print:text-black font-bold">الصورة</TableHead>
                       {isGlobalSearch && (
                         <TableHead className="text-right w-[120px] print:text-black font-bold text-primary">الفرع</TableHead>
                       )}
@@ -338,6 +339,20 @@ export default function InventoryPage() {
                         return (
                           <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black" data-testid={`row-item-${item.id}`}>
                             <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(index + 1)}</TableCell>
+                            <TableCell className="p-1">
+                              {item.imageUrl ? (
+                                <img 
+                                  src={item.imageUrl} 
+                                  alt={item.name}
+                                  className="w-12 h-12 object-cover rounded-md border border-border shadow-sm"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground/50 text-xs">
+                                  -
+                                </div>
+                              )}
+                            </TableCell>
                             {isGlobalSearch && (
                                <TableCell className="font-medium text-primary print:text-black text-sm">{item.branchName}</TableCell>
                             )}
@@ -375,7 +390,7 @@ export default function InventoryPage() {
                       })}
                       {showPrices && (
                         <TableRow className="bg-muted/50 font-bold border-t-2 border-primary/20 print:border-black">
-                          <TableCell colSpan={isGlobalSearch ? 5 : 4} className="text-center print:text-black">إجمالي {category}</TableCell>
+                          <TableCell colSpan={isGlobalSearch ? 6 : 5} className="text-center print:text-black">إجمالي {category}</TableCell>
                           <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue)}</TableCell>
                           <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue * 0.15)}</TableCell>
                           <TableCell className="font-mono text-green-700 print:text-black">{formatCurrency(categoryTotalValue * 1.15)}</TableCell>
