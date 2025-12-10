@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp } from "lucide-react";
+import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp, FileDown } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
@@ -355,6 +355,103 @@ export default function ConstructionReportsPage() {
     if (selectedCategoryId === null) return null;
     return workItemsByCategoryData.find(c => c.id === selectedCategoryId);
   }, [workItemsByCategoryData, selectedCategoryId]);
+
+  const exportCategoryDetailsToPDF = () => {
+    if (!selectedCategoryInfo || selectedCategoryItems.length === 0) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const totalCost = selectedCategoryInfo.actualCost;
+    const itemsCount = selectedCategoryInfo.count;
+    const percentage = selectedCategoryInfo.percentage;
+
+    const tableRows = selectedCategoryItems.map((item, index) => `
+      <tr>
+        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${index + 1}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${item.name}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; text-align: left;">${Number(item.actualCost || 0).toLocaleString()} ر.س</td>
+        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${
+          item.status === 'completed' ? 'مكتمل' :
+          item.status === 'in_progress' ? 'قيد التنفيذ' : 'معلق'
+        }</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>تفاصيل بنود: ${selectedCategoryInfo.name}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+          * { font-family: 'Cairo', sans-serif; box-sizing: border-box; }
+          body { padding: 20px; background: white; direction: rtl; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #d4a853; padding-bottom: 15px; }
+          .header h1 { color: #333; margin: 0 0 5px 0; font-size: 22px; }
+          .header p { color: #666; margin: 0; font-size: 12px; }
+          .summary { display: flex; justify-content: space-around; margin-bottom: 20px; gap: 15px; }
+          .summary-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; flex: 1; border: 1px solid #e9ecef; }
+          .summary-card .value { font-size: 20px; font-weight: bold; color: #d4a853; }
+          .summary-card .label { font-size: 12px; color: #666; margin-top: 5px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          th { background: #d4a853; color: white; padding: 10px; text-align: right; border: 1px solid #d4a853; }
+          tr:nth-child(even) { background: #f8f9fa; }
+          .footer { margin-top: 20px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+          @media print { body { padding: 10px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>تفاصيل بنود: ${selectedCategoryInfo.name}</h1>
+          <p>تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p>
+        </div>
+        <div class="summary">
+          <div class="summary-card">
+            <div class="value">${totalCost.toLocaleString()} ر.س</div>
+            <div class="label">إجمالي التكلفة</div>
+          </div>
+          <div class="summary-card">
+            <div class="value">${itemsCount}</div>
+            <div class="label">عدد البنود</div>
+          </div>
+          <div class="summary-card">
+            <div class="value">${percentage.toFixed(1)}%</div>
+            <div class="label">من إجمالي المشروع</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>البيان</th>
+              <th style="width: 120px;">التكلفة</th>
+              <th style="width: 100px;">الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f0f0f0; font-weight: bold;">
+              <td colspan="2" style="padding: 10px; border: 1px solid #ddd;">الإجمالي</td>
+              <td style="padding: 10px; border: 1px solid #ddd; text-align: left;">${totalCost.toLocaleString()} ر.س</td>
+              <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${itemsCount} بند</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="footer">
+          نظام إدارة المشروعات والأصول والصيانة - باتر
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
 
   const exportToExcel = () => {
     const projectsData = filteredProjects.map(project => ({
@@ -1233,10 +1330,20 @@ export default function ConstructionReportsPage() {
 
         <Dialog open={selectedCategoryId !== null} onOpenChange={(open) => !open && setSelectedCategoryId(null)}>
           <DialogContent className="max-w-4xl max-h-[80vh]" dir="rtl">
-            <DialogHeader>
+            <DialogHeader className="flex flex-row items-center justify-between">
               <DialogTitle className="text-xl">
                 تفاصيل بنود: {selectedCategoryInfo?.name}
               </DialogTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportCategoryDetailsToPDF}
+                className="flex items-center gap-2"
+                data-testid="button-export-category-pdf"
+              >
+                <FileDown className="h-4 w-4" />
+                تصدير PDF
+              </Button>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
