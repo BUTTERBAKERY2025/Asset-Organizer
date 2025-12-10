@@ -8,7 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
@@ -41,6 +43,7 @@ const CHART_COLORS = ["#f59e0b", "#22c55e", "#3b82f6", "#ef4444", "#8b5cf6", "#0
 export default function ConstructionReportsPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedProject, setSelectedProject] = useState<string>("all");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -235,6 +238,18 @@ export default function ConstructionReportsPage() {
       };
     });
   }, [filteredProjects, workItems, categoryMap, branchMap]);
+
+  const selectedCategoryItems = useMemo(() => {
+    if (selectedCategoryId === null) return [];
+    return workItemsByProject
+      .filter(w => w.categoryId === selectedCategoryId)
+      .sort((a, b) => (Number(b.actualCost) || 0) - (Number(a.actualCost) || 0));
+  }, [workItemsByProject, selectedCategoryId]);
+
+  const selectedCategoryInfo = useMemo(() => {
+    if (selectedCategoryId === null) return null;
+    return workItemsByCategoryData.find(c => c.id === selectedCategoryId);
+  }, [workItemsByCategoryData, selectedCategoryId]);
 
   const exportToExcel = () => {
     const projectsData = filteredProjects.map(project => ({
@@ -540,11 +555,12 @@ export default function ConstructionReportsPage() {
                         <TableHead>إجمالي التكلفة</TableHead>
                         <TableHead>النسبة</TableHead>
                         <TableHead className="w-32">التوزيع</TableHead>
+                        <TableHead className="w-24">التفاصيل</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {workItemsByCategoryData.map((cat, index) => (
-                        <TableRow key={cat.id} data-testid={`row-category-${cat.id}`}>
+                        <TableRow key={cat.id} data-testid={`row-category-${cat.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCategoryId(cat.id)}>
                           <TableCell className="font-medium">{index + 1}</TableCell>
                           <TableCell className="font-medium">{cat.name}</TableCell>
                           <TableCell>{cat.count}</TableCell>
@@ -552,6 +568,12 @@ export default function ConstructionReportsPage() {
                           <TableCell>{cat.percentage.toFixed(1)}%</TableCell>
                           <TableCell>
                             <Progress value={cat.percentage} className="w-24" />
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedCategoryId(cat.id); }}>
+                              <Eye className="w-4 h-4 ml-1" />
+                              عرض
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -562,6 +584,7 @@ export default function ConstructionReportsPage() {
                           <TableCell>{workItemsByCategoryData.reduce((sum, c) => sum + c.count, 0)}</TableCell>
                           <TableCell className="text-amber-600">{workItemsByCategoryData.reduce((sum, c) => sum + c.actualCost, 0).toLocaleString()} ر.س</TableCell>
                           <TableCell>100%</TableCell>
+                          <TableCell></TableCell>
                           <TableCell></TableCell>
                         </TableRow>
                       )}
@@ -785,6 +808,74 @@ export default function ConstructionReportsPage() {
             </Table>
           </div>
         </div>
+
+        <Dialog open={selectedCategoryId !== null} onOpenChange={(open) => !open && setSelectedCategoryId(null)}>
+          <DialogContent className="max-w-4xl max-h-[80vh]" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="text-xl">
+                تفاصيل بنود: {selectedCategoryInfo?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-2xl font-bold text-amber-600">
+                      {selectedCategoryInfo?.actualCost.toLocaleString()} ر.س
+                    </div>
+                    <p className="text-sm text-muted-foreground">إجمالي التكلفة</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-2xl font-bold">
+                      {selectedCategoryInfo?.count}
+                    </div>
+                    <p className="text-sm text-muted-foreground">عدد البنود</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-2xl font-bold">
+                      {selectedCategoryInfo?.percentage.toFixed(1)}%
+                    </div>
+                    <p className="text-sm text-muted-foreground">من إجمالي المشروع</p>
+                  </CardContent>
+                </Card>
+              </div>
+              <ScrollArea className="h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>البيان</TableHead>
+                      <TableHead className="w-32">التكلفة</TableHead>
+                      <TableHead className="w-24">الحالة</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedCategoryItems.map((item, index) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell className="max-w-md truncate" title={item.name}>{item.name}</TableCell>
+                        <TableCell className="font-medium">{Number(item.actualCost || 0).toLocaleString()} ر.س</TableCell>
+                        <TableCell>
+                          <Badge className={
+                            item.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            item.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }>
+                            {WORK_STATUS_LABELS[item.status] || item.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
