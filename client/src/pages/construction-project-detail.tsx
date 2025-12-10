@@ -52,7 +52,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link, useParams } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import type { Branch, ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -88,6 +88,7 @@ const PROJECT_STATUSES = [
 export default function ConstructionProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const projectId = parseInt(params.id || "0", 10);
+  const [, navigate] = useLocation();
   
   const [isAddWorkItemOpen, setIsAddWorkItemOpen] = useState(false);
   const [isEditWorkItemOpen, setIsEditWorkItemOpen] = useState(false);
@@ -134,6 +135,15 @@ export default function ConstructionProjectDetailPage() {
     queryFn: async () => {
       const res = await fetch("/api/construction/contractors");
       if (!res.ok) throw new Error("Failed to fetch contractors");
+      return res.json();
+    },
+  });
+
+  const { data: allProjects = [] } = useQuery<ConstructionProject[]>({
+    queryKey: ["/api/construction/projects"],
+    queryFn: async () => {
+      const res = await fetch("/api/construction/projects");
+      if (!res.ok) throw new Error("Failed to fetch projects");
       return res.json();
     },
   });
@@ -498,7 +508,25 @@ export default function ConstructionProjectDetailPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-3">
+              <Label className="text-sm text-muted-foreground whitespace-nowrap">اختر المشروع:</Label>
+              <Select
+                value={projectId.toString()}
+                onValueChange={(value) => navigate(`/construction-projects/${value}`)}
+              >
+                <SelectTrigger className="w-full max-w-md" data-testid="select-project">
+                  <SelectValue placeholder="اختر مشروع" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id.toString()}>
+                      {p.title} - {getBranchName(p.branchId)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-foreground">{project.title}</h1>
               {getStatusBadge(project.status)}
