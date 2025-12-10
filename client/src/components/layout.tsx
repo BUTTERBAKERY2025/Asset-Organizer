@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +73,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/construction-dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
           { href: "/construction-projects", label: "المشاريع", icon: Hammer },
           { href: "/contractors", label: "المقاولون", icon: HardHat },
+          { href: "/contracts", label: "العقود", icon: FileSignature },
+          { href: "/payment-requests", label: "طلبات الدفع", icon: Wallet },
           { href: "/construction-reports", label: "التقارير", icon: FileBarChart },
         ],
       },

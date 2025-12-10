@@ -18,6 +18,8 @@ import ContractorsPage from "@/pages/contractors";
 import ReportsPage from "@/pages/reports";
 import ConstructionDashboardPage from "@/pages/construction-dashboard";
 import ConstructionReportsPage from "@/pages/construction-reports";
+import ContractsPage from "@/pages/contracts";
+import PaymentRequestsPage from "@/pages/payment-requests";
 
 function Router() {
   return (
@@ -36,6 +38,8 @@ function Router() {
       <Route path="/contractors" component={ContractorsPage} />
       <Route path="/construction-dashboard" component={ConstructionDashboardPage} />
       <Route path="/construction-reports" component={ConstructionReportsPage} />
+      <Route path="/contracts" component={ContractsPage} />
+      <Route path="/payment-requests" component={PaymentRequestsPage} />
       <Route path="/reports" component={ReportsPage} />
       <Route component={NotFound} />
     </Switch>
