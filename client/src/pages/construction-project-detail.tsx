@@ -345,28 +345,69 @@ export default function ConstructionProjectDetailPage() {
     const infoWs = XLSX.utils.json_to_sheet(projectInfo);
     XLSX.utils.book_append_sheet(wb, infoWs, "معلومات المشروع");
 
-    const itemsData = workItems.map((item, index) => ({
-      "#": index + 1,
-      "البيان": item.name,
-      "الوصف": item.description || "",
-      "الفئة": getCategoryName(item.categoryId),
-      "المقاول": getContractorName(item.contractorId),
-      "التكلفة التقديرية": Number(item.costEstimate) || 0,
-      "التكلفة الفعلية": Number(item.actualCost) || 0,
-      "الحالة": WORK_ITEM_STATUSES.find(s => s.value === item.status)?.label || item.status,
-      "تاريخ البدء": item.scheduledStart || "-",
-      "تاريخ الانتهاء": item.scheduledEnd || "-",
-      "ملاحظات": item.notes || "",
-    }));
-    const itemsWs = XLSX.utils.json_to_sheet(itemsData);
-    XLSX.utils.book_append_sheet(wb, itemsWs, "بنود العمل");
+    const detailedData: Record<string, unknown>[] = [];
+    workItemsByCategory.forEach((group, groupIndex) => {
+      const categoryName = group.category?.name || "غير مصنف";
+      detailedData.push({
+        "#": "",
+        "البيان": `═══ ${categoryName} ═══`,
+        "المقاول": "",
+        "التكلفة التقديرية": "",
+        "التكلفة الفعلية": "",
+        "الحالة": `${group.items.length} بند`,
+      });
+      
+      group.items.forEach((item, itemIndex) => {
+        detailedData.push({
+          "#": itemIndex + 1,
+          "البيان": item.name,
+          "المقاول": getContractorName(item.contractorId),
+          "التكلفة التقديرية": Number(item.costEstimate) || 0,
+          "التكلفة الفعلية": Number(item.actualCost) || 0,
+          "الحالة": WORK_ITEM_STATUSES.find(s => s.value === item.status)?.label || item.status,
+        });
+      });
+      
+      detailedData.push({
+        "#": "",
+        "البيان": `▬▬▬ مجموع ${categoryName} ▬▬▬`,
+        "المقاول": "",
+        "التكلفة التقديرية": group.items.reduce((sum, i) => sum + (Number(i.costEstimate) || 0), 0),
+        "التكلفة الفعلية": group.totalCost,
+        "الحالة": "",
+      });
+      
+      detailedData.push({ "#": "", "البيان": "", "المقاول": "", "التكلفة التقديرية": "", "التكلفة الفعلية": "", "الحالة": "" });
+    });
+    
+    detailedData.push({
+      "#": "",
+      "البيان": "═══════ الإجمالي العام ═══════",
+      "المقاول": "",
+      "التكلفة التقديرية": totalEstimatedCost,
+      "التكلفة الفعلية": totalActualCost,
+      "الحالة": `${workItems.length} بند`,
+    });
+
+    const detailedWs = XLSX.utils.json_to_sheet(detailedData);
+    XLSX.utils.book_append_sheet(wb, detailedWs, "البنود حسب الفئة");
 
     const categorySummary = workItemsByCategory.map((group, index) => ({
       "#": index + 1,
       "الفئة": group.category?.name || "غير مصنف",
       "عدد البنود": group.items.length,
-      "إجمالي التكلفة": group.totalCost,
+      "التكلفة التقديرية": group.items.reduce((sum, i) => sum + (Number(i.costEstimate) || 0), 0),
+      "التكلفة الفعلية": group.totalCost,
+      "النسبة": totalActualCost > 0 ? `${((group.totalCost / totalActualCost) * 100).toFixed(1)}%` : "0%",
     }));
+    categorySummary.push({
+      "#": 0,
+      "الفئة": "الإجمالي",
+      "عدد البنود": workItems.length,
+      "التكلفة التقديرية": totalEstimatedCost,
+      "التكلفة الفعلية": totalActualCost,
+      "النسبة": "100%",
+    });
     const categoryWs = XLSX.utils.json_to_sheet(categorySummary);
     XLSX.utils.book_append_sheet(wb, categoryWs, "ملخص الفئات");
 
@@ -600,58 +641,53 @@ export default function ConstructionProjectDetailPage() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <CardContent className="pt-0">
-                            <ScrollArea className="max-h-[400px]">
+                            <div className="overflow-x-auto">
                               <Table>
                                 <TableHeader>
-                                  <TableRow className="text-xs">
-                                    <TableHead className="w-8">#</TableHead>
-                                    <TableHead>البيان</TableHead>
-                                    <TableHead>المقاول</TableHead>
-                                    <TableHead className="text-left">التكلفة</TableHead>
-                                    <TableHead>الحالة</TableHead>
-                                    {canEdit && <TableHead className="w-20">إجراءات</TableHead>}
+                                  <TableRow className="text-xs bg-muted/30">
+                                    <TableHead className="w-10">#</TableHead>
+                                    <TableHead className="min-w-[300px]">البيان</TableHead>
+                                    <TableHead className="w-28">المقاول</TableHead>
+                                    <TableHead className="w-28 text-left">التكلفة</TableHead>
+                                    <TableHead className="w-20">الحالة</TableHead>
+                                    {canEdit && <TableHead className="w-16">إجراءات</TableHead>}
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {group.items.map((item, itemIndex) => (
-                                    <TableRow key={item.id} className="text-sm" data-testid={`row-work-item-${item.id}`}>
-                                      <TableCell className="text-muted-foreground text-xs">{itemIndex + 1}</TableCell>
+                                    <TableRow key={item.id} className="text-sm hover:bg-amber-50/30" data-testid={`row-work-item-${item.id}`}>
+                                      <TableCell className="text-muted-foreground text-xs font-medium">{itemIndex + 1}</TableCell>
                                       <TableCell>
-                                        <div className="max-w-md">
-                                          <p className="font-medium text-sm truncate" title={item.name}>{item.name}</p>
+                                        <div>
+                                          <p className="font-medium text-sm" title={item.name}>{item.name}</p>
                                           {item.description && (
-                                            <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
                                           )}
                                           {(item.scheduledStart || item.scheduledEnd) && (
-                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                              {item.scheduledStart && `من: ${item.scheduledStart}`}
+                                            <p className="text-xs text-blue-600 mt-0.5">
+                                              📅 {item.scheduledStart && `من: ${item.scheduledStart}`}
                                               {item.scheduledStart && item.scheduledEnd && " - "}
                                               {item.scheduledEnd && `إلى: ${item.scheduledEnd}`}
                                             </p>
                                           )}
                                           {item.notes && (
-                                            <p className="text-xs text-amber-600 mt-0.5 line-clamp-1">📝 {item.notes}</p>
+                                            <p className="text-xs text-amber-600 mt-0.5">📝 {item.notes}</p>
                                           )}
                                         </div>
                                       </TableCell>
                                       <TableCell className="text-xs">{getContractorName(item.contractorId)}</TableCell>
                                       <TableCell className="text-left">
-                                        <div>
-                                          <p className="font-medium text-sm">{formatCurrency(item.actualCost)}</p>
-                                          {item.costEstimate && item.costEstimate !== item.actualCost && (
-                                            <p className="text-xs text-muted-foreground">تقديري: {formatCurrency(item.costEstimate)}</p>
-                                          )}
-                                        </div>
+                                        <p className="font-semibold text-sm">{formatCurrency(item.actualCost)}</p>
                                       </TableCell>
                                       <TableCell>{getWorkItemStatusBadge(item.status)}</TableCell>
                                       {canEdit && (
                                         <TableCell>
-                                          <div className="flex items-center gap-1">
-                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditWorkItem(item)} data-testid={`button-edit-work-item-${item.id}`}>
+                                          <div className="flex items-center gap-0.5">
+                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openEditWorkItem(item)} data-testid={`button-edit-work-item-${item.id}`}>
                                               <Pencil className="w-3 h-3" />
                                             </Button>
                                             {isAdmin && (
-                                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setSelectedWorkItem(item); setIsDeleteWorkItemOpen(true); }} data-testid={`button-delete-work-item-${item.id}`}>
+                                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setSelectedWorkItem(item); setIsDeleteWorkItemOpen(true); }} data-testid={`button-delete-work-item-${item.id}`}>
                                                 <Trash2 className="w-3 h-3 text-destructive" />
                                               </Button>
                                             )}
@@ -660,9 +696,17 @@ export default function ConstructionProjectDetailPage() {
                                       )}
                                     </TableRow>
                                   ))}
+                                  <TableRow className="bg-amber-100/50 font-bold border-t-2 border-amber-300">
+                                    <TableCell></TableCell>
+                                    <TableCell className="text-sm">مجموع {group.category?.name || "غير مصنف"}</TableCell>
+                                    <TableCell className="text-xs">{group.items.length} بند</TableCell>
+                                    <TableCell className="text-left text-sm font-bold text-primary">{formatCurrency(group.totalCost)}</TableCell>
+                                    <TableCell></TableCell>
+                                    {canEdit && <TableCell></TableCell>}
+                                  </TableRow>
                                 </TableBody>
                               </Table>
-                            </ScrollArea>
+                            </div>
                           </CardContent>
                         </CollapsibleContent>
                       </Card>
