@@ -116,3 +116,97 @@ export const insertSavedFilterSchema = createInsertSchema(savedFilters).omit({
 
 export type SavedFilter = typeof savedFilters.$inferSelect;
 export type InsertSavedFilter = z.infer<typeof insertSavedFilterSchema>;
+
+// Construction Categories table
+export const constructionCategories = pgTable("construction_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  icon: text("icon"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertConstructionCategorySchema = createInsertSchema(constructionCategories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ConstructionCategory = typeof constructionCategories.$inferSelect;
+export type InsertConstructionCategory = z.infer<typeof insertConstructionCategorySchema>;
+
+// Contractors table
+export const contractors = pgTable("contractors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  specialization: text("specialization"),
+  notes: text("notes"),
+  rating: integer("rating"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertContractorSchema = createInsertSchema(contractors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Contractor = typeof contractors.$inferSelect;
+export type InsertContractor = z.infer<typeof insertContractorSchema>;
+
+// Construction Projects table
+export const constructionProjects = pgTable("construction_projects", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").default("planned").notNull(), // planned, in_progress, completed, on_hold
+  budget: real("budget"),
+  actualCost: real("actual_cost"),
+  startDate: text("start_date"),
+  targetCompletionDate: text("target_completion_date"),
+  actualCompletionDate: text("actual_completion_date"),
+  progressPercent: integer("progress_percent").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertConstructionProjectSchema = createInsertSchema(constructionProjects).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ConstructionProject = typeof constructionProjects.$inferSelect;
+export type InsertConstructionProject = z.infer<typeof insertConstructionProjectSchema>;
+
+// Project Work Items table
+export const projectWorkItems = pgTable("project_work_items", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed
+  costEstimate: real("cost_estimate"),
+  actualCost: real("actual_cost"),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  scheduledStart: text("scheduled_start"),
+  scheduledEnd: text("scheduled_end"),
+  completedAt: text("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProjectWorkItemSchema = createInsertSchema(projectWorkItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectWorkItem = typeof projectWorkItems.$inferSelect;
+export type InsertProjectWorkItem = z.infer<typeof insertProjectWorkItemSchema>;
