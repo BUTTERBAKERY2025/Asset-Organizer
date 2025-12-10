@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -40,19 +40,19 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, Pencil, Trash2, Loader2, DollarSign, CheckCircle, XCircle, 
-  Clock, AlertTriangle, Wallet, CreditCard, ArrowUpCircle, Printer, Share2, MessageCircle, Mail, FileDown
+  Clock, AlertTriangle, Wallet, CreditCard, ArrowUpCircle, Share2, MessageCircle, FileDown, Download
 } from "lucide-react";
 import { Link } from "wouter";
-import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory } from "@shared/schema";
+import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory, Branch } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useReactToPrint } from "react-to-print";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { generatePaymentRequestsPDF, downloadPDF, sharePDF } from "@/lib/pdf-generator";
 
 const paymentRequestFormSchema = z.object({
   projectId: z.coerce.number().min(1, "اختر المشروع"),
@@ -103,7 +103,6 @@ export default function PaymentRequestsPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState("all");
   const [dateFilter, setDateFilter] = useState<string>(new Date().toISOString().split('T')[0]);
-  const printRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -146,6 +145,17 @@ export default function PaymentRequestsPage() {
       return res.json();
     },
   });
+
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+    queryFn: async () => {
+      const res = await fetch("/api/branches");
+      if (!res.ok) throw new Error("Failed to fetch branches");
+      return res.json();
+    },
+  });
+
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const form = useForm<PaymentRequestFormData>({
     resolver: zodResolver(paymentRequestFormSchema),
@@ -346,11 +356,6 @@ export default function PaymentRequestsPage() {
     return reqDate === dateFilter;
   });
 
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `طلبات الدفع - ${dateFilter}`,
-  });
-
   const formatDateArabic = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('ar-SA', { 
@@ -380,15 +385,65 @@ export default function PaymentRequestsPage() {
     return text;
   };
 
-  const shareViaWhatsApp = () => {
-    const text = encodeURIComponent(generateShareText());
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+  const handleDownloadPDF = async () => {
+    if (requestsByDate.length === 0) {
+      toast({ title: "لا توجد طلبات للتصدير", variant: "destructive" });
+      return;
+    }
+    
+    setIsGeneratingPDF(true);
+    try {
+      const blob = await generatePaymentRequestsPDF(
+        requestsByDate,
+        projects,
+        branches,
+        categories,
+        dateFilter
+      );
+      const filename = `طلبات-الدفع-${dateFilter}.pdf`;
+      downloadPDF(blob, filename);
+      toast({ title: "تم تحميل التقرير بنجاح" });
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast({ title: "فشل في إنشاء التقرير", variant: "destructive" });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
-  const shareViaEmail = () => {
-    const subject = encodeURIComponent(`طلبات الدفع - ${formatDateArabic(dateFilter)}`);
-    const body = encodeURIComponent(generateShareText());
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  const handleSharePDF = async () => {
+    if (requestsByDate.length === 0) {
+      toast({ title: "لا توجد طلبات للمشاركة", variant: "destructive" });
+      return;
+    }
+    
+    setIsGeneratingPDF(true);
+    try {
+      const blob = await generatePaymentRequestsPDF(
+        requestsByDate,
+        projects,
+        branches,
+        categories,
+        dateFilter
+      );
+      const filename = `طلبات-الدفع-${dateFilter}.pdf`;
+      const title = `طلبات الدفع - ${formatDateArabic(dateFilter)}`;
+      
+      const shared = await sharePDF(blob, filename, title);
+      
+      if (!shared) {
+        downloadPDF(blob, filename);
+        toast({ 
+          title: "تم تحميل الملف", 
+          description: "يمكنك مشاركته يدوياً عبر واتساب" 
+        });
+      }
+    } catch (error) {
+      console.error("PDF sharing failed:", error);
+      toast({ title: "فشل في مشاركة التقرير", variant: "destructive" });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const pendingCount = requests.filter((r) => r.status === "pending").length;
@@ -528,37 +583,32 @@ export default function PaymentRequestsPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button
+                <Button 
                   variant="outline"
-                  onClick={() => handlePrint()}
-                  disabled={requestsByDate.length === 0}
-                  data-testid="button-print"
+                  onClick={handleDownloadPDF}
+                  disabled={requestsByDate.length === 0 || isGeneratingPDF}
+                  data-testid="button-download-pdf"
                 >
-                  <Printer className="ml-2 h-4 w-4" />
-                  طباعة PDF
+                  {isGeneratingPDF ? (
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="ml-2 h-4 w-4" />
+                  )}
+                  تحميل PDF
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      disabled={requestsByDate.length === 0}
-                      data-testid="button-share"
-                    >
-                      <Share2 className="ml-2 h-4 w-4" />
-                      مشاركة
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={shareViaWhatsApp} data-testid="button-share-whatsapp">
-                      <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
-                      واتساب
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={shareViaEmail} data-testid="button-share-email">
-                      <Mail className="ml-2 h-4 w-4 text-blue-500" />
-                      البريد الإلكتروني
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Button 
+                  variant="outline"
+                  onClick={handleSharePDF}
+                  disabled={requestsByDate.length === 0 || isGeneratingPDF}
+                  data-testid="button-share-whatsapp"
+                >
+                  {isGeneratingPDF ? (
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
+                  )}
+                  مشاركة واتساب
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -1082,76 +1132,6 @@ export default function PaymentRequestsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white" dir="rtl">
-          <style>{`
-            @media print {
-              body { direction: rtl; font-family: 'Cairo', sans-serif; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
-              th { background-color: #f5f5f5; }
-            }
-          `}</style>
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold mb-2">طلبات الدفع - باتر بيكري</h1>
-            <p className="text-gray-600">{formatDateArabic(dateFilter)}</p>
-          </div>
-          
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-gray-600">إجمالي الطلبات:</span>
-                <span className="font-bold mr-2">{requestsByDate.length}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">إجمالي المبلغ:</span>
-                <span className="font-bold mr-2">{requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س</span>
-              </div>
-            </div>
-          </div>
-
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2 text-right">#</th>
-                <th className="border p-2 text-right">النوع</th>
-                <th className="border p-2 text-right">الوصف</th>
-                <th className="border p-2 text-right">المستفيد</th>
-                <th className="border p-2 text-right">المبلغ</th>
-                <th className="border p-2 text-right">الحالة</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requestsByDate.map((req, index) => {
-                const typeInfo = getTypeInfo(req.requestType);
-                const statusInfo = getStatusInfo(req.status);
-                return (
-                  <tr key={req.id}>
-                    <td className="border p-2">{index + 1}</td>
-                    <td className="border p-2">{typeInfo.label}</td>
-                    <td className="border p-2">{req.description}</td>
-                    <td className="border p-2">{req.beneficiaryName || "-"}</td>
-                    <td className="border p-2 font-bold">{req.amount.toLocaleString()} ر.س</td>
-                    <td className="border p-2">{statusInfo.label}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-100 font-bold">
-                <td className="border p-2" colSpan={4}>الإجمالي</td>
-                <td className="border p-2">{requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س</td>
-                <td className="border p-2"></td>
-              </tr>
-            </tfoot>
-          </table>
-
-          <div className="mt-8 text-center text-gray-500 text-sm">
-            <p>تم إنشاء هذا التقرير بواسطة نظام إدارة المشروعات - باتر بيكري</p>
-            <p>{new Date().toLocaleString('ar-SA')}</p>
-          </div>
-        </div>
-      </div>
     </Layout>
   );
 }
