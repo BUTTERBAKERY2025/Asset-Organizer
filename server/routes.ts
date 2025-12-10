@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requireRole } from "./auth";
 
@@ -637,6 +637,87 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting work item:", error);
       res.status(500).json({ error: "Failed to delete work item" });
+    }
+  });
+
+  // Budget Allocations
+  app.get("/api/construction/projects/:projectId/budget-allocations", async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId, 10);
+      if (isNaN(projectId)) {
+        return res.status(400).json({ error: "Invalid project ID" });
+      }
+      const allocations = await storage.getBudgetAllocationsByProject(projectId);
+      res.json(allocations);
+    } catch (error) {
+      console.error("Error fetching budget allocations:", error);
+      res.status(500).json({ error: "Failed to fetch budget allocations" });
+    }
+  });
+
+  app.post("/api/construction/budget-allocations", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+    try {
+      const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
+      const allocation = await storage.createBudgetAllocation(validatedData);
+      res.status(201).json(allocation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating budget allocation:", error);
+      res.status(500).json({ error: "Failed to create budget allocation" });
+    }
+  });
+
+  app.post("/api/construction/budget-allocations/upsert", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+    try {
+      const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
+      const allocation = await storage.upsertBudgetAllocation(validatedData);
+      res.json(allocation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error upserting budget allocation:", error);
+      res.status(500).json({ error: "Failed to upsert budget allocation" });
+    }
+  });
+
+  app.patch("/api/construction/budget-allocations/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid allocation ID" });
+      }
+      const partialData = insertProjectBudgetAllocationSchema.partial().parse(req.body);
+      const allocation = await storage.updateBudgetAllocation(id, partialData);
+      if (!allocation) {
+        return res.status(404).json({ error: "Budget allocation not found" });
+      }
+      res.json(allocation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating budget allocation:", error);
+      res.status(500).json({ error: "Failed to update budget allocation" });
+    }
+  });
+
+  app.delete("/api/construction/budget-allocations/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid allocation ID" });
+      }
+      const success = await storage.deleteBudgetAllocation(id);
+      if (!success) {
+        return res.status(404).json({ error: "Budget allocation not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting budget allocation:", error);
+      res.status(500).json({ error: "Failed to delete budget allocation" });
     }
   });
 

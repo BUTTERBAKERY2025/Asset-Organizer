@@ -210,3 +210,23 @@ export const insertProjectWorkItemSchema = createInsertSchema(projectWorkItems).
 
 export type ProjectWorkItem = typeof projectWorkItems.$inferSelect;
 export type InsertProjectWorkItem = z.infer<typeof insertProjectWorkItemSchema>;
+
+// Project Budget Allocations table - for planning budget per category
+export const projectBudgetAllocations = pgTable("project_budget_allocations", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
+  plannedAmount: real("planned_amount").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProjectBudgetAllocationSchema = createInsertSchema(projectBudgetAllocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectBudgetAllocation = typeof projectBudgetAllocations.$inferSelect;
+export type InsertProjectBudgetAllocation = z.infer<typeof insertProjectBudgetAllocationSchema>;

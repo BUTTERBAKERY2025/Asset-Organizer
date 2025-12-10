@@ -18,6 +18,8 @@ import {
   type InsertConstructionProject,
   type ProjectWorkItem,
   type InsertProjectWorkItem,
+  type ProjectBudgetAllocation,
+  type InsertProjectBudgetAllocation,
   branches,
   inventoryItems,
   auditLogs,
@@ -26,7 +28,8 @@ import {
   constructionCategories,
   contractors,
   constructionProjects,
-  projectWorkItems
+  projectWorkItems,
+  projectBudgetAllocations
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -92,6 +95,14 @@ export interface IStorage {
   createWorkItem(item: InsertProjectWorkItem): Promise<ProjectWorkItem>;
   updateWorkItem(id: number, item: Partial<InsertProjectWorkItem>): Promise<ProjectWorkItem | undefined>;
   deleteWorkItem(id: number): Promise<boolean>;
+  
+  // Project Budget Allocations
+  getBudgetAllocationsByProject(projectId: number): Promise<ProjectBudgetAllocation[]>;
+  getBudgetAllocation(id: number): Promise<ProjectBudgetAllocation | undefined>;
+  createBudgetAllocation(allocation: InsertProjectBudgetAllocation): Promise<ProjectBudgetAllocation>;
+  updateBudgetAllocation(id: number, allocation: Partial<InsertProjectBudgetAllocation>): Promise<ProjectBudgetAllocation | undefined>;
+  deleteBudgetAllocation(id: number): Promise<boolean>;
+  upsertBudgetAllocation(allocation: InsertProjectBudgetAllocation): Promise<ProjectBudgetAllocation>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -403,6 +414,64 @@ export class DatabaseStorage implements IStorage {
   async deleteWorkItem(id: number): Promise<boolean> {
     const result = await db.delete(projectWorkItems).where(eq(projectWorkItems.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Project Budget Allocations
+  async getBudgetAllocationsByProject(projectId: number): Promise<ProjectBudgetAllocation[]> {
+    return await db
+      .select()
+      .from(projectBudgetAllocations)
+      .where(eq(projectBudgetAllocations.projectId, projectId));
+  }
+
+  async getBudgetAllocation(id: number): Promise<ProjectBudgetAllocation | undefined> {
+    const [allocation] = await db.select().from(projectBudgetAllocations).where(eq(projectBudgetAllocations.id, id));
+    return allocation || undefined;
+  }
+
+  async createBudgetAllocation(allocation: InsertProjectBudgetAllocation): Promise<ProjectBudgetAllocation> {
+    const [newAllocation] = await db.insert(projectBudgetAllocations).values(allocation).returning();
+    return newAllocation;
+  }
+
+  async updateBudgetAllocation(id: number, allocation: Partial<InsertProjectBudgetAllocation>): Promise<ProjectBudgetAllocation | undefined> {
+    const [updated] = await db
+      .update(projectBudgetAllocations)
+      .set({ ...allocation, updatedAt: new Date() })
+      .where(eq(projectBudgetAllocations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteBudgetAllocation(id: number): Promise<boolean> {
+    const result = await db.delete(projectBudgetAllocations).where(eq(projectBudgetAllocations.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async upsertBudgetAllocation(allocation: InsertProjectBudgetAllocation): Promise<ProjectBudgetAllocation> {
+    const existing = await db
+      .select()
+      .from(projectBudgetAllocations)
+      .where(
+        and(
+          eq(projectBudgetAllocations.projectId, allocation.projectId),
+          allocation.categoryId 
+            ? eq(projectBudgetAllocations.categoryId, allocation.categoryId)
+            : eq(projectBudgetAllocations.categoryId, 0)
+        )
+      );
+    
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(projectBudgetAllocations)
+        .set({ ...allocation, updatedAt: new Date() })
+        .where(eq(projectBudgetAllocations.id, existing[0].id))
+        .returning();
+      return updated;
+    } else {
+      const [newAllocation] = await db.insert(projectBudgetAllocations).values(allocation).returning();
+      return newAllocation;
+    }
   }
 }
 

@@ -53,8 +53,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Link, useParams, useLocation } from "wouter";
-import type { Branch, ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem } from "@shared/schema";
+import type { Branch, ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem, ProjectBudgetAllocation } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const workItemFormSchema = z.object({
   projectId: z.number(),
@@ -157,6 +158,52 @@ export default function ConstructionProjectDetailPage() {
     },
     enabled: projectId > 0,
   });
+
+  const { data: budgetAllocations = [] } = useQuery<ProjectBudgetAllocation[]>({
+    queryKey: ["/api/construction/projects", projectId, "budget-allocations"],
+    queryFn: async () => {
+      const res = await fetch(`/api/construction/projects/${projectId}/budget-allocations`);
+      if (!res.ok) throw new Error("Failed to fetch budget allocations");
+      return res.json();
+    },
+    enabled: projectId > 0,
+  });
+
+  const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
+  const [budgetInputs, setBudgetInputs] = useState<Record<number, number>>({});
+
+  const upsertBudgetMutation = useMutation({
+    mutationFn: async (data: { projectId: number; categoryId: number | null; plannedAmount: number }) => {
+      const res = await fetch("/api/construction/budget-allocations/upsert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to save budget");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/construction/projects", projectId, "budget-allocations"] });
+    },
+  });
+
+  const saveBudgetAllocations = async () => {
+    try {
+      for (const [catId, amount] of Object.entries(budgetInputs)) {
+        const categoryIdNum = parseInt(catId, 10);
+        if (isNaN(categoryIdNum) || amount <= 0) continue;
+        await upsertBudgetMutation.mutateAsync({
+          projectId,
+          categoryId: categoryIdNum,
+          plannedAmount: amount,
+        });
+      }
+      setIsBudgetDialogOpen(false);
+      toast({ title: "تم حفظ الميزانية بنجاح" });
+    } catch {
+      toast({ title: "فشل في حفظ الميزانية", variant: "destructive" });
+    }
+  };
 
   const form = useForm<WorkItemFormData>({
     resolver: zodResolver(workItemFormSchema),
@@ -297,6 +344,46 @@ export default function ConstructionProjectDetailPage() {
   const totalEstimatedCost = workItems.reduce((sum, item) => sum + (item.costEstimate || 0), 0);
   const totalActualCost = workItems.reduce((sum, item) => sum + (item.actualCost || 0), 0);
   const completedItems = workItems.filter((item) => item.status === "completed").length;
+  
+  const totalPlannedBudget = budgetAllocations.reduce((sum, a) => sum + (a.plannedAmount || 0), 0);
+  
+  const budgetComparison = useMemo(() => {
+    const comparison: { categoryId: number | null; categoryName: string; planned: number; actual: number; variance: number }[] = [];
+    
+    const categoryActuals: Record<number, number> = {};
+    workItems.forEach(item => {
+      const catId = item.categoryId || 0;
+      categoryActuals[catId] = (categoryActuals[catId] || 0) + (Number(item.actualCost) || 0);
+    });
+    
+    categories.forEach(cat => {
+      const allocation = budgetAllocations.find(a => a.categoryId === cat.id);
+      const planned = allocation?.plannedAmount || 0;
+      const actual = categoryActuals[cat.id] || 0;
+      if (planned > 0 || actual > 0) {
+        comparison.push({
+          categoryId: cat.id,
+          categoryName: cat.name,
+          planned,
+          actual,
+          variance: planned - actual,
+        });
+      }
+    });
+    
+    if (categoryActuals[0] > 0) {
+      const uncatAllocation = budgetAllocations.find(a => !a.categoryId);
+      comparison.push({
+        categoryId: null,
+        categoryName: "غير مصنف",
+        planned: uncatAllocation?.plannedAmount || 0,
+        actual: categoryActuals[0],
+        variance: (uncatAllocation?.plannedAmount || 0) - categoryActuals[0],
+      });
+    }
+    
+    return comparison.sort((a, b) => b.actual - a.actual);
+  }, [workItems, categories, budgetAllocations]);
 
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({ contentRef: printRef });
@@ -546,13 +633,13 @@ export default function ConstructionProjectDetailPage() {
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">الميزانية</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">الميزانية المخططة</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(project.budget)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(totalPlannedBudget || project.budget)}</p>
             </CardContent>
           </Card>
           <Card>
@@ -560,7 +647,18 @@ export default function ConstructionProjectDetailPage() {
               <CardTitle className="text-sm text-muted-foreground">التكلفة الفعلية</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(project.actualCost || totalActualCost)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(totalActualCost)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">الفرق</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className={`text-2xl font-bold ${(totalPlannedBudget - totalActualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(Math.abs(totalPlannedBudget - totalActualCost))}
+                <span className="text-sm mr-1">{(totalPlannedBudget - totalActualCost) >= 0 ? '(وفر)' : '(تجاوز)'}</span>
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -584,6 +682,85 @@ export default function ConstructionProjectDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {canEdit && (
+          <Card className="border-amber-200 bg-amber-50/30">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">تخطيط ميزانية المشروع</CardTitle>
+                  <CardDescription>حدد الميزانية المتوقعة لكل فئة من بنود العمل</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    const inputs: Record<number, number> = {};
+                    budgetAllocations.forEach(a => {
+                      if (a.categoryId) {
+                        inputs[a.categoryId] = a.plannedAmount;
+                      }
+                    });
+                    setBudgetInputs(inputs);
+                    setIsBudgetDialogOpen(true);
+                  }}
+                  data-testid="button-plan-budget"
+                >
+                  <DollarSign className="w-4 h-4 ml-2" />
+                  تخطيط الميزانية
+                </Button>
+              </div>
+            </CardHeader>
+            {budgetComparison.length > 0 && (
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="text-xs">
+                        <TableHead>الفئة</TableHead>
+                        <TableHead className="text-left">الميزانية المخططة</TableHead>
+                        <TableHead className="text-left">التكلفة الفعلية</TableHead>
+                        <TableHead className="text-left">الفرق</TableHead>
+                        <TableHead className="text-left">نسبة الاستخدام</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {budgetComparison.map((item) => {
+                        const usagePercent = item.planned > 0 ? (item.actual / item.planned) * 100 : 0;
+                        return (
+                          <TableRow key={item.categoryId || 'uncategorized'} className="text-sm">
+                            <TableCell className="font-medium">{item.categoryName}</TableCell>
+                            <TableCell className="text-left">{formatCurrency(item.planned)}</TableCell>
+                            <TableCell className="text-left">{formatCurrency(item.actual)}</TableCell>
+                            <TableCell className={`text-left font-semibold ${item.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {formatCurrency(Math.abs(item.variance))} {item.variance >= 0 ? '(وفر)' : '(تجاوز)'}
+                            </TableCell>
+                            <TableCell className="text-left">
+                              <div className="flex items-center gap-2">
+                                <Progress value={Math.min(usagePercent, 100)} className={`h-2 w-20 ${usagePercent > 100 ? '[&>div]:bg-red-500' : ''}`} />
+                                <span className={`text-xs ${usagePercent > 100 ? 'text-red-600 font-bold' : ''}`}>{usagePercent.toFixed(0)}%</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      <TableRow className="bg-muted/50 font-bold">
+                        <TableCell>الإجمالي</TableCell>
+                        <TableCell className="text-left">{formatCurrency(totalPlannedBudget)}</TableCell>
+                        <TableCell className="text-left">{formatCurrency(totalActualCost)}</TableCell>
+                        <TableCell className={`text-left ${(totalPlannedBudget - totalActualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(Math.abs(totalPlannedBudget - totalActualCost))} {(totalPlannedBudget - totalActualCost) >= 0 ? '(وفر)' : '(تجاوز)'}
+                        </TableCell>
+                        <TableCell className="text-left">
+                          {totalPlannedBudget > 0 ? ((totalActualCost / totalPlannedBudget) * 100).toFixed(0) : 0}%
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -909,6 +1086,64 @@ export default function ConstructionProjectDetailPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>تخطيط ميزانية المشروع</DialogTitle>
+              <DialogDescription>
+                حدد الميزانية المتوقعة لكل فئة من بنود العمل لمتابعة الصرف الفعلي
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>الفئة</TableHead>
+                    <TableHead className="w-48">الميزانية المخططة (ريال)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categories.map((cat) => (
+                    <TableRow key={cat.id}>
+                      <TableCell className="font-medium">{cat.name}</TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={budgetInputs[cat.id] || ""}
+                          onChange={(e) => setBudgetInputs(prev => ({
+                            ...prev,
+                            [cat.id]: parseFloat(e.target.value) || 0
+                          }))}
+                          placeholder="0"
+                          className="text-left"
+                          data-testid={`input-budget-${cat.id}`}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="flex justify-between items-center bg-muted/50 p-3 rounded-lg">
+                <span className="font-semibold">إجمالي الميزانية المخططة:</span>
+                <span className="text-xl font-bold text-primary">
+                  {formatCurrency(Object.values(budgetInputs).reduce((sum, v) => sum + (v || 0), 0))}
+                </span>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsBudgetDialogOpen(false)}>إلغاء</Button>
+              <Button 
+                onClick={saveBudgetAllocations}
+                disabled={upsertBudgetMutation.isPending}
+                data-testid="button-save-budget"
+              >
+                {upsertBudgetMutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                حفظ الميزانية
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
