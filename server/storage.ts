@@ -10,11 +10,23 @@ import {
   type User,
   type UpsertUser,
   type InsertUser,
+  type ConstructionCategory,
+  type InsertConstructionCategory,
+  type Contractor,
+  type InsertContractor,
+  type ConstructionProject,
+  type InsertConstructionProject,
+  type ProjectWorkItem,
+  type InsertProjectWorkItem,
   branches,
   inventoryItems,
   auditLogs,
   savedFilters,
-  users
+  users,
+  constructionCategories,
+  contractors,
+  constructionProjects,
+  projectWorkItems
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -54,6 +66,31 @@ export interface IStorage {
   getSavedFilter(id: number): Promise<SavedFilter | undefined>;
   createSavedFilter(filter: InsertSavedFilter): Promise<SavedFilter>;
   deleteSavedFilter(id: number): Promise<boolean>;
+
+  // Construction Categories
+  getAllConstructionCategories(): Promise<ConstructionCategory[]>;
+  
+  // Contractors
+  getAllContractors(): Promise<Contractor[]>;
+  getContractor(id: number): Promise<Contractor | undefined>;
+  createContractor(contractor: InsertContractor): Promise<Contractor>;
+  updateContractor(id: number, contractor: Partial<InsertContractor>): Promise<Contractor | undefined>;
+  deleteContractor(id: number): Promise<boolean>;
+  
+  // Construction Projects
+  getAllConstructionProjects(): Promise<ConstructionProject[]>;
+  getConstructionProjectsByBranch(branchId: string): Promise<ConstructionProject[]>;
+  getConstructionProject(id: number): Promise<ConstructionProject | undefined>;
+  createConstructionProject(project: InsertConstructionProject): Promise<ConstructionProject>;
+  updateConstructionProject(id: number, project: Partial<InsertConstructionProject>): Promise<ConstructionProject | undefined>;
+  deleteConstructionProject(id: number): Promise<boolean>;
+  
+  // Project Work Items
+  getWorkItemsByProject(projectId: number): Promise<ProjectWorkItem[]>;
+  getWorkItem(id: number): Promise<ProjectWorkItem | undefined>;
+  createWorkItem(item: InsertProjectWorkItem): Promise<ProjectWorkItem>;
+  updateWorkItem(id: number, item: Partial<InsertProjectWorkItem>): Promise<ProjectWorkItem | undefined>;
+  deleteWorkItem(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -253,6 +290,110 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSavedFilter(id: number): Promise<boolean> {
     const result = await db.delete(savedFilters).where(eq(savedFilters.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Construction Categories
+  async getAllConstructionCategories(): Promise<ConstructionCategory[]> {
+    return await db.select().from(constructionCategories);
+  }
+
+  // Contractors
+  async getAllContractors(): Promise<Contractor[]> {
+    return await db.select().from(contractors).orderBy(desc(contractors.createdAt));
+  }
+
+  async getContractor(id: number): Promise<Contractor | undefined> {
+    const [contractor] = await db.select().from(contractors).where(eq(contractors.id, id));
+    return contractor || undefined;
+  }
+
+  async createContractor(contractor: InsertContractor): Promise<Contractor> {
+    const [newContractor] = await db.insert(contractors).values(contractor).returning();
+    return newContractor;
+  }
+
+  async updateContractor(id: number, contractor: Partial<InsertContractor>): Promise<Contractor | undefined> {
+    const [updated] = await db
+      .update(contractors)
+      .set({ ...contractor, updatedAt: new Date() })
+      .where(eq(contractors.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContractor(id: number): Promise<boolean> {
+    const result = await db.delete(contractors).where(eq(contractors.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Construction Projects
+  async getAllConstructionProjects(): Promise<ConstructionProject[]> {
+    return await db.select().from(constructionProjects).orderBy(desc(constructionProjects.createdAt));
+  }
+
+  async getConstructionProjectsByBranch(branchId: string): Promise<ConstructionProject[]> {
+    return await db
+      .select()
+      .from(constructionProjects)
+      .where(eq(constructionProjects.branchId, branchId))
+      .orderBy(desc(constructionProjects.createdAt));
+  }
+
+  async getConstructionProject(id: number): Promise<ConstructionProject | undefined> {
+    const [project] = await db.select().from(constructionProjects).where(eq(constructionProjects.id, id));
+    return project || undefined;
+  }
+
+  async createConstructionProject(project: InsertConstructionProject): Promise<ConstructionProject> {
+    const [newProject] = await db.insert(constructionProjects).values(project).returning();
+    return newProject;
+  }
+
+  async updateConstructionProject(id: number, project: Partial<InsertConstructionProject>): Promise<ConstructionProject | undefined> {
+    const [updated] = await db
+      .update(constructionProjects)
+      .set({ ...project, updatedAt: new Date() })
+      .where(eq(constructionProjects.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteConstructionProject(id: number): Promise<boolean> {
+    const result = await db.delete(constructionProjects).where(eq(constructionProjects.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Project Work Items
+  async getWorkItemsByProject(projectId: number): Promise<ProjectWorkItem[]> {
+    return await db
+      .select()
+      .from(projectWorkItems)
+      .where(eq(projectWorkItems.projectId, projectId))
+      .orderBy(desc(projectWorkItems.createdAt));
+  }
+
+  async getWorkItem(id: number): Promise<ProjectWorkItem | undefined> {
+    const [item] = await db.select().from(projectWorkItems).where(eq(projectWorkItems.id, id));
+    return item || undefined;
+  }
+
+  async createWorkItem(item: InsertProjectWorkItem): Promise<ProjectWorkItem> {
+    const [newItem] = await db.insert(projectWorkItems).values(item).returning();
+    return newItem;
+  }
+
+  async updateWorkItem(id: number, item: Partial<InsertProjectWorkItem>): Promise<ProjectWorkItem | undefined> {
+    const [updated] = await db
+      .update(projectWorkItems)
+      .set({ ...item, updatedAt: new Date() })
+      .where(eq(projectWorkItems.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteWorkItem(id: number): Promise<boolean> {
+    const result = await db.delete(projectWorkItems).where(eq(projectWorkItems.id, id)).returning();
     return result.length > 0;
   }
 }
