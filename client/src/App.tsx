@@ -12,6 +12,9 @@ import MaintenancePage from "@/pages/maintenance";
 import InspectionsPage from "@/pages/inspections";
 import UsersPage from "@/pages/users";
 import LoginPage from "@/pages/login";
+import ConstructionProjectsPage from "@/pages/construction-projects";
+import ConstructionProjectDetailPage from "@/pages/construction-project-detail";
+import ContractorsPage from "@/pages/contractors";
 
 function Router() {
   return (
@@ -25,6 +28,9 @@ function Router() {
       <Route path="/maintenance" component={MaintenancePage} />
       <Route path="/inspections" component={InspectionsPage} />
       <Route path="/users" component={UsersPage} />
+      <Route path="/construction-projects" component={ConstructionProjectsPage} />
+      <Route path="/construction-projects/:id" component={ConstructionProjectDetailPage} />
+      <Route path="/contractors" component={ContractorsPage} />
       <Route component={NotFound} />
     </Switch>
   );
