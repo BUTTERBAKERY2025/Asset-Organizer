@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -40,12 +40,19 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, Pencil, Trash2, Loader2, DollarSign, CheckCircle, XCircle, 
-  Clock, AlertTriangle, Wallet, CreditCard, ArrowUpCircle
+  Clock, AlertTriangle, Wallet, CreditCard, ArrowUpCircle, Printer, Share2, MessageCircle, Mail, FileDown
 } from "lucide-react";
 import { Link } from "wouter";
 import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useReactToPrint } from "react-to-print";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const paymentRequestFormSchema = z.object({
   projectId: z.coerce.number().min(1, "اختر المشروع"),
@@ -95,6 +102,8 @@ export default function PaymentRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState("all");
+  const [dateFilter, setDateFilter] = useState<string>(new Date().toISOString().split('T')[0]);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -330,6 +339,58 @@ export default function PaymentRequestsPage() {
     return true;
   });
 
+  const requestsByDate = filteredRequests.filter((req) => {
+    if (!dateFilter) return true;
+    const createdAtStr = req.createdAt ? new Date(req.createdAt).toISOString().split('T')[0] : null;
+    const reqDate = req.requestDate || createdAtStr;
+    return reqDate === dateFilter;
+  });
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `طلبات الدفع - ${dateFilter}`,
+  });
+
+  const formatDateArabic = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ar-SA', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
+  const generateShareText = () => {
+    const total = requestsByDate.reduce((sum, r) => sum + r.amount, 0);
+    let text = `📋 طلبات الدفع - ${formatDateArabic(dateFilter)}\n\n`;
+    text += `إجمالي الطلبات: ${requestsByDate.length}\n`;
+    text += `إجمالي المبلغ: ${total.toLocaleString()} ر.س\n\n`;
+    
+    requestsByDate.forEach((req, index) => {
+      const typeInfo = getTypeInfo(req.requestType);
+      const statusInfo = getStatusInfo(req.status);
+      text += `${index + 1}. ${typeInfo.label}: ${req.description}\n`;
+      text += `   المبلغ: ${req.amount.toLocaleString()} ر.س\n`;
+      text += `   الحالة: ${statusInfo.label}\n`;
+      if (req.beneficiaryName) text += `   المستفيد: ${req.beneficiaryName}\n`;
+      text += `\n`;
+    });
+    
+    return text;
+  };
+
+  const shareViaWhatsApp = () => {
+    const text = encodeURIComponent(generateShareText());
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
+  const shareViaEmail = () => {
+    const subject = encodeURIComponent(`طلبات الدفع - ${formatDateArabic(dateFilter)}`);
+    const body = encodeURIComponent(generateShareText());
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  };
+
   const pendingCount = requests.filter((r) => r.status === "pending").length;
   const approvedCount = requests.filter((r) => r.status === "approved").length;
   const paidCount = requests.filter((r) => r.status === "paid").length;
@@ -440,7 +501,7 @@ export default function PaymentRequestsPage() {
 
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-4 items-end">
               <div className="flex-1 min-w-[200px]">
                 <Label>نوع الطلب</Label>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -457,15 +518,57 @@ export default function PaymentRequestsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex-1 min-w-[200px]">
+                <Label>تاريخ الطلبات</Label>
+                <Input 
+                  type="date" 
+                  value={dateFilter} 
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  data-testid="input-date-filter"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handlePrint()}
+                  disabled={requestsByDate.length === 0}
+                  data-testid="button-print"
+                >
+                  <Printer className="ml-2 h-4 w-4" />
+                  طباعة PDF
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      disabled={requestsByDate.length === 0}
+                      data-testid="button-share"
+                    >
+                      <Share2 className="ml-2 h-4 w-4" />
+                      مشاركة
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={shareViaWhatsApp} data-testid="button-share-whatsapp">
+                      <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
+                      واتساب
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={shareViaEmail} data-testid="button-share-email">
+                      <Mail className="ml-2 h-4 w-4 text-blue-500" />
+                      البريد الإلكتروني
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>قائمة الطلبات</CardTitle>
+            <CardTitle>قائمة الطلبات - {formatDateArabic(dateFilter)}</CardTitle>
             <CardDescription>
-              عرض {filteredRequests.length} من {requests.length} طلب
+              عرض {requestsByDate.length} طلب لهذا اليوم (من إجمالي {filteredRequests.length} طلب)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -485,14 +588,14 @@ export default function PaymentRequestsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRequests.length === 0 ? (
+                  {requestsByDate.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                        لا توجد طلبات
+                        لا توجد طلبات لهذا اليوم
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredRequests.map((request) => {
+                    requestsByDate.map((request) => {
                       const statusInfo = getStatusInfo(request.status);
                       const typeInfo = getTypeInfo(request.requestType);
                       const priorityInfo = getPriorityInfo(request.priority || "normal");
@@ -978,6 +1081,77 @@ export default function PaymentRequestsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <div className="hidden">
+        <div ref={printRef} className="p-8 bg-white" dir="rtl">
+          <style>{`
+            @media print {
+              body { direction: rtl; font-family: 'Cairo', sans-serif; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+              th { background-color: #f5f5f5; }
+            }
+          `}</style>
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold mb-2">طلبات الدفع - باتر بيكري</h1>
+            <p className="text-gray-600">{formatDateArabic(dateFilter)}</p>
+          </div>
+          
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-gray-600">إجمالي الطلبات:</span>
+                <span className="font-bold mr-2">{requestsByDate.length}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">إجمالي المبلغ:</span>
+                <span className="font-bold mr-2">{requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س</span>
+              </div>
+            </div>
+          </div>
+
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border p-2 text-right">#</th>
+                <th className="border p-2 text-right">النوع</th>
+                <th className="border p-2 text-right">الوصف</th>
+                <th className="border p-2 text-right">المستفيد</th>
+                <th className="border p-2 text-right">المبلغ</th>
+                <th className="border p-2 text-right">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requestsByDate.map((req, index) => {
+                const typeInfo = getTypeInfo(req.requestType);
+                const statusInfo = getStatusInfo(req.status);
+                return (
+                  <tr key={req.id}>
+                    <td className="border p-2">{index + 1}</td>
+                    <td className="border p-2">{typeInfo.label}</td>
+                    <td className="border p-2">{req.description}</td>
+                    <td className="border p-2">{req.beneficiaryName || "-"}</td>
+                    <td className="border p-2 font-bold">{req.amount.toLocaleString()} ر.س</td>
+                    <td className="border p-2">{statusInfo.label}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-100 font-bold">
+                <td className="border p-2" colSpan={4}>الإجمالي</td>
+                <td className="border p-2">{requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س</td>
+                <td className="border p-2"></td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div className="mt-8 text-center text-gray-500 text-sm">
+            <p>تم إنشاء هذا التقرير بواسطة نظام إدارة المشروعات - باتر بيكري</p>
+            <p>{new Date().toLocaleString('ar-SA')}</p>
+          </div>
+        </div>
+      </div>
     </Layout>
   );
 }
