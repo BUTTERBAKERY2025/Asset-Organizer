@@ -230,3 +230,123 @@ export const insertProjectBudgetAllocationSchema = createInsertSchema(projectBud
 
 export type ProjectBudgetAllocation = typeof projectBudgetAllocations.$inferSelect;
 export type InsertProjectBudgetAllocation = z.infer<typeof insertProjectBudgetAllocationSchema>;
+
+// Construction Contracts table - عقود الإنشاءات مع المقاولين
+export const constructionContracts = pgTable("construction_contracts", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractorId: integer("contractor_id").notNull().references(() => contractors.id),
+  contractNumber: text("contract_number").unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  contractType: text("contract_type").default("fixed_price").notNull(), // fixed_price, cost_plus, unit_price
+  status: text("status").default("draft").notNull(), // draft, active, completed, cancelled, suspended
+  totalAmount: real("total_amount").notNull().default(0),
+  paidAmount: real("paid_amount").default(0),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  paymentTerms: text("payment_terms"), // شروط الدفع
+  warrantyPeriod: text("warranty_period"), // فترة الضمان
+  notes: text("notes"),
+  attachmentUrl: text("attachment_url"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertConstructionContractSchema = createInsertSchema(constructionContracts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ConstructionContract = typeof constructionContracts.$inferSelect;
+export type InsertConstructionContract = z.infer<typeof insertConstructionContractSchema>;
+
+// Contract Items table - بنود العقد
+export const contractItems = pgTable("contract_items", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").notNull().references(() => constructionContracts.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
+  description: text("description").notNull(),
+  unit: text("unit").default("قطعة"),
+  quantity: real("quantity").notNull().default(1),
+  unitPrice: real("unit_price").notNull().default(0),
+  totalPrice: real("total_price").notNull().default(0),
+  completedQuantity: real("completed_quantity").default(0),
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertContractItemSchema = createInsertSchema(contractItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractItem = typeof contractItems.$inferSelect;
+export type InsertContractItem = z.infer<typeof insertContractItemSchema>;
+
+// Payment Requests table - طلبات الحوالات والمصروفات
+export const paymentRequests = pgTable("payment_requests", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractId: integer("contract_id").references(() => constructionContracts.id),
+  requestNumber: text("request_number"),
+  requestType: text("request_type").notNull(), // transfer (حوالة), expense (مصروف), advance (سلفة)
+  amount: real("amount").notNull(),
+  description: text("description").notNull(),
+  beneficiaryName: text("beneficiary_name"), // اسم المستفيد
+  beneficiaryBank: text("beneficiary_bank"), // البنك
+  beneficiaryIban: text("beneficiary_iban"), // رقم الحساب
+  categoryId: integer("category_id").references(() => constructionCategories.id),
+  status: text("status").default("pending").notNull(), // pending, approved, rejected, paid
+  priority: text("priority").default("normal"), // urgent, high, normal, low
+  requestDate: text("request_date"),
+  dueDate: text("due_date"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  rejectionReason: text("rejection_reason"),
+  attachmentUrl: text("attachment_url"),
+  invoiceNumber: text("invoice_number"), // رقم الفاتورة
+  notes: text("notes"),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPaymentRequestSchema = createInsertSchema(paymentRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  approvedAt: true,
+  paidAt: true,
+});
+
+export type PaymentRequest = typeof paymentRequests.$inferSelect;
+export type InsertPaymentRequest = z.infer<typeof insertPaymentRequestSchema>;
+
+// Contract Payments table - سجل دفعات العقود
+export const contractPayments = pgTable("contract_payments", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").notNull().references(() => constructionContracts.id, { onDelete: "cascade" }),
+  paymentRequestId: integer("payment_request_id").references(() => paymentRequests.id),
+  amount: real("amount").notNull(),
+  paymentDate: text("payment_date").notNull(),
+  paymentMethod: text("payment_method"), // bank_transfer, cash, check
+  referenceNumber: text("reference_number"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertContractPaymentSchema = createInsertSchema(contractPayments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ContractPayment = typeof contractPayments.$inferSelect;
+export type InsertContractPayment = z.infer<typeof insertContractPaymentSchema>;
