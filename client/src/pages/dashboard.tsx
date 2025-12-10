@@ -122,7 +122,7 @@ export default function DashboardPage() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalValue.toLocaleString('ar-SA')} ريال</div>
+              <div className="text-2xl font-bold">{stats.totalValue.toLocaleString('en-US')} ريال</div>
               <p className="text-xs text-muted-foreground">القيمة الإجمالية للأصول</p>
             </CardContent>
           </Card>
@@ -184,10 +184,10 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={branchComparisonData} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tickFormatter={(value) => value.toLocaleString()} />
+                    <XAxis type="number" tickFormatter={(value) => value.toLocaleString('en-US')} />
                     <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
                     <Tooltip 
-                      formatter={(value: number) => [value.toLocaleString() + " ريال", "القيمة"]}
+                      formatter={(value: number) => [value.toLocaleString('en-US') + " ريال", "القيمة"]}
                       contentStyle={{ direction: "rtl" }}
                     />
                     <Bar dataKey="value" fill="#22c55e" radius={[0, 4, 4, 0]} />

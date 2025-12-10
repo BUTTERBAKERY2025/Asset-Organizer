@@ -230,7 +230,7 @@ export default function MaintenancePage() {
             <div ref={printRef} className="print:p-4">
               <div className="hidden print:block text-center mb-4">
                 <h2 className="text-xl font-bold">تقرير الصيانة والأصناف المفقودة</h2>
-                <p className="text-sm text-muted-foreground">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
+                <p className="text-sm text-muted-foreground">تاريخ التقرير: {new Date().toLocaleDateString('en-GB')}</p>
               </div>
 
               <div className="rounded-md border">

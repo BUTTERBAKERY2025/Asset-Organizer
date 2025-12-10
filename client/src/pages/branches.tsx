@@ -210,7 +210,7 @@ export default function BranchesPage() {
                             <Badge variant="outline">{stats.itemCount} صنف</Badge>
                           </TableCell>
                           <TableCell className="font-medium text-green-600">
-                            {stats.totalValue.toLocaleString('ar-SA')} ريال
+                            {stats.totalValue.toLocaleString('en-US')} ريال
                           </TableCell>
                         </TableRow>
                       );

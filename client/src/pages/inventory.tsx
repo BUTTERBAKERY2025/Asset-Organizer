@@ -427,7 +427,7 @@ export default function InventoryPage() {
             
             <div className="flex justify-between w-full px-12 mt-4 text-sm font-bold border-t border-black pt-4">
                <span>الفرع: {currentBranchName}</span>
-               <span>تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')} ({new Date().toLocaleDateString('en-GB')})</span>
+               <span>تاريخ التقرير: {new Date().toLocaleDateString('en-GB')}</span>
             </div>
 
             <div className="grid grid-cols-4 gap-4 mt-6 text-base border-2 border-primary/20 bg-primary/5 p-4 rounded-lg w-full text-center font-bold print:border-black print:bg-transparent">
