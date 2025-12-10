@@ -10,6 +10,7 @@ import ManagePage from "@/pages/manage";
 import BranchesPage from "@/pages/branches";
 import MaintenancePage from "@/pages/maintenance";
 import InspectionsPage from "@/pages/inspections";
+import UsersPage from "@/pages/users";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/branches" component={BranchesPage} />
       <Route path="/maintenance" component={MaintenancePage} />
       <Route path="/inspections" component={InspectionsPage} />
+      <Route path="/users" component={UsersPage} />
       <Route component={NotFound} />
     </Switch>
   );

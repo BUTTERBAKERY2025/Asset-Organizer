@@ -39,7 +39,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye, Upload, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { AssetDetailsDialog } from "@/components/asset-details-dialog";
 
@@ -89,7 +90,10 @@ export default function ManagePage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [importBranch, setImportBranch] = useState<string>("");
+  const [importPreview, setImportPreview] = useState<any[]>([]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -177,6 +181,70 @@ export default function ManagePage() {
       toast({ title: "خطأ", description: "فشل في حذف الصنف", variant: "destructive" });
     },
   });
+
+  const importMutation = useMutation({
+    mutationFn: async ({ items, branchId }: { items: any[]; branchId: string }) => {
+      const res = await fetch("/api/inventory/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, branchId }),
+      });
+      if (!res.ok) throw new Error("Failed to import items");
+      return res.json();
+    },
+    onSuccess: (data: { success: number; failed: number; errors: string[] }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      toast({ 
+        title: "تم الاستيراد", 
+        description: `تم استيراد ${data.success} صنف بنجاح${data.failed > 0 ? ` و ${data.failed} فشل` : ''}`
+      });
+      setIsImportDialogOpen(false);
+      setImportPreview([]);
+      setImportBranch("");
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في استيراد البيانات", variant: "destructive" });
+    },
+  });
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        setImportPreview(jsonData);
+        toast({ title: "تم قراءة الملف", description: `${jsonData.length} صف` });
+      } catch (error) {
+        toast({ title: "خطأ", description: "فشل في قراءة الملف", variant: "destructive" });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleImport = () => {
+    if (!importBranch || importPreview.length === 0) {
+      toast({ title: "خطأ", description: "اختر الفرع وارفع الملف أولاً", variant: "destructive" });
+      return;
+    }
+    importMutation.mutate({ items: importPreview, branchId: importBranch });
+  };
+
+  const downloadTemplate = () => {
+    const template = [
+      { name: "اسم الصنف", category: "المطبخ", quantity: 1, unit: "حبة", price: 100, status: "good", notes: "ملاحظات" }
+    ];
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "inventory_template.xlsx");
+  };
 
   const addForm = useForm<ItemFormData>({
     resolver: zodResolver(itemFormSchema),
@@ -503,25 +571,86 @@ export default function ManagePage() {
             <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">إدارة الأصول</h1>
             <p className="text-muted-foreground mt-1">إضافة وتعديل وحذف الأصول والمعدات</p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2" data-testid="button-add-item">
-                <Plus className="w-4 h-4" />
-                <span>إضافة صنف جديد</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>إضافة صنف جديد</DialogTitle>
-                <DialogDescription>أدخل بيانات الصنف أو المعدة الجديدة</DialogDescription>
-              </DialogHeader>
-              <ItemForm
-                form={addForm}
-                onSubmit={(data) => createMutation.mutate(data)}
-                isLoading={createMutation.isPending}
-              />
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2" data-testid="button-import">
+                  <Upload className="w-4 h-4" />
+                  <span>استيراد Excel</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>استيراد من Excel</DialogTitle>
+                  <DialogDescription>ارفع ملف Excel لاستيراد الأصناف</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>الفرع</Label>
+                    <Select value={importBranch} onValueChange={setImportBranch}>
+                      <SelectTrigger data-testid="select-import-branch">
+                        <SelectValue placeholder="اختر الفرع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches.map(branch => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>ملف Excel</Label>
+                    <Input 
+                      type="file" 
+                      accept=".xlsx,.xls" 
+                      onChange={handleFileUpload}
+                      data-testid="input-import-file"
+                    />
+                  </div>
+                  {importPreview.length > 0 && (
+                    <div className="text-sm text-muted-foreground">
+                      تم قراءة {importPreview.length} صنف جاهز للاستيراد
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={downloadTemplate} className="gap-2">
+                      <Download className="w-4 h-4" />
+                      تحميل النموذج
+                    </Button>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    onClick={handleImport} 
+                    disabled={importMutation.isPending || !importBranch || importPreview.length === 0}
+                    data-testid="button-confirm-import"
+                  >
+                    {importMutation.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+                    استيراد
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2" data-testid="button-add-item">
+                  <Plus className="w-4 h-4" />
+                  <span>إضافة صنف جديد</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>إضافة صنف جديد</DialogTitle>
+                  <DialogDescription>أدخل بيانات الصنف أو المعدة الجديدة</DialogDescription>
+                </DialogHeader>
+                <ItemForm
+                  form={addForm}
+                  onSubmit={(data) => createMutation.mutate(data)}
+                  isLoading={createMutation.isPending}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <Card>

@@ -7,15 +7,24 @@ import {
   type InsertAuditLog,
   type SavedFilter,
   type InsertSavedFilter,
+  type User,
+  type UpsertUser,
   branches,
   inventoryItems,
   auditLogs,
-  savedFilters
+  savedFilters,
+  users
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 
 export interface IStorage {
+  // Users (required for Replit Auth)
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  updateUserRole(id: string, role: string): Promise<User | undefined>;
+  
   // Branches
   getAllBranches(): Promise<Branch[]>;
   getBranch(id: string): Promise<Branch | undefined>;
@@ -25,9 +34,9 @@ export interface IStorage {
   getAllInventoryItems(): Promise<InventoryItem[]>;
   getInventoryItemsByBranch(branchId: string): Promise<InventoryItem[]>;
   getInventoryItem(id: string): Promise<InventoryItem | undefined>;
-  createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem>;
-  updateInventoryItem(id: string, item: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined>;
-  deleteInventoryItem(id: string): Promise<boolean>;
+  createInventoryItem(item: InsertInventoryItem, userId?: string): Promise<InventoryItem>;
+  updateInventoryItem(id: string, item: Partial<InsertInventoryItem>, userId?: string): Promise<InventoryItem | undefined>;
+  deleteInventoryItem(id: string, userId?: string): Promise<boolean>;
   getItemsNeedingInspection(): Promise<InventoryItem[]>;
   
   // Audit Logs
@@ -42,6 +51,40 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Users (required for Replit Auth)
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async updateUserRole(id: string, role: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
   // Branches
   async getAllBranches(): Promise<Branch[]> {
     return await db.select().from(branches);
@@ -71,7 +114,7 @@ export class DatabaseStorage implements IStorage {
     return item || undefined;
   }
 
-  async createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem> {
+  async createInventoryItem(item: InsertInventoryItem, userId?: string): Promise<InventoryItem> {
     const [newItem] = await db.insert(inventoryItems).values(item).returning();
     
     await this.createAuditLog({
@@ -80,13 +123,13 @@ export class DatabaseStorage implements IStorage {
       fieldName: null,
       oldValue: null,
       newValue: JSON.stringify(item),
-      changedBy: 'system'
+      changedBy: userId || 'system'
     });
     
     return newItem;
   }
 
-  async updateInventoryItem(id: string, item: Partial<InsertInventoryItem>): Promise<InventoryItem | undefined> {
+  async updateInventoryItem(id: string, item: Partial<InsertInventoryItem>, userId?: string): Promise<InventoryItem | undefined> {
     const existingItem = await this.getInventoryItem(id);
     
     const [updatedItem] = await db
@@ -105,7 +148,7 @@ export class DatabaseStorage implements IStorage {
             fieldName: key,
             oldValue: oldValue != null ? String(oldValue) : null,
             newValue: newValue != null ? String(newValue) : null,
-            changedBy: 'system'
+            changedBy: userId || 'system'
           });
         }
       }
@@ -114,7 +157,7 @@ export class DatabaseStorage implements IStorage {
     return updatedItem || undefined;
   }
 
-  async deleteInventoryItem(id: string): Promise<boolean> {
+  async deleteInventoryItem(id: string, userId?: string): Promise<boolean> {
     const existingItem = await this.getInventoryItem(id);
     
     if (existingItem) {
@@ -124,7 +167,7 @@ export class DatabaseStorage implements IStorage {
         fieldName: null,
         oldValue: JSON.stringify(existingItem),
         newValue: null,
-        changedBy: 'system'
+        changedBy: userId || 'system'
       });
     }
     

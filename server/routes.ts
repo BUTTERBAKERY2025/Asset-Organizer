@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema } from "@shared/schema";
 import { z } from "zod";
+import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -32,6 +33,49 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Setup authentication
+  await setupAuth(app);
+
+  // Auth routes
+  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Admin routes for user management
+  app.get("/api/users", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.patch("/api/users/:id/role", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { role } = req.body;
+      if (!["admin", "employee", "viewer"].includes(role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+      const user = await storage.updateUserRole(req.params.id, role);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      res.status(500).json({ error: "Failed to update user role" });
+    }
+  });
+
   // Branches
   app.get("/api/branches", async (req, res) => {
     try {
@@ -56,7 +100,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/branches", async (req, res) => {
+  app.post("/api/branches", isAuthenticated, requireRole(["admin"]), async (req, res) => {
     try {
       const validatedData = insertBranchSchema.parse(req.body);
       const branch = await storage.createBranch(validatedData);
@@ -117,11 +161,12 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/inventory", async (req, res) => {
+  app.post("/api/inventory", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
     try {
       const validatedData = insertInventoryItemSchema.parse(req.body);
       const normalizedData = normalizeInventoryData(validatedData);
-      const item = await storage.createInventoryItem(normalizedData);
+      const userId = req.user.claims.sub;
+      const item = await storage.createInventoryItem(normalizedData, userId);
       res.status(201).json(item);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -132,11 +177,12 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/inventory/:id", async (req, res) => {
+  app.patch("/api/inventory/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
     try {
       const partialData = insertInventoryItemSchema.partial().parse(req.body);
       const normalizedData = normalizeInventoryData(partialData);
-      const item = await storage.updateInventoryItem(req.params.id, normalizedData);
+      const userId = req.user.claims.sub;
+      const item = await storage.updateInventoryItem(req.params.id, normalizedData, userId);
       if (!item) {
         return res.status(404).json({ error: "Item not found" });
       }
@@ -150,9 +196,10 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/inventory/:id", async (req, res) => {
+  app.delete("/api/inventory/:id", isAuthenticated, requireRole(["admin"]), async (req: any, res) => {
     try {
-      const success = await storage.deleteInventoryItem(req.params.id);
+      const userId = req.user.claims.sub;
+      const success = await storage.deleteInventoryItem(req.params.id, userId);
       if (!success) {
         return res.status(404).json({ error: "Item not found" });
       }
@@ -174,7 +221,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/filters", async (req, res) => {
+  app.post("/api/filters", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertSavedFilterSchema.parse(req.body);
       const filter = await storage.createSavedFilter(validatedData);
@@ -188,7 +235,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/filters/:id", async (req, res) => {
+  app.delete("/api/filters/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -202,6 +249,77 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting saved filter:", error);
       res.status(500).json({ error: "Failed to delete saved filter" });
+    }
+  });
+
+  // Excel Import Route
+  app.post("/api/inventory/import", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+    try {
+      const { items, branchId } = req.body;
+      
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "No items provided" });
+      }
+      
+      if (!branchId) {
+        return res.status(400).json({ error: "Branch ID is required" });
+      }
+      
+      const userId = req.user.claims.sub;
+      const results = { success: 0, failed: 0, errors: [] as string[] };
+      
+      for (const item of items) {
+        try {
+          const itemData = {
+            name: item.name || '',
+            category: item.category || 'other',
+            quantity: parseInt(item.quantity) || 1,
+            unit: item.unit || 'قطعة',
+            price: parseFloat(item.price) || 0,
+            status: item.status || 'good',
+            branchId: branchId,
+            notes: item.notes || '',
+          };
+          
+          const validatedData = insertInventoryItemSchema.parse(itemData);
+          await storage.createInventoryItem(validatedData, userId);
+          results.success++;
+        } catch (err: any) {
+          results.failed++;
+          results.errors.push(`Row ${results.success + results.failed}: ${err.message || 'Unknown error'}`);
+        }
+      }
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Error importing inventory:", error);
+      res.status(500).json({ error: "Failed to import inventory" });
+    }
+  });
+
+  // Low quantity alert endpoint
+  app.get("/api/inventory/low-quantity", isAuthenticated, async (req, res) => {
+    try {
+      const items = await storage.getAllInventoryItems();
+      const lowQuantityItems = items.filter(item => item.quantity <= 5);
+      res.json(lowQuantityItems);
+    } catch (error) {
+      console.error("Error fetching low quantity items:", error);
+      res.status(500).json({ error: "Failed to fetch low quantity items" });
+    }
+  });
+
+  // Maintenance alerts endpoint
+  app.get("/api/inventory/maintenance-needed", isAuthenticated, async (req, res) => {
+    try {
+      const items = await storage.getAllInventoryItems();
+      const maintenanceItems = items.filter(item => 
+        item.status === 'maintenance' || item.status === 'damaged'
+      );
+      res.json(maintenanceItems);
+    } catch (error) {
+      console.error("Error fetching maintenance items:", error);
+      res.status(500).json({ error: "Failed to fetch maintenance items" });
     }
   });
 
