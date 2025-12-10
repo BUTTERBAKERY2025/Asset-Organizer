@@ -1,0 +1,1190 @@
+[
+  {
+    "name": "كرسي خشب",
+    "category": "furniture",
+    "row": 3,
+    "image": "image1.jpeg"
+  },
+  {
+    "name": "مجلس داخلي",
+    "category": "furniture",
+    "row": 4,
+    "image": "image2.jpeg"
+  },
+  {
+    "name": "طاولة داخلية",
+    "category": "furniture",
+    "row": 5,
+    "image": "image3.jpeg"
+  },
+  {
+    "name": "كنب دخلي",
+    "category": "furniture",
+    "row": 6,
+    "image": "image4.jpeg"
+  },
+  {
+    "name": "فاظا",
+    "category": "furniture",
+    "row": 7,
+    "image": "image5.jpeg"
+  },
+  {
+    "name": "طاولة خشب كبيرة",
+    "category": "furniture",
+    "row": 8,
+    "image": "image6.jpeg"
+  },
+  {
+    "name": "ستاند خشبي",
+    "category": "furniture",
+    "row": 9,
+    "image": "image7.jpeg"
+  },
+  {
+    "name": "ديكور",
+    "category": "furniture",
+    "row": 10,
+    "image": "image8.jpeg"
+  },
+  {
+    "name": "فاظا زجاج",
+    "category": "furniture",
+    "row": 11,
+    "image": "image9.jpeg"
+  },
+  {
+    "name": "سايد ستيشن",
+    "category": "furniture",
+    "row": 12,
+    "image": "image10.jpeg"
+  },
+  {
+    "name": "فاظا فار+ زرع",
+    "category": "furniture",
+    "row": 13,
+    "image": "image11.jpeg"
+  },
+  {
+    "name": "طفاية حريق",
+    "category": "furniture",
+    "row": 14,
+    "image": "image12.jpeg"
+  },
+  {
+    "name": "فاظا +زرع",
+    "category": "furniture",
+    "row": 15,
+    "image": "image13.jpeg"
+  },
+  {
+    "name": "ستارة حمام خشبية",
+    "category": "furniture",
+    "row": 16,
+    "image": "image14.jpeg"
+  },
+  {
+    "name": "حوض سمك زجاجي",
+    "category": "furniture",
+    "row": 17,
+    "image": "image15.jpeg"
+  },
+  {
+    "name": "لوجو بتر بيكري",
+    "category": "furniture",
+    "row": 18,
+    "image": "image16.jpeg"
+  },
+  {
+    "name": "كاميرات",
+    "category": "furniture",
+    "row": 19,
+    "image": "image17.jpeg"
+  },
+  {
+    "name": "طاحونة مالكونج - دريب",
+    "category": "barista",
+    "row": 3,
+    "image": "image18.jpeg"
+  },
+  {
+    "name": "طابعة فودكس",
+    "category": "furniture",
+    "row": 34,
+    "image": "image19.jpeg"
+  },
+  {
+    "name": "حامل اكواب",
+    "category": "barista",
+    "row": 4,
+    "image": "image20.jpeg"
+  },
+  {
+    "name": "ماكينة لمرزوكو",
+    "category": "barista",
+    "row": 5,
+    "image": "image21.jpeg"
+  },
+  {
+    "name": "ماكينة لمرزوكو",
+    "category": "barista",
+    "row": 5,
+    "image": "image22.jpeg"
+  },
+  {
+    "name": "فلتر مياه",
+    "category": "barista",
+    "row": 7,
+    "image": "image23.jpeg"
+  },
+  {
+    "name": "ايس ميكر",
+    "category": "barista",
+    "row": 8,
+    "image": "image24.jpeg"
+  },
+  {
+    "name": "سلة",
+    "category": "barista",
+    "row": 9,
+    "image": "image25.jpeg"
+  },
+  {
+    "name": "مكبس سبريسو كهربائي",
+    "category": "barista",
+    "row": 10,
+    "image": "image26.jpeg"
+  },
+  {
+    "name": "طاحونة مالكولنج - اسبريسو",
+    "category": "barista",
+    "row": 11,
+    "image": "image27.jpeg"
+  },
+  {
+    "name": "حافظة حرارة 4 لتر",
+    "category": "barista",
+    "row": 12,
+    "image": "image28.jpeg"
+  },
+  {
+    "name": "خلاط مشروبات",
+    "category": "barista",
+    "row": 13,
+    "image": "image29.jpeg"
+  },
+  {
+    "name": "سخان مياه 20 لتر",
+    "category": "barista",
+    "row": 14,
+    "image": "image30.jpeg"
+  },
+  {
+    "name": "عصارة برتقال",
+    "category": "barista",
+    "row": 16,
+    "image": "image31.jpeg"
+  },
+  {
+    "name": "فاظا",
+    "category": "furniture",
+    "row": 20,
+    "image": "image32.jpeg"
+  },
+  {
+    "name": "حافظة حرارية",
+    "category": "barista",
+    "row": 17,
+    "image": "image33.jpeg"
+  },
+  {
+    "name": "شجر زينة",
+    "category": "furniture",
+    "row": 21,
+    "image": "image34.jpeg"
+  },
+  {
+    "name": "لوحة",
+    "category": "furniture",
+    "row": 22,
+    "image": "image35.jpeg"
+  },
+  {
+    "name": "شبك عرض معدن",
+    "category": "furniture",
+    "row": 23,
+    "image": "image36.jpeg"
+  },
+  {
+    "name": "ستارة هوائية",
+    "category": "electrical",
+    "row": 14,
+    "image": "image37.jpeg"
+  },
+  {
+    "name": "مظلة خارجية",
+    "category": "furniture",
+    "row": 24,
+    "image": "image38.jpeg"
+  },
+  {
+    "name": "كرسي",
+    "category": "furniture",
+    "row": 25,
+    "image": "image39.jpeg"
+  },
+  {
+    "name": "طاولة معدن",
+    "category": "furniture",
+    "row": 26,
+    "image": "image40.jpeg"
+  },
+  {
+    "name": "كرسي",
+    "category": "furniture",
+    "row": 27,
+    "image": "image41.jpeg"
+  },
+  {
+    "name": "طاولة معدن",
+    "category": "furniture",
+    "row": 28,
+    "image": "image42.jpeg"
+  },
+  {
+    "name": "طاولة",
+    "category": "furniture",
+    "row": 29,
+    "image": "image43.jpeg"
+  },
+  {
+    "name": "كنب خارجي",
+    "category": "furniture",
+    "row": 30,
+    "image": "image44.jpeg"
+  },
+  {
+    "name": "كرسي اطفال",
+    "category": "furniture",
+    "row": 31,
+    "image": "image45.jpeg"
+  },
+  {
+    "name": "سماعات",
+    "category": "furniture",
+    "row": 32,
+    "image": "image46.jpeg"
+  },
+  {
+    "name": "صاعق ناموس",
+    "category": "furniture",
+    "row": 33,
+    "image": "image47.jpeg"
+  },
+  {
+    "name": "ثلاجة بان كول 2 باب",
+    "category": "electrical",
+    "row": 3,
+    "image": "image48.jpeg"
+  },
+  {
+    "name": "فرن اونكس",
+    "category": "electrical",
+    "row": 4,
+    "image": "image49.jpeg"
+  },
+  {
+    "name": "فرن اونكس + مخمر",
+    "category": "electrical",
+    "row": 5,
+    "image": "image50.jpeg"
+  },
+  {
+    "name": "فرن اونكس + مخمر",
+    "category": "electrical",
+    "row": 5,
+    "image": "image51.jpeg"
+  },
+  {
+    "name": "مصعد",
+    "category": "electrical",
+    "row": 7,
+    "image": "image52.jpeg"
+  },
+  {
+    "name": "ثلاجة بان كول 1 باب",
+    "category": "electrical",
+    "row": 8,
+    "image": "image53.jpeg"
+  },
+  {
+    "name": "ترولي",
+    "category": "furniture",
+    "row": 35,
+    "image": "image54.jpeg"
+  },
+  {
+    "name": "أي باد",
+    "category": "furniture",
+    "row": 36,
+    "image": "image55.jpeg"
+  },
+  {
+    "name": "بيجور",
+    "category": "furniture",
+    "row": 37,
+    "image": "image56.jpeg"
+  },
+  {
+    "name": "تاب شاومي",
+    "category": "furniture",
+    "row": 38,
+    "image": "image57.jpeg"
+  },
+  {
+    "name": "حامل أي باد",
+    "category": "furniture",
+    "row": 39,
+    "image": "image58.jpeg"
+  },
+  {
+    "name": "كرسي كاشير",
+    "category": "furniture",
+    "row": 40,
+    "image": "image59.jpeg"
+  },
+  {
+    "name": "حامل تابلت",
+    "category": "furniture",
+    "row": 41,
+    "image": "image60.jpeg"
+  },
+  {
+    "name": "ساوند مكسر",
+    "category": "furniture",
+    "row": 42,
+    "image": "image61.jpeg"
+  },
+  {
+    "name": "براد باستري",
+    "category": "electrical",
+    "row": 11,
+    "image": "image62.jpeg"
+  },
+  {
+    "name": "موتور براد باستر",
+    "category": "electrical",
+    "row": 12,
+    "image": "image63.jpeg"
+  },
+  {
+    "name": "ثلاجة بيتزا",
+    "category": "electrical",
+    "row": 13,
+    "image": "image64.jpeg"
+  },
+  {
+    "name": "فرن بيتزا",
+    "category": "pizza",
+    "row": 4,
+    "image": "image65.jpeg"
+  },
+  {
+    "name": "سلة بلدية بلاستيك",
+    "category": "pizza",
+    "row": 8,
+    "image": "image69.jpeg"
+  },
+  {
+    "name": "سلم 3 م",
+    "category": "furniture",
+    "row": 43,
+    "image": "image70.jpeg"
+  },
+  {
+    "name": "شاشة + كمبيوتر",
+    "category": "furniture",
+    "row": 44,
+    "image": "image71.jpeg"
+  },
+  {
+    "name": "طاولة مكتب",
+    "category": "furniture",
+    "row": 46,
+    "image": "image72.jpeg"
+  },
+  {
+    "name": "طابعة",
+    "category": "furniture",
+    "row": 47,
+    "image": "image73.jpeg"
+  },
+  {
+    "name": "جهاز بصمة",
+    "category": "furniture",
+    "row": 48,
+    "image": "image74.jpeg"
+  },
+  {
+    "name": "جهاز بصمة",
+    "category": "furniture",
+    "row": 48,
+    "image": "image75.jpeg"
+  },
+  {
+    "name": "شاشة 32بوصة",
+    "category": "furniture",
+    "row": 49,
+    "image": "image76.jpeg"
+  },
+  {
+    "name": "صندوق سيرفر",
+    "category": "furniture",
+    "row": 50,
+    "image": "image77.jpeg"
+  },
+  {
+    "name": "صندوق سيرفر",
+    "category": "furniture",
+    "row": 50,
+    "image": "image78.jpeg"
+  },
+  {
+    "name": "سويتش 26 مخرج",
+    "category": "furniture",
+    "row": 51,
+    "image": "image79.jpeg"
+  },
+  {
+    "name": "راوتر",
+    "category": "furniture",
+    "row": 52,
+    "image": "image80.jpeg"
+  },
+  {
+    "name": "DVR",
+    "category": "furniture",
+    "row": 53,
+    "image": "image81.jpeg"
+  },
+  {
+    "name": "ترولي خدمة",
+    "category": "furniture",
+    "row": 54,
+    "image": "image82.jpeg"
+  },
+  {
+    "name": "مثلث تحذير",
+    "category": "furniture",
+    "row": 55,
+    "image": "image83.jpeg"
+  },
+  {
+    "name": "دبة غاز",
+    "category": "furniture",
+    "row": 56,
+    "image": "image84.jpeg"
+  },
+  {
+    "name": "بوتوجاز كهربائي",
+    "category": "electrical",
+    "row": 31,
+    "image": "image85.jpeg"
+  },
+  {
+    "name": "سلمندر",
+    "category": "electrical",
+    "row": 32,
+    "image": "image86.jpeg"
+  },
+  {
+    "name": "رف معدن",
+    "category": "furniture",
+    "row": 57,
+    "image": "image87.jpeg"
+  },
+  {
+    "name": "جريل",
+    "category": "electrical",
+    "row": 18,
+    "image": "image88.jpeg"
+  },
+  {
+    "name": "سخان كهربائي مسطح",
+    "category": "electrical",
+    "row": 20,
+    "image": "image92.jpeg"
+  },
+  {
+    "name": "ميزان",
+    "category": "electrical",
+    "row": 21,
+    "image": "image93.jpeg"
+  },
+  {
+    "name": "عجان صغير",
+    "category": "electrical",
+    "row": 22,
+    "image": "image94.jpeg"
+  },
+  {
+    "name": "روبوت كوب",
+    "category": "electrical",
+    "row": 23,
+    "image": "image95.jpeg"
+  },
+  {
+    "name": "شفاط سقف",
+    "category": "electrical",
+    "row": 24,
+    "image": "image96.jpeg"
+  },
+  {
+    "name": "خلاط",
+    "category": "electrical",
+    "row": 25,
+    "image": "image97.jpeg"
+  },
+  {
+    "name": "ثلاجة خضار",
+    "category": "electrical",
+    "row": 26,
+    "image": "image98.jpeg"
+  },
+  {
+    "name": "قطاعة خبز",
+    "category": "electrical",
+    "row": 27,
+    "image": "image99.jpeg"
+  },
+  {
+    "name": "عجان",
+    "category": "electrical",
+    "row": 28,
+    "image": "image100.jpeg"
+  },
+  {
+    "name": "عجان",
+    "category": "electrical",
+    "row": 29,
+    "image": "image101.jpeg"
+  },
+  {
+    "name": "فرادة عجين",
+    "category": "electrical",
+    "row": 30,
+    "image": "image103.jpeg"
+  },
+  {
+    "name": "فرادة عجين",
+    "category": "electrical",
+    "row": 30,
+    "image": "image104.jpeg"
+  },
+  {
+    "name": "فليزر مسطح",
+    "category": "electrical",
+    "row": 10,
+    "image": "image105.jpeg"
+  },
+  {
+    "name": "مغسلة صحون",
+    "category": "electrical",
+    "row": 33,
+    "image": "image106.jpeg"
+  },
+  {
+    "name": "جريل 2 فحة",
+    "category": "electrical",
+    "row": 34,
+    "image": "image107.jpeg"
+  },
+  {
+    "name": "مكيف",
+    "category": "electrical",
+    "row": 15,
+    "image": "image108.jpeg"
+  },
+  {
+    "name": "تشوك",
+    "category": "electrical",
+    "row": 16,
+    "image": "image109.jpeg"
+  },
+  {
+    "name": "فليزر بان كول 1 باب",
+    "category": "electrical",
+    "row": 17,
+    "image": "image110.jpeg"
+  },
+  {
+    "name": "لوحة خارجية",
+    "category": "furniture",
+    "row": 58,
+    "image": "image111.png"
+  },
+  {
+    "name": "فليزر بان كول 2 باب",
+    "category": "storage",
+    "row": 4,
+    "image": "image112.png"
+  },
+  {
+    "name": "ثلاجة بان كول 2 باب",
+    "category": "storage",
+    "row": 3,
+    "image": "image113.png"
+  },
+  {
+    "name": "ماكينة قهوة اليوم",
+    "category": "barista",
+    "row": 15,
+    "image": "image115.png"
+  },
+  {
+    "name": "قطاعة جبن",
+    "category": "electrical",
+    "row": 35,
+    "image": "image116.png"
+  },
+  {
+    "name": "ستاند",
+    "category": "furniture",
+    "row": 45,
+    "image": "image118.jpg"
+  },
+  {
+    "name": "رفوف معدنية",
+    "category": "storage",
+    "row": 7,
+    "image": "image119.jpg"
+  },
+  {
+    "name": "ماكينة رش - كومبروسر",
+    "category": "electrical",
+    "row": 9,
+    "image": "image120.png"
+  },
+  {
+    "name": "الوصف",
+    "category": "pizza",
+    "row": 2,
+    "image": "image121.jpeg"
+  },
+  {
+    "name": "براد باستري",
+    "category": "electrical",
+    "row": 11,
+    "image": "image62.jpeg"
+  },
+  {
+    "name": "بلندر",
+    "category": "bakery",
+    "row": 3,
+    "image": "image122.jpeg"
+  },
+  {
+    "name": "قاطع دائري",
+    "category": "pizza",
+    "row": 9,
+    "image": "image123.jpeg"
+  },
+  {
+    "name": "بولة ستيل",
+    "category": "bakery",
+    "row": 35,
+    "image": "image124.jpeg"
+  },
+  {
+    "name": "مسطرة ستيل",
+    "category": "kitchen",
+    "row": 3,
+    "image": "image125.jpeg"
+  },
+  {
+    "name": "سكين خضار",
+    "category": "kitchen",
+    "row": 4,
+    "image": "image126.jpeg"
+  },
+  {
+    "name": "سكين خبز",
+    "category": "kitchen",
+    "row": 5,
+    "image": "image127.jpeg"
+  },
+  {
+    "name": "سباتول سخن",
+    "category": "kitchen",
+    "row": 6,
+    "image": "image128.jpeg"
+  },
+  {
+    "name": "سكين لحوم",
+    "category": "kitchen",
+    "row": 7,
+    "image": "image129.jpeg"
+  },
+  {
+    "name": "قلطع عجين",
+    "category": "kitchen",
+    "row": 8,
+    "image": "image130.jpeg"
+  },
+  {
+    "name": "ترمومتر",
+    "category": "kitchen",
+    "row": 9,
+    "image": "image131.jpeg"
+  },
+  {
+    "name": "خرامة عجين",
+    "category": "bakery",
+    "row": 4,
+    "image": "image132.jpeg"
+  },
+  {
+    "name": "سباتول - سيليكون بارد",
+    "category": "kitchen",
+    "row": 10,
+    "image": "image133.jpeg"
+  },
+  {
+    "name": "قالب حلا",
+    "category": "bakery",
+    "row": 31,
+    "image": "image134.jpeg"
+  },
+  {
+    "name": "مقطع رباعي",
+    "category": "bakery",
+    "row": 5,
+    "image": "image135.jpeg"
+  },
+  {
+    "name": "شبك عجين",
+    "category": "bakery",
+    "row": 6,
+    "image": "image136.jpeg"
+  },
+  {
+    "name": "قالب بريوش",
+    "category": "bakery",
+    "row": 7,
+    "image": "image137.jpeg"
+  },
+  {
+    "name": "مسطرة خشب",
+    "category": "bakery",
+    "row": 8,
+    "image": "image138.jpeg"
+  },
+  {
+    "name": "قالب خبز مربع",
+    "category": "bakery",
+    "row": 9,
+    "image": "image139.jpeg"
+  },
+  {
+    "name": "مغرفة",
+    "category": "kitchen",
+    "row": 11,
+    "image": "image140.jpeg"
+  },
+  {
+    "name": "سكين حلا",
+    "category": "kitchen",
+    "row": 12,
+    "image": "image141.jpeg"
+  },
+  {
+    "name": "سكين منشار",
+    "category": "kitchen",
+    "row": 13,
+    "image": "image142.jpeg"
+  },
+  {
+    "name": "ميزان",
+    "category": "kitchen",
+    "row": 14,
+    "image": "image143.jpeg"
+  },
+  {
+    "name": "قالب بريوش",
+    "category": "bakery",
+    "row": 33,
+    "image": "image144.jpeg"
+  },
+  {
+    "name": "قالب سور دو",
+    "category": "bakery",
+    "row": 34,
+    "image": "image145.jpeg"
+  },
+  {
+    "name": "قاطع عجين بلاستيك",
+    "category": "kitchen",
+    "row": 17,
+    "image": "image146.jpeg"
+  },
+  {
+    "name": "ملعقة المنيوم",
+    "category": "kitchen",
+    "row": 18,
+    "image": "image147.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 3,
+    "image": "image148.jpeg"
+  },
+  {
+    "name": "محراك يدوي",
+    "category": "bakery",
+    "row": 10,
+    "image": "image149.jpeg"
+  },
+  {
+    "name": "قوالب",
+    "category": "bakery",
+    "row": 11,
+    "image": "image150.jpeg"
+  },
+  {
+    "name": "ماكينة تاريخ",
+    "category": "kitchen",
+    "row": 21,
+    "image": "image151.jpeg"
+  },
+  {
+    "name": "جاك",
+    "category": "kitchen",
+    "row": 22,
+    "image": "image152.jpeg"
+  },
+  {
+    "name": "لوح تقطيع خبز",
+    "category": "kitchen",
+    "row": 23,
+    "image": "image153.jpeg"
+  },
+  {
+    "name": "رنج",
+    "category": "bakery",
+    "row": 32,
+    "image": "image154.jpeg"
+  },
+  {
+    "name": "قاطع",
+    "category": "kitchen",
+    "row": 24,
+    "image": "image155.jpeg"
+  },
+  {
+    "name": "لوح تقطيع لحوم",
+    "category": "kitchen",
+    "row": 25,
+    "image": "image156.jpeg"
+  },
+  {
+    "name": "علب بهار",
+    "category": "kitchen",
+    "row": 26,
+    "image": "image157.jpeg"
+  },
+  {
+    "name": "شنوار",
+    "category": "bakery",
+    "row": 30,
+    "image": "image158.jpeg"
+  },
+  {
+    "name": "مصفاه",
+    "category": "kitchen",
+    "row": 20,
+    "image": "image159.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 4,
+    "image": "image160.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 5,
+    "image": "image161.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 6,
+    "image": "image162.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 7,
+    "image": "image163.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 8,
+    "image": "image164.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 9,
+    "image": "image165.jpeg"
+  },
+  {
+    "name": "مقص",
+    "category": "pizza",
+    "row": 10,
+    "image": "image166.jpeg"
+  },
+  {
+    "name": "رول",
+    "category": "kitchen",
+    "row": 19,
+    "image": "image167.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 10,
+    "image": "image168.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 11,
+    "image": "image169.jpeg"
+  },
+  {
+    "name": "صحن سيراميك",
+    "category": "service",
+    "row": 12,
+    "image": "image170.jpeg"
+  },
+  {
+    "name": "شوكة وسكين",
+    "category": "service",
+    "row": 13,
+    "image": "image171.jpeg"
+  },
+  {
+    "name": "شوكة وسكين",
+    "category": "service",
+    "row": 13,
+    "image": "image172.jpeg"
+  },
+  {
+    "name": "مساكة",
+    "category": "kitchen",
+    "row": 15,
+    "image": "image173.jpeg"
+  },
+  {
+    "name": "قوالب تزيين",
+    "category": "bakery",
+    "row": 12,
+    "image": "image174.jpeg"
+  },
+  {
+    "name": "كسرولا",
+    "category": "bakery",
+    "row": 13,
+    "image": "image175.jpeg"
+  },
+  {
+    "name": "شبك",
+    "category": "bakery",
+    "row": 14,
+    "image": "image176.jpeg"
+  },
+  {
+    "name": "مغرفة",
+    "category": "pizza",
+    "row": 13,
+    "image": "image177.jpeg"
+  },
+  {
+    "name": "مصفاه",
+    "category": "pizza",
+    "row": 14,
+    "image": "image178.jpeg"
+  },
+  {
+    "name": "سيليكون",
+    "category": "bakery",
+    "row": 15,
+    "image": "image179.jpeg"
+  },
+  {
+    "name": "كسرولا",
+    "category": "bakery",
+    "row": 16,
+    "image": "image180.jpeg"
+  },
+  {
+    "name": "حامل خبز",
+    "category": "bakery",
+    "row": 17,
+    "image": "image181.jpeg"
+  },
+  {
+    "name": "لوح تقطيع خضار",
+    "category": "kitchen",
+    "row": 16,
+    "image": "image182.jpeg"
+  },
+  {
+    "name": "شنوار",
+    "category": "bakery",
+    "row": 18,
+    "image": "image183.jpeg"
+  },
+  {
+    "name": "سباتول",
+    "category": "bakery",
+    "row": 19,
+    "image": "image184.jpeg"
+  },
+  {
+    "name": "حامل الواح",
+    "category": "kitchen",
+    "row": 27,
+    "image": "image185.jpeg"
+  },
+  {
+    "name": "سيليكون",
+    "category": "bakery",
+    "row": 20,
+    "image": "image186.jpeg"
+  },
+  {
+    "name": "طقم تقطيع",
+    "category": "bakery",
+    "row": 21,
+    "image": "image187.jpeg"
+  },
+  {
+    "name": "مسطرة مشط",
+    "category": "bakery",
+    "row": 22,
+    "image": "image188.jpeg"
+  },
+  {
+    "name": "مغرفة",
+    "category": "bakery",
+    "row": 23,
+    "image": "image189.jpeg"
+  },
+  {
+    "name": "غاز",
+    "category": "bakery",
+    "row": 25,
+    "image": "image190.jpeg"
+  },
+  {
+    "name": "سباتول سيليكون",
+    "category": "bakery",
+    "row": 26,
+    "image": "image191.jpeg"
+  },
+  {
+    "name": "قالب",
+    "category": "bakery",
+    "row": 27,
+    "image": "image192.jpeg"
+  },
+  {
+    "name": "مبشرة",
+    "category": "pizza",
+    "row": 11,
+    "image": "image193.jpeg"
+  },
+  {
+    "name": "ملعقة",
+    "category": "bakery",
+    "row": 28,
+    "image": "image194.jpeg"
+  },
+  {
+    "name": "لوح خشبي",
+    "category": "pizza",
+    "row": 12,
+    "image": "image195.jpeg"
+  },
+  {
+    "name": "فرشاة سيليكون",
+    "category": "bakery",
+    "row": 29,
+    "image": "image196.jpeg"
+  },
+  {
+    "name": "سباتول",
+    "category": "bakery",
+    "row": 24,
+    "image": "image197.jpeg"
+  },
+  {
+    "name": "كسرولا صغيرة",
+    "category": "service",
+    "row": 16,
+    "image": "image199.jpeg"
+  },
+  {
+    "name": "قاطع سيليكون",
+    "category": "pizza",
+    "row": 15,
+    "image": "image200.jpeg"
+  },
+  {
+    "name": "طبق تقديم كبير",
+    "category": "service",
+    "row": 17,
+    "image": "image201.jpeg"
+  },
+  {
+    "name": "كوب سيراميك",
+    "category": "service",
+    "row": 18,
+    "image": "image202.jpeg"
+  },
+  {
+    "name": "مقشرة خضار",
+    "category": "kitchen",
+    "row": 32,
+    "image": "image203.jpeg"
+  },
+  {
+    "name": "حامل",
+    "category": "bakery",
+    "row": 36,
+    "image": "image204.jpeg"
+  },
+  {
+    "name": "صحن ستيل",
+    "category": "service",
+    "row": 19,
+    "image": "image205.jpeg"
+  },
+  {
+    "name": "طبق تقديم صغير",
+    "category": "service",
+    "row": 20,
+    "image": "image206.jpeg"
+  },
+  {
+    "name": "سيرفر",
+    "category": "barista",
+    "row": 18,
+    "image": "image207.jpeg"
+  }
+]
