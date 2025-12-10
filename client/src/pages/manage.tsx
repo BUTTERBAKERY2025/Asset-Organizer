@@ -39,8 +39,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye } from "lucide-react";
 import type { Branch, InventoryItem } from "@shared/schema";
+import { AssetDetailsDialog } from "@/components/asset-details-dialog";
 
 const itemFormSchema = z.object({
   id: z.string().min(1, "معرف الصنف مطلوب"),
@@ -54,6 +55,9 @@ const itemFormSchema = z.object({
   lastCheck: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   serialNumber: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
+  nextInspectionDate: z.string().optional().nullable(),
+  inspectionIntervalDays: z.coerce.number().optional().nullable(),
 });
 
 type ItemFormData = z.infer<typeof itemFormSchema>;
@@ -84,6 +88,7 @@ export default function ManagePage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
 
   const { toast } = useToast();
@@ -450,6 +455,37 @@ export default function ManagePage() {
         />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="imageUrl">رابط الصورة</Label>
+        <Input
+          {...form.register("imageUrl")}
+          placeholder="https://example.com/image.jpg"
+          data-testid="input-image-url"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="nextInspectionDate">تاريخ الفحص القادم</Label>
+          <Input
+            type="date"
+            {...form.register("nextInspectionDate")}
+            data-testid="input-next-inspection"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="inspectionIntervalDays">فترة الفحص (أيام)</Label>
+          <Input
+            type="number"
+            min={1}
+            {...form.register("inspectionIntervalDays")}
+            placeholder="مثال: 30"
+            data-testid="input-inspection-interval"
+          />
+        </div>
+      </div>
+
       <DialogFooter>
         <Button type="submit" disabled={isLoading} data-testid="button-submit-form">
           {isLoading && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
@@ -554,6 +590,17 @@ export default function ManagePage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => {
+                                setSelectedItem(item);
+                                setIsDetailsDialogOpen(true);
+                              }}
+                              data-testid={`button-details-${item.id}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleEdit(item)}
                               data-testid={`button-edit-${item.id}`}
                             >
@@ -621,6 +668,13 @@ export default function ManagePage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <AssetDetailsDialog
+          item={selectedItem}
+          open={isDetailsDialogOpen}
+          onOpenChange={setIsDetailsDialogOpen}
+          branchName={selectedItem ? branchMap[selectedItem.branchId] : undefined}
+        />
       </div>
     </Layout>
   );

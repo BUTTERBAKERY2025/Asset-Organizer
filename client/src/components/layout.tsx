@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, Settings, LogOut, ClipboardEdit, Building2, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -11,6 +11,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/inventory", label: "جرد الأصول", icon: FileText },
     { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit },
     { href: "/branches", label: "إدارة الفروع", icon: Building2 },
+    { href: "/inspections", label: "الفحص الدوري", icon: CalendarCheck },
     { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle },
   ];
 

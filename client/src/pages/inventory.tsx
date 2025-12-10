@@ -22,6 +22,7 @@ import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCi
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
+import { AdvancedFilters, defaultFilters, type FilterConfig } from "@/components/advanced-filters";
 
 type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
@@ -30,6 +31,8 @@ export default function InventoryPage() {
   const [activeBranch, setActiveBranch] = useState("medina");
   const [showPrices, setShowPrices] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [advancedFilters, setAdvancedFilters] = useState<FilterConfig>(defaultFilters);
+  const [appliedFilters, setAppliedFilters] = useState<FilterConfig>(defaultFilters);
 
   const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -79,15 +82,64 @@ export default function InventoryPage() {
 
   const displayedInventory = isGlobalSearch ? allItems : currentBranchItems;
 
+  const advancedFilteredItems = useMemo(() => {
+    return displayedInventory.filter(item => {
+      if (appliedFilters.status !== "all" && item.status !== appliedFilters.status) {
+        return false;
+      }
+      
+      if (appliedFilters.priceMin !== "") {
+        const minPrice = parseFloat(appliedFilters.priceMin);
+        if (!isNaN(minPrice) && (item.price || 0) < minPrice) {
+          return false;
+        }
+      }
+      
+      if (appliedFilters.priceMax !== "") {
+        const maxPrice = parseFloat(appliedFilters.priceMax);
+        if (!isNaN(maxPrice) && (item.price || 0) > maxPrice) {
+          return false;
+        }
+      }
+      
+      if (appliedFilters.lastCheckFrom !== "" && item.lastCheck) {
+        const fromDate = new Date(appliedFilters.lastCheckFrom);
+        const itemDate = new Date(item.lastCheck);
+        if (itemDate < fromDate) {
+          return false;
+        }
+      }
+      
+      if (appliedFilters.lastCheckTo !== "" && item.lastCheck) {
+        const toDate = new Date(appliedFilters.lastCheckTo);
+        const itemDate = new Date(item.lastCheck);
+        if (itemDate > toDate) {
+          return false;
+        }
+      }
+      
+      if (appliedFilters.needsInspection) {
+        if (!item.nextInspectionDate) return false;
+        const now = new Date();
+        const inspectionDate = new Date(item.nextInspectionDate);
+        if (inspectionDate > now) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }, [displayedInventory, appliedFilters]);
+
   const groupedInventory = useMemo(() => {
-    return displayedInventory.reduce((acc, item) => {
+    return advancedFilteredItems.reduce((acc, item) => {
       if (!acc[item.category]) {
         acc[item.category] = [];
       }
       acc[item.category].push(item);
       return acc;
     }, {} as Record<string, InventoryItemWithBranch[]>);
-  }, [displayedInventory]);
+  }, [advancedFilteredItems]);
 
   const allCategories = useMemo(() => {
     return Array.from(new Set(displayedInventory.map(i => i.category)));
@@ -503,6 +555,16 @@ export default function InventoryPage() {
                   />
                   <Label htmlFor="show-prices" className="cursor-pointer">إظهار الأسعار</Label>
                 </div>
+                
+                <AdvancedFilters
+                  filters={advancedFilters}
+                  onFiltersChange={setAdvancedFilters}
+                  onApply={() => setAppliedFilters(advancedFilters)}
+                  onClear={() => {
+                    setAdvancedFilters(defaultFilters);
+                    setAppliedFilters(defaultFilters);
+                  }}
+                />
               </div>
             </div>
 

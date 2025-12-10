@@ -9,6 +9,7 @@ import InventoryPage from "@/pages/inventory";
 import ManagePage from "@/pages/manage";
 import BranchesPage from "@/pages/branches";
 import MaintenancePage from "@/pages/maintenance";
+import InspectionsPage from "@/pages/inspections";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/manage" component={ManagePage} />
       <Route path="/branches" component={BranchesPage} />
       <Route path="/maintenance" component={MaintenancePage} />
+      <Route path="/inspections" component={InspectionsPage} />
       <Route component={NotFound} />
     </Switch>
   );

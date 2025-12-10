@@ -1,8 +1,32 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema } from "@shared/schema";
 import { z } from "zod";
+
+// Normalize date to YYYY-MM-DD format
+function normalizeDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  try {
+    // Parse the date and extract just the date part
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString().split('T')[0];
+  } catch {
+    return null;
+  }
+}
+
+// Normalize inventory item data before storage
+function normalizeInventoryData<T extends { nextInspectionDate?: string | null }>(data: T): T {
+  if (data.nextInspectionDate !== undefined) {
+    return {
+      ...data,
+      nextInspectionDate: normalizeDate(data.nextInspectionDate)
+    };
+  }
+  return data;
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -60,6 +84,16 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/inventory/needs-inspection", async (req, res) => {
+    try {
+      const items = await storage.getItemsNeedingInspection();
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching items needing inspection:", error);
+      res.status(500).json({ error: "Failed to fetch items needing inspection" });
+    }
+  });
+
   app.get("/api/inventory/:id", async (req, res) => {
     try {
       const item = await storage.getInventoryItem(req.params.id);
@@ -73,10 +107,21 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/inventory/:id/audit-logs", async (req, res) => {
+    try {
+      const logs = await storage.getAuditLogsForItem(req.params.id);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching audit logs:", error);
+      res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
   app.post("/api/inventory", async (req, res) => {
     try {
       const validatedData = insertInventoryItemSchema.parse(req.body);
-      const item = await storage.createInventoryItem(validatedData);
+      const normalizedData = normalizeInventoryData(validatedData);
+      const item = await storage.createInventoryItem(normalizedData);
       res.status(201).json(item);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -90,7 +135,8 @@ export async function registerRoutes(
   app.patch("/api/inventory/:id", async (req, res) => {
     try {
       const partialData = insertInventoryItemSchema.partial().parse(req.body);
-      const item = await storage.updateInventoryItem(req.params.id, partialData);
+      const normalizedData = normalizeInventoryData(partialData);
+      const item = await storage.updateInventoryItem(req.params.id, normalizedData);
       if (!item) {
         return res.status(404).json({ error: "Item not found" });
       }
@@ -114,6 +160,48 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting inventory item:", error);
       res.status(500).json({ error: "Failed to delete inventory item" });
+    }
+  });
+
+  // Saved Filters
+  app.get("/api/filters", async (req, res) => {
+    try {
+      const filters = await storage.getAllSavedFilters();
+      res.json(filters);
+    } catch (error) {
+      console.error("Error fetching saved filters:", error);
+      res.status(500).json({ error: "Failed to fetch saved filters" });
+    }
+  });
+
+  app.post("/api/filters", async (req, res) => {
+    try {
+      const validatedData = insertSavedFilterSchema.parse(req.body);
+      const filter = await storage.createSavedFilter(validatedData);
+      res.status(201).json(filter);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating saved filter:", error);
+      res.status(500).json({ error: "Failed to create saved filter" });
+    }
+  });
+
+  app.delete("/api/filters/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid filter ID" });
+      }
+      const success = await storage.deleteSavedFilter(id);
+      if (!success) {
+        return res.status(404).json({ error: "Filter not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting saved filter:", error);
+      res.status(500).json({ error: "Failed to delete saved filter" });
     }
   });
 
