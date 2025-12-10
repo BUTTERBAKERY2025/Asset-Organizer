@@ -52,7 +52,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { generatePaymentRequestsPDF, downloadPDF, sharePDF } from "@/lib/pdf-generator";
+import { generatePaymentRequestsPDF } from "@/lib/pdf-generator";
 
 const paymentRequestFormSchema = z.object({
   projectId: z.coerce.number().min(1, "اختر المشروع"),
@@ -154,8 +154,6 @@ export default function PaymentRequestsPage() {
       return res.json();
     },
   });
-
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const form = useForm<PaymentRequestFormData>({
     resolver: zodResolver(paymentRequestFormSchema),
@@ -385,64 +383,48 @@ export default function PaymentRequestsPage() {
     return text;
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = () => {
     if (requestsByDate.length === 0) {
       toast({ title: "لا توجد طلبات للتصدير", variant: "destructive" });
       return;
     }
     
-    setIsGeneratingPDF(true);
     try {
-      const blob = await generatePaymentRequestsPDF(
+      generatePaymentRequestsPDF(
         requestsByDate,
         projects,
         branches,
         categories,
         dateFilter
       );
-      const filename = `طلبات-الدفع-${dateFilter}.pdf`;
-      downloadPDF(blob, filename);
-      toast({ title: "تم تحميل التقرير بنجاح" });
+      toast({ title: "تم فتح نافذة التقرير - اضغط طباعة / حفظ PDF" });
     } catch (error) {
       console.error("PDF generation failed:", error);
       toast({ title: "فشل في إنشاء التقرير", variant: "destructive" });
-    } finally {
-      setIsGeneratingPDF(false);
     }
   };
 
-  const handleSharePDF = async () => {
+  const handleSharePDF = () => {
     if (requestsByDate.length === 0) {
       toast({ title: "لا توجد طلبات للمشاركة", variant: "destructive" });
       return;
     }
     
-    setIsGeneratingPDF(true);
     try {
-      const blob = await generatePaymentRequestsPDF(
+      generatePaymentRequestsPDF(
         requestsByDate,
         projects,
         branches,
         categories,
         dateFilter
       );
-      const filename = `طلبات-الدفع-${dateFilter}.pdf`;
-      const title = `طلبات الدفع - ${formatDateArabic(dateFilter)}`;
-      
-      const shared = await sharePDF(blob, filename, title);
-      
-      if (!shared) {
-        downloadPDF(blob, filename);
-        toast({ 
-          title: "تم تحميل الملف", 
-          description: "يمكنك مشاركته يدوياً عبر واتساب" 
-        });
-      }
+      toast({ 
+        title: "تم فتح نافذة التقرير",
+        description: "اضغط طباعة / حفظ PDF ثم شاركه عبر واتساب"
+      });
     } catch (error) {
       console.error("PDF sharing failed:", error);
       toast({ title: "فشل في مشاركة التقرير", variant: "destructive" });
-    } finally {
-      setIsGeneratingPDF(false);
     }
   };
 
@@ -586,27 +568,19 @@ export default function PaymentRequestsPage() {
                 <Button 
                   variant="outline"
                   onClick={handleDownloadPDF}
-                  disabled={requestsByDate.length === 0 || isGeneratingPDF}
+                  disabled={requestsByDate.length === 0}
                   data-testid="button-download-pdf"
                 >
-                  {isGeneratingPDF ? (
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="ml-2 h-4 w-4" />
-                  )}
+                  <Download className="ml-2 h-4 w-4" />
                   تحميل PDF
                 </Button>
                 <Button 
                   variant="outline"
                   onClick={handleSharePDF}
-                  disabled={requestsByDate.length === 0 || isGeneratingPDF}
+                  disabled={requestsByDate.length === 0}
                   data-testid="button-share-whatsapp"
                 >
-                  {isGeneratingPDF ? (
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
-                  )}
+                  <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
                   مشاركة واتساب
                 </Button>
               </div>
