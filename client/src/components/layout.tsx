@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "مدير",
@@ -13,26 +15,92 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: "مشاهد",
 };
 
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  requiresAuth?: boolean;
+}
+
+interface NavGroup {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: NavItem[];
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user, isLoading, isAuthenticated, isAdmin, logout, isLoggingOut } = useAuth();
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    assets: true,
+    construction: true,
+  });
 
   const handleLogout = async () => {
     await logout();
     setLocation("/login");
   };
 
-  const navItems = [
+  const toggleGroup = (group: string) => {
+    setOpenGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
+
+  const standaloneItems: NavItem[] = [
     { href: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
-    { href: "/inventory", label: "جرد الأصول", icon: FileText },
-    { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit, requiresAuth: true },
-    { href: "/branches", label: "إدارة الفروع", icon: Building2, requiresAuth: true },
-    { href: "/inspections", label: "الفحص الدوري", icon: CalendarCheck },
-    { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle },
-    { href: "/construction-projects", label: "المشاريع الإنشائية", icon: Hammer },
-    { href: "/contractors", label: "المقاولون", icon: HardHat },
+  ];
+
+  const navGroups: { key: string; group: NavGroup }[] = [
+    {
+      key: "assets",
+      group: {
+        label: "الأصول",
+        icon: Package,
+        items: [
+          { href: "/inventory", label: "جرد الأصول", icon: FileText },
+          { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit, requiresAuth: true },
+          { href: "/branches", label: "إدارة الفروع", icon: Building2, requiresAuth: true },
+          { href: "/inspections", label: "الفحص الدوري", icon: CalendarCheck },
+          { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle },
+        ],
+      },
+    },
+    {
+      key: "construction",
+      group: {
+        label: "المشاريع الإنشائية",
+        icon: Hammer,
+        items: [
+          { href: "/construction-projects", label: "المشاريع", icon: Hammer },
+          { href: "/contractors", label: "المقاولون", icon: HardHat },
+        ],
+      },
+    },
+  ];
+
+  const bottomItems: NavItem[] = [
+    { href: "/reports", label: "التقارير الشاملة", icon: FileBarChart },
     ...(isAdmin ? [{ href: "/users", label: "إدارة المستخدمين", icon: Users }] : []),
   ];
+
+  const isGroupActive = (items: NavItem[]) => items.some(item => location === item.href);
+
+  const renderNavItem = (item: NavItem, indented = false) => (
+    <Link key={item.href} href={item.href}>
+      <div
+        className={cn(
+          "flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors cursor-pointer",
+          indented && "mr-4",
+          location === item.href
+            ? "bg-primary/10 text-primary font-medium"
+            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+        )}
+        data-testid={`nav-link-${item.href.replace('/', '')}`}
+      >
+        <item.icon className="w-5 h-5" />
+        <span>{item.label}</span>
+      </div>
+    </Link>
+  );
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -47,23 +115,45 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
-          {navItems.map((item) => (
-            <Link key={item.href} href={item.href}>
-              <div
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-md transition-colors cursor-pointer",
-                  location === item.href
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-                data-testid={`nav-link-${item.href.replace('/', '')}`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span>{item.label}</span>
-              </div>
-            </Link>
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {standaloneItems.map(item => renderNavItem(item))}
+
+          {navGroups.map(({ key, group }) => (
+            <Collapsible
+              key={key}
+              open={openGroups[key]}
+              onOpenChange={() => toggleGroup(key)}
+            >
+              <CollapsibleTrigger asChild>
+                <div
+                  className={cn(
+                    "flex items-center justify-between gap-3 px-4 py-2.5 rounded-md transition-colors cursor-pointer mt-2",
+                    isGroupActive(group.items)
+                      ? "bg-primary/5 text-primary"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                  data-testid={`nav-group-${key}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <group.icon className="w-5 h-5" />
+                    <span className="font-medium">{group.label}</span>
+                  </div>
+                  {openGroups[key] ? (
+                    <ChevronDown className="w-4 h-4" />
+                  ) : (
+                    <ChevronLeft className="w-4 h-4" />
+                  )}
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 mt-1">
+                {group.items.map(item => renderNavItem(item, true))}
+              </CollapsibleContent>
+            </Collapsible>
           ))}
+
+          <div className="pt-2 border-t border-border/30 mt-3">
+            {bottomItems.map(item => renderNavItem(item))}
+          </div>
         </nav>
 
         <div className="p-4 border-t border-border/50">

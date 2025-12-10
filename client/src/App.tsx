@@ -15,6 +15,7 @@ import LoginPage from "@/pages/login";
 import ConstructionProjectsPage from "@/pages/construction-projects";
 import ConstructionProjectDetailPage from "@/pages/construction-project-detail";
 import ContractorsPage from "@/pages/contractors";
+import ReportsPage from "@/pages/reports";
 
 function Router() {
   return (
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/construction-projects" component={ConstructionProjectsPage} />
       <Route path="/construction-projects/:id" component={ConstructionProjectDetailPage} />
       <Route path="/contractors" component={ContractorsPage} />
+      <Route path="/reports" component={ReportsPage} />
       <Route component={NotFound} />
     </Switch>
   );
