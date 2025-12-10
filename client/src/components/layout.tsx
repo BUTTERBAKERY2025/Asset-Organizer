@@ -90,15 +90,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <Link key={item.href} href={item.href}>
       <div
         className={cn(
-          "flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors cursor-pointer",
-          indented && "mr-4",
+          "flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors cursor-pointer text-[13px]",
+          indented && "mr-3",
           location === item.href
             ? "bg-primary/10 text-primary font-medium"
             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
         )}
         data-testid={`nav-link-${item.href.replace('/', '')}`}
       >
-        <item.icon className="w-5 h-5" />
+        <item.icon className="w-4 h-4 flex-shrink-0" />
         <span>{item.label}</span>
       </div>
     </Link>
@@ -107,13 +107,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex">
       <aside className="w-64 bg-card border-l border-border hidden md:flex flex-col sticky top-0 h-screen">
-        <div className="p-6 flex flex-col items-center border-b border-border/50">
-          <div className="w-full px-4 mb-3 flex items-center justify-between">
-            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain" />
+        <div className="p-4 flex flex-col items-center border-b border-border/50">
+          <div className="w-full px-2 mb-2 flex items-center justify-between">
+            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-12" />
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2">
             {isAuthenticated && <NotificationsDropdown />}
-            <p className="text-xs text-muted-foreground">نظام إدارة المشروعات والأصول والصيانة</p>
+            <p className="text-[10px] text-muted-foreground text-center leading-tight">نظام إدارة المشروعات والأصول والصيانة</p>
           </div>
         </div>
 
@@ -129,25 +129,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <CollapsibleTrigger asChild>
                 <div
                   className={cn(
-                    "flex items-center justify-between gap-3 px-4 py-2.5 rounded-md transition-colors cursor-pointer mt-2",
+                    "flex items-center justify-between gap-2 px-3 py-1.5 rounded-md transition-colors cursor-pointer mt-1.5 text-[13px]",
                     isGroupActive(group.items)
                       ? "bg-primary/5 text-primary"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   )}
                   data-testid={`nav-group-${key}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <group.icon className="w-5 h-5" />
+                  <div className="flex items-center gap-2">
+                    <group.icon className="w-4 h-4 flex-shrink-0" />
                     <span className="font-medium">{group.label}</span>
                   </div>
                   {openGroups[key] ? (
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-3.5 h-3.5" />
                   ) : (
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-3.5 h-3.5" />
                   )}
                 </div>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-1 mt-1">
+              <CollapsibleContent className="space-y-0.5 mt-0.5">
                 {group.items.map(item => renderNavItem(item, true))}
               </CollapsibleContent>
             </Collapsible>
@@ -158,33 +158,33 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        <div className="p-4 border-t border-border/50">
+        <div className="p-3 border-t border-border/50">
           {isLoading ? (
-            <div className="flex items-center justify-center py-3">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-2">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             </div>
           ) : isAuthenticated && user ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 px-2">
-                <Avatar className="h-10 w-10">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-1">
+                <Avatar className="h-8 w-8">
                   <AvatarImage src={user.profileImageUrl || undefined} style={{ objectFit: 'cover' }} />
-                  <AvatarFallback>{user.firstName?.[0] || user.phone?.[0] || 'U'}</AvatarFallback>
+                  <AvatarFallback className="text-xs">{user.firstName?.[0] || user.phone?.[0] || 'U'}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{user.firstName || user.phone}</p>
-                  <Badge variant="secondary" className="text-xs">{ROLE_LABELS[user.role] || user.role}</Badge>
+                  <p className="text-[12px] font-medium truncate">{user.firstName || user.phone}</p>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ROLE_LABELS[user.role] || user.role}</Badge>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="w-full flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-destructive cursor-pointer transition-colors rounded-md hover:bg-destructive/10"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-muted-foreground hover:text-destructive cursor-pointer transition-colors rounded-md hover:bg-destructive/10"
                 data-testid="button-logout"
               >
                 {isLoggingOut ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <LogOut className="w-5 h-5" />
+                  <LogOut className="w-4 h-4" />
                 )}
                 <span>تسجيل الخروج</span>
               </button>
@@ -192,10 +192,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           ) : (
             <Link href="/login">
               <div
-                className="flex items-center gap-3 px-4 py-3 text-primary hover:text-primary/80 cursor-pointer transition-colors rounded-md hover:bg-primary/10"
+                className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-primary hover:text-primary/80 cursor-pointer transition-colors rounded-md hover:bg-primary/10"
                 data-testid="button-login"
               >
-                <LogIn className="w-5 h-5" />
+                <LogIn className="w-4 h-4" />
                 <span>تسجيل الدخول</span>
               </div>
             </Link>
