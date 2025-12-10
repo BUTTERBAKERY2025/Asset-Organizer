@@ -1,8 +1,8 @@
-# Butter Bakery Inventory Management System
+# نظام إدارة المشروعات والأصول والصيانة - باتر
 
 ## Overview
 
-This is an inventory management system for Butter Bakery, a bakery business with multiple branches in Saudi Arabia. The application tracks equipment, supplies, and assets across different branch locations (currently Medina and Tabuk). It provides features for viewing inventory, managing assets, tracking maintenance needs, and generating reports with support for Arabic RTL layout.
+This is a comprehensive projects, assets, and maintenance management system for Butter Bakery, a bakery business with multiple branches in Saudi Arabia (Medina, Tabuk, Riyadh). The application tracks equipment, supplies, assets, construction projects, and contractors across different branch locations. It provides features for viewing inventory, managing assets, construction project management, tracking maintenance needs, and generating comprehensive reports with support for Arabic RTL layout.
 
 ## User Preferences
 

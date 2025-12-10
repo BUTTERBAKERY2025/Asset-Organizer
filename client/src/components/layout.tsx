@@ -111,7 +111,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-2 mt-2">
             {isAuthenticated && <NotificationsDropdown />}
-            <p className="text-xs text-muted-foreground">نظام إدارة الأصول</p>
+            <p className="text-xs text-muted-foreground">نظام إدارة المشروعات والأصول والصيانة</p>
           </div>
         </div>
 
