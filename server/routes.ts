@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requireRole } from "./auth";
 
@@ -718,6 +718,341 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting budget allocation:", error);
       res.status(500).json({ error: "Failed to delete budget allocation" });
+    }
+  });
+
+  // ===== Construction Contracts Routes =====
+  
+  app.get("/api/construction/contracts", async (req, res) => {
+    try {
+      const projectId = req.query.projectId as string | undefined;
+      const contracts = projectId 
+        ? await storage.getContractsByProject(parseInt(projectId, 10))
+        : await storage.getAllContracts();
+      res.json(contracts);
+    } catch (error) {
+      console.error("Error fetching contracts:", error);
+      res.status(500).json({ error: "Failed to fetch contracts" });
+    }
+  });
+
+  app.get("/api/construction/contracts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      const contract = await storage.getContract(id);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+      res.json(contract);
+    } catch (error) {
+      console.error("Error fetching contract:", error);
+      res.status(500).json({ error: "Failed to fetch contract" });
+    }
+  });
+
+  app.post("/api/construction/contracts", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+    try {
+      const validatedData = insertConstructionContractSchema.parse({
+        ...req.body,
+        createdBy: req.currentUser?.id
+      });
+      const contract = await storage.createContract(validatedData);
+      res.status(201).json(contract);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating contract:", error);
+      res.status(500).json({ error: "Failed to create contract" });
+    }
+  });
+
+  app.patch("/api/construction/contracts/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      const partialData = insertConstructionContractSchema.partial().parse(req.body);
+      const contract = await storage.updateContract(id, partialData);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+      res.json(contract);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating contract:", error);
+      res.status(500).json({ error: "Failed to update contract" });
+    }
+  });
+
+  app.delete("/api/construction/contracts/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      const success = await storage.deleteContract(id);
+      if (!success) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting contract:", error);
+      res.status(500).json({ error: "Failed to delete contract" });
+    }
+  });
+
+  // Contract Items
+  app.get("/api/construction/contracts/:contractId/items", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.contractId, 10);
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      const items = await storage.getContractItems(contractId);
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching contract items:", error);
+      res.status(500).json({ error: "Failed to fetch contract items" });
+    }
+  });
+
+  app.post("/api/construction/contract-items", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+    try {
+      const validatedData = insertContractItemSchema.parse(req.body);
+      const item = await storage.createContractItem(validatedData);
+      res.status(201).json(item);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating contract item:", error);
+      res.status(500).json({ error: "Failed to create contract item" });
+    }
+  });
+
+  app.patch("/api/construction/contract-items/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid contract item ID" });
+      }
+      const partialData = insertContractItemSchema.partial().parse(req.body);
+      const item = await storage.updateContractItem(id, partialData);
+      if (!item) {
+        return res.status(404).json({ error: "Contract item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating contract item:", error);
+      res.status(500).json({ error: "Failed to update contract item" });
+    }
+  });
+
+  app.delete("/api/construction/contract-items/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid contract item ID" });
+      }
+      const success = await storage.deleteContractItem(id);
+      if (!success) {
+        return res.status(404).json({ error: "Contract item not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting contract item:", error);
+      res.status(500).json({ error: "Failed to delete contract item" });
+    }
+  });
+
+  // Contract Payments
+  app.get("/api/construction/contracts/:contractId/payments", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.contractId, 10);
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      const payments = await storage.getContractPayments(contractId);
+      res.json(payments);
+    } catch (error) {
+      console.error("Error fetching contract payments:", error);
+      res.status(500).json({ error: "Failed to fetch contract payments" });
+    }
+  });
+
+  app.post("/api/construction/contract-payments", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+    try {
+      const validatedData = insertContractPaymentSchema.parse({
+        ...req.body,
+        createdBy: req.currentUser?.id
+      });
+      const payment = await storage.createContractPayment(validatedData);
+      res.status(201).json(payment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating contract payment:", error);
+      res.status(500).json({ error: "Failed to create contract payment" });
+    }
+  });
+
+  // ===== Payment Requests Routes =====
+  
+  app.get("/api/payment-requests", async (req, res) => {
+    try {
+      const { projectId, status } = req.query;
+      let requests;
+      if (projectId) {
+        requests = await storage.getPaymentRequestsByProject(parseInt(projectId as string, 10));
+      } else if (status) {
+        requests = await storage.getPaymentRequestsByStatus(status as string);
+      } else {
+        requests = await storage.getAllPaymentRequests();
+      }
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching payment requests:", error);
+      res.status(500).json({ error: "Failed to fetch payment requests" });
+    }
+  });
+
+  app.get("/api/payment-requests/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid request ID" });
+      }
+      const request = await storage.getPaymentRequest(id);
+      if (!request) {
+        return res.status(404).json({ error: "Payment request not found" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error fetching payment request:", error);
+      res.status(500).json({ error: "Failed to fetch payment request" });
+    }
+  });
+
+  app.post("/api/payment-requests", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const validatedData = insertPaymentRequestSchema.parse({
+        ...req.body,
+        requestedBy: req.currentUser?.id,
+        requestDate: req.body.requestDate || today
+      });
+      const request = await storage.createPaymentRequest(validatedData);
+      res.status(201).json(request);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating payment request:", error);
+      res.status(500).json({ error: "Failed to create payment request" });
+    }
+  });
+
+  app.patch("/api/payment-requests/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid request ID" });
+      }
+      const partialData = insertPaymentRequestSchema.partial().parse(req.body);
+      const request = await storage.updatePaymentRequest(id, partialData);
+      if (!request) {
+        return res.status(404).json({ error: "Payment request not found" });
+      }
+      res.json(request);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating payment request:", error);
+      res.status(500).json({ error: "Failed to update payment request" });
+    }
+  });
+
+  app.post("/api/payment-requests/:id/approve", isAuthenticated, requireRole(["admin"]), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid request ID" });
+      }
+      const request = await storage.approvePaymentRequest(id, req.currentUser?.id);
+      if (!request) {
+        return res.status(404).json({ error: "Payment request not found" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error approving payment request:", error);
+      res.status(500).json({ error: "Failed to approve payment request" });
+    }
+  });
+
+  app.post("/api/payment-requests/:id/reject", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid request ID" });
+      }
+      const { reason } = req.body;
+      if (!reason) {
+        return res.status(400).json({ error: "Rejection reason is required" });
+      }
+      const request = await storage.rejectPaymentRequest(id, reason);
+      if (!request) {
+        return res.status(404).json({ error: "Payment request not found" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error rejecting payment request:", error);
+      res.status(500).json({ error: "Failed to reject payment request" });
+    }
+  });
+
+  app.post("/api/payment-requests/:id/mark-paid", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid request ID" });
+      }
+      const request = await storage.markPaymentRequestAsPaid(id);
+      if (!request) {
+        return res.status(404).json({ error: "Payment request not found" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error marking payment request as paid:", error);
+      res.status(500).json({ error: "Failed to mark payment request as paid" });
+    }
+  });
+
+  app.delete("/api/payment-requests/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid request ID" });
+      }
+      const success = await storage.deletePaymentRequest(id);
+      if (!success) {
+        return res.status(404).json({ error: "Payment request not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting payment request:", error);
+      res.status(500).json({ error: "Failed to delete payment request" });
     }
   });
 
