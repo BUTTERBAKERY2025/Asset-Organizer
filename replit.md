@@ -44,6 +44,12 @@ Preferred communication style: Simple, everyday language.
 
 5. **Price/VAT Calculations**: Built-in support for Saudi VAT (15%) calculations on inventory valuations.
 
+6. **Construction Project Management**: A dedicated module for tracking building/renovation projects for branches, including:
+   - Construction projects with budget, timeline, and progress tracking
+   - Work items categorized by type (electrical, plumbing, painting, tiling, carpentry, HVAC, signage, etc.)
+   - Contractor management with contact information and ratings
+   - Project status workflow (planned, in_progress, on_hold, completed, cancelled)
+
 ## External Dependencies
 
 ### Database
