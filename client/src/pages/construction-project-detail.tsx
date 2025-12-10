@@ -310,8 +310,13 @@ export default function ConstructionProjectDetailPage() {
       }
     });
 
+    Object.values(grouped).forEach(group => {
+      group.items.sort((a, b) => (Number(b.actualCost) || 0) - (Number(a.actualCost) || 0));
+    });
+
     const result = Object.values(grouped).sort((a, b) => b.totalCost - a.totalCost);
     if (uncategorized.length > 0) {
+      uncategorized.sort((a, b) => (Number(b.actualCost) || 0) - (Number(a.actualCost) || 0));
       result.push({
         category: null,
         items: uncategorized,
@@ -569,7 +574,7 @@ export default function ConstructionProjectDetailPage() {
                 
                 {workItemsByCategory.map((group, groupIndex) => {
                   const categoryId = group.category?.id || 0;
-                  const isOpen = openCategories[categoryId] !== false;
+                  const isOpen = openCategories[categoryId] !== undefined ? openCategories[categoryId] : groupIndex < 3;
                   const completedInCategory = group.items.filter(i => i.status === "completed").length;
                   
                   return (
@@ -588,7 +593,7 @@ export default function ConstructionProjectDetailPage() {
                                 </div>
                               </div>
                               <Badge variant="secondary" className="text-xs">
-                                {((group.totalCost / totalActualCost) * 100).toFixed(1)}%
+                                {totalActualCost > 0 ? ((group.totalCost / totalActualCost) * 100).toFixed(1) : 0}%
                               </Badge>
                             </div>
                           </CardHeader>
