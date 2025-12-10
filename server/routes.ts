@@ -50,19 +50,19 @@ export async function registerRoutes(
 
   app.post("/api/users", isAuthenticated, requireRole(["admin"]), async (req, res) => {
     try {
-      const { phone, password, firstName, lastName, role } = req.body;
+      const { username, password, firstName, lastName, role } = req.body;
       
-      if (!phone || !password) {
-        return res.status(400).json({ error: "رقم الهاتف وكلمة المرور مطلوبان" });
+      if (!username || !password) {
+        return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
       }
       
-      const existingUser = await storage.getUserByPhone(phone);
+      const existingUser = await storage.getUserByUsername(username);
       if (existingUser) {
-        return res.status(400).json({ error: "رقم الهاتف مسجل مسبقاً" });
+        return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
       }
       
       const user = await storage.createUser({
-        phone,
+        username,
         password,
         firstName,
         lastName,
