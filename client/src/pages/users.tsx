@@ -8,26 +8,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2 } from "lucide-react";
-import type { User } from "@shared/schema";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2 } from "lucide-react";
+import type { User, UserPermission } from "@shared/schema";
+import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS } from "@shared/schema";
 import { useEffect, useState } from "react";
 
 const ROLES = [
   { value: "admin", label: "مدير", icon: Shield, description: "صلاحيات كاملة" },
-  { value: "employee", label: "موظف", icon: UserCog, description: "إضافة وتعديل" },
-  { value: "viewer", label: "مشاهد", icon: Eye, description: "عرض فقط" },
+  { value: "employee", label: "موظف", icon: UserCog, description: "حسب الصلاحيات المحددة" },
+  { value: "viewer", label: "مشاهد", icon: Eye, description: "حسب الصلاحيات المحددة" },
 ];
 
 type SafeUser = Omit<User, 'password'>;
+
+interface PermissionState {
+  [module: string]: string[];
+}
 
 export default function UsersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user: currentUser, isAdmin, isLoading: authLoading, isAuthenticated } = useAuth();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SafeUser | null>(null);
+  const [permissionState, setPermissionState] = useState<PermissionState>({});
   const [newUser, setNewUser] = useState({
     username: "",
     password: "",
@@ -118,6 +127,102 @@ export default function UsersPage() {
       toast({ title: error.message || "فشل حذف المستخدم", variant: "destructive" });
     },
   });
+
+  const { data: userPermissions = [], refetch: refetchPermissions } = useQuery<UserPermission[]>({
+    queryKey: ["/api/users", selectedUser?.id, "permissions"],
+    queryFn: async () => {
+      if (!selectedUser) return [];
+      const res = await fetch(`/api/users/${selectedUser.id}/permissions`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedUser && isPermissionsDialogOpen,
+  });
+
+  useEffect(() => {
+    if (userPermissions.length > 0) {
+      const state: PermissionState = {};
+      for (const perm of userPermissions) {
+        state[perm.module] = perm.actions;
+      }
+      setPermissionState(state);
+    } else if (selectedUser) {
+      setPermissionState({});
+    }
+  }, [userPermissions, selectedUser]);
+
+  const savePermissionsMutation = useMutation({
+    mutationFn: async (permissions: { module: string; actions: string[] }[]) => {
+      if (!selectedUser) return;
+      const res = await fetch(`/api/users/${selectedUser.id}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions }),
+      });
+      if (!res.ok) throw new Error("Failed to save permissions");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم حفظ الصلاحيات بنجاح" });
+      setIsPermissionsDialogOpen(false);
+      setSelectedUser(null);
+    },
+    onError: () => {
+      toast({ title: "فشل حفظ الصلاحيات", variant: "destructive" });
+    },
+  });
+
+  const openPermissionsDialog = (user: SafeUser) => {
+    setSelectedUser(user);
+    setPermissionState({});
+    setIsPermissionsDialogOpen(true);
+  };
+
+  const toggleAction = (module: string, action: string) => {
+    setPermissionState(prev => {
+      const currentActions = prev[module] || [];
+      const hasAction = currentActions.includes(action);
+      
+      if (hasAction) {
+        return {
+          ...prev,
+          [module]: currentActions.filter(a => a !== action),
+        };
+      } else {
+        return {
+          ...prev,
+          [module]: [...currentActions, action],
+        };
+      }
+    });
+  };
+
+  const toggleAllActionsForModule = (module: string) => {
+    setPermissionState(prev => {
+      const currentActions = prev[module] || [];
+      const allSelected = MODULE_ACTIONS.every(a => currentActions.includes(a));
+      
+      if (allSelected) {
+        return {
+          ...prev,
+          [module]: [],
+        };
+      } else {
+        return {
+          ...prev,
+          [module]: [...MODULE_ACTIONS],
+        };
+      }
+    });
+  };
+
+  const handleSavePermissions = () => {
+    const permissions = Object.entries(permissionState)
+      .filter(([_, actions]) => actions.length > 0)
+      .map(([module, actions]) => ({ module, actions }));
+    
+    savePermissionsMutation.mutate(permissions);
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -342,16 +447,29 @@ export default function UsersPage() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => deleteUserMutation.mutate(user.id)}
-                            disabled={user.id === currentUser?.id || deleteUserMutation.isPending}
-                            data-testid={`button-delete-${user.id}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            {user.role !== "admin" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-blue-600 hover:text-blue-700"
+                                onClick={() => openPermissionsDialog(user)}
+                                data-testid={`button-permissions-${user.id}`}
+                              >
+                                <Settings2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => deleteUserMutation.mutate(user.id)}
+                              disabled={user.id === currentUser?.id || deleteUserMutation.isPending}
+                              data-testid={`button-delete-${user.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -362,6 +480,105 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Permissions Dialog */}
+      <Dialog open={isPermissionsDialogOpen} onOpenChange={setIsPermissionsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="w-5 h-5" />
+              إدارة صلاحيات المستخدم
+            </DialogTitle>
+            <DialogDescription>
+              {selectedUser && (
+                <span>
+                  تحديد صلاحيات {selectedUser.firstName} {selectedUser.lastName} ({selectedUser.username})
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUser?.role === "admin" ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Shield className="w-12 h-12 mx-auto mb-4 text-amber-500" />
+              <p>المدير لديه صلاحيات كاملة على النظام</p>
+              <p className="text-sm">لا يمكن تعديل صلاحيات المدير</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right w-48">الوحدة</TableHead>
+                      {MODULE_ACTIONS.map(action => (
+                        <TableHead key={action} className="text-center w-20">
+                          {ACTION_LABELS[action]}
+                        </TableHead>
+                      ))}
+                      <TableHead className="text-center w-20">الكل</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {SYSTEM_MODULES.map(module => {
+                      const currentActions = permissionState[module] || [];
+                      const allSelected = MODULE_ACTIONS.every(a => currentActions.includes(a));
+                      
+                      return (
+                        <TableRow key={module}>
+                          <TableCell className="font-medium">
+                            {MODULE_LABELS[module]}
+                          </TableCell>
+                          {MODULE_ACTIONS.map(action => (
+                            <TableCell key={action} className="text-center">
+                              <Checkbox
+                                checked={currentActions.includes(action)}
+                                onCheckedChange={() => toggleAction(module, action)}
+                                data-testid={`checkbox-${module}-${action}`}
+                              />
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-center">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => toggleAllActionsForModule(module)}
+                              data-testid={`checkbox-${module}-all`}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPermissionsDialogOpen(false)}
+                  data-testid="button-cancel-permissions"
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={handleSavePermissions}
+                  disabled={savePermissionsMutation.isPending}
+                  data-testid="button-save-permissions"
+                >
+                  {savePermissionsMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                      جاري الحفظ...
+                    </>
+                  ) : (
+                    "حفظ الصلاحيات"
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
