@@ -499,17 +499,31 @@ export default function UsersPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {selectedUser?.role === "viewer" && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-blue-800 text-sm">
+                  <Eye className="w-4 h-4 inline-block ml-2" />
+                  المشاهد يمكنه العرض فقط. حدد الوحدات التي يستطيع مشاهدتها.
+                </div>
+              )}
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right w-48">الوحدة</TableHead>
-                      {MODULE_ACTIONS.map(action => (
-                        <TableHead key={action} className="text-center w-20">
-                          {ACTION_LABELS[action]}
+                      {selectedUser?.role === "viewer" ? (
+                        <TableHead className="text-center w-20">
+                          {ACTION_LABELS["view"]}
                         </TableHead>
-                      ))}
-                      <TableHead className="text-center w-20">الكل</TableHead>
+                      ) : (
+                        MODULE_ACTIONS.map(action => (
+                          <TableHead key={action} className="text-center w-20">
+                            {ACTION_LABELS[action]}
+                          </TableHead>
+                        ))
+                      )}
+                      {selectedUser?.role !== "viewer" && (
+                        <TableHead className="text-center w-20">الكل</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -522,22 +536,34 @@ export default function UsersPage() {
                           <TableCell className="font-medium">
                             {MODULE_LABELS[module]}
                           </TableCell>
-                          {MODULE_ACTIONS.map(action => (
-                            <TableCell key={action} className="text-center">
+                          {selectedUser?.role === "viewer" ? (
+                            <TableCell className="text-center">
                               <Checkbox
-                                checked={currentActions.includes(action)}
-                                onCheckedChange={() => toggleAction(module, action)}
-                                data-testid={`checkbox-${module}-${action}`}
+                                checked={currentActions.includes("view")}
+                                onCheckedChange={() => toggleAction(module, "view")}
+                                data-testid={`checkbox-${module}-view`}
                               />
                             </TableCell>
-                          ))}
-                          <TableCell className="text-center">
-                            <Checkbox
-                              checked={allSelected}
-                              onCheckedChange={() => toggleAllActionsForModule(module)}
-                              data-testid={`checkbox-${module}-all`}
-                            />
-                          </TableCell>
+                          ) : (
+                            MODULE_ACTIONS.map(action => (
+                              <TableCell key={action} className="text-center">
+                                <Checkbox
+                                  checked={currentActions.includes(action)}
+                                  onCheckedChange={() => toggleAction(module, action)}
+                                  data-testid={`checkbox-${module}-${action}`}
+                                />
+                              </TableCell>
+                            ))
+                          )}
+                          {selectedUser?.role !== "viewer" && (
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={allSelected}
+                                onCheckedChange={() => toggleAllActionsForModule(module)}
+                                data-testid={`checkbox-${module}-all`}
+                              />
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}

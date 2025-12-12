@@ -9,6 +9,8 @@ interface Permission {
 
 export function usePermissions() {
   const { user, isAdmin } = useAuth();
+  const isViewer = user?.role === "viewer";
+  const isEmployee = user?.role === "employee";
 
   const { data: permissions = [], isLoading } = useQuery<Permission[]>({
     queryKey: ["/api/my-permissions"],
@@ -22,8 +24,19 @@ export function usePermissions() {
   });
 
   const hasPermission = (module: SystemModule, action: ModuleAction): boolean => {
+    // Admin has full access
     if (isAdmin) return true;
     
+    // Viewer can ONLY view - nothing else (regardless of stored permissions)
+    if (isViewer) {
+      if (action !== "view") return false;
+      // Check if viewer has view permission for this module
+      const perm = permissions.find(p => p.module === module);
+      if (!perm) return false;
+      return perm.actions.includes("view");
+    }
+    
+    // Employee uses granular permissions from database
     const perm = permissions.find(p => p.module === module);
     if (!perm) return false;
     return perm.actions.includes(action);
@@ -46,5 +59,7 @@ export function usePermissions() {
     canDelete,
     canApprove,
     canExport,
+    isViewer,
+    isEmployee,
   };
 }
