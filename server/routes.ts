@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, SYSTEM_MODULES, MODULE_ACTIONS } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requireRole } from "./auth";
 
@@ -120,6 +120,85 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting user:", error);
       res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // User Permissions
+  app.get("/api/users/:id/permissions", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const permissions = await storage.getUserPermissions(req.params.id);
+      res.json(permissions);
+    } catch (error) {
+      console.error("Error fetching user permissions:", error);
+      res.status(500).json({ error: "Failed to fetch permissions" });
+    }
+  });
+
+  app.put("/api/users/:id/permissions", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { permissions } = req.body;
+      
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ error: "Invalid permissions format" });
+      }
+      
+      // Delete existing permissions first
+      await storage.deleteUserPermissions(req.params.id);
+      
+      // Add new permissions
+      const savedPermissions = [];
+      for (const perm of permissions) {
+        if (!perm.module || !Array.isArray(perm.actions)) {
+          continue;
+        }
+        
+        // Validate module and actions
+        if (!SYSTEM_MODULES.includes(perm.module)) {
+          continue;
+        }
+        
+        const validActions = perm.actions.filter((a: string) => 
+          MODULE_ACTIONS.includes(a as any)
+        );
+        
+        if (validActions.length > 0) {
+          const saved = await storage.setUserPermission({
+            userId: req.params.id,
+            module: perm.module,
+            actions: validActions,
+          });
+          savedPermissions.push(saved);
+        }
+      }
+      
+      res.json(savedPermissions);
+    } catch (error) {
+      console.error("Error updating user permissions:", error);
+      res.status(500).json({ error: "Failed to update permissions" });
+    }
+  });
+
+  app.get("/api/my-permissions", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      if (!currentUser) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      // Admins have all permissions
+      if (currentUser.role === "admin") {
+        const allPermissions = SYSTEM_MODULES.map(module => ({
+          module,
+          actions: [...MODULE_ACTIONS],
+        }));
+        return res.json(allPermissions);
+      }
+      
+      const permissions = await storage.getUserPermissions(currentUser.id);
+      res.json(permissions);
+    } catch (error) {
+      console.error("Error fetching my permissions:", error);
+      res.status(500).json({ error: "Failed to fetch permissions" });
     }
   });
 
