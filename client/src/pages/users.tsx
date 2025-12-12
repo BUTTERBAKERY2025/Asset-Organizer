@@ -140,16 +140,14 @@ export default function UsersPage() {
   });
 
   useEffect(() => {
-    if (userPermissions.length > 0) {
-      const state: PermissionState = {};
-      for (const perm of userPermissions) {
-        state[perm.module] = perm.actions;
-      }
-      setPermissionState(state);
-    } else if (selectedUser) {
-      setPermissionState({});
+    if (!isPermissionsDialogOpen) return;
+    
+    const state: PermissionState = {};
+    for (const perm of userPermissions) {
+      state[perm.module] = perm.actions;
     }
-  }, [userPermissions, selectedUser]);
+    setPermissionState(state);
+  }, [userPermissions, isPermissionsDialogOpen]);
 
   const savePermissionsMutation = useMutation({
     mutationFn: async (permissions: { module: string; actions: string[] }[]) => {
