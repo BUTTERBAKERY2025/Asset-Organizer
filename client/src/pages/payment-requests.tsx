@@ -46,6 +46,7 @@ import {
 import { Link } from "wouter";
 import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory, Branch } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
@@ -112,9 +113,13 @@ export default function PaymentRequestsPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin, isEmployee, user } = useAuth();
-  const canEdit = isAdmin || isEmployee;
-  const canApprove = isAdmin;
+  const { isAdmin, user } = useAuth();
+  const { canCreate, canEdit: canEditPayments, canDelete, canApprove: canApprovePayments } = usePermissions();
+  
+  const canEditPayment = isAdmin || canEditPayments("payment_requests");
+  const canCreatePayment = isAdmin || canCreate("payment_requests");
+  const canDeletePayment = isAdmin || canDelete("payment_requests");
+  const canApprovePayment = isAdmin || canApprovePayments("payment_requests");
 
   const { data: requests = [], isLoading } = useQuery<PaymentRequest[]>({
     queryKey: ["/api/payment-requests"],
@@ -808,7 +813,7 @@ export default function PaymentRequestsPage() {
                         <span className="text-xs text-gray-500">{getProjectName(request.projectId)}</span>
                         <span className="font-bold text-sm text-butter-gold">{request.amount.toLocaleString()} ر.س</span>
                       </div>
-                      {(request.status === "pending" && canApprove) && (
+                      {(request.status === "pending" && canApprovePayment) && (
                         <div className="flex gap-2 mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
                           <Button
                             size="sm"
@@ -834,7 +839,7 @@ export default function PaymentRequestsPage() {
                           </Button>
                         </div>
                       )}
-                      {(request.status === "approved" && canApprove) && (
+                      {(request.status === "approved" && canApprovePayment) && (
                         <div className="mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
                           <Button
                             size="sm"
@@ -923,7 +928,7 @@ export default function PaymentRequestsPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              {request.status === "pending" && canApprove && (
+                              {request.status === "pending" && canApprovePayment && (
                                 <>
                                   <Button
                                     variant="ghost"
@@ -948,7 +953,7 @@ export default function PaymentRequestsPage() {
                                   </Button>
                                 </>
                               )}
-                              {request.status === "approved" && canApprove && (
+                              {request.status === "approved" && canApprovePayment && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -959,7 +964,7 @@ export default function PaymentRequestsPage() {
                                   <DollarSign className="h-4 w-4" />
                                 </Button>
                               )}
-                              {request.status === "pending" && canEdit && (
+                              {request.status === "pending" && canEditPayment && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -969,7 +974,7 @@ export default function PaymentRequestsPage() {
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               )}
-                              {request.status === "pending" && isAdmin && (
+                              {request.status === "pending" && canDeletePayment && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1506,7 +1511,7 @@ export default function PaymentRequestsPage() {
                 <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>
                   إغلاق
                 </Button>
-                {detailsRequest.status === "pending" && canEdit && (
+                {detailsRequest.status === "pending" && canEditPayment && (
                   <Button onClick={() => {
                     setIsDetailsOpen(false);
                     openEditDialog(detailsRequest);

@@ -43,6 +43,7 @@ import { Plus, Pencil, Trash2, Loader2, FileText, Calendar, DollarSign, Eye, Bui
 import { Link, useLocation } from "wouter";
 import type { ConstructionContract, Contractor, ConstructionProject, ConstructionCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const contractFormSchema = z.object({
   projectId: z.coerce.number().min(1, "اختر المشروع"),
@@ -87,8 +88,12 @@ export default function ContractsPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin, isEmployee } = useAuth();
-  const canEdit = isAdmin || isEmployee;
+  const { isAdmin } = useAuth();
+  const { canCreate, canEdit: canEditContracts, canDelete, canView } = usePermissions();
+  
+  const canEditContract = isAdmin || canEditContracts("contracts");
+  const canCreateContract = isAdmin || canCreate("contracts");
+  const canDeleteContract = isAdmin || canDelete("contracts");
 
   const { data: contracts = [], isLoading } = useQuery<ConstructionContract[]>({
     queryKey: ["/api/construction/contracts"],
@@ -272,7 +277,7 @@ export default function ContractsPage() {
             <h1 className="text-3xl font-bold text-gray-900">إدارة العقود</h1>
             <p className="text-gray-500 mt-1">إدارة عقود المقاولين والموردين</p>
           </div>
-          {canEdit && (
+          {canCreateContract && (
             <Button
               onClick={() => {
                 form.reset();
@@ -458,28 +463,28 @@ export default function ContractsPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {canEdit && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => openEditDialog(contract)}
-                                    data-testid={`button-edit-contract-${contract.id}`}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      setSelectedContract(contract);
-                                      setIsDeleteOpen(true);
-                                    }}
-                                    data-testid={`button-delete-contract-${contract.id}`}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                  </Button>
-                                </>
+                              {canEditContract && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openEditDialog(contract)}
+                                  data-testid={`button-edit-contract-${contract.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {canDeleteContract && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedContract(contract);
+                                    setIsDeleteOpen(true);
+                                  }}
+                                  data-testid={`button-delete-contract-${contract.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
                               )}
                             </div>
                           </TableCell>

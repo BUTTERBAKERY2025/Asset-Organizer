@@ -35,6 +35,7 @@ import { Plus, Pencil, Trash2, Search, Loader2, Building2, Calendar, DollarSign,
 import { Link } from "wouter";
 import type { Branch, ConstructionProject } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const projectFormSchema = z.object({
   branchId: z.string().min(1, "الفرع مطلوب"),
@@ -67,8 +68,12 @@ export default function ConstructionProjectsPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin, isEmployee } = useAuth();
-  const canEdit = isAdmin || isEmployee;
+  const { isAdmin } = useAuth();
+  const { canCreate, canEdit: canEditProjects, canDelete } = usePermissions();
+  
+  const canEditProject = isAdmin || canEditProjects("construction_projects");
+  const canCreateProject = isAdmin || canCreate("construction_projects");
+  const canDeleteProject = isAdmin || canDelete("construction_projects");
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -218,7 +223,7 @@ export default function ConstructionProjectsPage() {
             <h1 className="text-2xl font-bold text-foreground">المشاريع الإنشائية</h1>
             <p className="text-muted-foreground">إدارة ومتابعة مشاريع البناء والتجديد</p>
           </div>
-          {canEdit && (
+          {canCreateProject && (
             <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-project">
               <Plus className="w-4 h-4 ml-2" />
               إضافة مشروع
@@ -317,22 +322,20 @@ export default function ConstructionProjectsPage() {
                         عرض
                       </Button>
                     </Link>
-                    {canEdit && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(project)} data-testid={`button-edit-project-${project.id}`}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        {isAdmin && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => { setSelectedProject(project); setIsDeleteDialogOpen(true); }}
-                            data-testid={`button-delete-project-${project.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
-                      </>
+                    {canEditProject && (
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(project)} data-testid={`button-edit-project-${project.id}`}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canDeleteProject && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => { setSelectedProject(project); setIsDeleteDialogOpen(true); }}
+                        data-testid={`button-delete-project-${project.id}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
                     )}
                   </div>
                 </CardContent>
