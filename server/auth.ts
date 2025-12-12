@@ -132,3 +132,76 @@ export const requireRole = (roles: string[]): RequestHandler => {
     next();
   };
 };
+
+// New middleware for granular permission checking
+export const requirePermission = (module: string, action: string): RequestHandler => {
+  return async (req, res, next) => {
+    const user = (req as any).currentUser;
+    if (!user) {
+      return res.status(401).json({ message: "غير مصرح" });
+    }
+    
+    // Admin has full access
+    if (user.role === "admin") {
+      return next();
+    }
+    
+    // Viewer can only view
+    if (user.role === "viewer") {
+      if (action !== "view") {
+        return res.status(403).json({ message: "غير مسموح - المشاهد يمكنه العرض فقط" });
+      }
+    }
+    
+    // Check granular permissions from database
+    const permissions = await storage.getUserPermissions(user.id);
+    const modulePerm = permissions.find((p: any) => p.module === module);
+    
+    if (!modulePerm) {
+      return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
+    }
+    
+    if (!modulePerm.actions.includes(action)) {
+      return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${action} على هذه الوحدة` });
+    }
+    
+    next();
+  };
+};
+
+// Helper to require any of multiple actions (useful for edit/create combined routes)
+export const requireAnyPermission = (module: string, actions: string[]): RequestHandler => {
+  return async (req, res, next) => {
+    const user = (req as any).currentUser;
+    if (!user) {
+      return res.status(401).json({ message: "غير مصرح" });
+    }
+    
+    // Admin has full access
+    if (user.role === "admin") {
+      return next();
+    }
+    
+    // Viewer can only view
+    if (user.role === "viewer") {
+      if (!actions.includes("view")) {
+        return res.status(403).json({ message: "غير مسموح - المشاهد يمكنه العرض فقط" });
+      }
+    }
+    
+    // Check granular permissions from database
+    const permissions = await storage.getUserPermissions(user.id);
+    const modulePerm = permissions.find((p: any) => p.module === module);
+    
+    if (!modulePerm) {
+      return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
+    }
+    
+    const hasAnyAction = actions.some(action => modulePerm.actions.includes(action));
+    if (!hasAnyAction) {
+      return res.status(403).json({ message: "غير مسموح - صلاحيات غير كافية" });
+    }
+    
+    next();
+  };
+};

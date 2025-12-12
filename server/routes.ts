@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, SYSTEM_MODULES, MODULE_ACTIONS } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requireRole } from "./auth";
+import { setupAuth, isAuthenticated, requireRole, requirePermission, requireAnyPermission } from "./auth";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
