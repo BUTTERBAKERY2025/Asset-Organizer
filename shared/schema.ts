@@ -421,3 +421,31 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   approve: "اعتماد",
   export: "تصدير",
 };
+
+// Role permission templates - قوالب الصلاحيات الافتراضية لكل دور
+export const ROLE_PERMISSION_TEMPLATES: Record<string, { module: SystemModule; actions: ModuleAction[] }[]> = {
+  // Admin gets full access (handled separately in middleware)
+  admin: SYSTEM_MODULES.map(module => ({
+    module,
+    actions: [...MODULE_ACTIONS] as ModuleAction[],
+  })),
+  
+  // Employee: Can view, create, edit most things, but no delete/approve for sensitive modules
+  employee: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "construction_projects", actions: ["view", "create", "edit", "export"] },
+    { module: "construction_work_items", actions: ["view", "create", "edit", "export"] },
+    { module: "contractors", actions: ["view", "create", "edit", "export"] },
+    { module: "contracts", actions: ["view", "create", "edit", "export"] },
+    { module: "budget_planning", actions: ["view", "create", "edit", "export"] },
+    { module: "payment_requests", actions: ["view", "create", "edit", "export"] },
+    { module: "reports", actions: ["view", "export"] },
+  ],
+  
+  // Viewer: View-only access to all modules
+  viewer: SYSTEM_MODULES.filter(m => m !== "users").map(module => ({
+    module,
+    actions: ["view"] as ModuleAction[],
+  })),
+};

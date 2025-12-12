@@ -12,9 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2 } from "lucide-react";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2 } from "lucide-react";
 import type { User, UserPermission } from "@shared/schema";
-import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS } from "@shared/schema";
+import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
 import { useEffect, useState } from "react";
 
 const ROLES = [
@@ -208,6 +208,24 @@ export default function UsersPage() {
           [module]: [...MODULE_ACTIONS],
         };
       }
+    });
+  };
+
+  const applyRoleTemplate = () => {
+    if (!selectedUser) return;
+    
+    const template = ROLE_PERMISSION_TEMPLATES[selectedUser.role];
+    if (!template) return;
+    
+    const newState: PermissionState = {};
+    for (const perm of template) {
+      newState[perm.module] = [...perm.actions];
+    }
+    setPermissionState(newState);
+    
+    toast({
+      title: "تم تطبيق القالب",
+      description: `تم تطبيق الصلاحيات الافتراضية لدور ${ROLES.find(r => r.value === selectedUser.role)?.label || selectedUser.role}`,
     });
   };
 
@@ -499,12 +517,32 @@ export default function UsersPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {selectedUser?.role === "viewer" && (
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-blue-800 text-sm">
-                  <Eye className="w-4 h-4 inline-block ml-2" />
-                  المشاهد يمكنه العرض فقط. حدد الوحدات التي يستطيع مشاهدتها.
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  {selectedUser?.role === "viewer" && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-blue-800 text-sm">
+                      <Eye className="w-4 h-4 inline-block ml-2" />
+                      المشاهد يمكنه العرض فقط. حدد الوحدات التي يستطيع مشاهدتها.
+                    </div>
+                  )}
+                  {selectedUser?.role === "employee" && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-sm">
+                      <UserCog className="w-4 h-4 inline-block ml-2" />
+                      الموظف لديه صلاحيات مخصصة حسب الاختيار أدناه.
+                    </div>
+                  )}
                 </div>
-              )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={applyRoleTemplate}
+                  className="mr-4"
+                  data-testid="button-apply-template"
+                >
+                  <Wand2 className="w-4 h-4 ml-2" />
+                  تطبيق القالب الافتراضي
+                </Button>
+              </div>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, SYSTEM_MODULES, MODULE_ACTIONS } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requireRole, requirePermission, requireAnyPermission } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission } from "./auth";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -37,7 +37,7 @@ export async function registerRoutes(
   await setupAuth(app);
 
   // Admin routes for user management
-  app.get("/api/users", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.get("/api/users", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       const safeUsers = users.map(({ password, ...user }) => user);
@@ -48,7 +48,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/users", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.post("/api/users", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
       const { username, password, firstName, lastName, role } = req.body;
       
@@ -77,7 +77,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/users/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.patch("/api/users/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { firstName, lastName, role, password } = req.body;
       const updateData: any = {};
@@ -105,7 +105,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/users/:id", isAuthenticated, requireRole(["admin"]), async (req: any, res) => {
+  app.delete("/api/users/:id", isAuthenticated, requirePermission("users", "delete"), async (req: any, res) => {
     try {
       const currentUser = req.currentUser;
       if (currentUser.id === req.params.id) {
@@ -124,7 +124,7 @@ export async function registerRoutes(
   });
 
   // User Permissions
-  app.get("/api/users/:id/permissions", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.get("/api/users/:id/permissions", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const permissions = await storage.getUserPermissions(req.params.id);
       res.json(permissions);
@@ -134,7 +134,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/users/:id/permissions", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.put("/api/users/:id/permissions", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { permissions } = req.body;
       
@@ -226,7 +226,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/branches", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.post("/api/branches", isAuthenticated, requirePermission("inventory", "create"), async (req, res) => {
     try {
       const validatedData = insertBranchSchema.parse(req.body);
       const branch = await storage.createBranch(validatedData);
@@ -241,7 +241,7 @@ export async function registerRoutes(
   });
 
   // Inventory Items
-  app.get("/api/inventory", async (req, res) => {
+  app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const branchId = req.query.branchId as string | undefined;
       const items = branchId 
@@ -254,7 +254,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/needs-inspection", async (req, res) => {
+  app.get("/api/inventory/needs-inspection", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const items = await storage.getItemsNeedingInspection();
       res.json(items);
@@ -264,7 +264,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/:id", async (req, res) => {
+  app.get("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const item = await storage.getInventoryItem(req.params.id);
       if (!item) {
@@ -277,7 +277,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/:id/audit-logs", async (req, res) => {
+  app.get("/api/inventory/:id/audit-logs", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const logs = await storage.getAuditLogsForItem(req.params.id);
       res.json(logs);
@@ -287,7 +287,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/inventory", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+  app.post("/api/inventory", isAuthenticated, requirePermission("inventory", "create"), async (req: any, res) => {
     try {
       const validatedData = insertInventoryItemSchema.parse(req.body);
       const normalizedData = normalizeInventoryData(validatedData);
@@ -303,7 +303,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/inventory/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+  app.patch("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "edit"), async (req: any, res) => {
     try {
       const partialData = insertInventoryItemSchema.partial().parse(req.body);
       const normalizedData = normalizeInventoryData(partialData);
@@ -322,7 +322,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/inventory/:id", isAuthenticated, requireRole(["admin"]), async (req: any, res) => {
+  app.delete("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "delete"), async (req: any, res) => {
     try {
       const userId = req.currentUser.id;
       const success = await storage.deleteInventoryItem(req.params.id, userId);
@@ -379,7 +379,7 @@ export async function registerRoutes(
   });
 
   // Excel Import Route
-  app.post("/api/inventory/import", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+  app.post("/api/inventory/import", isAuthenticated, requirePermission("inventory", "create"), async (req: any, res) => {
     try {
       const { items, branchId } = req.body;
       
@@ -424,7 +424,7 @@ export async function registerRoutes(
   });
 
   // Low quantity alert endpoint
-  app.get("/api/inventory/low-quantity", isAuthenticated, async (req, res) => {
+  app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const items = await storage.getAllInventoryItems();
       const lowQuantityItems = items.filter(item => item.quantity <= 5);
@@ -436,7 +436,7 @@ export async function registerRoutes(
   });
 
   // Maintenance alerts endpoint
-  app.get("/api/inventory/maintenance-needed", isAuthenticated, async (req, res) => {
+  app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const items = await storage.getAllInventoryItems();
       const maintenanceItems = items.filter(item => 
@@ -463,7 +463,7 @@ export async function registerRoutes(
   });
 
   // Contractors
-  app.get("/api/construction/contractors", async (req, res) => {
+  app.get("/api/construction/contractors", isAuthenticated, requirePermission("contractors", "view"), async (req, res) => {
     try {
       const contractors = await storage.getAllContractors();
       res.json(contractors);
@@ -473,7 +473,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/contractors/:id", async (req, res) => {
+  app.get("/api/construction/contractors/:id", isAuthenticated, requirePermission("contractors", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -490,7 +490,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contractors", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.post("/api/construction/contractors", isAuthenticated, requirePermission("contractors", "create"), async (req, res) => {
     try {
       const validatedData = insertContractorSchema.parse(req.body);
       const contractor = await storage.createContractor(validatedData);
@@ -504,7 +504,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/contractors/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.patch("/api/construction/contractors/:id", isAuthenticated, requirePermission("contractors", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -525,7 +525,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/contractors/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/construction/contractors/:id", isAuthenticated, requirePermission("contractors", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -543,7 +543,7 @@ export async function registerRoutes(
   });
 
   // Construction Projects
-  app.get("/api/construction/projects", async (req, res) => {
+  app.get("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
     try {
       const branchId = req.query.branchId as string | undefined;
       const projects = branchId 
@@ -556,7 +556,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/projects/:id", async (req, res) => {
+  app.get("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -573,7 +573,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/projects", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.post("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "create"), async (req, res) => {
     try {
       const validatedData = insertConstructionProjectSchema.parse(req.body);
       const project = await storage.createConstructionProject(validatedData);
@@ -587,7 +587,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/projects/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.patch("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -608,7 +608,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/projects/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -626,7 +626,7 @@ export async function registerRoutes(
   });
 
   // Project Work Items
-  app.get("/api/construction/work-items", async (req, res) => {
+  app.get("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
     try {
       const items = await storage.getAllWorkItems();
       res.json(items);
@@ -636,7 +636,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/projects/:projectId/work-items", async (req, res) => {
+  app.get("/api/construction/projects/:projectId/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId, 10);
       if (isNaN(projectId)) {
@@ -650,7 +650,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/work-items/:id", async (req, res) => {
+  app.get("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -667,7 +667,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/work-items", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.post("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "create"), async (req, res) => {
     try {
       const validatedData = insertProjectWorkItemSchema.parse(req.body);
       const item = await storage.createWorkItem(validatedData);
@@ -681,7 +681,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/work-items/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.patch("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -702,7 +702,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/work-items/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -720,7 +720,7 @@ export async function registerRoutes(
   });
 
   // Budget Allocations
-  app.get("/api/construction/projects/:projectId/budget-allocations", async (req, res) => {
+  app.get("/api/construction/projects/:projectId/budget-allocations", isAuthenticated, requirePermission("budget_planning", "view"), async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId, 10);
       if (isNaN(projectId)) {
@@ -734,7 +734,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/budget-allocations", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.post("/api/construction/budget-allocations", isAuthenticated, requirePermission("budget_planning", "create"), async (req, res) => {
     try {
       const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
       const allocation = await storage.createBudgetAllocation(validatedData);
@@ -748,7 +748,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/budget-allocations/upsert", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.post("/api/construction/budget-allocations/upsert", isAuthenticated, requireAnyPermission("budget_planning", ["create", "edit"]), async (req, res) => {
     try {
       const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
       const allocation = await storage.upsertBudgetAllocation(validatedData);
@@ -762,7 +762,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/budget-allocations/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.patch("/api/construction/budget-allocations/:id", isAuthenticated, requirePermission("budget_planning", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -783,7 +783,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/budget-allocations/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/construction/budget-allocations/:id", isAuthenticated, requirePermission("budget_planning", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -802,7 +802,7 @@ export async function registerRoutes(
 
   // ===== Construction Contracts Routes =====
   
-  app.get("/api/construction/contracts", async (req, res) => {
+  app.get("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const projectId = req.query.projectId as string | undefined;
       const contracts = projectId 
@@ -815,7 +815,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/contracts/:id", async (req, res) => {
+  app.get("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -832,7 +832,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contracts", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+  app.post("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
     try {
       const validatedData = insertConstructionContractSchema.parse({
         ...req.body,
@@ -849,7 +849,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/contracts/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.patch("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -870,7 +870,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/contracts/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -888,7 +888,7 @@ export async function registerRoutes(
   });
 
   // Contract Items
-  app.get("/api/construction/contracts/:contractId/items", async (req, res) => {
+  app.get("/api/construction/contracts/:contractId/items", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const contractId = parseInt(req.params.contractId, 10);
       if (isNaN(contractId)) {
@@ -902,7 +902,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contract-items", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.post("/api/construction/contract-items", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
     try {
       const validatedData = insertContractItemSchema.parse(req.body);
       const item = await storage.createContractItem(validatedData);
@@ -916,7 +916,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/contract-items/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.patch("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -937,7 +937,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/contract-items/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -955,7 +955,7 @@ export async function registerRoutes(
   });
 
   // Contract Payments
-  app.get("/api/construction/contracts/:contractId/payments", async (req, res) => {
+  app.get("/api/construction/contracts/:contractId/payments", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const contractId = parseInt(req.params.contractId, 10);
       if (isNaN(contractId)) {
@@ -969,7 +969,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contract-payments", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+  app.post("/api/construction/contract-payments", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
     try {
       const validatedData = insertContractPaymentSchema.parse({
         ...req.body,
@@ -988,7 +988,7 @@ export async function registerRoutes(
 
   // ===== Payment Requests Routes =====
   
-  app.get("/api/payment-requests", async (req, res) => {
+  app.get("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "view"), async (req, res) => {
     try {
       const { projectId, status } = req.query;
       let requests;
@@ -1006,7 +1006,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/payment-requests/:id", async (req, res) => {
+  app.get("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1023,7 +1023,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests", isAuthenticated, requireRole(["admin", "employee"]), async (req: any, res) => {
+  app.post("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "create"), async (req: any, res) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const validatedData = insertPaymentRequestSchema.parse({
@@ -1042,7 +1042,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/payment-requests/:id", isAuthenticated, requireRole(["admin", "employee"]), async (req, res) => {
+  app.patch("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1063,7 +1063,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/approve", isAuthenticated, requireRole(["admin"]), async (req: any, res) => {
+  app.post("/api/payment-requests/:id/approve", isAuthenticated, requirePermission("payment_requests", "approve"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1080,7 +1080,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/reject", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.post("/api/payment-requests/:id/reject", isAuthenticated, requirePermission("payment_requests", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1101,7 +1101,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/mark-paid", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.post("/api/payment-requests/:id/mark-paid", isAuthenticated, requirePermission("payment_requests", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1118,7 +1118,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/payment-requests/:id", isAuthenticated, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
