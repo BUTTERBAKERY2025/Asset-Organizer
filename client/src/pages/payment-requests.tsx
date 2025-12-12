@@ -347,7 +347,12 @@ export default function PaymentRequestsPage() {
   };
 
   const filteredRequests = requests.filter((req) => {
-    if (activeTab !== "all" && req.status !== activeTab) return false;
+    // تبويب التقرير يعرض المعتمد والمدفوع فقط
+    if (activeTab === "report") {
+      if (req.status !== "approved" && req.status !== "paid") return false;
+    } else if (activeTab !== "all" && req.status !== activeTab) {
+      return false;
+    }
     if (statusFilter !== "all" && req.status !== statusFilter) return false;
     if (typeFilter !== "all" && req.requestType !== typeFilter) return false;
     if (projectFilter !== "all" && req.projectId !== parseInt(projectFilter, 10)) return false;
@@ -471,8 +476,10 @@ export default function PaymentRequestsPage() {
   const pendingCount = requests.filter((r) => r.status === "pending").length;
   const approvedCount = requests.filter((r) => r.status === "approved").length;
   const paidCount = requests.filter((r) => r.status === "paid").length;
+  const rejectedCount = requests.filter((r) => r.status === "rejected").length;
   const pendingAmount = requests.filter((r) => r.status === "pending").reduce((sum, r) => sum + r.amount, 0);
   const approvedAmount = requests.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.amount, 0);
+  const paidAmount = requests.filter((r) => r.status === "paid").reduce((sum, r) => sum + r.amount, 0);
 
   if (isLoading) {
     return (
@@ -505,8 +512,8 @@ export default function PaymentRequestsPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("pending")}>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-yellow-100 rounded-lg">
@@ -521,14 +528,14 @@ export default function PaymentRequestsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("approved")}>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <CheckCircle className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">معتمد (بانتظار الدفع)</p>
+                  <p className="text-sm text-gray-500">معتمد</p>
                   <p className="text-2xl font-bold">{approvedCount}</p>
                   <p className="text-xs text-gray-400">{approvedAmount.toLocaleString()} ر.س</p>
                 </div>
@@ -536,7 +543,7 @@ export default function PaymentRequestsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("paid")}>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-lg">
@@ -545,6 +552,21 @@ export default function PaymentRequestsPage() {
                 <div>
                   <p className="text-sm text-gray-500">مدفوع</p>
                   <p className="text-2xl font-bold">{paidCount}</p>
+                  <p className="text-xs text-gray-400">{paidAmount.toLocaleString()} ر.س</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("rejected")}>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <XCircle className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">مرفوض</p>
+                  <p className="text-2xl font-bold">{rejectedCount}</p>
                 </div>
               </div>
             </CardContent>
@@ -557,7 +579,7 @@ export default function PaymentRequestsPage() {
                   <Wallet className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">إجمالي الطلبات</p>
+                  <p className="text-sm text-gray-500">الإجمالي</p>
                   <p className="text-2xl font-bold">{requests.length}</p>
                 </div>
               </div>
@@ -566,11 +588,13 @@ export default function PaymentRequestsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="all">الكل ({requests.length})</TabsTrigger>
-            <TabsTrigger value="pending">قيد المراجعة ({pendingCount})</TabsTrigger>
-            <TabsTrigger value="approved">معتمد ({approvedCount})</TabsTrigger>
-            <TabsTrigger value="paid">مدفوع ({paidCount})</TabsTrigger>
+            <TabsTrigger value="pending" className="text-yellow-600">قيد المراجعة ({pendingCount})</TabsTrigger>
+            <TabsTrigger value="approved" className="text-blue-600">معتمد ({approvedCount})</TabsTrigger>
+            <TabsTrigger value="paid" className="text-green-600">مدفوع ({paidCount})</TabsTrigger>
+            <TabsTrigger value="rejected" className="text-red-600">مرفوض ({rejectedCount})</TabsTrigger>
+            <TabsTrigger value="report" className="text-purple-600">تقرير الصرف</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -693,9 +717,46 @@ export default function PaymentRequestsPage() {
           </CardContent>
         </Card>
 
+        {activeTab === "report" && (
+          <Card className="mb-6 border-purple-200 bg-purple-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-purple-700">
+                <FileDown className="h-5 w-5" />
+                تقرير الحوالات المعتمدة والمصروفة
+              </CardTitle>
+              <CardDescription>تقرير شامل للمراجعة الدورية على الحوالات التي تمت الموافقة عليها وصرفها</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-lg border">
+                  <p className="text-sm text-gray-500">المعتمد (بانتظار الصرف)</p>
+                  <p className="text-2xl font-bold text-blue-600">{requestsByDate.filter(r => r.status === "approved").length}</p>
+                  <p className="text-sm text-gray-400">{requestsByDate.filter(r => r.status === "approved").reduce((s, r) => s + r.amount, 0).toLocaleString()} ر.س</p>
+                </div>
+                <div className="bg-white p-4 rounded-lg border">
+                  <p className="text-sm text-gray-500">المصروف</p>
+                  <p className="text-2xl font-bold text-green-600">{requestsByDate.filter(r => r.status === "paid").length}</p>
+                  <p className="text-sm text-gray-400">{requestsByDate.filter(r => r.status === "paid").reduce((s, r) => s + r.amount, 0).toLocaleString()} ر.س</p>
+                </div>
+                <div className="bg-white p-4 rounded-lg border">
+                  <p className="text-sm text-gray-500">إجمالي الطلبات</p>
+                  <p className="text-2xl font-bold text-purple-600">{requestsByDate.length}</p>
+                </div>
+                <div className="bg-white p-4 rounded-lg border">
+                  <p className="text-sm text-gray-500">إجمالي المبالغ</p>
+                  <p className="text-2xl font-bold text-purple-600">{requestsByDate.reduce((s, r) => s + r.amount, 0).toLocaleString()}</p>
+                  <p className="text-sm text-gray-400">ريال سعودي</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
-            <CardTitle>قائمة الطلبات - {getDateRangeText()}</CardTitle>
+            <CardTitle>
+              {activeTab === "report" ? "تفاصيل الحوالات المعتمدة والمصروفة" : "قائمة الطلبات"} - {getDateRangeText()}
+            </CardTitle>
             <CardDescription>
               عرض {requestsByDate.length} طلب (من إجمالي {requests.length} طلب)
               {requestsByDate.length > 0 && ` - إجمالي المبلغ: ${requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س`}
