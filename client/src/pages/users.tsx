@@ -128,26 +128,23 @@ export default function UsersPage() {
     },
   });
 
-  const { data: userPermissions = [], refetch: refetchPermissions } = useQuery<UserPermission[]>({
+  const { data: userPermissions = [] } = useQuery<UserPermission[]>({
     queryKey: ["/api/users", selectedUser?.id, "permissions"],
     queryFn: async () => {
       if (!selectedUser) return [];
       const res = await fetch(`/api/users/${selectedUser.id}/permissions`);
       if (!res.ok) return [];
-      return res.json();
+      const data = await res.json();
+      const state: PermissionState = {};
+      for (const perm of data) {
+        state[perm.module] = perm.actions;
+      }
+      setPermissionState(state);
+      return data;
     },
     enabled: !!selectedUser && isPermissionsDialogOpen,
+    staleTime: 0,
   });
-
-  useEffect(() => {
-    if (!isPermissionsDialogOpen) return;
-    
-    const state: PermissionState = {};
-    for (const perm of userPermissions) {
-      state[perm.module] = perm.actions;
-    }
-    setPermissionState(state);
-  }, [userPermissions, isPermissionsDialogOpen]);
 
   const savePermissionsMutation = useMutation({
     mutationFn: async (permissions: { module: string; actions: string[] }[]) => {
