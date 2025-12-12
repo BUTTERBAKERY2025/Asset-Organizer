@@ -492,19 +492,17 @@ export default function PaymentRequestsPage() {
             <h1 className="text-3xl font-bold text-gray-900">طلبات الحوالات والمصروفات</h1>
             <p className="text-gray-500 mt-1">إدارة طلبات الدفع والحوالات للمشاريع</p>
           </div>
-          {canEdit && (
-            <Button
-              onClick={() => {
-                form.reset();
-                setIsAddOpen(true);
-              }}
-              className="bg-butter-gold hover:bg-butter-gold/90"
-              data-testid="button-add-request"
-            >
-              <Plus className="ml-2 h-4 w-4" />
-              طلب جديد
-            </Button>
-          )}
+          <Button
+            onClick={() => {
+              form.reset();
+              setIsAddOpen(true);
+            }}
+            className="bg-butter-gold hover:bg-butter-gold/90"
+            data-testid="button-add-request"
+          >
+            <Plus className="ml-2 h-4 w-4" />
+            طلب تحويل / دفعة
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -856,8 +854,11 @@ export default function PaymentRequestsPage() {
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>طلب جديد</DialogTitle>
-            <DialogDescription>أدخل بيانات الطلب</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-butter-gold" />
+              طلب تحويل / دفعة جديد
+            </DialogTitle>
+            <DialogDescription>يرجى تعبئة البيانات التالية لتقديم طلب التحويل أو الدفعة</DialogDescription>
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
