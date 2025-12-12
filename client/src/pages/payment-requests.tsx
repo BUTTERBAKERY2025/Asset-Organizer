@@ -494,17 +494,17 @@ export default function PaymentRequestsPage() {
   return (
     <Layout>
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">طلبات الحوالات والمصروفات</h1>
-            <p className="text-gray-500 mt-1">إدارة طلبات الدفع والحوالات للمشاريع</p>
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-900">طلبات الحوالات والمصروفات</h1>
+            <p className="text-gray-500 mt-1 text-sm sm:text-base">إدارة طلبات الدفع والحوالات للمشاريع</p>
           </div>
           <Button
             onClick={() => {
               form.reset();
               setIsAddOpen(true);
             }}
-            className="bg-butter-gold hover:bg-butter-gold/90"
+            className="bg-butter-gold hover:bg-butter-gold/90 w-full sm:w-auto"
             data-testid="button-add-request"
           >
             <Plus className="ml-2 h-4 w-4" />
@@ -512,115 +512,118 @@ export default function PaymentRequestsPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-6">
           <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("pending")}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="h-5 w-5 text-yellow-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-yellow-100 rounded-lg">
+                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">قيد المراجعة</p>
-                  <p className="text-2xl font-bold">{pendingCount}</p>
-                  <p className="text-xs text-gray-400">{pendingAmount.toLocaleString()} ر.س</p>
+                  <p className="text-xs sm:text-sm text-gray-500">قيد المراجعة</p>
+                  <p className="text-lg sm:text-2xl font-bold">{pendingCount}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 hidden sm:block">{pendingAmount.toLocaleString()} ر.س</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("approved")}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-blue-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">معتمد</p>
-                  <p className="text-2xl font-bold">{approvedCount}</p>
-                  <p className="text-xs text-gray-400">{approvedAmount.toLocaleString()} ر.س</p>
+                  <p className="text-xs sm:text-sm text-gray-500">معتمد</p>
+                  <p className="text-lg sm:text-2xl font-bold">{approvedCount}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 hidden sm:block">{approvedAmount.toLocaleString()} ر.س</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("paid")}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-green-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">مدفوع</p>
-                  <p className="text-2xl font-bold">{paidCount}</p>
-                  <p className="text-xs text-gray-400">{paidAmount.toLocaleString()} ر.س</p>
+                  <p className="text-xs sm:text-sm text-gray-500">مدفوع</p>
+                  <p className="text-lg sm:text-2xl font-bold">{paidCount}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 hidden sm:block">{paidAmount.toLocaleString()} ر.س</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("rejected")}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <XCircle className="h-5 w-5 text-red-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                  <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">مرفوض</p>
-                  <p className="text-2xl font-bold">{rejectedCount}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">مرفوض</p>
+                  <p className="text-lg sm:text-2xl font-bold">{rejectedCount}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Wallet className="h-5 w-5 text-purple-600" />
+          <Card className="col-span-2 sm:col-span-1">
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+                  <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">الإجمالي</p>
-                  <p className="text-2xl font-bold">{requests.length}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">الإجمالي</p>
+                  <p className="text-lg sm:text-2xl font-bold">{requests.length}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="all">الكل ({requests.length})</TabsTrigger>
-            <TabsTrigger value="pending" className="text-yellow-600">قيد المراجعة ({pendingCount})</TabsTrigger>
-            <TabsTrigger value="approved" className="text-blue-600">معتمد ({approvedCount})</TabsTrigger>
-            <TabsTrigger value="paid" className="text-green-600">مدفوع ({paidCount})</TabsTrigger>
-            <TabsTrigger value="rejected" className="text-red-600">مرفوض ({rejectedCount})</TabsTrigger>
-            <TabsTrigger value="report" className="text-purple-600">تقرير الصرف</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="mb-4 sm:mb-6 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="inline-flex w-max sm:w-auto gap-1">
+              <TabsTrigger value="all" className="text-xs sm:text-sm whitespace-nowrap">الكل ({requests.length})</TabsTrigger>
+              <TabsTrigger value="pending" className="text-xs sm:text-sm whitespace-nowrap">قيد المراجعة ({pendingCount})</TabsTrigger>
+              <TabsTrigger value="approved" className="text-xs sm:text-sm whitespace-nowrap">معتمد ({approvedCount})</TabsTrigger>
+              <TabsTrigger value="paid" className="text-xs sm:text-sm whitespace-nowrap">مدفوع ({paidCount})</TabsTrigger>
+              <TabsTrigger value="rejected" className="text-xs sm:text-sm whitespace-nowrap">مرفوض ({rejectedCount})</TabsTrigger>
+              <TabsTrigger value="report" className="text-xs sm:text-sm whitespace-nowrap">تقرير الصرف</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[250px]">
-                  <Label className="flex items-center gap-2 mb-2">
-                    <Search className="h-4 w-4" />
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="p-3 sm:pt-6 sm:px-6">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="sm:col-span-1">
+                  <Label className="flex items-center gap-2 mb-1.5 text-xs sm:text-sm">
+                    <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     بحث
                   </Label>
                   <Input 
-                    placeholder="ابحث في الوصف، المستفيد، رقم الفاتورة..."
+                    placeholder="ابحث..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     data-testid="input-search"
+                    className="h-9 text-sm"
                   />
                 </div>
-                <div className="flex-1 min-w-[180px]">
-                  <Label className="flex items-center gap-2 mb-2">
-                    <Building2 className="h-4 w-4" />
+                <div>
+                  <Label className="flex items-center gap-2 mb-1.5 text-xs sm:text-sm">
+                    <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     المشروع
                   </Label>
                   <Select value={projectFilter} onValueChange={setProjectFilter}>
-                    <SelectTrigger data-testid="select-project-filter">
+                    <SelectTrigger data-testid="select-project-filter" className="h-9 text-sm">
                       <SelectValue placeholder="جميع المشاريع" />
                     </SelectTrigger>
                     <SelectContent>
@@ -633,10 +636,10 @@ export default function PaymentRequestsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex-1 min-w-[150px]">
-                  <Label>نوع الطلب</Label>
+                <div>
+                  <Label className="mb-1.5 text-xs sm:text-sm">نوع الطلب</Label>
                   <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger data-testid="select-type-filter">
+                    <SelectTrigger data-testid="select-type-filter" className="h-9 text-sm">
                       <SelectValue placeholder="جميع الأنواع" />
                     </SelectTrigger>
                     <SelectContent>
@@ -651,29 +654,31 @@ export default function PaymentRequestsPage() {
                 </div>
               </div>
               
-              <div className="flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[150px]">
-                  <Label className="flex items-center gap-2 mb-2">
-                    <Calendar className="h-4 w-4" />
-                    من تاريخ
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4 items-end">
+                <div className="col-span-1">
+                  <Label className="flex items-center gap-2 mb-1.5 text-xs sm:text-sm">
+                    <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    من
                   </Label>
                   <Input 
                     type="date" 
                     value={dateFrom} 
                     onChange={(e) => setDateFrom(e.target.value)}
                     data-testid="input-date-from"
+                    className="h-9 text-sm"
                   />
                 </div>
-                <div className="flex-1 min-w-[150px]">
-                  <Label className="flex items-center gap-2 mb-2">
-                    <Calendar className="h-4 w-4" />
-                    إلى تاريخ
+                <div className="col-span-1">
+                  <Label className="flex items-center gap-2 mb-1.5 text-xs sm:text-sm">
+                    <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    إلى
                   </Label>
                   <Input 
                     type="date" 
                     value={dateTo} 
                     onChange={(e) => setDateTo(e.target.value)}
                     data-testid="input-date-to"
+                    className="h-9 text-sm"
                   />
                 </div>
                 <Button 
@@ -686,32 +691,39 @@ export default function PaymentRequestsPage() {
                     setDateFrom("");
                     setDateTo("");
                   }}
-                  className="text-gray-500"
+                  className="text-gray-500 h-9 text-xs sm:text-sm col-span-2 sm:col-span-1"
                   data-testid="button-clear-filters"
                 >
-                  <X className="ml-1 h-4 w-4" />
+                  <X className="ml-1 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   مسح الفلاتر
                 </Button>
-                <div className="flex gap-2 mr-auto">
-                  <Button 
-                    variant="outline"
-                    onClick={handleDownloadPDF}
-                    disabled={requestsByDate.length === 0}
-                    data-testid="button-download-pdf"
-                  >
-                    <Download className="ml-2 h-4 w-4" />
-                    تحميل PDF
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    onClick={handleSharePDF}
-                    disabled={requestsByDate.length === 0}
-                    data-testid="button-share-whatsapp"
-                  >
-                    <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
-                    مشاركة واتساب
-                  </Button>
-                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadPDF}
+                  disabled={requestsByDate.length === 0}
+                  data-testid="button-download-pdf"
+                  className="flex-1 sm:flex-none h-9 text-xs sm:text-sm"
+                >
+                  <Download className="ml-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">تحميل PDF</span>
+                  <span className="sm:hidden">PDF</span>
+                </Button>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSharePDF}
+                  disabled={requestsByDate.length === 0}
+                  data-testid="button-share-whatsapp"
+                  className="flex-1 sm:flex-none h-9 text-xs sm:text-sm"
+                >
+                  <MessageCircle className="ml-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" />
+                  <span className="hidden sm:inline">مشاركة واتساب</span>
+                  <span className="sm:hidden">واتساب</span>
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -753,17 +765,96 @@ export default function PaymentRequestsPage() {
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle>
-              {activeTab === "report" ? "تفاصيل الحوالات المعتمدة والمصروفة" : "قائمة الطلبات"} - {getDateRangeText()}
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-base sm:text-xl">
+              {activeTab === "report" ? "تفاصيل الحوالات المعتمدة والمصروفة" : "قائمة الطلبات"}
             </CardTitle>
-            <CardDescription>
-              عرض {requestsByDate.length} طلب (من إجمالي {requests.length} طلب)
-              {requestsByDate.length > 0 && ` - إجمالي المبلغ: ${requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س`}
+            <CardDescription className="text-xs sm:text-sm">
+              عرض {requestsByDate.length} طلب
+              {requestsByDate.length > 0 && ` - إجمالي: ${requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س`}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
+          <CardContent className="p-0 sm:p-6 sm:pt-0">
+            {/* Mobile Card View */}
+            <div className="sm:hidden space-y-2 px-3 pb-3">
+              {requestsByDate.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  لا توجد طلبات
+                </div>
+              ) : (
+                requestsByDate.map((request) => {
+                  const statusInfo = getStatusInfo(request.status);
+                  const typeInfo = getTypeInfo(request.requestType);
+                  const TypeIcon = typeInfo.icon;
+
+                  return (
+                    <div 
+                      key={request.id} 
+                      className="border rounded-lg p-3 bg-white hover:shadow-sm cursor-pointer"
+                      onClick={() => openDetailsModal(request)}
+                      data-testid={`card-request-${request.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <TypeIcon className="h-4 w-4 text-gray-500" />
+                          <span className="font-medium text-sm">{typeInfo.label}</span>
+                        </div>
+                        <Badge className={`${statusInfo.color} text-white text-[10px] px-1.5 py-0.5`}>
+                          {statusInfo.label}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-700 line-clamp-2 mb-2">{request.description}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">{getProjectName(request.projectId)}</span>
+                        <span className="font-bold text-sm text-butter-gold">{request.amount.toLocaleString()} ر.س</span>
+                      </div>
+                      {(request.status === "pending" && canApprove) && (
+                        <div className="flex gap-2 mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            className="flex-1 h-8 text-xs bg-green-600 hover:bg-green-700"
+                            onClick={() => approveMutation.mutate(request.id)}
+                            data-testid={`button-mobile-approve-${request.id}`}
+                          >
+                            <CheckCircle className="ml-1 h-3.5 w-3.5" />
+                            اعتماد
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="flex-1 h-8 text-xs"
+                            onClick={() => {
+                              setSelectedRequest(request);
+                              setIsRejectOpen(true);
+                            }}
+                            data-testid={`button-mobile-reject-${request.id}`}
+                          >
+                            <XCircle className="ml-1 h-3.5 w-3.5" />
+                            رفض
+                          </Button>
+                        </div>
+                      )}
+                      {(request.status === "approved" && canApprove) && (
+                        <div className="mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            className="w-full h-8 text-xs bg-green-600 hover:bg-green-700"
+                            onClick={() => markPaidMutation.mutate(request.id)}
+                            data-testid={`button-mobile-paid-${request.id}`}
+                          >
+                            <DollarSign className="ml-1 h-3.5 w-3.5" />
+                            تأكيد الدفع
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -782,7 +873,7 @@ export default function PaymentRequestsPage() {
                   {requestsByDate.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                        لا توجد طلبات لهذا اليوم
+                        لا توجد طلبات
                       </TableCell>
                     </TableRow>
                   ) : (

@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "مدير",
@@ -35,6 +37,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     assets: true,
     construction: true,
   });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location]);
 
   const handleLogout = async () => {
     await logout();
@@ -207,14 +215,125 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="md:hidden h-16 border-b border-border bg-card flex items-center px-4 justify-between">
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="Butter Bakery" className="h-10 w-auto object-contain" />
+        <header className="md:hidden h-14 border-b border-border bg-card flex items-center px-3 justify-between sticky top-0 z-50">
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
+              <div className="p-4 border-b border-border/50">
+                <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-10" />
+                <p className="text-[10px] text-muted-foreground text-center mt-2">نظام إدارة المشروعات والأصول والصيانة</p>
+              </div>
+              
+              <nav className="p-3 space-y-1">
+                {standaloneItems.map(item => renderNavItem(item))}
+
+                {navGroups.map(({ key, group }) => (
+                  <Collapsible
+                    key={key}
+                    open={openGroups[key]}
+                    onOpenChange={() => toggleGroup(key)}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <div
+                        className={cn(
+                          "flex items-center justify-between gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer mt-1 text-sm",
+                          isGroupActive(group.items)
+                            ? "bg-primary/5 text-primary"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <group.icon className="w-4 h-4 flex-shrink-0" />
+                          <span className="font-medium">{group.label}</span>
+                        </div>
+                        {openGroups[key] ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronLeft className="w-4 h-4" />
+                        )}
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-0.5 mt-0.5">
+                      {group.items.map(item => (
+                        <Link key={item.href} href={item.href}>
+                          <div
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer text-sm mr-3",
+                              location === item.href
+                                ? "bg-primary/10 text-primary font-medium"
+                                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                            )}
+                          >
+                            <item.icon className="w-4 h-4 flex-shrink-0" />
+                            <span>{item.label}</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+
+                <div className="pt-2 border-t border-border/30 mt-3">
+                  {bottomItems.map(item => renderNavItem(item))}
+                </div>
+              </nav>
+
+              <div className="p-3 border-t border-border/50 mt-auto">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : isAuthenticated && user ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={user.profileImageUrl || undefined} style={{ objectFit: 'cover' }} />
+                        <AvatarFallback className="text-sm">{user.firstName?.[0] || user.phone?.[0] || 'U'}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{user.firstName || user.phone}</p>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ROLE_LABELS[user.role] || user.role}</Badge>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-destructive cursor-pointer transition-colors rounded-md hover:bg-destructive/10"
+                    >
+                      {isLoggingOut ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <LogOut className="w-4 h-4" />
+                      )}
+                      <span>تسجيل الخروج</span>
+                    </button>
+                  </div>
+                ) : (
+                  <Link href="/login">
+                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-primary hover:text-primary/80 cursor-pointer transition-colors rounded-md hover:bg-primary/10">
+                      <LogIn className="w-4 h-4" />
+                      <span>تسجيل الدخول</span>
+                    </div>
+                  </Link>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <div className="flex items-center">
+            <img src={logo} alt="Butter Bakery" className="h-8 w-auto object-contain" />
           </div>
-          {isAuthenticated && <NotificationsDropdown />}
+
+          <div className="flex items-center gap-1">
+            {isAuthenticated && <NotificationsDropdown />}
+          </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="flex-1 overflow-auto p-3 md:p-8">
           {children}
         </div>
       </main>
