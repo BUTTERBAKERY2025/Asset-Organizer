@@ -350,3 +350,74 @@ export const insertContractPaymentSchema = createInsertSchema(contractPayments).
 
 export type ContractPayment = typeof contractPayments.$inferSelect;
 export type InsertContractPayment = z.infer<typeof insertContractPaymentSchema>;
+
+// System Modules for permissions
+export const SYSTEM_MODULES = [
+  "dashboard",
+  "inventory",
+  "construction_projects",
+  "construction_work_items",
+  "contractors",
+  "contracts",
+  "budget_planning",
+  "payment_requests",
+  "users",
+  "reports",
+] as const;
+
+export type SystemModule = typeof SYSTEM_MODULES[number];
+
+// Actions for each module
+export const MODULE_ACTIONS = [
+  "view",
+  "create",
+  "edit",
+  "delete",
+  "approve",
+  "export",
+] as const;
+
+export type ModuleAction = typeof MODULE_ACTIONS[number];
+
+// User Permissions table - صلاحيات المستخدمين التفصيلية
+export const userPermissions = pgTable("user_permissions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  module: text("module").notNull(), // e.g., 'inventory', 'construction_projects'
+  actions: text("actions").array().notNull(), // e.g., ['view', 'create', 'edit', 'delete']
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserPermissionSchema = createInsertSchema(userPermissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserPermission = typeof userPermissions.$inferSelect;
+export type InsertUserPermission = z.infer<typeof insertUserPermissionSchema>;
+
+// Module labels for UI display (Arabic)
+export const MODULE_LABELS: Record<SystemModule, string> = {
+  dashboard: "لوحة التحكم",
+  inventory: "المخزون والأصول",
+  construction_projects: "مشاريع الإنشاءات",
+  construction_work_items: "بنود الأعمال",
+  contractors: "المقاولين",
+  contracts: "العقود",
+  budget_planning: "تخطيط الميزانية",
+  payment_requests: "طلبات الصرف",
+  users: "إدارة المستخدمين",
+  reports: "التقارير",
+};
+
+// Action labels for UI display (Arabic)
+export const ACTION_LABELS: Record<ModuleAction, string> = {
+  view: "عرض",
+  create: "إنشاء",
+  edit: "تعديل",
+  delete: "حذف",
+  approve: "اعتماد",
+  export: "تصدير",
+};

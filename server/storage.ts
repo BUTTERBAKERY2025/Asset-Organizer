@@ -28,6 +28,8 @@ import {
   type InsertPaymentRequest,
   type ContractPayment,
   type InsertContractPayment,
+  type UserPermission,
+  type InsertUserPermission,
   branches,
   inventoryItems,
   auditLogs,
@@ -41,7 +43,8 @@ import {
   constructionContracts,
   contractItems,
   paymentRequests,
-  contractPayments
+  contractPayments,
+  userPermissions
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -146,6 +149,12 @@ export interface IStorage {
   // Contract Payments
   getContractPayments(contractId: number): Promise<ContractPayment[]>;
   createContractPayment(payment: InsertContractPayment): Promise<ContractPayment>;
+  
+  // User Permissions
+  getUserPermissions(userId: string): Promise<UserPermission[]>;
+  setUserPermission(permission: InsertUserPermission): Promise<UserPermission>;
+  deleteUserPermissions(userId: string): Promise<boolean>;
+  hasPermission(userId: string, module: string, action: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -689,6 +698,72 @@ export class DatabaseStorage implements IStorage {
     await this.updateContract(payment.contractId, { paidAmount: totalPaid });
     
     return newPayment;
+  }
+
+  // User Permissions
+  async getUserPermissions(userId: string): Promise<UserPermission[]> {
+    return await db
+      .select()
+      .from(userPermissions)
+      .where(eq(userPermissions.userId, userId));
+  }
+
+  async setUserPermission(permission: InsertUserPermission): Promise<UserPermission> {
+    // Check if permission for this user+module exists
+    const [existing] = await db
+      .select()
+      .from(userPermissions)
+      .where(
+        and(
+          eq(userPermissions.userId, permission.userId),
+          eq(userPermissions.module, permission.module)
+        )
+      );
+
+    if (existing) {
+      // Update existing permission
+      const [updated] = await db
+        .update(userPermissions)
+        .set({ actions: permission.actions, updatedAt: new Date() })
+        .where(eq(userPermissions.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new permission
+      const [created] = await db
+        .insert(userPermissions)
+        .values(permission)
+        .returning();
+      return created;
+    }
+  }
+
+  async deleteUserPermissions(userId: string): Promise<boolean> {
+    const result = await db
+      .delete(userPermissions)
+      .where(eq(userPermissions.userId, userId))
+      .returning();
+    return result.length >= 0;
+  }
+
+  async hasPermission(userId: string, module: string, action: string): Promise<boolean> {
+    // First check if user is admin (admins have all permissions)
+    const user = await this.getUser(userId);
+    if (user?.role === "admin") return true;
+
+    // Check specific permission
+    const [permission] = await db
+      .select()
+      .from(userPermissions)
+      .where(
+        and(
+          eq(userPermissions.userId, userId),
+          eq(userPermissions.module, module)
+        )
+      );
+
+    if (!permission) return false;
+    return permission.actions.includes(action);
   }
 }
 
