@@ -30,6 +30,8 @@ import {
   type InsertContractPayment,
   type UserPermission,
   type InsertUserPermission,
+  type PermissionAuditLog,
+  type InsertPermissionAuditLog,
   branches,
   inventoryItems,
   auditLogs,
@@ -44,7 +46,8 @@ import {
   contractItems,
   paymentRequests,
   contractPayments,
-  userPermissions
+  userPermissions,
+  permissionAuditLogs
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -155,6 +158,18 @@ export interface IStorage {
   setUserPermission(permission: InsertUserPermission): Promise<UserPermission>;
   deleteUserPermissions(userId: string): Promise<boolean>;
   hasPermission(userId: string, module: string, action: string): Promise<boolean>;
+  
+  // Permission Audit Logs
+  createPermissionAuditLog(log: InsertPermissionAuditLog): Promise<PermissionAuditLog>;
+  getPermissionAuditLogs(targetUserId?: string): Promise<PermissionAuditLog[]>;
+  
+  // Transactional permission update
+  updateUserPermissionsWithAudit(
+    userId: string,
+    permissions: { module: string; actions: string[] }[],
+    changedByUserId: string,
+    templateApplied: string | null
+  ): Promise<UserPermission[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -764,6 +779,100 @@ export class DatabaseStorage implements IStorage {
 
     if (!permission) return false;
     return permission.actions.includes(action);
+  }
+
+  // Permission Audit Logs
+  async createPermissionAuditLog(log: InsertPermissionAuditLog): Promise<PermissionAuditLog> {
+    const [created] = await db
+      .insert(permissionAuditLogs)
+      .values(log)
+      .returning();
+    return created;
+  }
+
+  async getPermissionAuditLogs(targetUserId?: string): Promise<PermissionAuditLog[]> {
+    if (targetUserId) {
+      return db
+        .select()
+        .from(permissionAuditLogs)
+        .where(eq(permissionAuditLogs.targetUserId, targetUserId))
+        .orderBy(desc(permissionAuditLogs.createdAt));
+    }
+    return db
+      .select()
+      .from(permissionAuditLogs)
+      .orderBy(desc(permissionAuditLogs.createdAt));
+  }
+
+  async updateUserPermissionsWithAudit(
+    userId: string,
+    permissions: { module: string; actions: string[] }[],
+    changedByUserId: string,
+    templateApplied: string | null
+  ): Promise<UserPermission[]> {
+    return await db.transaction(async (tx) => {
+      // Get old permissions for audit logging
+      const oldPermissions = await tx
+        .select()
+        .from(userPermissions)
+        .where(eq(userPermissions.userId, userId));
+      const oldPermissionsMap = new Map(oldPermissions.map(p => [p.module, p.actions]));
+
+      // Delete existing permissions
+      await tx
+        .delete(userPermissions)
+        .where(eq(userPermissions.userId, userId));
+
+      // Add new permissions
+      const savedPermissions: UserPermission[] = [];
+      for (const perm of permissions) {
+        if (!perm.module || !Array.isArray(perm.actions) || perm.actions.length === 0) {
+          continue;
+        }
+
+        const [created] = await tx
+          .insert(userPermissions)
+          .values({
+            userId,
+            module: perm.module,
+            actions: perm.actions,
+          })
+          .returning();
+        savedPermissions.push(created);
+
+        // Log permission change for this module
+        const oldActions = oldPermissionsMap.get(perm.module) || [];
+        if (JSON.stringify([...oldActions].sort()) !== JSON.stringify([...perm.actions].sort())) {
+          await tx.insert(permissionAuditLogs).values({
+            targetUserId: userId,
+            changedByUserId,
+            action: templateApplied ? 'apply_template' : (oldActions.length === 0 ? 'grant' : 'modify'),
+            module: perm.module,
+            oldActions: oldActions,
+            newActions: perm.actions,
+            templateApplied: templateApplied || null,
+          });
+        }
+      }
+
+      // Log revoked permissions (modules that were removed entirely)
+      for (const oldPerm of oldPermissions) {
+        const stillExists = savedPermissions.some(p => p.module === oldPerm.module);
+        if (!stillExists) {
+          await tx.insert(permissionAuditLogs).values({
+            targetUserId: userId,
+            changedByUserId,
+            action: 'revoke',
+            module: oldPerm.module,
+            oldActions: oldPerm.actions,
+            newActions: [],
+            templateApplied: templateApplied || null,
+          });
+        }
+      }
+
+      return savedPermissions;
+    });
   }
 }
 

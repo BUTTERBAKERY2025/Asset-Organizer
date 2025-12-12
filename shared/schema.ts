@@ -422,6 +422,14 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   export: "تصدير",
 };
 
+// Module groups for UI organization
+export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
+  { label: "الأساسية", modules: ["dashboard", "inventory", "reports"] },
+  { label: "إدارة الإنشاءات", modules: ["construction_projects", "construction_work_items", "contractors"] },
+  { label: "المالية والعقود", modules: ["contracts", "budget_planning", "payment_requests"] },
+  { label: "إدارة النظام", modules: ["users"] },
+];
+
 // Role permission templates - قوالب الصلاحيات الافتراضية لكل دور
 export const ROLE_PERMISSION_TEMPLATES: Record<string, { module: SystemModule; actions: ModuleAction[] }[]> = {
   // Admin gets full access (handled separately in middleware)
@@ -449,3 +457,24 @@ export const ROLE_PERMISSION_TEMPLATES: Record<string, { module: SystemModule; a
     actions: ["view"] as ModuleAction[],
   })),
 };
+
+// Permission Audit Logs - سجل تغييرات الصلاحيات
+export const permissionAuditLogs = pgTable("permission_audit_logs", {
+  id: serial("id").primaryKey(),
+  targetUserId: varchar("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  changedByUserId: varchar("changed_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // 'grant', 'revoke', 'modify', 'apply_template'
+  module: text("module"), // The module affected
+  oldActions: text("old_actions").array(), // Previous actions
+  newActions: text("new_actions").array(), // New actions
+  templateApplied: text("template_applied"), // If a template was applied (e.g., 'admin', 'employee', 'viewer')
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPermissionAuditLogSchema = createInsertSchema(permissionAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PermissionAuditLog = typeof permissionAuditLogs.$inferSelect;
+export type InsertPermissionAuditLog = z.infer<typeof insertPermissionAuditLogSchema>;

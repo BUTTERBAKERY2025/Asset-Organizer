@@ -134,47 +134,54 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/users/:id/permissions", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+  app.put("/api/users/:id/permissions", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
     try {
-      const { permissions } = req.body;
+      const { permissions, templateApplied } = req.body;
+      const currentUser = req.currentUser;
       
       if (!Array.isArray(permissions)) {
         return res.status(400).json({ error: "Invalid permissions format" });
       }
       
-      // Delete existing permissions first
-      await storage.deleteUserPermissions(req.params.id);
+      // Validate and filter permissions
+      const validatedPermissions = permissions
+        .filter((perm: any) => 
+          perm.module && 
+          Array.isArray(perm.actions) && 
+          SYSTEM_MODULES.includes(perm.module)
+        )
+        .map((perm: any) => ({
+          module: perm.module,
+          actions: perm.actions.filter((a: string) => 
+            MODULE_ACTIONS.includes(a as any)
+          ),
+        }))
+        .filter((perm: any) => perm.actions.length > 0);
       
-      // Add new permissions
-      const savedPermissions = [];
-      for (const perm of permissions) {
-        if (!perm.module || !Array.isArray(perm.actions)) {
-          continue;
-        }
-        
-        // Validate module and actions
-        if (!SYSTEM_MODULES.includes(perm.module)) {
-          continue;
-        }
-        
-        const validActions = perm.actions.filter((a: string) => 
-          MODULE_ACTIONS.includes(a as any)
-        );
-        
-        if (validActions.length > 0) {
-          const saved = await storage.setUserPermission({
-            userId: req.params.id,
-            module: perm.module,
-            actions: validActions,
-          });
-          savedPermissions.push(saved);
-        }
-      }
+      // Use transactional update for atomicity
+      const savedPermissions = await storage.updateUserPermissionsWithAudit(
+        req.params.id,
+        validatedPermissions,
+        currentUser.id,
+        templateApplied || null
+      );
       
       res.json(savedPermissions);
     } catch (error) {
       console.error("Error updating user permissions:", error);
       res.status(500).json({ error: "Failed to update permissions" });
+    }
+  });
+
+  // Permission Audit Logs
+  app.get("/api/permission-audit-logs", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const userId = req.query.userId as string | undefined;
+      const logs = await storage.getPermissionAuditLogs(userId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching permission audit logs:", error);
+      res.status(500).json({ error: "Failed to fetch permission audit logs" });
     }
   });
 

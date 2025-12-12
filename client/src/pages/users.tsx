@@ -14,8 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2 } from "lucide-react";
 import type { User, UserPermission } from "@shared/schema";
-import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
-import { useEffect, useState } from "react";
+import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
+import React, { useEffect, useState } from "react";
 
 const ROLES = [
   { value: "admin", label: "مدير", icon: Shield, description: "صلاحيات كاملة" },
@@ -37,6 +37,7 @@ export default function UsersPage() {
   const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SafeUser | null>(null);
   const [permissionState, setPermissionState] = useState<PermissionState>({});
+  const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     username: "",
     password: "",
@@ -147,12 +148,12 @@ export default function UsersPage() {
   });
 
   const savePermissionsMutation = useMutation({
-    mutationFn: async (permissions: { module: string; actions: string[] }[]) => {
+    mutationFn: async ({ permissions, templateApplied }: { permissions: { module: string; actions: string[] }[]; templateApplied: string | null }) => {
       if (!selectedUser) return;
       const res = await fetch(`/api/users/${selectedUser.id}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions }),
+        body: JSON.stringify({ permissions, templateApplied }),
       });
       if (!res.ok) throw new Error("Failed to save permissions");
       return res.json();
@@ -161,6 +162,7 @@ export default function UsersPage() {
       toast({ title: "تم حفظ الصلاحيات بنجاح" });
       setIsPermissionsDialogOpen(false);
       setSelectedUser(null);
+      setAppliedTemplate(null);
     },
     onError: () => {
       toast({ title: "فشل حفظ الصلاحيات", variant: "destructive" });
@@ -170,6 +172,7 @@ export default function UsersPage() {
   const openPermissionsDialog = (user: SafeUser) => {
     setSelectedUser(user);
     setPermissionState({});
+    setAppliedTemplate(null);
     setIsPermissionsDialogOpen(true);
   };
 
@@ -222,6 +225,7 @@ export default function UsersPage() {
       newState[perm.module] = [...perm.actions];
     }
     setPermissionState(newState);
+    setAppliedTemplate(selectedUser.role);
     
     toast({
       title: "تم تطبيق القالب",
@@ -234,7 +238,7 @@ export default function UsersPage() {
       .filter(([_, actions]) => actions.length > 0)
       .map(([module, actions]) => ({ module, actions }));
     
-    savePermissionsMutation.mutate(permissions);
+    savePermissionsMutation.mutate({ permissions, templateApplied: appliedTemplate });
   };
 
   if (authLoading || isLoading) {
@@ -565,46 +569,58 @@ export default function UsersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {SYSTEM_MODULES.map(module => {
-                      const currentActions = permissionState[module] || [];
-                      const allSelected = MODULE_ACTIONS.every(a => currentActions.includes(a));
-                      
-                      return (
-                        <TableRow key={module}>
-                          <TableCell className="font-medium">
-                            {MODULE_LABELS[module]}
+                    {MODULE_GROUPS.map((group) => (
+                      <React.Fragment key={group.label}>
+                        <TableRow className="bg-muted/50">
+                          <TableCell 
+                            colSpan={selectedUser?.role === "viewer" ? 2 : MODULE_ACTIONS.length + 2} 
+                            className="font-bold text-primary py-2"
+                          >
+                            {group.label}
                           </TableCell>
-                          {selectedUser?.role === "viewer" ? (
-                            <TableCell className="text-center">
-                              <Checkbox
-                                checked={currentActions.includes("view")}
-                                onCheckedChange={() => toggleAction(module, "view")}
-                                data-testid={`checkbox-${module}-view`}
-                              />
-                            </TableCell>
-                          ) : (
-                            MODULE_ACTIONS.map(action => (
-                              <TableCell key={action} className="text-center">
-                                <Checkbox
-                                  checked={currentActions.includes(action)}
-                                  onCheckedChange={() => toggleAction(module, action)}
-                                  data-testid={`checkbox-${module}-${action}`}
-                                />
-                              </TableCell>
-                            ))
-                          )}
-                          {selectedUser?.role !== "viewer" && (
-                            <TableCell className="text-center">
-                              <Checkbox
-                                checked={allSelected}
-                                onCheckedChange={() => toggleAllActionsForModule(module)}
-                                data-testid={`checkbox-${module}-all`}
-                              />
-                            </TableCell>
-                          )}
                         </TableRow>
-                      );
-                    })}
+                        {group.modules.map(module => {
+                          const currentActions = permissionState[module] || [];
+                          const allSelected = MODULE_ACTIONS.every(a => currentActions.includes(a));
+                          
+                          return (
+                            <TableRow key={module}>
+                              <TableCell className="font-medium pr-6">
+                                {MODULE_LABELS[module]}
+                              </TableCell>
+                              {selectedUser?.role === "viewer" ? (
+                                <TableCell className="text-center">
+                                  <Checkbox
+                                    checked={currentActions.includes("view")}
+                                    onCheckedChange={() => toggleAction(module, "view")}
+                                    data-testid={`checkbox-${module}-view`}
+                                  />
+                                </TableCell>
+                              ) : (
+                                MODULE_ACTIONS.map(action => (
+                                  <TableCell key={action} className="text-center">
+                                    <Checkbox
+                                      checked={currentActions.includes(action)}
+                                      onCheckedChange={() => toggleAction(module, action)}
+                                      data-testid={`checkbox-${module}-${action}`}
+                                    />
+                                  </TableCell>
+                                ))
+                              )}
+                              {selectedUser?.role !== "viewer" && (
+                                <TableCell className="text-center">
+                                  <Checkbox
+                                    checked={allSelected}
+                                    onCheckedChange={() => toggleAllActionsForModule(module)}
+                                    data-testid={`checkbox-${module}-all`}
+                                  />
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
