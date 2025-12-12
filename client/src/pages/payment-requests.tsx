@@ -40,7 +40,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, Pencil, Trash2, Loader2, DollarSign, CheckCircle, XCircle, 
-  Clock, AlertTriangle, Wallet, CreditCard, ArrowUpCircle, Share2, MessageCircle, FileDown, Download
+  Clock, AlertTriangle, Wallet, CreditCard, ArrowUpCircle, Share2, MessageCircle, FileDown, Download,
+  Search, Eye, Calendar, Building2, Filter, X
 } from "lucide-react";
 import { Link } from "wouter";
 import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory, Branch } from "@shared/schema";
@@ -101,8 +102,13 @@ export default function PaymentRequestsPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState("all");
-  const [dateFilter, setDateFilter] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [detailsRequest, setDetailsRequest] = useState<PaymentRequest | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -344,14 +350,32 @@ export default function PaymentRequestsPage() {
     if (activeTab !== "all" && req.status !== activeTab) return false;
     if (statusFilter !== "all" && req.status !== statusFilter) return false;
     if (typeFilter !== "all" && req.requestType !== typeFilter) return false;
+    if (projectFilter !== "all" && req.projectId !== parseInt(projectFilter, 10)) return false;
+    
+    // بحث نصي
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesDescription = (req.description ?? "").toLowerCase().includes(query);
+      const matchesBeneficiary = (req.beneficiaryName ?? "").toLowerCase().includes(query);
+      const matchesInvoice = (req.invoiceNumber ?? "").toLowerCase().includes(query);
+      const matchesNotes = (req.notes ?? "").toLowerCase().includes(query);
+      if (!matchesDescription && !matchesBeneficiary && !matchesInvoice && !matchesNotes) {
+        return false;
+      }
+    }
+    
     return true;
   });
 
   const requestsByDate = filteredRequests.filter((req) => {
-    if (!dateFilter) return true;
     const createdAtStr = req.createdAt ? new Date(req.createdAt).toISOString().split('T')[0] : null;
     const reqDate = req.requestDate || createdAtStr;
-    return reqDate === dateFilter;
+    
+    // فلترة بنطاق تاريخ
+    if (dateFrom && reqDate && reqDate < dateFrom) return false;
+    if (dateTo && reqDate && reqDate > dateTo) return false;
+    
+    return true;
   });
 
   const formatDateArabic = (dateStr: string) => {
@@ -364,9 +388,20 @@ export default function PaymentRequestsPage() {
     });
   };
 
+  const getDateRangeText = () => {
+    if (dateFrom && dateTo) {
+      return `${formatDateArabic(dateFrom)} إلى ${formatDateArabic(dateTo)}`;
+    } else if (dateFrom) {
+      return `من ${formatDateArabic(dateFrom)}`;
+    } else if (dateTo) {
+      return `حتى ${formatDateArabic(dateTo)}`;
+    }
+    return "جميع التواريخ";
+  };
+
   const generateShareText = () => {
     const total = requestsByDate.reduce((sum, r) => sum + r.amount, 0);
-    let text = `📋 طلبات الدفع - ${formatDateArabic(dateFilter)}\n\n`;
+    let text = `📋 طلبات الدفع - ${getDateRangeText()}\n\n`;
     text += `إجمالي الطلبات: ${requestsByDate.length}\n`;
     text += `إجمالي المبلغ: ${total.toLocaleString()} ر.س\n\n`;
     
@@ -383,6 +418,11 @@ export default function PaymentRequestsPage() {
     return text;
   };
 
+  const openDetailsModal = (request: PaymentRequest) => {
+    setDetailsRequest(request);
+    setIsDetailsOpen(true);
+  };
+
   const handleDownloadPDF = () => {
     if (requestsByDate.length === 0) {
       toast({ title: "لا توجد طلبات للتصدير", variant: "destructive" });
@@ -395,7 +435,7 @@ export default function PaymentRequestsPage() {
         projects,
         branches,
         categories,
-        dateFilter
+        getDateRangeText()
       );
       toast({ title: "تم فتح نافذة التقرير - اضغط طباعة / حفظ PDF" });
     } catch (error) {
@@ -416,7 +456,7 @@ export default function PaymentRequestsPage() {
         projects,
         branches,
         categories,
-        dateFilter
+        getDateRangeText()
       );
       toast({ 
         title: "تم فتح نافذة التقرير",
@@ -538,51 +578,118 @@ export default function PaymentRequestsPage() {
 
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <Label>نوع الطلب</Label>
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger data-testid="select-type-filter">
-                    <SelectValue placeholder="جميع الأنواع" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">جميع الأنواع</SelectItem>
-                    {REQUEST_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[250px]">
+                  <Label className="flex items-center gap-2 mb-2">
+                    <Search className="h-4 w-4" />
+                    بحث
+                  </Label>
+                  <Input 
+                    placeholder="ابحث في الوصف، المستفيد، رقم الفاتورة..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    data-testid="input-search"
+                  />
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <Label className="flex items-center gap-2 mb-2">
+                    <Building2 className="h-4 w-4" />
+                    المشروع
+                  </Label>
+                  <Select value={projectFilter} onValueChange={setProjectFilter}>
+                    <SelectTrigger data-testid="select-project-filter">
+                      <SelectValue placeholder="جميع المشاريع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع المشاريع</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id.toString()}>
+                          {project.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <Label>نوع الطلب</Label>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger data-testid="select-type-filter">
+                      <SelectValue placeholder="جميع الأنواع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الأنواع</SelectItem>
+                      {REQUEST_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="flex-1 min-w-[200px]">
-                <Label>تاريخ الطلبات</Label>
-                <Input 
-                  type="date" 
-                  value={dateFilter} 
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  data-testid="input-date-filter"
-                />
-              </div>
-              <div className="flex gap-2">
+              
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[150px]">
+                  <Label className="flex items-center gap-2 mb-2">
+                    <Calendar className="h-4 w-4" />
+                    من تاريخ
+                  </Label>
+                  <Input 
+                    type="date" 
+                    value={dateFrom} 
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    data-testid="input-date-from"
+                  />
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <Label className="flex items-center gap-2 mb-2">
+                    <Calendar className="h-4 w-4" />
+                    إلى تاريخ
+                  </Label>
+                  <Input 
+                    type="date" 
+                    value={dateTo} 
+                    onChange={(e) => setDateTo(e.target.value)}
+                    data-testid="input-date-to"
+                  />
+                </div>
                 <Button 
-                  variant="outline"
-                  onClick={handleDownloadPDF}
-                  disabled={requestsByDate.length === 0}
-                  data-testid="button-download-pdf"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setProjectFilter("all");
+                    setTypeFilter("all");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  className="text-gray-500"
+                  data-testid="button-clear-filters"
                 >
-                  <Download className="ml-2 h-4 w-4" />
-                  تحميل PDF
+                  <X className="ml-1 h-4 w-4" />
+                  مسح الفلاتر
                 </Button>
-                <Button 
-                  variant="outline"
-                  onClick={handleSharePDF}
-                  disabled={requestsByDate.length === 0}
-                  data-testid="button-share-whatsapp"
-                >
-                  <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
-                  مشاركة واتساب
-                </Button>
+                <div className="flex gap-2 mr-auto">
+                  <Button 
+                    variant="outline"
+                    onClick={handleDownloadPDF}
+                    disabled={requestsByDate.length === 0}
+                    data-testid="button-download-pdf"
+                  >
+                    <Download className="ml-2 h-4 w-4" />
+                    تحميل PDF
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={handleSharePDF}
+                    disabled={requestsByDate.length === 0}
+                    data-testid="button-share-whatsapp"
+                  >
+                    <MessageCircle className="ml-2 h-4 w-4 text-green-500" />
+                    مشاركة واتساب
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -590,9 +697,10 @@ export default function PaymentRequestsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>قائمة الطلبات - {formatDateArabic(dateFilter)}</CardTitle>
+            <CardTitle>قائمة الطلبات - {getDateRangeText()}</CardTitle>
             <CardDescription>
-              عرض {requestsByDate.length} طلب لهذا اليوم (من إجمالي {filteredRequests.length} طلب)
+              عرض {requestsByDate.length} طلب (من إجمالي {requests.length} طلب)
+              {requestsByDate.length > 0 && ` - إجمالي المبلغ: ${requestsByDate.reduce((sum, r) => sum + r.amount, 0).toLocaleString()} ر.س`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -643,7 +751,10 @@ export default function PaymentRequestsPage() {
                               </span>
                             </Link>
                           </TableCell>
-                          <TableCell className="max-w-[200px] truncate">
+                          <TableCell 
+                            className="max-w-[200px] truncate cursor-pointer hover:text-blue-600"
+                            onClick={() => openDetailsModal(request)}
+                          >
                             {request.description}
                           </TableCell>
                           <TableCell className="font-medium">
@@ -721,6 +832,14 @@ export default function PaymentRequestsPage() {
                                   <Trash2 className="h-4 w-4 text-red-500" />
                                 </Button>
                               )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openDetailsModal(request)}
+                                data-testid={`button-view-${request.id}`}
+                              >
+                                <Eye className="h-4 w-4 text-gray-500" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1105,6 +1224,149 @@ export default function PaymentRequestsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              تفاصيل الطلب {detailsRequest?.requestNumber || `#${detailsRequest?.id}`}
+            </DialogTitle>
+          </DialogHeader>
+          {detailsRequest && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">نوع الطلب</p>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const typeInfo = getTypeInfo(detailsRequest.requestType);
+                      const TypeIcon = typeInfo.icon;
+                      return (
+                        <>
+                          <TypeIcon className="h-4 w-4" />
+                          <span className="font-medium">{typeInfo.label}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">الحالة</p>
+                  <Badge className={`${getStatusInfo(detailsRequest.status).color} text-white`}>
+                    {getStatusInfo(detailsRequest.status).label}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-gray-500">المشروع</p>
+                <p className="font-medium">{getProjectName(detailsRequest.projectId)}</p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-gray-500">الوصف</p>
+                <p className="font-medium bg-gray-50 p-3 rounded-lg">{detailsRequest.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">المبلغ</p>
+                  <p className="text-xl font-bold text-butter-gold">{detailsRequest.amount.toLocaleString()} ر.س</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">الأولوية</p>
+                  <Badge className={`${getPriorityInfo(detailsRequest.priority || "normal").color} text-white`}>
+                    {getPriorityInfo(detailsRequest.priority || "normal").label}
+                  </Badge>
+                </div>
+              </div>
+
+              {(detailsRequest.beneficiaryName || detailsRequest.beneficiaryBank || detailsRequest.beneficiaryIban) && (
+                <div className="border-t pt-4">
+                  <p className="text-sm font-medium text-gray-700 mb-3">بيانات المستفيد</p>
+                  <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                    {detailsRequest.beneficiaryName && (
+                      <div className="space-y-1">
+                        <p className="text-sm text-gray-500">الاسم</p>
+                        <p className="font-medium">{detailsRequest.beneficiaryName}</p>
+                      </div>
+                    )}
+                    {detailsRequest.beneficiaryBank && (
+                      <div className="space-y-1">
+                        <p className="text-sm text-gray-500">البنك</p>
+                        <p className="font-medium">{detailsRequest.beneficiaryBank}</p>
+                      </div>
+                    )}
+                    {detailsRequest.beneficiaryIban && (
+                      <div className="col-span-2 space-y-1">
+                        <p className="text-sm text-gray-500">الآيبان</p>
+                        <p className="font-mono text-sm bg-white p-2 rounded border">{detailsRequest.beneficiaryIban}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                {detailsRequest.categoryId && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">الفئة</p>
+                    <p className="font-medium">{getCategoryName(detailsRequest.categoryId)}</p>
+                  </div>
+                )}
+                {detailsRequest.invoiceNumber && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">رقم الفاتورة</p>
+                    <p className="font-medium">{detailsRequest.invoiceNumber}</p>
+                  </div>
+                )}
+                {detailsRequest.dueDate && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">تاريخ الاستحقاق</p>
+                    <p className="font-medium">{formatDateArabic(detailsRequest.dueDate)}</p>
+                  </div>
+                )}
+                {detailsRequest.createdAt && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">تاريخ الإنشاء</p>
+                    <p className="font-medium">{formatDateArabic(detailsRequest.createdAt.toString())}</p>
+                  </div>
+                )}
+              </div>
+
+              {detailsRequest.notes && (
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">ملاحظات</p>
+                  <p className="bg-yellow-50 p-3 rounded-lg text-sm">{detailsRequest.notes}</p>
+                </div>
+              )}
+
+              {detailsRequest.rejectionReason && (
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">سبب الرفض</p>
+                  <p className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{detailsRequest.rejectionReason}</p>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>
+                  إغلاق
+                </Button>
+                {detailsRequest.status === "pending" && canEdit && (
+                  <Button onClick={() => {
+                    setIsDetailsOpen(false);
+                    openEditDialog(detailsRequest);
+                  }}>
+                    <Pencil className="ml-2 h-4 w-4" />
+                    تعديل
+                  </Button>
+                )}
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </Layout>
   );
