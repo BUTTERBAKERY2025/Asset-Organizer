@@ -448,17 +448,15 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            {user.role !== "admin" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-blue-600 hover:text-blue-700"
-                                onClick={() => openPermissionsDialog(user)}
-                                data-testid={`button-permissions-${user.id}`}
-                              >
-                                <Settings2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-blue-600 hover:text-blue-700"
+                              onClick={() => openPermissionsDialog(user)}
+                              data-testid={`button-permissions-${user.id}`}
+                            >
+                              <Settings2 className="w-4 h-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
