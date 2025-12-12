@@ -8,6 +8,11 @@ This is a comprehensive projects, assets, and maintenance management system for 
 
 Preferred communication style: Simple, everyday language.
 
+**Important Deployment Preferences:**
+- Always notify the user when any update requires database schema changes (new tables, columns, migrations)
+- Deployment workflow: Manual deploy on Render (not auto-deploy)
+- Database updates require manual SQL execution in Supabase SQL Editor before code deployment
+
 ## System Architecture
 
 ### Frontend Architecture
