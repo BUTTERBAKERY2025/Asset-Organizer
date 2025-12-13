@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2 } from "lucide-react";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil } from "lucide-react";
 import type { User, UserPermission } from "@shared/schema";
 import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
 import React, { useEffect, useState } from "react";
@@ -34,6 +34,7 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const { user: currentUser, isAdmin, isLoading: authLoading, isAuthenticated } = useAuth();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SafeUser | null>(null);
   const [permissionState, setPermissionState] = useState<PermissionState>({});
@@ -44,6 +45,12 @@ export default function UsersPage() {
     firstName: "",
     lastName: "",
     role: "viewer",
+  });
+  const [editUser, setEditUser] = useState({
+    firstName: "",
+    lastName: "",
+    role: "viewer",
+    password: "",
   });
 
   useEffect(() => {
@@ -129,6 +136,36 @@ export default function UsersPage() {
     },
   });
 
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; role?: string; password?: string } }) => {
+      const updateData: any = {};
+      if (data.firstName !== undefined) updateData.firstName = data.firstName;
+      if (data.lastName !== undefined) updateData.lastName = data.lastName;
+      if (data.role !== undefined) updateData.role = data.role;
+      if (data.password && data.password.trim() !== "") updateData.password = data.password;
+      
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+      if (!res.ok) {
+        const result = await res.json();
+        throw new Error(result.error || "Failed to update user");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "تم تحديث بيانات المستخدم بنجاح" });
+      setIsEditDialogOpen(false);
+      setSelectedUser(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "فشل تحديث بيانات المستخدم", variant: "destructive" });
+    },
+  });
+
   const { data: userPermissions = [] } = useQuery<UserPermission[]>({
     queryKey: ["/api/users", selectedUser?.id, "permissions"],
     queryFn: async () => {
@@ -174,6 +211,26 @@ export default function UsersPage() {
     setPermissionState({});
     setAppliedTemplate(null);
     setIsPermissionsDialogOpen(true);
+  };
+
+  const openEditDialog = (user: SafeUser) => {
+    setSelectedUser(user);
+    setEditUser({
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      role: user.role,
+      password: "",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    updateUserMutation.mutate({
+      userId: selectedUser.id,
+      data: editUser,
+    });
   };
 
   const toggleAction = (module: string, action: string) => {
@@ -468,9 +525,20 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="text-amber-600 hover:text-amber-700"
+                              onClick={() => openEditDialog(user)}
+                              data-testid={`button-edit-${user.id}`}
+                              title="تعديل البيانات"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="text-blue-600 hover:text-blue-700"
                               onClick={() => openPermissionsDialog(user)}
                               data-testid={`button-permissions-${user.id}`}
+                              title="إدارة الصلاحيات"
                             >
                               <Settings2 className="w-4 h-4" />
                             </Button>
@@ -481,6 +549,7 @@ export default function UsersPage() {
                               onClick={() => deleteUserMutation.mutate(user.id)}
                               disabled={user.id === currentUser?.id || deleteUserMutation.isPending}
                               data-testid={`button-delete-${user.id}`}
+                              title="حذف المستخدم"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -650,6 +719,105 @@ export default function UsersPage() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5" />
+              تعديل بيانات المستخدم
+            </DialogTitle>
+            <DialogDescription>
+              {selectedUser && (
+                <span>تعديل بيانات {selectedUser.username}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditUser} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editFirstName">الاسم الأول</Label>
+                <Input
+                  id="editFirstName"
+                  value={editUser.firstName}
+                  onChange={(e) => setEditUser({ ...editUser, firstName: e.target.value })}
+                  data-testid="input-edit-first-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editLastName">اسم العائلة</Label>
+                <Input
+                  id="editLastName"
+                  value={editUser.lastName}
+                  onChange={(e) => setEditUser({ ...editUser, lastName: e.target.value })}
+                  data-testid="input-edit-last-name"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editRole">الدور</Label>
+              <Select 
+                value={editUser.role} 
+                onValueChange={(role) => setEditUser({ ...editUser, role })}
+                disabled={selectedUser?.id === currentUser?.id}
+              >
+                <SelectTrigger data-testid="select-edit-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label} - {role.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedUser?.id === currentUser?.id && (
+                <p className="text-xs text-muted-foreground">لا يمكنك تغيير دورك الخاص</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editPassword">كلمة المرور الجديدة</Label>
+              <Input
+                id="editPassword"
+                type="password"
+                value={editUser.password}
+                onChange={(e) => setEditUser({ ...editUser, password: e.target.value })}
+                placeholder="اتركها فارغة للإبقاء على كلمة المرور الحالية"
+                className="text-left"
+                dir="ltr"
+                data-testid="input-edit-password"
+              />
+              <p className="text-xs text-muted-foreground">اتركها فارغة إذا لم ترد تغيير كلمة المرور</p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+                data-testid="button-cancel-edit"
+              >
+                إلغاء
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={updateUserMutation.isPending} 
+                data-testid="button-submit-edit"
+              >
+                {updateUserMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                    جاري الحفظ...
+                  </>
+                ) : (
+                  "حفظ التغييرات"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </Layout>
