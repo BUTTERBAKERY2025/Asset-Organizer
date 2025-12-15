@@ -40,7 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, Plus, Pencil, Trash2, Loader2, Building2, Calendar, DollarSign, CheckCircle2, Clock, Pause, FileSpreadsheet, Printer, Download, ChevronDown } from "lucide-react";
+import { ArrowRight, Plus, Pencil, Trash2, Loader2, Building2, Calendar, DollarSign, CheckCircle2, Clock, Pause, FileSpreadsheet, Printer, Download, ChevronDown, Calculator } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useRef, useMemo } from "react";
 import { useReactToPrint } from "react-to-print";
@@ -56,6 +56,7 @@ import { Link, useParams, useLocation } from "wouter";
 import type { Branch, ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem, ProjectBudgetAllocation } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BudgetEstimateDialog } from "@/components/budget-estimate-dialog";
 
 const workItemFormSchema = z.object({
   projectId: z.number(),
@@ -170,6 +171,7 @@ export default function ConstructionProjectDetailPage() {
   });
 
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
+  const [isBudgetEstimateDialogOpen, setIsBudgetEstimateDialogOpen] = useState(false);
   const [budgetInputs, setBudgetInputs] = useState<Record<number, number>>({});
 
   const upsertBudgetMutation = useMutation({
@@ -708,6 +710,15 @@ export default function ConstructionProjectDetailPage() {
                   <DollarSign className="w-4 h-4 ml-2" />
                   تخطيط الميزانية
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBudgetEstimateDialogOpen(true)}
+                  data-testid="button-estimate-budget"
+                >
+                  <Calculator className="w-4 h-4 ml-2" />
+                  ميزانية تقديرية
+                </Button>
               </div>
             </CardHeader>
             {budgetComparison.length > 0 && (
@@ -1144,6 +1155,15 @@ export default function ConstructionProjectDetailPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {project && (
+          <BudgetEstimateDialog
+            open={isBudgetEstimateDialogOpen}
+            onOpenChange={setIsBudgetEstimateDialogOpen}
+            projectId={projectId}
+            projectTitle={project.title}
+          />
+        )}
       </div>
     </Layout>
   );
