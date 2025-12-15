@@ -18,12 +18,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2 } from "lucide-react";
+import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { AdvancedFilters, defaultFilters, type FilterConfig } from "@/components/advanced-filters";
 import { ItemCardDialog } from "@/components/item-card-dialog";
+import { ExcelImportDialog } from "@/components/excel-import-dialog";
 
 type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
@@ -36,6 +37,7 @@ export default function InventoryPage() {
   const [appliedFilters, setAppliedFilters] = useState<FilterConfig>(defaultFilters);
   const [selectedItem, setSelectedItem] = useState<InventoryItemWithBranch | null>(null);
   const [isItemCardOpen, setIsItemCardOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -445,6 +447,10 @@ export default function InventoryPage() {
               <Download className="w-4 h-4" />
               <span>تصدير Excel</span>
             </Button>
+            <Button className="gap-2" onClick={() => setIsImportDialogOpen(true)} data-testid="button-import">
+              <Upload className="w-4 h-4" />
+              <span>استيراد Excel</span>
+            </Button>
           </div>
         </div>
 
@@ -670,6 +676,11 @@ export default function InventoryPage() {
         branchName={selectedItem?.branchName}
         open={isItemCardOpen}
         onOpenChange={setIsItemCardOpen}
+      />
+
+      <ExcelImportDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
       />
     </Layout>
   );

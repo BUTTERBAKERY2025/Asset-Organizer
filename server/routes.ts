@@ -423,7 +423,7 @@ export async function registerRoutes(
         }
       }
       
-      res.json(results);
+      res.json({ imported: results.success, failed: results.failed, errors: results.errors });
     } catch (error) {
       console.error("Error importing inventory:", error);
       res.status(500).json({ error: "Failed to import inventory" });
