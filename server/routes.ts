@@ -271,6 +271,30 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+    try {
+      const items = await storage.getAllInventoryItems();
+      const lowQuantityItems = items.filter(item => item.quantity <= 5);
+      res.json(lowQuantityItems);
+    } catch (error) {
+      console.error("Error fetching low quantity items:", error);
+      res.status(500).json({ error: "Failed to fetch low quantity items" });
+    }
+  });
+
+  app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+    try {
+      const items = await storage.getAllInventoryItems();
+      const maintenanceItems = items.filter(item => 
+        item.status === 'maintenance' || item.status === 'damaged'
+      );
+      res.json(maintenanceItems);
+    } catch (error) {
+      console.error("Error fetching maintenance items:", error);
+      res.status(500).json({ error: "Failed to fetch maintenance items" });
+    }
+  });
+
   app.get("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const item = await storage.getInventoryItem(req.params.id);
@@ -427,32 +451,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error importing inventory:", error);
       res.status(500).json({ error: "Failed to import inventory" });
-    }
-  });
-
-  // Low quantity alert endpoint
-  app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
-    try {
-      const items = await storage.getAllInventoryItems();
-      const lowQuantityItems = items.filter(item => item.quantity <= 5);
-      res.json(lowQuantityItems);
-    } catch (error) {
-      console.error("Error fetching low quantity items:", error);
-      res.status(500).json({ error: "Failed to fetch low quantity items" });
-    }
-  });
-
-  // Maintenance alerts endpoint
-  app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
-    try {
-      const items = await storage.getAllInventoryItems();
-      const maintenanceItems = items.filter(item => 
-        item.status === 'maintenance' || item.status === 'damaged'
-      );
-      res.json(maintenanceItems);
-    } catch (error) {
-      console.error("Error fetching maintenance items:", error);
-      res.status(500).json({ error: "Failed to fetch maintenance items" });
     }
   });
 
