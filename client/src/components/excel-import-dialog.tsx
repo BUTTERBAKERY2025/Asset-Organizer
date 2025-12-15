@@ -42,6 +42,13 @@ const TEMPLATE_COLUMNS = [
 ];
 
 const VALID_STATUSES = ["good", "maintenance", "damaged", "missing"];
+const STATUS_ARABIC_MAP: Record<string, string> = {
+  "جيد": "good",
+  "يحتاج صيانة": "maintenance",
+  "صيانة": "maintenance",
+  "تالف": "damaged",
+  "مفقود": "missing",
+};
 const VALID_CATEGORIES = [
   "معدات المخبز",
   "أدوات العرض",
@@ -179,9 +186,10 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
           const price = priceRaw ? parseFloat(priceRaw) : undefined;
           if (priceRaw && isNaN(price!)) errors.push("السعر غير صحيح");
 
-          const normalizedStatus = status?.toLowerCase().trim();
-          if (status && !VALID_STATUSES.includes(normalizedStatus) && normalizedStatus !== "") {
-            errors.push("الحالة غير صحيحة (good, maintenance, damaged, missing)");
+          const statusTrimmed = status?.trim() || "";
+          const normalizedStatus = STATUS_ARABIC_MAP[statusTrimmed] || statusTrimmed.toLowerCase();
+          if (statusTrimmed && !VALID_STATUSES.includes(normalizedStatus) && normalizedStatus !== "") {
+            errors.push("الحالة غير صحيحة (جيد، صيانة، تالف، مفقود)");
           }
 
           return {
@@ -249,7 +257,7 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose(); else onOpenChange(true); }}>
       <DialogContent className="max-w-4xl max-h-[90vh]" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
