@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { AdvancedFilters, defaultFilters, type FilterConfig } from "@/components/advanced-filters";
+import { ItemCardDialog } from "@/components/item-card-dialog";
 
 type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
@@ -33,6 +34,8 @@ export default function InventoryPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [advancedFilters, setAdvancedFilters] = useState<FilterConfig>(defaultFilters);
   const [appliedFilters, setAppliedFilters] = useState<FilterConfig>(defaultFilters);
+  const [selectedItem, setSelectedItem] = useState<InventoryItemWithBranch | null>(null);
+  const [isItemCardOpen, setIsItemCardOpen] = useState(false);
 
   const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -337,7 +340,12 @@ export default function InventoryPage() {
                         const totalWithVat = total + vat;
                         
                         return (
-                          <TableRow key={item.id} className="hover:bg-muted/20 transition-colors print:border-black" data-testid={`row-item-${item.id}`}>
+                          <TableRow 
+                            key={item.id} 
+                            className="hover:bg-muted/20 transition-colors print:border-black cursor-pointer" 
+                            data-testid={`row-item-${item.id}`}
+                            onClick={() => { setSelectedItem(item); setIsItemCardOpen(true); }}
+                          >
                             <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(index + 1)}</TableCell>
                             <TableCell className="p-1">
                               {item.imageUrl ? (
@@ -656,6 +664,13 @@ export default function InventoryPage() {
           </div>
         </div>
       </div>
+
+      <ItemCardDialog
+        item={selectedItem}
+        branchName={selectedItem?.branchName}
+        open={isItemCardOpen}
+        onOpenChange={setIsItemCardOpen}
+      />
     </Layout>
   );
 }
