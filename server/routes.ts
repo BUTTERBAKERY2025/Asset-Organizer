@@ -769,6 +769,71 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/construction/budget-estimates/historical", isAuthenticated, requirePermission("budget_planning", "view"), async (req, res) => {
+    try {
+      const averages = await storage.getHistoricalCategoryAverages();
+      res.json(averages);
+    } catch (error) {
+      console.error("Error fetching historical averages:", error);
+      res.status(500).json({ error: "Failed to fetch historical averages" });
+    }
+  });
+
+  app.post("/api/construction/budget-estimates/generate", isAuthenticated, requirePermission("budget_planning", "create"), async (req, res) => {
+    try {
+      const { totalBudget } = req.body;
+      if (!totalBudget || totalBudget <= 0) {
+        return res.status(400).json({ error: "Total budget is required and must be greater than 0" });
+      }
+
+      const averages = await storage.getHistoricalCategoryAverages();
+      const categoriesWithData = averages.filter(a => a.avgCost > 0);
+      
+      if (categoriesWithData.length === 0) {
+        const allCategories = averages;
+        const equalShare = totalBudget / Math.max(allCategories.length, 1);
+        const estimates = allCategories.map(cat => ({
+          categoryId: cat.categoryId,
+          categoryName: cat.categoryName,
+          estimatedAmount: Math.round(equalShare),
+          percentOfTotal: 100 / allCategories.length,
+          basedOnProjects: 0,
+          confidence: "low"
+        }));
+        return res.json({ estimates, totalBudget, hasHistoricalData: false });
+      }
+
+      const totalAvgCost = categoriesWithData.reduce((sum, c) => sum + c.avgCost, 0);
+      
+      const estimates = averages.map(cat => {
+        let estimatedAmount = 0;
+        let percentOfTotal = 0;
+        let confidence = "low";
+
+        if (cat.avgCost > 0) {
+          percentOfTotal = (cat.avgCost / totalAvgCost) * 100;
+          estimatedAmount = Math.round((percentOfTotal / 100) * totalBudget);
+          confidence = cat.projectCount >= 3 ? "high" : cat.projectCount >= 1 ? "medium" : "low";
+        }
+
+        return {
+          categoryId: cat.categoryId,
+          categoryName: cat.categoryName,
+          estimatedAmount,
+          percentOfTotal: Math.round(percentOfTotal * 10) / 10,
+          basedOnProjects: cat.projectCount,
+          avgHistoricalCost: Math.round(cat.avgCost),
+          confidence
+        };
+      });
+
+      res.json({ estimates, totalBudget, hasHistoricalData: true });
+    } catch (error) {
+      console.error("Error generating budget estimates:", error);
+      res.status(500).json({ error: "Failed to generate budget estimates" });
+    }
+  });
+
   app.patch("/api/construction/budget-allocations/:id", isAuthenticated, requirePermission("budget_planning", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);

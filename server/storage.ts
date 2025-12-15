@@ -121,6 +121,7 @@ export interface IStorage {
   updateBudgetAllocation(id: number, allocation: Partial<InsertProjectBudgetAllocation>): Promise<ProjectBudgetAllocation | undefined>;
   deleteBudgetAllocation(id: number): Promise<boolean>;
   upsertBudgetAllocation(allocation: InsertProjectBudgetAllocation): Promise<ProjectBudgetAllocation>;
+  getHistoricalCategoryAverages(): Promise<{ categoryId: number; categoryName: string; avgCost: number; projectCount: number; totalCost: number }[]>;
   
   // Construction Contracts
   getAllContracts(): Promise<ConstructionContract[]>;
@@ -539,6 +540,52 @@ export class DatabaseStorage implements IStorage {
       const [newAllocation] = await db.insert(projectBudgetAllocations).values(allocation).returning();
       return newAllocation;
     }
+  }
+
+  async getHistoricalCategoryAverages(): Promise<{ categoryId: number; categoryName: string; avgCost: number; projectCount: number; totalCost: number }[]> {
+    const categories = await db.select().from(constructionCategories);
+    const workItems = await db.select().from(projectWorkItems);
+    
+    const categoryStats: Record<number, { totalCost: number; projectIds: Set<number>; count: number }> = {};
+    
+    for (const item of workItems) {
+      if (!item.categoryId) continue;
+      const cost = item.actualCost || item.costEstimate || 0;
+      if (cost <= 0) continue;
+      
+      if (!categoryStats[item.categoryId]) {
+        categoryStats[item.categoryId] = { totalCost: 0, projectIds: new Set(), count: 0 };
+      }
+      
+      categoryStats[item.categoryId].totalCost += cost;
+      categoryStats[item.categoryId].projectIds.add(item.projectId);
+      categoryStats[item.categoryId].count++;
+    }
+    
+    const result: { categoryId: number; categoryName: string; avgCost: number; projectCount: number; totalCost: number }[] = [];
+    
+    for (const category of categories) {
+      const stats = categoryStats[category.id];
+      if (stats && stats.count > 0) {
+        result.push({
+          categoryId: category.id,
+          categoryName: category.name,
+          avgCost: stats.totalCost / stats.projectIds.size,
+          projectCount: stats.projectIds.size,
+          totalCost: stats.totalCost
+        });
+      } else {
+        result.push({
+          categoryId: category.id,
+          categoryName: category.name,
+          avgCost: 0,
+          projectCount: 0,
+          totalCost: 0
+        });
+      }
+    }
+    
+    return result;
   }
 
   // Construction Contracts
