@@ -45,6 +45,7 @@ export function BudgetEstimateDialog({ open, onOpenChange, projectId, projectTit
       const res = await fetch("/api/construction/budget-estimates/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ totalBudget: budget }),
       });
       if (!res.ok) throw new Error("Failed to generate estimates");
@@ -67,20 +68,20 @@ export function BudgetEstimateDialog({ open, onOpenChange, projectId, projectTit
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const promises = Object.entries(editedEstimates)
-        .filter(([_, amount]) => amount > 0)
-        .map(([categoryId, amount]) =>
-          fetch("/api/construction/budget-allocations/upsert", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              projectId,
-              categoryId: parseInt(categoryId),
-              plannedAmount: amount,
-            }),
-          })
-        );
-      await Promise.all(promises);
+      const entries = Object.entries(editedEstimates).filter(([_, amount]) => amount > 0);
+      for (const [categoryId, amount] of entries) {
+        const res = await fetch("/api/construction/budget-allocations/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            projectId,
+            categoryId: parseInt(categoryId),
+            plannedAmount: amount,
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to save budget");
+      }
     },
     onSuccess: () => {
       toast({ title: "تم حفظ الميزانية بنجاح" });

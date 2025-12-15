@@ -546,27 +546,31 @@ export class DatabaseStorage implements IStorage {
     const categories = await db.select().from(constructionCategories);
     const workItems = await db.select().from(projectWorkItems);
     
-    const categoryStats: Record<number, { totalCost: number; projectIds: Set<number>; count: number }> = {};
+    const categoryStats: Record<number, { totalCost: number; projectIds: Set<number>; itemCount: number }> = {};
     
     for (const item of workItems) {
       if (!item.categoryId) continue;
-      const cost = item.actualCost || item.costEstimate || 0;
+      
+      const cost = item.actualCost !== null && item.actualCost > 0 
+        ? item.actualCost 
+        : (item.costEstimate !== null && item.costEstimate > 0 ? item.costEstimate : 0);
+      
       if (cost <= 0) continue;
       
       if (!categoryStats[item.categoryId]) {
-        categoryStats[item.categoryId] = { totalCost: 0, projectIds: new Set(), count: 0 };
+        categoryStats[item.categoryId] = { totalCost: 0, projectIds: new Set(), itemCount: 0 };
       }
       
       categoryStats[item.categoryId].totalCost += cost;
       categoryStats[item.categoryId].projectIds.add(item.projectId);
-      categoryStats[item.categoryId].count++;
+      categoryStats[item.categoryId].itemCount++;
     }
     
     const result: { categoryId: number; categoryName: string; avgCost: number; projectCount: number; totalCost: number }[] = [];
     
     for (const category of categories) {
       const stats = categoryStats[category.id];
-      if (stats && stats.count > 0) {
+      if (stats && stats.itemCount > 0) {
         result.push({
           categoryId: category.id,
           categoryName: category.name,
