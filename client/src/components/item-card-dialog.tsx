@@ -16,20 +16,19 @@ interface ItemCardDialogProps {
 }
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("ar-SA", {
-    style: "currency",
-    currency: "SAR",
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 2,
+  }).format(value) + " ر.س";
 };
 
 const formatDate = (dateStr: string | Date | null | undefined) => {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
-  return new Intl.DateTimeFormat("ar-SA", {
+  return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
-    month: "long",
-    day: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
@@ -38,7 +37,7 @@ const formatDate = (dateStr: string | Date | null | undefined) => {
 const formatDateShort = (dateStr: string | null | undefined) => {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
-  return new Intl.DateTimeFormat("ar-SA", {
+  return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -189,7 +188,7 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
                 <Package className="w-4 h-4" />
                 الكمية
               </div>
-              <p className="text-2xl font-bold font-mono">{item.quantity} <span className="text-sm font-normal text-muted-foreground">{item.unit}</span></p>
+              <p className="text-2xl font-bold font-mono">{item.quantity.toLocaleString('en-US')} <span className="text-sm font-normal text-muted-foreground">{item.unit}</span></p>
             </div>
 
             <div className="bg-muted/30 rounded-lg p-4">
