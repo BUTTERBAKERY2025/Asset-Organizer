@@ -1,8 +1,3 @@
--- Migration: Update Medina Branch Asset Images
--- تحديث صور أصول فرع المدينة المنورة
--- Run this in Supabase SQL Editor after deploying the new code
-
--- Barista Section (b-*)
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_3.jpeg' WHERE id = 'b-1';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_5.jpeg' WHERE id = 'b-2';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_6.jpeg' WHERE id = 'b-3';
@@ -33,8 +28,6 @@ UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_28.jpeg' WHERE id = 'b-28';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_29.jpeg' WHERE id = 'b-29';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_30.jpeg' WHERE id = 'b-30';
-
--- Cashier Section (c-*)
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_31.jpeg' WHERE id = 'c-1';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_32.jpeg' WHERE id = 'c-2';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_33.jpeg' WHERE id = 'c-3';
@@ -45,8 +38,6 @@ UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_39.jpeg' WHERE id = 'c-9';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_40.jpeg' WHERE id = 'c-10';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_42.jpeg' WHERE id = 'c-11';
-
--- Kitchen Section (k-*)
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_43.jpeg' WHERE id = 'k-1';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_44.jpeg' WHERE id = 'k-2';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_45.jpeg' WHERE id = 'k-19';
@@ -68,14 +59,10 @@ UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_116.jpeg' WHERE id = 'k-21';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_118.jpeg' WHERE id = 'k-22';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_117.jpeg' WHERE id = 'k-23';
-
--- Pizza Section (p-*)
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_62.jpeg' WHERE id = 'p-1';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_63.jpeg' WHERE id = 'p-2';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_64.jpeg' WHERE id = 'p-3';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_65.jpeg' WHERE id = 'p-4';
-
--- General/Furniture Section (g-*)
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_67.jpeg' WHERE id = 'g-1';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_68.jpeg' WHERE id = 'g-2';
 UPDATE inventory_items SET image_url = '/attached_assets/medina_assets_v2/image_69.jpeg' WHERE id = 'g-3';
