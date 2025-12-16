@@ -150,7 +150,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <aside className="w-64 bg-card border-l border-border hidden md:flex flex-col sticky top-0 h-screen">
         <div className="p-4 flex flex-col items-center border-b border-border/50">
           <div className="w-full px-2 mb-2 flex items-center justify-between">
-            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-12" />
+            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-20" />
           </div>
           <div className="flex items-center gap-2">
             {isAuthenticated && <NotificationsDropdown />}
@@ -259,7 +259,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
-                <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-10" />
+                <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16" />
                 <p className="text-[10px] text-muted-foreground text-center mt-2">نظام إدارة المشروعات والأصول والصيانة</p>
               </div>
               
@@ -360,7 +360,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Sheet>
 
           <div className="flex items-center">
-            <img src={logo} alt="Butter Bakery" className="h-8 w-auto object-contain" />
+            <img src={logo} alt="Butter Bakery" className="h-10 w-auto object-contain" />
           </div>
 
           <div className="flex items-center gap-1">
