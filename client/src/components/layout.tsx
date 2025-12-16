@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { GlobalSearch } from "@/components/global-search";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const allBottomItems: NavItem[] = [
     { href: "/reports", label: "التقارير الشاملة", icon: FileBarChart, module: "reports" },
+    { href: "/audit-logs", label: "سجل التدقيق", icon: FileSearch, module: "users" },
+    { href: "/backups", label: "النسخ الاحتياطية", icon: HardDrive, module: "users" },
     { href: "/users", label: "إدارة المستخدمين", icon: Users, module: "users" },
   ];
 
@@ -152,6 +155,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {isAuthenticated && <NotificationsDropdown />}
             <p className="text-[10px] text-muted-foreground text-center leading-tight">نظام إدارة المشروعات والأصول والصيانة</p>
           </div>
+          {isAuthenticated && (
+            <div className="mt-2 w-full">
+              <GlobalSearch />
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">

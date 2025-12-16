@@ -5,6 +5,10 @@ import {
   type InsertInventoryItem,
   type AuditLog,
   type InsertAuditLog,
+  type SystemAuditLog,
+  type InsertSystemAuditLog,
+  type Backup,
+  type InsertBackup,
   type SavedFilter,
   type InsertSavedFilter,
   type User,
@@ -39,6 +43,8 @@ import {
   branches,
   inventoryItems,
   auditLogs,
+  systemAuditLogs,
+  backups,
   savedFilters,
   users,
   constructionCategories,
@@ -187,6 +193,29 @@ export interface IStorage {
   confirmAssetTransfer(id: number, userId: string, receiverName: string, signature?: string): Promise<AssetTransfer | undefined>;
   cancelAssetTransfer(id: number, userId: string, reason?: string): Promise<AssetTransfer | undefined>;
   getAssetTransferEvents(transferId: number): Promise<AssetTransferEvent[]>;
+  
+  // System Audit Logs
+  getAllSystemAuditLogs(limit?: number): Promise<SystemAuditLog[]>;
+  getSystemAuditLogsByModule(module: string): Promise<SystemAuditLog[]>;
+  getSystemAuditLogsByUser(userId: string): Promise<SystemAuditLog[]>;
+  createSystemAuditLog(log: InsertSystemAuditLog): Promise<SystemAuditLog>;
+  searchSystemAuditLogs(query: string): Promise<SystemAuditLog[]>;
+  
+  // Backups
+  getAllBackups(): Promise<Backup[]>;
+  getBackup(id: number): Promise<Backup | undefined>;
+  createBackup(backup: InsertBackup): Promise<Backup>;
+  updateBackup(id: number, backup: Partial<InsertBackup>): Promise<Backup | undefined>;
+  deleteBackup(id: number): Promise<boolean>;
+  
+  // Global Search
+  globalSearch(query: string): Promise<{
+    inventory: InventoryItem[];
+    projects: ConstructionProject[];
+    contractors: Contractor[];
+    transfers: AssetTransfer[];
+    users: User[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -298,6 +327,16 @@ export class DatabaseStorage implements IStorage {
       changedBy: userId || 'system'
     });
     
+    await this.createSystemAuditLog({
+      module: 'inventory',
+      entityId: newItem.id,
+      entityName: newItem.name,
+      action: 'create',
+      details: JSON.stringify({ category: newItem.category, branchId: newItem.branchId }),
+      userId: userId || null,
+      userName: null,
+    });
+    
     return newItem;
   }
 
@@ -340,6 +379,16 @@ export class DatabaseStorage implements IStorage {
         oldValue: JSON.stringify(existingItem),
         newValue: null,
         changedBy: userId || 'system'
+      });
+      
+      await this.createSystemAuditLog({
+        module: 'inventory',
+        entityId: id,
+        entityName: existingItem.name,
+        action: 'delete',
+        details: JSON.stringify({ category: existingItem.category }),
+        userId: userId || null,
+        userName: null,
       });
     }
     
@@ -975,6 +1024,16 @@ export class DatabaseStorage implements IStorage {
       note: 'تم إنشاء طلب التحويل',
     });
 
+    await this.createSystemAuditLog({
+      module: 'transfers',
+      entityId: String(created.id),
+      entityName: created.transferNumber,
+      action: 'create',
+      details: JSON.stringify({ itemId: transfer.itemId, from: transfer.fromBranchId, to: transfer.toBranchId }),
+      userId: userId,
+      userName: null,
+    });
+
     return created;
   }
 
@@ -995,6 +1054,16 @@ export class DatabaseStorage implements IStorage {
         eventType: 'approved',
         actorId: userId,
         note: 'تمت الموافقة على التحويل',
+      });
+
+      await this.createSystemAuditLog({
+        module: 'transfers',
+        entityId: String(id),
+        entityName: updated.transferNumber,
+        action: 'approve',
+        details: 'تمت الموافقة على التحويل',
+        userId: userId,
+        userName: null,
       });
     }
 
@@ -1075,6 +1144,134 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(assetTransferEvents)
       .where(eq(assetTransferEvents.transferId, transferId))
       .orderBy(desc(assetTransferEvents.createdAt));
+  }
+
+  // System Audit Logs
+  async getAllSystemAuditLogs(limit: number = 500): Promise<SystemAuditLog[]> {
+    return db.select().from(systemAuditLogs)
+      .orderBy(desc(systemAuditLogs.createdAt))
+      .limit(limit);
+  }
+
+  async getSystemAuditLogsByModule(module: string): Promise<SystemAuditLog[]> {
+    return db.select().from(systemAuditLogs)
+      .where(eq(systemAuditLogs.module, module))
+      .orderBy(desc(systemAuditLogs.createdAt));
+  }
+
+  async getSystemAuditLogsByUser(userId: string): Promise<SystemAuditLog[]> {
+    return db.select().from(systemAuditLogs)
+      .where(eq(systemAuditLogs.userId, userId))
+      .orderBy(desc(systemAuditLogs.createdAt));
+  }
+
+  async createSystemAuditLog(log: InsertSystemAuditLog): Promise<SystemAuditLog> {
+    const [created] = await db.insert(systemAuditLogs).values(log).returning();
+    return created;
+  }
+
+  async searchSystemAuditLogs(query: string): Promise<SystemAuditLog[]> {
+    const allLogs = await db.select().from(systemAuditLogs)
+      .orderBy(desc(systemAuditLogs.createdAt))
+      .limit(1000);
+    
+    const lowerQuery = query.toLowerCase();
+    return allLogs.filter(log => 
+      log.entityName?.toLowerCase().includes(lowerQuery) ||
+      log.details?.toLowerCase().includes(lowerQuery) ||
+      log.userName?.toLowerCase().includes(lowerQuery) ||
+      log.action.toLowerCase().includes(lowerQuery) ||
+      log.module.toLowerCase().includes(lowerQuery)
+    );
+  }
+
+  // Backups
+  async getAllBackups(): Promise<Backup[]> {
+    return db.select().from(backups).orderBy(desc(backups.createdAt));
+  }
+
+  async getBackup(id: number): Promise<Backup | undefined> {
+    const [backup] = await db.select().from(backups).where(eq(backups.id, id));
+    return backup || undefined;
+  }
+
+  async createBackup(backup: InsertBackup): Promise<Backup> {
+    const [created] = await db.insert(backups).values(backup).returning();
+    return created;
+  }
+
+  async updateBackup(id: number, backupData: Partial<InsertBackup>): Promise<Backup | undefined> {
+    const [updated] = await db.update(backups)
+      .set(backupData)
+      .where(eq(backups.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteBackup(id: number): Promise<boolean> {
+    const result = await db.delete(backups).where(eq(backups.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Global Search
+  async globalSearch(query: string): Promise<{
+    inventory: InventoryItem[];
+    projects: ConstructionProject[];
+    contractors: Contractor[];
+    transfers: AssetTransfer[];
+    users: User[];
+  }> {
+    const lowerQuery = query.toLowerCase();
+    
+    // Search inventory
+    const allInventory = await db.select().from(inventoryItems);
+    const inventory = allInventory.filter(item =>
+      item.name.toLowerCase().includes(lowerQuery) ||
+      item.id.toLowerCase().includes(lowerQuery) ||
+      item.category.toLowerCase().includes(lowerQuery) ||
+      item.serialNumber?.toLowerCase().includes(lowerQuery) ||
+      item.notes?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 20);
+
+    // Search projects
+    const allProjects = await db.select().from(constructionProjects);
+    const projects = allProjects.filter(project =>
+      project.title.toLowerCase().includes(lowerQuery) ||
+      project.description?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 20);
+
+    // Search contractors
+    const allContractors = await db.select().from(contractors);
+    const contractorResults = allContractors.filter(contractor =>
+      contractor.name.toLowerCase().includes(lowerQuery) ||
+      contractor.email?.toLowerCase().includes(lowerQuery) ||
+      contractor.phone?.toLowerCase().includes(lowerQuery) ||
+      contractor.specialization?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 20);
+
+    // Search transfers
+    const allTransfers = await db.select().from(assetTransfers);
+    const transfers = allTransfers.filter(transfer =>
+      transfer.transferNumber.toLowerCase().includes(lowerQuery) ||
+      transfer.notes?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 20);
+
+    // Search users
+    const allUsers = await db.select().from(users);
+    const userResults = allUsers.filter(user =>
+      user.username?.toLowerCase().includes(lowerQuery) ||
+      user.firstName?.toLowerCase().includes(lowerQuery) ||
+      user.lastName?.toLowerCase().includes(lowerQuery) ||
+      user.email?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 20);
+
+    return {
+      inventory,
+      projects,
+      contractors: contractorResults,
+      transfers,
+      users: userResults,
+    };
   }
 }
 

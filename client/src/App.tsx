@@ -24,6 +24,8 @@ import ContractsPage from "@/pages/contracts";
 import PaymentRequestsPage from "@/pages/payment-requests";
 import BudgetPlanningPage from "@/pages/budget-planning";
 import AssetTransfersPage from "@/pages/asset-transfers";
+import AuditLogsPage from "@/pages/audit-logs";
+import BackupsPage from "@/pages/backups";
 
 function Router() {
   return (
@@ -47,6 +49,8 @@ function Router() {
       <Route path="/budget-planning" component={BudgetPlanningPage} />
       <Route path="/asset-transfers" component={AssetTransfersPage} />
       <Route path="/reports" component={ReportsPage} />
+      <Route path="/audit-logs" component={AuditLogsPage} />
+      <Route path="/backups" component={BackupsPage} />
       <Route component={NotFound} />
     </Switch>
   );

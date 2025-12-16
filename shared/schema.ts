@@ -81,7 +81,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit
 export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 
-// Audit logs table for tracking changes
+// Audit logs table for tracking changes (legacy - for inventory items)
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
   itemId: varchar("item_id").notNull().references(() => inventoryItems.id, { onDelete: "cascade" }),
@@ -100,6 +100,51 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// System-wide audit log for all operations
+export const systemAuditLogs = pgTable("system_audit_logs", {
+  id: serial("id").primaryKey(),
+  module: text("module").notNull(), // 'inventory', 'projects', 'contractors', 'transfers', 'users', 'contracts'
+  entityId: text("entity_id").notNull(),
+  entityName: text("entity_name"),
+  action: text("action").notNull(), // 'create', 'update', 'delete', 'view', 'export', 'transfer', 'approve', 'reject'
+  details: text("details"), // JSON string with change details
+  userId: varchar("user_id").references(() => users.id),
+  userName: text("user_name"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSystemAuditLogSchema = createInsertSchema(systemAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SystemAuditLog = typeof systemAuditLogs.$inferSelect;
+export type InsertSystemAuditLog = z.infer<typeof insertSystemAuditLogSchema>;
+
+// Backups table
+export const backups = pgTable("backups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // 'manual', 'auto', 'scheduled'
+  status: text("status").notNull().default("pending"), // 'pending', 'completed', 'failed'
+  fileSize: integer("file_size"),
+  filePath: text("file_path"),
+  tables: text("tables"), // JSON array of backed up tables
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertBackupSchema = createInsertSchema(backups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Backup = typeof backups.$inferSelect;
+export type InsertBackup = z.infer<typeof insertBackupSchema>;
 
 // Saved filters table
 export const savedFilters = pgTable("saved_filters", {

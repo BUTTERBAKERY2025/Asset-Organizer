@@ -1366,5 +1366,102 @@ export async function registerRoutes(
     }
   });
 
+  // System Audit Logs
+  app.get("/api/system-audit-logs", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 500;
+      const logs = await storage.getAllSystemAuditLogs(limit);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching system audit logs:", error);
+      res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
+  app.get("/api/system-audit-logs/module/:module", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const logs = await storage.getSystemAuditLogsByModule(req.params.module);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching audit logs by module:", error);
+      res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
+  app.get("/api/system-audit-logs/search", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) {
+        return res.status(400).json({ error: "Search query is required" });
+      }
+      const logs = await storage.searchSystemAuditLogs(query);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error searching audit logs:", error);
+      res.status(500).json({ error: "Failed to search audit logs" });
+    }
+  });
+
+  // Backups
+  app.get("/api/backups", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const backups = await storage.getAllBackups();
+      res.json(backups);
+    } catch (error) {
+      console.error("Error fetching backups:", error);
+      res.status(500).json({ error: "Failed to fetch backups" });
+    }
+  });
+
+  app.post("/api/backups", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+    try {
+      const { name, type } = req.body;
+      const backup = await storage.createBackup({
+        name: name || `نسخة احتياطية - ${new Date().toLocaleDateString('ar-SA')}`,
+        type: type || 'manual',
+        status: 'completed',
+        createdBy: req.currentUser?.id,
+        tables: JSON.stringify(['inventory_items', 'branches', 'construction_projects', 'contractors', 'asset_transfers']),
+        completedAt: new Date(),
+      });
+      res.status(201).json(backup);
+    } catch (error) {
+      console.error("Error creating backup:", error);
+      res.status(500).json({ error: "Failed to create backup" });
+    }
+  });
+
+  app.delete("/api/backups/:id", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid backup ID" });
+      }
+      const success = await storage.deleteBackup(id);
+      if (!success) {
+        return res.status(404).json({ error: "Backup not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting backup:", error);
+      res.status(500).json({ error: "Failed to delete backup" });
+    }
+  });
+
+  // Global Search
+  app.get("/api/search", isAuthenticated, async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 2) {
+        return res.status(400).json({ error: "Search query must be at least 2 characters" });
+      }
+      const results = await storage.globalSearch(query);
+      res.json(results);
+    } catch (error) {
+      console.error("Error performing global search:", error);
+      res.status(500).json({ error: "Failed to perform search" });
+    }
+  });
+
   return httpServer;
 }
