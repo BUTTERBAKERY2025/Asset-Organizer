@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeftRight, Plus, Search, Check, X, Clock, Send, Package, Building2, FileText, Eye } from "lucide-react";
+import { ArrowLeftRight, Plus, Search, Check, X, Clock, Send, Package, Building2, FileText, Eye, Hash, MapPin, Tag, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { AssetTransfer, InventoryItem, Branch } from "@shared/schema";
 
 const statusLabels: Record<string, string> = {
@@ -56,6 +58,10 @@ export default function AssetTransfersPage() {
     receiverName: "",
     signature: "",
   });
+
+  const [assetSearch, setAssetSearch] = useState("");
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [branchFilter, setBranchFilter] = useState<string>("all");
 
   const { data: transfers = [], isLoading } = useQuery<AssetTransfer[]>({
     queryKey: ["/api/asset-transfers"],
@@ -201,15 +207,34 @@ export default function AssetTransfersPage() {
     });
   };
 
-  const handleItemSelect = (itemId: string) => {
-    const item = items.find((i) => i.id === itemId);
-    if (item) {
-      setNewTransfer({
-        ...newTransfer,
-        itemId,
-        fromBranchId: item.branchId,
-      });
-    }
+  const handleItemSelect = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setNewTransfer({
+      ...newTransfer,
+      itemId: item.id,
+      fromBranchId: item.branchId,
+      quantity: 1,
+    });
+    setAssetSearch("");
+  };
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      const matchesSearch = 
+        item.name.toLowerCase().includes(assetSearch.toLowerCase()) ||
+        item.id.toLowerCase().includes(assetSearch.toLowerCase()) ||
+        (item.serialNumber && item.serialNumber.toLowerCase().includes(assetSearch.toLowerCase()));
+      const matchesBranch = branchFilter === "all" || item.branchId === branchFilter;
+      return matchesSearch && matchesBranch && item.quantity > 0;
+    });
+  }, [items, assetSearch, branchFilter]);
+
+  const resetCreateDialog = () => {
+    setIsCreateOpen(false);
+    setNewTransfer({ itemId: "", fromBranchId: "", toBranchId: "", quantity: 1, reason: "", notes: "" });
+    setSelectedItem(null);
+    setAssetSearch("");
+    setBranchFilter("all");
   };
 
   const pendingCount = transfers.filter((t) => t.status === "pending").length;
@@ -234,93 +259,259 @@ export default function AssetTransfersPage() {
             <h1 className="text-2xl font-bold text-gray-900" data-testid="page-title">تحويلات الأصول</h1>
             <p className="text-gray-600">إدارة تحويلات الأصول والمعدات بين الفروع</p>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={(open) => { if (!open) resetCreateDialog(); else setIsCreateOpen(true); }}>
             <DialogTrigger asChild>
               <Button className="bg-amber-600 hover:bg-amber-700" data-testid="button-create-transfer">
                 <Plus className="h-4 w-4 ml-2" />
                 طلب تحويل جديد
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg" dir="rtl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden" dir="rtl">
               <DialogHeader>
-                <DialogTitle>إنشاء طلب تحويل جديد</DialogTitle>
-                <DialogDescription>حدد الأصل والفرع المراد التحويل إليه</DialogDescription>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <ArrowLeftRight className="h-5 w-5 text-amber-600" />
+                  إنشاء طلب تحويل جديد
+                </DialogTitle>
+                <DialogDescription>ابحث عن الأصل المراد تحويله وحدد الفرع المستلم</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>الأصل / المعدة</Label>
-                  <Select value={newTransfer.itemId} onValueChange={handleItemSelect}>
-                    <SelectTrigger data-testid="select-item">
-                      <SelectValue placeholder="اختر الأصل" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {items.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name} - {getBranchName(item.branchId)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              
+              <div className="space-y-4 py-2">
+                {!selectedItem ? (
+                  <>
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold flex items-center gap-2">
+                        <Search className="h-4 w-4" />
+                        البحث عن الأصل
+                      </Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                          <Input
+                            value={assetSearch}
+                            onChange={(e) => setAssetSearch(e.target.value)}
+                            placeholder="ابحث بالاسم أو الرقم التسلسلي أو رمز الأصل..."
+                            className="pr-10"
+                            data-testid="input-asset-search"
+                          />
+                        </div>
+                        <Select value={branchFilter} onValueChange={setBranchFilter}>
+                          <SelectTrigger className="w-40" data-testid="select-branch-filter">
+                            <SelectValue placeholder="كل الفروع" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">كل الفروع</SelectItem>
+                            {branches.map((branch) => (
+                              <SelectItem key={branch.id} value={branch.id}>
+                                {branch.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>من فرع</Label>
-                    <Select value={newTransfer.fromBranchId} onValueChange={(v) => setNewTransfer({ ...newTransfer, fromBranchId: v })}>
-                      <SelectTrigger data-testid="select-from-branch">
-                        <SelectValue placeholder="الفرع المرسل" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>إلى فرع</Label>
-                    <Select value={newTransfer.toBranchId} onValueChange={(v) => setNewTransfer({ ...newTransfer, toBranchId: v })}>
-                      <SelectTrigger data-testid="select-to-branch">
-                        <SelectValue placeholder="الفرع المستلم" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.filter((b) => b.id !== newTransfer.fromBranchId).map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    <ScrollArea className="h-64 border rounded-lg">
+                      {filteredItems.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full py-8 text-gray-500">
+                          <Package className="h-10 w-10 text-gray-300 mb-2" />
+                          <p>لا توجد أصول مطابقة للبحث</p>
+                        </div>
+                      ) : (
+                        <div className="p-2 space-y-2">
+                          {filteredItems.slice(0, 20).map((item) => (
+                            <div
+                              key={item.id}
+                              onClick={() => handleItemSelect(item)}
+                              className="p-3 border rounded-lg hover:bg-amber-50 hover:border-amber-300 cursor-pointer transition-colors"
+                              data-testid={`item-option-${item.id}`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-gray-900">{item.name}</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.category}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                    <span className="flex items-center gap-1">
+                                      <Hash className="h-3 w-3" />
+                                      {item.id}
+                                    </span>
+                                    {item.serialNumber && (
+                                      <span className="flex items-center gap-1 font-mono">
+                                        <Tag className="h-3 w-3" />
+                                        {item.serialNumber}
+                                      </span>
+                                    )}
+                                    <span className="flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" />
+                                      {getBranchName(item.branchId)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-left">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    الكمية: {item.quantity.toLocaleString('en-US')} {item.unit}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {filteredItems.length > 20 && (
+                            <p className="text-center text-sm text-gray-500 py-2">
+                              يظهر 20 من {filteredItems.length} نتيجة - حدد البحث للمزيد
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <span className="font-semibold text-lg">{selectedItem.name}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-1 mt-2 text-sm">
+                            <div className="flex items-center gap-2 text-gray-600">
+                              <Hash className="h-4 w-4" />
+                              <span>رمز الأصل:</span>
+                              <span className="font-mono font-medium text-gray-900">{selectedItem.id}</span>
+                            </div>
+                            {selectedItem.serialNumber && (
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Tag className="h-4 w-4" />
+                                <span>الرقم التسلسلي:</span>
+                                <span className="font-mono font-medium text-gray-900">{selectedItem.serialNumber}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 text-gray-600">
+                              <Package className="h-4 w-4" />
+                              <span>التصنيف:</span>
+                              <span className="font-medium text-gray-900">{selectedItem.category}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-600">
+                              <MapPin className="h-4 w-4" />
+                              <span>الفرع الحالي:</span>
+                              <span className="font-medium text-gray-900">{getBranchName(selectedItem.branchId)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-600">
+                              <span>الكمية المتاحة:</span>
+                              <span className="font-bold text-gray-900">{selectedItem.quantity.toLocaleString('en-US')} {selectedItem.unit}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedItem(null);
+                            setNewTransfer({ ...newTransfer, itemId: "", fromBranchId: "" });
+                          }}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <X className="h-4 w-4" />
+                          تغيير
+                        </Button>
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>سبب التحويل</Label>
-                  <Input
-                    value={newTransfer.reason}
-                    onChange={(e) => setNewTransfer({ ...newTransfer, reason: e.target.value })}
-                    placeholder="أدخل سبب التحويل"
-                    data-testid="input-reason"
-                  />
-                </div>
+                    <Separator />
 
-                <div className="space-y-2">
-                  <Label>ملاحظات</Label>
-                  <Textarea
-                    value={newTransfer.notes}
-                    onChange={(e) => setNewTransfer({ ...newTransfer, notes: e.target.value })}
-                    placeholder="ملاحظات إضافية (اختياري)"
-                    data-testid="input-notes"
-                  />
-                </div>
+                    <div className="space-y-4">
+                      <Label className="text-base font-semibold">تفاصيل التحويل</Label>
+                      
+                      <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1 text-center">
+                          <div className="text-xs text-gray-500 mb-1">من</div>
+                          <div className="flex items-center justify-center gap-2">
+                            <Building2 className="h-4 w-4 text-red-500" />
+                            <span className="font-medium">{getBranchName(newTransfer.fromBranchId)}</span>
+                          </div>
+                        </div>
+                        <ArrowRight className="h-6 w-6 text-amber-600" />
+                        <div className="flex-1">
+                          <div className="text-xs text-gray-500 mb-1 text-center">إلى</div>
+                          <Select value={newTransfer.toBranchId} onValueChange={(v) => setNewTransfer({ ...newTransfer, toBranchId: v })}>
+                            <SelectTrigger data-testid="select-to-branch" className="border-amber-300">
+                              <SelectValue placeholder="اختر الفرع المستلم" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {branches.filter((b) => b.id !== newTransfer.fromBranchId).map((branch) => (
+                                <SelectItem key={branch.id} value={branch.id}>
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="h-4 w-4 text-green-500" />
+                                    {branch.name}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>الكمية المراد تحويلها</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={selectedItem.quantity}
+                            value={newTransfer.quantity}
+                            onChange={(e) => setNewTransfer({ ...newTransfer, quantity: Math.min(parseInt(e.target.value) || 1, selectedItem.quantity) })}
+                            data-testid="input-quantity"
+                          />
+                          <p className="text-xs text-gray-500">الحد الأقصى: {selectedItem.quantity.toLocaleString('en-US')}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>سبب التحويل <span className="text-red-500">*</span></Label>
+                          <Input
+                            value={newTransfer.reason}
+                            onChange={(e) => setNewTransfer({ ...newTransfer, reason: e.target.value })}
+                            placeholder="مثال: نقص في الفرع المستلم"
+                            data-testid="input-reason"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>ملاحظات إضافية</Label>
+                        <Textarea
+                          value={newTransfer.notes}
+                          onChange={(e) => setNewTransfer({ ...newTransfer, notes: e.target.value })}
+                          placeholder="أي ملاحظات أخرى تتعلق بالتحويل (اختياري)"
+                          rows={2}
+                          data-testid="input-notes"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>إلغاء</Button>
-                <Button onClick={handleCreateTransfer} disabled={createMutation.isPending} data-testid="button-submit-transfer">
-                  {createMutation.isPending ? "جاري الإنشاء..." : "إنشاء الطلب"}
-                </Button>
+
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={resetCreateDialog}>إلغاء</Button>
+                {selectedItem && (
+                  <Button 
+                    onClick={handleCreateTransfer} 
+                    disabled={createMutation.isPending || !newTransfer.toBranchId || !newTransfer.reason}
+                    className="bg-amber-600 hover:bg-amber-700"
+                    data-testid="button-submit-transfer"
+                  >
+                    {createMutation.isPending ? (
+                      <>جاري الإنشاء...</>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 ml-2" />
+                        إرسال طلب التحويل
+                      </>
+                    )}
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>
