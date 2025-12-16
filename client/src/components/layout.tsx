@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -70,6 +70,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: [
           { href: "/inventory", label: "جرد الأصول", icon: FileText, module: "inventory" },
           { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit, requiresAuth: true, module: "inventory" },
+          { href: "/asset-transfers", label: "تحويلات الأصول", icon: ArrowLeftRight, module: "asset_transfers" },
           { href: "/branches", label: "إدارة الفروع", icon: Building2, requiresAuth: true, module: "inventory" },
           { href: "/inspections", label: "الفحص الدوري", icon: CalendarCheck, module: "inventory" },
           { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle, module: "inventory" },
