@@ -26,7 +26,7 @@ import AssetTransfersPage from "@/pages/asset-transfers";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={() => <Redirect to="/dashboard" />} />
+      <Route path="/" component={() => <Redirect to="/login" />} />
       <Route path="/login" component={LoginPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/inventory" component={InventoryPage} />

@@ -37,7 +37,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <img src={logo} alt="Butter Bakery" className="h-24 w-auto" />
+            <img src={logo} alt="Butter Bakery" className="h-36 w-auto" />
           </div>
           <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
           <CardDescription>
