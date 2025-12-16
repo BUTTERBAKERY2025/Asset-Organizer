@@ -39,10 +39,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye, Upload, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye, Upload, Download, Camera } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { AssetDetailsDialog } from "@/components/asset-details-dialog";
+import { CameraCapture } from "@/components/camera-capture";
 
 const itemFormSchema = z.object({
   id: z.string().min(1, "معرف الصنف مطلوب"),
@@ -524,12 +525,23 @@ export default function ManagePage() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="imageUrl">رابط الصورة</Label>
-        <Input
-          {...form.register("imageUrl")}
-          placeholder="https://example.com/image.jpg"
-          data-testid="input-image-url"
-        />
+        <Label htmlFor="imageUrl">صورة الأصل</Label>
+        <div className="flex gap-2">
+          <Input
+            {...form.register("imageUrl")}
+            placeholder="رابط الصورة أو التقط صورة"
+            className="flex-1"
+            data-testid="input-image-url"
+          />
+          <CameraCapture 
+            onCapture={(imageData) => form.setValue("imageUrl", imageData)}
+            existingImage={form.watch("imageUrl")}
+            buttonText="التقاط"
+          />
+        </div>
+        {form.watch("imageUrl") && form.watch("imageUrl")?.startsWith("data:") && (
+          <p className="text-xs text-muted-foreground">تم التقاط صورة من الكاميرا</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
