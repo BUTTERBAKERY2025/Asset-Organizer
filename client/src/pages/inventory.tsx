@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
+import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { AdvancedFilters, defaultFilters, type FilterConfig } from "@/components/advanced-filters";
 import { ItemCardDialog } from "@/components/item-card-dialog";
@@ -217,7 +218,10 @@ export default function InventoryPage() {
     ws['!cols'] = wscols;
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+    XLSX.utils.book_append_sheet(wb, ws, "المخزون");
+    
+    const reportTitle = isGlobalSearch ? "تقرير المخزون - جميع الفروع" : `تقرير المخزون - ${currentBranchName}`;
+    finalizeBrandedWorkbook(wb, reportTitle);
     
     const date = new Date().toISOString().split('T')[0];
     const fileName = `inventory_${isGlobalSearch ? 'all_branches' : activeBranch}_${date}.xlsx`;

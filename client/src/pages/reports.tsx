@@ -16,6 +16,8 @@ import {
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { PrintHeader, PrintFooter } from "@/components/print-header";
+import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 
 const STATUS_LABELS: Record<string, string> = {
   good: "جيد",
@@ -224,6 +226,9 @@ export default function ReportsPage() {
       XLSX.utils.book_append_sheet(wb, ws, "الملخص");
     }
 
+    const reportTitle = type === "full" ? "تقرير الأصول الشامل" : `تقرير ${type}`;
+    finalizeBrandedWorkbook(wb, reportTitle);
+    
     const fileName = type === "full" 
       ? `تقرير_الأصول_الشامل_${new Date().toLocaleDateString("ar-SA")}.xlsx`
       : `تقرير_${type}_${new Date().toLocaleDateString("ar-SA")}.xlsx`;
@@ -279,10 +284,10 @@ export default function ReportsPage() {
         </div>
 
         <div ref={printRef} className="space-y-6 print:p-4">
-          <div className="hidden print:block text-center mb-6">
-            <h2 className="text-xl font-bold">تقرير الأصول والمعدات - مخبز باتر</h2>
-            <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("ar-SA")}</p>
-          </div>
+          <PrintHeader 
+            title="تقرير الأصول والمعدات" 
+            subtitle={`إجمالي ${overallStats.total} أصل - القيمة: ${overallStats.totalValue.toLocaleString()} ر.س`}
+          />
 
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
@@ -905,6 +910,7 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
+          <PrintFooter />
         </div>
       </div>
     </Layout>

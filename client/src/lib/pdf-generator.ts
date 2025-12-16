@@ -98,6 +98,8 @@ export function generatePaymentRequestsPDF(
     return;
   }
 
+  const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
+  
   const htmlContent = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -125,6 +127,10 @@ export function generatePaymentRequestsPDF(
       margin-bottom: 30px;
       border-bottom: 2px solid #d4a853;
       padding-bottom: 20px;
+    }
+    .header .logo {
+      max-height: 80px;
+      margin-bottom: 15px;
     }
     .header h1 {
       font-size: 24px;
@@ -253,7 +259,8 @@ export function generatePaymentRequestsPDF(
   <button class="print-btn no-print" onclick="window.print()">طباعة / حفظ PDF</button>
   
   <div class="header">
-    <h1>تقرير طلبات الدفع - باتر بيكري</h1>
+    <img src="${logoUrl}" alt="باتر بيكري" class="logo" />
+    <h1>تقرير طلبات الدفع</h1>
     <div class="date">${formatDate(dateFilter)}</div>
   </div>
 

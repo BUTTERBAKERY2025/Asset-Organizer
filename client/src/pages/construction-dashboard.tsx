@@ -11,6 +11,7 @@ import { Loader2, Hammer, DollarSign, Clock, CheckCircle2, AlertTriangle, Trendi
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, Area } from "recharts";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
+import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 import type { Branch, ConstructionProject, Contractor, ConstructionCategory, ProjectWorkItem } from "@shared/schema";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -244,6 +245,7 @@ export default function ConstructionDashboardPage() {
     const ws3 = XLSX.utils.json_to_sheet(branchData);
     XLSX.utils.book_append_sheet(wb, ws3, "الفروع");
 
+    finalizeBrandedWorkbook(wb, "تقرير لوحة تحكم المشاريع الإنشائية");
     XLSX.writeFile(wb, `تقرير_لوحة_التحكم_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 

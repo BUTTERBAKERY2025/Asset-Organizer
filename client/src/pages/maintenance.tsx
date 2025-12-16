@@ -17,6 +17,8 @@ import { Loader2, Printer, AlertTriangle, XCircle, HelpCircle, Download } from "
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
+import { PrintHeader, PrintFooter } from "@/components/print-header";
+import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 
 export default function MaintenancePage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -101,6 +103,7 @@ export default function MaintenancePage() {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير الصيانة");
+    finalizeBrandedWorkbook(workbook, "تقرير الصيانة والأصناف المفقودة");
     XLSX.writeFile(workbook, "maintenance_report.xlsx");
   };
 
@@ -228,10 +231,10 @@ export default function MaintenancePage() {
             </div>
 
             <div ref={printRef} className="print:p-4">
-              <div className="hidden print:block text-center mb-4">
-                <h2 className="text-xl font-bold">تقرير الصيانة والأصناف المفقودة</h2>
-                <p className="text-sm text-muted-foreground">تاريخ التقرير: {new Date().toLocaleDateString('en-GB')}</p>
-              </div>
+              <PrintHeader 
+                title="تقرير الصيانة والأصناف المفقودة" 
+                subtitle={`إجمالي ${problemItems.length} صنف يحتاج متابعة`}
+              />
 
               <div className="rounded-md border">
                 <Table>
@@ -273,6 +276,7 @@ export default function MaintenancePage() {
                   </TableBody>
                 </Table>
               </div>
+              <PrintFooter />
             </div>
           </CardContent>
         </Card>
