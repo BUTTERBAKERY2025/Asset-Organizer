@@ -355,6 +355,7 @@ export type InsertContractPayment = z.infer<typeof insertContractPaymentSchema>;
 export const SYSTEM_MODULES = [
   "dashboard",
   "inventory",
+  "asset_transfers",
   "construction_projects",
   "construction_work_items",
   "contractors",
@@ -402,6 +403,7 @@ export type InsertUserPermission = z.infer<typeof insertUserPermissionSchema>;
 export const MODULE_LABELS: Record<SystemModule, string> = {
   dashboard: "لوحة التحكم",
   inventory: "المخزون والأصول",
+  asset_transfers: "تحويلات الأصول",
   construction_projects: "مشاريع الإنشاءات",
   construction_work_items: "بنود الأعمال",
   contractors: "المقاولين",
@@ -424,7 +426,7 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
 
 // Module groups for UI organization
 export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
-  { label: "الأساسية", modules: ["dashboard", "inventory", "reports"] },
+  { label: "الأساسية", modules: ["dashboard", "inventory", "asset_transfers", "reports"] },
   { label: "إدارة الإنشاءات", modules: ["construction_projects", "construction_work_items", "contractors"] },
   { label: "المالية والعقود", modules: ["contracts", "budget_planning", "payment_requests"] },
   { label: "إدارة النظام", modules: ["users"] },
@@ -442,6 +444,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<string, { module: SystemModule; a
   employee: [
     { module: "dashboard", actions: ["view", "export"] },
     { module: "inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "asset_transfers", actions: ["view", "create", "edit", "export"] },
     { module: "construction_projects", actions: ["view", "create", "edit", "export"] },
     { module: "construction_work_items", actions: ["view", "create", "edit", "export"] },
     { module: "contractors", actions: ["view", "create", "edit", "export"] },
@@ -478,3 +481,56 @@ export const insertPermissionAuditLogSchema = createInsertSchema(permissionAudit
 
 export type PermissionAuditLog = typeof permissionAuditLogs.$inferSelect;
 export type InsertPermissionAuditLog = z.infer<typeof insertPermissionAuditLogSchema>;
+
+// Asset Transfers table - تحويلات الأصول بين الفروع
+export const assetTransfers = pgTable("asset_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: text("transfer_number").unique().notNull(),
+  itemId: varchar("item_id").notNull().references(() => inventoryItems.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull().default(1),
+  fromBranchId: varchar("from_branch_id").notNull().references(() => branches.id),
+  toBranchId: varchar("to_branch_id").notNull().references(() => branches.id),
+  status: text("status").default("pending").notNull(), // pending, approved, in_transit, completed, cancelled
+  reason: text("reason"),
+  notes: text("notes"),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  receivedBy: varchar("received_by").references(() => users.id),
+  receivedAt: timestamp("received_at"),
+  receiverName: text("receiver_name"),
+  receiverSignature: text("receiver_signature"), // Base64 signature
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAssetTransferSchema = createInsertSchema(assetTransfers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  requestedAt: true,
+  approvedAt: true,
+  receivedAt: true,
+});
+
+export type AssetTransfer = typeof assetTransfers.$inferSelect;
+export type InsertAssetTransfer = z.infer<typeof insertAssetTransferSchema>;
+
+// Asset Transfer Events table - أحداث التحويل
+export const assetTransferEvents = pgTable("asset_transfer_events", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => assetTransfers.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(), // created, approved, dispatched, received, cancelled
+  actorId: varchar("actor_id").references(() => users.id),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAssetTransferEventSchema = createInsertSchema(assetTransferEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AssetTransferEvent = typeof assetTransferEvents.$inferSelect;
+export type InsertAssetTransferEvent = z.infer<typeof insertAssetTransferEventSchema>;
