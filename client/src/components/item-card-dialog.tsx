@@ -1,11 +1,12 @@
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Printer, Download, X, Package, Calendar, DollarSign, MapPin, FileText, Hash, Clock, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Wrench } from "lucide-react";
-import type { InventoryItem } from "@shared/schema";
+import { Printer, Download, X, Package, Calendar, DollarSign, MapPin, FileText, Hash, Clock, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Wrench, ArrowLeftRight, ArrowRight } from "lucide-react";
+import type { InventoryItem, AssetTransfer, Branch } from "@shared/schema";
 import * as XLSX from "xlsx";
 
 interface ItemCardDialogProps {
@@ -59,8 +60,36 @@ const getStatusInfo = (status: string | null | undefined) => {
   }
 };
 
+const TRANSFER_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800" },
+  approved: { label: "تمت الموافقة", color: "bg-blue-100 text-blue-800" },
+  in_transit: { label: "في الطريق", color: "bg-purple-100 text-purple-800" },
+  completed: { label: "مكتمل", color: "bg-green-100 text-green-800" },
+  cancelled: { label: "ملغى", color: "bg-red-100 text-red-800" },
+};
+
 export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCardDialogProps) {
   const printRef = useRef<HTMLDivElement>(null);
+
+  const { data: transfers = [] } = useQuery<AssetTransfer[]>({
+    queryKey: ["/api/asset-transfers/by-item", item?.id],
+    queryFn: async () => {
+      if (!item?.id) return [];
+      const res = await fetch(`/api/asset-transfers/by-item/${item.id}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!item?.id && open,
+  });
+
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+    enabled: open,
+  });
+
+  const getBranchName = (branchId: string) => {
+    return branches.find(b => b.id === branchId)?.name || `فرع ${branchId}`;
+  };
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -269,6 +298,44 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
                   ملاحظات
                 </h3>
                 <p className="text-muted-foreground bg-muted/30 rounded-lg p-4">{item.notes}</p>
+              </div>
+            </>
+          )}
+
+          {transfers.length > 0 && (
+            <>
+              <Separator className="my-6" />
+              <div className="space-y-3">
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                  <ArrowLeftRight className="w-5 h-5 text-muted-foreground" />
+                  سجل التحويلات
+                </h3>
+                <div className="space-y-2">
+                  {transfers.slice(0, 5).map((transfer) => {
+                    const statusInfo = TRANSFER_STATUS_LABELS[transfer.status] || { label: transfer.status, color: "bg-gray-100 text-gray-800" };
+                    return (
+                      <div key={transfer.id} className="bg-muted/30 rounded-lg p-3 text-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span>{getBranchName(transfer.fromBranchId)}</span>
+                            <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                            <span>{getBranchName(transfer.toBranchId)}</span>
+                          </div>
+                          <Badge className={statusInfo.color}>{statusInfo.label}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-muted-foreground text-xs">
+                          <span>الكمية: {transfer.quantity}</span>
+                          <span>{formatDateShort(transfer.createdAt as any)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {transfers.length > 5 && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      و {transfers.length - 5} تحويلات أخرى...
+                    </p>
+                  )}
+                </div>
               </div>
             </>
           )}
