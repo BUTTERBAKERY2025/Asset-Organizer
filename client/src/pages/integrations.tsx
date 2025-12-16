@@ -187,7 +187,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع الفروع</SelectItem>
+                  <SelectItem value="all">جميع الفروع</SelectItem>
                   {(branches as any[]).map((branch: any) => (
                     <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                   ))}
@@ -195,7 +195,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
               </Select>
             </div>
             <Button 
-              onClick={() => inventoryValuationMutation.mutate(selectedBranch || undefined)}
+              onClick={() => inventoryValuationMutation.mutate(selectedBranch === "all" ? undefined : selectedBranch || undefined)}
               disabled={inventoryValuationMutation.isPending}
               className="w-full"
               data-testid="btn-export-valuation"
