@@ -8,7 +8,7 @@ const app = express();
 const httpServer = createServer(app);
 
 // Serve attached_assets folder for uploaded images
-app.use("/attached_assets", express.static(path.resolve(import.meta.dirname, "..", "attached_assets")));
+app.use("/attached_assets", express.static(path.resolve(process.cwd(), "attached_assets")));
 
 declare module "http" {
   interface IncomingMessage {
