@@ -1,0 +1,120 @@
+image_3.jpeg|PARISTA|1
+image_5.jpeg|بلتو فلتر|1
+image_6.jpeg|ستاند اكواب يالستيك اسود|1
+image_7.jpeg|حبة1|1
+image_1.jpeg|تامبر كهربائي|1
+image_4.jpeg|طاحونة دريب براتزاforte bg|1
+image_2.jpeg|مكينةv60|1
+image_8.jpeg|طاحونةomina Mahlkonig|2
+image_9.jpeg|سخان مياه17 لتر كوادر|2
+image_10.jpeg|مكينة فيتكوxts ngحبة1|2
+image_11.jpeg|حافظة قهوه5|2
+image_12.jpeg|حافظه قهوه2.5|2
+image_13.jpeg|حافظه قهوه4.5|2
+image_14.jpeg|مكينة برتقال فروكسول صغير|2
+image_15.jpeg|جهاز حساس4|2
+image_16.jpeg|بتشر مقاس450|3
+image_17.jpeg|بتشر مقاس300|3
+image_18.jpeg|بتشر مقاس600حبة2|3
+image_19.jpeg|صانعة ثلجBREMAحبة1|3
+image_20.jpeg|ميزان شحن|3
+image_21.jpeg|سيرفر مع القمع|3
+image_22.jpeg|كاتل كهربائي1|3
+image_23.jpeg|كاتل برتقالي500|3
+image_24.jpeg|ثالجه2|4
+image_25.jpeg|شيكر مقاس750|4
+image_26.jpeg|خالط كهربائي للمشروباتitemnoحبة1|4
+image_27.jpeg|كوب اسبريسو سراميك|4
+image_28.jpeg|صحن خشبي لالسبريسو|4
+image_29.jpeg|باسكت للبن بالستيك اسود|4
+image_30.jpeg|طابعة|4
+image_31.jpeg|CASHER|4
+image_32.jpeg|جهاز بيجر مع الشاحن|5
+image_33.jpeg|صرافتين مع الشاحن|5
+image_34.jpeg|ايباد المنيو|5
+image_35.jpeg|طابعة كاشير|5
+image_36.jpeg|مكينة صوت|5
+image_37.jpeg|توصيله كهرباء|5
+image_38.jpeg|جهاز هنقرستيشن مع الشاحن|5
+image_39.jpeg|جهاز تو يو مع الشاحن|5
+image_40.jpeg|طابعه ورقhpحبة1|6
+image_41.jpeg|جهاز كيتا|6
+image_42.jpeg|درج كاشير للنقدية|6
+image_43.jpeg|KITCHEN|6
+image_44.jpeg|قالية زيت بالكهرباء|6
+image_45.jpeg|سالمندر|6
+image_46.jpeg|ثالجة اندر كاونتر4 باب|6
+image_47.jpeg|ثالجة اندر كاونتر2 باب|6
+image_48.jpeg|فريزر2|7
+image_49.jpeg|شوك فريزر|7
+image_50.jpeg|عجان|7
+image_51.jpeg|ميكسر|7
+image_52.jpeg|فرادة عجين|7
+image_53.jpeg|عجان صغير|7
+image_54.jpeg|مسدس لهبTOTALحبة2|7
+image_55.jpeg|ترولى|7
+image_56.jpeg|راك استيل|8
+image_57.jpeg|راك بالستيك أبيض كبير|8
+image_58.jpeg|راك بالستيك ابيض صغير|8
+image_59.jpeg|طابعة|8
+image_60.jpeg|قطاعة لحم|8
+image_61.jpeg|مضرب كهربائي|8
+image_62.jpeg|ثالجة اندر كاونتر2 باب|8
+image_63.jpeg|فرن بيتزا|8
+image_64.jpeg|فرشة فرن معدن|9
+image_65.jpeg|بيل التقاط بيتزا|9
+image_66.jpeg|طابعة كاشير|9
+image_67.jpeg|كرسي شبك|9
+image_68.jpeg|طاولة دائرية|9
+image_69.jpeg|كرسي خشب|9
+image_70.jpeg|كرسي خشب صغير|9
+image_71.jpeg|طاولة خشب|9
+image_72.jpeg|طاولة دائريى رخام|10
+image_73.jpeg|طاولة مربعة رخام|10
+image_74.jpeg|كرسي جلد|10
+image_75.jpeg|جلسات ساكو|10
+image_76.jpeg|دفاية غاز|10
+image_77.jpeg|صندوق بلدية|10
+image_78.jpeg|مظلةBBحبة4|10
+image_79.jpeg|شاشة32 بوصة|10
+image_80.jpeg|شاشة98 بوصة|11
+image_81.jpeg|ستارة هواء|11
+image_82.jpeg|جريالت سوداء|11
+image_83.jpeg|سماعات|11
+image_84.jpeg|راوتر انترنت|11
+image_85.jpeg|كاميرات مراقبة360 درجة|11
+image_86.jpeg|كاميرات مراقبة|11
+image_87.jpeg|وحدة تحكم بالكاميرات|12
+image_88.jpeg|جهاز تسجيل الكاميرات|12
+image_89.jpeg|صندوق أجهزة الكاميرات|12
+image_90.jpeg|صندوق شاشة +شاتر|12
+image_91.jpeg|طفاية حريق|12
+image_92.jpeg|لوجو بتر بيكرى|12
+image_93.jpeg|فخاريات|12
+image_94.jpeg|صائد حشرات|12
+image_95.jpeg|خزان مياه|13
+image_96.jpeg|سخان مياه كهرباء|13
+image_97.jpeg|غرفة تبريد|13
+image_98.jpeg|باب خزان ارضى|13
+image_99.jpeg|أسطوانة غاز|13
+image_100.jpeg|طقم مفكات|14
+image_101.jpeg|باب خشب|14
+image_102.jpeg|باب دفاع مدنى|14
+image_103.jpeg|ستارة قماش مطبوعbbحبة20|14
+image_104.jpeg|شفاط دخان|14
+image_105.jpeg|ماكينة غرفة التبريد|14
+image_106.jpeg|وحدات تكييف خارجية|14
+image_107.jpeg|قطع ضخ مياه النافورة|14
+image_115.jpeg|كشاف النافورة|15
+image_108.jpeg|كشاف طوارئ|15
+image_109.jpeg|كشاف زرع|15
+image_110.jpeg|صندوق خشب بتر بيكرى|15
+image_111.jpeg|ثالجة عرض1.5م|15
+image_112.jpeg|ثالجة عرض1.2 م|15
+image_113.jpeg|رف ستيل معلق|15
+image_114.jpeg|طاولة ستيل|15
+image_116.jpeg|فرن يونكس|16
+image_117.jpeg|خمارة|16
+image_118.jpeg|فرن تسخين|16
+image_119.jpeg|ماكينة تغليف|16
+image_120.jpeg|رف ستيل ارضي|16
