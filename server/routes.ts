@@ -1463,5 +1463,268 @@ export async function registerRoutes(
     }
   });
 
+  // External Integrations
+  app.get("/api/integrations", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const integrations = await storage.getAllExternalIntegrations();
+      res.json(integrations);
+    } catch (error) {
+      console.error("Error fetching integrations:", error);
+      res.status(500).json({ error: "Failed to fetch integrations" });
+    }
+  });
+
+  app.post("/api/integrations", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const integration = await storage.createExternalIntegration(req.body);
+      res.status(201).json(integration);
+    } catch (error) {
+      console.error("Error creating integration:", error);
+      res.status(500).json({ error: "Failed to create integration" });
+    }
+  });
+
+  app.patch("/api/integrations/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const integration = await storage.updateExternalIntegration(id, req.body);
+      if (!integration) {
+        return res.status(404).json({ error: "Integration not found" });
+      }
+      res.json(integration);
+    } catch (error) {
+      console.error("Error updating integration:", error);
+      res.status(500).json({ error: "Failed to update integration" });
+    }
+  });
+
+  app.delete("/api/integrations/:id", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const success = await storage.deleteExternalIntegration(id);
+      if (!success) {
+        return res.status(404).json({ error: "Integration not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting integration:", error);
+      res.status(500).json({ error: "Failed to delete integration" });
+    }
+  });
+
+  // Notification Templates
+  app.get("/api/notification-templates", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const templates = await storage.getAllNotificationTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching notification templates:", error);
+      res.status(500).json({ error: "Failed to fetch notification templates" });
+    }
+  });
+
+  app.post("/api/notification-templates", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const template = await storage.createNotificationTemplate(req.body);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating notification template:", error);
+      res.status(500).json({ error: "Failed to create notification template" });
+    }
+  });
+
+  app.patch("/api/notification-templates/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const template = await storage.updateNotificationTemplate(id, req.body);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating notification template:", error);
+      res.status(500).json({ error: "Failed to update notification template" });
+    }
+  });
+
+  app.delete("/api/notification-templates/:id", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const success = await storage.deleteNotificationTemplate(id);
+      if (!success) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting notification template:", error);
+      res.status(500).json({ error: "Failed to delete notification template" });
+    }
+  });
+
+  // Notification Queue
+  app.get("/api/notifications", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const notifications = await storage.getAllNotifications();
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.post("/api/notifications/send", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const { recipientPhone, recipientName, channel, message, relatedModule, relatedEntityId } = req.body;
+      
+      // Create notification in queue
+      const notification = await storage.createNotification({
+        recipientPhone,
+        recipientName,
+        channel,
+        message,
+        status: 'pending',
+        relatedModule,
+        relatedEntityId,
+      });
+
+      // Check for Twilio credentials
+      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+
+      if (twilioSid && twilioToken && twilioPhone && channel === 'sms') {
+        // TODO: Implement actual Twilio SMS sending when credentials are available
+        // For now, mark as pending - requires Twilio setup
+        await storage.updateNotificationStatus(notification.id, 'pending', 'Twilio غير مكوّن - الرسالة في قائمة الانتظار');
+      } else {
+        await storage.updateNotificationStatus(notification.id, 'pending', 'في انتظار إعداد خدمة الإرسال');
+      }
+
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error("Error sending notification:", error);
+      res.status(500).json({ error: "Failed to send notification" });
+    }
+  });
+
+  // Data Import Jobs
+  app.get("/api/import-jobs", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+    try {
+      const jobs = await storage.getAllDataImportJobs();
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching import jobs:", error);
+      res.status(500).json({ error: "Failed to fetch import jobs" });
+    }
+  });
+
+  app.post("/api/import-jobs", isAuthenticated, requirePermission("inventory", "edit"), async (req: any, res) => {
+    try {
+      const { sourceSystem, targetModule, fileName, totalRecords } = req.body;
+      const job = await storage.createDataImportJob({
+        sourceSystem,
+        targetModule,
+        fileName,
+        status: 'pending',
+        totalRecords: totalRecords || 0,
+        processedRecords: 0,
+        failedRecords: 0,
+        importedBy: req.user?.id || null,
+      });
+      res.status(201).json(job);
+    } catch (error) {
+      console.error("Error creating import job:", error);
+      res.status(500).json({ error: "Failed to create import job" });
+    }
+  });
+
+  // Accounting Exports
+  app.get("/api/accounting-exports", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+    try {
+      const exports = await storage.getAllAccountingExports();
+      res.json(exports);
+    } catch (error) {
+      console.error("Error fetching accounting exports:", error);
+      res.status(500).json({ error: "Failed to fetch accounting exports" });
+    }
+  });
+
+  app.post("/api/accounting-exports/inventory-valuation", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+    try {
+      const { branchId } = req.body;
+      const data = await storage.generateInventoryValuation(branchId);
+      
+      const exportRecord = await storage.createAccountingExport({
+        exportType: 'inventory_valuation',
+        branchId: branchId || null,
+        data,
+        status: 'completed',
+        exportedBy: req.user?.id || null,
+      });
+      
+      res.json({ export: exportRecord, data });
+    } catch (error) {
+      console.error("Error generating inventory valuation:", error);
+      res.status(500).json({ error: "Failed to generate inventory valuation" });
+    }
+  });
+
+  app.post("/api/accounting-exports/asset-movements", isAuthenticated, requirePermission("transfers", "view"), async (req: any, res) => {
+    try {
+      const { dateFrom, dateTo } = req.body;
+      const data = await storage.generateAssetMovementsReport(dateFrom, dateTo);
+      
+      const exportRecord = await storage.createAccountingExport({
+        exportType: 'asset_movements',
+        dateFrom,
+        dateTo,
+        data,
+        status: 'completed',
+        exportedBy: req.user?.id || null,
+      });
+      
+      res.json({ export: exportRecord, data });
+    } catch (error) {
+      console.error("Error generating asset movements report:", error);
+      res.status(500).json({ error: "Failed to generate asset movements report" });
+    }
+  });
+
+  app.post("/api/accounting-exports/project-costs", isAuthenticated, requirePermission("projects", "view"), async (req: any, res) => {
+    try {
+      const { projectId } = req.body;
+      const data = await storage.generateProjectCostsReport(projectId);
+      
+      const exportRecord = await storage.createAccountingExport({
+        exportType: 'project_costs',
+        data,
+        status: 'completed',
+        exportedBy: req.user?.id || null,
+      });
+      
+      res.json({ export: exportRecord, data });
+    } catch (error) {
+      console.error("Error generating project costs report:", error);
+      res.status(500).json({ error: "Failed to generate project costs report" });
+    }
+  });
+
+  app.patch("/api/accounting-exports/:id/sync", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const exportRecord = await storage.updateAccountingExport(id, {
+        status: 'synced',
+        syncedAt: new Date(),
+      });
+      if (!exportRecord) {
+        return res.status(404).json({ error: "Export not found" });
+      }
+      res.json(exportRecord);
+    } catch (error) {
+      console.error("Error syncing accounting export:", error);
+      res.status(500).json({ error: "Failed to sync accounting export" });
+    }
+  });
+
   return httpServer;
 }

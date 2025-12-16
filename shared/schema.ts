@@ -579,3 +579,117 @@ export const insertAssetTransferEventSchema = createInsertSchema(assetTransferEv
 
 export type AssetTransferEvent = typeof assetTransferEvents.$inferSelect;
 export type InsertAssetTransferEvent = z.infer<typeof insertAssetTransferEventSchema>;
+
+// External System Integrations - التكاملات مع الأنظمة الخارجية
+export const externalIntegrations = pgTable("external_integrations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // e.g., 'accounting', 'sms', 'whatsapp', 'erp'
+  type: text("type").notNull(), // 'accounting', 'messaging', 'erp', 'import'
+  config: jsonb("config"), // JSON configuration
+  isActive: text("is_active").default("true"),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertExternalIntegrationSchema = createInsertSchema(externalIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExternalIntegration = typeof externalIntegrations.$inferSelect;
+export type InsertExternalIntegration = z.infer<typeof insertExternalIntegrationSchema>;
+
+// Notification Templates - قوالب الإشعارات
+export const notificationTemplates = pgTable("notification_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  eventType: text("event_type").notNull(), // 'transfer_pending', 'transfer_approved', 'maintenance_due', etc.
+  channel: text("channel").notNull(), // 'sms', 'whatsapp', 'email'
+  template: text("template").notNull(), // Template with placeholders like {{itemName}}, {{branchName}}
+  isActive: text("is_active").default("true"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertNotificationTemplateSchema = createInsertSchema(notificationTemplates).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type NotificationTemplate = typeof notificationTemplates.$inferSelect;
+export type InsertNotificationTemplate = z.infer<typeof insertNotificationTemplateSchema>;
+
+// Notification Queue - قائمة الإشعارات المنتظرة
+export const notificationQueue = pgTable("notification_queue", {
+  id: serial("id").primaryKey(),
+  recipientPhone: text("recipient_phone").notNull(),
+  recipientName: text("recipient_name"),
+  channel: text("channel").notNull(), // 'sms', 'whatsapp'
+  message: text("message").notNull(),
+  status: text("status").default("pending").notNull(), // 'pending', 'sent', 'failed'
+  errorMessage: text("error_message"),
+  relatedModule: text("related_module"), // 'transfers', 'inventory', 'projects'
+  relatedEntityId: text("related_entity_id"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertNotificationQueueSchema = createInsertSchema(notificationQueue).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+});
+
+export type NotificationQueueItem = typeof notificationQueue.$inferSelect;
+export type InsertNotificationQueueItem = z.infer<typeof insertNotificationQueueSchema>;
+
+// Data Import Jobs - وظائف استيراد البيانات
+export const dataImportJobs = pgTable("data_import_jobs", {
+  id: serial("id").primaryKey(),
+  sourceSystem: text("source_system").notNull(), // 'excel', 'csv', 'api', 'erp'
+  targetModule: text("target_module").notNull(), // 'inventory', 'projects', 'contractors'
+  fileName: text("file_name"),
+  status: text("status").default("pending").notNull(), // 'pending', 'processing', 'completed', 'failed'
+  totalRecords: integer("total_records").default(0),
+  processedRecords: integer("processed_records").default(0),
+  failedRecords: integer("failed_records").default(0),
+  errorLog: text("error_log"),
+  importedBy: varchar("imported_by").references(() => users.id),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDataImportJobSchema = createInsertSchema(dataImportJobs).omit({
+  id: true,
+  createdAt: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type DataImportJob = typeof dataImportJobs.$inferSelect;
+export type InsertDataImportJob = z.infer<typeof insertDataImportJobSchema>;
+
+// Accounting Exports - تصدير للمحاسبة
+export const accountingExports = pgTable("accounting_exports", {
+  id: serial("id").primaryKey(),
+  exportType: text("export_type").notNull(), // 'inventory_valuation', 'asset_movements', 'project_costs'
+  dateFrom: text("date_from"),
+  dateTo: text("date_to"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  data: jsonb("data"), // Exported data in JSON format
+  status: text("status").default("pending").notNull(), // 'pending', 'completed', 'synced'
+  syncedAt: timestamp("synced_at"),
+  exportedBy: varchar("exported_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAccountingExportSchema = createInsertSchema(accountingExports).omit({
+  id: true,
+  createdAt: true,
+  syncedAt: true,
+});
+
+export type AccountingExport = typeof accountingExports.$inferSelect;
+export type InsertAccountingExport = z.infer<typeof insertAccountingExportSchema>;

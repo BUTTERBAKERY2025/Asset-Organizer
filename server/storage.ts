@@ -40,6 +40,16 @@ import {
   type InsertAssetTransfer,
   type AssetTransferEvent,
   type InsertAssetTransferEvent,
+  type ExternalIntegration,
+  type InsertExternalIntegration,
+  type NotificationTemplate,
+  type InsertNotificationTemplate,
+  type NotificationQueueItem,
+  type InsertNotificationQueueItem,
+  type DataImportJob,
+  type InsertDataImportJob,
+  type AccountingExport,
+  type InsertAccountingExport,
   branches,
   inventoryItems,
   auditLogs,
@@ -59,7 +69,12 @@ import {
   userPermissions,
   permissionAuditLogs,
   assetTransfers,
-  assetTransferEvents
+  assetTransferEvents,
+  externalIntegrations,
+  notificationTemplates,
+  notificationQueue,
+  dataImportJobs,
+  accountingExports
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -1271,6 +1286,227 @@ export class DatabaseStorage implements IStorage {
       contractors: contractorResults,
       transfers,
       users: userResults,
+    };
+  }
+
+  // External Integrations
+  async getAllExternalIntegrations(): Promise<ExternalIntegration[]> {
+    return db.select().from(externalIntegrations).orderBy(desc(externalIntegrations.createdAt));
+  }
+
+  async getExternalIntegration(id: number): Promise<ExternalIntegration | undefined> {
+    const [integration] = await db.select().from(externalIntegrations).where(eq(externalIntegrations.id, id));
+    return integration || undefined;
+  }
+
+  async createExternalIntegration(integration: InsertExternalIntegration): Promise<ExternalIntegration> {
+    const [created] = await db.insert(externalIntegrations).values(integration).returning();
+    return created;
+  }
+
+  async updateExternalIntegration(id: number, data: Partial<InsertExternalIntegration>): Promise<ExternalIntegration | undefined> {
+    const [updated] = await db.update(externalIntegrations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(externalIntegrations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteExternalIntegration(id: number): Promise<boolean> {
+    const result = await db.delete(externalIntegrations).where(eq(externalIntegrations.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Notification Templates
+  async getAllNotificationTemplates(): Promise<NotificationTemplate[]> {
+    return db.select().from(notificationTemplates).orderBy(desc(notificationTemplates.createdAt));
+  }
+
+  async createNotificationTemplate(template: InsertNotificationTemplate): Promise<NotificationTemplate> {
+    const [created] = await db.insert(notificationTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateNotificationTemplate(id: number, data: Partial<InsertNotificationTemplate>): Promise<NotificationTemplate | undefined> {
+    const [updated] = await db.update(notificationTemplates)
+      .set(data)
+      .where(eq(notificationTemplates.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteNotificationTemplate(id: number): Promise<boolean> {
+    const result = await db.delete(notificationTemplates).where(eq(notificationTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Notification Queue
+  async getAllNotifications(): Promise<NotificationQueueItem[]> {
+    return db.select().from(notificationQueue).orderBy(desc(notificationQueue.createdAt));
+  }
+
+  async getPendingNotifications(): Promise<NotificationQueueItem[]> {
+    return db.select().from(notificationQueue)
+      .where(eq(notificationQueue.status, 'pending'))
+      .orderBy(notificationQueue.createdAt);
+  }
+
+  async createNotification(notification: InsertNotificationQueueItem): Promise<NotificationQueueItem> {
+    const [created] = await db.insert(notificationQueue).values(notification).returning();
+    return created;
+  }
+
+  async updateNotificationStatus(id: number, status: string, errorMessage?: string): Promise<NotificationQueueItem | undefined> {
+    const [updated] = await db.update(notificationQueue)
+      .set({ 
+        status, 
+        errorMessage: errorMessage || null,
+        sentAt: status === 'sent' ? new Date() : null
+      })
+      .where(eq(notificationQueue.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Data Import Jobs
+  async getAllDataImportJobs(): Promise<DataImportJob[]> {
+    return db.select().from(dataImportJobs).orderBy(desc(dataImportJobs.createdAt));
+  }
+
+  async getDataImportJob(id: number): Promise<DataImportJob | undefined> {
+    const [job] = await db.select().from(dataImportJobs).where(eq(dataImportJobs.id, id));
+    return job || undefined;
+  }
+
+  async createDataImportJob(job: InsertDataImportJob): Promise<DataImportJob> {
+    const [created] = await db.insert(dataImportJobs).values({
+      ...job,
+      startedAt: new Date()
+    }).returning();
+    return created;
+  }
+
+  async updateDataImportJob(id: number, data: Partial<DataImportJob>): Promise<DataImportJob | undefined> {
+    const [updated] = await db.update(dataImportJobs)
+      .set(data)
+      .where(eq(dataImportJobs.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Accounting Exports
+  async getAllAccountingExports(): Promise<AccountingExport[]> {
+    return db.select().from(accountingExports).orderBy(desc(accountingExports.createdAt));
+  }
+
+  async getAccountingExport(id: number): Promise<AccountingExport | undefined> {
+    const [exp] = await db.select().from(accountingExports).where(eq(accountingExports.id, id));
+    return exp || undefined;
+  }
+
+  async createAccountingExport(exportData: InsertAccountingExport): Promise<AccountingExport> {
+    const [created] = await db.insert(accountingExports).values(exportData).returning();
+    return created;
+  }
+
+  async updateAccountingExport(id: number, data: Partial<AccountingExport>): Promise<AccountingExport | undefined> {
+    const [updated] = await db.update(accountingExports)
+      .set(data)
+      .where(eq(accountingExports.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Generate accounting export data
+  async generateInventoryValuation(branchId?: string): Promise<any> {
+    let items: InventoryItem[];
+    if (branchId) {
+      items = await this.getInventoryItemsByBranch(branchId);
+    } else {
+      items = await this.getAllInventoryItems();
+    }
+    
+    const VAT_RATE = 0.15;
+    const totalValue = items.reduce((sum, item) => sum + (item.price || 0) * item.quantity, 0);
+    const vatAmount = totalValue * VAT_RATE;
+    
+    return {
+      generatedAt: new Date().toISOString(),
+      branchId: branchId || 'all',
+      itemCount: items.length,
+      totalValue,
+      vatAmount,
+      totalWithVat: totalValue + vatAmount,
+      items: items.map(item => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        totalValue: (item.price || 0) * item.quantity,
+        status: item.status
+      }))
+    };
+  }
+
+  async generateAssetMovementsReport(dateFrom?: string, dateTo?: string): Promise<any> {
+    const transfers = await this.getAllAssetTransfers();
+    
+    let filtered = transfers;
+    if (dateFrom) {
+      filtered = filtered.filter(t => t.createdAt >= new Date(dateFrom));
+    }
+    if (dateTo) {
+      filtered = filtered.filter(t => t.createdAt <= new Date(dateTo));
+    }
+    
+    return {
+      generatedAt: new Date().toISOString(),
+      dateFrom,
+      dateTo,
+      totalTransfers: filtered.length,
+      completed: filtered.filter(t => t.status === 'completed').length,
+      pending: filtered.filter(t => t.status === 'pending').length,
+      transfers: filtered.map(t => ({
+        transferNumber: t.transferNumber,
+        itemId: t.itemId,
+        fromBranch: t.fromBranchId,
+        toBranch: t.toBranchId,
+        status: t.status,
+        requestedAt: t.requestedAt,
+        completedAt: t.receivedAt
+      }))
+    };
+  }
+
+  async generateProjectCostsReport(projectId?: number): Promise<any> {
+    let projects: ConstructionProject[];
+    if (projectId) {
+      const project = await this.getConstructionProject(projectId);
+      projects = project ? [project] : [];
+    } else {
+      projects = await this.getAllConstructionProjects();
+    }
+    
+    const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
+    const totalSpent = projects.reduce((sum, p) => sum + (p.actualCost || 0), 0);
+    
+    return {
+      generatedAt: new Date().toISOString(),
+      projectId: projectId || 'all',
+      projectCount: projects.length,
+      totalBudget,
+      totalSpent,
+      remainingBudget: totalBudget - totalSpent,
+      utilizationPercentage: totalBudget > 0 ? (totalSpent / totalBudget * 100).toFixed(2) : 0,
+      projects: projects.map(p => ({
+        id: p.id,
+        title: p.title,
+        status: p.status,
+        budget: p.budget,
+        spent: p.actualCost,
+        progress: p.progressPercent
+      }))
     };
   }
 }

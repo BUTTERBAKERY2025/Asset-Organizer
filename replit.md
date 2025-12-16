@@ -75,3 +75,34 @@ Preferred communication style: Simple, everyday language.
 ### Development Tools
 - Vite with HMR for development
 - Custom Replit plugins for development experience (cartographer, dev-banner, runtime-error-modal)
+
+## External System Integrations
+
+### Accounting Integration
+- API endpoints for generating accounting reports:
+  - `/api/accounting-exports/inventory-valuation` - تقييم المخزون مع ضريبة القيمة المضافة
+  - `/api/accounting-exports/asset-movements` - تقرير حركة الأصول
+  - `/api/accounting-exports/project-costs` - تكاليف المشاريع
+- Reports include JSON data suitable for import into accounting systems
+
+### SMS/WhatsApp Notifications
+- Notification queue system ready for Twilio integration
+- Requires environment variables to be set:
+  - `TWILIO_ACCOUNT_SID`
+  - `TWILIO_AUTH_TOKEN`
+  - `TWILIO_PHONE_NUMBER`
+- User dismissed Twilio Replit integration - manual setup required
+
+### Data Import
+- Excel import already available via inventory management page
+- Data import jobs table tracks import operations
+- API endpoint: `/api/import-jobs`
+
+### New Database Tables (require SQL migration for production)
+```sql
+CREATE TABLE external_integrations (...);
+CREATE TABLE notification_templates (...);
+CREATE TABLE notification_queue (...);
+CREATE TABLE data_import_jobs (...);
+CREATE TABLE accounting_exports (...);
+```

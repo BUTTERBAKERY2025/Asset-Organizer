@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -98,6 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const allBottomItems: NavItem[] = [
     { href: "/reports", label: "التقارير الشاملة", icon: FileBarChart, module: "reports" },
+    { href: "/integrations", label: "التكاملات", icon: Link2, module: "users" },
     { href: "/audit-logs", label: "سجل التدقيق", icon: FileSearch, module: "users" },
     { href: "/backups", label: "النسخ الاحتياطية", icon: HardDrive, module: "users" },
     { href: "/users", label: "إدارة المستخدمين", icon: Users, module: "users" },
