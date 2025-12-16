@@ -32,6 +32,10 @@ import {
   type InsertUserPermission,
   type PermissionAuditLog,
   type InsertPermissionAuditLog,
+  type AssetTransfer,
+  type InsertAssetTransfer,
+  type AssetTransferEvent,
+  type InsertAssetTransferEvent,
   branches,
   inventoryItems,
   auditLogs,
@@ -47,7 +51,9 @@ import {
   paymentRequests,
   contractPayments,
   userPermissions,
-  permissionAuditLogs
+  permissionAuditLogs,
+  assetTransfers,
+  assetTransferEvents
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -171,6 +177,16 @@ export interface IStorage {
     changedByUserId: string,
     templateApplied: string | null
   ): Promise<UserPermission[]>;
+  
+  // Asset Transfers
+  getAllAssetTransfers(): Promise<AssetTransfer[]>;
+  getAssetTransfer(id: number): Promise<AssetTransfer | undefined>;
+  getAssetTransfersByItem(itemId: string): Promise<AssetTransfer[]>;
+  createAssetTransfer(transfer: InsertAssetTransfer, userId: string): Promise<AssetTransfer>;
+  approveAssetTransfer(id: number, userId: string): Promise<AssetTransfer | undefined>;
+  confirmAssetTransfer(id: number, userId: string, receiverName: string, signature?: string): Promise<AssetTransfer | undefined>;
+  cancelAssetTransfer(id: number, userId: string, reason?: string): Promise<AssetTransfer | undefined>;
+  getAssetTransferEvents(transferId: number): Promise<AssetTransferEvent[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -924,6 +940,141 @@ export class DatabaseStorage implements IStorage {
 
       return savedPermissions;
     });
+  }
+
+  // Asset Transfers
+  async getAllAssetTransfers(): Promise<AssetTransfer[]> {
+    return db.select().from(assetTransfers).orderBy(desc(assetTransfers.createdAt));
+  }
+
+  async getAssetTransfer(id: number): Promise<AssetTransfer | undefined> {
+    const [transfer] = await db.select().from(assetTransfers).where(eq(assetTransfers.id, id));
+    return transfer || undefined;
+  }
+
+  async getAssetTransfersByItem(itemId: string): Promise<AssetTransfer[]> {
+    return db.select().from(assetTransfers)
+      .where(eq(assetTransfers.itemId, itemId))
+      .orderBy(desc(assetTransfers.createdAt));
+  }
+
+  async createAssetTransfer(transfer: InsertAssetTransfer, userId: string): Promise<AssetTransfer> {
+    const transferNumber = `TRF-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    
+    const [created] = await db.insert(assetTransfers).values({
+      ...transfer,
+      transferNumber,
+      requestedBy: userId,
+      status: 'pending',
+    }).returning();
+
+    await db.insert(assetTransferEvents).values({
+      transferId: created.id,
+      eventType: 'created',
+      actorId: userId,
+      note: 'تم إنشاء طلب التحويل',
+    });
+
+    return created;
+  }
+
+  async approveAssetTransfer(id: number, userId: string): Promise<AssetTransfer | undefined> {
+    const [updated] = await db.update(assetTransfers)
+      .set({ 
+        status: 'approved', 
+        approvedBy: userId, 
+        approvedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(assetTransfers.id, id))
+      .returning();
+
+    if (updated) {
+      await db.insert(assetTransferEvents).values({
+        transferId: id,
+        eventType: 'approved',
+        actorId: userId,
+        note: 'تمت الموافقة على التحويل',
+      });
+    }
+
+    return updated || undefined;
+  }
+
+  async confirmAssetTransfer(id: number, userId: string, receiverName: string, signature?: string): Promise<AssetTransfer | undefined> {
+    return await db.transaction(async (tx) => {
+      const [transfer] = await tx.select().from(assetTransfers).where(eq(assetTransfers.id, id));
+      if (!transfer) return undefined;
+
+      // Update the transfer status
+      const [updated] = await tx.update(assetTransfers)
+        .set({ 
+          status: 'completed', 
+          receivedBy: userId,
+          receivedAt: new Date(),
+          receiverName,
+          receiverSignature: signature || null,
+          updatedAt: new Date()
+        })
+        .where(eq(assetTransfers.id, id))
+        .returning();
+
+      // Update the item's branch
+      await tx.update(inventoryItems)
+        .set({ 
+          branchId: transfer.toBranchId,
+          updatedAt: new Date()
+        })
+        .where(eq(inventoryItems.id, transfer.itemId));
+
+      // Add audit log for the branch change
+      await tx.insert(auditLogs).values({
+        itemId: transfer.itemId,
+        action: 'transfer',
+        fieldName: 'branchId',
+        oldValue: transfer.fromBranchId,
+        newValue: transfer.toBranchId,
+        changedBy: userId,
+      });
+
+      // Add transfer event
+      await tx.insert(assetTransferEvents).values({
+        transferId: id,
+        eventType: 'received',
+        actorId: userId,
+        note: `تم تأكيد استلام الأصل بواسطة ${receiverName}`,
+      });
+
+      return updated;
+    });
+  }
+
+  async cancelAssetTransfer(id: number, userId: string, reason?: string): Promise<AssetTransfer | undefined> {
+    const [updated] = await db.update(assetTransfers)
+      .set({ 
+        status: 'cancelled',
+        notes: reason || undefined,
+        updatedAt: new Date()
+      })
+      .where(eq(assetTransfers.id, id))
+      .returning();
+
+    if (updated) {
+      await db.insert(assetTransferEvents).values({
+        transferId: id,
+        eventType: 'cancelled',
+        actorId: userId,
+        note: reason || 'تم إلغاء التحويل',
+      });
+    }
+
+    return updated || undefined;
+  }
+
+  async getAssetTransferEvents(transferId: number): Promise<AssetTransferEvent[]> {
+    return db.select().from(assetTransferEvents)
+      .where(eq(assetTransferEvents.transferId, transferId))
+      .orderBy(desc(assetTransferEvents.createdAt));
   }
 }
 
