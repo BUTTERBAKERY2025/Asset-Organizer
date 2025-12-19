@@ -16,16 +16,26 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { Branch, CashierSalesJournal, CashierPaymentBreakdown } from "@shared/schema";
 
+const PAYMENT_CATEGORIES = {
+  cash: { label: "نقدي", color: "bg-green-100 text-green-700" },
+  cards: { label: "بطاقات وشبكة", color: "bg-blue-100 text-blue-700" },
+  apps: { label: "تطبيقات التوصيل (آجل)", color: "bg-purple-100 text-purple-700" },
+};
+
 const PAYMENT_METHODS = [
-  { value: "cash", label: "نقداً", icon: Wallet },
-  { value: "card", label: "بطاقة ائتمان", icon: CreditCard },
-  { value: "mada", label: "مدى", icon: CreditCard },
-  { value: "apple_pay", label: "Apple Pay", icon: Smartphone },
-  { value: "stc_pay", label: "STC Pay", icon: Smartphone },
-  { value: "hunger_station", label: "هنقرستيشن", icon: Truck },
-  { value: "toyou", label: "ToYou", icon: Truck },
-  { value: "jahez", label: "جاهز", icon: Truck },
-  { value: "other", label: "أخرى", icon: Wallet },
+  { value: "cash", label: "نقداً", icon: Wallet, category: "cash" },
+  { value: "card", label: "بطاقة ائتمان", icon: CreditCard, category: "cards" },
+  { value: "mada", label: "مدى", icon: CreditCard, category: "cards" },
+  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards" },
+  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards" },
+  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps" },
+  { value: "toyou", label: "ToYou", icon: Truck, category: "apps" },
+  { value: "jahez", label: "جاهز", icon: Truck, category: "apps" },
+  { value: "marsool", label: "مرسول", icon: Truck, category: "apps" },
+  { value: "keeta", label: "كيتا", icon: Truck, category: "apps" },
+  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps" },
+  { value: "talabat", label: "طلبات", icon: Truck, category: "apps" },
+  { value: "other", label: "أخرى", icon: Wallet, category: "cash" },
 ];
 
 const SHIFT_TYPES = [
@@ -216,6 +226,81 @@ export default function CashierJournalFormPage() {
     if (diff === 0) return { label: "متوازن", color: "text-green-600 bg-green-50", isShortage: false };
     if (diff < 0) return { label: `عجز ${Math.abs(diff).toFixed(2)} ر.س`, color: "text-red-600 bg-red-50", isShortage: true };
     return { label: `زيادة ${diff.toFixed(2)} ر.س`, color: "text-amber-600 bg-amber-50", isShortage: false };
+  };
+
+  const getCategoryTotals = () => {
+    const totals = { cash: 0, cards: 0, apps: 0 };
+    paymentBreakdowns.forEach((b) => {
+      const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
+      if (method) {
+        totals[method.category as keyof typeof totals] += b.amount || 0;
+      }
+    });
+    return totals;
+  };
+
+  const getAppBreakdowns = () => {
+    return paymentBreakdowns.filter((b) => {
+      const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
+      return method?.category === "apps" && b.amount > 0;
+    });
+  };
+
+  const getCardBreakdowns = () => {
+    return paymentBreakdowns.filter((b) => {
+      const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
+      return method?.category === "cards" && b.amount > 0;
+    });
+  };
+
+  const getDiscrepancyAnalysis = () => {
+    const cashDiscrepancy = calculateDiscrepancy();
+    const categoryTotals = getCategoryTotals();
+    const breakdownTotal = getBreakdownTotal();
+    const reportedTotal = formData.totalSales;
+    
+    if (cashDiscrepancy === 0) {
+      return { type: "balanced", message: "الصندوق متوازن" };
+    }
+    
+    const shortage = Math.abs(cashDiscrepancy);
+    const breakdownDiff = Math.abs(breakdownTotal - reportedTotal);
+    
+    const expectedCashFromBreakdown = categoryTotals.cash;
+    const actualCashInDrawer = formData.actualCashDrawer;
+    const cashDiff = expectedCashFromBreakdown - actualCashInDrawer;
+    
+    const expectedNonCash = reportedTotal - actualCashInDrawer;
+    const recordedNonCash = categoryTotals.cards + categoryTotals.apps;
+    const nonCashVariance = Math.abs(recordedNonCash - expectedNonCash);
+    
+    if (cashDiscrepancy < 0) {
+      if (categoryTotals.cards > 0 && breakdownDiff < 5) {
+        if (Math.abs(cashDiff - (categoryTotals.cards - (reportedTotal - actualCashInDrawer - categoryTotals.apps))) < 10) {
+          return { 
+            type: "possible_misclass", 
+            message: `عجز نقدي ${shortage.toFixed(2)} ر.س - قد يكون الكاشير ضرب حركة نقدي على أنها بطاقة. تحقق من العمليات وطابق المبالغ.` 
+          };
+        }
+      }
+      
+      if (categoryTotals.cards > 0 && shortage > 10 && nonCashVariance > shortage * 0.5) {
+        return { 
+          type: "possible_misclass", 
+          message: `عجز نقدي ${shortage.toFixed(2)} ر.س - يوجد تفاوت في تصنيف طرق الدفع. تحقق من صحة المبالغ المسجلة.` 
+        };
+      }
+      
+      return { 
+        type: "shortage", 
+        message: `عجز حقيقي بقيمة ${shortage.toFixed(2)} ر.س - سيُسجَّل على الكاشير` 
+      };
+    }
+    
+    return { 
+      type: "surplus", 
+      message: `زيادة في الصندوق بقيمة ${cashDiscrepancy.toFixed(2)} ر.س - يجب توضيح السبب` 
+    };
   };
 
   const initCanvas = () => {
@@ -637,6 +722,60 @@ export default function CashierJournalFormPage() {
                   <span className="font-medium">{averageTicket.toFixed(2)} ر.س</span>
                 </div>
                 <Separator />
+                
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground">تصنيف المبيعات</div>
+                  <div className={`flex justify-between text-sm p-2 rounded ${PAYMENT_CATEGORIES.cash.color}`}>
+                    <span className="flex items-center gap-1">
+                      <Wallet className="w-3 h-3" />
+                      نقدي
+                    </span>
+                    <span className="font-medium">{getCategoryTotals().cash.toFixed(2)} ر.س</span>
+                  </div>
+                  <div className={`flex justify-between text-sm p-2 rounded ${PAYMENT_CATEGORIES.cards.color}`}>
+                    <span className="flex items-center gap-1">
+                      <CreditCard className="w-3 h-3" />
+                      بطاقات وشبكة
+                    </span>
+                    <span className="font-medium">{getCategoryTotals().cards.toFixed(2)} ر.س</span>
+                  </div>
+                  {getCardBreakdowns().length > 0 && (
+                    <div className="pr-4 space-y-1">
+                      {getCardBreakdowns().map((b, i) => {
+                        const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
+                        return (
+                          <div key={i} className="flex justify-between text-xs text-blue-600">
+                            <span>• {method?.label}</span>
+                            <span>{b.amount.toFixed(2)} ر.س</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className={`flex justify-between text-sm p-2 rounded ${PAYMENT_CATEGORIES.apps.color}`}>
+                    <span className="flex items-center gap-1">
+                      <Truck className="w-3 h-3" />
+                      تطبيقات التوصيل (آجل)
+                    </span>
+                    <span className="font-medium">{getCategoryTotals().apps.toFixed(2)} ر.س</span>
+                  </div>
+                  {getAppBreakdowns().length > 0 && (
+                    <div className="pr-4 space-y-1">
+                      {getAppBreakdowns().map((b, i) => {
+                        const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
+                        return (
+                          <div key={i} className="flex justify-between text-xs text-purple-600">
+                            <span>• {method?.label}</span>
+                            <span>{b.amount.toFixed(2)} ر.س</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                
+                <Separator />
+                <div className="text-xs font-semibold text-muted-foreground">تسوية النقدي</div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">المبيعات النقدية</span>
                   <span className="font-medium">{formData.cashTotal.toFixed(2)} ر.س</span>
@@ -645,7 +784,6 @@ export default function CashierJournalFormPage() {
                   <span className="text-muted-foreground">الرصيد الفعلي</span>
                   <span className="font-medium">{formData.actualCashDrawer.toFixed(2)} ر.س</span>
                 </div>
-                <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">الفارق</span>
                   <span className={`font-bold text-lg ${calculateDiscrepancy() === 0 ? "text-green-600" : calculateDiscrepancy() < 0 ? "text-red-600" : "text-amber-600"}`}>
@@ -655,6 +793,12 @@ export default function CashierJournalFormPage() {
                 {discrepancyStatus.isShortage && (
                   <div className="mt-2 p-2 bg-red-100 rounded text-red-700 text-xs text-center">
                     عجز مُسجَّل على الكاشير
+                  </div>
+                )}
+                {getDiscrepancyAnalysis().type === "possible_misclass" && (
+                  <div className="mt-2 p-2 bg-amber-100 rounded text-amber-700 text-xs">
+                    <AlertCircle className="w-3 h-3 inline ml-1" />
+                    {getDiscrepancyAnalysis().message}
                   </div>
                 )}
               </CardContent>

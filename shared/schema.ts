@@ -959,26 +959,51 @@ export const PAYMENT_METHODS = [
   "visa",
   "mastercard",
   "delivery_app",
+  "hunger_station",
   "hungerstation",
   "toyou",
   "jahez",
+  "marsool",
+  "keeta",
+  "the_chefs",
+  "talabat",
   "other",
 ] as const;
 
 export type PaymentMethod = typeof PAYMENT_METHODS[number];
 
+// Payment method categories for reporting
+export const PAYMENT_CATEGORIES = {
+  cash: ["cash"],
+  cards: ["card", "mada", "stc_pay", "apple_pay", "visa", "mastercard"],
+  apps: ["delivery_app", "hunger_station", "hungerstation", "toyou", "jahez", "marsool", "keeta", "the_chefs", "talabat"],
+} as const;
+
+export type PaymentCategory = keyof typeof PAYMENT_CATEGORIES;
+
+export const PAYMENT_CATEGORY_LABELS: Record<PaymentCategory, string> = {
+  cash: "نقدي",
+  cards: "بطاقات وشبكة",
+  apps: "تطبيقات التوصيل (آجل)",
+};
+
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "نقد",
-  card: "بطاقة",
+  card: "بطاقة ائتمان",
   mada: "مدى",
   stc_pay: "STC Pay",
   apple_pay: "Apple Pay",
   visa: "فيزا",
   mastercard: "ماستركارد",
   delivery_app: "تطبيق توصيل",
+  hunger_station: "هنقرستيشن",
   hungerstation: "هنقرستيشن",
   toyou: "تو يو",
   jahez: "جاهز",
+  marsool: "مرسول",
+  keeta: "كيتا",
+  the_chefs: "ذا شيفز",
+  talabat: "طلبات",
   other: "أخرى",
 };
 
