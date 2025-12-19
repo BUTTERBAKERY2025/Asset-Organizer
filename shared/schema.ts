@@ -1039,12 +1039,13 @@ export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
 };
 
 // Journal status labels
-export const JOURNAL_STATUS = ["draft", "submitted", "approved", "rejected"] as const;
+export const JOURNAL_STATUS = ["draft", "posted", "submitted", "approved", "rejected"] as const;
 export type JournalStatus = typeof JOURNAL_STATUS[number];
 
 export const JOURNAL_STATUS_LABELS: Record<JournalStatus, string> = {
   draft: "مسودة",
-  submitted: "مقدم",
+  posted: "مُرحَّل",
+  submitted: "مقدم للمراجعة",
   approved: "معتمد",
   rejected: "مرفوض",
 };

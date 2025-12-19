@@ -1877,6 +1877,14 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async postCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
+    const [updated] = await db.update(cashierSalesJournals)
+      .set({ status: 'posted', updatedAt: new Date() })
+      .where(eq(cashierSalesJournals.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
   async approveCashierJournal(id: number, approvedBy: string): Promise<CashierSalesJournal | undefined> {
     const [updated] = await db.update(cashierSalesJournals)
       .set({ status: 'approved', approvedBy, approvedAt: new Date(), updatedAt: new Date() })

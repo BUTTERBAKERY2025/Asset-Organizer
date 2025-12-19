@@ -156,7 +156,32 @@ export default function CashierJournalFormPage() {
     },
   });
 
+  const postMutation = useMutation({
+    mutationFn: async (data: { signatureData?: string; signerName?: string }) =>
+      apiRequest(`/api/cashier-journals/${id}/post`, "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}`] });
+      toast({ title: "تم ترحيل اليومية بنجاح", description: "لم يعد بإمكانك تعديل هذه اليومية" });
+      setLocation("/cashier-journals");
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في ترحيل اليومية", variant: "destructive" });
+    },
+  });
+
+  const isReadOnly = existingJournal && existingJournal.status !== "draft";
+
   const handleSave = () => {
+    if (getTotalsMismatch()) {
+      toast({ 
+        title: "لا يمكن الحفظ", 
+        description: "مجموع التفصيل لا يطابق إجمالي المبيعات", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     const data = {
       ...formData,
       paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0),
@@ -167,6 +192,33 @@ export default function CashierJournalFormPage() {
     } else {
       createMutation.mutate(data);
     }
+  };
+
+  const handleSaveAndPost = async () => {
+    if (getTotalsMismatch()) {
+      toast({ 
+        title: "لا يمكن الترحيل", 
+        description: "مجموع التفصيل لا يطابق إجمالي المبيعات", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    const canvas = signatureCanvasRef.current;
+    const signatureData = canvas ? canvas.toDataURL("image/png") : undefined;
+
+    if (isEdit) {
+      const data = {
+        ...formData,
+        paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0),
+      };
+      await updateMutation.mutateAsync(data);
+    }
+
+    postMutation.mutate({
+      signatureData,
+      signerName: formData.cashierName,
+    });
   };
 
   const handleSubmit = () => {
@@ -252,6 +304,8 @@ export default function CashierJournalFormPage() {
       return method?.category === "cards" && b.amount > 0;
     });
   };
+
+  const canSave = !getTotalsMismatch() && formData.totalSales > 0 && formData.branchId && formData.cashierName;
 
   const getDiscrepancyAnalysis = () => {
     const cashDiscrepancy = calculateDiscrepancy();
@@ -403,7 +457,7 @@ export default function CashierJournalFormPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>الفرع *</Label>
-                    <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })}>
+                    <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly}>
                       <SelectTrigger data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
@@ -422,12 +476,13 @@ export default function CashierJournalFormPage() {
                       type="date"
                       value={formData.journalDate}
                       onChange={(e) => setFormData({ ...formData, journalDate: e.target.value })}
+                      disabled={isReadOnly}
                       data-testid="input-date"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>الوردية *</Label>
-                    <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })}>
+                    <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly}>
                       <SelectTrigger data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
@@ -446,6 +501,7 @@ export default function CashierJournalFormPage() {
                       value={formData.cashierName}
                       onChange={(e) => setFormData({ ...formData, cashierName: e.target.value })}
                       placeholder="اسم الكاشير"
+                      disabled={isReadOnly}
                       data-testid="input-cashier-name"
                     />
                   </div>
@@ -471,6 +527,7 @@ export default function CashierJournalFormPage() {
                       onChange={(e) => setFormData({ ...formData, totalSales: parseFloat(e.target.value) || 0 })}
                       className="text-xl font-bold h-14"
                       placeholder="0.00"
+                      disabled={isReadOnly}
                       data-testid="input-total-sales"
                     />
                   </div>
@@ -485,6 +542,7 @@ export default function CashierJournalFormPage() {
                       onChange={(e) => setFormData({ ...formData, transactionCount: parseInt(e.target.value) || 0 })}
                       className="h-14"
                       placeholder="0"
+                      disabled={isReadOnly}
                       data-testid="input-transaction-count"
                     />
                   </div>
@@ -508,6 +566,7 @@ export default function CashierJournalFormPage() {
                       value={formData.openingBalance || ""}
                       onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
                       placeholder="0.00"
+                      disabled={isReadOnly}
                       data-testid="input-opening-balance"
                     />
                   </div>
@@ -518,6 +577,7 @@ export default function CashierJournalFormPage() {
                       value={formData.customerCount || ""}
                       onChange={(e) => setFormData({ ...formData, customerCount: parseInt(e.target.value) || 0 })}
                       placeholder="0"
+                      disabled={isReadOnly}
                       data-testid="input-customer-count"
                     />
                   </div>
@@ -531,10 +591,12 @@ export default function CashierJournalFormPage() {
                   <CardTitle>تفصيل المبيعات حسب طريقة الدفع</CardTitle>
                   <CardDescription>أدخل المبيعات لكل طريقة دفع</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={addPaymentBreakdown} data-testid="button-add-payment">
-                  <Plus className="w-4 h-4 mr-1" />
-                  إضافة
-                </Button>
+                {!isReadOnly && (
+                  <Button variant="outline" size="sm" onClick={addPaymentBreakdown} data-testid="button-add-payment">
+                    <Plus className="w-4 h-4 mr-1" />
+                    إضافة
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {paymentBreakdowns.map((breakdown, index) => {
@@ -547,6 +609,7 @@ export default function CashierJournalFormPage() {
                       <Select
                         value={breakdown.paymentMethod}
                         onValueChange={(v) => updatePaymentBreakdown(index, "paymentMethod", v)}
+                        disabled={isReadOnly}
                       >
                         <SelectTrigger className="w-40">
                           <SelectValue />
@@ -565,6 +628,7 @@ export default function CashierJournalFormPage() {
                           placeholder="المبلغ"
                           value={breakdown.amount || ""}
                           onChange={(e) => updatePaymentBreakdown(index, "amount", parseFloat(e.target.value) || 0)}
+                          disabled={isReadOnly}
                           data-testid={`input-payment-amount-${index}`}
                         />
                       </div>
@@ -574,10 +638,11 @@ export default function CashierJournalFormPage() {
                           placeholder="عدد"
                           value={breakdown.transactionCount || ""}
                           onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                          disabled={isReadOnly}
                           data-testid={`input-payment-count-${index}`}
                         />
                       </div>
-                      {paymentBreakdowns.length > 1 && (
+                      {paymentBreakdowns.length > 1 && !isReadOnly && (
                         <Button variant="ghost" size="sm" onClick={() => removePaymentBreakdown(index)}>
                           <Trash2 className="w-4 h-4 text-red-500" />
                         </Button>
@@ -627,6 +692,7 @@ export default function CashierJournalFormPage() {
                       onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
                       className="text-lg font-bold"
                       placeholder="0.00"
+                      disabled={isReadOnly}
                       data-testid="input-actual-cash"
                     />
                     <p className="text-xs text-muted-foreground">أدخل المبلغ الفعلي الموجود في درج الكاشير</p>
@@ -671,6 +737,7 @@ export default function CashierJournalFormPage() {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="أي ملاحظات إضافية..."
                   rows={3}
+                  disabled={isReadOnly}
                   data-testid="input-notes"
                 />
               </CardContent>
@@ -804,26 +871,56 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
+            {isReadOnly && (
+              <Alert className="bg-amber-50 border-amber-200">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertTitle className="text-amber-700">للقراءة فقط</AlertTitle>
+                <AlertDescription className="text-amber-600">
+                  تم ترحيل هذه اليومية ولا يمكن تعديلها
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="space-y-2">
-              <Button
-                className="w-full gap-2"
-                onClick={handleSave}
-                disabled={createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save"
-              >
-                <Save className="w-4 h-4" />
-                {isEdit ? "حفظ التغييرات" : "حفظ كمسودة"}
-              </Button>
-              {isEdit && existingJournal?.status === "draft" && (
+              {!isReadOnly && (
+                <>
+                  <Button
+                    className="w-full gap-2"
+                    onClick={handleSave}
+                    disabled={createMutation.isPending || updateMutation.isPending || !canSave}
+                    data-testid="button-save"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isEdit ? "حفظ التغييرات" : "حفظ كمسودة"}
+                  </Button>
+                  {isEdit && existingJournal?.status === "draft" && (
+                    <Button
+                      variant="default"
+                      className="w-full gap-2 bg-green-600 hover:bg-green-700"
+                      onClick={handleSaveAndPost}
+                      disabled={postMutation.isPending || updateMutation.isPending || !canSave}
+                      data-testid="button-save-post"
+                    >
+                      <Send className="w-4 h-4" />
+                      حفظ وترحيل
+                    </Button>
+                  )}
+                  {getTotalsMismatch() && (
+                    <p className="text-xs text-red-500 text-center">
+                      لا يمكن الحفظ: مجموع التفصيل لا يطابق إجمالي المبيعات
+                    </p>
+                  )}
+                </>
+              )}
+              {isReadOnly && (
                 <Button
                   variant="outline"
                   className="w-full gap-2"
-                  onClick={handleSubmit}
-                  disabled={submitMutation.isPending}
-                  data-testid="button-submit"
+                  onClick={() => setLocation("/cashier-journals")}
+                  data-testid="button-back-list"
                 >
-                  <Send className="w-4 h-4" />
-                  تقديم للمراجعة
+                  <ArrowRight className="w-4 h-4" />
+                  العودة للقائمة
                 </Button>
               )}
             </div>

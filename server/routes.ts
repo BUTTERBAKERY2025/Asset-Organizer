@@ -2133,6 +2133,19 @@ export async function registerRoutes(
     try {
       const { paymentBreakdowns, ...journalData } = req.body;
       
+      // Server-side validation: payment breakdown totals must match total sales
+      if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
+        const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        const totalSales = parseFloat(journalData.totalSales) || 0;
+        const tolerance = 0.01;
+        if (Math.abs(breakdownTotal - totalSales) > tolerance) {
+          return res.status(400).json({ 
+            error: "مجموع التفصيل لا يطابق إجمالي المبيعات",
+            details: { breakdownTotal, totalSales, difference: Math.abs(breakdownTotal - totalSales) }
+          });
+        }
+      }
+      
       // Add creator info
       journalData.createdBy = req.currentUser?.id;
       
@@ -2166,13 +2179,22 @@ export async function registerRoutes(
       const id = parseInt(req.params.id, 10);
       const { paymentBreakdowns, ...journalData } = req.body;
       
-      // Check if journal is already submitted/approved
+      // Check if journal is already submitted/approved/posted
       const existing = await storage.getCashierJournal(id);
       if (!existing) {
         return res.status(404).json({ error: "Cashier journal not found" });
       }
       if (existing.status !== 'draft') {
-        return res.status(400).json({ error: "Cannot edit submitted or approved journal" });
+        return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
+      }
+      
+      // Server-side validation: totals must match
+      if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && journalData.totalSales !== undefined) {
+        const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        const diff = Math.abs(journalData.totalSales - breakdownTotal);
+        if (diff > 0.01) {
+          return res.status(400).json({ error: "Payment breakdown total must match total sales" });
+        }
       }
       
       const journal = await storage.updateCashierJournal(id, journalData);
@@ -2251,6 +2273,57 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error submitting cashier journal:", error);
       res.status(500).json({ error: "Failed to submit cashier journal" });
+    }
+  });
+
+  // Post cashier journal (finalize - no more edits allowed)
+  app.post("/api/cashier-journals/:id/post", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { signatureData, signerName } = req.body;
+      
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (existing.status !== 'draft') {
+        return res.status(400).json({ error: "Journal already posted or submitted" });
+      }
+      
+      // Server-side validation: fetch payment breakdowns and verify totals match
+      const breakdowns = await storage.getPaymentBreakdowns(id);
+      if (breakdowns && breakdowns.length > 0) {
+        const breakdownTotal = breakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        const totalSales = parseFloat(String(existing.totalSales)) || 0;
+        const tolerance = 0.01;
+        if (Math.abs(breakdownTotal - totalSales) > tolerance) {
+          return res.status(400).json({ 
+            error: "لا يمكن الترحيل: مجموع التفصيل لا يطابق إجمالي المبيعات",
+            details: { breakdownTotal, totalSales, difference: Math.abs(breakdownTotal - totalSales) }
+          });
+        }
+      }
+      
+      // Create signature if provided
+      if (signatureData) {
+        await storage.createCashierSignature({
+          journalId: id,
+          signatureType: 'cashier',
+          signerName: signerName || existing.cashierName,
+          signerId: req.currentUser?.id,
+          signatureData,
+          ipAddress: req.ip,
+        });
+      }
+      
+      // Post the journal (change status to 'posted')
+      const journal = await storage.postCashierJournal(id);
+      const signatures = await storage.getCashierSignatures(id);
+      
+      res.json({ ...journal, signatures });
+    } catch (error) {
+      console.error("Error posting cashier journal:", error);
+      res.status(500).json({ error: "Failed to post cashier journal" });
     }
   });
 
