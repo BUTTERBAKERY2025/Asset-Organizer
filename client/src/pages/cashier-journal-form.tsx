@@ -10,9 +10,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { Branch, CashierSalesJournal, CashierPaymentBreakdown } from "@shared/schema";
 
 const PAYMENT_METHODS = [
@@ -61,6 +62,7 @@ export default function CashierJournalFormPage() {
     cashTotal: 0,
     actualCashDrawer: 0,
     customerCount: 0,
+    transactionCount: 0,
     notes: "",
   });
 
@@ -90,6 +92,7 @@ export default function CashierJournalFormPage() {
         cashTotal: existingJournal.cashTotal,
         actualCashDrawer: existingJournal.actualCashDrawer,
         customerCount: existingJournal.customerCount || 0,
+        transactionCount: existingJournal.transactionCount || 0,
         notes: existingJournal.notes || "",
       });
       if (existingJournal.paymentBreakdowns?.length > 0) {
@@ -184,20 +187,35 @@ export default function CashierJournalFormPage() {
       if (cashBreakdown) {
         setFormData((prev) => ({ ...prev, cashTotal: cashBreakdown.amount }));
       }
-      const totalSales = updated.reduce((sum, b) => sum + b.amount, 0);
-      setFormData((prev) => ({ ...prev, totalSales }));
     }
+  };
+
+  const getBreakdownTotal = () => {
+    return paymentBreakdowns.reduce((sum, b) => sum + (b.amount || 0), 0);
+  };
+
+  const getTotalsMismatch = () => {
+    const breakdownTotal = getBreakdownTotal();
+    const diff = Math.abs(formData.totalSales - breakdownTotal);
+    return diff > 0.01;
   };
 
   const calculateDiscrepancy = () => {
     return formData.actualCashDrawer - formData.cashTotal;
   };
 
+  const calculateAverageTicket = () => {
+    if (formData.transactionCount > 0) {
+      return formData.totalSales / formData.transactionCount;
+    }
+    return 0;
+  };
+
   const getDiscrepancyStatus = () => {
     const diff = calculateDiscrepancy();
-    if (diff === 0) return { label: "متوازن", color: "text-green-600 bg-green-50" };
-    if (diff < 0) return { label: `عجز ${Math.abs(diff).toFixed(2)} ر.س`, color: "text-red-600 bg-red-50" };
-    return { label: `زيادة ${diff.toFixed(2)} ر.س`, color: "text-amber-600 bg-amber-50" };
+    if (diff === 0) return { label: "متوازن", color: "text-green-600 bg-green-50", isShortage: false };
+    if (diff < 0) return { label: `عجز ${Math.abs(diff).toFixed(2)} ر.س`, color: "text-red-600 bg-red-50", isShortage: true };
+    return { label: `زيادة ${diff.toFixed(2)} ر.س`, color: "text-amber-600 bg-amber-50", isShortage: false };
   };
 
   const initCanvas = () => {
@@ -260,6 +278,7 @@ export default function CashierJournalFormPage() {
   };
 
   const discrepancyStatus = getDiscrepancyStatus();
+  const averageTicket = calculateAverageTicket();
 
   if (isEdit && loadingJournal) {
     return (
@@ -345,12 +364,65 @@ export default function CashierJournalFormPage() {
                       data-testid="input-cashier-name"
                     />
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-primary/20">
+              <CardHeader className="bg-primary/5">
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5" />
+                  إجمالي المبيعات من تقرير الشفت
+                </CardTitle>
+                <CardDescription>أدخل إجمالي المبيعات كما يظهر في تقرير الكاشير أو تقرير نهاية الوردية</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-lg font-semibold">إجمالي المبيعات (ر.س) *</Label>
+                    <Input
+                      type="number"
+                      value={formData.totalSales || ""}
+                      onChange={(e) => setFormData({ ...formData, totalSales: parseFloat(e.target.value) || 0 })}
+                      className="text-xl font-bold h-14"
+                      placeholder="0.00"
+                      data-testid="input-total-sales"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      عدد الفواتير *
+                    </Label>
+                    <Input
+                      type="number"
+                      value={formData.transactionCount || ""}
+                      onChange={(e) => setFormData({ ...formData, transactionCount: parseInt(e.target.value) || 0 })}
+                      className="h-14"
+                      placeholder="0"
+                      data-testid="input-transaction-count"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Calculator className="w-4 h-4" />
+                      متوسط الفاتورة
+                    </Label>
+                    <div className="h-14 flex items-center justify-center bg-muted rounded-md px-4">
+                      <span className="text-xl font-bold text-primary" data-testid="text-average-ticket">
+                        {averageTicket.toFixed(2)} ر.س
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>رصيد الافتتاح (ر.س)</Label>
                     <Input
                       type="number"
-                      value={formData.openingBalance}
+                      value={formData.openingBalance || ""}
                       onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
                       data-testid="input-opening-balance"
                     />
                   </div>
@@ -358,8 +430,9 @@ export default function CashierJournalFormPage() {
                     <Label>عدد العملاء</Label>
                     <Input
                       type="number"
-                      value={formData.customerCount}
+                      value={formData.customerCount || ""}
                       onChange={(e) => setFormData({ ...formData, customerCount: parseInt(e.target.value) || 0 })}
+                      placeholder="0"
                       data-testid="input-customer-count"
                     />
                   </div>
@@ -429,37 +502,77 @@ export default function CashierJournalFormPage() {
                 })}
                 <Separator />
                 <div className="flex justify-between items-center text-lg font-medium">
-                  <span>إجمالي المبيعات</span>
-                  <span data-testid="text-total-sales">{formData.totalSales.toFixed(2)} ر.س</span>
+                  <span>مجموع التفصيل</span>
+                  <span data-testid="text-breakdown-total">{getBreakdownTotal().toFixed(2)} ر.س</span>
                 </div>
+                {getTotalsMismatch() && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>تحذير: فرق في الأرقام</AlertTitle>
+                    <AlertDescription>
+                      مجموع التفصيل ({getBreakdownTotal().toFixed(2)} ر.س) لا يطابق إجمالي المبيعات ({formData.totalSales.toFixed(2)} ر.س)
+                      <br />
+                      الفرق: {Math.abs(formData.totalSales - getBreakdownTotal()).toFixed(2)} ر.س
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>تسوية الصندوق النقدي</CardTitle>
-                <CardDescription>مطابقة الرصيد الفعلي مع المتوقع</CardDescription>
+            <Card className="border-2 border-amber-200">
+              <CardHeader className="bg-amber-50">
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5" />
+                  تسوية الصندوق النقدي
+                </CardTitle>
+                <CardDescription>مطابقة الرصيد الفعلي مع المتوقع في الصندوق</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>المبيعات النقدية المتوقعة (ر.س)</Label>
-                    <Input type="number" value={formData.cashTotal} readOnly className="bg-muted" data-testid="input-expected-cash" />
+                    <Input type="number" value={formData.cashTotal.toFixed(2)} readOnly className="bg-muted text-lg font-bold" data-testid="input-expected-cash" />
+                    <p className="text-xs text-muted-foreground">تُحسب تلقائياً من تفصيل المبيعات النقدية</p>
                   </div>
                   <div className="space-y-2">
                     <Label>الرصيد الفعلي في الصندوق (ر.س) *</Label>
                     <Input
                       type="number"
-                      value={formData.actualCashDrawer}
+                      value={formData.actualCashDrawer || ""}
                       onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
+                      className="text-lg font-bold"
+                      placeholder="0.00"
                       data-testid="input-actual-cash"
                     />
+                    <p className="text-xs text-muted-foreground">أدخل المبلغ الفعلي الموجود في درج الكاشير</p>
                   </div>
                 </div>
+                
                 <div className={`p-4 rounded-lg flex items-center gap-3 ${discrepancyStatus.color}`}>
-                  <AlertCircle className="w-5 h-5" />
-                  <span className="font-medium" data-testid="text-discrepancy">{discrepancyStatus.label}</span>
+                  {discrepancyStatus.isShortage ? (
+                    <AlertTriangle className="w-6 h-6" />
+                  ) : calculateDiscrepancy() === 0 ? (
+                    <CheckCircle className="w-6 h-6" />
+                  ) : (
+                    <AlertCircle className="w-6 h-6" />
+                  )}
+                  <span className="font-bold text-lg" data-testid="text-discrepancy">{discrepancyStatus.label}</span>
                 </div>
+
+                {discrepancyStatus.isShortage && (
+                  <Alert variant="destructive" className="border-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    <AlertTitle className="text-lg font-bold">تنبيه هام: عجز في الصندوق</AlertTitle>
+                    <AlertDescription className="text-base mt-2">
+                      <p className="font-semibold">
+                        هذا العجز بقيمة {Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س سيُسجَّل على أمين الصندوق / الكاشير: <strong>{formData.cashierName || "غير محدد"}</strong>
+                      </p>
+                      <p className="mt-2 text-sm">
+                        يرجى التأكد من صحة المبلغ المُدخل قبل الحفظ. في حالة وجود عجز، سيتم توثيقه وقد يتم خصمه من راتب الموظف وفقاً لسياسة الشركة.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 
@@ -505,15 +618,25 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-gradient-to-br from-primary/5 to-primary/10">
               <CardHeader>
-                <CardTitle>ملخص</CardTitle>
+                <CardTitle>ملخص اليومية</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">إجمالي المبيعات</span>
-                  <span className="font-medium">{formData.totalSales.toFixed(2)} ر.س</span>
+                  <span className="font-bold text-lg">{formData.totalSales.toFixed(2)} ر.س</span>
                 </div>
+                <Separator />
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">عدد الفواتير</span>
+                  <span className="font-medium">{formData.transactionCount}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">متوسط الفاتورة</span>
+                  <span className="font-medium">{averageTicket.toFixed(2)} ر.س</span>
+                </div>
+                <Separator />
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">المبيعات النقدية</span>
                   <span className="font-medium">{formData.cashTotal.toFixed(2)} ر.س</span>
@@ -523,12 +646,17 @@ export default function CashierJournalFormPage() {
                   <span className="font-medium">{formData.actualCashDrawer.toFixed(2)} ر.س</span>
                 </div>
                 <Separator />
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">الفارق</span>
-                  <span className={`font-bold ${calculateDiscrepancy() === 0 ? "text-green-600" : calculateDiscrepancy() < 0 ? "text-red-600" : "text-amber-600"}`}>
+                  <span className={`font-bold text-lg ${calculateDiscrepancy() === 0 ? "text-green-600" : calculateDiscrepancy() < 0 ? "text-red-600" : "text-amber-600"}`}>
                     {calculateDiscrepancy().toFixed(2)} ر.س
                   </span>
                 </div>
+                {discrepancyStatus.isShortage && (
+                  <div className="mt-2 p-2 bg-red-100 rounded text-red-700 text-xs text-center">
+                    عجز مُسجَّل على الكاشير
+                  </div>
+                )}
               </CardContent>
             </Card>
 
