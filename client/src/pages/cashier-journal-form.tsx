@@ -669,29 +669,16 @@ export default function CashierJournalFormPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>رصيد الافتتاح (ر.س)</Label>
-                    <Input
-                      type="number"
-                      value={formData.openingBalance || ""}
-                      onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
-                      placeholder="0.00"
-                      disabled={isReadOnly}
-                      data-testid="input-opening-balance"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>عدد العملاء</Label>
-                    <Input
-                      type="number"
-                      value={formData.customerCount || ""}
-                      onChange={(e) => setFormData({ ...formData, customerCount: parseInt(e.target.value) || 0 })}
-                      placeholder="0"
-                      disabled={isReadOnly}
-                      data-testid="input-customer-count"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label>رصيد سابق للدرج (عهدة)</Label>
+                  <Input
+                    type="number"
+                    value={formData.openingBalance || ""}
+                    onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                    disabled={isReadOnly}
+                    data-testid="input-opening-balance"
+                  />
                 </div>
               </CardContent>
             </Card>
