@@ -63,6 +63,15 @@ Preferred communication style: Simple, everyday language.
    - Daily operations summary with aggregate statistics
    - Permission modules: operations, production, shifts, quality_control
 
+8. **Cashier Sales Journal Module** (Added December 2025): Daily sales tracking and cash reconciliation:
+   - Cashier journals for daily sales records with branch, shift, and cashier info
+   - Payment breakdown by method (cash, card, mada, Apple Pay, STC Pay, delivery apps)
+   - Cash drawer reconciliation with automatic discrepancy detection (balanced, shortage, surplus)
+   - Electronic signature capture with IP address logging
+   - Multi-step workflow: draft → submitted → approved/rejected
+   - Statistics dashboard with total sales, shortages, surpluses, average ticket
+   - Permission module: cashier_journal (view, create, edit, delete, approve)
+
 ## External Dependencies
 
 ### Database
@@ -177,5 +186,59 @@ CREATE TABLE daily_operations_summary (
     quality_pass_rate DOUBLE PRECISION DEFAULT 0,
     notes TEXT,
     created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+-- Cashier Sales Journal tables (December 2025)
+CREATE TABLE cashier_sales_journals (
+    id SERIAL PRIMARY KEY,
+    branch_id VARCHAR NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    shift_id INTEGER REFERENCES shifts(id),
+    cashier_id VARCHAR NOT NULL REFERENCES users(id),
+    cashier_name TEXT NOT NULL,
+    journal_date TEXT NOT NULL,
+    shift_type TEXT,
+    shift_start_time TEXT,
+    shift_end_time TEXT,
+    opening_balance REAL DEFAULT 0 NOT NULL,
+    total_sales REAL DEFAULT 0 NOT NULL,
+    cash_total REAL DEFAULT 0 NOT NULL,
+    network_total REAL DEFAULT 0 NOT NULL,
+    delivery_total REAL DEFAULT 0 NOT NULL,
+    expected_cash REAL DEFAULT 0 NOT NULL,
+    actual_cash_drawer REAL DEFAULT 0 NOT NULL,
+    discrepancy_amount REAL DEFAULT 0 NOT NULL,
+    discrepancy_status TEXT DEFAULT 'balanced' NOT NULL,
+    customer_count INTEGER DEFAULT 0,
+    transaction_count INTEGER DEFAULT 0,
+    average_ticket REAL DEFAULT 0,
+    status TEXT DEFAULT 'draft' NOT NULL,
+    submitted_at TIMESTAMP,
+    approved_by VARCHAR REFERENCES users(id),
+    approved_at TIMESTAMP,
+    notes TEXT,
+    created_by VARCHAR REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE cashier_payment_breakdowns (
+    id SERIAL PRIMARY KEY,
+    journal_id INTEGER NOT NULL REFERENCES cashier_sales_journals(id) ON DELETE CASCADE,
+    payment_method TEXT NOT NULL,
+    amount REAL DEFAULT 0 NOT NULL,
+    transaction_count INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE cashier_signatures (
+    id SERIAL PRIMARY KEY,
+    journal_id INTEGER NOT NULL REFERENCES cashier_sales_journals(id) ON DELETE CASCADE,
+    signature_type TEXT NOT NULL,
+    signer_name TEXT NOT NULL,
+    signer_id VARCHAR REFERENCES users(id),
+    signature_data TEXT NOT NULL,
+    ip_address TEXT,
+    signed_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 ```

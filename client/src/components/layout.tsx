@@ -93,6 +93,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/shifts", label: "الورديات", icon: Clock, module: "shifts" },
           { href: "/production", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
           { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
+          { href: "/cashier-journals", label: "يومية الكاشير", icon: Wallet, module: "cashier_journal" },
         ],
       },
     },

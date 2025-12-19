@@ -82,10 +82,10 @@ export default function CashierJournalFormPage() {
       setFormData({
         branchId: existingJournal.branchId,
         journalDate: existingJournal.journalDate,
-        shiftType: existingJournal.shiftType,
+        shiftType: existingJournal.shiftType || "morning",
         cashierName: existingJournal.cashierName,
         cashierId: existingJournal.cashierId || "",
-        openingBalance: existingJournal.openingBalance,
+        openingBalance: existingJournal.openingBalance || 0,
         totalSales: existingJournal.totalSales,
         cashTotal: existingJournal.cashTotal,
         actualCashDrawer: existingJournal.actualCashDrawer,

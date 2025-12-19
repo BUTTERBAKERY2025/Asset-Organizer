@@ -107,6 +107,7 @@ export default function PlatformHomePage() {
         { label: "الورديات", href: "/shifts", icon: Clock },
         { label: "أوامر الإنتاج", href: "/production", icon: ClipboardEdit },
         { label: "مراقبة الجودة", href: "/quality-control", icon: CheckCircle },
+        { label: "يومية الكاشير", href: "/cashier-journals", icon: Wallet },
       ],
     },
     {

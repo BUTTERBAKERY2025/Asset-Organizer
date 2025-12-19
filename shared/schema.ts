@@ -887,6 +887,9 @@ export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   shiftStartTime: text("shift_start_time"), // وقت بدء الشفت
   shiftEndTime: text("shift_end_time"), // وقت انتهاء الشفت
   
+  // رصيد افتتاحي
+  openingBalance: real("opening_balance").default(0).notNull(), // رصيد الافتتاح في الصندوق
+  
   // إجمالي المبيعات
   totalSales: real("total_sales").default(0).notNull(), // إجمالي المبيعات
   cashTotal: real("cash_total").default(0).notNull(), // إجمالي النقد
