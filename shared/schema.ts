@@ -25,6 +25,9 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: varchar("role").default("viewer").notNull(), // admin, employee, viewer
+  branchId: varchar("branch_id").references(() => branches.id),
+  jobTitle: varchar("job_title"),
+  isActive: text("is_active").default("active"), // active, inactive
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
