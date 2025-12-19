@@ -2134,7 +2134,7 @@ export async function registerRoutes(
       const { paymentBreakdowns, ...journalData } = req.body;
       
       // Add creator info
-      journalData.createdBy = req.user?.id;
+      journalData.createdBy = req.currentUser?.id;
       
       // Create the journal
       const journal = await storage.createCashierJournal(journalData);
@@ -2237,7 +2237,7 @@ export async function registerRoutes(
           journalId: id,
           signatureType: 'cashier',
           signerName: signerName || existing.cashierName,
-          signerId: req.user?.id,
+          signerId: req.currentUser?.id,
           signatureData,
           ipAddress: req.ip,
         });
@@ -2274,13 +2274,13 @@ export async function registerRoutes(
           journalId: id,
           signatureType: 'supervisor',
           signerName: signerName || 'مشرف',
-          signerId: req.user?.id,
+          signerId: req.currentUser?.id,
           signatureData,
           ipAddress: req.ip,
         });
       }
       
-      const journal = await storage.approveCashierJournal(id, req.user?.id);
+      const journal = await storage.approveCashierJournal(id, req.currentUser?.id);
       res.json(journal);
     } catch (error) {
       console.error("Error approving cashier journal:", error);
