@@ -35,6 +35,7 @@ import ProductionPage from "@/pages/production";
 import QualityControlPage from "@/pages/quality-control";
 import CashierJournalsPage from "@/pages/cashier-journals";
 import CashierJournalFormPage from "@/pages/cashier-journal-form";
+import OperationsEmployeesPage from "@/pages/operations-employees";
 
 function Router() {
   return (
@@ -69,6 +70,7 @@ function Router() {
       <Route path="/cashier-journals" component={CashierJournalsPage} />
       <Route path="/cashier-journals/new" component={CashierJournalFormPage} />
       <Route path="/cashier-journals/:id" component={CashierJournalFormPage} />
+      <Route path="/operations-employees" component={OperationsEmployeesPage} />
       <Route component={NotFound} />
     </Switch>
   );

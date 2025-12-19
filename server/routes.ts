@@ -2076,6 +2076,103 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Operations Employees Routes ====================
+  
+  // Get all operations employees (users with branchId or jobTitle)
+  app.get("/api/operations-employees", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const employees = users
+        .filter(u => u.role === "employee" || u.branchId || u.jobTitle)
+        .map(({ password, ...user }) => user);
+      res.json(employees);
+    } catch (error) {
+      console.error("Error fetching operations employees:", error);
+      res.status(500).json({ error: "Failed to fetch operations employees" });
+    }
+  });
+
+  // Create operations employee
+  app.post("/api/operations-employees", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const { username, password, firstName, lastName, phone, email, branchId, jobTitle, role } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
+      }
+      
+      if (!branchId) {
+        return res.status(400).json({ error: "يرجى اختيار الفرع" });
+      }
+      
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
+      }
+      
+      const user = await storage.createUser({
+        username,
+        password,
+        firstName,
+        lastName,
+        phone,
+        email,
+        branchId,
+        jobTitle,
+        role: role || "employee",
+        isActive: "active",
+      });
+      
+      const { password: _, ...safeUser } = user;
+      res.status(201).json(safeUser);
+    } catch (error) {
+      console.error("Error creating operations employee:", error);
+      res.status(500).json({ error: "Failed to create operations employee" });
+    }
+  });
+
+  // Update operations employee
+  app.patch("/api/operations-employees/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const { firstName, lastName, phone, email, branchId, jobTitle, isActive, password } = req.body;
+      const updateData: any = {};
+      
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (phone !== undefined) updateData.phone = phone;
+      if (email !== undefined) updateData.email = email;
+      if (branchId !== undefined) updateData.branchId = branchId;
+      if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      if (password) updateData.password = password;
+      
+      const user = await storage.updateUser(req.params.id, updateData);
+      if (!user) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      
+      const { password: _, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Error updating operations employee:", error);
+      res.status(500).json({ error: "Failed to update operations employee" });
+    }
+  });
+
+  // Delete operations employee
+  app.delete("/api/operations-employees/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const success = await storage.deleteUser(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting operations employee:", error);
+      res.status(500).json({ error: "Failed to delete operations employee" });
+    }
+  });
+
   // ==================== Cashier Sales Journal Routes ====================
 
   // Get all cashier journals with filters

@@ -89,6 +89,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Factory,
         items: [
           { href: "/operations", label: "لوحة التشغيل", icon: Factory, module: "operations" },
+          { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
           { href: "/products", label: "المنتجات", icon: Package, module: "operations" },
           { href: "/shifts", label: "الورديات", icon: Clock, module: "shifts" },
           { href: "/production", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
