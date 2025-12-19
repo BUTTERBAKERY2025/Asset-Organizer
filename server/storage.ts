@@ -62,6 +62,12 @@ import {
   type InsertQualityCheck,
   type DailyOperationsSummary,
   type InsertDailyOperationsSummary,
+  type CashierSalesJournal,
+  type InsertCashierSalesJournal,
+  type CashierPaymentBreakdown,
+  type InsertCashierPaymentBreakdown,
+  type CashierSignature,
+  type InsertCashierSignature,
   branches,
   inventoryItems,
   auditLogs,
@@ -92,7 +98,10 @@ import {
   shiftEmployees,
   productionOrders,
   qualityChecks,
-  dailyOperationsSummary
+  dailyOperationsSummary,
+  cashierSalesJournals,
+  cashierPaymentBreakdowns,
+  cashierSignatures
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -1748,6 +1757,214 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db.insert(dailyOperationsSummary).values(summary).returning();
       return created;
     }
+  }
+
+  // ==================== Cashier Sales Journal ====================
+  
+  async getAllCashierJournals(): Promise<CashierSalesJournal[]> {
+    return await db.select().from(cashierSalesJournals).orderBy(desc(cashierSalesJournals.journalDate));
+  }
+
+  async getCashierJournalsByBranch(branchId: string): Promise<CashierSalesJournal[]> {
+    return await db.select().from(cashierSalesJournals)
+      .where(eq(cashierSalesJournals.branchId, branchId))
+      .orderBy(desc(cashierSalesJournals.journalDate));
+  }
+
+  async getCashierJournalsByDate(date: string): Promise<CashierSalesJournal[]> {
+    return await db.select().from(cashierSalesJournals)
+      .where(eq(cashierSalesJournals.journalDate, date))
+      .orderBy(desc(cashierSalesJournals.createdAt));
+  }
+
+  async getCashierJournalsByDateRange(startDate: string, endDate: string): Promise<CashierSalesJournal[]> {
+    return await db.select().from(cashierSalesJournals)
+      .where(and(
+        gte(cashierSalesJournals.journalDate, startDate),
+        lte(cashierSalesJournals.journalDate, endDate)
+      ))
+      .orderBy(desc(cashierSalesJournals.journalDate));
+  }
+
+  async getCashierJournalsByCashier(cashierId: string): Promise<CashierSalesJournal[]> {
+    return await db.select().from(cashierSalesJournals)
+      .where(eq(cashierSalesJournals.cashierId, cashierId))
+      .orderBy(desc(cashierSalesJournals.journalDate));
+  }
+
+  async getCashierJournalsByStatus(status: string): Promise<CashierSalesJournal[]> {
+    return await db.select().from(cashierSalesJournals)
+      .where(eq(cashierSalesJournals.status, status))
+      .orderBy(desc(cashierSalesJournals.journalDate));
+  }
+
+  async getCashierJournalsByDiscrepancyStatus(status: string): Promise<CashierSalesJournal[]> {
+    return await db.select().from(cashierSalesJournals)
+      .where(eq(cashierSalesJournals.discrepancyStatus, status))
+      .orderBy(desc(cashierSalesJournals.journalDate));
+  }
+
+  async getCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
+    const [journal] = await db.select().from(cashierSalesJournals).where(eq(cashierSalesJournals.id, id));
+    return journal || undefined;
+  }
+
+  async createCashierJournal(journal: InsertCashierSalesJournal): Promise<CashierSalesJournal> {
+    // Calculate discrepancy
+    const expectedCash = journal.cashTotal || 0;
+    const actualCash = journal.actualCashDrawer || 0;
+    const discrepancy = actualCash - expectedCash;
+    const discrepancyStatus = discrepancy === 0 ? 'balanced' : (discrepancy < 0 ? 'shortage' : 'surplus');
+    
+    // Calculate average ticket
+    const customerCount = journal.customerCount || 0;
+    const totalSales = journal.totalSales || 0;
+    const averageTicket = customerCount > 0 ? totalSales / customerCount : 0;
+
+    const [created] = await db.insert(cashierSalesJournals).values({
+      ...journal,
+      expectedCash,
+      discrepancyAmount: Math.abs(discrepancy),
+      discrepancyStatus,
+      averageTicket,
+    }).returning();
+    return created;
+  }
+
+  async updateCashierJournal(id: number, journal: Partial<InsertCashierSalesJournal>): Promise<CashierSalesJournal | undefined> {
+    // Recalculate discrepancy if relevant fields changed
+    let updateData: any = { ...journal, updatedAt: new Date() };
+    
+    if (journal.cashTotal !== undefined || journal.actualCashDrawer !== undefined) {
+      const existing = await this.getCashierJournal(id);
+      if (existing) {
+        const expectedCash = journal.cashTotal ?? existing.cashTotal;
+        const actualCash = journal.actualCashDrawer ?? existing.actualCashDrawer;
+        const discrepancy = actualCash - expectedCash;
+        updateData.expectedCash = expectedCash;
+        updateData.discrepancyAmount = Math.abs(discrepancy);
+        updateData.discrepancyStatus = discrepancy === 0 ? 'balanced' : (discrepancy < 0 ? 'shortage' : 'surplus');
+      }
+    }
+
+    // Recalculate average ticket
+    if (journal.customerCount !== undefined || journal.totalSales !== undefined) {
+      const existing = await this.getCashierJournal(id);
+      if (existing) {
+        const customerCount = journal.customerCount ?? existing.customerCount ?? 0;
+        const totalSales = journal.totalSales ?? existing.totalSales;
+        updateData.averageTicket = customerCount > 0 ? totalSales / customerCount : 0;
+      }
+    }
+
+    const [updated] = await db.update(cashierSalesJournals)
+      .set(updateData)
+      .where(eq(cashierSalesJournals.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteCashierJournal(id: number): Promise<boolean> {
+    const result = await db.delete(cashierSalesJournals).where(eq(cashierSalesJournals.id, id));
+    return true;
+  }
+
+  async submitCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
+    const [updated] = await db.update(cashierSalesJournals)
+      .set({ status: 'submitted', submittedAt: new Date(), updatedAt: new Date() })
+      .where(eq(cashierSalesJournals.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async approveCashierJournal(id: number, approvedBy: string): Promise<CashierSalesJournal | undefined> {
+    const [updated] = await db.update(cashierSalesJournals)
+      .set({ status: 'approved', approvedBy, approvedAt: new Date(), updatedAt: new Date() })
+      .where(eq(cashierSalesJournals.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async rejectCashierJournal(id: number, notes?: string): Promise<CashierSalesJournal | undefined> {
+    const [updated] = await db.update(cashierSalesJournals)
+      .set({ status: 'rejected', notes, updatedAt: new Date() })
+      .where(eq(cashierSalesJournals.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Payment Breakdowns
+  async getPaymentBreakdowns(journalId: number): Promise<CashierPaymentBreakdown[]> {
+    return await db.select().from(cashierPaymentBreakdowns)
+      .where(eq(cashierPaymentBreakdowns.journalId, journalId));
+  }
+
+  async createPaymentBreakdown(breakdown: InsertCashierPaymentBreakdown): Promise<CashierPaymentBreakdown> {
+    const [created] = await db.insert(cashierPaymentBreakdowns).values(breakdown).returning();
+    return created;
+  }
+
+  async createPaymentBreakdowns(breakdowns: InsertCashierPaymentBreakdown[]): Promise<CashierPaymentBreakdown[]> {
+    if (breakdowns.length === 0) return [];
+    const created = await db.insert(cashierPaymentBreakdowns).values(breakdowns).returning();
+    return created;
+  }
+
+  async deletePaymentBreakdowns(journalId: number): Promise<boolean> {
+    await db.delete(cashierPaymentBreakdowns).where(eq(cashierPaymentBreakdowns.journalId, journalId));
+    return true;
+  }
+
+  // Cashier Signatures
+  async getCashierSignatures(journalId: number): Promise<CashierSignature[]> {
+    return await db.select().from(cashierSignatures)
+      .where(eq(cashierSignatures.journalId, journalId));
+  }
+
+  async createCashierSignature(signature: InsertCashierSignature): Promise<CashierSignature> {
+    const [created] = await db.insert(cashierSignatures).values(signature).returning();
+    return created;
+  }
+
+  // Cashier Journal Stats
+  async getCashierJournalStats(branchId?: string): Promise<{
+    totalJournals: number;
+    totalSales: number;
+    totalShortages: number;
+    totalSurpluses: number;
+    shortageAmount: number;
+    surplusAmount: number;
+    averageTicket: number;
+  }> {
+    let journals: CashierSalesJournal[];
+    if (branchId) {
+      journals = await this.getCashierJournalsByBranch(branchId);
+    } else {
+      journals = await this.getAllCashierJournals();
+    }
+
+    const totalJournals = journals.length;
+    const totalSales = journals.reduce((sum, j) => sum + j.totalSales, 0);
+    const shortageJournals = journals.filter(j => j.discrepancyStatus === 'shortage');
+    const surplusJournals = journals.filter(j => j.discrepancyStatus === 'surplus');
+    const totalShortages = shortageJournals.length;
+    const totalSurpluses = surplusJournals.length;
+    const shortageAmount = shortageJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0);
+    const surplusAmount = surplusJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0);
+    const avgTickets = journals.filter(j => j.averageTicket && j.averageTicket > 0);
+    const averageTicket = avgTickets.length > 0 
+      ? avgTickets.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / avgTickets.length 
+      : 0;
+
+    return {
+      totalJournals,
+      totalSales,
+      totalShortages,
+      totalSurpluses,
+      shortageAmount,
+      surplusAmount,
+      averageTicket,
+    };
   }
 }
 
