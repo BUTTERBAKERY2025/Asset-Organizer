@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2 } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,7 +40,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { canView } = usePermissions();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     assets: true,
-    construction: true,
+    construction: false,
+    reports: false,
+    settings: false,
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -59,6 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const allStandaloneItems: NavItem[] = [
+    { href: "/", label: "الصفحة الرئيسية", icon: Home, module: "dashboard" },
     { href: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, module: "dashboard" },
   ];
 
@@ -66,10 +69,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     {
       key: "assets",
       group: {
-        label: "الأصول",
+        label: "الأصول والجرد",
         icon: Package,
         items: [
-          { href: "/inventory", label: "جرد الأصول", icon: FileText, module: "inventory" },
+          { href: "/inventory", label: "جرد الأصول", icon: Boxes, module: "inventory" },
           { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit, requiresAuth: true, module: "inventory" },
           { href: "/asset-transfers", label: "تحويلات الأصول", icon: ArrowLeftRight, module: "asset_transfers" },
           { href: "/branches", label: "إدارة الفروع", icon: Building2, requiresAuth: true, module: "inventory" },
@@ -84,25 +87,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: "المشاريع الإنشائية",
         icon: Hammer,
         items: [
-          { href: "/construction-dashboard", label: "لوحة التحكم", icon: LayoutDashboard, module: "construction_projects" },
           { href: "/construction-projects", label: "المشاريع", icon: Hammer, module: "construction_projects" },
           { href: "/contractors", label: "المقاولون", icon: HardHat, module: "contractors" },
           { href: "/contracts", label: "العقود", icon: FileSignature, module: "contracts" },
           { href: "/payment-requests", label: "طلبات الدفع", icon: Wallet, module: "payment_requests" },
           { href: "/budget-planning", label: "تخطيط الميزانية", icon: Calculator, module: "budget_planning" },
-          { href: "/construction-reports", label: "التقارير", icon: FileBarChart, module: "reports" },
+        ],
+      },
+    },
+    {
+      key: "reports",
+      group: {
+        label: "التقارير",
+        icon: FileBarChart,
+        items: [
+          { href: "/reports", label: "التقارير الشاملة", icon: FileText, module: "reports" },
+          { href: "/construction-reports", label: "تقارير المشاريع", icon: FileBarChart, module: "reports" },
+        ],
+      },
+    },
+    {
+      key: "settings",
+      group: {
+        label: "الإعدادات والنظام",
+        icon: Settings,
+        items: [
+          { href: "/users", label: "إدارة المستخدمين", icon: Users, module: "users" },
+          { href: "/integrations", label: "التكاملات", icon: Link2, module: "users" },
+          { href: "/audit-logs", label: "سجل التدقيق", icon: FileSearch, module: "users" },
+          { href: "/backups", label: "النسخ الاحتياطية", icon: HardDrive, module: "users" },
         ],
       },
     },
   ];
 
-  const allBottomItems: NavItem[] = [
-    { href: "/reports", label: "التقارير الشاملة", icon: FileBarChart, module: "reports" },
-    { href: "/integrations", label: "التكاملات", icon: Link2, module: "users" },
-    { href: "/audit-logs", label: "سجل التدقيق", icon: FileSearch, module: "users" },
-    { href: "/backups", label: "النسخ الاحتياطية", icon: HardDrive, module: "users" },
-    { href: "/users", label: "إدارة المستخدمين", icon: Users, module: "users" },
-  ];
+  const allBottomItems: NavItem[] = [];
 
   const filterItemsByPermission = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
@@ -154,7 +173,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-2">
             {isAuthenticated && <NotificationsDropdown />}
-            <p className="text-[10px] text-muted-foreground text-center leading-tight">نظام إدارة المشروعات والأصول والصيانة</p>
+            <p className="text-[10px] text-muted-foreground text-center leading-tight">منصة بتر بيكري الشاملة</p>
           </div>
           {isAuthenticated && (
             <div className="mt-2 w-full">
@@ -260,7 +279,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
                 <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16" />
-                <p className="text-[10px] text-muted-foreground text-center mt-2">نظام إدارة المشروعات والأصول والصيانة</p>
+                <p className="text-[10px] text-muted-foreground text-center mt-2">منصة بتر بيكري الشاملة</p>
               </div>
               
               <nav className="p-3 space-y-1">
