@@ -55,6 +55,14 @@ Preferred communication style: Simple, everyday language.
    - Contractor management with contact information and ratings
    - Project status workflow (planned, in_progress, on_hold, completed, cancelled)
 
+7. **Operations and Production Module** (Added December 2025): Complete production management system including:
+   - Products catalog with pricing, categories, and active status
+   - Shift scheduling with morning/evening/night shifts and employee assignments
+   - Production orders with status tracking (pending, in_progress, completed, cancelled)
+   - Quality control checks with pass/fail status and inspector notes
+   - Daily operations summary with aggregate statistics
+   - Permission modules: operations, production, shifts, quality_control
+
 ## External Dependencies
 
 ### Database
@@ -100,9 +108,74 @@ Preferred communication style: Simple, everyday language.
 
 ### New Database Tables (require SQL migration for production)
 ```sql
+-- Integration/Notification tables
 CREATE TABLE external_integrations (...);
 CREATE TABLE notification_templates (...);
 CREATE TABLE notification_queue (...);
 CREATE TABLE data_import_jobs (...);
 CREATE TABLE accounting_exports (...);
+
+-- Operations Module tables (December 2025)
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    price DOUBLE PRECISION,
+    unit TEXT DEFAULT 'قطعة',
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE shifts (
+    id SERIAL PRIMARY KEY,
+    branch_id TEXT NOT NULL REFERENCES branches(id),
+    shift_type TEXT NOT NULL, -- morning, evening, night
+    shift_date DATE NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE shift_employees (
+    id SERIAL PRIMARY KEY,
+    shift_id INTEGER NOT NULL REFERENCES shifts(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    role TEXT NOT NULL
+);
+
+CREATE TABLE production_orders (
+    id SERIAL PRIMARY KEY,
+    branch_id TEXT NOT NULL REFERENCES branches(id),
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    quantity INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending' NOT NULL, -- pending, in_progress, completed, cancelled
+    notes TEXT,
+    production_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE quality_checks (
+    id SERIAL PRIMARY KEY,
+    production_order_id INTEGER NOT NULL REFERENCES production_orders(id),
+    checked_by_user_id INTEGER NOT NULL REFERENCES users(id),
+    check_date TIMESTAMP DEFAULT NOW() NOT NULL,
+    status TEXT NOT NULL, -- passed, failed
+    notes TEXT
+);
+
+CREATE TABLE daily_operations_summary (
+    id SERIAL PRIMARY KEY,
+    branch_id TEXT NOT NULL REFERENCES branches(id),
+    summary_date DATE NOT NULL,
+    total_production INTEGER DEFAULT 0,
+    total_orders INTEGER DEFAULT 0,
+    completed_orders INTEGER DEFAULT 0,
+    quality_pass_rate DOUBLE PRECISION DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
 ```
