@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, timestamp, serial, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, timestamp, serial, index, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -519,6 +519,137 @@ export const ROLE_PERMISSION_TEMPLATES: Record<string, { module: SystemModule; a
     actions: ["view"] as ModuleAction[],
   })),
 };
+
+// Job Titles - الوظائف
+export const JOB_TITLES = [
+  "cashier",
+  "baker",
+  "supervisor",
+  "branch_manager",
+  "production_manager",
+  "quality_inspector",
+  "delivery",
+  "cleaner",
+  "maintenance",
+  "other",
+] as const;
+
+export type JobTitle = typeof JOB_TITLES[number];
+
+// Job Title Labels - مسميات الوظائف بالعربية
+export const JOB_TITLE_LABELS: Record<JobTitle, string> = {
+  cashier: "كاشير",
+  baker: "خباز",
+  supervisor: "مشرف",
+  branch_manager: "مدير فرع",
+  production_manager: "مدير إنتاج",
+  quality_inspector: "مفتش جودة",
+  delivery: "توصيل",
+  cleaner: "نظافة",
+  maintenance: "صيانة",
+  other: "أخرى",
+};
+
+// Job Role Permission Templates - قوالب صلاحيات الوظائف
+export const JOB_ROLE_PERMISSION_TEMPLATES: Record<JobTitle, { module: SystemModule; actions: ModuleAction[] }[]> = {
+  // كاشير - يومية الكاشير فقط
+  cashier: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "cashier_journal", actions: ["view", "create", "edit"] },
+  ],
+  
+  // خباز - الإنتاج ومراقبة الجودة
+  baker: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "production", actions: ["view", "create", "edit"] },
+    { module: "quality_control", actions: ["view"] },
+  ],
+  
+  // مشرف - نظرة عامة على التشغيل مع عرض الأقسام الأساسية
+  supervisor: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "operations", actions: ["view", "create", "edit"] },
+    { module: "production", actions: ["view"] },
+    { module: "shifts", actions: ["view", "create", "edit"] },
+    { module: "quality_control", actions: ["view"] },
+    { module: "cashier_journal", actions: ["view", "approve"] },
+    { module: "inventory", actions: ["view"] },
+  ],
+  
+  // مدير فرع - صلاحيات واسعة على فرعه
+  branch_manager: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "operations", actions: ["view", "create", "edit", "delete"] },
+    { module: "production", actions: ["view", "create", "edit"] },
+    { module: "shifts", actions: ["view", "create", "edit", "delete"] },
+    { module: "quality_control", actions: ["view", "create", "edit"] },
+    { module: "cashier_journal", actions: ["view", "create", "edit", "approve"] },
+    { module: "inventory", actions: ["view", "create", "edit"] },
+    { module: "asset_transfers", actions: ["view", "create", "edit"] },
+    { module: "reports", actions: ["view", "export"] },
+  ],
+  
+  // مدير إنتاج - الإنتاج والورديات ومراقبة الجودة
+  production_manager: [
+    { module: "dashboard", actions: ["view", "export"] },
+    { module: "production", actions: ["view", "create", "edit", "delete"] },
+    { module: "shifts", actions: ["view", "create", "edit", "delete"] },
+    { module: "quality_control", actions: ["view", "create", "edit", "delete"] },
+    { module: "operations", actions: ["view"] },
+    { module: "inventory", actions: ["view"] },
+  ],
+  
+  // مفتش جودة - مراقبة الجودة والإنتاج
+  quality_inspector: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "quality_control", actions: ["view", "create", "edit"] },
+    { module: "production", actions: ["view"] },
+  ],
+  
+  // توصيل - عرض يومية الكاشير
+  delivery: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "cashier_journal", actions: ["view"] },
+  ],
+  
+  // نظافة - عرض محدود
+  cleaner: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "operations", actions: ["view"] },
+  ],
+  
+  // صيانة - المخزون وتحويلات الأصول
+  maintenance: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "inventory", actions: ["view", "edit"] },
+    { module: "asset_transfers", actions: ["view", "create"] },
+  ],
+  
+  // أخرى - عرض لوحة التحكم فقط
+  other: [
+    { module: "dashboard", actions: ["view"] },
+  ],
+};
+
+// Job Role Permissions table - جدول صلاحيات الوظائف (للتخصيص)
+export const jobRolePermissions = pgTable("job_role_permissions", {
+  id: serial("id").primaryKey(),
+  jobTitle: text("job_title").notNull(), // cashier, baker, supervisor, etc.
+  module: text("module").notNull(),
+  actions: text("actions").array().notNull(),
+  isDefault: boolean("is_default").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertJobRolePermissionSchema = createInsertSchema(jobRolePermissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type JobRolePermission = typeof jobRolePermissions.$inferSelect;
+export type InsertJobRolePermission = z.infer<typeof insertJobRolePermissionSchema>;
 
 // Permission Audit Logs - سجل تغييرات الصلاحيات
 export const permissionAuditLogs = pgTable("permission_audit_logs", {
