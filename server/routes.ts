@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, SYSTEM_MODULES, MODULE_ACTIONS } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission } from "./auth";
 
@@ -2124,9 +2124,8 @@ export async function registerRoutes(
       });
       
       // Apply job role permissions automatically based on job title
-      if (jobTitle) {
-        const currentUser = req.user as User;
-        await storage.applyJobRolePermissions(user.id, jobTitle, currentUser.id);
+      if (jobTitle && req.currentUser && JOB_TITLES.includes(jobTitle as typeof JOB_TITLES[number])) {
+        await storage.applyJobRolePermissions(user.id, jobTitle, req.currentUser.id);
       }
       
       const { password: _, ...safeUser } = user;
@@ -2158,9 +2157,8 @@ export async function registerRoutes(
       }
       
       // Apply job role permissions automatically if job title changed
-      if (jobTitle !== undefined) {
-        const currentUser = req.user as User;
-        await storage.applyJobRolePermissions(req.params.id, jobTitle, currentUser.id);
+      if (jobTitle !== undefined && req.currentUser && JOB_TITLES.includes(jobTitle as typeof JOB_TITLES[number])) {
+        await storage.applyJobRolePermissions(req.params.id, jobTitle, req.currentUser.id);
       }
       
       const { password: _, ...safeUser } = user;
@@ -2182,6 +2180,60 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting operations employee:", error);
       res.status(500).json({ error: "Failed to delete operations employee" });
+    }
+  });
+
+  // ==================== Job Role Permissions Routes ====================
+
+  // Get job role permission templates
+  app.get("/api/job-role-permissions", isAuthenticated, async (req, res) => {
+    try {
+      // Format templates for frontend display
+      const templates = Object.entries(JOB_ROLE_PERMISSION_TEMPLATES).map(([jobTitle, permissions]) => ({
+        jobTitle,
+        jobTitleLabel: JOB_TITLE_LABELS[jobTitle as keyof typeof JOB_TITLE_LABELS] || jobTitle,
+        permissions: permissions.map(p => ({
+          module: p.module,
+          moduleLabel: MODULE_LABELS[p.module as keyof typeof MODULE_LABELS] || p.module,
+          actions: p.actions,
+          actionLabels: p.actions.map(a => ACTION_LABELS[a as keyof typeof ACTION_LABELS] || a),
+        })),
+      }));
+      
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching job role permissions:", error);
+      res.status(500).json({ error: "Failed to fetch job role permissions" });
+    }
+  });
+
+  // Reapply job role permissions to a specific employee
+  app.post("/api/operations-employees/:id/reapply-permissions", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      if (!req.currentUser) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
+      const employee = await storage.getUser(req.params.id);
+      if (!employee) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      
+      if (!employee.jobTitle) {
+        return res.status(400).json({ error: "الموظف ليس لديه وظيفة محددة" });
+      }
+      
+      // Verify job title has a template
+      if (!JOB_TITLES.includes(employee.jobTitle as typeof JOB_TITLES[number])) {
+        return res.status(400).json({ error: "الوظيفة غير معرفة في النظام" });
+      }
+      
+      await storage.applyJobRolePermissions(req.params.id, employee.jobTitle, req.currentUser.id);
+      
+      res.json({ success: true, message: "تم تطبيق صلاحيات الوظيفة بنجاح" });
+    } catch (error) {
+      console.error("Error reapplying job role permissions:", error);
+      res.status(500).json({ error: "Failed to reapply job role permissions" });
     }
   });
 
