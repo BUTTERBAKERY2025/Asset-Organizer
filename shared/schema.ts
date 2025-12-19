@@ -413,6 +413,7 @@ export const SYSTEM_MODULES = [
   "production",
   "shifts",
   "quality_control",
+  "cashier_journal",
 ] as const;
 
 export type SystemModule = typeof SYSTEM_MODULES[number];
@@ -465,6 +466,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   production: "الإنتاج",
   shifts: "الورديات",
   quality_control: "مراقبة الجودة",
+  cashier_journal: "يومية الكاشير",
 };
 
 // Action labels for UI display (Arabic)
@@ -480,7 +482,7 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
 // Module groups for UI organization
 export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   { label: "الأساسية", modules: ["dashboard", "inventory", "asset_transfers", "reports"] },
-  { label: "التشغيل", modules: ["operations", "production", "shifts", "quality_control"] },
+  { label: "التشغيل", modules: ["operations", "production", "shifts", "quality_control", "cashier_journal"] },
   { label: "إدارة الإنشاءات", modules: ["construction_projects", "construction_work_items", "contractors"] },
   { label: "المالية والعقود", modules: ["contracts", "budget_planning", "payment_requests"] },
   { label: "إدارة النظام", modules: ["users"] },
@@ -870,3 +872,151 @@ export const insertDailyOperationsSummarySchema = createInsertSchema(dailyOperat
 
 export type DailyOperationsSummary = typeof dailyOperationsSummary.$inferSelect;
 export type InsertDailyOperationsSummary = z.infer<typeof insertDailyOperationsSummarySchema>;
+
+// ==================== Cashier Sales Journal Module ====================
+
+// Cashier Sales Journals table - يومية مبيعات الكاشير
+export const cashierSalesJournals = pgTable("cashier_sales_journals", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  journalDate: text("journal_date").notNull(), // تاريخ اليومية
+  shiftType: text("shift_type"), // صباحي، مسائي، ليلي
+  shiftStartTime: text("shift_start_time"), // وقت بدء الشفت
+  shiftEndTime: text("shift_end_time"), // وقت انتهاء الشفت
+  
+  // إجمالي المبيعات
+  totalSales: real("total_sales").default(0).notNull(), // إجمالي المبيعات
+  cashTotal: real("cash_total").default(0).notNull(), // إجمالي النقد
+  networkTotal: real("network_total").default(0).notNull(), // إجمالي الشبكة
+  deliveryTotal: real("delivery_total").default(0).notNull(), // إجمالي التوصيل
+  
+  // مقارنة الصندوق
+  expectedCash: real("expected_cash").default(0).notNull(), // النقد المتوقع
+  actualCashDrawer: real("actual_cash_drawer").default(0).notNull(), // النقد الفعلي بالصندوق
+  discrepancyAmount: real("discrepancy_amount").default(0).notNull(), // مبلغ الفرق
+  discrepancyStatus: text("discrepancy_status").default("balanced").notNull(), // balanced, shortage, surplus
+  
+  // إحصائيات
+  customerCount: integer("customer_count").default(0), // عدد العملاء
+  transactionCount: integer("transaction_count").default(0), // عدد الفواتير
+  averageTicket: real("average_ticket").default(0), // متوسط الفاتورة
+  
+  // الحالة والتوقيع
+  status: text("status").default("draft").notNull(), // draft, submitted, approved, rejected
+  submittedAt: timestamp("submitted_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCashierSalesJournalSchema = createInsertSchema(cashierSalesJournals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  submittedAt: true,
+  approvedAt: true,
+});
+
+export type CashierSalesJournal = typeof cashierSalesJournals.$inferSelect;
+export type InsertCashierSalesJournal = z.infer<typeof insertCashierSalesJournalSchema>;
+
+// Payment Breakdown table - تفصيل المبيعات حسب وسيلة الدفع
+export const cashierPaymentBreakdowns = pgTable("cashier_payment_breakdowns", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id").notNull().references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  paymentMethod: text("payment_method").notNull(), // cash, card, mada, stc_pay, apple_pay, visa, mastercard, delivery_app, other
+  amount: real("amount").default(0).notNull(),
+  transactionCount: integer("transaction_count").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCashierPaymentBreakdownSchema = createInsertSchema(cashierPaymentBreakdowns).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CashierPaymentBreakdown = typeof cashierPaymentBreakdowns.$inferSelect;
+export type InsertCashierPaymentBreakdown = z.infer<typeof insertCashierPaymentBreakdownSchema>;
+
+// Payment Methods labels
+export const PAYMENT_METHODS = [
+  "cash",
+  "card", 
+  "mada",
+  "stc_pay",
+  "apple_pay",
+  "visa",
+  "mastercard",
+  "delivery_app",
+  "hungerstation",
+  "toyou",
+  "jahez",
+  "other",
+] as const;
+
+export type PaymentMethod = typeof PAYMENT_METHODS[number];
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: "نقد",
+  card: "بطاقة",
+  mada: "مدى",
+  stc_pay: "STC Pay",
+  apple_pay: "Apple Pay",
+  visa: "فيزا",
+  mastercard: "ماستركارد",
+  delivery_app: "تطبيق توصيل",
+  hungerstation: "هنقرستيشن",
+  toyou: "تو يو",
+  jahez: "جاهز",
+  other: "أخرى",
+};
+
+// Cashier Signatures table - التوقيعات الإلكترونية
+export const cashierSignatures = pgTable("cashier_signatures", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id").notNull().references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  signatureType: text("signature_type").notNull(), // cashier, supervisor, manager
+  signerName: text("signer_name").notNull(),
+  signerId: varchar("signer_id").references(() => users.id),
+  signatureData: text("signature_data").notNull(), // Base64 encoded signature image
+  signedAt: timestamp("signed_at").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+  notes: text("notes"),
+});
+
+export const insertCashierSignatureSchema = createInsertSchema(cashierSignatures).omit({
+  id: true,
+  signedAt: true,
+});
+
+export type CashierSignature = typeof cashierSignatures.$inferSelect;
+export type InsertCashierSignature = z.infer<typeof insertCashierSignatureSchema>;
+
+// Discrepancy status labels
+export const DISCREPANCY_STATUS = ["balanced", "shortage", "surplus"] as const;
+export type DiscrepancyStatus = typeof DISCREPANCY_STATUS[number];
+
+export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
+  balanced: "متوازن",
+  shortage: "عجز",
+  surplus: "زيادة",
+};
+
+// Journal status labels
+export const JOURNAL_STATUS = ["draft", "submitted", "approved", "rejected"] as const;
+export type JournalStatus = typeof JOURNAL_STATUS[number];
+
+export const JOURNAL_STATUS_LABELS: Record<JournalStatus, string> = {
+  draft: "مسودة",
+  submitted: "مقدم",
+  approved: "معتمد",
+  rejected: "مرفوض",
+};
