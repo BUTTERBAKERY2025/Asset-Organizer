@@ -241,4 +241,17 @@ CREATE TABLE cashier_signatures (
     ip_address TEXT,
     signed_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
+
+CREATE TABLE journal_attachments (
+    id SERIAL PRIMARY KEY,
+    journal_id INTEGER NOT NULL REFERENCES cashier_sales_journals(id) ON DELETE CASCADE,
+    attachment_type TEXT NOT NULL,  -- foodics_report, network_report, other
+    file_name TEXT NOT NULL,
+    file_data TEXT NOT NULL,  -- base64 encoded image data
+    mime_type TEXT NOT NULL,
+    file_size INTEGER,
+    notes TEXT,
+    uploaded_by VARCHAR REFERENCES users(id),
+    uploaded_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
 ```
