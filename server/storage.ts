@@ -104,7 +104,8 @@ import {
   cashierSignatures,
   journalAttachments,
   type JournalAttachment,
-  type InsertJournalAttachment
+  type InsertJournalAttachment,
+  JOB_ROLE_PERMISSION_TEMPLATES
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -227,6 +228,13 @@ export interface IStorage {
     permissions: { module: string; actions: string[] }[],
     changedByUserId: string,
     templateApplied: string | null
+  ): Promise<UserPermission[]>;
+  
+  // Apply job role permissions to user
+  applyJobRolePermissions(
+    userId: string,
+    jobTitle: string,
+    changedByUserId: string
   ): Promise<UserPermission[]>;
   
   // Asset Transfers
@@ -1076,6 +1084,38 @@ export class DatabaseStorage implements IStorage {
 
       return savedPermissions;
     });
+  }
+
+  async applyJobRolePermissions(
+    userId: string,
+    jobTitle: string,
+    changedByUserId: string
+  ): Promise<UserPermission[]> {
+    // Get job role permission template
+    const template = JOB_ROLE_PERMISSION_TEMPLATES[jobTitle as keyof typeof JOB_ROLE_PERMISSION_TEMPLATES];
+    
+    if (!template) {
+      // If no template exists, apply minimal dashboard access
+      return this.updateUserPermissionsWithAudit(
+        userId,
+        [{ module: "dashboard", actions: ["view"] }],
+        changedByUserId,
+        `job_role:${jobTitle}`
+      );
+    }
+
+    // Convert template to the format expected by updateUserPermissionsWithAudit
+    const permissions = template.map(perm => ({
+      module: perm.module,
+      actions: [...perm.actions] as string[],
+    }));
+
+    return this.updateUserPermissionsWithAudit(
+      userId,
+      permissions,
+      changedByUserId,
+      `job_role:${jobTitle}`
+    );
   }
 
   // Asset Transfers

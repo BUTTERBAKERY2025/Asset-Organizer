@@ -2123,6 +2123,12 @@ export async function registerRoutes(
         isActive: "active",
       });
       
+      // Apply job role permissions automatically based on job title
+      if (jobTitle) {
+        const currentUser = req.user as User;
+        await storage.applyJobRolePermissions(user.id, jobTitle, currentUser.id);
+      }
+      
       const { password: _, ...safeUser } = user;
       res.status(201).json(safeUser);
     } catch (error) {
@@ -2149,6 +2155,12 @@ export async function registerRoutes(
       const user = await storage.updateUser(req.params.id, updateData);
       if (!user) {
         return res.status(404).json({ error: "Employee not found" });
+      }
+      
+      // Apply job role permissions automatically if job title changed
+      if (jobTitle !== undefined) {
+        const currentUser = req.user as User;
+        await storage.applyJobRolePermissions(req.params.id, jobTitle, currentUser.id);
       }
       
       const { password: _, ...safeUser } = user;
