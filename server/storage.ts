@@ -1091,16 +1091,22 @@ export class DatabaseStorage implements IStorage {
     jobTitle: string,
     changedByUserId: string
   ): Promise<UserPermission[]> {
+    // Validate actor ID for audit trail
+    if (!changedByUserId) {
+      throw new Error("Actor ID is required for permission changes");
+    }
+    
     // Get job role permission template
     const template = JOB_ROLE_PERMISSION_TEMPLATES[jobTitle as keyof typeof JOB_ROLE_PERMISSION_TEMPLATES];
     
     if (!template) {
+      console.warn(`No permission template found for job title: ${jobTitle}, applying minimal access`);
       // If no template exists, apply minimal dashboard access
       return this.updateUserPermissionsWithAudit(
         userId,
         [{ module: "dashboard", actions: ["view"] }],
         changedByUserId,
-        `job_role:${jobTitle}`
+        `job_role:${jobTitle}:fallback`
       );
     }
 
