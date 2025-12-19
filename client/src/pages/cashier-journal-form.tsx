@@ -10,11 +10,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { Branch, CashierSalesJournal, CashierPaymentBreakdown } from "@shared/schema";
+import type { Branch, CashierSalesJournal, CashierPaymentBreakdown, JournalAttachment } from "@shared/schema";
+import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPES, type AttachmentType } from "@shared/schema";
 
 const PAYMENT_CATEGORIES = {
   cash: { label: "نقدي", color: "bg-green-100 text-green-700" },
@@ -80,6 +81,17 @@ export default function CashierJournalFormPage() {
     { paymentMethod: "cash", amount: 0, transactionCount: 0 },
   ]);
 
+  const [attachments, setAttachments] = useState<JournalAttachment[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<{
+    attachmentType: AttachmentType;
+    fileName: string;
+    fileData: string;
+    mimeType: string;
+    fileSize: number;
+  }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingType, setUploadingType] = useState<AttachmentType | null>(null);
+
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
   });
@@ -88,6 +100,17 @@ export default function CashierJournalFormPage() {
     queryKey: [`/api/cashier-journals/${id}`],
     enabled: isEdit,
   });
+
+  const { data: existingAttachments } = useQuery<JournalAttachment[]>({
+    queryKey: [`/api/cashier-journals/${id}/attachments`],
+    enabled: isEdit,
+  });
+
+  useEffect(() => {
+    if (existingAttachments) {
+      setAttachments(existingAttachments);
+    }
+  }, [existingAttachments]);
 
   useEffect(() => {
     if (existingJournal) {
@@ -120,7 +143,18 @@ export default function CashierJournalFormPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => apiRequest("/api/cashier-journals", "POST", data),
-    onSuccess: () => {
+    onSuccess: async (createdJournal: CashierSalesJournal) => {
+      if (pendingAttachments.length > 0) {
+        try {
+          for (const attachment of pendingAttachments) {
+            await apiRequest(`/api/cashier-journals/${createdJournal.id}/attachments`, "POST", attachment);
+          }
+          setPendingAttachments([]);
+        } catch (error) {
+          console.error("Error uploading attachments:", error);
+          toast({ title: "تحذير", description: "تم حفظ اليومية لكن فشل رفع بعض المرفقات", variant: "destructive" });
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       toast({ title: "تم إنشاء اليومية بنجاح" });
       setLocation("/cashier-journals");
@@ -169,6 +203,83 @@ export default function CashierJournalFormPage() {
       toast({ title: "خطأ", description: "فشل في ترحيل اليومية", variant: "destructive" });
     },
   });
+
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: async (data: { journalId: number; attachment: typeof pendingAttachments[0] }) =>
+      apiRequest(`/api/cashier-journals/${data.journalId}/attachments`, "POST", data.attachment),
+    onSuccess: (newAttachment: JournalAttachment) => {
+      setAttachments((prev) => [...prev, newAttachment]);
+      queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}/attachments`] });
+      toast({ title: "تم رفع المرفق بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في رفع المرفق", variant: "destructive" });
+    },
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: async (attachmentId: number) =>
+      apiRequest(`/api/cashier-journals/${id}/attachments/${attachmentId}`, "DELETE"),
+    onSuccess: (_, attachmentId) => {
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+      queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}/attachments`] });
+      toast({ title: "تم حذف المرفق" });
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في حذف المرفق", variant: "destructive" });
+    },
+  });
+
+  const handleFileSelect = (type: AttachmentType) => {
+    setUploadingType(type);
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = "image/*";
+      fileInputRef.current.capture = "environment"; // Opens rear camera on mobile
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingType) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64Data = reader.result as string;
+      
+      if (isEdit && id) {
+        uploadAttachmentMutation.mutate({
+          journalId: parseInt(id),
+          attachment: {
+            attachmentType: uploadingType,
+            fileName: file.name,
+            fileData: base64Data,
+            mimeType: file.type,
+            fileSize: file.size,
+          },
+        });
+      } else {
+        setPendingAttachments((prev) => [
+          ...prev,
+          {
+            attachmentType: uploadingType,
+            fileName: file.name,
+            fileData: base64Data,
+            mimeType: file.type,
+            fileSize: file.size,
+          },
+        ]);
+      }
+    };
+    reader.readAsDataURL(file);
+    
+    e.target.value = "";
+    setUploadingType(null);
+  };
+
+  const removePendingAttachment = (index: number) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const isReadOnly = existingJournal && existingJournal.status !== "draft";
 
@@ -740,6 +851,112 @@ export default function CashierJournalFormPage() {
                   disabled={isReadOnly}
                   data-testid="input-notes"
                 />
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-orange-200">
+              <CardHeader className="bg-orange-50">
+                <CardTitle className="flex items-center gap-2">
+                  <Camera className="w-5 h-5" />
+                  المرفقات والصور
+                </CardTitle>
+                <CardDescription>التقط صور من تقرير فوديكس وجهاز الشبكة</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  data-testid="input-file"
+                />
+                
+                {!isReadOnly && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {ATTACHMENT_TYPES.map((type) => (
+                      <Button
+                        key={type}
+                        variant="outline"
+                        className="h-20 flex flex-col items-center justify-center gap-2"
+                        onClick={() => handleFileSelect(type)}
+                        data-testid={`button-upload-${type}`}
+                      >
+                        <Camera className="w-6 h-6" />
+                        <span className="text-sm">{ATTACHMENT_TYPE_LABELS[type]}</span>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {attachments.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">المرفقات المحفوظة</Label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {attachments.map((attachment) => (
+                        <div key={attachment.id} className="relative border rounded-lg overflow-hidden group">
+                          <img
+                            src={attachment.fileData}
+                            alt={attachment.fileName}
+                            className="w-full h-32 object-cover"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-2">
+                            {ATTACHMENT_TYPE_LABELS[attachment.attachmentType as AttachmentType]}
+                          </div>
+                          {!isReadOnly && (
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-2 left-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => deleteAttachmentMutation.mutate(attachment.id)}
+                              data-testid={`button-delete-attachment-${attachment.id}`}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {pendingAttachments.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">مرفقات في انتظار الحفظ</Label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {pendingAttachments.map((attachment, index) => (
+                        <div key={index} className="relative border rounded-lg overflow-hidden group border-dashed border-2 border-orange-300">
+                          <img
+                            src={attachment.fileData}
+                            alt={attachment.fileName}
+                            className="w-full h-32 object-cover"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-orange-500/80 text-white text-xs p-2">
+                            {ATTACHMENT_TYPE_LABELS[attachment.attachmentType]}
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-2 left-2 h-6 w-6"
+                            onClick={() => removePendingAttachment(index)}
+                            data-testid={`button-remove-pending-${index}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">سيتم رفع هذه المرفقات بعد حفظ اليومية</p>
+                  </div>
+                )}
+
+                {attachments.length === 0 && pendingAttachments.length === 0 && (
+                  <div className="text-center text-muted-foreground py-4">
+                    <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">لا توجد مرفقات</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
