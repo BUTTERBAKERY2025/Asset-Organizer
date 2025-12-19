@@ -101,7 +101,10 @@ import {
   dailyOperationsSummary,
   cashierSalesJournals,
   cashierPaymentBreakdowns,
-  cashierSignatures
+  cashierSignatures,
+  journalAttachments,
+  type JournalAttachment,
+  type InsertJournalAttachment
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -1932,6 +1935,27 @@ export class DatabaseStorage implements IStorage {
   async createCashierSignature(signature: InsertCashierSignature): Promise<CashierSignature> {
     const [created] = await db.insert(cashierSignatures).values(signature).returning();
     return created;
+  }
+
+  // Journal Attachments
+  async getJournalAttachments(journalId: number): Promise<JournalAttachment[]> {
+    return await db.select().from(journalAttachments)
+      .where(eq(journalAttachments.journalId, journalId));
+  }
+
+  async createJournalAttachment(attachment: InsertJournalAttachment): Promise<JournalAttachment> {
+    const [created] = await db.insert(journalAttachments).values(attachment).returning();
+    return created;
+  }
+
+  async deleteJournalAttachment(id: number): Promise<boolean> {
+    await db.delete(journalAttachments).where(eq(journalAttachments.id, id));
+    return true;
+  }
+
+  async deleteJournalAttachments(journalId: number): Promise<boolean> {
+    await db.delete(journalAttachments).where(eq(journalAttachments.journalId, journalId));
+    return true;
   }
 
   // Cashier Journal Stats
