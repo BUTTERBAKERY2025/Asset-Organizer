@@ -2076,5 +2076,251 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Cashier Sales Journal Routes ====================
+
+  // Get all cashier journals with filters
+  app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+    try {
+      const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus } = req.query;
+      let journals;
+      
+      if (branchId) {
+        journals = await storage.getCashierJournalsByBranch(branchId as string);
+      } else if (date) {
+        journals = await storage.getCashierJournalsByDate(date as string);
+      } else if (startDate && endDate) {
+        journals = await storage.getCashierJournalsByDateRange(startDate as string, endDate as string);
+      } else if (cashierId) {
+        journals = await storage.getCashierJournalsByCashier(cashierId as string);
+      } else if (status) {
+        journals = await storage.getCashierJournalsByStatus(status as string);
+      } else if (discrepancyStatus) {
+        journals = await storage.getCashierJournalsByDiscrepancyStatus(discrepancyStatus as string);
+      } else {
+        journals = await storage.getAllCashierJournals();
+      }
+      res.json(journals);
+    } catch (error) {
+      console.error("Error fetching cashier journals:", error);
+      res.status(500).json({ error: "Failed to fetch cashier journals" });
+    }
+  });
+
+  // Get single cashier journal with payment breakdowns and signatures
+  app.get("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const journal = await storage.getCashierJournal(id);
+      if (!journal) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      
+      // Get related payment breakdowns and signatures
+      const [paymentBreakdowns, signatures] = await Promise.all([
+        storage.getPaymentBreakdowns(id),
+        storage.getCashierSignatures(id),
+      ]);
+      
+      res.json({ ...journal, paymentBreakdowns, signatures });
+    } catch (error) {
+      console.error("Error fetching cashier journal:", error);
+      res.status(500).json({ error: "Failed to fetch cashier journal" });
+    }
+  });
+
+  // Create new cashier journal
+  app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+    try {
+      const { paymentBreakdowns, ...journalData } = req.body;
+      
+      // Add creator info
+      journalData.createdBy = req.user?.id;
+      
+      // Create the journal
+      const journal = await storage.createCashierJournal(journalData);
+      
+      // Create payment breakdowns if provided
+      if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
+        const breakdownsWithJournalId = paymentBreakdowns.map((b: any) => ({
+          ...b,
+          journalId: journal.id,
+        }));
+        await storage.createPaymentBreakdowns(breakdownsWithJournalId);
+      }
+      
+      // Get the complete journal with breakdowns
+      const [createdBreakdowns] = await Promise.all([
+        storage.getPaymentBreakdowns(journal.id),
+      ]);
+      
+      res.status(201).json({ ...journal, paymentBreakdowns: createdBreakdowns });
+    } catch (error) {
+      console.error("Error creating cashier journal:", error);
+      res.status(500).json({ error: "Failed to create cashier journal" });
+    }
+  });
+
+  // Update cashier journal
+  app.patch("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { paymentBreakdowns, ...journalData } = req.body;
+      
+      // Check if journal is already submitted/approved
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (existing.status !== 'draft') {
+        return res.status(400).json({ error: "Cannot edit submitted or approved journal" });
+      }
+      
+      const journal = await storage.updateCashierJournal(id, journalData);
+      
+      // Update payment breakdowns if provided
+      if (paymentBreakdowns && Array.isArray(paymentBreakdowns)) {
+        await storage.deletePaymentBreakdowns(id);
+        if (paymentBreakdowns.length > 0) {
+          const breakdownsWithJournalId = paymentBreakdowns.map((b: any) => ({
+            ...b,
+            journalId: id,
+          }));
+          await storage.createPaymentBreakdowns(breakdownsWithJournalId);
+        }
+      }
+      
+      const updatedBreakdowns = await storage.getPaymentBreakdowns(id);
+      res.json({ ...journal, paymentBreakdowns: updatedBreakdowns });
+    } catch (error) {
+      console.error("Error updating cashier journal:", error);
+      res.status(500).json({ error: "Failed to update cashier journal" });
+    }
+  });
+
+  // Delete cashier journal
+  app.delete("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (existing.status === 'approved') {
+        return res.status(400).json({ error: "Cannot delete approved journal" });
+      }
+      
+      await storage.deleteCashierJournal(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting cashier journal:", error);
+      res.status(500).json({ error: "Failed to delete cashier journal" });
+    }
+  });
+
+  // Submit cashier journal with signature
+  app.post("/api/cashier-journals/:id/submit", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { signatureData, signerName } = req.body;
+      
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (existing.status !== 'draft') {
+        return res.status(400).json({ error: "Journal already submitted" });
+      }
+      
+      // Create signature if provided
+      if (signatureData) {
+        await storage.createCashierSignature({
+          journalId: id,
+          signatureType: 'cashier',
+          signerName: signerName || existing.cashierName,
+          signerId: req.user?.id,
+          signatureData,
+          ipAddress: req.ip,
+        });
+      }
+      
+      // Submit the journal
+      const journal = await storage.submitCashierJournal(id);
+      const signatures = await storage.getCashierSignatures(id);
+      
+      res.json({ ...journal, signatures });
+    } catch (error) {
+      console.error("Error submitting cashier journal:", error);
+      res.status(500).json({ error: "Failed to submit cashier journal" });
+    }
+  });
+
+  // Approve cashier journal
+  app.post("/api/cashier-journals/:id/approve", isAuthenticated, requirePermission("cashier_journal", "approve"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { signatureData, signerName } = req.body;
+      
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (existing.status !== 'submitted') {
+        return res.status(400).json({ error: "Can only approve submitted journals" });
+      }
+      
+      // Create supervisor signature if provided
+      if (signatureData) {
+        await storage.createCashierSignature({
+          journalId: id,
+          signatureType: 'supervisor',
+          signerName: signerName || 'مشرف',
+          signerId: req.user?.id,
+          signatureData,
+          ipAddress: req.ip,
+        });
+      }
+      
+      const journal = await storage.approveCashierJournal(id, req.user?.id);
+      res.json(journal);
+    } catch (error) {
+      console.error("Error approving cashier journal:", error);
+      res.status(500).json({ error: "Failed to approve cashier journal" });
+    }
+  });
+
+  // Reject cashier journal
+  app.post("/api/cashier-journals/:id/reject", isAuthenticated, requirePermission("cashier_journal", "approve"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { notes } = req.body;
+      
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (existing.status !== 'submitted') {
+        return res.status(400).json({ error: "Can only reject submitted journals" });
+      }
+      
+      const journal = await storage.rejectCashierJournal(id, notes);
+      res.json(journal);
+    } catch (error) {
+      console.error("Error rejecting cashier journal:", error);
+      res.status(500).json({ error: "Failed to reject cashier journal" });
+    }
+  });
+
+  // Get cashier journal stats
+  app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.query;
+      const stats = await storage.getCashierJournalStats(branchId as string | undefined);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching cashier journal stats:", error);
+      res.status(500).json({ error: "Failed to fetch cashier journal stats" });
+    }
+  });
+
   return httpServer;
 }
