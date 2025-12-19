@@ -1028,6 +1028,37 @@ export const insertCashierSignatureSchema = createInsertSchema(cashierSignatures
 export type CashierSignature = typeof cashierSignatures.$inferSelect;
 export type InsertCashierSignature = z.infer<typeof insertCashierSignatureSchema>;
 
+// Journal Attachments - for storing photos (Foodics report, network device report, etc.)
+export const ATTACHMENT_TYPES = ["foodics_report", "network_report", "other"] as const;
+export type AttachmentType = typeof ATTACHMENT_TYPES[number];
+
+export const ATTACHMENT_TYPE_LABELS: Record<AttachmentType, string> = {
+  foodics_report: "تقرير فوديكس",
+  network_report: "تقرير جهاز الشبكة",
+  other: "أخرى",
+};
+
+export const journalAttachments = pgTable("journal_attachments", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id").notNull().references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  attachmentType: text("attachment_type").notNull(), // foodics_report, network_report, other
+  fileName: text("file_name").notNull(),
+  fileData: text("file_data").notNull(), // Base64 encoded image
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size"),
+  notes: text("notes"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+});
+
+export const insertJournalAttachmentSchema = createInsertSchema(journalAttachments).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type JournalAttachment = typeof journalAttachments.$inferSelect;
+export type InsertJournalAttachment = z.infer<typeof insertJournalAttachmentSchema>;
+
 // Discrepancy status labels
 export const DISCREPANCY_STATUS = ["balanced", "shortage", "surplus"] as const;
 export type DiscrepancyStatus = typeof DISCREPANCY_STATUS[number];
