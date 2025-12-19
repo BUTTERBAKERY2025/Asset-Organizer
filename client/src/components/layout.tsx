@@ -217,10 +217,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </CollapsibleContent>
             </Collapsible>
           ))}
-
-          <div className="pt-2 border-t border-border/30 mt-3">
-            {bottomItems.map(item => renderNavItem(item))}
-          </div>
         </nav>
 
         <div className="p-3 border-t border-border/50">
@@ -330,10 +326,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </CollapsibleContent>
                   </Collapsible>
                 ))}
-
-                <div className="pt-2 border-t border-border/30 mt-3">
-                  {bottomItems.map(item => renderNavItem(item))}
-                </div>
               </nav>
 
               <div className="p-3 border-t border-border/50 mt-auto">

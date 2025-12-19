@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import NotFound from "@/pages/not-found";
+import PlatformHomePage from "@/pages/platform-home";
 import DashboardPage from "@/pages/dashboard";
 import InventoryPage from "@/pages/inventory";
 import ManagePage from "@/pages/manage";
@@ -31,7 +32,7 @@ import IntegrationsPage from "@/pages/integrations";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={() => <Redirect to="/login" />} />
+      <Route path="/" component={PlatformHomePage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/inventory" component={InventoryPage} />
