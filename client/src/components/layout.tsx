@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, CheckCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,6 +40,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { canView } = usePermissions();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     assets: true,
+    operations: false,
     construction: false,
     reports: false,
     settings: false,
@@ -78,6 +79,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/branches", label: "إدارة الفروع", icon: Building2, requiresAuth: true, module: "inventory" },
           { href: "/inspections", label: "الفحص الدوري", icon: CalendarCheck, module: "inventory" },
           { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle, module: "inventory" },
+        ],
+      },
+    },
+    {
+      key: "operations",
+      group: {
+        label: "التشغيل والإنتاج",
+        icon: Factory,
+        items: [
+          { href: "/operations", label: "لوحة التشغيل", icon: Factory, module: "operations" },
+          { href: "/products", label: "المنتجات", icon: Package, module: "operations" },
+          { href: "/shifts", label: "الورديات", icon: Clock, module: "shifts" },
+          { href: "/production", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
+          { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
         ],
       },
     },

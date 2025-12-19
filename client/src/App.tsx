@@ -28,6 +28,11 @@ import AssetTransfersPage from "@/pages/asset-transfers";
 import AuditLogsPage from "@/pages/audit-logs";
 import BackupsPage from "@/pages/backups";
 import IntegrationsPage from "@/pages/integrations";
+import OperationsDashboardPage from "@/pages/operations-dashboard";
+import ProductsPage from "@/pages/products";
+import ShiftsPage from "@/pages/shifts";
+import ProductionPage from "@/pages/production";
+import QualityControlPage from "@/pages/quality-control";
 
 function Router() {
   return (
@@ -54,6 +59,11 @@ function Router() {
       <Route path="/audit-logs" component={AuditLogsPage} />
       <Route path="/backups" component={BackupsPage} />
       <Route path="/integrations" component={IntegrationsPage} />
+      <Route path="/operations" component={OperationsDashboardPage} />
+      <Route path="/products" component={ProductsPage} />
+      <Route path="/shifts" component={ShiftsPage} />
+      <Route path="/production" component={ProductionPage} />
+      <Route path="/quality-control" component={QualityControlPage} />
       <Route component={NotFound} />
     </Switch>
   );

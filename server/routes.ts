@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, SYSTEM_MODULES, MODULE_ACTIONS } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, SYSTEM_MODULES, MODULE_ACTIONS } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission } from "./auth";
 
@@ -1723,6 +1723,356 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error syncing accounting export:", error);
       res.status(500).json({ error: "Failed to sync accounting export" });
+    }
+  });
+
+  // ============================================
+  // نظام التشغيل - Operations Module Routes
+  // ============================================
+
+  // Products Routes
+  app.get("/api/products", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const products = await storage.getAllProducts();
+      res.json(products);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
+  });
+
+  app.get("/api/products/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const product = await storage.getProduct(id);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      res.json(product);
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      res.status(500).json({ error: "Failed to fetch product" });
+    }
+  });
+
+  app.post("/api/products", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const validatedData = insertProductSchema.parse(req.body);
+      const product = await storage.createProduct(validatedData);
+      res.status(201).json(product);
+    } catch (error) {
+      console.error("Error creating product:", error);
+      res.status(500).json({ error: "Failed to create product" });
+    }
+  });
+
+  app.patch("/api/products/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const product = await storage.updateProduct(id, req.body);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      res.json(product);
+    } catch (error) {
+      console.error("Error updating product:", error);
+      res.status(500).json({ error: "Failed to update product" });
+    }
+  });
+
+  app.delete("/api/products/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const deleted = await storage.deleteProduct(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      res.status(500).json({ error: "Failed to delete product" });
+    }
+  });
+
+  // Shifts Routes
+  app.get("/api/shifts", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
+    try {
+      const { branchId, date } = req.query;
+      let shifts;
+      if (branchId) {
+        shifts = await storage.getShiftsByBranch(branchId as string);
+      } else if (date) {
+        shifts = await storage.getShiftsByDate(date as string);
+      } else {
+        shifts = await storage.getAllShifts();
+      }
+      res.json(shifts);
+    } catch (error) {
+      console.error("Error fetching shifts:", error);
+      res.status(500).json({ error: "Failed to fetch shifts" });
+    }
+  });
+
+  app.get("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const shift = await storage.getShift(id);
+      if (!shift) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+      res.json(shift);
+    } catch (error) {
+      console.error("Error fetching shift:", error);
+      res.status(500).json({ error: "Failed to fetch shift" });
+    }
+  });
+
+  app.post("/api/shifts", isAuthenticated, requirePermission("shifts", "create"), async (req: any, res) => {
+    try {
+      const validatedData = insertShiftSchema.parse({
+        ...req.body,
+        createdBy: req.user?.id,
+      });
+      const shift = await storage.createShift(validatedData);
+      res.status(201).json(shift);
+    } catch (error) {
+      console.error("Error creating shift:", error);
+      res.status(500).json({ error: "Failed to create shift" });
+    }
+  });
+
+  app.patch("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const shift = await storage.updateShift(id, req.body);
+      if (!shift) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+      res.json(shift);
+    } catch (error) {
+      console.error("Error updating shift:", error);
+      res.status(500).json({ error: "Failed to update shift" });
+    }
+  });
+
+  app.delete("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const deleted = await storage.deleteShift(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting shift:", error);
+      res.status(500).json({ error: "Failed to delete shift" });
+    }
+  });
+
+  // Shift Employees Routes
+  app.get("/api/shifts/:shiftId/employees", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.shiftId, 10);
+      const employees = await storage.getShiftEmployees(shiftId);
+      res.json(employees);
+    } catch (error) {
+      console.error("Error fetching shift employees:", error);
+      res.status(500).json({ error: "Failed to fetch shift employees" });
+    }
+  });
+
+  app.post("/api/shifts/:shiftId/employees", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.shiftId, 10);
+      const validatedData = insertShiftEmployeeSchema.parse({
+        ...req.body,
+        shiftId,
+      });
+      const employee = await storage.createShiftEmployee(validatedData);
+      res.status(201).json(employee);
+    } catch (error) {
+      console.error("Error adding shift employee:", error);
+      res.status(500).json({ error: "Failed to add shift employee" });
+    }
+  });
+
+  app.patch("/api/shift-employees/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const employee = await storage.updateShiftEmployee(id, req.body);
+      if (!employee) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      res.json(employee);
+    } catch (error) {
+      console.error("Error updating shift employee:", error);
+      res.status(500).json({ error: "Failed to update shift employee" });
+    }
+  });
+
+  app.delete("/api/shift-employees/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const deleted = await storage.deleteShiftEmployee(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting shift employee:", error);
+      res.status(500).json({ error: "Failed to delete shift employee" });
+    }
+  });
+
+  // Production Orders Routes
+  app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const { branchId, date } = req.query;
+      let orders;
+      if (branchId) {
+        orders = await storage.getProductionOrdersByBranch(branchId as string);
+      } else if (date) {
+        orders = await storage.getProductionOrdersByDate(date as string);
+      } else {
+        orders = await storage.getAllProductionOrders();
+      }
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching production orders:", error);
+      res.status(500).json({ error: "Failed to fetch production orders" });
+    }
+  });
+
+  app.get("/api/production-orders/:id", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const order = await storage.getProductionOrder(id);
+      if (!order) {
+        return res.status(404).json({ error: "Production order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Error fetching production order:", error);
+      res.status(500).json({ error: "Failed to fetch production order" });
+    }
+  });
+
+  app.post("/api/production-orders", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
+    try {
+      const validatedData = insertProductionOrderSchema.parse({
+        ...req.body,
+        createdBy: req.user?.id,
+      });
+      const order = await storage.createProductionOrder(validatedData);
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating production order:", error);
+      res.status(500).json({ error: "Failed to create production order" });
+    }
+  });
+
+  app.patch("/api/production-orders/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const order = await storage.updateProductionOrder(id, req.body);
+      if (!order) {
+        return res.status(404).json({ error: "Production order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Error updating production order:", error);
+      res.status(500).json({ error: "Failed to update production order" });
+    }
+  });
+
+  app.delete("/api/production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const deleted = await storage.deleteProductionOrder(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Production order not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting production order:", error);
+      res.status(500).json({ error: "Failed to delete production order" });
+    }
+  });
+
+  // Quality Checks Routes
+  app.get("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "view"), async (req, res) => {
+    try {
+      const { branchId, date } = req.query;
+      let checks;
+      if (branchId) {
+        checks = await storage.getQualityChecksByBranch(branchId as string);
+      } else if (date) {
+        checks = await storage.getQualityChecksByDate(date as string);
+      } else {
+        checks = await storage.getAllQualityChecks();
+      }
+      res.json(checks);
+    } catch (error) {
+      console.error("Error fetching quality checks:", error);
+      res.status(500).json({ error: "Failed to fetch quality checks" });
+    }
+  });
+
+  app.get("/api/quality-checks/:id", isAuthenticated, requirePermission("quality_control", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const check = await storage.getQualityCheck(id);
+      if (!check) {
+        return res.status(404).json({ error: "Quality check not found" });
+      }
+      res.json(check);
+    } catch (error) {
+      console.error("Error fetching quality check:", error);
+      res.status(500).json({ error: "Failed to fetch quality check" });
+    }
+  });
+
+  app.post("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "create"), async (req, res) => {
+    try {
+      const validatedData = insertQualityCheckSchema.parse(req.body);
+      const check = await storage.createQualityCheck(validatedData);
+      res.status(201).json(check);
+    } catch (error) {
+      console.error("Error creating quality check:", error);
+      res.status(500).json({ error: "Failed to create quality check" });
+    }
+  });
+
+  // Operations Dashboard Stats
+  app.get("/api/operations/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const [products, shifts, orders, qualityChecks] = await Promise.all([
+        storage.getAllProducts(),
+        storage.getShiftsByDate(today),
+        storage.getProductionOrdersByDate(today),
+        storage.getQualityChecksByDate(today),
+      ]);
+
+      const totalProduced = orders.reduce((sum, o) => sum + (o.producedQuantity || 0), 0);
+      const totalWasted = orders.reduce((sum, o) => sum + (o.wastedQuantity || 0), 0);
+      const completedOrders = orders.filter(o => o.status === 'completed').length;
+      const passedChecks = qualityChecks.filter(c => c.result === 'passed').length;
+
+      res.json({
+        productsCount: products.filter(p => p.isActive === 'true').length,
+        todayShifts: shifts.length,
+        todayOrders: orders.length,
+        completedOrders,
+        totalProduced,
+        totalWasted,
+        wastePercentage: totalProduced > 0 ? ((totalWasted / totalProduced) * 100).toFixed(1) : 0,
+        qualityChecks: qualityChecks.length,
+        qualityPassRate: qualityChecks.length > 0 ? ((passedChecks / qualityChecks.length) * 100).toFixed(1) : 100,
+      });
+    } catch (error) {
+      console.error("Error fetching operations stats:", error);
+      res.status(500).json({ error: "Failed to fetch operations stats" });
     }
   });
 

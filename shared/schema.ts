@@ -409,6 +409,10 @@ export const SYSTEM_MODULES = [
   "payment_requests",
   "users",
   "reports",
+  "operations",
+  "production",
+  "shifts",
+  "quality_control",
 ] as const;
 
 export type SystemModule = typeof SYSTEM_MODULES[number];
@@ -457,6 +461,10 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   payment_requests: "طلبات الصرف",
   users: "إدارة المستخدمين",
   reports: "التقارير",
+  operations: "التشغيل",
+  production: "الإنتاج",
+  shifts: "الورديات",
+  quality_control: "مراقبة الجودة",
 };
 
 // Action labels for UI display (Arabic)
@@ -472,6 +480,7 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
 // Module groups for UI organization
 export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   { label: "الأساسية", modules: ["dashboard", "inventory", "asset_transfers", "reports"] },
+  { label: "التشغيل", modules: ["operations", "production", "shifts", "quality_control"] },
   { label: "إدارة الإنشاءات", modules: ["construction_projects", "construction_work_items", "contractors"] },
   { label: "المالية والعقود", modules: ["contracts", "budget_planning", "payment_requests"] },
   { label: "إدارة النظام", modules: ["users"] },
@@ -693,3 +702,171 @@ export const insertAccountingExportSchema = createInsertSchema(accountingExports
 
 export type AccountingExport = typeof accountingExports.$inferSelect;
 export type InsertAccountingExport = z.infer<typeof insertAccountingExportSchema>;
+
+// ============================================
+// نظام التشغيل - Operations Module
+// ============================================
+
+// Products table - المنتجات (المخبوزات والمعجنات)
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  category: text("category").notNull(), // bread, pastry, cake, sandwich, etc.
+  unit: text("unit").default("قطعة"), // قطعة، كيلو، صينية
+  standardQuantity: integer("standard_quantity").default(1), // الكمية القياسية للوحدة
+  preparationTime: integer("preparation_time"), // وقت التحضير بالدقائق
+  bakingTime: integer("baking_time"), // وقت الخبز بالدقائق
+  ingredients: text("ingredients"), // المكونات (JSON)
+  isActive: text("is_active").default("true"),
+  imageUrl: text("image_url"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+
+// Shifts table - الورديات
+export const shifts = pgTable("shifts", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // الوردية الصباحية، المسائية، الليلية
+  date: text("date").notNull(), // التاريخ
+  startTime: text("start_time").notNull(), // وقت البدء
+  endTime: text("end_time").notNull(), // وقت الانتهاء
+  status: text("status").default("scheduled").notNull(), // scheduled, active, completed, cancelled
+  supervisorName: text("supervisor_name"), // اسم المشرف
+  employeeCount: integer("employee_count").default(0), // عدد الموظفين
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertShiftSchema = createInsertSchema(shifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Shift = typeof shifts.$inferSelect;
+export type InsertShift = z.infer<typeof insertShiftSchema>;
+
+// Shift Employees table - موظفي الوردية
+export const shiftEmployees = pgTable("shift_employees", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => shifts.id, { onDelete: "cascade" }),
+  employeeName: text("employee_name").notNull(),
+  role: text("role"), // خباز، معجناتي، كاشير، منظف، إلخ
+  checkInTime: text("check_in_time"),
+  checkOutTime: text("check_out_time"),
+  status: text("status").default("expected").notNull(), // expected, present, absent, late
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertShiftEmployeeSchema = createInsertSchema(shiftEmployees).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftEmployee = typeof shiftEmployees.$inferSelect;
+export type InsertShiftEmployee = z.infer<typeof insertShiftEmployeeSchema>;
+
+// Production Orders table - أوامر الإنتاج
+export const productionOrders = pgTable("production_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").unique(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  productId: integer("product_id").notNull().references(() => products.id),
+  targetQuantity: integer("target_quantity").notNull(), // الكمية المطلوبة
+  producedQuantity: integer("produced_quantity").default(0), // الكمية المنتجة
+  wastedQuantity: integer("wasted_quantity").default(0), // الكمية التالفة
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed, cancelled
+  priority: text("priority").default("normal"), // urgent, high, normal, low
+  scheduledDate: text("scheduled_date"),
+  scheduledTime: text("scheduled_time"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  assignedTo: text("assigned_to"), // الخباز المسؤول
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProductionOrderSchema = createInsertSchema(productionOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type ProductionOrder = typeof productionOrders.$inferSelect;
+export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
+
+// Quality Checks table - فحوصات الجودة
+export const qualityChecks = pgTable("quality_checks", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  productionOrderId: integer("production_order_id").references(() => productionOrders.id),
+  checkType: text("check_type").notNull(), // temperature, appearance, taste, weight, packaging, cleanliness
+  checkDate: text("check_date").notNull(),
+  checkTime: text("check_time"),
+  result: text("result").notNull(), // passed, failed, needs_improvement
+  score: integer("score"), // درجة الجودة (1-100)
+  temperature: real("temperature"), // درجة الحرارة (للأفران والثلاجات)
+  checkedBy: text("checked_by").notNull(), // اسم الفاحص
+  details: text("details"), // تفاصيل الفحص (JSON)
+  issues: text("issues"), // المشاكل المكتشفة
+  correctiveAction: text("corrective_action"), // الإجراء التصحيحي
+  attachmentUrl: text("attachment_url"), // صورة أو مستند
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertQualityCheckSchema = createInsertSchema(qualityChecks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QualityCheck = typeof qualityChecks.$inferSelect;
+export type InsertQualityCheck = z.infer<typeof insertQualityCheckSchema>;
+
+// Daily Operations Summary - ملخص العمليات اليومية
+export const dailyOperationsSummary = pgTable("daily_operations_summary", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  totalOrders: integer("total_orders").default(0),
+  completedOrders: integer("completed_orders").default(0),
+  totalProduced: integer("total_produced").default(0),
+  totalWasted: integer("total_wasted").default(0),
+  wastePercentage: real("waste_percentage").default(0),
+  qualityScore: real("quality_score"), // متوسط درجة الجودة
+  shiftsCount: integer("shifts_count").default(0),
+  employeesPresent: integer("employees_present").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDailyOperationsSummarySchema = createInsertSchema(dailyOperationsSummary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DailyOperationsSummary = typeof dailyOperationsSummary.$inferSelect;
+export type InsertDailyOperationsSummary = z.infer<typeof insertDailyOperationsSummarySchema>;

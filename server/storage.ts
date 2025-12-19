@@ -50,6 +50,18 @@ import {
   type InsertDataImportJob,
   type AccountingExport,
   type InsertAccountingExport,
+  type Product,
+  type InsertProduct,
+  type Shift,
+  type InsertShift,
+  type ShiftEmployee,
+  type InsertShiftEmployee,
+  type ProductionOrder,
+  type InsertProductionOrder,
+  type QualityCheck,
+  type InsertQualityCheck,
+  type DailyOperationsSummary,
+  type InsertDailyOperationsSummary,
   branches,
   inventoryItems,
   auditLogs,
@@ -74,7 +86,13 @@ import {
   notificationTemplates,
   notificationQueue,
   dataImportJobs,
-  accountingExports
+  accountingExports,
+  products,
+  shifts,
+  shiftEmployees,
+  productionOrders,
+  qualityChecks,
+  dailyOperationsSummary
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -231,6 +249,48 @@ export interface IStorage {
     transfers: AssetTransfer[];
     users: User[];
   }>;
+  
+  // Operations Module - Products
+  getAllProducts(): Promise<Product[]>;
+  getProduct(id: number): Promise<Product | undefined>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
+  deleteProduct(id: number): Promise<boolean>;
+  
+  // Operations Module - Shifts
+  getAllShifts(): Promise<Shift[]>;
+  getShiftsByBranch(branchId: string): Promise<Shift[]>;
+  getShiftsByDate(date: string): Promise<Shift[]>;
+  getShift(id: number): Promise<Shift | undefined>;
+  createShift(shift: InsertShift): Promise<Shift>;
+  updateShift(id: number, shift: Partial<InsertShift>): Promise<Shift | undefined>;
+  deleteShift(id: number): Promise<boolean>;
+  
+  // Operations Module - Shift Employees
+  getShiftEmployees(shiftId: number): Promise<ShiftEmployee[]>;
+  createShiftEmployee(employee: InsertShiftEmployee): Promise<ShiftEmployee>;
+  updateShiftEmployee(id: number, employee: Partial<InsertShiftEmployee>): Promise<ShiftEmployee | undefined>;
+  deleteShiftEmployee(id: number): Promise<boolean>;
+  
+  // Operations Module - Production Orders
+  getAllProductionOrders(): Promise<ProductionOrder[]>;
+  getProductionOrdersByBranch(branchId: string): Promise<ProductionOrder[]>;
+  getProductionOrdersByDate(date: string): Promise<ProductionOrder[]>;
+  getProductionOrder(id: number): Promise<ProductionOrder | undefined>;
+  createProductionOrder(order: InsertProductionOrder): Promise<ProductionOrder>;
+  updateProductionOrder(id: number, order: Partial<InsertProductionOrder>): Promise<ProductionOrder | undefined>;
+  deleteProductionOrder(id: number): Promise<boolean>;
+  
+  // Operations Module - Quality Checks
+  getAllQualityChecks(): Promise<QualityCheck[]>;
+  getQualityChecksByBranch(branchId: string): Promise<QualityCheck[]>;
+  getQualityChecksByDate(date: string): Promise<QualityCheck[]>;
+  getQualityCheck(id: number): Promise<QualityCheck | undefined>;
+  createQualityCheck(check: InsertQualityCheck): Promise<QualityCheck>;
+  
+  // Operations Module - Daily Summary
+  getDailyOperationsSummary(branchId: string, date: string): Promise<DailyOperationsSummary | undefined>;
+  createOrUpdateDailyOperationsSummary(summary: InsertDailyOperationsSummary): Promise<DailyOperationsSummary>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1508,6 +1568,186 @@ export class DatabaseStorage implements IStorage {
         progress: p.progressPercent
       }))
     };
+  }
+
+  // ============================================
+  // Operations Module Implementation
+  // ============================================
+
+  // Products
+  async getAllProducts(): Promise<Product[]> {
+    return await db.select().from(products).orderBy(desc(products.createdAt));
+  }
+
+  async getProduct(id: number): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product || undefined;
+  }
+
+  async createProduct(product: InsertProduct): Promise<Product> {
+    const [created] = await db.insert(products).values(product).returning();
+    return created;
+  }
+
+  async updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined> {
+    const [updated] = await db
+      .update(products)
+      .set({ ...product, updatedAt: new Date() })
+      .where(eq(products.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProduct(id: number): Promise<boolean> {
+    const result = await db.delete(products).where(eq(products.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Shifts
+  async getAllShifts(): Promise<Shift[]> {
+    return await db.select().from(shifts).orderBy(desc(shifts.date), desc(shifts.createdAt));
+  }
+
+  async getShiftsByBranch(branchId: string): Promise<Shift[]> {
+    return await db.select().from(shifts).where(eq(shifts.branchId, branchId)).orderBy(desc(shifts.date));
+  }
+
+  async getShiftsByDate(date: string): Promise<Shift[]> {
+    return await db.select().from(shifts).where(eq(shifts.date, date)).orderBy(desc(shifts.createdAt));
+  }
+
+  async getShift(id: number): Promise<Shift | undefined> {
+    const [shift] = await db.select().from(shifts).where(eq(shifts.id, id));
+    return shift || undefined;
+  }
+
+  async createShift(shift: InsertShift): Promise<Shift> {
+    const [created] = await db.insert(shifts).values(shift).returning();
+    return created;
+  }
+
+  async updateShift(id: number, shift: Partial<InsertShift>): Promise<Shift | undefined> {
+    const [updated] = await db
+      .update(shifts)
+      .set({ ...shift, updatedAt: new Date() })
+      .where(eq(shifts.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteShift(id: number): Promise<boolean> {
+    const result = await db.delete(shifts).where(eq(shifts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Shift Employees
+  async getShiftEmployees(shiftId: number): Promise<ShiftEmployee[]> {
+    return await db.select().from(shiftEmployees).where(eq(shiftEmployees.shiftId, shiftId));
+  }
+
+  async createShiftEmployee(employee: InsertShiftEmployee): Promise<ShiftEmployee> {
+    const [created] = await db.insert(shiftEmployees).values(employee).returning();
+    return created;
+  }
+
+  async updateShiftEmployee(id: number, employee: Partial<InsertShiftEmployee>): Promise<ShiftEmployee | undefined> {
+    const [updated] = await db
+      .update(shiftEmployees)
+      .set(employee)
+      .where(eq(shiftEmployees.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteShiftEmployee(id: number): Promise<boolean> {
+    const result = await db.delete(shiftEmployees).where(eq(shiftEmployees.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Production Orders
+  async getAllProductionOrders(): Promise<ProductionOrder[]> {
+    return await db.select().from(productionOrders).orderBy(desc(productionOrders.createdAt));
+  }
+
+  async getProductionOrdersByBranch(branchId: string): Promise<ProductionOrder[]> {
+    return await db.select().from(productionOrders).where(eq(productionOrders.branchId, branchId)).orderBy(desc(productionOrders.createdAt));
+  }
+
+  async getProductionOrdersByDate(date: string): Promise<ProductionOrder[]> {
+    return await db.select().from(productionOrders).where(eq(productionOrders.scheduledDate, date)).orderBy(desc(productionOrders.createdAt));
+  }
+
+  async getProductionOrder(id: number): Promise<ProductionOrder | undefined> {
+    const [order] = await db.select().from(productionOrders).where(eq(productionOrders.id, id));
+    return order || undefined;
+  }
+
+  async createProductionOrder(order: InsertProductionOrder): Promise<ProductionOrder> {
+    const orderNumber = `PRD-${Date.now()}`;
+    const [created] = await db.insert(productionOrders).values({ ...order, orderNumber }).returning();
+    return created;
+  }
+
+  async updateProductionOrder(id: number, order: Partial<InsertProductionOrder>): Promise<ProductionOrder | undefined> {
+    const [updated] = await db
+      .update(productionOrders)
+      .set({ ...order, updatedAt: new Date() })
+      .where(eq(productionOrders.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProductionOrder(id: number): Promise<boolean> {
+    const result = await db.delete(productionOrders).where(eq(productionOrders.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Quality Checks
+  async getAllQualityChecks(): Promise<QualityCheck[]> {
+    return await db.select().from(qualityChecks).orderBy(desc(qualityChecks.createdAt));
+  }
+
+  async getQualityChecksByBranch(branchId: string): Promise<QualityCheck[]> {
+    return await db.select().from(qualityChecks).where(eq(qualityChecks.branchId, branchId)).orderBy(desc(qualityChecks.createdAt));
+  }
+
+  async getQualityChecksByDate(date: string): Promise<QualityCheck[]> {
+    return await db.select().from(qualityChecks).where(eq(qualityChecks.checkDate, date)).orderBy(desc(qualityChecks.createdAt));
+  }
+
+  async getQualityCheck(id: number): Promise<QualityCheck | undefined> {
+    const [check] = await db.select().from(qualityChecks).where(eq(qualityChecks.id, id));
+    return check || undefined;
+  }
+
+  async createQualityCheck(check: InsertQualityCheck): Promise<QualityCheck> {
+    const [created] = await db.insert(qualityChecks).values(check).returning();
+    return created;
+  }
+
+  // Daily Operations Summary
+  async getDailyOperationsSummary(branchId: string, date: string): Promise<DailyOperationsSummary | undefined> {
+    const [summary] = await db
+      .select()
+      .from(dailyOperationsSummary)
+      .where(and(eq(dailyOperationsSummary.branchId, branchId), eq(dailyOperationsSummary.date, date)));
+    return summary || undefined;
+  }
+
+  async createOrUpdateDailyOperationsSummary(summary: InsertDailyOperationsSummary): Promise<DailyOperationsSummary> {
+    const existing = await this.getDailyOperationsSummary(summary.branchId, summary.date);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(dailyOperationsSummary)
+        .set({ ...summary, updatedAt: new Date() })
+        .where(eq(dailyOperationsSummary.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(dailyOperationsSummary).values(summary).returning();
+      return created;
+    }
   }
 }
 

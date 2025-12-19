@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Link, useLocation } from "wouter";
-import { Package, Hammer, FileBarChart, Settings, Users, ArrowLeftRight, Building2, FileSignature, Wallet, Calculator, Boxes, AlertTriangle, CalendarCheck, ClipboardEdit, HardHat, FileSearch, HardDrive, Link2, LayoutDashboard, ChevronLeft } from "lucide-react";
+import { Package, Hammer, FileBarChart, Settings, Users, ArrowLeftRight, Building2, FileSignature, Wallet, Calculator, Boxes, AlertTriangle, CalendarCheck, ClipboardEdit, HardHat, FileSearch, HardDrive, Link2, LayoutDashboard, ChevronLeft, Factory, Clock, CheckCircle } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
 interface ModuleCardProps {
@@ -92,6 +92,21 @@ export default function PlatformHomePage() {
         { label: "إدارة الفروع", href: "/branches", icon: Building2 },
         { label: "الفحص الدوري", href: "/inspections", icon: CalendarCheck },
         { label: "تقرير الصيانة", href: "/maintenance", icon: AlertTriangle },
+      ],
+    },
+    {
+      title: "التشغيل والإنتاج",
+      description: "إدارة الإنتاج اليومي والورديات ومراقبة الجودة",
+      icon: Factory,
+      href: "/operations",
+      color: "bg-indigo-500",
+      module: "operations",
+      items: [
+        { label: "لوحة التشغيل", href: "/operations", icon: Factory },
+        { label: "المنتجات", href: "/products", icon: Package },
+        { label: "الورديات", href: "/shifts", icon: Clock },
+        { label: "أوامر الإنتاج", href: "/production", icon: ClipboardEdit },
+        { label: "مراقبة الجودة", href: "/quality-control", icon: CheckCircle },
       ],
     },
     {
