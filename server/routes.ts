@@ -2395,5 +2395,75 @@ export async function registerRoutes(
     }
   });
 
+  // Journal Attachments - Get attachments for a journal
+  app.get("/api/cashier-journals/:id/attachments", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+    try {
+      const journalId = parseInt(req.params.id, 10);
+      const attachments = await storage.getJournalAttachments(journalId);
+      res.json(attachments);
+    } catch (error) {
+      console.error("Error fetching journal attachments:", error);
+      res.status(500).json({ error: "Failed to fetch journal attachments" });
+    }
+  });
+
+  // Journal Attachments - Upload attachment
+  app.post("/api/cashier-journals/:id/attachments", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+    try {
+      const journalId = parseInt(req.params.id, 10);
+      const { attachmentType, fileName, fileData, mimeType, fileSize, notes } = req.body;
+      
+      // Check if journal exists
+      const journal = await storage.getCashierJournal(journalId);
+      if (!journal) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      
+      // Allow attachments on draft journals only
+      if (journal.status !== 'draft') {
+        return res.status(400).json({ error: "لا يمكن إضافة مرفقات على يومية مرحّلة أو معتمدة" });
+      }
+      
+      const attachment = await storage.createJournalAttachment({
+        journalId,
+        attachmentType,
+        fileName,
+        fileData,
+        mimeType,
+        fileSize,
+        notes,
+        uploadedBy: req.currentUser?.id,
+      });
+      
+      res.status(201).json(attachment);
+    } catch (error) {
+      console.error("Error uploading journal attachment:", error);
+      res.status(500).json({ error: "Failed to upload journal attachment" });
+    }
+  });
+
+  // Journal Attachments - Delete attachment
+  app.delete("/api/cashier-journals/:journalId/attachments/:attachmentId", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req, res) => {
+    try {
+      const journalId = parseInt(req.params.journalId, 10);
+      const attachmentId = parseInt(req.params.attachmentId, 10);
+      
+      // Check if journal exists and is draft
+      const journal = await storage.getCashierJournal(journalId);
+      if (!journal) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (journal.status !== 'draft') {
+        return res.status(400).json({ error: "لا يمكن حذف مرفقات من يومية مرحّلة أو معتمدة" });
+      }
+      
+      await storage.deleteJournalAttachment(attachmentId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting journal attachment:", error);
+      res.status(500).json({ error: "Failed to delete journal attachment" });
+    }
+  });
+
   return httpServer;
 }
