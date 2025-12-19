@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Loader2, Users, Plus, Pencil, Trash2, Building2, Briefcase, Phone, Mail, UserCheck, UserX } from "lucide-react";
+import { Loader2, Users, Plus, Pencil, Trash2, Building2, Briefcase, Phone, Mail, UserCheck, UserX, RefreshCw, Shield } from "lucide-react";
 import type { User, Branch } from "@shared/schema";
 import React, { useState } from "react";
 
@@ -176,6 +176,25 @@ export default function OperationsEmployeesPage() {
     },
     onError: () => {
       toast({ title: "فشل حذف الموظف", variant: "destructive" });
+    },
+  });
+
+  const reapplyPermissionsMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/operations-employees/${id}/reapply-permissions`, { 
+        method: "POST" 
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to reapply permissions");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم تطبيق صلاحيات الوظيفة بنجاح" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "فشل تطبيق الصلاحيات", variant: "destructive" });
     },
   });
 
@@ -513,8 +532,21 @@ export default function OperationsEmployeesPage() {
                                 size="icon"
                                 onClick={() => openEditDialog(emp)}
                                 data-testid={`button-edit-${emp.id}`}
+                                title="تعديل"
                               >
                                 <Pencil className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {canEdit && emp.jobTitle && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => reapplyPermissionsMutation.mutate(emp.id)}
+                                disabled={reapplyPermissionsMutation.isPending}
+                                data-testid={`button-reapply-permissions-${emp.id}`}
+                                title="تطبيق صلاحيات الوظيفة"
+                              >
+                                <Shield className="w-4 h-4 text-primary" />
                               </Button>
                             )}
                             {canDelete && emp.id !== currentUser?.id && (
@@ -527,6 +559,7 @@ export default function OperationsEmployeesPage() {
                                   }
                                 }}
                                 data-testid={`button-delete-${emp.id}`}
+                                title="حذف"
                               >
                                 <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
