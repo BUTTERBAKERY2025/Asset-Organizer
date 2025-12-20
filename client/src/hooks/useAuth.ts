@@ -9,7 +9,7 @@ export function useAuth() {
   const { data: user, isLoading } = useQuery<UserWithoutPassword | null>({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/me");
+      const res = await fetch("/api/auth/me", { credentials: "include" });
       if (!res.ok) return null;
       const data = await res.json();
       return data;
@@ -24,6 +24,7 @@ export function useAuth() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(credentials),
+        credentials: "include",
       });
       if (!res.ok) {
         const data = await res.json();
@@ -38,7 +39,7 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/auth/logout", { method: "POST" });
+      const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
       if (!res.ok) {
         throw new Error("فشل تسجيل الخروج");
       }
