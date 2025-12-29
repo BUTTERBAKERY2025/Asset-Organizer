@@ -213,7 +213,7 @@ function QuickStatsRow({ report, cashierJournals }: { report: OperationsReport; 
   const shortageCount = cashierJournals.filter(j => j.discrepancyStatus === 'shortage').length;
   const pendingApproval = cashierJournals.filter(j => j.status === 'submitted').length;
   
-  const formatCurrency = (amount: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
+  const formatCurrency = (amount: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
   
   return (
     <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white">
@@ -374,19 +374,19 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
       </tr>
       <tr>
         <td>إجمالي المبيعات</td>
-        <td class="amount positive">${(journal.totalSales || 0).toLocaleString('ar-SA')}</td>
+        <td class="amount positive">${(journal.totalSales || 0).toLocaleString('en')}</td>
       </tr>
       <tr>
         <td>المبيعات النقدية</td>
-        <td class="amount">${(journal.cashTotal || 0).toLocaleString('ar-SA')}</td>
+        <td class="amount">${(journal.cashTotal || 0).toLocaleString('en')}</td>
       </tr>
       <tr>
         <td>مبيعات الشبكة (بطاقات)</td>
-        <td class="amount">${(journal.networkTotal || 0).toLocaleString('ar-SA')}</td>
+        <td class="amount">${(journal.networkTotal || 0).toLocaleString('en')}</td>
       </tr>
       <tr>
         <td>مبيعات التوصيل</td>
-        <td class="amount">${(journal.deliveryTotal || 0).toLocaleString('ar-SA')}</td>
+        <td class="amount">${(journal.deliveryTotal || 0).toLocaleString('en')}</td>
       </tr>
       <tr class="summary-row">
         <td>عدد العمليات</td>
@@ -415,7 +415,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
       ${paymentBreakdowns.map(p => `
         <tr>
           <td>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</td>
-          <td class="amount">${(p.amount || 0).toLocaleString('ar-SA')}</td>
+          <td class="amount">${(p.amount || 0).toLocaleString('en')}</td>
           <td>${p.transactionCount || 0}</td>
         </tr>
       `).join('')}
@@ -429,25 +429,25 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
       <div class="reconciliation-grid">
         <div class="reconciliation-item">
           <span class="label">رصيد الافتتاح</span>
-          <span class="value">${(journal.openingBalance || 0).toLocaleString('ar-SA')} ر.س</span>
+          <span class="value">${(journal.openingBalance || 0).toLocaleString('en')} ر.س</span>
         </div>
         <div class="reconciliation-item">
           <span class="label">المبيعات النقدية</span>
-          <span class="value">${(journal.cashTotal || 0).toLocaleString('ar-SA')} ر.س</span>
+          <span class="value">${(journal.cashTotal || 0).toLocaleString('en')} ر.س</span>
         </div>
         <div class="reconciliation-item">
           <span class="label">المتوقع في الصندوق</span>
-          <span class="value">${(journal.expectedCash || 0).toLocaleString('ar-SA')} ر.س</span>
+          <span class="value">${(journal.expectedCash || 0).toLocaleString('en')} ر.س</span>
         </div>
         <div class="reconciliation-item">
           <span class="label">الفعلي في الصندوق</span>
-          <span class="value">${(journal.actualCashDrawer || 0).toLocaleString('ar-SA')} ر.س</span>
+          <span class="value">${(journal.actualCashDrawer || 0).toLocaleString('en')} ر.س</span>
         </div>
       </div>
       <div class="discrepancy-result">
         <p style="margin-bottom: 10px;">الفرق (العجز/الفائض)</p>
         <span class="amount ${(journal.discrepancyAmount || 0) < 0 ? 'negative' : (journal.discrepancyAmount || 0) > 0 ? 'positive' : ''}">
-          ${(journal.discrepancyAmount || 0).toLocaleString('ar-SA')} ر.س
+          ${(journal.discrepancyAmount || 0).toLocaleString('en')} ر.س
         </span>
         <span class="status-badge status-${journal.discrepancyStatus === 'balanced' ? 'balanced' : journal.discrepancyStatus === 'shortage' ? 'shortage' : 'surplus'}" style="margin-right: 10px;">
           ${DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
@@ -556,19 +556,19 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                       <span className="text-muted-foreground">إجمالي المبيعات</span>
-                      <span className="font-bold text-green-600 text-lg">{journal.totalSales?.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="font-bold text-green-600 text-lg">{journal.totalSales?.toLocaleString('en')} ر.س</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
                       <span className="text-muted-foreground">المبيعات النقدية</span>
-                      <span className="font-semibold">{journal.cashTotal?.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="font-semibold">{journal.cashTotal?.toLocaleString('en')} ر.س</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
                       <span className="text-muted-foreground">مبيعات الشبكة</span>
-                      <span className="font-semibold">{journal.networkTotal?.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="font-semibold">{journal.networkTotal?.toLocaleString('en')} ر.س</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
                       <span className="text-muted-foreground">مبيعات التوصيل</span>
-                      <span className="font-semibold">{journal.deliveryTotal?.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="font-semibold">{journal.deliveryTotal?.toLocaleString('en')} ر.س</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
                       <span className="text-muted-foreground">عدد العمليات</span>
@@ -593,20 +593,20 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
                       <span className="text-xs text-muted-foreground">رصيد الافتتاح</span>
-                      <span className="font-semibold">{journal.openingBalance?.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="font-semibold">{journal.openingBalance?.toLocaleString('en')} ر.س</span>
                     </div>
                     <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
                       <span className="text-xs text-muted-foreground">المتوقع في الصندوق</span>
-                      <span className="font-semibold">{journal.expectedCash?.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="font-semibold">{journal.expectedCash?.toLocaleString('en')} ر.س</span>
                     </div>
                     <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
                       <span className="text-xs text-muted-foreground">الفعلي في الصندوق</span>
-                      <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('en')} ر.س</span>
                     </div>
                     <div className={`flex flex-col p-3 rounded-lg ${journal.discrepancyStatus === 'balanced' ? 'bg-green-50 border border-green-200' : journal.discrepancyStatus === 'shortage' ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}`}>
                       <span className="text-xs text-muted-foreground">الفرق</span>
                       <span className={`font-bold ${journal.discrepancyAmount && journal.discrepancyAmount < 0 ? 'text-red-600' : journal.discrepancyAmount && journal.discrepancyAmount > 0 ? 'text-green-600' : ''}`}>
-                        {journal.discrepancyAmount?.toLocaleString('ar-SA')} ر.س
+                        {journal.discrepancyAmount?.toLocaleString('en')} ر.س
                       </span>
                       <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mt-1 w-fit">
                         {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
@@ -751,7 +751,7 @@ export default function OperationsReportsDashboardPage() {
   });
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("ar-SA", {
+    return new Intl.NumberFormat("en-SA", {
       style: "currency",
       currency: "SAR",
       minimumFractionDigits: 0,
@@ -760,7 +760,7 @@ export default function OperationsReportsDashboardPage() {
   };
 
   const formatNumber = (value: number) => {
-    return new Intl.NumberFormat("ar-SA").format(value);
+    return new Intl.NumberFormat("en").format(value);
   };
 
   const formatPercent = (value: number) => {

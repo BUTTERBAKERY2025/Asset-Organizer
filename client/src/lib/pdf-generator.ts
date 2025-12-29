@@ -380,7 +380,7 @@ export function generatePaymentRequestsPDF(
 
   <div class="footer">
     <p>تم إنشاء هذا التقرير بواسطة نظام إدارة المشروعات - باتر بيكري</p>
-    <p>${new Date().toLocaleString('ar-SA')}</p>
+    <p>${new Date().toLocaleString('en-GB')}</p>
   </div>
 </body>
 </html>

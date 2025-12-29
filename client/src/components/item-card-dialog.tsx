@@ -344,7 +344,7 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
 
           <div className="text-xs text-muted-foreground text-center space-y-1">
             <p>معرف الصنف: <span className="font-mono">{item.id}</span></p>
-            <p className="print:block hidden">تم الطباعة بتاريخ: {new Date().toLocaleString("ar-SA")}</p>
+            <p className="print:block hidden">تم الطباعة بتاريخ: {new Date().toLocaleString("en-GB")}</p>
           </div>
         </div>
       </DialogContent>

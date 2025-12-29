@@ -97,7 +97,7 @@ export default function CashierJournalsPage() {
   });
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
+    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount);
   };
 
   const formatDate = (dateStr: string) => {

@@ -687,7 +687,7 @@ export default function CashierJournalFormPage() {
       <div>
         <div class="section">
           <div class="section-title">ملخص المبيعات</div>
-          <div class="row"><span class="label">إجمالي المبيعات</span><span class="value big">${formData.totalSales.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="row"><span class="label">إجمالي المبيعات</span><span class="value big">${formData.totalSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           <div class="row"><span class="label">عدد الفواتير</span><span class="value">${formData.transactionCount}</span></div>
           <div class="row"><span class="label">عدد العملاء</span><span class="value">${formData.customerCount}</span></div>
           <div class="row"><span class="label">متوسط الفاتورة</span><span class="value">${averageTicket.toFixed(2)} ر.س</span></div>
@@ -696,13 +696,13 @@ export default function CashierJournalFormPage() {
         <div class="section">
           <div class="section-title">تسوية النقدي</div>
           <div class="recon-box">
-            <div class="recon-row"><span>رصيد الافتتاح</span><span>${formData.openingBalance.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>المبيعات النقدية</span><span>${categoryTotals.cash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>المتوقع في الصندوق</span><span>${expectedCash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>الفعلي في الصندوق</span><span>${formData.actualCashDrawer.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>رصيد الافتتاح</span><span>${formData.openingBalance.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>المبيعات النقدية</span><span>${categoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>المتوقع في الصندوق</span><span>${expectedCash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>الفعلي في الصندوق</span><span>${formData.actualCashDrawer.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           </div>
           <div class="diff-display ${discrepancy === 0 ? 'balanced' : discrepancy < 0 ? 'shortage' : 'surplus'}">
-            <div class="amount ${discrepancy < 0 ? 'negative' : discrepancy > 0 ? 'positive' : ''}">${discrepancy.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</div>
+            <div class="amount ${discrepancy < 0 ? 'negative' : discrepancy > 0 ? 'positive' : ''}">${discrepancy.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</div>
             <div class="status">${discrepancy === 0 ? 'مطابق ✓' : discrepancy < 0 ? 'عجز مُسجّل على الكاشير' : 'فائض مُسجّل'}</div>
           </div>
         </div>
@@ -712,16 +712,16 @@ export default function CashierJournalFormPage() {
         <div class="section">
           <div class="section-title">تصنيف المبيعات</div>
           
-          <div class="category-header cash"><span>💵 نقدي</span><span>${categoryTotals.cash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="category-header cash"><span>💵 نقدي</span><span>${categoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           
-          <div class="category-header cards"><span>💳 بطاقات وشبكة</span><span>${categoryTotals.cards.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="category-header cards"><span>💳 بطاقات وشبكة</span><span>${categoryTotals.cards.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay'].includes(p.paymentMethod)).map(p => `
-          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           `).join('')}
           
-          <div class="category-header apps"><span>🚗 تطبيقات التوصيل</span><span>${categoryTotals.apps.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="category-header apps"><span>🚗 تطبيقات التوصيل</span><span>${categoryTotals.apps.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           ${paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'].includes(p.paymentMethod)).map(p => `
-          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           `).join('')}
         </div>
         
@@ -750,7 +750,7 @@ export default function CashierJournalFormPage() {
     
     <div class="footer">
       <span>بتر بيكري - Butter Bakery</span>
-      <span>تم الإنشاء: ${new Date().toLocaleDateString('ar-SA')}</span>
+      <span>تم الإنشاء: ${new Date().toLocaleDateString('en-GB')}</span>
     </div>
   </div>
 </body>

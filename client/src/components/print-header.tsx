@@ -28,7 +28,7 @@ export function PrintHeader({ title, subtitle, showDate = true }: PrintHeaderPro
 }
 
 export function PrintFooter() {
-  const currentDateTime = new Date().toLocaleString('ar-SA');
+  const currentDateTime = new Date().toLocaleString('en-GB');
   
   return (
     <div className="print-footer hidden print:block mt-8 pt-4 border-t border-gray-300 text-center text-xs text-gray-500">
