@@ -615,6 +615,9 @@ export default function CashierJournalFormPage() {
       return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
+    const cashierSig = existingJournal?.signatures?.find(s => s.signatureType === 'cashier');
+    const supervisorSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor');
+
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -623,145 +626,131 @@ export default function CashierJournalFormPage() {
   <title>ملخص اليومية - ${formData.journalDate}</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: 80mm auto; margin: 3mm; }
+    @page { size: A4; margin: 10mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; direction: rtl; background: #fef9f3; color: #333; font-size: 12px; max-width: 300px; margin: 0 auto; padding: 15px; }
-    .container { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-    .title { text-align: center; font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
-    .row:last-child { border-bottom: none; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #333; font-size: 11px; padding: 10px; }
+    .container { max-width: 100%; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 8px; margin-bottom: 10px; }
+    .header .logo { max-height: 35px; }
+    .header .title { font-size: 16px; font-weight: bold; }
+    .header .info { font-size: 10px; color: #666; }
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .section { margin-bottom: 10px; }
+    .section-title { font-size: 11px; font-weight: bold; color: #333; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid #ddd; }
+    .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-size: 10px; }
     .row .label { color: #666; }
-    .row .value { font-weight: bold; color: #333; }
-    .row .value.big { font-size: 18px; }
-    .section-header { background: linear-gradient(90deg, #e8f5e9 0%, #f1f8e9 100%); padding: 8px 12px; border-radius: 6px; margin: 12px 0 8px 0; display: flex; justify-content: space-between; align-items: center; }
-    .section-header.cash { background: linear-gradient(90deg, #e8f5e9 0%, #f1f8e9 100%); }
-    .section-header.cards { background: linear-gradient(90deg, #fff3e0 0%, #fff8e1 100%); }
-    .section-header.apps { background: linear-gradient(90deg, #fce4ec 0%, #fff3e0 100%); }
-    .section-header .name { font-weight: bold; color: #333; }
-    .section-header .amount { font-weight: bold; color: #333; }
-    .sub-item { display: flex; justify-content: space-between; padding: 4px 15px; font-size: 11px; color: #666; }
-    .sub-item::before { content: "•"; margin-left: 5px; }
-    .recon-section { margin-top: 15px; padding-top: 12px; border-top: 1px solid #eee; }
-    .recon-row { display: flex; justify-content: space-between; padding: 6px 0; }
-    .recon-row .label { color: #666; }
-    .recon-row .value { font-weight: bold; }
-    .diff-row { display: flex; justify-content: space-between; padding: 10px 0; margin-top: 5px; }
-    .diff-row .label { font-weight: bold; }
-    .diff-row .value { font-size: 20px; font-weight: bold; }
-    .diff-row .value.negative { color: #e53935; }
-    .diff-row .value.positive { color: #43a047; }
-    .status-bar { text-align: center; padding: 10px; border-radius: 8px; margin-top: 10px; font-weight: bold; font-size: 13px; }
-    .status-bar.shortage { background: #ffebee; color: #c62828; }
-    .status-bar.surplus { background: #e8f5e9; color: #2e7d32; }
-    .status-bar.balanced { background: #e8f5e9; color: #2e7d32; }
-    .sig-area { margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; display: flex; gap: 10px; }
-    .sig-box { flex: 1; text-align: center; }
-    .sig-box .title { font-size: 9px; font-weight: bold; color: #666; margin-bottom: 5px; }
-    .sig-box .sig-img { max-width: 60px; max-height: 25px; margin: 0 auto; display: block; }
-    .sig-box .name { font-size: 9px; margin-top: 3px; }
-    .footer { text-align: center; margin-top: 10px; font-size: 9px; color: #999; }
+    .row .value { font-weight: bold; }
+    .row .value.big { font-size: 14px; color: #333; }
+    .category-header { background: #f5f5f5; padding: 5px 8px; border-radius: 4px; margin: 6px 0 4px 0; display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; }
+    .category-header.cash { background: #e8f5e9; }
+    .category-header.cards { background: #fff3e0; }
+    .category-header.apps { background: #fce4ec; }
+    .sub-row { display: flex; justify-content: space-between; padding: 2px 12px; font-size: 9px; color: #666; }
+    .recon-box { background: #fafafa; padding: 8px; border-radius: 6px; margin-top: 8px; }
+    .recon-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 10px; }
+    .diff-display { text-align: center; padding: 8px; margin-top: 6px; border-radius: 6px; }
+    .diff-display.shortage { background: #ffebee; }
+    .diff-display.surplus { background: #e8f5e9; }
+    .diff-display.balanced { background: #e8f5e9; }
+    .diff-display .amount { font-size: 18px; font-weight: bold; }
+    .diff-display .amount.negative { color: #c62828; }
+    .diff-display .amount.positive { color: #2e7d32; }
+    .diff-display .status { font-size: 11px; font-weight: bold; margin-top: 4px; }
+    .signature-section { margin-top: 15px; padding-top: 10px; border-top: 2px solid #d4a853; }
+    .sig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .sig-box { text-align: center; padding: 8px; border: 1px solid #ddd; border-radius: 6px; min-height: 80px; }
+    .sig-box .role { font-size: 10px; font-weight: bold; color: #666; margin-bottom: 5px; }
+    .sig-box .sig-img { max-width: 100px; max-height: 40px; margin: 5px auto; display: block; }
+    .sig-box .name { font-size: 10px; font-weight: bold; margin-top: 5px; }
+    .sig-box .placeholder { height: 40px; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 9px; }
+    .footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #d4a853; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 11px; z-index: 100; }
-    @media print { .print-btn { display: none; } body { background: white; } }
+    @media print { .print-btn { display: none; } }
   </style>
 </head>
 <body>
   <button class="print-btn" onclick="window.print()">طباعة</button>
   
   <div class="container">
-    <div class="title">ملخص اليومية</div>
-    
-    <div class="row">
-      <span class="label">إجمالي المبيعات</span>
-      <span class="value big">${formData.totalSales.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-    </div>
-    
-    <div class="row">
-      <span class="label">عدد الفواتير</span>
-      <span class="value">${formData.transactionCount}</span>
-    </div>
-    
-    <div class="row">
-      <span class="label">متوسط الفاتورة</span>
-      <span class="value">${averageTicket.toFixed(2)} ر.س</span>
-    </div>
-
-    <div style="margin-top:10px; font-weight:bold; color:#666; text-align:center;">تصنيف المبيعات</div>
-    
-    <div class="section-header cash">
-      <span class="name">💵 نقدي</span>
-      <span class="amount">${categoryTotals.cash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-    </div>
-    
-    <div class="section-header cards">
-      <span class="name">💳 بطاقات وشبكة</span>
-      <span class="amount">${categoryTotals.cards.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-    </div>
-    ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay'].includes(p.paymentMethod)).map(p => `
-    <div class="sub-item">
-      <span>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span>
-      <span>${p.amount.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-    </div>
-    `).join('')}
-    
-    <div class="section-header apps">
-      <span class="name">🚗 تطبيقات التوصيل (آجل)</span>
-      <span class="amount">${categoryTotals.apps.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-    </div>
-    ${paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'].includes(p.paymentMethod)).map(p => `
-    <div class="sub-item">
-      <span>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span>
-      <span>${p.amount.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-    </div>
-    `).join('')}
-    
-    <div class="recon-section">
-      <div style="font-weight:bold; color:#666; text-align:center; margin-bottom:8px;">تسوية النقدي</div>
-      
-      <div class="recon-row">
-        <span class="label">المبيعات النقدية</span>
-        <span class="value">${categoryTotals.cash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
+    <div class="header">
+      <div>
+        <div class="title">ملخص يومية الكاشير</div>
+        <div class="info">${branchName} | ${SHIFT_LABELS[formData.shiftType] || formData.shiftType} | ${formatDate(formData.journalDate)}</div>
       </div>
-      
-      <div class="recon-row">
-        <span class="label">الرصيد الفعلي</span>
-        <span class="value">${formData.actualCashDrawer.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-      </div>
-      
-      <div class="diff-row">
-        <span class="label">الفارق</span>
-        <span class="value ${discrepancy < 0 ? 'negative' : discrepancy > 0 ? 'positive' : ''}">${discrepancy < 0 ? '' : '+'}${discrepancy.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span>
-      </div>
-      
-      <div class="status-bar ${discrepancy === 0 ? 'balanced' : discrepancy < 0 ? 'shortage' : 'surplus'}">
-        ${discrepancy === 0 ? 'مطابق ✓' : discrepancy < 0 ? 'عجز مُسجّل على الكاشير' : 'فائض مُسجّل'}
+      <div style="text-align:left;">
+        <div style="font-size:10px;color:#666;">رقم اليومية</div>
+        <div style="font-size:14px;font-weight:bold;">#${existingJournal?.id || '-'}</div>
       </div>
     </div>
-
-    ${existingJournal?.signatures && existingJournal.signatures.length > 0 ? `
-    <div class="sig-area">
-      ${(() => {
-        const cashierSig = existingJournal?.signatures?.find(s => s.signatureType === 'cashier');
-        return cashierSig?.signatureData ? `
+    
+    <div class="main-grid">
+      <div>
+        <div class="section">
+          <div class="section-title">ملخص المبيعات</div>
+          <div class="row"><span class="label">إجمالي المبيعات</span><span class="value big">${formData.totalSales.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="row"><span class="label">عدد الفواتير</span><span class="value">${formData.transactionCount}</span></div>
+          <div class="row"><span class="label">عدد العملاء</span><span class="value">${formData.customerCount}</span></div>
+          <div class="row"><span class="label">متوسط الفاتورة</span><span class="value">${averageTicket.toFixed(2)} ر.س</span></div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">تسوية النقدي</div>
+          <div class="recon-box">
+            <div class="recon-row"><span>رصيد الافتتاح</span><span>${formData.openingBalance.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>المبيعات النقدية</span><span>${categoryTotals.cash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>المتوقع في الصندوق</span><span>${expectedCash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>الفعلي في الصندوق</span><span>${formData.actualCashDrawer.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          </div>
+          <div class="diff-display ${discrepancy === 0 ? 'balanced' : discrepancy < 0 ? 'shortage' : 'surplus'}">
+            <div class="amount ${discrepancy < 0 ? 'negative' : discrepancy > 0 ? 'positive' : ''}">${discrepancy.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</div>
+            <div class="status">${discrepancy === 0 ? 'مطابق ✓' : discrepancy < 0 ? 'عجز مُسجّل على الكاشير' : 'فائض مُسجّل'}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div>
+        <div class="section">
+          <div class="section-title">تصنيف المبيعات</div>
+          
+          <div class="category-header cash"><span>💵 نقدي</span><span>${categoryTotals.cash.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          
+          <div class="category-header cards"><span>💳 بطاقات وشبكة</span><span>${categoryTotals.cards.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay'].includes(p.paymentMethod)).map(p => `
+          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          `).join('')}
+          
+          <div class="category-header apps"><span>🚗 تطبيقات التوصيل</span><span>${categoryTotals.apps.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          ${paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'].includes(p.paymentMethod)).map(p => `
+          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.س</span></div>
+          `).join('')}
+        </div>
+        
+        ${formData.notes ? `<div class="section"><div class="section-title">ملاحظات</div><div style="font-size:10px;color:#666;padding:5px;background:#fffbeb;border-radius:4px;">${formData.notes}</div></div>` : ''}
+      </div>
+    </div>
+    
+    <div class="signature-section">
+      <div style="font-size:11px;font-weight:bold;margin-bottom:8px;text-align:center;">التوقيعات والاعتماد</div>
+      <div class="sig-grid">
         <div class="sig-box">
-          <div class="title">الكاشير</div>
-          <img class="sig-img" src="${cashierSig.signatureData}" />
+          <div class="role">توقيع الكاشير</div>
+          ${cashierSig?.signatureData ? `<img class="sig-img" src="${cashierSig.signatureData}" />` : '<div class="placeholder">لم يوقع بعد</div>'}
           <div class="name">${formData.cashierName}</div>
-        </div>` : '';
-      })()}
-      ${(() => {
-        const supervisorSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor');
-        return supervisorSig?.signatureData ? `
+        </div>
         <div class="sig-box">
-          <div class="title">المشرف</div>
-          <img class="sig-img" src="${supervisorSig.signatureData}" />
-          <div class="name">${supervisorSig.signerName}</div>
-        </div>` : '';
-      })()}
+          <div class="role">توقيع المشرف</div>
+          ${supervisorSig?.signatureData ? `<img class="sig-img" src="${supervisorSig.signatureData}" /><div class="name">${supervisorSig.signerName}</div>` : '<div class="placeholder">لم يوقع بعد</div><div class="name">________________</div>'}
+        </div>
+        <div class="sig-box">
+          <div class="role">اعتماد المدير</div>
+          ${existingJournal?.approvedBy ? `<div class="name" style="margin-top:15px;">${existingJournal.approvedBy}</div><div style="font-size:8px;color:#666;">${formatDateTime(existingJournal?.approvedAt)}</div>` : '<div class="placeholder">لم يُعتمد بعد</div><div class="name">________________</div>'}
+        </div>
+      </div>
     </div>
-    ` : ''}
     
     <div class="footer">
-      ${branchName} | ${formatDate(formData.journalDate)} | ${SHIFT_LABELS[formData.shiftType] || formData.shiftType}
+      <span>بتر بيكري - Butter Bakery</span>
+      <span>تم الإنشاء: ${new Date().toLocaleDateString('ar-SA')}</span>
     </div>
   </div>
 </body>
