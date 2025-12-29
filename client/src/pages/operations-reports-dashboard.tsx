@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import type { Branch, CashierSalesJournal, JournalAttachment } from "@shared/schema";
 import * as XLSX from "xlsx";
+import { printHtmlContent } from "@/lib/print-utils";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "نقداً",
@@ -264,12 +265,6 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
   });
 
   const handleExportJournalPDF = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير');
-      return;
-    }
-
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
       return date.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -436,18 +431,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
 </body>
 </html>`;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for fonts and content to load before enabling print
-    printWindow.onload = () => {
-      printWindow.focus();
-    };
-    
-    // Fallback: ensure content is ready after short delay
-    setTimeout(() => {
-      printWindow.focus();
-    }, 500);
+    printHtmlContent(htmlContent);
   };
 
   return (
@@ -809,13 +793,6 @@ export default function OperationsReportsDashboardPage() {
   const handleExportPDF = () => {
     if (!report) return;
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير');
-      return;
-    }
-
-    const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
     const selectedBranch = filters.branchId ? branches?.find(b => b.id === filters.branchId)?.name : 'جميع الفروع';
 
     const htmlContent = `
@@ -960,18 +937,7 @@ export default function OperationsReportsDashboardPage() {
 </body>
 </html>`;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for fonts and content to load before enabling print
-    printWindow.onload = () => {
-      printWindow.focus();
-    };
-    
-    // Fallback: ensure content is ready after short delay
-    setTimeout(() => {
-      printWindow.focus();
-    }, 500);
+    printHtmlContent(htmlContent);
   };
 
   // Use the filtered journals directly from API (filtering now done server-side)

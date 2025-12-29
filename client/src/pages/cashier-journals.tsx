@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { CashierSalesJournal, Branch } from "@shared/schema";
+import { printHtmlContent } from "@/lib/print-utils";
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { label: "مسودة", variant: "secondary" },
@@ -107,12 +108,6 @@ export default function CashierJournalsPage() {
   const handlePrintList = () => {
     if (!filteredJournals || filteredJournals.length === 0) {
       toast({ title: "لا توجد يوميات للطباعة", variant: "destructive" });
-      return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast({ title: "يرجى السماح بفتح النوافذ المنبثقة", variant: "destructive" });
       return;
     }
 
@@ -230,18 +225,7 @@ export default function CashierJournalsPage() {
 </body>
 </html>`;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for fonts and content to load before enabling print
-    printWindow.onload = () => {
-      printWindow.focus();
-    };
-    
-    // Fallback: ensure content is ready after short delay
-    setTimeout(() => {
-      printWindow.focus();
-    }, 500);
+    printHtmlContent(htmlContent);
   };
 
   return (

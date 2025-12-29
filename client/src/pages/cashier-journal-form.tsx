@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { Branch, CashierSalesJournal, CashierPaymentBreakdown, JournalAttachment } from "@shared/schema";
 import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPES, type AttachmentType } from "@shared/schema";
+import { printHtmlContent } from "@/lib/print-utils";
 
 const PAYMENT_CATEGORIES = {
   cash: { label: "نقدي", color: "bg-green-100 text-green-700" },
@@ -580,14 +581,7 @@ export default function CashierJournalFormPage() {
   const averageTicket = calculateAverageTicket();
 
   const handleExportPDF = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast({ title: "يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير", variant: "destructive" });
-      return;
-    }
-
     const branchName = branches?.find(b => b.id === formData.branchId)?.name || formData.branchId;
-    const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
     
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
@@ -793,18 +787,7 @@ export default function CashierJournalFormPage() {
 </body>
 </html>`;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for fonts and content to load before enabling print
-    printWindow.onload = () => {
-      printWindow.focus();
-    };
-    
-    // Fallback: ensure content is ready after short delay
-    setTimeout(() => {
-      printWindow.focus();
-    }, 500);
+    printHtmlContent(htmlContent);
   };
 
   if (isEdit && loadingJournal) {
