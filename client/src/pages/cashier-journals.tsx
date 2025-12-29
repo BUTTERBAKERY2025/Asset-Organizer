@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users } from "lucide-react";
+import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -104,6 +104,122 @@ export default function CashierJournalsPage() {
     return format(new Date(dateStr), "dd MMMM yyyy", { locale: ar });
   };
 
+  const handlePrintList = () => {
+    if (!filteredJournals || filteredJournals.length === 0) {
+      toast({ title: "لا توجد يوميات للطباعة", variant: "destructive" });
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "يرجى السماح بفتح النوافذ المنبثقة", variant: "destructive" });
+      return;
+    }
+
+    const totalSales = filteredJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+    const totalShortage = filteredJournals.filter(j => j.discrepancyStatus === 'shortage').reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0);
+    const totalSurplus = filteredJournals.filter(j => j.discrepancyStatus === 'surplus').reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>قائمة يوميات الكاشير</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4; margin: 8mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 10px; background: white; color: #333; font-size: 9px; line-height: 1.3; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 6px; margin-bottom: 10px; }
+    .header .title { font-size: 14px; font-weight: bold; }
+    .header .info { font-size: 9px; color: #666; }
+    .summary-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .summary-card { flex: 1; background: #f8f9fa; padding: 8px; border-radius: 6px; text-align: center; border: 1px solid #e9ecef; }
+    .summary-card .value { font-size: 12px; font-weight: bold; }
+    .summary-card .value.negative { color: #dc3545; }
+    .summary-card .value.positive { color: #28a745; }
+    .summary-card .label { color: #666; font-size: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 8px; }
+    th, td { border: 1px solid #ddd; padding: 5px 4px; text-align: right; }
+    th { background: #d4a853; color: white; font-weight: 600; }
+    tr:nth-child(even) { background: #fafafa; }
+    .status { padding: 2px 6px; border-radius: 8px; font-size: 7px; font-weight: 600; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-submitted { background: #fff3cd; color: #856404; }
+    .status-draft { background: #e9ecef; color: #495057; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .discrepancy { font-weight: bold; }
+    .discrepancy.shortage { color: #dc3545; }
+    .discrepancy.surplus { color: #28a745; }
+    .discrepancy.balanced { color: #666; }
+    .footer { margin-top: 10px; padding-top: 5px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 8px; color: #666; }
+    .print-btn { position: fixed; top: 8px; left: 8px; background: #d4a853; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 10px; z-index: 100; }
+    @media print { .print-btn { display: none; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">طباعة</button>
+  
+  <div class="header">
+    <div>
+      <div class="title">قائمة يوميات الكاشير</div>
+      <div class="info">${branchFilter !== 'all' ? getBranchName(branchFilter) : 'جميع الفروع'} | ${filteredJournals.length} يومية</div>
+    </div>
+    <div style="font-size:10px;font-weight:bold;color:#d4a853;">بتر بيكري</div>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-card"><div class="value">${formatCurrency(totalSales)}</div><div class="label">إجمالي المبيعات</div></div>
+    <div class="summary-card"><div class="value negative">-${formatCurrency(totalShortage)}</div><div class="label">إجمالي العجز</div></div>
+    <div class="summary-card"><div class="value positive">+${formatCurrency(totalSurplus)}</div><div class="label">إجمالي الفائض</div></div>
+    <div class="summary-card"><div class="value">${filteredJournals.length}</div><div class="label">عدد اليوميات</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>التاريخ</th>
+        <th>الفرع</th>
+        <th>الكاشير</th>
+        <th>الوردية</th>
+        <th>المبيعات</th>
+        <th>نقدي</th>
+        <th>شبكة</th>
+        <th>الفرق</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filteredJournals.map((j, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${j.journalDate}</td>
+          <td>${getBranchName(j.branchId)}</td>
+          <td>${j.cashierName || '-'}</td>
+          <td>${j.shiftType === 'morning' ? 'صباحي' : j.shiftType === 'evening' ? 'مسائي' : j.shiftType === 'night' ? 'ليلي' : '-'}</td>
+          <td>${formatCurrency(j.totalSales || 0)}</td>
+          <td>${formatCurrency(j.cashTotal || 0)}</td>
+          <td>${formatCurrency(j.networkTotal || 0)}</td>
+          <td class="discrepancy ${j.discrepancyStatus || 'balanced'}">${formatCurrency(j.discrepancyAmount || 0)}</td>
+          <td><span class="status status-${j.status}">${STATUS_LABELS[j.status]?.label || j.status}</span></td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span>بتر بيكري - Butter Bakery</span>
+    <span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span>
+  </div>
+</body>
+</html>`;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   return (
     <Layout>
       <div className="p-6 space-y-6">
@@ -116,12 +232,18 @@ export default function CashierJournalsPage() {
               متابعة وإدارة يوميات المبيعات والتسويات النقدية
             </p>
           </div>
-          <Link href="/cashier-journals/new">
-            <Button className="gap-2" data-testid="button-new-journal">
-              <Plus className="w-4 h-4" />
-              يومية جديدة
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handlePrintList} className="gap-2" data-testid="button-print-list">
+              <Printer className="w-4 h-4" />
+              طباعة القائمة
             </Button>
-          </Link>
+            <Link href="/cashier-journals/new">
+              <Button className="gap-2" data-testid="button-new-journal">
+                <Plus className="w-4 h-4" />
+                يومية جديدة
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {stats && (
