@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, timestamp, serial, index, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, timestamp, serial, index, jsonb, boolean, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -847,15 +847,11 @@ export type InsertAccountingExport = z.infer<typeof insertAccountingExportSchema
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  nameEn: text("name_en"),
   category: text("category").notNull(), // bread, pastry, cake, sandwich, etc.
   unit: text("unit").default("قطعة"), // قطعة، كيلو، صينية
-  standardQuantity: integer("standard_quantity").default(1), // الكمية القياسية للوحدة
-  preparationTime: integer("preparation_time"), // وقت التحضير بالدقائق
-  bakingTime: integer("baking_time"), // وقت الخبز بالدقائق
-  ingredients: text("ingredients"), // المكونات (JSON)
+  basePrice: doublePrecision("base_price"), // السعر الأساسي
   isActive: text("is_active").default("true"),
-  imageUrl: text("image_url"),
+  description: text("description"), // وصف المنتج
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
