@@ -11,7 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -557,6 +557,266 @@ export default function CashierJournalFormPage() {
   const discrepancyStatus = getDiscrepancyStatus();
   const averageTicket = calculateAverageTicket();
 
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير", variant: "destructive" });
+      return;
+    }
+
+    const branchName = branches?.find(b => b.id === formData.branchId)?.name || formData.branchId;
+    const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
+    
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    };
+
+    const categoryTotals = getCategoryTotals();
+    const expectedCash = formData.openingBalance + categoryTotals.cash;
+    const discrepancy = formData.actualCashDrawer - categoryTotals.cash;
+    const discrepancyStatusText = discrepancy === 0 ? 'متوازن' : discrepancy < 0 ? 'عجز' : 'فائض';
+
+    const STATUS_LABELS: Record<string, string> = {
+      draft: "مسودة",
+      submitted: "مُقدم للمراجعة", 
+      approved: "معتمد",
+      rejected: "مرفوض",
+    };
+
+    const SHIFT_LABELS: Record<string, string> = {
+      morning: "صباحي",
+      evening: "مسائي",
+      night: "ليلي",
+    };
+
+    const PAYMENT_METHOD_LABELS: Record<string, string> = {
+      cash: "نقداً",
+      card: "بطاقة ائتمان",
+      mada: "مدى",
+      apple_pay: "Apple Pay",
+      stc_pay: "STC Pay",
+      hunger_station: "هنقرستيشن",
+      toyou: "ToYou",
+      jahez: "جاهز",
+      marsool: "مرسول",
+      keeta: "كيتا",
+      the_chefs: "ذا شيفز",
+      talabat: "طلبات",
+      other: "أخرى",
+    };
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تقرير يومية الكاشير - ${formData.journalDate}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 30px; background: white; color: #333; font-size: 13px; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #d4a853; padding-bottom: 20px; }
+    .header .logo { max-height: 70px; margin-bottom: 10px; }
+    .header h1 { font-size: 22px; color: #333; margin-bottom: 5px; }
+    .header .subtitle { color: #666; font-size: 14px; }
+    .header .journal-date { background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; margin-top: 10px; font-weight: bold; }
+    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+    .info-box { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #e9ecef; }
+    .info-box .label { color: #666; font-size: 11px; margin-bottom: 5px; }
+    .info-box .value { font-size: 16px; font-weight: bold; color: #333; }
+    .section { margin-bottom: 25px; page-break-inside: avoid; }
+    .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; padding: 10px 15px; background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    th, td { border: 1px solid #ddd; padding: 12px 10px; text-align: right; }
+    th { background: #f5f5f5; font-weight: 600; color: #333; }
+    tr:nth-child(even) { background: #fafafa; }
+    .amount { font-weight: bold; }
+    .amount.positive { color: #28a745; }
+    .amount.negative { color: #dc3545; }
+    .status-badge { padding: 4px 12px; border-radius: 15px; font-size: 11px; font-weight: 600; display: inline-block; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .status-balanced { background: #d4edda; color: #155724; }
+    .status-shortage { background: #f8d7da; color: #721c24; }
+    .status-surplus { background: #cce5ff; color: #004085; }
+    .summary-row { background: #f8f9fa !important; font-weight: bold; }
+    .reconciliation-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 10px; margin-top: 15px; }
+    .reconciliation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .reconciliation-item { display: flex; justify-content: space-between; padding: 10px; background: white; border-radius: 8px; border: 1px solid #dee2e6; }
+    .reconciliation-item .label { color: #666; }
+    .reconciliation-item .value { font-weight: bold; }
+    .discrepancy-result { text-align: center; padding: 20px; background: white; border-radius: 10px; margin-top: 15px; border: 2px solid #d4a853; }
+    .discrepancy-result .amount { font-size: 24px; }
+    .notes-box { background: #fffbeb; padding: 15px; border-radius: 10px; border: 1px solid #fbbf24; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #d4a853; display: flex; justify-content: space-between; align-items: center; }
+    .footer .company { font-weight: bold; color: #d4a853; }
+    .footer .timestamp { color: #666; font-size: 11px; }
+    .signature-area { margin-top: 30px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; }
+    .signature-box { border-top: 2px solid #333; padding-top: 10px; text-align: center; }
+    .signature-box .title { font-weight: bold; margin-bottom: 40px; }
+    .print-btn { position: fixed; top: 20px; left: 20px; background: #d4a853; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .print-btn:hover { background: #c49843; }
+    @media print { .print-btn { display: none; } .signature-area { page-break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">طباعة / حفظ PDF</button>
+  
+  <div class="header">
+    <img src="${logoUrl}" alt="Butter Bakery" class="logo" onerror="this.style.display='none'">
+    <h1>تقرير يومية الكاشير</h1>
+    <p class="subtitle">بتر بيكري - Butter Bakery</p>
+    <div class="journal-date">${formatDate(formData.journalDate)}</div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="label">الفرع</div>
+      <div class="value">${branchName}</div>
+    </div>
+    <div class="info-box">
+      <div class="label">اسم الكاشير</div>
+      <div class="value">${formData.cashierName}</div>
+    </div>
+    <div class="info-box">
+      <div class="label">الوردية</div>
+      <div class="value">${SHIFT_LABELS[formData.shiftType] || formData.shiftType}</div>
+    </div>
+    <div class="info-box">
+      <div class="label">الحالة</div>
+      <div class="value">
+        <span class="status-badge status-${existingJournal?.status === 'approved' ? 'approved' : existingJournal?.status === 'rejected' ? 'rejected' : 'pending'}">
+          ${STATUS_LABELS[existingJournal?.status || 'draft'] || 'مسودة'}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">ملخص المبيعات</div>
+    <table>
+      <tr>
+        <th>البند</th>
+        <th>المبلغ (ر.س)</th>
+      </tr>
+      <tr>
+        <td>إجمالي المبيعات</td>
+        <td class="amount positive">${formData.totalSales.toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr>
+        <td>المبيعات النقدية</td>
+        <td class="amount">${categoryTotals.cash.toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr>
+        <td>مبيعات الشبكة (بطاقات)</td>
+        <td class="amount">${categoryTotals.cards.toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr>
+        <td>مبيعات التوصيل</td>
+        <td class="amount">${categoryTotals.apps.toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr class="summary-row">
+        <td>عدد العمليات</td>
+        <td>${formData.transactionCount}</td>
+      </tr>
+      <tr class="summary-row">
+        <td>عدد العملاء</td>
+        <td>${formData.customerCount}</td>
+      </tr>
+      <tr class="summary-row">
+        <td>متوسط قيمة الفاتورة</td>
+        <td>${averageTicket.toFixed(2)} ر.س</td>
+      </tr>
+    </table>
+  </div>
+
+  ${paymentBreakdowns.length > 0 ? `
+  <div class="section">
+    <div class="section-title">تفصيل طرق الدفع</div>
+    <table>
+      <tr>
+        <th>طريقة الدفع</th>
+        <th>المبلغ (ر.س)</th>
+        <th>عدد العمليات</th>
+      </tr>
+      ${paymentBreakdowns.filter(p => p.amount > 0).map(p => `
+        <tr>
+          <td>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</td>
+          <td class="amount">${p.amount.toLocaleString('ar-SA')}</td>
+          <td>${p.transactionCount}</td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+  ` : ''}
+
+  <div class="section">
+    <div class="section-title">مطابقة الصندوق</div>
+    <div class="reconciliation-box">
+      <div class="reconciliation-grid">
+        <div class="reconciliation-item">
+          <span class="label">رصيد الافتتاح</span>
+          <span class="value">${formData.openingBalance.toLocaleString('ar-SA')} ر.س</span>
+        </div>
+        <div class="reconciliation-item">
+          <span class="label">المبيعات النقدية</span>
+          <span class="value">${categoryTotals.cash.toLocaleString('ar-SA')} ر.س</span>
+        </div>
+        <div class="reconciliation-item">
+          <span class="label">المتوقع في الصندوق</span>
+          <span class="value">${expectedCash.toLocaleString('ar-SA')} ر.س</span>
+        </div>
+        <div class="reconciliation-item">
+          <span class="label">الفعلي في الصندوق</span>
+          <span class="value">${formData.actualCashDrawer.toLocaleString('ar-SA')} ر.س</span>
+        </div>
+      </div>
+      <div class="discrepancy-result">
+        <p style="margin-bottom: 10px;">الفرق (العجز/الفائض)</p>
+        <span class="amount ${discrepancy < 0 ? 'negative' : discrepancy > 0 ? 'positive' : ''}">
+          ${discrepancy.toLocaleString('ar-SA')} ر.س
+        </span>
+        <span class="status-badge status-${discrepancy === 0 ? 'balanced' : discrepancy < 0 ? 'shortage' : 'surplus'}" style="margin-right: 10px;">
+          ${discrepancyStatusText}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  ${formData.notes ? `
+  <div class="section">
+    <div class="section-title">ملاحظات</div>
+    <div class="notes-box">
+      <p>${formData.notes}</p>
+    </div>
+  </div>
+  ` : ''}
+
+  <div class="signature-area">
+    <div class="signature-box">
+      <div class="title">توقيع الكاشير</div>
+      <p>${formData.cashierName}</p>
+    </div>
+    <div class="signature-box">
+      <div class="title">توقيع المدير</div>
+      <p>________________</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="company">بتر بيكري - Butter Bakery</div>
+    <div class="timestamp">تم إنشاء هذا التقرير بتاريخ: ${new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+  </div>
+</body>
+</html>`;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   if (isEdit && loadingJournal) {
     return (
       <Layout>
@@ -571,17 +831,25 @@ export default function CashierJournalFormPage() {
   return (
     <Layout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href="/cashier-journals">
-            <Button variant="ghost" size="sm" data-testid="button-back">
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-primary" data-testid="page-title">
-              {isEdit ? "تعديل يومية المبيعات" : "يومية مبيعات جديدة"}
-            </h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/cashier-journals">
+              <Button variant="ghost" size="sm" data-testid="button-back">
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold text-primary" data-testid="page-title">
+                {isEdit ? "تعديل يومية المبيعات" : "يومية مبيعات جديدة"}
+              </h1>
+            </div>
           </div>
+          {isEdit && (
+            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="button-export-pdf">
+              <FileDown className="w-4 h-4" />
+              تصدير PDF
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
