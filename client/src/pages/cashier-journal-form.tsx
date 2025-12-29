@@ -61,6 +61,7 @@ export default function CashierJournalFormPage() {
   const { user } = useAuth();
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
 
   const isEdit = !!id;
 
@@ -314,6 +315,15 @@ export default function CashierJournalFormPage() {
   const isReadOnly = existingJournal && existingJournal.status !== "draft";
 
   const handleSave = () => {
+    if (!hasSignature && !isEdit) {
+      toast({ 
+        title: "التوقيع الإلكتروني مطلوب", 
+        description: "يجب التوقيع الإلكتروني قبل حفظ اليومية", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     if (getTotalsMismatch()) {
       toast({ 
         title: "لا يمكن الحفظ", 
@@ -323,9 +333,14 @@ export default function CashierJournalFormPage() {
       return;
     }
 
+    const canvas = signatureCanvasRef.current;
+    const signatureData = hasSignature && canvas ? canvas.toDataURL("image/png") : undefined;
+
     const data = {
       ...formData,
       paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0),
+      signatureData,
+      signerName: formData.cashierName,
     };
 
     if (isEdit) {
@@ -543,6 +558,9 @@ export default function CashierJournalFormPage() {
   };
 
   const stopDrawing = () => {
+    if (isDrawing) {
+      setHasSignature(true);
+    }
     setIsDrawing(false);
   };
 
@@ -555,6 +573,7 @@ export default function CashierJournalFormPage() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
     }
+    setHasSignature(false);
   };
 
   const discrepancyStatus = getDiscrepancyStatus();
@@ -1188,18 +1207,32 @@ export default function CashierJournalFormPage() {
           </div>
 
           <div className="space-y-6">
-            <Card>
+            <Card className={!hasSignature && !isEdit ? "border-red-300 bg-red-50/50" : ""}>
               <CardHeader>
-                <CardTitle>التوقيع الإلكتروني</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  التوقيع الإلكتروني
+                  {!hasSignature && !isEdit && (
+                    <span className="text-xs font-normal text-red-600 bg-red-100 px-2 py-1 rounded">مطلوب</span>
+                  )}
+                  {hasSignature && (
+                    <span className="text-xs font-normal text-green-600 bg-green-100 px-2 py-1 rounded">تم التوقيع ✓</span>
+                  )}
+                </CardTitle>
                 <CardDescription>وقّع لتأكيد صحة البيانات</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border rounded-lg overflow-hidden">
+                {!hasSignature && !isEdit && (
+                  <div className="bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>يجب التوقيع الإلكتروني قبل حفظ اليومية</span>
+                  </div>
+                )}
+                <div className={`border rounded-lg overflow-hidden ${!hasSignature && !isEdit ? "border-red-300" : ""}`}>
                   <canvas
                     ref={signatureCanvasRef}
                     width={280}
                     height={150}
-                    className="w-full cursor-crosshair"
+                    className="w-full cursor-crosshair bg-white"
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
