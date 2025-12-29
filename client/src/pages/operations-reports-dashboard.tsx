@@ -290,11 +290,13 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
 <head>
   <meta charset="UTF-8">
   <title>ملخص اليومية - ${journal.journalDate}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4; margin: 10mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #333; font-size: 11px; padding: 10px; }
+    body { font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; background: white; color: #333; font-size: 11px; padding: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .container { max-width: 100%; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 8px; margin-bottom: 10px; }
     .header .title { font-size: 16px; font-weight: bold; }
@@ -331,11 +333,23 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
     .sig-box .placeholder { height: 40px; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 9px; }
     .footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #d4a853; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 11px; z-index: 100; }
-    @media print { .print-btn { display: none; } }
+    .loading-msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px; z-index: 200; }
+    @media print { .print-btn, .loading-msg { display: none !important; } }
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة</button>
+  <script>
+    document.fonts.ready.then(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    });
+    setTimeout(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    }, 1500);
+  </script>
   
   <div class="container">
     <div class="header">
@@ -810,11 +824,13 @@ export default function OperationsReportsDashboardPage() {
 <head>
   <meta charset="UTF-8">
   <title>تقرير التشغيل - ${filters.startDate}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4; margin: 8mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 10px; background: white; color: #333; font-size: 9px; line-height: 1.3; }
+    body { font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; padding: 10px; background: white; color: #333; font-size: 9px; line-height: 1.3; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 6px; margin-bottom: 8px; }
     .header .title { font-size: 14px; font-weight: bold; }
     .header .info { font-size: 9px; color: #666; }
@@ -838,11 +854,23 @@ export default function OperationsReportsDashboardPage() {
     .status-rejected { background: #f8d7da; color: #721c24; }
     .footer { margin-top: 8px; padding-top: 5px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 8px; color: #666; }
     .print-btn { position: fixed; top: 8px; left: 8px; background: #d4a853; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 10px; z-index: 100; }
-    @media print { .print-btn { display: none; } }
+    .loading-msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px; z-index: 200; }
+    @media print { .print-btn, .loading-msg { display: none !important; } }
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة</button>
+  <script>
+    document.fonts.ready.then(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    });
+    setTimeout(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    }, 1500);
+  </script>
   
   <div class="header">
     <div>

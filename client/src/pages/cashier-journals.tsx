@@ -126,11 +126,13 @@ export default function CashierJournalsPage() {
 <head>
   <meta charset="UTF-8">
   <title>قائمة يوميات الكاشير</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4; margin: 8mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 10px; background: white; color: #333; font-size: 9px; line-height: 1.3; }
+    body { font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; padding: 10px; background: white; color: #333; font-size: 9px; line-height: 1.3; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 6px; margin-bottom: 10px; }
     .header .title { font-size: 14px; font-weight: bold; }
     .header .info { font-size: 9px; color: #666; }
@@ -155,11 +157,23 @@ export default function CashierJournalsPage() {
     .discrepancy.balanced { color: #666; }
     .footer { margin-top: 10px; padding-top: 5px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 8px; color: #666; }
     .print-btn { position: fixed; top: 8px; left: 8px; background: #d4a853; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 10px; z-index: 100; }
-    @media print { .print-btn { display: none; } }
+    .loading-msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px; z-index: 200; }
+    @media print { .print-btn, .loading-msg { display: none !important; } }
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة</button>
+  <script>
+    document.fonts.ready.then(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    });
+    setTimeout(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    }, 1500);
+  </script>
   
   <div class="header">
     <div>
