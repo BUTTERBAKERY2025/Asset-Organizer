@@ -2044,6 +2044,298 @@ export class DatabaseStorage implements IStorage {
       averageTicket,
     };
   }
+
+  // Comprehensive Operations Reports
+  async getOperationsReport(filters: {
+    branchId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    salesReport: {
+      totalSales: number;
+      cashSales: number;
+      networkSales: number;
+      deliverySales: number;
+      totalTransactions: number;
+      averageTicket: number;
+      totalShortages: number;
+      shortageAmount: number;
+      totalSurpluses: number;
+      surplusAmount: number;
+      journalsByStatus: { status: string; count: number }[];
+      paymentMethodBreakdown: { method: string; amount: number; count: number }[];
+      dailySales: { date: string; sales: number; transactions: number }[];
+    };
+    productionReport: {
+      totalOrders: number;
+      pendingOrders: number;
+      inProgressOrders: number;
+      completedOrders: number;
+      cancelledOrders: number;
+      totalQuantityProduced: number;
+      qualityPassRate: number;
+      qualityChecks: { status: string; count: number }[];
+      ordersByProduct: { productName: string; quantity: number; orderCount: number }[];
+      dailyProduction: { date: string; quantity: number; orders: number }[];
+    };
+    shiftsReport: {
+      totalShifts: number;
+      shiftsWithEmployees: number;
+      totalEmployeeAssignments: number;
+      shiftsByType: { type: string; count: number }[];
+      employeesByRole: { role: string; count: number }[];
+    };
+    branchComparison: {
+      branchId: string;
+      branchName: string;
+      totalSales: number;
+      totalOrders: number;
+      qualityPassRate: number;
+      averageTicket: number;
+    }[];
+  }> {
+    const { branchId, startDate, endDate } = filters;
+    
+    // Get all journals within date range
+    let allJournals = await this.getAllCashierJournals();
+    if (branchId) {
+      allJournals = allJournals.filter(j => j.branchId === branchId);
+    }
+    if (startDate) {
+      allJournals = allJournals.filter(j => j.journalDate >= startDate);
+    }
+    if (endDate) {
+      allJournals = allJournals.filter(j => j.journalDate <= endDate);
+    }
+
+    // Sales Report calculations
+    const totalSales = allJournals.reduce((sum, j) => sum + j.totalSales, 0);
+    const cashSales = allJournals.reduce((sum, j) => sum + j.cashTotal, 0);
+    const networkSales = allJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0);
+    const deliverySales = allJournals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
+    const totalTransactions = allJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0);
+    const avgTickets = allJournals.filter(j => j.averageTicket && j.averageTicket > 0);
+    const averageTicket = avgTickets.length > 0 
+      ? avgTickets.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / avgTickets.length 
+      : totalTransactions > 0 ? totalSales / totalTransactions : 0;
+    
+    const shortageJournals = allJournals.filter(j => j.discrepancyStatus === 'shortage');
+    const surplusJournals = allJournals.filter(j => j.discrepancyStatus === 'surplus');
+    const totalShortages = shortageJournals.length;
+    const shortageAmount = shortageJournals.reduce((sum, j) => sum + Math.abs(j.discrepancyAmount), 0);
+    const totalSurpluses = surplusJournals.length;
+    const surplusAmount = surplusJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0);
+
+    // Journals by status
+    const statusCounts: Record<string, number> = {};
+    allJournals.forEach(j => {
+      statusCounts[j.status] = (statusCounts[j.status] || 0) + 1;
+    });
+    const journalsByStatus = Object.entries(statusCounts).map(([status, count]) => ({ status, count }));
+
+    // Payment method breakdown (aggregate from all breakdowns)
+    const paymentMethodTotals: Record<string, { amount: number; count: number }> = {};
+    for (const journal of allJournals) {
+      const breakdowns = await this.getPaymentBreakdowns(journal.id);
+      for (const b of breakdowns) {
+        if (!paymentMethodTotals[b.paymentMethod]) {
+          paymentMethodTotals[b.paymentMethod] = { amount: 0, count: 0 };
+        }
+        paymentMethodTotals[b.paymentMethod].amount += b.amount;
+        paymentMethodTotals[b.paymentMethod].count += b.transactionCount || 0;
+      }
+    }
+    const paymentMethodBreakdown = Object.entries(paymentMethodTotals)
+      .map(([method, data]) => ({ method, amount: data.amount, count: data.count }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Daily sales
+    const dailySalesMap: Record<string, { sales: number; transactions: number }> = {};
+    allJournals.forEach(j => {
+      if (!dailySalesMap[j.journalDate]) {
+        dailySalesMap[j.journalDate] = { sales: 0, transactions: 0 };
+      }
+      dailySalesMap[j.journalDate].sales += j.totalSales;
+      dailySalesMap[j.journalDate].transactions += j.transactionCount || 0;
+    });
+    const dailySales = Object.entries(dailySalesMap)
+      .map(([date, data]) => ({ date, sales: data.sales, transactions: data.transactions }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Production Report
+    let allOrders = await this.getAllProductionOrders();
+    if (branchId) {
+      allOrders = allOrders.filter(o => o.branchId === branchId);
+    }
+    if (startDate) {
+      allOrders = allOrders.filter(o => (o.scheduledDate || '') >= startDate);
+    }
+    if (endDate) {
+      allOrders = allOrders.filter(o => (o.scheduledDate || '') <= endDate);
+    }
+
+    const totalOrders = allOrders.length;
+    const pendingOrders = allOrders.filter(o => o.status === 'pending').length;
+    const inProgressOrders = allOrders.filter(o => o.status === 'in_progress').length;
+    const completedOrders = allOrders.filter(o => o.status === 'completed').length;
+    const cancelledOrders = allOrders.filter(o => o.status === 'cancelled').length;
+    const totalQuantityProduced = allOrders
+      .filter(o => o.status === 'completed')
+      .reduce((sum, o) => sum + (o.producedQuantity || 0), 0);
+
+    // Quality checks
+    const allQualityChecks = await this.getAllQualityChecks();
+    const relevantChecks = allQualityChecks.filter(qc => 
+      allOrders.some(o => o.id === qc.productionOrderId)
+    );
+    const passedChecks = relevantChecks.filter(qc => qc.result === 'passed').length;
+    const qualityPassRate = relevantChecks.length > 0 
+      ? (passedChecks / relevantChecks.length) * 100 
+      : 100;
+    
+    const qualityStatusCounts: Record<string, number> = {};
+    relevantChecks.forEach(qc => {
+      qualityStatusCounts[qc.result] = (qualityStatusCounts[qc.result] || 0) + 1;
+    });
+    const qualityChecks = Object.entries(qualityStatusCounts).map(([status, count]) => ({ status, count }));
+
+    // Orders by product
+    const products = await this.getAllProducts();
+    const productOrderMap: Record<number, { productName: string; quantity: number; orderCount: number }> = {};
+    for (const order of allOrders) {
+      const product = products.find(p => p.id === order.productId);
+      if (!productOrderMap[order.productId]) {
+        productOrderMap[order.productId] = {
+          productName: product?.name || `منتج ${order.productId}`,
+          quantity: 0,
+          orderCount: 0
+        };
+      }
+      productOrderMap[order.productId].quantity += (order.producedQuantity || 0);
+      productOrderMap[order.productId].orderCount += 1;
+    }
+    const ordersByProduct = Object.values(productOrderMap).sort((a, b) => b.quantity - a.quantity);
+
+    // Daily production
+    const dailyProductionMap: Record<string, { quantity: number; orders: number }> = {};
+    allOrders.forEach(o => {
+      const orderDate = o.scheduledDate || '';
+      if (orderDate && !dailyProductionMap[orderDate]) {
+        dailyProductionMap[orderDate] = { quantity: 0, orders: 0 };
+      }
+      if (orderDate) {
+        dailyProductionMap[orderDate].quantity += (o.producedQuantity || 0);
+        dailyProductionMap[orderDate].orders += 1;
+      }
+    });
+    const dailyProduction = Object.entries(dailyProductionMap)
+      .map(([date, data]) => ({ date, quantity: data.quantity, orders: data.orders }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Shifts Report
+    let allShifts = await this.getAllShifts();
+    if (branchId) {
+      allShifts = allShifts.filter(s => s.branchId === branchId);
+    }
+    if (startDate) {
+      allShifts = allShifts.filter(s => s.date >= startDate);
+    }
+    if (endDate) {
+      allShifts = allShifts.filter(s => s.date <= endDate);
+    }
+
+    const totalShifts = allShifts.length;
+    let totalEmployeeAssignments = 0;
+    let shiftsWithEmployees = 0;
+    const roleCounts: Record<string, number> = {};
+
+    for (const shift of allShifts) {
+      const employees = await this.getShiftEmployees(shift.id);
+      if (employees.length > 0) {
+        shiftsWithEmployees += 1;
+      }
+      totalEmployeeAssignments += employees.length;
+      for (const emp of employees) {
+        if (emp.role) {
+          roleCounts[emp.role] = (roleCounts[emp.role] || 0) + 1;
+        }
+      }
+    }
+
+    const shiftTypeCounts: Record<string, number> = {};
+    allShifts.forEach(s => {
+      const shiftName = s.name || 'غير محدد';
+      shiftTypeCounts[shiftName] = (shiftTypeCounts[shiftName] || 0) + 1;
+    });
+    const shiftsByType = Object.entries(shiftTypeCounts).map(([type, count]) => ({ type, count }));
+    const employeesByRole = Object.entries(roleCounts).map(([role, count]) => ({ role, count }));
+
+    // Branch Comparison
+    const allBranches = await this.getAllBranches();
+    const branchComparison = [];
+    
+    for (const branch of allBranches) {
+      const branchJournals = allJournals.filter(j => j.branchId === branch.id);
+      const branchOrders = allOrders.filter(o => o.branchId === branch.id);
+      const branchSales = branchJournals.reduce((sum, j) => sum + j.totalSales, 0);
+      const branchTransactions = branchJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0);
+      
+      const branchQualityChecks = allQualityChecks.filter(qc =>
+        branchOrders.some(o => o.id === qc.productionOrderId)
+      );
+      const branchPassedChecks = branchQualityChecks.filter(qc => qc.result === 'passed').length;
+      const branchQualityRate = branchQualityChecks.length > 0 
+        ? (branchPassedChecks / branchQualityChecks.length) * 100 
+        : 100;
+
+      branchComparison.push({
+        branchId: branch.id,
+        branchName: branch.name,
+        totalSales: branchSales,
+        totalOrders: branchOrders.length,
+        qualityPassRate: branchQualityRate,
+        averageTicket: branchTransactions > 0 ? branchSales / branchTransactions : 0,
+      });
+    }
+
+    return {
+      salesReport: {
+        totalSales,
+        cashSales,
+        networkSales,
+        deliverySales,
+        totalTransactions,
+        averageTicket,
+        totalShortages,
+        shortageAmount,
+        totalSurpluses,
+        surplusAmount,
+        journalsByStatus,
+        paymentMethodBreakdown,
+        dailySales,
+      },
+      productionReport: {
+        totalOrders,
+        pendingOrders,
+        inProgressOrders,
+        completedOrders,
+        cancelledOrders,
+        totalQuantityProduced,
+        qualityPassRate,
+        qualityChecks,
+        ordersByProduct,
+        dailyProduction,
+      },
+      shiftsReport: {
+        totalShifts,
+        shiftsWithEmployees,
+        totalEmployeeAssignments,
+        shiftsByType,
+        employeesByRole,
+      },
+      branchComparison,
+    };
+  }
 }
 
 export const storage = new DatabaseStorage();

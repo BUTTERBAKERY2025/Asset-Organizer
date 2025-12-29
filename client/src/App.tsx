@@ -29,6 +29,7 @@ import AuditLogsPage from "@/pages/audit-logs";
 import BackupsPage from "@/pages/backups";
 import IntegrationsPage from "@/pages/integrations";
 import OperationsDashboardPage from "@/pages/operations-dashboard";
+import OperationsReportsDashboardPage from "@/pages/operations-reports-dashboard";
 import ProductsPage from "@/pages/products";
 import ShiftsPage from "@/pages/shifts";
 import ProductionPage from "@/pages/production";
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/backups" component={BackupsPage} />
       <Route path="/integrations" component={IntegrationsPage} />
       <Route path="/operations" component={OperationsDashboardPage} />
+      <Route path="/operations-reports" component={OperationsReportsDashboardPage} />
       <Route path="/products" component={ProductsPage} />
       <Route path="/shifts" component={ShiftsPage} />
       <Route path="/production" component={ProductionPage} />

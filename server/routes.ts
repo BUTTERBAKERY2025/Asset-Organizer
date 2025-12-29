@@ -2626,5 +2626,21 @@ export async function registerRoutes(
     }
   });
 
+  // Comprehensive Operations Reports Dashboard
+  app.get("/api/operations/reports", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, startDate, endDate } = req.query;
+      const report = await storage.getOperationsReport({
+        branchId: branchId as string | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+      });
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching operations reports:", error);
+      res.status(500).json({ error: "Failed to fetch operations reports" });
+    }
+  });
+
   return httpServer;
 }
