@@ -142,12 +142,15 @@ export default function CashierJournalFormPage() {
   }, [existingJournal]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => apiRequest("/api/cashier-journals", "POST", data),
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/cashier-journals", data);
+      return res.json();
+    },
     onSuccess: async (createdJournal: CashierSalesJournal) => {
       if (pendingAttachments.length > 0) {
         try {
           for (const attachment of pendingAttachments) {
-            await apiRequest(`/api/cashier-journals/${createdJournal.id}/attachments`, "POST", attachment);
+            await apiRequest("POST", `/api/cashier-journals/${createdJournal.id}/attachments`, attachment);
           }
           setPendingAttachments([]);
         } catch (error) {
@@ -165,7 +168,7 @@ export default function CashierJournalFormPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => apiRequest(`/api/cashier-journals/${id}`, "PATCH", data),
+    mutationFn: async (data: any) => apiRequest("PATCH", `/api/cashier-journals/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}`] });
@@ -179,7 +182,7 @@ export default function CashierJournalFormPage() {
 
   const submitMutation = useMutation({
     mutationFn: async (data: { signatureData?: string; signerName?: string }) =>
-      apiRequest(`/api/cashier-journals/${id}/submit`, "POST", data),
+      apiRequest("POST", `/api/cashier-journals/${id}/submit`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       toast({ title: "تم تقديم اليومية للمراجعة" });
@@ -192,7 +195,7 @@ export default function CashierJournalFormPage() {
 
   const postMutation = useMutation({
     mutationFn: async (data: { signatureData?: string; signerName?: string }) =>
-      apiRequest(`/api/cashier-journals/${id}/post`, "POST", data),
+      apiRequest("POST", `/api/cashier-journals/${id}/post`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}`] });
@@ -205,8 +208,10 @@ export default function CashierJournalFormPage() {
   });
 
   const uploadAttachmentMutation = useMutation({
-    mutationFn: async (data: { journalId: number; attachment: typeof pendingAttachments[0] }) =>
-      apiRequest(`/api/cashier-journals/${data.journalId}/attachments`, "POST", data.attachment),
+    mutationFn: async (data: { journalId: number; attachment: typeof pendingAttachments[0] }) => {
+      const res = await apiRequest("POST", `/api/cashier-journals/${data.journalId}/attachments`, data.attachment);
+      return res.json();
+    },
     onSuccess: (newAttachment: JournalAttachment) => {
       setAttachments((prev) => [...prev, newAttachment]);
       queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}/attachments`] });
@@ -219,7 +224,7 @@ export default function CashierJournalFormPage() {
 
   const deleteAttachmentMutation = useMutation({
     mutationFn: async (attachmentId: number) =>
-      apiRequest(`/api/cashier-journals/${id}/attachments/${attachmentId}`, "DELETE"),
+      apiRequest("DELETE", `/api/cashier-journals/${id}/attachments/${attachmentId}`),
     onSuccess: (_, attachmentId) => {
       setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
       queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}/attachments`] });
