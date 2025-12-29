@@ -788,211 +788,125 @@ export default function OperationsReportsDashboardPage() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تقرير التشغيل الشامل - ${filters.startDate} إلى ${filters.endDate}</title>
+  <title>تقرير التشغيل - ${filters.startDate}</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
+    @page { size: A4; margin: 8mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 20px; background: white; color: #333; font-size: 12px; }
-    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #d4a853; padding-bottom: 20px; }
-    .header .logo { max-height: 80px; margin-bottom: 15px; }
-    .header h1 { font-size: 24px; color: #333; margin-bottom: 10px; }
-    .header .subtitle { color: #666; font-size: 14px; }
-    .header .date-range { background: #f5f5f5; padding: 8px 16px; border-radius: 20px; display: inline-block; margin-top: 10px; }
-    .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
-    .summary-card { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #dee2e6; }
-    .summary-card .value { font-size: 20px; font-weight: bold; color: #d4a853; }
-    .summary-card .label { color: #666; font-size: 11px; margin-top: 5px; }
-    .section { margin-bottom: 25px; page-break-inside: avoid; }
-    .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #d4a853; display: flex; align-items: center; gap: 8px; }
-    .section-title::before { content: ''; width: 4px; height: 20px; background: #d4a853; border-radius: 2px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th, td { border: 1px solid #ddd; padding: 10px 8px; text-align: right; font-size: 11px; }
-    th { background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; font-weight: 600; }
-    tr:nth-child(even) { background: #fafafa; }
-    tr:hover { background: #f5f5f5; }
-    .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 10px; background: white; color: #333; font-size: 9px; line-height: 1.3; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 6px; margin-bottom: 8px; }
+    .header .title { font-size: 14px; font-weight: bold; }
+    .header .info { font-size: 9px; color: #666; }
+    .summary-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .summary-card { flex: 1; background: #f8f9fa; padding: 8px; border-radius: 6px; text-align: center; border: 1px solid #e9ecef; }
+    .summary-card .value { font-size: 14px; font-weight: bold; color: #d4a853; }
+    .summary-card .label { color: #666; font-size: 8px; }
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .section { margin-bottom: 8px; }
+    .section-title { font-size: 10px; font-weight: bold; color: #333; padding: 4px 8px; background: #d4a853; color: white; border-radius: 4px; margin-bottom: 5px; }
+    .kpi-row { display: flex; gap: 5px; margin-bottom: 6px; }
+    .kpi-item { flex: 1; background: #f8f9fa; padding: 5px; border-radius: 4px; text-align: center; border-right: 3px solid #d4a853; }
+    .kpi-item .value { font-size: 11px; font-weight: bold; }
+    .kpi-item .label { font-size: 7px; color: #666; }
+    table { width: 100%; border-collapse: collapse; font-size: 8px; }
+    th, td { border: 1px solid #ddd; padding: 4px 5px; text-align: right; }
+    th { background: #f0f0f0; font-weight: 600; }
+    .status-badge { padding: 1px 5px; border-radius: 8px; font-size: 7px; font-weight: 600; }
     .status-approved { background: #d4edda; color: #155724; }
     .status-pending { background: #fff3cd; color: #856404; }
     .status-rejected { background: #f8d7da; color: #721c24; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
-    .kpi-item { background: #f8f9fa; padding: 12px; border-radius: 8px; border-right: 4px solid #d4a853; }
-    .kpi-item .kpi-value { font-size: 18px; font-weight: bold; color: #333; }
-    .kpi-item .kpi-label { font-size: 10px; color: #666; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 10px; }
-    .footer .company { font-weight: bold; color: #d4a853; }
-    .print-btn { position: fixed; top: 20px; left: 20px; background: #d4a853; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .print-btn:hover { background: #c49843; }
+    .footer { margin-top: 8px; padding-top: 5px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 8px; color: #666; }
+    .print-btn { position: fixed; top: 8px; left: 8px; background: #d4a853; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 10px; z-index: 100; }
     @media print { .print-btn { display: none; } }
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">طباعة / حفظ PDF</button>
+  <button class="print-btn" onclick="window.print()">طباعة</button>
   
   <div class="header">
-    <img src="${logoUrl}" alt="Butter Bakery" class="logo" onerror="this.style.display='none'">
-    <h1>تقرير التشغيل الشامل</h1>
-    <p class="subtitle">منصة بتر بيكري لإدارة العمليات</p>
-    <div class="date-range">
-      <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate} | <strong>الفرع:</strong> ${selectedBranch}
+    <div>
+      <div class="title">تقرير التشغيل الشامل</div>
+      <div class="info">${selectedBranch} | ${filters.startDate} إلى ${filters.endDate}</div>
     </div>
+    <div style="font-size:10px;font-weight:bold;color:#d4a853;">بتر بيكري</div>
   </div>
 
-  <div class="summary-cards">
-    <div class="summary-card">
-      <div class="value">${formatCurrency(report.salesReport.totalSales)}</div>
-      <div class="label">إجمالي المبيعات</div>
-    </div>
-    <div class="summary-card">
-      <div class="value">${formatNumber(report.salesReport.totalTransactions)}</div>
-      <div class="label">إجمالي العمليات</div>
-    </div>
-    <div class="summary-card">
-      <div class="value">${formatNumber(report.productionReport.totalOrders)}</div>
-      <div class="label">أوامر الإنتاج</div>
-    </div>
-    <div class="summary-card">
-      <div class="value">${formatPercent(report.productionReport.qualityPassRate)}</div>
-      <div class="label">نسبة الجودة</div>
-    </div>
+  <div class="summary-row">
+    <div class="summary-card"><div class="value">${formatCurrency(report.salesReport.totalSales)}</div><div class="label">إجمالي المبيعات</div></div>
+    <div class="summary-card"><div class="value">${formatNumber(report.salesReport.totalTransactions)}</div><div class="label">العمليات</div></div>
+    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.totalOrders)}</div><div class="label">أوامر الإنتاج</div></div>
+    <div class="summary-card"><div class="value">${formatPercent(report.productionReport.qualityPassRate)}</div><div class="label">الجودة</div></div>
   </div>
 
-  <div class="section">
-    <h2 class="section-title">تقرير المبيعات</h2>
-    <div class="kpi-grid">
-      <div class="kpi-item">
-        <div class="kpi-value">${formatCurrency(report.salesReport.cashSales)}</div>
-        <div class="kpi-label">المبيعات النقدية</div>
+  <div class="main-grid">
+    <div>
+      <div class="section">
+        <div class="section-title">المبيعات</div>
+        <div class="kpi-row">
+          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.cashSales)}</div><div class="label">نقدي</div></div>
+          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.networkSales)}</div><div class="label">شبكة</div></div>
+          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.deliverySales)}</div><div class="label">توصيل</div></div>
+        </div>
+        <table>
+          <tr><td>متوسط الفاتورة</td><td>${formatCurrency(report.salesReport.averageTicket)}</td></tr>
+          <tr><td>العجز (${report.salesReport.totalShortages})</td><td style="color:#dc3545;">${formatCurrency(report.salesReport.shortageAmount)}</td></tr>
+          <tr><td>الفائض (${report.salesReport.totalSurpluses})</td><td style="color:#28a745;">${formatCurrency(report.salesReport.surplusAmount)}</td></tr>
+        </table>
       </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatCurrency(report.salesReport.networkSales)}</div>
-        <div class="kpi-label">مبيعات الشبكة</div>
+      
+      <div class="section">
+        <div class="section-title">الإنتاج</div>
+        <div class="kpi-row">
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.pendingOrders)}</div><div class="label">انتظار</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.inProgressOrders)}</div><div class="label">تنفيذ</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.completedOrders)}</div><div class="label">مكتملة</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.totalQuantityProduced)}</div><div class="label">الكمية</div></div>
+        </div>
       </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatCurrency(report.salesReport.deliverySales)}</div>
-        <div class="kpi-label">مبيعات التوصيل</div>
-      </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatCurrency(report.salesReport.averageTicket)}</div>
-        <div class="kpi-label">متوسط الفاتورة</div>
+
+      <div class="section">
+        <div class="section-title">الورديات</div>
+        <div class="kpi-row">
+          <div class="kpi-item"><div class="value">${formatNumber(report.shiftsReport.totalShifts)}</div><div class="label">الورديات</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.shiftsReport.totalEmployeeAssignments)}</div><div class="label">التكليفات</div></div>
+          <div class="kpi-item"><div class="value">${report.shiftsReport.totalShifts > 0 ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100) : '100%'}</div><div class="label">التغطية</div></div>
+        </div>
       </div>
     </div>
-    <table>
-      <tr>
-        <th>البند</th>
-        <th>العدد</th>
-        <th>المبلغ</th>
-      </tr>
-      <tr>
-        <td>حالات العجز</td>
-        <td>${report.salesReport.totalShortages}</td>
-        <td style="color: #dc3545;">${formatCurrency(report.salesReport.shortageAmount)}</td>
-      </tr>
-      <tr>
-        <td>حالات الفائض</td>
-        <td>${report.salesReport.totalSurpluses}</td>
-        <td style="color: #28a745;">${formatCurrency(report.salesReport.surplusAmount)}</td>
-      </tr>
-    </table>
-  </div>
+    
+    <div>
+      <div class="section">
+        <div class="section-title">مقارنة الفروع</div>
+        <table>
+          <tr><th>الفرع</th><th>المبيعات</th><th>متوسط</th></tr>
+          ${report.branchComparison.map(b => `<tr><td>${b.branchName}</td><td>${formatCurrency(b.totalSales)}</td><td>${formatCurrency(b.averageTicket)}</td></tr>`).join('')}
+        </table>
+      </div>
 
-  <div class="section">
-    <h2 class="section-title">تقرير الإنتاج</h2>
-    <div class="kpi-grid">
-      <div class="kpi-item">
-        <div class="kpi-value">${formatNumber(report.productionReport.pendingOrders)}</div>
-        <div class="kpi-label">قيد الانتظار</div>
+      ${cashierJournals && cashierJournals.length > 0 ? `
+      <div class="section">
+        <div class="section-title">يوميات الكاشير (${cashierJournals.length})</div>
+        <table>
+          <tr><th>التاريخ</th><th>الفرع</th><th>الكاشير</th><th>المبيعات</th><th>الفرق</th><th>الحالة</th></tr>
+          ${cashierJournals.slice(0, 8).map(j => `
+            <tr>
+              <td>${j.journalDate}</td>
+              <td>${branches?.find(b => b.id === j.branchId)?.name?.substring(0,10) || j.branchId}</td>
+              <td>${j.cashierName?.substring(0,10) || '-'}</td>
+              <td>${formatCurrency(j.totalSales || 0)}</td>
+              <td style="color:${(j.discrepancyAmount || 0) < 0 ? '#dc3545' : '#28a745'};">${formatCurrency(j.discrepancyAmount || 0)}</td>
+              <td><span class="status-badge status-${j.status === 'approved' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${STATUS_LABELS[j.status]?.substring(0,6) || j.status}</span></td>
+            </tr>
+          `).join('')}
+        </table>
       </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatNumber(report.productionReport.inProgressOrders)}</div>
-        <div class="kpi-label">قيد التنفيذ</div>
-      </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatNumber(report.productionReport.completedOrders)}</div>
-        <div class="kpi-label">مكتملة</div>
-      </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatNumber(report.productionReport.totalQuantityProduced)}</div>
-        <div class="kpi-label">الكمية المنتجة</div>
-      </div>
+      ` : ''}
     </div>
   </div>
-
-  <div class="section">
-    <h2 class="section-title">تقرير الورديات</h2>
-    <div class="kpi-grid">
-      <div class="kpi-item">
-        <div class="kpi-value">${formatNumber(report.shiftsReport.totalShifts)}</div>
-        <div class="kpi-label">إجمالي الورديات</div>
-      </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatNumber(report.shiftsReport.shiftsWithEmployees)}</div>
-        <div class="kpi-label">الورديات مع موظفين</div>
-      </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${formatNumber(report.shiftsReport.totalEmployeeAssignments)}</div>
-        <div class="kpi-label">إجمالي التكليفات</div>
-      </div>
-      <div class="kpi-item">
-        <div class="kpi-value">${report.shiftsReport.totalShifts > 0 ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100) : '100%'}</div>
-        <div class="kpi-label">نسبة التغطية</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2 class="section-title">مقارنة الفروع</h2>
-    <table>
-      <tr>
-        <th>الفرع</th>
-        <th>المبيعات</th>
-        <th>الأوامر</th>
-        <th>نسبة الجودة</th>
-        <th>متوسط الفاتورة</th>
-      </tr>
-      ${report.branchComparison.map(b => `
-        <tr>
-          <td><strong>${b.branchName}</strong></td>
-          <td>${formatCurrency(b.totalSales)}</td>
-          <td>${formatNumber(b.totalOrders)}</td>
-          <td>${formatPercent(b.qualityPassRate)}</td>
-          <td>${formatCurrency(b.averageTicket)}</td>
-        </tr>
-      `).join('')}
-    </table>
-  </div>
-
-  ${cashierJournals && cashierJournals.length > 0 ? `
-  <div class="section">
-    <h2 class="section-title">يوميات الكاشير الأخيرة</h2>
-    <table>
-      <tr>
-        <th>التاريخ</th>
-        <th>الفرع</th>
-        <th>الكاشير</th>
-        <th>إجمالي المبيعات</th>
-        <th>العجز/الفائض</th>
-        <th>الحالة</th>
-      </tr>
-      ${cashierJournals.slice(0, 10).map(j => `
-        <tr>
-          <td>${j.journalDate}</td>
-          <td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td>
-          <td>${j.cashierName}</td>
-          <td>${formatCurrency(j.totalSales || 0)}</td>
-          <td style="color: ${(j.discrepancyAmount || 0) < 0 ? '#dc3545' : (j.discrepancyAmount || 0) > 0 ? '#28a745' : 'inherit'};">
-            ${formatCurrency(j.discrepancyAmount || 0)}
-          </td>
-          <td><span class="status-badge status-${j.status === 'approved' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${STATUS_LABELS[j.status] || j.status}</span></td>
-        </tr>
-      `).join('')}
-    </table>
-  </div>
-  ` : ''}
 
   <div class="footer">
-    <p class="company">بتر بيكري - Butter Bakery</p>
-    <p>تم إنشاء هذا التقرير بتاريخ: ${new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+    <span>بتر بيكري - Butter Bakery</span>
+    <span>${new Date().toLocaleDateString('ar-SA')}</span>
   </div>
 </body>
 </html>`;
