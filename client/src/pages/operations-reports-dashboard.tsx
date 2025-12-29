@@ -255,12 +255,12 @@ export default function OperationsReportsDashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label>الفرع</Label>
-                <Select value={filters.branchId} onValueChange={(v) => setFilters({ ...filters, branchId: v })}>
+                <Select value={filters.branchId || "all"} onValueChange={(v) => setFilters({ ...filters, branchId: v === "all" ? "" : v })}>
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">جميع الفروع</SelectItem>
+                    <SelectItem value="all">جميع الفروع</SelectItem>
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
