@@ -127,7 +127,9 @@ function KPICard({
   trendLabel,
   color = "text-primary",
   bgColor = "bg-primary/10",
-  onClick
+  onClick,
+  subtitle,
+  progress
 }: { 
   title: string; 
   value: string | number; 
@@ -137,18 +139,26 @@ function KPICard({
   color?: string;
   bgColor?: string;
   onClick?: () => void;
+  subtitle?: string;
+  progress?: number;
 }) {
   return (
     <Card 
       data-testid={`kpi-card-${title.replace(/\s+/g, '-')}`}
-      className={onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}
+      className={`relative overflow-hidden transition-all duration-200 ${onClick ? "cursor-pointer hover:shadow-lg hover:-translate-y-0.5" : "hover:shadow-sm"}`}
       onClick={onClick}
     >
+      {progress !== undefined && (
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
+          <div className={`h-full transition-all duration-500 ${color?.includes('green') ? 'bg-green-500' : color?.includes('red') ? 'bg-red-500' : color?.includes('amber') ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
+        </div>
+      )}
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <p className="text-sm text-muted-foreground mb-1">{title}</p>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+            <p className="text-xs text-muted-foreground mb-0.5">{title}</p>
+            <p className={`text-xl font-bold ${color}`}>{value}</p>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
             {trendLabel && (
               <div className="flex items-center gap-1 mt-1 text-xs">
                 {trend === "up" && <TrendingUp className="w-3 h-3 text-green-500" />}
@@ -159,12 +169,81 @@ function KPICard({
               </div>
             )}
           </div>
-          <div className={`p-2 rounded-lg ${bgColor}`}>
+          <div className={`p-2.5 rounded-xl ${bgColor} shadow-sm`}>
             <Icon className={`w-5 h-5 ${color}`} />
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function AlertBanner({ alerts }: { alerts: { type: 'warning' | 'danger' | 'info'; message: string; count?: number }[] }) {
+  if (!alerts || alerts.length === 0) return null;
+  
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      {alerts.map((alert, i) => (
+        <div 
+          key={i} 
+          className={`flex items-center gap-3 p-3 rounded-lg border ${
+            alert.type === 'danger' ? 'bg-red-50 border-red-200 text-red-800' :
+            alert.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+            'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
+          {alert.type === 'danger' && <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />}
+          {alert.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />}
+          {alert.type === 'info' && <Activity className="w-5 h-5 text-blue-600 flex-shrink-0" />}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{alert.message}</p>
+          </div>
+          {alert.count !== undefined && (
+            <Badge variant={alert.type === 'danger' ? 'destructive' : 'secondary'} className="flex-shrink-0">
+              {alert.count}
+            </Badge>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QuickStatsRow({ report, cashierJournals }: { report: OperationsReport; cashierJournals: CashierSalesJournal[] }) {
+  const shortageCount = cashierJournals.filter(j => j.discrepancyStatus === 'shortage').length;
+  const pendingApproval = cashierJournals.filter(j => j.status === 'submitted').length;
+  
+  const formatCurrency = (amount: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
+  
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+      <div className="text-center">
+        <p className="text-2xl font-bold text-green-400">{formatCurrency(report.salesReport.totalSales)}</p>
+        <p className="text-xs text-slate-400">إجمالي المبيعات</p>
+      </div>
+      <div className="text-center">
+        <p className="text-2xl font-bold text-blue-400">{report.salesReport.totalTransactions}</p>
+        <p className="text-xs text-slate-400">العمليات</p>
+      </div>
+      <div className="text-center">
+        <p className={`text-2xl font-bold ${report.productionReport.qualityPassRate >= 90 ? 'text-green-400' : 'text-amber-400'}`}>
+          {report.productionReport.qualityPassRate.toFixed(0)}%
+        </p>
+        <p className="text-xs text-slate-400">نسبة الجودة</p>
+      </div>
+      <div className="text-center">
+        <p className={`text-2xl font-bold ${shortageCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{shortageCount}</p>
+        <p className="text-xs text-slate-400">حالات عجز</p>
+      </div>
+      <div className="text-center">
+        <p className={`text-2xl font-bold ${pendingApproval > 0 ? 'text-amber-400' : 'text-green-400'}`}>{pendingApproval}</p>
+        <p className="text-xs text-slate-400">بانتظار الموافقة</p>
+      </div>
+      <div className="text-center">
+        <p className="text-2xl font-bold text-purple-400">{cashierJournals.length}</p>
+        <p className="text-xs text-slate-400">يوميات الكاشير</p>
+      </div>
+    </div>
   );
 }
 
@@ -1070,6 +1149,20 @@ export default function OperationsReportsDashboardPage() {
             ))}
           </div>
         ) : report ? (
+          <>
+            <QuickStatsRow report={report} cashierJournals={filteredCashierJournals} />
+            
+            <AlertBanner alerts={[
+              ...(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length > 0 
+                ? [{ type: 'danger' as const, message: 'يوميات بها حالات عجز تحتاج مراجعة', count: filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length }] 
+                : []),
+              ...(filteredCashierJournals.filter(j => j.status === 'submitted').length > 0 
+                ? [{ type: 'warning' as const, message: 'يوميات بانتظار الموافقة', count: filteredCashierJournals.filter(j => j.status === 'submitted').length }] 
+                : []),
+              ...(report.productionReport.qualityPassRate < 90 
+                ? [{ type: 'warning' as const, message: `نسبة الجودة ${report.productionReport.qualityPassRate.toFixed(0)}% أقل من المستهدف 90%` }] 
+                : []),
+            ]} />
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className={`grid w-full max-w-4xl`} style={{ gridTemplateColumns: `repeat(${Math.min(visibleTabs.length, 6)}, 1fr)` }}>
               {visibleTabs.includes("overview") && (
@@ -1456,16 +1549,147 @@ export default function OperationsReportsDashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 <KPICard title="إجمالي اليوميات" value={formatNumber(filteredCashierJournals.length)} icon={Receipt} color="text-blue-600" bgColor="bg-blue-100" />
                 <KPICard title="إجمالي المبيعات" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0))}
                   icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
+                <KPICard title="النقدي" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0))}
+                  icon={Wallet} color="text-emerald-600" bgColor="bg-emerald-100" />
+                <KPICard title="الشبكة" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0))}
+                  icon={CreditCard} color="text-indigo-600" bgColor="bg-indigo-100" />
                 <KPICard title="حالات العجز"
                   value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length)}
-                  icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" />
+                  icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" 
+                  subtitle={formatCurrency(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0))} />
                 <KPICard title="حالات الفائض"
                   value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').length)}
-                  icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100" />
+                  icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100"
+                  subtitle={formatCurrency(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0))} />
+                <KPICard title="بانتظار الموافقة"
+                  value={formatNumber(filteredCashierJournals.filter(j => j.status === 'submitted').length)}
+                  icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
+                <KPICard title="معتمدة"
+                  value={formatNumber(filteredCashierJournals.filter(j => j.status === 'approved').length)}
+                  icon={CheckCircle} color="text-green-600" bgColor="bg-green-100"
+                  progress={filteredCashierJournals.length > 0 ? (filteredCashierJournals.filter(j => j.status === 'approved').length / filteredCashierJournals.length) * 100 : 0} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Users className="w-4 h-4 text-green-600" />
+                      أفضل الكاشيرين (حسب المبيعات)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {(() => {
+                        const cashierStats = filteredCashierJournals.reduce((acc, j) => {
+                          const name = j.cashierName || 'غير معروف';
+                          if (!acc[name]) acc[name] = { name, sales: 0, count: 0 };
+                          acc[name].sales += (j.totalSales || 0);
+                          acc[name].count += 1;
+                          return acc;
+                        }, {} as Record<string, { name: string; sales: number; count: number }>);
+                        return Object.values(cashierStats)
+                          .sort((a, b) => b.sales - a.sales)
+                          .slice(0, 5)
+                          .map((c, i) => (
+                            <div key={c.name} className="flex items-center justify-between p-2 rounded-lg bg-gradient-to-l from-green-50 to-white">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-amber-400 text-white' : 'bg-gray-200 text-gray-600'}`}>{i + 1}</span>
+                                <span className="font-medium text-sm">{c.name}</span>
+                                <Badge variant="secondary" className="text-xs">{c.count} يومية</Badge>
+                              </div>
+                              <span className="text-sm font-bold text-green-600">{formatCurrency(c.sales)}</span>
+                            </div>
+                          ));
+                      })()}
+                      {filteredCashierJournals.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد بيانات</p>}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-purple-600" />
+                      أداء الورديات
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {(() => {
+                        const shiftStats = filteredCashierJournals.reduce((acc, j) => {
+                          const shift = j.shiftType || 'غير محدد';
+                          const label = shift === 'morning' ? 'صباحي' : shift === 'evening' ? 'مسائي' : shift === 'night' ? 'ليلي' : shift;
+                          if (!acc[shift]) acc[shift] = { label, sales: 0, count: 0 };
+                          acc[shift].sales += (j.totalSales || 0);
+                          acc[shift].count += 1;
+                          return acc;
+                        }, {} as Record<string, { label: string; sales: number; count: number }>);
+                        return Object.values(shiftStats)
+                          .sort((a, b) => b.sales - a.sales)
+                          .map((s, i) => (
+                            <div key={s.label} className="flex items-center justify-between p-2 rounded-lg bg-gradient-to-l from-purple-50 to-white">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-purple-500" />
+                                <span className="font-medium text-sm">{s.label}</span>
+                                <Badge variant="secondary" className="text-xs">{s.count} يومية</Badge>
+                              </div>
+                              <span className="text-sm font-bold text-purple-600">{formatCurrency(s.sales)}</span>
+                            </div>
+                          ));
+                      })()}
+                      {filteredCashierJournals.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد بيانات</p>}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                      كاشيرين يحتاجون مراجعة
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {(() => {
+                        const cashierIssues = filteredCashierJournals.reduce((acc, j) => {
+                          const name = j.cashierName || 'غير معروف';
+                          if (!acc[name]) acc[name] = { name, shortages: 0, shortageAmount: 0 };
+                          if (j.discrepancyStatus === 'shortage') {
+                            acc[name].shortages += 1;
+                            acc[name].shortageAmount += Math.abs(j.discrepancyAmount || 0);
+                          }
+                          return acc;
+                        }, {} as Record<string, { name: string; shortages: number; shortageAmount: number }>);
+                        return Object.values(cashierIssues)
+                          .filter(c => c.shortages > 0)
+                          .sort((a, b) => b.shortageAmount - a.shortageAmount)
+                          .slice(0, 5)
+                          .map((c) => (
+                            <div key={c.name} className="flex items-center justify-between p-2 rounded-lg bg-gradient-to-l from-red-50 to-white">
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-red-500" />
+                                <span className="font-medium text-sm">{c.name}</span>
+                                <Badge variant="destructive" className="text-xs">{c.shortages} عجز</Badge>
+                              </div>
+                              <span className="text-sm font-bold text-red-600">-{formatCurrency(c.shortageAmount)}</span>
+                            </div>
+                          ));
+                      })()}
+                      {filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length === 0 && 
+                        <div className="text-center py-4">
+                          <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground">لا يوجد عجز في الفترة المحددة</p>
+                        </div>
+                      }
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
               <Card>
@@ -1593,6 +1817,7 @@ export default function OperationsReportsDashboardPage() {
               </Card>
             </TabsContent>
           </Tabs>
+          </>
         ) : (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
