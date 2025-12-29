@@ -170,160 +170,449 @@ function KPICard({
 
 function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJournal; branches?: Branch[] }) {
   const branchName = branches?.find(b => b.id === journal.branchId)?.name || journal.branchId;
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
   const { data: attachments } = useQuery<JournalAttachment[]>({
     queryKey: [`/api/cashier-journals/${journal.id}/attachments`],
   });
 
+  const { data: paymentBreakdowns } = useQuery<{ paymentMethod: string; amount: number; transactionCount: number }[]>({
+    queryKey: [`/api/cashier-journals/${journal.id}/payment-breakdowns`],
+  });
+
+  const handleExportJournalPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير');
+      return;
+    }
+
+    const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    };
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تقرير يومية الكاشير - ${journal.journalDate}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 30px; background: white; color: #333; font-size: 13px; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #d4a853; padding-bottom: 20px; }
+    .header .logo { max-height: 70px; margin-bottom: 10px; }
+    .header h1 { font-size: 22px; color: #333; margin-bottom: 5px; }
+    .header .subtitle { color: #666; font-size: 14px; }
+    .header .journal-date { background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; margin-top: 10px; font-weight: bold; }
+    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+    .info-box { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #e9ecef; }
+    .info-box .label { color: #666; font-size: 11px; margin-bottom: 5px; }
+    .info-box .value { font-size: 16px; font-weight: bold; color: #333; }
+    .section { margin-bottom: 25px; page-break-inside: avoid; }
+    .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; padding: 10px 15px; background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    th, td { border: 1px solid #ddd; padding: 12px 10px; text-align: right; }
+    th { background: #f5f5f5; font-weight: 600; color: #333; }
+    tr:nth-child(even) { background: #fafafa; }
+    .amount { font-weight: bold; }
+    .amount.positive { color: #28a745; }
+    .amount.negative { color: #dc3545; }
+    .status-badge { padding: 4px 12px; border-radius: 15px; font-size: 11px; font-weight: 600; display: inline-block; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .status-balanced { background: #d4edda; color: #155724; }
+    .status-shortage { background: #f8d7da; color: #721c24; }
+    .status-surplus { background: #cce5ff; color: #004085; }
+    .summary-row { background: #f8f9fa !important; font-weight: bold; }
+    .reconciliation-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 10px; margin-top: 15px; }
+    .reconciliation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .reconciliation-item { display: flex; justify-content: space-between; padding: 10px; background: white; border-radius: 8px; border: 1px solid #dee2e6; }
+    .reconciliation-item .label { color: #666; }
+    .reconciliation-item .value { font-weight: bold; }
+    .discrepancy-result { text-align: center; padding: 20px; background: white; border-radius: 10px; margin-top: 15px; border: 2px solid #d4a853; }
+    .discrepancy-result .amount { font-size: 24px; }
+    .notes-box { background: #fffbeb; padding: 15px; border-radius: 10px; border: 1px solid #fbbf24; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #d4a853; display: flex; justify-content: space-between; align-items: center; }
+    .footer .company { font-weight: bold; color: #d4a853; }
+    .footer .timestamp { color: #666; font-size: 11px; }
+    .signature-area { margin-top: 30px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; }
+    .signature-box { border-top: 2px solid #333; padding-top: 10px; text-align: center; }
+    .signature-box .title { font-weight: bold; margin-bottom: 40px; }
+    .print-btn { position: fixed; top: 20px; left: 20px; background: #d4a853; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .print-btn:hover { background: #c49843; }
+    @media print { .print-btn { display: none; } .signature-area { page-break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">طباعة / حفظ PDF</button>
+  
+  <div class="header">
+    <img src="${logoUrl}" alt="Butter Bakery" class="logo" onerror="this.style.display='none'">
+    <h1>تقرير يومية الكاشير</h1>
+    <p class="subtitle">بتر بيكري - Butter Bakery</p>
+    <div class="journal-date">${formatDate(journal.journalDate)}</div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="label">الفرع</div>
+      <div class="value">${branchName}</div>
+    </div>
+    <div class="info-box">
+      <div class="label">اسم الكاشير</div>
+      <div class="value">${journal.cashierName}</div>
+    </div>
+    <div class="info-box">
+      <div class="label">الوردية</div>
+      <div class="value">${journal.shiftType || '-'}</div>
+    </div>
+    <div class="info-box">
+      <div class="label">الحالة</div>
+      <div class="value">
+        <span class="status-badge status-${journal.status === 'approved' ? 'approved' : journal.status === 'rejected' ? 'rejected' : 'pending'}">
+          ${STATUS_LABELS[journal.status] || journal.status}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">ملخص المبيعات</div>
+    <table>
+      <tr>
+        <th>البند</th>
+        <th>المبلغ (ر.س)</th>
+      </tr>
+      <tr>
+        <td>إجمالي المبيعات</td>
+        <td class="amount positive">${(journal.totalSales || 0).toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr>
+        <td>المبيعات النقدية</td>
+        <td class="amount">${(journal.cashTotal || 0).toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr>
+        <td>مبيعات الشبكة (بطاقات)</td>
+        <td class="amount">${(journal.networkTotal || 0).toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr>
+        <td>مبيعات التوصيل</td>
+        <td class="amount">${(journal.deliveryTotal || 0).toLocaleString('ar-SA')}</td>
+      </tr>
+      <tr class="summary-row">
+        <td>عدد العمليات</td>
+        <td>${journal.transactionCount || 0}</td>
+      </tr>
+      <tr class="summary-row">
+        <td>عدد العملاء</td>
+        <td>${journal.customerCount || 0}</td>
+      </tr>
+      <tr class="summary-row">
+        <td>متوسط قيمة الفاتورة</td>
+        <td>${(journal.averageTicket || 0).toFixed(2)} ر.س</td>
+      </tr>
+    </table>
+  </div>
+
+  ${paymentBreakdowns && paymentBreakdowns.length > 0 ? `
+  <div class="section">
+    <div class="section-title">تفصيل طرق الدفع</div>
+    <table>
+      <tr>
+        <th>طريقة الدفع</th>
+        <th>المبلغ (ر.س)</th>
+        <th>عدد العمليات</th>
+      </tr>
+      ${paymentBreakdowns.map(p => `
+        <tr>
+          <td>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</td>
+          <td class="amount">${(p.amount || 0).toLocaleString('ar-SA')}</td>
+          <td>${p.transactionCount || 0}</td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+  ` : ''}
+
+  <div class="section">
+    <div class="section-title">مطابقة الصندوق</div>
+    <div class="reconciliation-box">
+      <div class="reconciliation-grid">
+        <div class="reconciliation-item">
+          <span class="label">رصيد الافتتاح</span>
+          <span class="value">${(journal.openingBalance || 0).toLocaleString('ar-SA')} ر.س</span>
+        </div>
+        <div class="reconciliation-item">
+          <span class="label">المبيعات النقدية</span>
+          <span class="value">${(journal.cashTotal || 0).toLocaleString('ar-SA')} ر.س</span>
+        </div>
+        <div class="reconciliation-item">
+          <span class="label">المتوقع في الصندوق</span>
+          <span class="value">${(journal.expectedCash || 0).toLocaleString('ar-SA')} ر.س</span>
+        </div>
+        <div class="reconciliation-item">
+          <span class="label">الفعلي في الصندوق</span>
+          <span class="value">${(journal.actualCashDrawer || 0).toLocaleString('ar-SA')} ر.س</span>
+        </div>
+      </div>
+      <div class="discrepancy-result">
+        <p style="margin-bottom: 10px;">الفرق (العجز/الفائض)</p>
+        <span class="amount ${(journal.discrepancyAmount || 0) < 0 ? 'negative' : (journal.discrepancyAmount || 0) > 0 ? 'positive' : ''}">
+          ${(journal.discrepancyAmount || 0).toLocaleString('ar-SA')} ر.س
+        </span>
+        <span class="status-badge status-${journal.discrepancyStatus === 'balanced' ? 'balanced' : journal.discrepancyStatus === 'shortage' ? 'shortage' : 'surplus'}" style="margin-right: 10px;">
+          ${DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  ${journal.notes ? `
+  <div class="section">
+    <div class="section-title">ملاحظات</div>
+    <div class="notes-box">
+      <p>${journal.notes}</p>
+    </div>
+  </div>
+  ` : ''}
+
+  <div class="signature-area">
+    <div class="signature-box">
+      <div class="title">توقيع الكاشير</div>
+      <p>${journal.cashierName}</p>
+    </div>
+    <div class="signature-box">
+      <div class="title">توقيع المدير</div>
+      <p>________________</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="company">بتر بيكري - Butter Bakery</div>
+    <div class="timestamp">تم إنشاء هذا التقرير بتاريخ: ${new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+  </div>
+</body>
+</html>`;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1" data-testid={`view-journal-${journal.id}`}>
-          <Eye className="w-4 h-4" />
-          عرض
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Receipt className="w-5 h-5" />
-            تفاصيل يومية الكاشير - {journal.journalDate}
-          </DialogTitle>
-        </DialogHeader>
-        <ScrollArea className="max-h-[70vh]">
-          <div className="space-y-6 p-2">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground">الفرع</p>
-                <p className="font-semibold">{branchName}</p>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground">اسم الكاشير</p>
-                <p className="font-semibold">{journal.cashierName}</p>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground">الوردية</p>
-                <p className="font-semibold">{journal.shiftType || "-"}</p>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground">الحالة</p>
-                <Badge variant={journal.status === "approved" ? "default" : journal.status === "rejected" ? "destructive" : "secondary"}>
-                  {STATUS_LABELS[journal.status] || journal.status}
-                </Badge>
-              </div>
+    <>
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="sm" className="gap-1" data-testid={`view-journal-${journal.id}`}>
+            <Eye className="w-4 h-4" />
+            عرض
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-amber-600" />
+                تفاصيل يومية الكاشير - {journal.journalDate}
+              </DialogTitle>
+              <Button onClick={handleExportJournalPDF} className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid={`export-journal-pdf-${journal.id}`}>
+                <FileDown className="w-4 h-4" />
+                تصدير PDF
+              </Button>
             </div>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">ملخص المبيعات</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">إجمالي المبيعات</span>
-                    <span className="font-bold text-green-600">{journal.totalSales?.toLocaleString('ar-SA')} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">المبيعات النقدية</span>
-                    <span className="font-semibold">{journal.cashTotal?.toLocaleString('ar-SA')} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">مبيعات الشبكة</span>
-                    <span className="font-semibold">{journal.networkTotal?.toLocaleString('ar-SA')} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">مبيعات التوصيل</span>
-                    <span className="font-semibold">{journal.deliveryTotal?.toLocaleString('ar-SA')} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">عدد العمليات</span>
-                    <span className="font-semibold">{journal.transactionCount}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">متوسط الفاتورة</span>
-                    <span className="font-semibold">{journal.averageTicket?.toFixed(2)} ر.س</span>
-                  </div>
+          </DialogHeader>
+          <ScrollArea className="max-h-[70vh]">
+            <div className="space-y-6 p-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg border border-amber-200">
+                  <p className="text-xs text-muted-foreground">الفرع</p>
+                  <p className="font-semibold">{branchName}</p>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">مطابقة الصندوق</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">رصيد الافتتاح</span>
-                    <span className="font-semibold">{journal.openingBalance?.toLocaleString('ar-SA')} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">المتوقع في الصندوق</span>
-                    <span className="font-semibold">{journal.expectedCash?.toLocaleString('ar-SA')} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">الفعلي في الصندوق</span>
-                    <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('ar-SA')} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 border-b">
-                    <span className="text-muted-foreground">الفرق</span>
-                    <span className={`font-bold ${journal.discrepancyAmount && journal.discrepancyAmount < 0 ? 'text-red-600' : journal.discrepancyAmount && journal.discrepancyAmount > 0 ? 'text-green-600' : ''}`}>
-                      {journal.discrepancyAmount?.toLocaleString('ar-SA')} ر.س
-                      <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mr-2">
-                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
-                      </Badge>
-                    </span>
-                  </div>
+                <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                  <p className="text-xs text-muted-foreground">اسم الكاشير</p>
+                  <p className="font-semibold">{journal.cashierName}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="p-3 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200">
+                  <p className="text-xs text-muted-foreground">الوردية</p>
+                  <p className="font-semibold">{journal.shiftType || "-"}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200">
+                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <Badge variant={journal.status === "approved" ? "default" : journal.status === "rejected" ? "destructive" : "secondary"}>
+                    {STATUS_LABELS[journal.status] || journal.status}
+                  </Badge>
+                </div>
+              </div>
 
-            {attachments && attachments.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
+              <Card className="border-green-200">
+                <CardHeader className="pb-2 bg-gradient-to-r from-green-50 to-white">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Image className="w-4 h-4" />
-                    المرفقات ({attachments.length})
+                    <DollarSign className="w-4 h-4 text-green-600" />
+                    ملخص المبيعات
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {attachments.map((att) => (
-                      <div key={att.id} className="border rounded-lg p-2">
-                        <div className="aspect-video bg-muted rounded flex items-center justify-center overflow-hidden">
-                          {att.fileData ? (
-                            <img 
-                              src={att.fileData} 
-                              alt={att.fileName}
-                              className="object-contain w-full h-full"
-                            />
-                          ) : (
-                            <FileText className="w-8 h-8 text-muted-foreground" />
-                          )}
-                        </div>
-                        <p className="text-xs mt-1 truncate">{att.fileName}</p>
-                        <p className="text-xs text-muted-foreground">{att.attachmentType}</p>
-                      </div>
-                    ))}
+                    <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                      <span className="text-muted-foreground">إجمالي المبيعات</span>
+                      <span className="font-bold text-green-600 text-lg">{journal.totalSales?.toLocaleString('ar-SA')} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 border-b">
+                      <span className="text-muted-foreground">المبيعات النقدية</span>
+                      <span className="font-semibold">{journal.cashTotal?.toLocaleString('ar-SA')} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 border-b">
+                      <span className="text-muted-foreground">مبيعات الشبكة</span>
+                      <span className="font-semibold">{journal.networkTotal?.toLocaleString('ar-SA')} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 border-b">
+                      <span className="text-muted-foreground">مبيعات التوصيل</span>
+                      <span className="font-semibold">{journal.deliveryTotal?.toLocaleString('ar-SA')} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 border-b">
+                      <span className="text-muted-foreground">عدد العمليات</span>
+                      <span className="font-semibold">{journal.transactionCount}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 border-b">
+                      <span className="text-muted-foreground">متوسط الفاتورة</span>
+                      <span className="font-semibold">{journal.averageTicket?.toFixed(2)} ر.س</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            )}
 
-            {journal.notes && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">ملاحظات</CardTitle>
+              <Card className="border-blue-200">
+                <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-white">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-blue-600" />
+                    مطابقة الصندوق
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground">{journal.notes}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
+                      <span className="text-xs text-muted-foreground">رصيد الافتتاح</span>
+                      <span className="font-semibold">{journal.openingBalance?.toLocaleString('ar-SA')} ر.س</span>
+                    </div>
+                    <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
+                      <span className="text-xs text-muted-foreground">المتوقع في الصندوق</span>
+                      <span className="font-semibold">{journal.expectedCash?.toLocaleString('ar-SA')} ر.س</span>
+                    </div>
+                    <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
+                      <span className="text-xs text-muted-foreground">الفعلي في الصندوق</span>
+                      <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('ar-SA')} ر.س</span>
+                    </div>
+                    <div className={`flex flex-col p-3 rounded-lg ${journal.discrepancyStatus === 'balanced' ? 'bg-green-50 border border-green-200' : journal.discrepancyStatus === 'shortage' ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}`}>
+                      <span className="text-xs text-muted-foreground">الفرق</span>
+                      <span className={`font-bold ${journal.discrepancyAmount && journal.discrepancyAmount < 0 ? 'text-red-600' : journal.discrepancyAmount && journal.discrepancyAmount > 0 ? 'text-green-600' : ''}`}>
+                        {journal.discrepancyAmount?.toLocaleString('ar-SA')} ر.س
+                      </span>
+                      <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mt-1 w-fit">
+                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                      </Badge>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-            )}
-          </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+
+              {attachments && attachments.length > 0 && (
+                <Card className="border-purple-200">
+                  <CardHeader className="pb-2 bg-gradient-to-r from-purple-50 to-white">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Image className="w-4 h-4 text-purple-600" />
+                      المرفقات والصور ({attachments.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {attachments.map((att) => (
+                        <div 
+                          key={att.id} 
+                          className="border rounded-lg p-2 cursor-pointer hover:shadow-lg transition-shadow hover:border-purple-400"
+                          onClick={() => att.fileData && setSelectedImage(att.fileData)}
+                        >
+                          <div className="aspect-video bg-muted rounded flex items-center justify-center overflow-hidden relative group">
+                            {att.fileData ? (
+                              <>
+                                <img 
+                                  src={att.fileData} 
+                                  alt={att.fileName}
+                                  className="object-cover w-full h-full"
+                                />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Eye className="w-8 h-8 text-white" />
+                                </div>
+                              </>
+                            ) : (
+                              <FileText className="w-8 h-8 text-muted-foreground" />
+                            )}
+                          </div>
+                          <p className="text-xs mt-2 truncate font-medium">{att.fileName}</p>
+                          <p className="text-xs text-muted-foreground">{att.attachmentType}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {journal.notes && (
+                <Card className="border-amber-200">
+                  <CardHeader className="pb-2 bg-gradient-to-r from-amber-50 to-white">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-amber-600" />
+                      ملاحظات
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground bg-amber-50 p-3 rounded-lg">{journal.notes}</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {selectedImage && (
+        <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
+          <DialogContent className="max-w-5xl max-h-[95vh] p-2">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Image className="w-5 h-5" />
+                عرض الصورة
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center justify-center bg-black/5 rounded-lg p-2">
+              <img 
+                src={selectedImage} 
+                alt="صورة مكبرة"
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              />
+            </div>
+            <div className="flex justify-center gap-2 mt-2">
+              <Button variant="outline" onClick={() => setSelectedImage(null)}>
+                إغلاق
+              </Button>
+              <Button onClick={() => {
+                const link = document.createElement('a');
+                link.href = selectedImage;
+                link.download = `مرفق_${journal.journalDate}.png`;
+                link.click();
+              }} className="gap-2">
+                <Download className="w-4 h-4" />
+                تحميل الصورة
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
 
