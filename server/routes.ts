@@ -2302,7 +2302,7 @@ export async function registerRoutes(
   // Create new cashier journal
   app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
     try {
-      const { paymentBreakdowns, ...journalData } = req.body;
+      const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
       
       // Server-side validation: payment breakdown totals must match total sales
       if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
@@ -2332,12 +2332,24 @@ export async function registerRoutes(
         await storage.createPaymentBreakdowns(breakdownsWithJournalId);
       }
       
-      // Get the complete journal with breakdowns
-      const [createdBreakdowns] = await Promise.all([
+      // Save cashier signature if provided
+      if (signatureData && signerName) {
+        await storage.createCashierSignature({
+          journalId: journal.id,
+          signatureType: 'cashier',
+          signerName: signerName,
+          signatureData: signatureData,
+          signerId: req.currentUser?.id,
+        });
+      }
+      
+      // Get the complete journal with breakdowns and signatures
+      const [createdBreakdowns, signatures] = await Promise.all([
         storage.getPaymentBreakdowns(journal.id),
+        storage.getCashierSignatures(journal.id),
       ]);
       
-      res.status(201).json({ ...journal, paymentBreakdowns: createdBreakdowns });
+      res.status(201).json({ ...journal, paymentBreakdowns: createdBreakdowns, signatures });
     } catch (error) {
       console.error("Error creating cashier journal:", error);
       res.status(500).json({ error: "Failed to create cashier journal" });
@@ -2345,10 +2357,10 @@ export async function registerRoutes(
   });
 
   // Update cashier journal
-  app.patch("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req, res) => {
+  app.patch("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const { paymentBreakdowns, ...journalData } = req.body;
+      const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
       
       // Check if journal is already submitted/approved/posted
       const existing = await storage.getCashierJournal(id);
@@ -2382,8 +2394,27 @@ export async function registerRoutes(
         }
       }
       
-      const updatedBreakdowns = await storage.getPaymentBreakdowns(id);
-      res.json({ ...journal, paymentBreakdowns: updatedBreakdowns });
+      // Update/create cashier signature if provided
+      if (signatureData && signerName) {
+        // Check if cashier signature already exists
+        const existingSigs = await storage.getCashierSignatures(id);
+        const existingCashierSig = existingSigs.find(s => s.signatureType === 'cashier');
+        if (!existingCashierSig) {
+          await storage.createCashierSignature({
+            journalId: id,
+            signatureType: 'cashier',
+            signerName: signerName,
+            signatureData: signatureData,
+            signerId: req.currentUser?.id,
+          });
+        }
+      }
+      
+      const [updatedBreakdowns, signatures] = await Promise.all([
+        storage.getPaymentBreakdowns(id),
+        storage.getCashierSignatures(id),
+      ]);
+      res.json({ ...journal, paymentBreakdowns: updatedBreakdowns, signatures });
     } catch (error) {
       console.error("Error updating cashier journal:", error);
       res.status(500).json({ error: "Failed to update cashier journal" });
