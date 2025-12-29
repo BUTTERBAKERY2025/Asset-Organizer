@@ -180,6 +180,10 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
     queryKey: [`/api/cashier-journals/${journal.id}/payment-breakdowns`],
   });
 
+  const { data: journalDetails } = useQuery<{ signatures?: { signatureType: string; signerName: string; signatureData: string }[] }>({
+    queryKey: [`/api/cashier-journals/${journal.id}`],
+  });
+
   const handleExportJournalPDF = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -385,11 +389,24 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
   <div class="signature-area">
     <div class="signature-box">
       <div class="title">توقيع الكاشير</div>
+      ${(() => {
+        const cashierSig = journalDetails?.signatures?.find(s => s.signatureType === 'cashier');
+        if (cashierSig?.signatureData) {
+          return `<img src="${cashierSig.signatureData}" alt="توقيع الكاشير" style="max-width: 200px; max-height: 80px; margin: 10px auto; display: block;" />`;
+        }
+        return '<p style="margin-top: 40px;">________________</p>';
+      })()}
       <p>${journal.cashierName}</p>
     </div>
     <div class="signature-box">
       <div class="title">توقيع المدير</div>
-      <p>________________</p>
+      ${(() => {
+        const managerSig = journalDetails?.signatures?.find(s => s.signatureType === 'supervisor' || s.signatureType === 'manager');
+        if (managerSig?.signatureData) {
+          return `<img src="${managerSig.signatureData}" alt="توقيع المدير" style="max-width: 200px; max-height: 80px; margin: 10px auto; display: block;" /><p>${managerSig.signerName}</p>`;
+        }
+        return '<p style="margin-top: 40px;">________________</p>';
+      })()}
     </div>
   </div>
 

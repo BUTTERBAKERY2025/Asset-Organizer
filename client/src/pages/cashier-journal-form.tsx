@@ -118,7 +118,10 @@ export default function CashierJournalFormPage() {
     queryKey: ["/api/branches"],
   });
 
-  const { data: existingJournal, isLoading: loadingJournal } = useQuery<CashierSalesJournal & { paymentBreakdowns: CashierPaymentBreakdown[] }>({
+  const { data: existingJournal, isLoading: loadingJournal } = useQuery<CashierSalesJournal & { 
+    paymentBreakdowns: CashierPaymentBreakdown[];
+    signatures?: { signatureType: string; signerName: string; signatureData: string; signedAt: string }[];
+  }>({
     queryKey: [`/api/cashier-journals/${id}`],
     enabled: isEdit,
   });
@@ -798,11 +801,24 @@ export default function CashierJournalFormPage() {
   <div class="signature-area">
     <div class="signature-box">
       <div class="title">توقيع الكاشير</div>
+      ${(() => {
+        const cashierSig = existingJournal?.signatures?.find(s => s.signatureType === 'cashier');
+        if (cashierSig?.signatureData) {
+          return `<img src="${cashierSig.signatureData}" alt="توقيع الكاشير" style="max-width: 200px; max-height: 80px; margin: 10px auto; display: block;" />`;
+        }
+        return '<p style="margin-top: 40px;">________________</p>';
+      })()}
       <p>${formData.cashierName}</p>
     </div>
     <div class="signature-box">
       <div class="title">توقيع المدير</div>
-      <p>________________</p>
+      ${(() => {
+        const managerSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor' || s.signatureType === 'manager');
+        if (managerSig?.signatureData) {
+          return `<img src="${managerSig.signatureData}" alt="توقيع المدير" style="max-width: 200px; max-height: 80px; margin: 10px auto; display: block;" /><p>${managerSig.signerName}</p>`;
+        }
+        return '<p style="margin-top: 40px;">________________</p>';
+      })()}
     </div>
   </div>
 
