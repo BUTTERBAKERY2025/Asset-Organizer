@@ -609,6 +609,12 @@ export default function CashierJournalFormPage() {
       other: "أخرى",
     };
 
+    const formatDateTime = (dateVal: string | Date | null | undefined) => {
+      if (!dateVal) return '-';
+      const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
+      return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -619,48 +625,63 @@ export default function CashierJournalFormPage() {
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 30px; background: white; color: #333; font-size: 13px; }
-    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #d4a853; padding-bottom: 20px; }
-    .header .logo { max-height: 70px; margin-bottom: 10px; }
-    .header h1 { font-size: 22px; color: #333; margin-bottom: 5px; }
-    .header .subtitle { color: #666; font-size: 14px; }
-    .header .journal-date { background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; margin-top: 10px; font-weight: bold; }
-    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
-    .info-box { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #e9ecef; }
-    .info-box .label { color: #666; font-size: 11px; margin-bottom: 5px; }
-    .info-box .value { font-size: 16px; font-weight: bold; color: #333; }
-    .section { margin-bottom: 25px; page-break-inside: avoid; }
-    .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; padding: 10px 15px; background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; border-radius: 8px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-    th, td { border: 1px solid #ddd; padding: 12px 10px; text-align: right; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 25px; background: white; color: #333; font-size: 12px; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #d4a853; padding-bottom: 15px; }
+    .header .logo { max-height: 60px; margin-bottom: 8px; }
+    .header h1 { font-size: 20px; color: #333; margin-bottom: 3px; }
+    .header .subtitle { color: #666; font-size: 12px; }
+    .header .journal-id { background: #333; color: white; padding: 4px 12px; border-radius: 4px; font-size: 11px; margin-top: 8px; display: inline-block; }
+    .header .journal-date { background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; padding: 6px 16px; border-radius: 15px; display: inline-block; margin-top: 8px; font-weight: bold; font-size: 13px; margin-right: 8px; }
+    .info-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+    .info-box { background: #f8f9fa; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef; }
+    .info-box .label { color: #666; font-size: 10px; margin-bottom: 3px; }
+    .info-box .value { font-size: 13px; font-weight: bold; color: #333; }
+    .section { margin-bottom: 20px; page-break-inside: avoid; }
+    .section-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 10px; padding: 8px 12px; background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px 6px; text-align: right; font-size: 11px; }
     th { background: #f5f5f5; font-weight: 600; color: #333; }
     tr:nth-child(even) { background: #fafafa; }
     .amount { font-weight: bold; }
     .amount.positive { color: #28a745; }
     .amount.negative { color: #dc3545; }
-    .status-badge { padding: 4px 12px; border-radius: 15px; font-size: 11px; font-weight: 600; display: inline-block; }
+    .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; display: inline-block; }
     .status-approved { background: #d4edda; color: #155724; }
     .status-pending { background: #fff3cd; color: #856404; }
     .status-rejected { background: #f8d7da; color: #721c24; }
+    .status-draft { background: #e9ecef; color: #495057; }
     .status-balanced { background: #d4edda; color: #155724; }
     .status-shortage { background: #f8d7da; color: #721c24; }
     .status-surplus { background: #cce5ff; color: #004085; }
     .summary-row { background: #f8f9fa !important; font-weight: bold; }
-    .reconciliation-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 10px; margin-top: 15px; }
-    .reconciliation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-    .reconciliation-item { display: flex; justify-content: space-between; padding: 10px; background: white; border-radius: 8px; border: 1px solid #dee2e6; }
+    .reconciliation-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 15px; border-radius: 8px; margin-top: 10px; }
+    .reconciliation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .reconciliation-item { display: flex; justify-content: space-between; padding: 8px; background: white; border-radius: 6px; border: 1px solid #dee2e6; font-size: 11px; }
     .reconciliation-item .label { color: #666; }
     .reconciliation-item .value { font-weight: bold; }
-    .discrepancy-result { text-align: center; padding: 20px; background: white; border-radius: 10px; margin-top: 15px; border: 2px solid #d4a853; }
-    .discrepancy-result .amount { font-size: 24px; }
-    .notes-box { background: #fffbeb; padding: 15px; border-radius: 10px; border: 1px solid #fbbf24; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #d4a853; display: flex; justify-content: space-between; align-items: center; }
-    .footer .company { font-weight: bold; color: #d4a853; }
-    .footer .timestamp { color: #666; font-size: 11px; }
-    .signature-area { margin-top: 30px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; }
-    .signature-box { border-top: 2px solid #333; padding-top: 10px; text-align: center; }
-    .signature-box .title { font-weight: bold; margin-bottom: 40px; }
-    .print-btn { position: fixed; top: 20px; left: 20px; background: #d4a853; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .discrepancy-result { text-align: center; padding: 15px; background: white; border-radius: 8px; margin-top: 10px; border: 2px solid #d4a853; }
+    .discrepancy-result .amount { font-size: 20px; }
+    .notes-box { background: #fffbeb; padding: 12px; border-radius: 8px; border: 1px solid #fbbf24; font-size: 11px; }
+    .approval-section { background: #f0f9ff; padding: 15px; border-radius: 8px; border: 1px solid #0ea5e9; margin-top: 15px; }
+    .approval-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .approval-item { text-align: center; padding: 10px; background: white; border-radius: 6px; }
+    .approval-item .role { font-weight: bold; color: #0369a1; font-size: 11px; margin-bottom: 5px; }
+    .approval-item .name { font-size: 12px; font-weight: 600; }
+    .approval-item .time { font-size: 10px; color: #666; margin-top: 3px; }
+    .attachments-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+    .attachment-item { border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
+    .attachment-item img { width: 100%; height: 120px; object-fit: cover; }
+    .attachment-item .info { padding: 6px; background: #f8f9fa; font-size: 10px; }
+    .footer { margin-top: 25px; padding-top: 15px; border-top: 2px solid #d4a853; display: flex; justify-content: space-between; align-items: center; }
+    .footer .company { font-weight: bold; color: #d4a853; font-size: 12px; }
+    .footer .timestamp { color: #666; font-size: 10px; }
+    .signature-area { margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .signature-box { border-top: 2px solid #333; padding-top: 8px; text-align: center; }
+    .signature-box .title { font-weight: bold; font-size: 11px; margin-bottom: 5px; }
+    .signature-box .sig-img { max-width: 150px; max-height: 60px; margin: 5px auto; }
+    .signature-box .name { font-size: 11px; margin-top: 5px; }
+    .signature-box .time { font-size: 9px; color: #666; }
+    .print-btn { position: fixed; top: 15px; left: 15px; background: #d4a853; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
     .print-btn:hover { background: #c49843; }
     @media print { .print-btn { display: none; } .signature-area { page-break-inside: avoid; } }
   </style>
@@ -670,15 +691,19 @@ export default function CashierJournalFormPage() {
   
   <div class="header">
     <img src="${logoUrl}" alt="Butter Bakery" class="logo" onerror="this.style.display='none'">
-    <h1>تقرير يومية الكاشير</h1>
+    <h1>تقرير يومية الكاشير والصندوق</h1>
     <p class="subtitle">بتر بيكري - Butter Bakery</p>
-    <div class="journal-date">${formatDate(formData.journalDate)}</div>
+    <div>
+      <span class="journal-date">${formatDate(formData.journalDate)}</span>
+      <span class="journal-id">رقم اليومية: ${existingJournal?.id || 'جديد'}</span>
+    </div>
   </div>
 
   <div class="info-grid">
     <div class="info-box">
       <div class="label">الفرع</div>
       <div class="value">${branchName}</div>
+      <div class="label" style="margin-top:3px;font-size:9px;">رمز: ${formData.branchId}</div>
     </div>
     <div class="info-box">
       <div class="label">اسم الكاشير</div>
@@ -687,11 +712,16 @@ export default function CashierJournalFormPage() {
     <div class="info-box">
       <div class="label">الوردية</div>
       <div class="value">${SHIFT_LABELS[formData.shiftType] || formData.shiftType}</div>
+      <div class="label" style="margin-top:3px;font-size:9px;">${existingJournal?.shiftStartTime || ''} - ${existingJournal?.shiftEndTime || ''}</div>
+    </div>
+    <div class="info-box">
+      <div class="label">تاريخ الإنشاء</div>
+      <div class="value" style="font-size:10px;">${formatDateTime(existingJournal?.createdAt)}</div>
     </div>
     <div class="info-box">
       <div class="label">الحالة</div>
       <div class="value">
-        <span class="status-badge status-${existingJournal?.status === 'approved' ? 'approved' : existingJournal?.status === 'rejected' ? 'rejected' : 'pending'}">
+        <span class="status-badge status-${existingJournal?.status === 'approved' ? 'approved' : existingJournal?.status === 'rejected' ? 'rejected' : existingJournal?.status === 'submitted' ? 'pending' : 'draft'}">
           ${STATUS_LABELS[existingJournal?.status || 'draft'] || 'مسودة'}
         </span>
       </div>
@@ -798,26 +828,87 @@ export default function CashierJournalFormPage() {
   </div>
   ` : ''}
 
+  ${attachments && attachments.length > 0 ? `
+  <div class="section">
+    <div class="section-title">المرفقات (${attachments.length})</div>
+    <div class="attachments-grid">
+      ${attachments.map(att => `
+        <div class="attachment-item">
+          ${att.fileData ? `<img src="${att.fileData}" alt="${att.fileName}" />` : '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:#f5f5f5;">لا توجد صورة</div>'}
+          <div class="info">
+            <strong>${ATTACHMENT_TYPE_LABELS[att.attachmentType as keyof typeof ATTACHMENT_TYPE_LABELS] || att.attachmentType}</strong><br/>
+            ${att.fileName}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+  ` : ''}
+
+  <div class="section">
+    <div class="section-title">سجل الموافقات والتوقيعات</div>
+    <div class="approval-section">
+      <div class="approval-grid">
+        <div class="approval-item">
+          <div class="role">الكاشير (مُقدم اليومية)</div>
+          <div class="name">${formData.cashierName}</div>
+          <div class="time">التقديم: ${formatDateTime(existingJournal?.submittedAt)}</div>
+        </div>
+        <div class="approval-item">
+          <div class="role">المشرف</div>
+          ${(() => {
+            const supervisorSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor');
+            if (supervisorSig) {
+              return `<div class="name">${supervisorSig.signerName}</div><div class="time">${formatDateTime(supervisorSig.signedAt)}</div>`;
+            }
+            return '<div class="name" style="color:#999;">-</div>';
+          })()}
+        </div>
+        <div class="approval-item">
+          <div class="role">المدير (الاعتماد النهائي)</div>
+          ${existingJournal?.approvedBy ? `
+            <div class="name">${existingJournal.approvedBy}</div>
+            <div class="time">${formatDateTime(existingJournal?.approvedAt)}</div>
+          ` : '<div class="name" style="color:#999;">لم يُعتمد بعد</div>'}
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="signature-area">
     <div class="signature-box">
       <div class="title">توقيع الكاشير</div>
       ${(() => {
         const cashierSig = existingJournal?.signatures?.find(s => s.signatureType === 'cashier');
         if (cashierSig?.signatureData) {
-          return `<img src="${cashierSig.signatureData}" alt="توقيع الكاشير" style="max-width: 200px; max-height: 80px; margin: 10px auto; display: block;" />`;
+          return `<img class="sig-img" src="${cashierSig.signatureData}" alt="توقيع الكاشير" />`;
         }
-        return '<p style="margin-top: 40px;">________________</p>';
+        return '<div style="height:50px;"></div>';
       })()}
-      <p>${formData.cashierName}</p>
+      <div class="name">${formData.cashierName}</div>
+      ${(() => {
+        const cashierSig = existingJournal?.signatures?.find(s => s.signatureType === 'cashier');
+        return cashierSig?.signedAt ? `<div class="time">${formatDateTime(cashierSig.signedAt)}</div>` : '';
+      })()}
+    </div>
+    <div class="signature-box">
+      <div class="title">توقيع المشرف</div>
+      ${(() => {
+        const supervisorSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor');
+        if (supervisorSig?.signatureData) {
+          return `<img class="sig-img" src="${supervisorSig.signatureData}" alt="توقيع المشرف" /><div class="name">${supervisorSig.signerName}</div><div class="time">${formatDateTime(supervisorSig.signedAt)}</div>`;
+        }
+        return '<div style="height:50px;"></div><div class="name">________________</div>';
+      })()}
     </div>
     <div class="signature-box">
       <div class="title">توقيع المدير</div>
       ${(() => {
-        const managerSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor' || s.signatureType === 'manager');
+        const managerSig = existingJournal?.signatures?.find(s => s.signatureType === 'manager');
         if (managerSig?.signatureData) {
-          return `<img src="${managerSig.signatureData}" alt="توقيع المدير" style="max-width: 200px; max-height: 80px; margin: 10px auto; display: block;" /><p>${managerSig.signerName}</p>`;
+          return `<img class="sig-img" src="${managerSig.signatureData}" alt="توقيع المدير" /><div class="name">${managerSig.signerName}</div><div class="time">${formatDateTime(managerSig.signedAt)}</div>`;
         }
-        return '<p style="margin-top: 40px;">________________</p>';
+        return '<div style="height:50px;"></div><div class="name">________________</div>';
       })()}
     </div>
   </div>
