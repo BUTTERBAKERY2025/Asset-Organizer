@@ -634,7 +634,11 @@ export default function CashierJournalFormPage() {
       return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    const cashierSig = existingJournal?.signatures?.find(s => s.signatureType === 'cashier');
+    // Get signature from existing journal or from current canvas
+    const savedCashierSig = existingJournal?.signatures?.find(s => s.signatureType === 'cashier');
+    const canvas = signatureCanvasRef.current;
+    const currentCanvasSignature = hasSignature && canvas ? canvas.toDataURL("image/png") : null;
+    const cashierSigData = savedCashierSig?.signatureData || currentCanvasSignature;
     const supervisorSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor');
 
     const htmlContent = `
@@ -753,7 +757,7 @@ export default function CashierJournalFormPage() {
       <div class="sig-grid">
         <div class="sig-box">
           <div class="role">توقيع الكاشير</div>
-          ${cashierSig?.signatureData ? `<img class="sig-img" src="${cashierSig.signatureData}" />` : '<div class="placeholder">لم يوقع بعد</div>'}
+          ${cashierSigData ? `<img class="sig-img" src="${cashierSigData}" />` : '<div class="placeholder">لم يوقع بعد</div>'}
           <div class="name">${formData.cashierName}</div>
         </div>
         <div class="sig-box">
