@@ -781,6 +781,16 @@ export default function CashierJournalFormPage() {
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
+    
+    // Wait for fonts and content to load before enabling print
+    printWindow.onload = () => {
+      printWindow.focus();
+    };
+    
+    // Fallback: ensure content is ready after short delay
+    setTimeout(() => {
+      printWindow.focus();
+    }, 500);
   };
 
   if (isEdit && loadingJournal) {
