@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Factory, Users, Clock, CheckCircle, AlertTriangle, TrendingUp, Calendar, ClipboardCheck, Plus } from "lucide-react";
+import { Factory, Users, Clock, CheckCircle, AlertTriangle, TrendingUp, Calendar, ClipboardCheck, Plus, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface OperationsStats {
@@ -73,10 +73,12 @@ export default function OperationsDashboardPage() {
   ];
 
   const quickActions = [
+    { label: "يومية الكاشير", href: "/cashier-journals", icon: Wallet },
     { label: "إنشاء وردية", href: "/shifts", icon: Plus },
     { label: "أمر إنتاج جديد", href: "/production", icon: Plus },
     { label: "فحص جودة", href: "/quality-control", icon: ClipboardCheck },
     { label: "إدارة المنتجات", href: "/products", icon: Factory },
+    { label: "إدارة الموظفين", href: "/operations-employees", icon: Users },
   ];
 
   return (
