@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { useLocation, useParams, Link } from "wouter";
 import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,10 +58,20 @@ export default function CashierJournalFormPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
   const isEdit = !!id;
+
+  const getUserDisplayName = () => {
+    if (!user) return "";
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    if (user.firstName) return user.firstName;
+    return user.username || "";
+  };
 
   const [formData, setFormData] = useState({
     branchId: "",
@@ -76,6 +87,17 @@ export default function CashierJournalFormPage() {
     transactionCount: 0,
     notes: "",
   });
+
+  useEffect(() => {
+    if (!isEdit && user && !formData.cashierName) {
+      setFormData(prev => ({
+        ...prev,
+        cashierName: getUserDisplayName(),
+        cashierId: user.id,
+        branchId: user.branchId || prev.branchId,
+      }));
+    }
+  }, [user, isEdit]);
 
   const [paymentBreakdowns, setPaymentBreakdowns] = useState<PaymentBreakdownInput[]>([
     { paymentMethod: "cash", amount: 0, transactionCount: 0 },
@@ -615,11 +637,12 @@ export default function CashierJournalFormPage() {
                     <Label>اسم الكاشير *</Label>
                     <Input
                       value={formData.cashierName}
-                      onChange={(e) => setFormData({ ...formData, cashierName: e.target.value })}
+                      readOnly
+                      className="bg-muted cursor-not-allowed"
                       placeholder="اسم الكاشير"
-                      disabled={isReadOnly}
                       data-testid="input-cashier-name"
                     />
+                    <p className="text-xs text-muted-foreground">يتم تحديد اسم الكاشير تلقائياً من حساب المستخدم الحالي</p>
                   </div>
                 </div>
               </CardContent>
