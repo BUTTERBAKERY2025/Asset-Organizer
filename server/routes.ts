@@ -2239,27 +2239,37 @@ export async function registerRoutes(
 
   // ==================== Cashier Sales Journal Routes ====================
 
-  // Get all cashier journals with filters
+  // Get all cashier journals with filters (supports combined filters)
   app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus } = req.query;
-      let journals;
       
+      // Get all journals first, then apply filters
+      let journals = await storage.getAllCashierJournals();
+      
+      // Apply filters in combination
       if (branchId) {
-        journals = await storage.getCashierJournalsByBranch(branchId as string);
-      } else if (date) {
-        journals = await storage.getCashierJournalsByDate(date as string);
-      } else if (startDate && endDate) {
-        journals = await storage.getCashierJournalsByDateRange(startDate as string, endDate as string);
-      } else if (cashierId) {
-        journals = await storage.getCashierJournalsByCashier(cashierId as string);
-      } else if (status) {
-        journals = await storage.getCashierJournalsByStatus(status as string);
-      } else if (discrepancyStatus) {
-        journals = await storage.getCashierJournalsByDiscrepancyStatus(discrepancyStatus as string);
-      } else {
-        journals = await storage.getAllCashierJournals();
+        journals = journals.filter(j => j.branchId === branchId);
       }
+      if (date) {
+        journals = journals.filter(j => j.journalDate === date);
+      }
+      if (startDate) {
+        journals = journals.filter(j => j.journalDate >= (startDate as string));
+      }
+      if (endDate) {
+        journals = journals.filter(j => j.journalDate <= (endDate as string));
+      }
+      if (cashierId) {
+        journals = journals.filter(j => j.cashierId === cashierId);
+      }
+      if (status) {
+        journals = journals.filter(j => j.status === status);
+      }
+      if (discrepancyStatus) {
+        journals = journals.filter(j => j.discrepancyStatus === discrepancyStatus);
+      }
+      
       res.json(journals);
     } catch (error) {
       console.error("Error fetching cashier journals:", error);

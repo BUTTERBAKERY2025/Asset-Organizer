@@ -740,8 +740,14 @@ export default function OperationsReportsDashboardPage() {
     queryKey: [`/api/operations/reports?${queryString}`],
   });
 
+  const cashierQueryString = new URLSearchParams({
+    ...(filters.branchId && { branchId: filters.branchId }),
+    ...(filters.startDate && { startDate: filters.startDate }),
+    ...(filters.endDate && { endDate: filters.endDate }),
+  }).toString();
+
   const { data: cashierJournals } = useQuery<CashierSalesJournal[]>({
-    queryKey: ["/api/cashier-journals"],
+    queryKey: [`/api/cashier-journals?${cashierQueryString}`],
   });
 
   const formatCurrency = (value: number) => {
@@ -994,12 +1000,8 @@ export default function OperationsReportsDashboardPage() {
     printWindow.document.close();
   };
 
-  const filteredCashierJournals = cashierJournals?.filter(j => {
-    if (filters.branchId && j.branchId !== filters.branchId) return false;
-    if (filters.startDate && j.journalDate < filters.startDate) return false;
-    if (filters.endDate && j.journalDate > filters.endDate) return false;
-    return true;
-  }) || [];
+  // Use the filtered journals directly from API (filtering now done server-side)
+  const filteredCashierJournals = cashierJournals || [];
 
   const getVisibleTabs = () => {
     switch (filters.reportType) {
