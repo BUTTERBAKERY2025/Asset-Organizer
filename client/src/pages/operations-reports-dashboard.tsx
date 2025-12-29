@@ -8,16 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useLocation } from "wouter";
 import { 
   BarChart3, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Factory, 
   CheckCircle, XCircle, Clock, AlertTriangle, Download, Wallet, CreditCard, Truck,
-  Building2, Activity, Target, Package
+  Building2, Activity, Target, Package, FileText, Eye, Image, FileDown, Filter,
+  Calendar, RefreshCw, Printer, ExternalLink, Receipt, ClipboardList, PieChart as PieChartIcon
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, Legend 
+  PieChart, Pie, Cell, LineChart, Line, Legend, AreaChart, Area
 } from "recharts";
-import type { Branch } from "@shared/schema";
+import type { Branch, CashierSalesJournal, JournalAttachment } from "@shared/schema";
 import * as XLSX from "xlsx";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -51,7 +56,22 @@ const STATUS_LABELS: Record<string, string> = {
   needs_improvement: "يحتاج تحسين",
 };
 
-const COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4"];
+const DISCREPANCY_STATUS_LABELS: Record<string, string> = {
+  balanced: "متوازن",
+  shortage: "عجز",
+  surplus: "فائض",
+};
+
+const REPORT_TYPES = [
+  { value: "all", label: "جميع التقارير", icon: BarChart3 },
+  { value: "cashier", label: "تقارير الكاشير", icon: Wallet },
+  { value: "sales", label: "تقارير المبيعات", icon: DollarSign },
+  { value: "shifts", label: "تقارير الورديات", icon: Clock },
+  { value: "production", label: "تقارير الإنتاج", icon: Factory },
+  { value: "quality", label: "تقارير الجودة", icon: CheckCircle },
+];
+
+const COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
 
 interface OperationsReport {
   salesReport: {
@@ -96,6 +116,7 @@ interface OperationsReport {
     qualityPassRate: number;
     averageTicket: number;
   }[];
+  cashierJournals?: CashierSalesJournal[];
 }
 
 function KPICard({ 
@@ -105,7 +126,8 @@ function KPICard({
   trend, 
   trendLabel,
   color = "text-primary",
-  bgColor = "bg-primary/10"
+  bgColor = "bg-primary/10",
+  onClick
 }: { 
   title: string; 
   value: string | number; 
@@ -114,9 +136,14 @@ function KPICard({
   trendLabel?: string;
   color?: string;
   bgColor?: string;
+  onClick?: () => void;
 }) {
   return (
-    <Card data-testid={`kpi-card-${title.replace(/\s+/g, '-')}`}>
+    <Card 
+      data-testid={`kpi-card-${title.replace(/\s+/g, '-')}`}
+      className={onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}
+      onClick={onClick}
+    >
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -141,7 +168,167 @@ function KPICard({
   );
 }
 
+function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJournal; branches?: Branch[] }) {
+  const branchName = branches?.find(b => b.id === journal.branchId)?.name || journal.branchId;
+  
+  const { data: attachments } = useQuery<JournalAttachment[]>({
+    queryKey: [`/api/cashier-journals/${journal.id}/attachments`],
+  });
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1" data-testid={`view-journal-${journal.id}`}>
+          <Eye className="w-4 h-4" />
+          عرض
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="w-5 h-5" />
+            تفاصيل يومية الكاشير - {journal.journalDate}
+          </DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[70vh]">
+          <div className="space-y-6 p-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground">الفرع</p>
+                <p className="font-semibold">{branchName}</p>
+              </div>
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground">اسم الكاشير</p>
+                <p className="font-semibold">{journal.cashierName}</p>
+              </div>
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground">الوردية</p>
+                <p className="font-semibold">{journal.shiftType || "-"}</p>
+              </div>
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground">الحالة</p>
+                <Badge variant={journal.status === "approved" ? "default" : journal.status === "rejected" ? "destructive" : "secondary"}>
+                  {STATUS_LABELS[journal.status] || journal.status}
+                </Badge>
+              </div>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">ملخص المبيعات</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">إجمالي المبيعات</span>
+                    <span className="font-bold text-green-600">{journal.totalSales?.toLocaleString('ar-SA')} ر.س</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">المبيعات النقدية</span>
+                    <span className="font-semibold">{journal.cashTotal?.toLocaleString('ar-SA')} ر.س</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">مبيعات الشبكة</span>
+                    <span className="font-semibold">{journal.networkTotal?.toLocaleString('ar-SA')} ر.س</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">مبيعات التوصيل</span>
+                    <span className="font-semibold">{journal.deliveryTotal?.toLocaleString('ar-SA')} ر.س</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">عدد العمليات</span>
+                    <span className="font-semibold">{journal.transactionCount}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">متوسط الفاتورة</span>
+                    <span className="font-semibold">{journal.averageTicket?.toFixed(2)} ر.س</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">مطابقة الصندوق</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">رصيد الافتتاح</span>
+                    <span className="font-semibold">{journal.openingBalance?.toLocaleString('ar-SA')} ر.س</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">المتوقع في الصندوق</span>
+                    <span className="font-semibold">{journal.expectedCash?.toLocaleString('ar-SA')} ر.س</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">الفعلي في الصندوق</span>
+                    <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('ar-SA')} ر.س</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 border-b">
+                    <span className="text-muted-foreground">الفرق</span>
+                    <span className={`font-bold ${journal.discrepancyAmount && journal.discrepancyAmount < 0 ? 'text-red-600' : journal.discrepancyAmount && journal.discrepancyAmount > 0 ? 'text-green-600' : ''}`}>
+                      {journal.discrepancyAmount?.toLocaleString('ar-SA')} ر.س
+                      <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mr-2">
+                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                      </Badge>
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {attachments && attachments.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Image className="w-4 h-4" />
+                    المرفقات ({attachments.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {attachments.map((att) => (
+                      <div key={att.id} className="border rounded-lg p-2">
+                        <div className="aspect-video bg-muted rounded flex items-center justify-center overflow-hidden">
+                          {att.fileData ? (
+                            <img 
+                              src={att.fileData} 
+                              alt={att.fileName}
+                              className="object-contain w-full h-full"
+                            />
+                          ) : (
+                            <FileText className="w-8 h-8 text-muted-foreground" />
+                          )}
+                        </div>
+                        <p className="text-xs mt-1 truncate">{att.fileName}</p>
+                        <p className="text-xs text-muted-foreground">{att.attachmentType}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {journal.notes && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">ملاحظات</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{journal.notes}</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function OperationsReportsDashboardPage() {
+  const [, setLocation] = useLocation();
   const today = new Date().toISOString().split("T")[0];
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   
@@ -149,7 +336,10 @@ export default function OperationsReportsDashboardPage() {
     branchId: "",
     startDate: thirtyDaysAgo,
     endDate: today,
+    reportType: "all",
   });
+
+  const [activeTab, setActiveTab] = useState("overview");
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -161,8 +351,12 @@ export default function OperationsReportsDashboardPage() {
     ...(filters.endDate && { endDate: filters.endDate }),
   }).toString();
 
-  const { data: report, isLoading } = useQuery<OperationsReport>({
+  const { data: report, isLoading, refetch } = useQuery<OperationsReport>({
     queryKey: [`/api/operations/reports?${queryString}`],
+  });
+
+  const { data: cashierJournals } = useQuery<CashierSalesJournal[]>({
+    queryKey: ["/api/cashier-journals"],
   });
 
   const formatCurrency = (value: number) => {
@@ -182,13 +376,15 @@ export default function OperationsReportsDashboardPage() {
     return `${value.toFixed(1)}%`;
   };
 
-  const handleExport = () => {
+  const handleExportExcel = () => {
     if (!report) return;
 
     const wb = XLSX.utils.book_new();
 
     const salesData = [
-      ["تقرير المبيعات"],
+      ["تقرير المبيعات - " + filters.startDate + " إلى " + filters.endDate],
+      [],
+      ["البند", "القيمة"],
       ["إجمالي المبيعات", report.salesReport.totalSales],
       ["المبيعات النقدية", report.salesReport.cashSales],
       ["مبيعات الشبكة", report.salesReport.networkSales],
@@ -204,7 +400,9 @@ export default function OperationsReportsDashboardPage() {
     XLSX.utils.book_append_sheet(wb, salesSheet, "المبيعات");
 
     const productionData = [
-      ["تقرير الإنتاج"],
+      ["تقرير الإنتاج - " + filters.startDate + " إلى " + filters.endDate],
+      [],
+      ["البند", "القيمة"],
       ["إجمالي الأوامر", report.productionReport.totalOrders],
       ["قيد الانتظار", report.productionReport.pendingOrders],
       ["قيد التنفيذ", report.productionReport.inProgressOrders],
@@ -216,8 +414,20 @@ export default function OperationsReportsDashboardPage() {
     const productionSheet = XLSX.utils.aoa_to_sheet(productionData);
     XLSX.utils.book_append_sheet(wb, productionSheet, "الإنتاج");
 
+    const shiftsData = [
+      ["تقرير الورديات - " + filters.startDate + " إلى " + filters.endDate],
+      [],
+      ["البند", "القيمة"],
+      ["إجمالي الورديات", report.shiftsReport.totalShifts],
+      ["الورديات مع موظفين", report.shiftsReport.shiftsWithEmployees],
+      ["إجمالي التكليفات", report.shiftsReport.totalEmployeeAssignments],
+    ];
+    const shiftsSheet = XLSX.utils.aoa_to_sheet(shiftsData);
+    XLSX.utils.book_append_sheet(wb, shiftsSheet, "الورديات");
+
     const branchData = [
-      ["مقارنة الفروع"],
+      ["مقارنة الفروع - " + filters.startDate + " إلى " + filters.endDate],
+      [],
       ["الفرع", "المبيعات", "الأوامر", "نسبة الجودة", "متوسط الفاتورة"],
       ...report.branchComparison.map(b => [
         b.branchName,
@@ -230,31 +440,357 @@ export default function OperationsReportsDashboardPage() {
     const branchSheet = XLSX.utils.aoa_to_sheet(branchData);
     XLSX.utils.book_append_sheet(wb, branchSheet, "مقارنة الفروع");
 
+    if (cashierJournals && cashierJournals.length > 0) {
+      const journalData = [
+        ["يوميات الكاشير - " + filters.startDate + " إلى " + filters.endDate],
+        [],
+        ["التاريخ", "الفرع", "الكاشير", "الوردية", "إجمالي المبيعات", "نقداً", "شبكة", "توصيل", "العجز/الفائض", "الحالة"],
+        ...cashierJournals.map(j => [
+          j.journalDate,
+          branches?.find(b => b.id === j.branchId)?.name || j.branchId,
+          j.cashierName,
+          j.shiftType || "-",
+          j.totalSales,
+          j.cashTotal,
+          j.networkTotal,
+          j.deliveryTotal,
+          j.discrepancyAmount,
+          STATUS_LABELS[j.status] || j.status,
+        ]),
+      ];
+      const journalSheet = XLSX.utils.aoa_to_sheet(journalData);
+      XLSX.utils.book_append_sheet(wb, journalSheet, "يوميات الكاشير");
+    }
+
     XLSX.writeFile(wb, `تقارير_التشغيل_${filters.startDate}_${filters.endDate}.xlsx`);
   };
+
+  const handleExportPDF = () => {
+    if (!report) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير');
+      return;
+    }
+
+    const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
+    const selectedBranch = filters.branchId ? branches?.find(b => b.id === filters.branchId)?.name : 'جميع الفروع';
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تقرير التشغيل الشامل - ${filters.startDate} إلى ${filters.endDate}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 20px; background: white; color: #333; font-size: 12px; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #d4a853; padding-bottom: 20px; }
+    .header .logo { max-height: 80px; margin-bottom: 15px; }
+    .header h1 { font-size: 24px; color: #333; margin-bottom: 10px; }
+    .header .subtitle { color: #666; font-size: 14px; }
+    .header .date-range { background: #f5f5f5; padding: 8px 16px; border-radius: 20px; display: inline-block; margin-top: 10px; }
+    .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+    .summary-card { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #dee2e6; }
+    .summary-card .value { font-size: 20px; font-weight: bold; color: #d4a853; }
+    .summary-card .label { color: #666; font-size: 11px; margin-top: 5px; }
+    .section { margin-bottom: 25px; page-break-inside: avoid; }
+    .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #d4a853; display: flex; align-items: center; gap: 8px; }
+    .section-title::before { content: ''; width: 4px; height: 20px; background: #d4a853; border-radius: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #ddd; padding: 10px 8px; text-align: right; font-size: 11px; }
+    th { background: linear-gradient(135deg, #d4a853 0%, #c49843 100%); color: white; font-weight: 600; }
+    tr:nth-child(even) { background: #fafafa; }
+    tr:hover { background: #f5f5f5; }
+    .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    .kpi-item { background: #f8f9fa; padding: 12px; border-radius: 8px; border-right: 4px solid #d4a853; }
+    .kpi-item .kpi-value { font-size: 18px; font-weight: bold; color: #333; }
+    .kpi-item .kpi-label { font-size: 10px; color: #666; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 10px; }
+    .footer .company { font-weight: bold; color: #d4a853; }
+    .print-btn { position: fixed; top: 20px; left: 20px; background: #d4a853; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .print-btn:hover { background: #c49843; }
+    @media print { .print-btn { display: none; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">طباعة / حفظ PDF</button>
+  
+  <div class="header">
+    <img src="${logoUrl}" alt="Butter Bakery" class="logo" onerror="this.style.display='none'">
+    <h1>تقرير التشغيل الشامل</h1>
+    <p class="subtitle">منصة بتر بيكري لإدارة العمليات</p>
+    <div class="date-range">
+      <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate} | <strong>الفرع:</strong> ${selectedBranch}
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="value">${formatCurrency(report.salesReport.totalSales)}</div>
+      <div class="label">إجمالي المبيعات</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">${formatNumber(report.salesReport.totalTransactions)}</div>
+      <div class="label">إجمالي العمليات</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">${formatNumber(report.productionReport.totalOrders)}</div>
+      <div class="label">أوامر الإنتاج</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">${formatPercent(report.productionReport.qualityPassRate)}</div>
+      <div class="label">نسبة الجودة</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">تقرير المبيعات</h2>
+    <div class="kpi-grid">
+      <div class="kpi-item">
+        <div class="kpi-value">${formatCurrency(report.salesReport.cashSales)}</div>
+        <div class="kpi-label">المبيعات النقدية</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatCurrency(report.salesReport.networkSales)}</div>
+        <div class="kpi-label">مبيعات الشبكة</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatCurrency(report.salesReport.deliverySales)}</div>
+        <div class="kpi-label">مبيعات التوصيل</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatCurrency(report.salesReport.averageTicket)}</div>
+        <div class="kpi-label">متوسط الفاتورة</div>
+      </div>
+    </div>
+    <table>
+      <tr>
+        <th>البند</th>
+        <th>العدد</th>
+        <th>المبلغ</th>
+      </tr>
+      <tr>
+        <td>حالات العجز</td>
+        <td>${report.salesReport.totalShortages}</td>
+        <td style="color: #dc3545;">${formatCurrency(report.salesReport.shortageAmount)}</td>
+      </tr>
+      <tr>
+        <td>حالات الفائض</td>
+        <td>${report.salesReport.totalSurpluses}</td>
+        <td style="color: #28a745;">${formatCurrency(report.salesReport.surplusAmount)}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">تقرير الإنتاج</h2>
+    <div class="kpi-grid">
+      <div class="kpi-item">
+        <div class="kpi-value">${formatNumber(report.productionReport.pendingOrders)}</div>
+        <div class="kpi-label">قيد الانتظار</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatNumber(report.productionReport.inProgressOrders)}</div>
+        <div class="kpi-label">قيد التنفيذ</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatNumber(report.productionReport.completedOrders)}</div>
+        <div class="kpi-label">مكتملة</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatNumber(report.productionReport.totalQuantityProduced)}</div>
+        <div class="kpi-label">الكمية المنتجة</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">تقرير الورديات</h2>
+    <div class="kpi-grid">
+      <div class="kpi-item">
+        <div class="kpi-value">${formatNumber(report.shiftsReport.totalShifts)}</div>
+        <div class="kpi-label">إجمالي الورديات</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatNumber(report.shiftsReport.shiftsWithEmployees)}</div>
+        <div class="kpi-label">الورديات مع موظفين</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${formatNumber(report.shiftsReport.totalEmployeeAssignments)}</div>
+        <div class="kpi-label">إجمالي التكليفات</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${report.shiftsReport.totalShifts > 0 ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100) : '100%'}</div>
+        <div class="kpi-label">نسبة التغطية</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">مقارنة الفروع</h2>
+    <table>
+      <tr>
+        <th>الفرع</th>
+        <th>المبيعات</th>
+        <th>الأوامر</th>
+        <th>نسبة الجودة</th>
+        <th>متوسط الفاتورة</th>
+      </tr>
+      ${report.branchComparison.map(b => `
+        <tr>
+          <td><strong>${b.branchName}</strong></td>
+          <td>${formatCurrency(b.totalSales)}</td>
+          <td>${formatNumber(b.totalOrders)}</td>
+          <td>${formatPercent(b.qualityPassRate)}</td>
+          <td>${formatCurrency(b.averageTicket)}</td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+
+  ${cashierJournals && cashierJournals.length > 0 ? `
+  <div class="section">
+    <h2 class="section-title">يوميات الكاشير الأخيرة</h2>
+    <table>
+      <tr>
+        <th>التاريخ</th>
+        <th>الفرع</th>
+        <th>الكاشير</th>
+        <th>إجمالي المبيعات</th>
+        <th>العجز/الفائض</th>
+        <th>الحالة</th>
+      </tr>
+      ${cashierJournals.slice(0, 10).map(j => `
+        <tr>
+          <td>${j.journalDate}</td>
+          <td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td>
+          <td>${j.cashierName}</td>
+          <td>${formatCurrency(j.totalSales || 0)}</td>
+          <td style="color: ${(j.discrepancyAmount || 0) < 0 ? '#dc3545' : (j.discrepancyAmount || 0) > 0 ? '#28a745' : 'inherit'};">
+            ${formatCurrency(j.discrepancyAmount || 0)}
+          </td>
+          <td><span class="status-badge status-${j.status === 'approved' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${STATUS_LABELS[j.status] || j.status}</span></td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+  ` : ''}
+
+  <div class="footer">
+    <p class="company">بتر بيكري - Butter Bakery</p>
+    <p>تم إنشاء هذا التقرير بتاريخ: ${new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+  </div>
+</body>
+</html>`;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const filteredCashierJournals = cashierJournals?.filter(j => {
+    if (filters.branchId && j.branchId !== filters.branchId) return false;
+    if (filters.startDate && j.journalDate < filters.startDate) return false;
+    if (filters.endDate && j.journalDate > filters.endDate) return false;
+    return true;
+  }) || [];
+
+  const getVisibleTabs = () => {
+    switch (filters.reportType) {
+      case "cashier":
+        return ["cashier"];
+      case "sales":
+        return ["sales"];
+      case "shifts":
+        return ["shifts"];
+      case "production":
+        return ["production"];
+      case "quality":
+        return ["production"];
+      default:
+        return ["overview", "sales", "production", "shifts", "cashier", "branches"];
+    }
+  };
+
+  const visibleTabs = getVisibleTabs();
 
   return (
     <Layout>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="page-title">لوحة تقارير التشغيل</h1>
-            <p className="text-muted-foreground">تقارير شاملة لجميع عمليات التشغيل والإنتاج والمبيعات</p>
+            <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="page-title">
+              <BarChart3 className="w-7 h-7 text-amber-600" />
+              لوحة تقارير التشغيل الشاملة
+            </h1>
+            <p className="text-muted-foreground">تقارير تفصيلية لجميع عمليات التشغيل والإنتاج والمبيعات ويوميات الكاشير</p>
           </div>
-          <Button onClick={handleExport} disabled={!report} className="gap-2" data-testid="button-export">
-            <Download className="w-4 h-4" />
-            تصدير Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => refetch()} className="gap-2" data-testid="button-refresh">
+              <RefreshCw className="w-4 h-4" />
+              تحديث
+            </Button>
+            <Button variant="outline" onClick={handleExportExcel} disabled={!report} className="gap-2" data-testid="button-export-excel">
+              <Download className="w-4 h-4" />
+              Excel
+            </Button>
+            <Button onClick={handleExportPDF} disabled={!report} className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="button-export-pdf">
+              <FileDown className="w-4 h-4" />
+              PDF
+            </Button>
+          </div>
         </div>
 
-        <Card>
+        <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">الفلاتر</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Filter className="w-5 h-5 text-amber-600" />
+              فلاتر التقارير
+            </CardTitle>
+            <CardDescription>حدد نوع التقرير والفرع والفترة الزمنية</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
-                <Label>الفرع</Label>
+                <Label className="flex items-center gap-1">
+                  <ClipboardList className="w-4 h-4" />
+                  نوع التقرير
+                </Label>
+                <Select value={filters.reportType} onValueChange={(v) => {
+                  setFilters({ ...filters, reportType: v });
+                  if (v !== "all") {
+                    setActiveTab(v === "quality" ? "production" : v);
+                  } else {
+                    setActiveTab("overview");
+                  }
+                }}>
+                  <SelectTrigger data-testid="select-report-type">
+                    <SelectValue placeholder="اختر نوع التقرير" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REPORT_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        <div className="flex items-center gap-2">
+                          <type.icon className="w-4 h-4" />
+                          {type.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Building2 className="w-4 h-4" />
+                  الفرع
+                </Label>
                 <Select value={filters.branchId || "all"} onValueChange={(v) => setFilters({ ...filters, branchId: v === "all" ? "" : v })}>
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="جميع الفروع" />
@@ -270,7 +806,10 @@ export default function OperationsReportsDashboardPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>من تاريخ</Label>
+                <Label className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  من تاريخ
+                </Label>
                 <Input
                   type="date"
                   value={filters.startDate}
@@ -279,7 +818,10 @@ export default function OperationsReportsDashboardPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>إلى تاريخ</Label>
+                <Label className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  إلى تاريخ
+                </Label>
                 <Input
                   type="date"
                   value={filters.endDate}
@@ -287,10 +829,11 @@ export default function OperationsReportsDashboardPage() {
                   data-testid="input-end-date"
                 />
               </div>
-              <div className="flex items-end gap-2">
+              <div className="flex items-end">
                 <Button
                   variant="outline"
-                  onClick={() => setFilters({ branchId: "", startDate: thirtyDaysAgo, endDate: today })}
+                  onClick={() => setFilters({ branchId: "", startDate: thirtyDaysAgo, endDate: today, reportType: "all" })}
+                  className="w-full"
                   data-testid="button-reset-filters"
                 >
                   إعادة تعيين
@@ -307,101 +850,120 @@ export default function OperationsReportsDashboardPage() {
             ))}
           </div>
         ) : report ? (
-          <Tabs defaultValue="sales" className="space-y-6">
-            <TabsList className="grid grid-cols-4 w-full max-w-2xl">
-              <TabsTrigger value="sales" data-testid="tab-sales">المبيعات</TabsTrigger>
-              <TabsTrigger value="production" data-testid="tab-production">الإنتاج</TabsTrigger>
-              <TabsTrigger value="shifts" data-testid="tab-shifts">الورديات</TabsTrigger>
-              <TabsTrigger value="branches" data-testid="tab-branches">مقارنة الفروع</TabsTrigger>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className={`grid w-full max-w-4xl`} style={{ gridTemplateColumns: `repeat(${Math.min(visibleTabs.length, 6)}, 1fr)` }}>
+              {visibleTabs.includes("overview") && (
+                <TabsTrigger value="overview" data-testid="tab-overview" className="gap-1">
+                  <PieChartIcon className="w-4 h-4" />
+                  نظرة عامة
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("sales") && (
+                <TabsTrigger value="sales" data-testid="tab-sales" className="gap-1">
+                  <DollarSign className="w-4 h-4" />
+                  المبيعات
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("production") && (
+                <TabsTrigger value="production" data-testid="tab-production" className="gap-1">
+                  <Factory className="w-4 h-4" />
+                  الإنتاج
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("shifts") && (
+                <TabsTrigger value="shifts" data-testid="tab-shifts" className="gap-1">
+                  <Clock className="w-4 h-4" />
+                  الورديات
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("cashier") && (
+                <TabsTrigger value="cashier" data-testid="tab-cashier" className="gap-1">
+                  <Wallet className="w-4 h-4" />
+                  الكاشير
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("branches") && (
+                <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1">
+                  <Building2 className="w-4 h-4" />
+                  الفروع
+                </TabsTrigger>
+              )}
             </TabsList>
 
-            <TabsContent value="sales" className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 <KPICard
                   title="إجمالي المبيعات"
                   value={formatCurrency(report.salesReport.totalSales)}
                   icon={DollarSign}
                   color="text-green-600"
                   bgColor="bg-green-100"
+                  onClick={() => setActiveTab("sales")}
                 />
                 <KPICard
-                  title="المبيعات النقدية"
-                  value={formatCurrency(report.salesReport.cashSales)}
-                  icon={Wallet}
-                  color="text-emerald-600"
-                  bgColor="bg-emerald-100"
-                />
-                <KPICard
-                  title="مبيعات الشبكة"
-                  value={formatCurrency(report.salesReport.networkSales)}
-                  icon={CreditCard}
+                  title="عمليات اليوم"
+                  value={formatNumber(report.salesReport.totalTransactions)}
+                  icon={ShoppingCart}
                   color="text-blue-600"
                   bgColor="bg-blue-100"
                 />
                 <KPICard
-                  title="مبيعات التوصيل"
-                  value={formatCurrency(report.salesReport.deliverySales)}
-                  icon={Truck}
+                  title="أوامر الإنتاج"
+                  value={formatNumber(report.productionReport.totalOrders)}
+                  icon={Package}
                   color="text-purple-600"
                   bgColor="bg-purple-100"
+                  onClick={() => setActiveTab("production")}
                 />
                 <KPICard
-                  title="إجمالي العمليات"
-                  value={formatNumber(report.salesReport.totalTransactions)}
-                  icon={ShoppingCart}
-                  color="text-indigo-600"
-                  bgColor="bg-indigo-100"
+                  title="نسبة الجودة"
+                  value={formatPercent(report.productionReport.qualityPassRate)}
+                  icon={CheckCircle}
+                  color="text-emerald-600"
+                  bgColor="bg-emerald-100"
                 />
                 <KPICard
-                  title="متوسط قيمة الفاتورة"
-                  value={formatCurrency(report.salesReport.averageTicket)}
-                  icon={Target}
-                  color="text-cyan-600"
-                  bgColor="bg-cyan-100"
+                  title="الورديات"
+                  value={formatNumber(report.shiftsReport.totalShifts)}
+                  icon={Clock}
+                  color="text-orange-600"
+                  bgColor="bg-orange-100"
+                  onClick={() => setActiveTab("shifts")}
                 />
                 <KPICard
-                  title="إجمالي العجز"
-                  value={formatCurrency(report.salesReport.shortageAmount)}
-                  icon={TrendingDown}
-                  color="text-red-600"
-                  bgColor="bg-red-100"
-                  trendLabel={`${report.salesReport.totalShortages} حالة`}
-                />
-                <KPICard
-                  title="إجمالي الفائض"
-                  value={formatCurrency(report.salesReport.surplusAmount)}
-                  icon={TrendingUp}
+                  title="يوميات الكاشير"
+                  value={formatNumber(filteredCashierJournals.length)}
+                  icon={Wallet}
                   color="text-amber-600"
                   bgColor="bg-amber-100"
-                  trendLabel={`${report.salesReport.totalSurpluses} حالة`}
+                  onClick={() => setActiveTab("cashier")}
                 />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">المبيعات اليومية</CardTitle>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-green-600" />
+                      المبيعات اليومية
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={report.salesReport.dailySales}>
+                        <AreaChart data={report.salesReport.dailySales}>
+                          <defs>
+                            <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                              <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" fontSize={12} />
-                          <YAxis fontSize={12} />
-                          <Tooltip 
-                            formatter={(value: number) => formatCurrency(value)}
-                            labelFormatter={(label) => `التاريخ: ${label}`}
-                          />
-                          <Legend />
-                          <Line 
-                            type="monotone" 
-                            dataKey="sales" 
-                            name="المبيعات" 
-                            stroke="#10B981" 
-                            strokeWidth={2}
-                          />
-                        </LineChart>
+                          <XAxis dataKey="date" fontSize={10} />
+                          <YAxis fontSize={10} />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Area type="monotone" dataKey="sales" name="المبيعات" stroke="#10B981" fillOpacity={1} fill="url(#colorSales)" />
+                        </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   </CardContent>
@@ -409,7 +971,10 @@ export default function OperationsReportsDashboardPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">توزيع طرق الدفع</CardTitle>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <PieChartIcon className="w-5 h-5 text-blue-600" />
+                      توزيع طرق الدفع
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
@@ -430,9 +995,7 @@ export default function OperationsReportsDashboardPage() {
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip 
-                            formatter={(value: number) => formatCurrency(value)}
-                          />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -442,22 +1005,89 @@ export default function OperationsReportsDashboardPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">حالة اليوميات</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-amber-600" />
+                    أداء الفروع
+                  </CardTitle>
                 </CardHeader>
+                <CardContent>
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={report.branchComparison}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" fontSize={11} />
+                        <YAxis fontSize={11} />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        <Legend />
+                        <Bar dataKey="totalSales" name="المبيعات" fill="#10B981" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="sales" className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KPICard title="إجمالي المبيعات" value={formatCurrency(report.salesReport.totalSales)} icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
+                <KPICard title="المبيعات النقدية" value={formatCurrency(report.salesReport.cashSales)} icon={Wallet} color="text-emerald-600" bgColor="bg-emerald-100" />
+                <KPICard title="مبيعات الشبكة" value={formatCurrency(report.salesReport.networkSales)} icon={CreditCard} color="text-blue-600" bgColor="bg-blue-100" />
+                <KPICard title="مبيعات التوصيل" value={formatCurrency(report.salesReport.deliverySales)} icon={Truck} color="text-purple-600" bgColor="bg-purple-100" />
+                <KPICard title="إجمالي العمليات" value={formatNumber(report.salesReport.totalTransactions)} icon={ShoppingCart} color="text-indigo-600" bgColor="bg-indigo-100" />
+                <KPICard title="متوسط قيمة الفاتورة" value={formatCurrency(report.salesReport.averageTicket)} icon={Target} color="text-cyan-600" bgColor="bg-cyan-100" />
+                <KPICard title="إجمالي العجز" value={formatCurrency(report.salesReport.shortageAmount)} icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" trendLabel={`${report.salesReport.totalShortages} حالة`} />
+                <KPICard title="إجمالي الفائض" value={formatCurrency(report.salesReport.surplusAmount)} icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100" trendLabel={`${report.salesReport.totalSurpluses} حالة`} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader><CardTitle className="text-lg">المبيعات اليومية</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={report.salesReport.dailySales}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" fontSize={12} />
+                          <YAxis fontSize={12} />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(label) => `التاريخ: ${label}`} />
+                          <Legend />
+                          <Line type="monotone" dataKey="sales" name="المبيعات" stroke="#10B981" strokeWidth={2} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader><CardTitle className="text-lg">توزيع طرق الدفع</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={report.salesReport.paymentMethodBreakdown} dataKey="amount" nameKey="method" cx="50%" cy="50%" outerRadius={100}
+                            label={({ method, percent }) => `${PAYMENT_METHOD_LABELS[method] || method}: ${(percent * 100).toFixed(0)}%`}>
+                            {report.salesReport.paymentMethodBreakdown.map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader><CardTitle className="text-lg">حالة اليوميات</CardTitle></CardHeader>
                 <CardContent>
                   <div className="h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={report.salesReport.journalsByStatus}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="status" 
-                          fontSize={12}
-                          tickFormatter={(value) => STATUS_LABELS[value] || value}
-                        />
+                        <XAxis dataKey="status" fontSize={12} tickFormatter={(value) => STATUS_LABELS[value] || value} />
                         <YAxis fontSize={12} />
-                        <Tooltip 
-                          labelFormatter={(label) => STATUS_LABELS[label] || label}
-                        />
+                        <Tooltip labelFormatter={(label) => STATUS_LABELS[label] || label} />
                         <Bar dataKey="count" name="العدد" fill="#3B82F6" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -468,62 +1098,21 @@ export default function OperationsReportsDashboardPage() {
 
             <TabsContent value="production" className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KPICard
-                  title="إجمالي الأوامر"
-                  value={formatNumber(report.productionReport.totalOrders)}
-                  icon={Package}
-                  color="text-blue-600"
-                  bgColor="bg-blue-100"
-                />
-                <KPICard
-                  title="قيد الانتظار"
-                  value={formatNumber(report.productionReport.pendingOrders)}
-                  icon={Clock}
-                  color="text-yellow-600"
-                  bgColor="bg-yellow-100"
-                />
-                <KPICard
-                  title="قيد التنفيذ"
-                  value={formatNumber(report.productionReport.inProgressOrders)}
-                  icon={Activity}
-                  color="text-orange-600"
-                  bgColor="bg-orange-100"
-                />
-                <KPICard
-                  title="مكتملة"
-                  value={formatNumber(report.productionReport.completedOrders)}
-                  icon={CheckCircle}
-                  color="text-green-600"
-                  bgColor="bg-green-100"
-                />
-                <KPICard
-                  title="ملغاة"
-                  value={formatNumber(report.productionReport.cancelledOrders)}
-                  icon={XCircle}
-                  color="text-red-600"
-                  bgColor="bg-red-100"
-                />
-                <KPICard
-                  title="الكمية المنتجة"
-                  value={formatNumber(report.productionReport.totalQuantityProduced)}
-                  icon={Factory}
-                  color="text-indigo-600"
-                  bgColor="bg-indigo-100"
-                />
-                <KPICard
-                  title="نسبة نجاح الجودة"
-                  value={formatPercent(report.productionReport.qualityPassRate)}
+                <KPICard title="إجمالي الأوامر" value={formatNumber(report.productionReport.totalOrders)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
+                <KPICard title="قيد الانتظار" value={formatNumber(report.productionReport.pendingOrders)} icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
+                <KPICard title="قيد التنفيذ" value={formatNumber(report.productionReport.inProgressOrders)} icon={Activity} color="text-orange-600" bgColor="bg-orange-100" />
+                <KPICard title="مكتملة" value={formatNumber(report.productionReport.completedOrders)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
+                <KPICard title="ملغاة" value={formatNumber(report.productionReport.cancelledOrders)} icon={XCircle} color="text-red-600" bgColor="bg-red-100" />
+                <KPICard title="الكمية المنتجة" value={formatNumber(report.productionReport.totalQuantityProduced)} icon={Factory} color="text-indigo-600" bgColor="bg-indigo-100" />
+                <KPICard title="نسبة نجاح الجودة" value={formatPercent(report.productionReport.qualityPassRate)}
                   icon={report.productionReport.qualityPassRate >= 90 ? CheckCircle : AlertTriangle}
                   color={report.productionReport.qualityPassRate >= 90 ? "text-green-600" : "text-yellow-600"}
-                  bgColor={report.productionReport.qualityPassRate >= 90 ? "bg-green-100" : "bg-yellow-100"}
-                />
+                  bgColor={report.productionReport.qualityPassRate >= 90 ? "bg-green-100" : "bg-yellow-100"} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">الإنتاج اليومي</CardTitle>
-                  </CardHeader>
+                  <CardHeader><CardTitle className="text-lg">الإنتاج اليومي</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -542,29 +1131,15 @@ export default function OperationsReportsDashboardPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">نتائج فحوصات الجودة</CardTitle>
-                  </CardHeader>
+                  <CardHeader><CardTitle className="text-lg">نتائج فحوصات الجودة</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={report.productionReport.qualityChecks}
-                            dataKey="count"
-                            nameKey="status"
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={100}
-                            label={({ status, percent }) => 
-                              `${STATUS_LABELS[status] || status}: ${(percent * 100).toFixed(0)}%`
-                            }
-                          >
+                          <Pie data={report.productionReport.qualityChecks} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={100}
+                            label={({ status, percent }) => `${STATUS_LABELS[status] || status}: ${(percent * 100).toFixed(0)}%`}>
                             {report.productionReport.qualityChecks.map((entry, index) => (
-                              <Cell 
-                                key={`cell-${index}`} 
-                                fill={entry.status === 'passed' ? '#10B981' : entry.status === 'failed' ? '#EF4444' : '#F59E0B'} 
-                              />
+                              <Cell key={`cell-${index}`} fill={entry.status === 'passed' ? '#10B981' : entry.status === 'failed' ? '#EF4444' : '#F59E0B'} />
                             ))}
                           </Pie>
                           <Tooltip />
@@ -576,9 +1151,7 @@ export default function OperationsReportsDashboardPage() {
               </div>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">الإنتاج حسب المنتج</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-lg">الإنتاج حسب المنتج</CardTitle></CardHeader>
                 <CardContent>
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -598,57 +1171,23 @@ export default function OperationsReportsDashboardPage() {
 
             <TabsContent value="shifts" className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KPICard
-                  title="إجمالي الورديات"
-                  value={formatNumber(report.shiftsReport.totalShifts)}
-                  icon={Clock}
-                  color="text-blue-600"
-                  bgColor="bg-blue-100"
-                />
-                <KPICard
-                  title="الورديات مع موظفين"
-                  value={formatNumber(report.shiftsReport.shiftsWithEmployees)}
-                  icon={Users}
-                  color="text-green-600"
-                  bgColor="bg-green-100"
-                />
-                <KPICard
-                  title="إجمالي التكليفات"
-                  value={formatNumber(report.shiftsReport.totalEmployeeAssignments)}
-                  icon={Users}
-                  color="text-indigo-600"
-                  bgColor="bg-indigo-100"
-                />
-                <KPICard
-                  title="نسبة التغطية"
-                  value={report.shiftsReport.totalShifts > 0 
-                    ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100)
-                    : "100%"
-                  }
-                  icon={Target}
-                  color="text-purple-600"
-                  bgColor="bg-purple-100"
-                />
+                <KPICard title="إجمالي الورديات" value={formatNumber(report.shiftsReport.totalShifts)} icon={Clock} color="text-blue-600" bgColor="bg-blue-100" />
+                <KPICard title="الورديات مع موظفين" value={formatNumber(report.shiftsReport.shiftsWithEmployees)} icon={Users} color="text-green-600" bgColor="bg-green-100" />
+                <KPICard title="إجمالي التكليفات" value={formatNumber(report.shiftsReport.totalEmployeeAssignments)} icon={Users} color="text-indigo-600" bgColor="bg-indigo-100" />
+                <KPICard title="نسبة التغطية"
+                  value={report.shiftsReport.totalShifts > 0 ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100) : "100%"}
+                  icon={Target} color="text-purple-600" bgColor="bg-purple-100" />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">الورديات حسب النوع</CardTitle>
-                  </CardHeader>
+                  <CardHeader><CardTitle className="text-lg">الورديات حسب النوع</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={report.shiftsReport.shiftsByType}
-                            dataKey="count"
-                            nameKey="type"
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={100}
-                            label={({ type, percent }) => `${type}: ${(percent * 100).toFixed(0)}%`}
-                          >
+                          <Pie data={report.shiftsReport.shiftsByType} dataKey="count" nameKey="type" cx="50%" cy="50%" outerRadius={100}
+                            label={({ type, percent }) => `${type}: ${(percent * 100).toFixed(0)}%`}>
                             {report.shiftsReport.shiftsByType.map((_, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
@@ -661,9 +1200,7 @@ export default function OperationsReportsDashboardPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">الموظفين حسب الدور</CardTitle>
-                  </CardHeader>
+                  <CardHeader><CardTitle className="text-lg">الموظفين حسب الدور</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -681,75 +1218,167 @@ export default function OperationsReportsDashboardPage() {
               </div>
             </TabsContent>
 
-            <TabsContent value="branches" className="space-y-6">
-              <div className="grid grid-cols-1 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">مقارنة المبيعات بين الفروع</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={report.branchComparison}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="branchName" fontSize={12} />
-                          <YAxis fontSize={12} />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                          <Legend />
-                          <Bar dataKey="totalSales" name="المبيعات" fill="#10B981" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
+            <TabsContent value="cashier" className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-amber-600" />
+                  يوميات الكاشير والصندوق
+                </h2>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setLocation("/cashier-journals")} className="gap-2" data-testid="link-cashier-journals">
+                    <ExternalLink className="w-4 h-4" />
+                    عرض الكل
+                  </Button>
+                  <Button onClick={() => setLocation("/cashier-journals/new")} className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="link-new-journal">
+                    <Receipt className="w-4 h-4" />
+                    يومية جديدة
+                  </Button>
+                </div>
+              </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">تفاصيل أداء الفروع</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-right py-3 px-4">الفرع</th>
-                            <th className="text-right py-3 px-4">المبيعات</th>
-                            <th className="text-right py-3 px-4">الأوامر</th>
-                            <th className="text-right py-3 px-4">نسبة الجودة</th>
-                            <th className="text-right py-3 px-4">متوسط الفاتورة</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.branchComparison.map((branch) => (
-                            <tr key={branch.branchId} className="border-b hover:bg-muted/50">
-                              <td className="py-3 px-4 font-medium">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KPICard title="إجمالي اليوميات" value={formatNumber(filteredCashierJournals.length)} icon={Receipt} color="text-blue-600" bgColor="bg-blue-100" />
+                <KPICard title="إجمالي المبيعات" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0))}
+                  icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
+                <KPICard title="حالات العجز"
+                  value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length)}
+                  icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" />
+                <KPICard title="حالات الفائض"
+                  value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').length)}
+                  icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100" />
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">قائمة يوميات الكاشير</CardTitle>
+                  <CardDescription>عرض وإدارة يوميات الكاشير مع إمكانية الاطلاع على التفاصيل والمرفقات</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-right py-3 px-4">التاريخ</th>
+                          <th className="text-right py-3 px-4">الفرع</th>
+                          <th className="text-right py-3 px-4">الكاشير</th>
+                          <th className="text-right py-3 px-4">الوردية</th>
+                          <th className="text-right py-3 px-4">إجمالي المبيعات</th>
+                          <th className="text-right py-3 px-4">العجز/الفائض</th>
+                          <th className="text-right py-3 px-4">الحالة</th>
+                          <th className="text-right py-3 px-4">الإجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredCashierJournals.length > 0 ? (
+                          filteredCashierJournals.slice(0, 20).map((journal) => (
+                            <tr key={journal.id} className="border-b hover:bg-muted/50">
+                              <td className="py-3 px-4">{journal.journalDate}</td>
+                              <td className="py-3 px-4">
                                 <div className="flex items-center gap-2">
                                   <Building2 className="w-4 h-4 text-muted-foreground" />
-                                  {branch.branchName}
+                                  {branches?.find(b => b.id === journal.branchId)?.name || journal.branchId}
                                 </div>
                               </td>
-                              <td className="py-3 px-4">{formatCurrency(branch.totalSales)}</td>
-                              <td className="py-3 px-4">{formatNumber(branch.totalOrders)}</td>
+                              <td className="py-3 px-4">{journal.cashierName}</td>
+                              <td className="py-3 px-4">{journal.shiftType || "-"}</td>
+                              <td className="py-3 px-4 font-semibold text-green-600">{formatCurrency(journal.totalSales || 0)}</td>
                               <td className="py-3 px-4">
-                                <span className={branch.qualityPassRate >= 90 ? "text-green-600" : "text-yellow-600"}>
-                                  {formatPercent(branch.qualityPassRate)}
+                                <span className={`font-semibold ${(journal.discrepancyAmount || 0) < 0 ? 'text-red-600' : (journal.discrepancyAmount || 0) > 0 ? 'text-green-600' : ''}`}>
+                                  {formatCurrency(journal.discrepancyAmount || 0)}
                                 </span>
+                                <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mr-2 text-xs">
+                                  {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                                </Badge>
                               </td>
-                              <td className="py-3 px-4">{formatCurrency(branch.averageTicket)}</td>
+                              <td className="py-3 px-4">
+                                <Badge variant={journal.status === 'approved' ? 'default' : journal.status === 'rejected' ? 'destructive' : 'secondary'}>
+                                  {STATUS_LABELS[journal.status] || journal.status}
+                                </Badge>
+                              </td>
+                              <td className="py-3 px-4">
+                                <JournalDetailsDialog journal={journal} branches={branches} />
+                              </td>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                              لا توجد يوميات كاشير في الفترة المحددة
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="branches" className="space-y-6">
+              <Card>
+                <CardHeader><CardTitle className="text-lg">مقارنة المبيعات بين الفروع</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={report.branchComparison}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" fontSize={12} />
+                        <YAxis fontSize={12} />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        <Legend />
+                        <Bar dataKey="totalSales" name="المبيعات" fill="#10B981" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-lg">تفاصيل أداء الفروع</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-right py-3 px-4">الفرع</th>
+                          <th className="text-right py-3 px-4">المبيعات</th>
+                          <th className="text-right py-3 px-4">الأوامر</th>
+                          <th className="text-right py-3 px-4">نسبة الجودة</th>
+                          <th className="text-right py-3 px-4">متوسط الفاتورة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.branchComparison.map((branch) => (
+                          <tr key={branch.branchId} className="border-b hover:bg-muted/50">
+                            <td className="py-3 px-4 font-medium">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-amber-600" />
+                                {branch.branchName}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-semibold text-green-600">{formatCurrency(branch.totalSales)}</td>
+                            <td className="py-3 px-4">{formatNumber(branch.totalOrders)}</td>
+                            <td className="py-3 px-4">
+                              <span className={branch.qualityPassRate >= 90 ? "text-green-600 font-semibold" : "text-yellow-600"}>
+                                {formatPercent(branch.qualityPassRate)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">{formatCurrency(branch.averageTicket)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         ) : (
           <Card>
-            <CardContent className="flex items-center justify-center py-12">
+            <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+              <BarChart3 className="w-12 h-12 text-muted-foreground" />
               <p className="text-muted-foreground">لا توجد بيانات متاحة</p>
+              <p className="text-sm text-muted-foreground">قم بتسجيل الدخول وتأكد من وجود بيانات في النظام</p>
             </CardContent>
           </Card>
         )}
