@@ -281,7 +281,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
                     <span className="font-medium">{exportTypeLabels[exp.exportType] || exp.exportType}</span>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {new Date(exp.createdAt).toLocaleDateString('ar-SA')}
+                    {new Date(exp.createdAt).toLocaleDateString('en-GB')}
                   </span>
                 </div>
               ))}
@@ -532,7 +532,7 @@ function ImportSection({ jobs }: { jobs: DataImportJob[] }) {
                     </div>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {new Date(job.createdAt).toLocaleDateString('ar-SA')}
+                    {new Date(job.createdAt).toLocaleDateString('en-GB')}
                   </span>
                 </div>
               ))}

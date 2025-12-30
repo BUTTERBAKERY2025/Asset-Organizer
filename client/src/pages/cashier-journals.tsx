@@ -220,7 +220,7 @@ export default function CashierJournalsPage() {
 
   <div class="footer">
     <span>بتر بيكري - Butter Bakery</span>
-    <span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span>
+    <span>تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</span>
   </div>
 </body>
 </html>`;

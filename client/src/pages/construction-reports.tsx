@@ -405,7 +405,7 @@ export default function ConstructionReportsPage() {
       <body>
         <div class="header">
           <h1>تفاصيل بنود: ${selectedCategoryInfo.name}</h1>
-          <p>تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p>
+          <p>تاريخ التقرير: ${new Date().toLocaleDateString('en-GB')}</p>
         </div>
         <div class="summary">
           <div class="summary-card">

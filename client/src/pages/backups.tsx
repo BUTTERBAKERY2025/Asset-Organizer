@@ -95,7 +95,7 @@ export default function BackupsPage() {
   });
 
   const handleCreate = () => {
-    createMutation.mutate(backupName || `نسخة احتياطية - ${new Date().toLocaleDateString('ar-SA')}`);
+    createMutation.mutate(backupName || `نسخة احتياطية - ${new Date().toLocaleDateString('en-GB')}`);
   };
 
   const getStatusBadge = (status: string) => {

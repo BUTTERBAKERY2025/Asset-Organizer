@@ -933,7 +933,7 @@ export default function OperationsReportsDashboardPage() {
 
   <div class="footer">
     <span>بتر بيكري - Butter Bakery</span>
-    <span>${new Date().toLocaleDateString('ar-SA')}</span>
+    <span>${new Date().toLocaleDateString('en-GB')}</span>
   </div>
 </body>
 </html>`;

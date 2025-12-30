@@ -282,6 +282,116 @@ export default function TargetsDashboard() {
     XLSX.writeFile(wb, `تقرير_الأهداف_${selectedMonth}.xlsx`);
   };
 
+  const exportBranchReport = () => {
+    if (selectedBranch === "all" || !branchProgress) {
+      return;
+    }
+    
+    const branchName = branches.find(b => b.id === selectedBranch)?.name || selectedBranch;
+    const wb = XLSX.utils.book_new();
+    
+    // Branch summary sheet
+    const summaryData = [{
+      'الفرع': branchName,
+      'الشهر': selectedMonth,
+      'الهدف الشهري': branchProgress.targetAmount,
+      'المحقق': branchProgress.achievedAmount,
+      'نسبة التحقيق': `${branchProgress.achievementPercent.toFixed(1)}%`,
+      'المتبقي': branchProgress.remainingAmount,
+      'متوسط الهدف اليومي': branchProgress.dailyTargetAverage
+    }];
+    const ws1 = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, ws1, 'ملخص الفرع');
+    
+    // Daily progress sheet
+    if (branchProgress.dailyProgress?.length) {
+      const dailyData = branchProgress.dailyProgress.map(d => ({
+        'التاريخ': d.date,
+        'اليوم': d.dayName,
+        'الهدف اليومي': d.targetAmount,
+        'المحقق': d.achievedAmount,
+        'النسبة': `${d.achievementPercent.toFixed(1)}%`,
+        'الفارق': d.variance,
+        'عدد اليوميات': d.journalCount,
+        'تراكمي الهدف': d.cumulativeTarget,
+        'تراكمي المحقق': d.cumulativeAchieved,
+        'تراكمي%': `${d.cumulativePercent.toFixed(1)}%`
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(dailyData);
+      XLSX.utils.book_append_sheet(wb, ws2, 'التقدم اليومي');
+    }
+    
+    XLSX.writeFile(wb, `تقرير_الأهداف_${branchName}_${selectedMonth}.xlsx`);
+  };
+
+  const exportBranchPDF = () => {
+    if (selectedBranch === "all" || !branchProgress) {
+      return;
+    }
+    
+    const branchName = branches.find(b => b.id === selectedBranch)?.name || selectedBranch;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="UTF-8">
+          <title>تقرير الفرع - ${branchName}</title>
+          <style>
+            body { font-family: 'Cairo', sans-serif; padding: 20px; direction: rtl; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+            th { background-color: #f59e0b; color: white; }
+            h1, h2 { color: #92400e; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .summary { display: flex; justify-content: space-around; margin: 20px 0; flex-wrap: wrap; gap: 10px; }
+            .card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; text-align: center; min-width: 120px; }
+            @media print { body { print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>تقرير أداء الفرع</h1>
+            <h2>${branchName}</h2>
+            <p>الشهر: ${selectedMonth}</p>
+          </div>
+          <div class="summary">
+            <div class="card"><strong>الهدف الشهري:</strong><br/>${formatCurrency(branchProgress.targetAmount)}</div>
+            <div class="card"><strong>المحقق:</strong><br/>${formatCurrency(branchProgress.achievedAmount)}</div>
+            <div class="card"><strong>نسبة التحقيق:</strong><br/>${branchProgress.achievementPercent.toFixed(1)}%</div>
+            <div class="card"><strong>المتبقي:</strong><br/>${formatCurrency(branchProgress.remainingAmount)}</div>
+          </div>
+          ${branchProgress.dailyProgress?.length ? `
+            <h2>التقدم اليومي التفصيلي</h2>
+            <table>
+              <thead>
+                <tr><th>التاريخ</th><th>اليوم</th><th>الهدف</th><th>المحقق</th><th>النسبة</th><th>الفارق</th><th>تراكمي%</th></tr>
+              </thead>
+              <tbody>
+                ${branchProgress.dailyProgress.filter(d => d.achievedAmount > 0 || new Date(d.date) <= new Date()).map(d => `
+                  <tr>
+                    <td>${new Date(d.date).toLocaleDateString('en-GB')}</td>
+                    <td>${d.dayName}</td>
+                    <td>${formatCurrency(d.targetAmount)}</td>
+                    <td>${formatCurrency(d.achievedAmount)}</td>
+                    <td>${d.achievementPercent.toFixed(0)}%</td>
+                    <td style="color: ${d.variance >= 0 ? 'green' : 'red'}">${d.variance >= 0 ? '+' : ''}${formatCurrency(d.variance)}</td>
+                    <td>${d.cumulativePercent.toFixed(1)}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : ''}
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 500);
+    }
+  };
+
   const exportToPDF = () => {
     const printContent = document.getElementById('print-content');
     if (!printContent) {
@@ -686,7 +796,7 @@ export default function TargetsDashboard() {
                     <Calendar className="h-5 w-5 text-amber-600" />
                     التقدم اليومي للمبيعات مقابل الأهداف
                   </CardTitle>
-                  <div className="flex items-center gap-4 mt-4">
+                  <div className="flex items-center gap-4 mt-4 flex-wrap">
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                       <SelectTrigger className="w-48" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
@@ -698,6 +808,19 @@ export default function TargetsDashboard() {
                         ))}
                       </SelectContent>
                     </Select>
+                    
+                    {selectedBranch !== "all" && branchProgress && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={exportBranchReport} data-testid="button-export-branch-excel">
+                          <FileSpreadsheet className="h-4 w-4 ml-2" />
+                          تصدير تقرير الفرع (Excel)
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={exportBranchPDF} data-testid="button-export-branch-pdf">
+                          <FileText className="h-4 w-4 ml-2" />
+                          طباعة تقرير الفرع (PDF)
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -767,7 +890,7 @@ export default function TargetsDashboard() {
                                     <YAxis />
                                     <Tooltip 
                                       formatter={(value: number) => formatCurrency(value)}
-                                      labelFormatter={(v) => `${new Date(v).toLocaleDateString('ar-SA')}`}
+                                      labelFormatter={(v) => `${new Date(v).toLocaleDateString('en-GB')}`}
                                     />
                                     <Legend />
                                     <Bar dataKey="targetAmount" fill="#f59e0b" name="الهدف اليومي" />
@@ -789,7 +912,7 @@ export default function TargetsDashboard() {
                                     <YAxis />
                                     <Tooltip 
                                       formatter={(value: number) => formatCurrency(value)}
-                                      labelFormatter={(v) => new Date(v).toLocaleDateString('ar-SA')}
+                                      labelFormatter={(v) => new Date(v).toLocaleDateString('en-GB')}
                                     />
                                     <Legend />
                                     <Line type="monotone" dataKey="cumulativeTarget" stroke="#f59e0b" name="الهدف التراكمي" strokeWidth={2} />
@@ -824,7 +947,7 @@ export default function TargetsDashboard() {
                                       .filter(d => d.achievedAmount > 0 || new Date(d.date) <= new Date())
                                       .map((day) => (
                                       <tr key={day.date} className={`border-b hover:bg-gray-50 ${day.achievedAmount > 0 ? '' : 'text-gray-400'}`}>
-                                        <td className="p-2">{new Date(day.date).toLocaleDateString('ar-SA')}</td>
+                                        <td className="p-2">{new Date(day.date).toLocaleDateString('en-GB')}</td>
                                         <td className="p-2">{day.dayName}</td>
                                         <td className="p-2 font-mono">{formatCurrency(day.targetAmount)}</td>
                                         <td className="p-2 font-mono font-bold">{formatCurrency(day.achievedAmount)}</td>
