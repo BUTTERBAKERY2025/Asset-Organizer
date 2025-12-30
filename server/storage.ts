@@ -3268,7 +3268,7 @@ export class DatabaseStorage implements IStorage {
   // ==========================================
 
   // Get targets vs actuals analysis for a date range
-  async getTargetsVsActuals(branchId: string | null, fromDate: string, toDate: string): Promise<{
+  async getTargetsVsActuals(branchId: string | null, fromDate: string, toDate: string, status?: string, discrepancyType?: string): Promise<{
     date: string;
     branchId: string;
     branchName: string;
@@ -3283,18 +3283,31 @@ export class DatabaseStorage implements IStorage {
     const targetBranches = branchId ? branches.filter(b => b.id === branchId) : branches;
     const results: any[] = [];
 
+    // Build status filter
+    const statusFilter = status ? [status] : ['posted', 'approved'];
+    
     for (const branch of targetBranches) {
-      // Get approved journals for the date range
+      // Build where conditions
+      const whereConditions: any[] = [
+        eq(cashierSalesJournals.branchId, branch.id),
+        gte(cashierSalesJournals.journalDate, fromDate),
+        lte(cashierSalesJournals.journalDate, toDate),
+        inArray(cashierSalesJournals.status, statusFilter)
+      ];
+
+      // Add discrepancy filter
+      if (discrepancyType === 'shortage') {
+        whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'shortage'));
+      } else if (discrepancyType === 'surplus') {
+        whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'surplus'));
+      } else if (discrepancyType === 'balanced') {
+        whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'balanced'));
+      }
+
+      // Get journals for the date range
       const journals = await db.select()
         .from(cashierSalesJournals)
-        .where(
-          and(
-            eq(cashierSalesJournals.branchId, branch.id),
-            gte(cashierSalesJournals.journalDate, fromDate),
-            lte(cashierSalesJournals.journalDate, toDate),
-            inArray(cashierSalesJournals.status, ['posted', 'approved'])
-          )
-        );
+        .where(and(...whereConditions));
 
       // Group by date
       const salesMap = new Map<string, {
@@ -3372,7 +3385,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get shift performance analysis
-  async getShiftAnalytics(branchId: string | null, fromDate: string, toDate: string): Promise<{
+  async getShiftAnalytics(branchId: string | null, fromDate: string, toDate: string, status?: string, discrepancyType?: string): Promise<{
     shiftType: string;
     shiftLabel: string;
     totalSales: number;
@@ -3382,14 +3395,23 @@ export class DatabaseStorage implements IStorage {
     journalCount: number;
     percentage: number;
   }[]> {
+    const statusFilter = status ? [status] : ['posted', 'approved'];
     const whereConditions: any[] = [
       gte(cashierSalesJournals.journalDate, fromDate),
       lte(cashierSalesJournals.journalDate, toDate),
-      inArray(cashierSalesJournals.status, ['posted', 'approved'])
+      inArray(cashierSalesJournals.status, statusFilter)
     ];
     
     if (branchId) {
       whereConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    }
+
+    if (discrepancyType === 'shortage') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'shortage'));
+    } else if (discrepancyType === 'surplus') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'surplus'));
+    } else if (discrepancyType === 'balanced') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'balanced'));
     }
 
     const journals = await db.select()
@@ -3434,7 +3456,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get cashier leaderboard
-  async getCashierLeaderboard(branchId: string | null, fromDate: string, toDate: string): Promise<{
+  async getCashierLeaderboard(branchId: string | null, fromDate: string, toDate: string, status?: string, discrepancyType?: string): Promise<{
     cashierId: string;
     cashierName: string;
     branchId: string;
@@ -3448,14 +3470,23 @@ export class DatabaseStorage implements IStorage {
     contribution: number;
     shiftDistribution: { morning: number; evening: number; night: number };
   }[]> {
+    const statusFilter = status ? [status] : ['posted', 'approved'];
     const whereConditions: any[] = [
       gte(cashierSalesJournals.journalDate, fromDate),
       lte(cashierSalesJournals.journalDate, toDate),
-      inArray(cashierSalesJournals.status, ['posted', 'approved'])
+      inArray(cashierSalesJournals.status, statusFilter)
     ];
     
     if (branchId) {
       whereConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    }
+
+    if (discrepancyType === 'shortage') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'shortage'));
+    } else if (discrepancyType === 'surplus') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'surplus'));
+    } else if (discrepancyType === 'balanced') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'balanced'));
     }
 
     const journals = await db.select()
@@ -3530,7 +3561,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get average ticket analysis
-  async getAverageTicketAnalysis(branchId: string | null, groupBy: 'shift' | 'cashier' | 'date', fromDate: string, toDate: string): Promise<{
+  async getAverageTicketAnalysis(branchId: string | null, groupBy: 'shift' | 'cashier' | 'date', fromDate: string, toDate: string, status?: string, discrepancyType?: string): Promise<{
     group: string;
     groupLabel: string;
     averageTicket: number;
@@ -3538,14 +3569,23 @@ export class DatabaseStorage implements IStorage {
     totalSales: number;
     journalCount: number;
   }[]> {
+    const statusFilter = status ? [status] : ['posted', 'approved'];
     const whereConditions: any[] = [
       gte(cashierSalesJournals.journalDate, fromDate),
       lte(cashierSalesJournals.journalDate, toDate),
-      inArray(cashierSalesJournals.status, ['posted', 'approved'])
+      inArray(cashierSalesJournals.status, statusFilter)
     ];
     
     if (branchId) {
       whereConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    }
+
+    if (discrepancyType === 'shortage') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'shortage'));
+    } else if (discrepancyType === 'surplus') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'surplus'));
+    } else if (discrepancyType === 'balanced') {
+      whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'balanced'));
     }
 
     const journals = await db.select()

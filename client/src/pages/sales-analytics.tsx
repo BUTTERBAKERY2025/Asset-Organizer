@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,7 +26,13 @@ import {
   Trophy,
   Gift,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Sparkles
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -52,6 +58,22 @@ export default function SalesAnalytics() {
   const [selectedMonth, setSelectedMonth] = useState((currentDate.getMonth() + 1).toString().padStart(2, "0"));
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [activeTab, setActiveTab] = useState("overview");
+  const [journalStatus, setJournalStatus] = useState<string>("all");
+  const [discrepancyType, setDiscrepancyType] = useState<string>("all");
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (autoRefresh) {
+      interval = setInterval(() => {
+        handleRefresh();
+      }, 60000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh]);
 
   const yearMonth = `${selectedYear}-${selectedMonth}`;
   const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
@@ -63,10 +85,12 @@ export default function SalesAnalytics() {
   });
 
   const { data: targetsVsActuals = [], isLoading: loadingTargets, refetch: refetchTargets } = useQuery<any[]>({
-    queryKey: ["/api/analytics/targets-vs-actuals", selectedBranch, fromDate, toDate],
+    queryKey: ["/api/analytics/targets-vs-actuals", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
     queryFn: async () => {
       const params = new URLSearchParams({ fromDate, toDate });
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (journalStatus !== "all") params.append("status", journalStatus);
+      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
       const res = await fetch(`/api/analytics/targets-vs-actuals?${params}`);
       if (!res.ok) throw new Error("Failed to fetch targets vs actuals");
       return res.json();
@@ -74,10 +98,12 @@ export default function SalesAnalytics() {
   });
 
   const { data: shiftAnalytics = [], isLoading: loadingShifts, refetch: refetchShifts } = useQuery<any[]>({
-    queryKey: ["/api/analytics/shifts", selectedBranch, fromDate, toDate],
+    queryKey: ["/api/analytics/shifts", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
     queryFn: async () => {
       const params = new URLSearchParams({ fromDate, toDate });
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (journalStatus !== "all") params.append("status", journalStatus);
+      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
       const res = await fetch(`/api/analytics/shifts?${params}`);
       if (!res.ok) throw new Error("Failed to fetch shift analytics");
       return res.json();
@@ -85,10 +111,12 @@ export default function SalesAnalytics() {
   });
 
   const { data: cashierLeaderboard = [], isLoading: loadingLeaderboard, refetch: refetchLeaderboard } = useQuery<any[]>({
-    queryKey: ["/api/analytics/cashier-leaderboard", selectedBranch, fromDate, toDate],
+    queryKey: ["/api/analytics/cashier-leaderboard", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
     queryFn: async () => {
       const params = new URLSearchParams({ fromDate, toDate });
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (journalStatus !== "all") params.append("status", journalStatus);
+      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
       const res = await fetch(`/api/analytics/cashier-leaderboard?${params}`);
       if (!res.ok) throw new Error("Failed to fetch cashier leaderboard");
       return res.json();
@@ -96,10 +124,12 @@ export default function SalesAnalytics() {
   });
 
   const { data: avgTicketByShift = [], refetch: refetchAvgTicket } = useQuery<any[]>({
-    queryKey: ["/api/analytics/average-ticket", selectedBranch, "shift", fromDate, toDate],
+    queryKey: ["/api/analytics/average-ticket", selectedBranch, "shift", fromDate, toDate, journalStatus, discrepancyType],
     queryFn: async () => {
       const params = new URLSearchParams({ fromDate, toDate, groupBy: "shift" });
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (journalStatus !== "all") params.append("status", journalStatus);
+      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
       const res = await fetch(`/api/analytics/average-ticket?${params}`);
       if (!res.ok) throw new Error("Failed to fetch average ticket");
       return res.json();
@@ -107,9 +137,11 @@ export default function SalesAnalytics() {
   });
 
   const { data: branchCompetition = [], isLoading: loadingBranches, refetch: refetchBranches } = useQuery<any[]>({
-    queryKey: ["/api/analytics/branch-competition", fromDate, toDate],
+    queryKey: ["/api/analytics/branch-competition", fromDate, toDate, journalStatus, discrepancyType],
     queryFn: async () => {
       const params = new URLSearchParams({ fromDate, toDate });
+      if (journalStatus !== "all") params.append("status", journalStatus);
+      if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
       const res = await fetch(`/api/analytics/branch-competition?${params}`);
       if (!res.ok) throw new Error("Failed to fetch branch competition");
       return res.json();
@@ -122,6 +154,7 @@ export default function SalesAnalytics() {
     refetchLeaderboard();
     refetchAvgTicket();
     refetchBranches();
+    setLastUpdated(new Date());
   };
 
   const exportToExcel = (data: any[], sheetName: string, fileName: string) => {
@@ -130,6 +163,49 @@ export default function SalesAnalytics() {
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileName}.xlsx`);
   };
+
+  const exportToCSV = (data: any[], fileName: string) => {
+    if (data.length === 0) return;
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(","),
+      ...data.map(row => headers.map(h => `"${row[h] || ''}"`).join(","))
+    ].join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${fileName}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const formatLastUpdated = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "الآن";
+    if (diffMins < 60) return `منذ ${diffMins} دقيقة`;
+    const diffHours = Math.floor(diffMins / 60);
+    return `منذ ${diffHours} ساعة`;
+  };
+
+  const holidaysAndSeasons: Record<string, { label: string; factor: number }> = {
+    "01": { label: "موسم الشتاء", factor: 0.9 },
+    "02": { label: "عادي", factor: 1.0 },
+    "03": { label: "رمضان (تقريبي)", factor: 1.3 },
+    "04": { label: "عيد الفطر (تقريبي)", factor: 1.5 },
+    "05": { label: "عادي", factor: 1.0 },
+    "06": { label: "موسم الصيف", factor: 0.85 },
+    "07": { label: "موسم الصيف", factor: 0.85 },
+    "08": { label: "موسم الصيف", factor: 0.85 },
+    "09": { label: "عودة المدارس", factor: 1.1 },
+    "10": { label: "عادي", factor: 1.0 },
+    "11": { label: "عادي", factor: 1.0 },
+    "12": { label: "نهاية السنة", factor: 1.15 },
+  };
+
+  const currentSeason = holidaysAndSeasons[selectedMonth] || { label: "عادي", factor: 1.0 };
 
   const exportCashierLeaderboard = () => {
     const exportData = cashierLeaderboard.map((c: any) => ({
@@ -256,46 +332,109 @@ export default function SalesAnalytics() {
               <p className="text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
             </div>
 
-            <div className="flex flex-wrap gap-3 items-center">
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-28" data-testid="select-year">
-                  <SelectValue placeholder="السنة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map((y) => (
-                    <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-32" data-testid="select-month">
-                  <SelectValue placeholder="الشهر" />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-40" data-testid="select-branch">
-                  <SelectValue placeholder="الفرع" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">جميع الفروع</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="button-refresh">
-                <RefreshCw className="h-4 w-4" />
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-white/80">
+                <Clock className="h-3 w-3 ml-1" />
+                آخر تحديث: {formatLastUpdated(lastUpdated)}
+              </Badge>
+              <Button 
+                variant={autoRefresh ? "default" : "outline"} 
+                size="sm" 
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className={autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}
+                data-testid="button-auto-refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ml-1 ${autoRefresh ? "animate-spin" : ""}`} />
+                {autoRefresh ? "تحديث تلقائي" : "تفعيل التحديث"}
               </Button>
             </div>
           </div>
+
+          <Card className="bg-white/80 backdrop-blur border-amber-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Filter className="h-4 w-4 text-amber-600" />
+                الفلاتر المتقدمة
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3 items-center">
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="w-28" data-testid="select-year">
+                    <SelectValue placeholder="السنة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map((y) => (
+                      <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-32" data-testid="select-month">
+                    <SelectValue placeholder="الشهر" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                  <SelectTrigger className="w-40" data-testid="select-branch">
+                    <SelectValue placeholder="الفرع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الفروع</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={journalStatus} onValueChange={setJournalStatus}>
+                  <SelectTrigger className="w-40" data-testid="select-journal-status">
+                    <SelectValue placeholder="حالة اليومية" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الحالات</SelectItem>
+                    <SelectItem value="posted">مرحّلة</SelectItem>
+                    <SelectItem value="approved">معتمدة</SelectItem>
+                    <SelectItem value="submitted">مقدمة</SelectItem>
+                    <SelectItem value="draft">مسودة</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={discrepancyType} onValueChange={setDiscrepancyType}>
+                  <SelectTrigger className="w-44" data-testid="select-discrepancy-type">
+                    <SelectValue placeholder="نوع العجز/الزيادة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="balanced">متوازن</SelectItem>
+                    <SelectItem value="shortage">عجز فقط</SelectItem>
+                    <SelectItem value="surplus">زيادة فقط</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="button-refresh">
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+
+                <div className="mr-auto flex items-center gap-2">
+                  <Badge className={`${
+                    currentSeason.factor > 1.2 ? "bg-green-100 text-green-800" :
+                    currentSeason.factor < 0.9 ? "bg-orange-100 text-orange-800" :
+                    "bg-gray-100 text-gray-800"
+                  }`}>
+                    <Sparkles className="h-3 w-3 ml-1" />
+                    {currentSeason.label} ({currentSeason.factor > 1 ? "+" : ""}{((currentSeason.factor - 1) * 100).toFixed(0)}%)
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="bg-white/80 backdrop-blur border-amber-200">
@@ -507,10 +646,25 @@ export default function SalesAnalytics() {
                     ترتيب الفروع حسب نسبة تحقيق الهدف للفترة: {fromDate} إلى {toDate}
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={exportBranchCompetition} data-testid="button-export-branches">
-                  <FileSpreadsheet className="h-4 w-4 ml-2" />
-                  تصدير Excel
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={exportBranchCompetition} data-testid="button-export-branches-excel">
+                    <FileSpreadsheet className="h-4 w-4 ml-1" />
+                    Excel
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const exportData = branchCompetition.map((b: any) => ({
+                      'الترتيب': b.rank,
+                      'الفرع': b.branchName,
+                      'الهدف': b.targetAmount,
+                      'الفعلي': b.totalSales,
+                      'نسبة الإنجاز': `${b.achievementPercent.toFixed(1)}%`
+                    }));
+                    exportToCSV(exportData, `branch-competition-${yearMonth}`);
+                  }} data-testid="button-export-branches-csv">
+                    <FileText className="h-4 w-4 ml-1" />
+                    CSV
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {loadingBranches ? (
@@ -664,10 +818,26 @@ export default function SalesAnalytics() {
                     الفترة: {fromDate} إلى {toDate}
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={exportCashierLeaderboard} data-testid="button-export-cashiers">
-                  <FileSpreadsheet className="h-4 w-4 ml-2" />
-                  تصدير Excel
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={exportCashierLeaderboard} data-testid="button-export-cashiers-excel">
+                    <FileSpreadsheet className="h-4 w-4 ml-1" />
+                    Excel
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const exportData = cashierLeaderboard.map((c: any) => ({
+                      'الترتيب': c.rank,
+                      'الكاشير': c.cashierName,
+                      'الفرع': c.branchName,
+                      'إجمالي المبيعات': c.totalSales,
+                      'نسبة الإنجاز': `${(c.achievementPercent || 0).toFixed(1)}%`,
+                      'المساهمة': `${c.contribution.toFixed(1)}%`
+                    }));
+                    exportToCSV(exportData, `cashier-leaderboard-${yearMonth}`);
+                  }} data-testid="button-export-cashiers-csv">
+                    <FileText className="h-4 w-4 ml-1" />
+                    CSV
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {loadingLeaderboard ? (
@@ -754,10 +924,24 @@ export default function SalesAnalytics() {
                   <Calendar className="h-5 w-5 text-amber-600" />
                   الأداء اليومي - الأهداف مقابل الفعلي
                 </CardTitle>
-                <Button variant="outline" size="sm" onClick={exportDailyPerformance} data-testid="button-export-daily">
-                  <FileSpreadsheet className="h-4 w-4 ml-2" />
-                  تصدير Excel
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={exportDailyPerformance} data-testid="button-export-daily-excel">
+                    <FileSpreadsheet className="h-4 w-4 ml-1" />
+                    Excel
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const exportData = targetsVsActuals.map((d: any) => ({
+                      'التاريخ': d.date,
+                      'الهدف': d.targetAmount,
+                      'الفعلي': d.actualSales,
+                      'نسبة الإنجاز': `${d.achievementPercent.toFixed(1)}%`
+                    }));
+                    exportToCSV(exportData, `daily-performance-${yearMonth}`);
+                  }} data-testid="button-export-daily-csv">
+                    <FileText className="h-4 w-4 ml-1" />
+                    CSV
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {loadingTargets ? (

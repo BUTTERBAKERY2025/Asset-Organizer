@@ -3787,7 +3787,7 @@ export async function registerRoutes(
   // Targets vs Actuals - مقارنة الأهداف بالفعليات
   app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { branchId, fromDate, toDate } = req.query;
+      const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
       if (!fromDate || !toDate) {
         return res.status(400).json({ error: "fromDate and toDate are required" });
@@ -3796,7 +3796,9 @@ export async function registerRoutes(
       const data = await storage.getTargetsVsActuals(
         branchId as string | null,
         fromDate as string,
-        toDate as string
+        toDate as string,
+        status as string | undefined,
+        discrepancyType as string | undefined
       );
       res.json(data);
     } catch (error) {
@@ -3808,7 +3810,7 @@ export async function registerRoutes(
   // Shift Analytics - تحليلات الورديات
   app.get("/api/analytics/shifts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { branchId, fromDate, toDate } = req.query;
+      const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
       if (!fromDate || !toDate) {
         return res.status(400).json({ error: "fromDate and toDate are required" });
@@ -3817,7 +3819,9 @@ export async function registerRoutes(
       const data = await storage.getShiftAnalytics(
         branchId as string | null,
         fromDate as string,
-        toDate as string
+        toDate as string,
+        status as string | undefined,
+        discrepancyType as string | undefined
       );
       res.json(data);
     } catch (error) {
@@ -3829,7 +3833,7 @@ export async function registerRoutes(
   // Cashier Leaderboard - ترتيب الكاشيرين
   app.get("/api/analytics/cashier-leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { branchId, fromDate, toDate } = req.query;
+      const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
       if (!fromDate || !toDate) {
         return res.status(400).json({ error: "fromDate and toDate are required" });
@@ -3838,7 +3842,9 @@ export async function registerRoutes(
       const data = await storage.getCashierLeaderboard(
         branchId as string | null,
         fromDate as string,
-        toDate as string
+        toDate as string,
+        status as string | undefined,
+        discrepancyType as string | undefined
       );
       
       // Get incentive tiers to enrich the leaderboard
@@ -3902,7 +3908,7 @@ export async function registerRoutes(
   // Branch Competition - منافسة الفروع
   app.get("/api/analytics/branch-competition", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { fromDate, toDate } = req.query;
+      const { fromDate, toDate, status, discrepancyType } = req.query;
       
       if (!fromDate || !toDate) {
         return res.status(400).json({ error: "fromDate and toDate are required" });
@@ -3918,7 +3924,13 @@ export async function registerRoutes(
         const targetAmount = branchTarget?.targetAmount || 0;
         
         // Get cashier leaderboard for this branch to sum sales
-        const cashiers = await storage.getCashierLeaderboard(branch.id, fromDate as string, toDate as string);
+        const cashiers = await storage.getCashierLeaderboard(
+          branch.id, 
+          fromDate as string, 
+          toDate as string,
+          status as string | undefined,
+          discrepancyType as string | undefined
+        );
         const totalSales = cashiers.reduce((sum, c) => sum + c.totalSales, 0);
         const cashierCount = cashiers.length;
         const totalTransactions = cashiers.reduce((sum, c) => sum + c.transactionsCount, 0);
@@ -3985,7 +3997,7 @@ export async function registerRoutes(
   // Average Ticket Analysis - تحليل متوسط الفاتورة
   app.get("/api/analytics/average-ticket", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { branchId, groupBy, fromDate, toDate } = req.query;
+      const { branchId, groupBy, fromDate, toDate, status, discrepancyType } = req.query;
       
       if (!fromDate || !toDate) {
         return res.status(400).json({ error: "fromDate and toDate are required" });
@@ -3997,7 +4009,9 @@ export async function registerRoutes(
         branchId as string | null,
         validGroupBy,
         fromDate as string,
-        toDate as string
+        toDate as string,
+        status as string | undefined,
+        discrepancyType as string | undefined
       );
       res.json(data);
     } catch (error) {
