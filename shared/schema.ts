@@ -1381,6 +1381,98 @@ export const insertIncentiveAwardSchema = createInsertSchema(incentiveAwards).om
 export type IncentiveAward = typeof incentiveAwards.$inferSelect;
 export type InsertIncentiveAward = z.infer<typeof insertIncentiveAwardSchema>;
 
+// Seasons and Holidays - المواسم والإجازات
+export const seasonsHolidays = pgTable("seasons_holidays", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم الموسم أو الإجازة
+  type: text("type").notNull(), // season, holiday, event
+  startDate: text("start_date").notNull(), // Format: "2025-01-15"
+  endDate: text("end_date").notNull(),
+  weightMultiplier: real("weight_multiplier").default(1.0).notNull(), // 1.5 for 150% target
+  applicableBranches: jsonb("applicable_branches"), // Array of branch IDs or null for all
+  description: text("description"),
+  isRecurring: boolean("is_recurring").default(false),
+  recurringPattern: text("recurring_pattern"), // yearly, monthly, etc.
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSeasonHolidaySchema = createInsertSchema(seasonsHolidays).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SeasonHoliday = typeof seasonsHolidays.$inferSelect;
+export type InsertSeasonHoliday = z.infer<typeof insertSeasonHolidaySchema>;
+
+// Commission Rates - معدلات العمولات
+export const commissionRates = pgTable("commission_rates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم نظام العمولة
+  description: text("description"),
+  minSalesAmount: real("min_sales_amount").default(0), // الحد الأدنى للمبيعات
+  maxSalesAmount: real("max_sales_amount"), // الحد الأقصى للمبيعات (null = unlimited)
+  commissionType: text("commission_type").notNull(), // fixed, percentage, tiered
+  fixedAmount: real("fixed_amount"), // مبلغ ثابت
+  percentageRate: real("percentage_rate"), // نسبة من المبيعات
+  applicableTo: text("applicable_to").default("cashier").notNull(), // cashier, branch, all
+  applicableBranches: jsonb("applicable_branches"), // Array of branch IDs or null for all
+  isActive: boolean("is_active").default(true).notNull(),
+  validFrom: text("valid_from"),
+  validTo: text("valid_to"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCommissionRateSchema = createInsertSchema(commissionRates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CommissionRate = typeof commissionRates.$inferSelect;
+export type InsertCommissionRate = z.infer<typeof insertCommissionRateSchema>;
+
+// Commission Calculations - حسابات العمولات
+export const commissionCalculations = pgTable("commission_calculations", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id").references(() => users.id),
+  branchId: varchar("branch_id").references(() => branches.id),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  totalSales: real("total_sales").notNull(),
+  targetAmount: real("target_amount"),
+  achievementPercent: real("achievement_percent"),
+  rateId: integer("rate_id").references(() => commissionRates.id),
+  calculatedCommission: real("calculated_commission").notNull(),
+  adjustedCommission: real("adjusted_commission"),
+  finalCommission: real("final_commission").notNull(),
+  status: text("status").default("pending").notNull(), // pending, approved, paid
+  journalIds: jsonb("journal_ids"),
+  notes: text("notes"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCommissionCalculationSchema = createInsertSchema(commissionCalculations).omit({
+  id: true,
+  approvedAt: true,
+  paidAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CommissionCalculation = typeof commissionCalculations.$inferSelect;
+export type InsertCommissionCalculation = z.infer<typeof insertCommissionCalculationSchema>;
+
 // Target Status Labels
 export const TARGET_STATUS = ["draft", "active", "locked", "archived"] as const;
 export type TargetStatus = typeof TARGET_STATUS[number];

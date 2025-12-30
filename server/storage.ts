@@ -80,6 +80,12 @@ import {
   type InsertIncentiveTier,
   type IncentiveAward,
   type InsertIncentiveAward,
+  type SeasonHoliday,
+  type InsertSeasonHoliday,
+  type CommissionRate,
+  type InsertCommissionRate,
+  type CommissionCalculation,
+  type InsertCommissionCalculation,
   branches,
   inventoryItems,
   auditLogs,
@@ -124,6 +130,9 @@ import {
   targetShiftAllocations,
   incentiveTiers,
   incentiveAwards,
+  seasonsHolidays,
+  commissionRates,
+  commissionCalculations,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -2766,6 +2775,290 @@ export class DatabaseStorage implements IStorage {
       branches: branchPerformance,
       cashiers: cashierPerformance.slice(0, 20)
     };
+  }
+
+  // ==========================================
+  // Seasons & Holidays Management
+  // ==========================================
+
+  async getAllSeasonsHolidays(): Promise<SeasonHoliday[]> {
+    return await db.select().from(seasonsHolidays).orderBy(seasonsHolidays.startDate);
+  }
+
+  async getActiveSeasonsHolidays(): Promise<SeasonHoliday[]> {
+    return await db.select().from(seasonsHolidays)
+      .where(eq(seasonsHolidays.isActive, true))
+      .orderBy(seasonsHolidays.startDate);
+  }
+
+  async createSeasonHoliday(data: InsertSeasonHoliday): Promise<SeasonHoliday> {
+    const [inserted] = await db.insert(seasonsHolidays).values(data).returning();
+    return inserted;
+  }
+
+  async updateSeasonHoliday(id: number, data: Partial<InsertSeasonHoliday>): Promise<SeasonHoliday | undefined> {
+    const [updated] = await db.update(seasonsHolidays)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(seasonsHolidays.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSeasonHoliday(id: number): Promise<void> {
+    await db.delete(seasonsHolidays).where(eq(seasonsHolidays.id, id));
+  }
+
+  async getSeasonsHolidaysForDateRange(startDate: string, endDate: string): Promise<SeasonHoliday[]> {
+    return await db.select().from(seasonsHolidays)
+      .where(
+        and(
+          eq(seasonsHolidays.isActive, true),
+          lte(seasonsHolidays.startDate, endDate),
+          gte(seasonsHolidays.endDate, startDate)
+        )
+      );
+  }
+
+  // ==========================================
+  // Commission Rates Management
+  // ==========================================
+
+  async getAllCommissionRates(): Promise<CommissionRate[]> {
+    return await db.select().from(commissionRates).orderBy(commissionRates.name);
+  }
+
+  async getActiveCommissionRates(): Promise<CommissionRate[]> {
+    return await db.select().from(commissionRates)
+      .where(eq(commissionRates.isActive, true))
+      .orderBy(commissionRates.minSalesAmount);
+  }
+
+  async createCommissionRate(data: InsertCommissionRate): Promise<CommissionRate> {
+    const [inserted] = await db.insert(commissionRates).values(data).returning();
+    return inserted;
+  }
+
+  async updateCommissionRate(id: number, data: Partial<InsertCommissionRate>): Promise<CommissionRate | undefined> {
+    const [updated] = await db.update(commissionRates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(commissionRates.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteCommissionRate(id: number): Promise<void> {
+    await db.delete(commissionRates).where(eq(commissionRates.id, id));
+  }
+
+  // ==========================================
+  // Commission Calculations
+  // ==========================================
+
+  async getAllCommissionCalculations(): Promise<CommissionCalculation[]> {
+    return await db.select().from(commissionCalculations).orderBy(desc(commissionCalculations.createdAt));
+  }
+
+  async getCommissionCalculationsByBranch(branchId: string): Promise<CommissionCalculation[]> {
+    return await db.select().from(commissionCalculations)
+      .where(eq(commissionCalculations.branchId, branchId))
+      .orderBy(desc(commissionCalculations.createdAt));
+  }
+
+  async getCommissionCalculationsByCashier(cashierId: string): Promise<CommissionCalculation[]> {
+    return await db.select().from(commissionCalculations)
+      .where(eq(commissionCalculations.cashierId, cashierId))
+      .orderBy(desc(commissionCalculations.createdAt));
+  }
+
+  async createCommissionCalculation(data: InsertCommissionCalculation): Promise<CommissionCalculation> {
+    const [inserted] = await db.insert(commissionCalculations).values(data).returning();
+    return inserted;
+  }
+
+  async updateCommissionCalculation(id: number, data: Partial<InsertCommissionCalculation>): Promise<CommissionCalculation | undefined> {
+    const [updated] = await db.update(commissionCalculations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(commissionCalculations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async approveCommissionCalculation(id: number, approvedBy: string): Promise<CommissionCalculation | undefined> {
+    const [updated] = await db.update(commissionCalculations)
+      .set({ status: 'approved', approvedBy, approvedAt: new Date(), updatedAt: new Date() })
+      .where(eq(commissionCalculations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markCommissionAsPaid(id: number): Promise<CommissionCalculation | undefined> {
+    const [updated] = await db.update(commissionCalculations)
+      .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
+      .where(eq(commissionCalculations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Calculate commission for a cashier for a period
+  async calculateCashierCommission(cashierId: string, periodStart: string, periodEnd: string): Promise<{
+    cashierId: string;
+    totalSales: number;
+    targetAmount: number;
+    achievementPercent: number;
+    applicableRate: CommissionRate | null;
+    calculatedCommission: number;
+    journalIds: number[];
+  }> {
+    const journals = await db.select().from(cashierSalesJournals)
+      .where(
+        and(
+          eq(cashierSalesJournals.cashierId, cashierId),
+          gte(cashierSalesJournals.journalDate, periodStart),
+          lte(cashierSalesJournals.journalDate, periodEnd),
+          eq(cashierSalesJournals.status, 'approved')
+        )
+      );
+
+    const totalSales = journals.reduce((sum, j) => sum + j.totalSales, 0);
+    const journalIds = journals.map(j => j.id);
+
+    // Get applicable commission rate
+    const rates = await this.getActiveCommissionRates();
+    const applicableRate = rates.find(r => {
+      const minOk = totalSales >= (r.minSalesAmount || 0);
+      const maxOk = !r.maxSalesAmount || totalSales <= r.maxSalesAmount;
+      return minOk && maxOk;
+    }) || null;
+
+    let calculatedCommission = 0;
+    if (applicableRate) {
+      if (applicableRate.commissionType === 'fixed' && applicableRate.fixedAmount) {
+        calculatedCommission = applicableRate.fixedAmount;
+      } else if (applicableRate.commissionType === 'percentage' && applicableRate.percentageRate) {
+        calculatedCommission = (totalSales * applicableRate.percentageRate) / 100;
+      } else if (applicableRate.commissionType === 'tiered') {
+        if (applicableRate.fixedAmount) calculatedCommission += applicableRate.fixedAmount;
+        if (applicableRate.percentageRate) calculatedCommission += (totalSales * applicableRate.percentageRate) / 100;
+      }
+    }
+
+    // Get target for achievement calculation
+    const branchId = journals[0]?.branchId;
+    let targetAmount = 0;
+    let achievementPercent = 0;
+    if (branchId) {
+      const yearMonth = periodStart.substring(0, 7);
+      const target = await this.getBranchMonthlyTargetByMonth(branchId, yearMonth);
+      if (target) {
+        targetAmount = target.targetAmount;
+        achievementPercent = targetAmount > 0 ? (totalSales / targetAmount) * 100 : 0;
+      }
+    }
+
+    return {
+      cashierId,
+      totalSales,
+      targetAmount,
+      achievementPercent,
+      applicableRate,
+      calculatedCommission,
+      journalIds
+    };
+  }
+
+  // Get performance alerts for targets not being met
+  async getTargetAlerts(yearMonth: string): Promise<{
+    branchId: string;
+    branchName: string;
+    targetAmount: number;
+    achievedAmount: number;
+    achievementPercent: number;
+    daysRemaining: number;
+    projectedAchievement: number;
+    alertLevel: 'critical' | 'warning' | 'on_track' | 'exceeding';
+    message: string;
+  }[]> {
+    const allBranches = await this.getAllBranches();
+    const allTargets = await this.getAllBranchMonthlyTargets();
+    const monthTargets = allTargets.filter(t => t.yearMonth === yearMonth);
+    
+    const [year, month] = yearMonth.split('-').map(Number);
+    const today = new Date();
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0);
+    
+    let daysPassed: number;
+    let daysRemaining: number;
+    
+    if (today < monthStart) {
+      // Future month - no days passed yet
+      daysPassed = 0;
+      daysRemaining = daysInMonth;
+    } else if (today > monthEnd) {
+      // Past month - all days passed
+      daysPassed = daysInMonth;
+      daysRemaining = 0;
+    } else {
+      // Current month
+      daysPassed = today.getDate();
+      daysRemaining = daysInMonth - daysPassed;
+    }
+
+    const alerts: {
+      branchId: string;
+      branchName: string;
+      targetAmount: number;
+      achievedAmount: number;
+      achievementPercent: number;
+      daysRemaining: number;
+      projectedAchievement: number;
+      alertLevel: 'critical' | 'warning' | 'on_track' | 'exceeding';
+      message: string;
+    }[] = [];
+
+    for (const branch of allBranches) {
+      const branchTarget = monthTargets.find(t => t.branchId === branch.id);
+      if (!branchTarget) continue;
+
+      const performance = await this.calculateBranchPerformance(branch.id, yearMonth);
+      const dailyAverage = daysPassed > 0 ? performance.achievedAmount / daysPassed : 0;
+      const projectedTotal = dailyAverage * daysInMonth;
+      const projectedAchievement = branchTarget.targetAmount > 0 
+        ? (projectedTotal / branchTarget.targetAmount) * 100 
+        : 0;
+
+      let alertLevel: 'critical' | 'warning' | 'on_track' | 'exceeding';
+      let message: string;
+
+      if (performance.achievementPercent >= 100) {
+        alertLevel = 'exceeding';
+        message = `تم تحقيق الهدف! نسبة التحقيق ${performance.achievementPercent.toFixed(1)}%`;
+      } else if (projectedAchievement >= 90) {
+        alertLevel = 'on_track';
+        message = `على المسار الصحيح. التوقع: ${projectedAchievement.toFixed(1)}%`;
+      } else if (projectedAchievement >= 70) {
+        alertLevel = 'warning';
+        message = `تحذير: التوقع ${projectedAchievement.toFixed(1)}% - يحتاج تحسين`;
+      } else {
+        alertLevel = 'critical';
+        message = `تنبيه خطير: التوقع ${projectedAchievement.toFixed(1)}% - يتطلب تدخل عاجل`;
+      }
+
+      alerts.push({
+        branchId: branch.id,
+        branchName: branch.name,
+        targetAmount: branchTarget.targetAmount,
+        achievedAmount: performance.achievedAmount,
+        achievementPercent: performance.achievementPercent,
+        daysRemaining,
+        projectedAchievement,
+        alertLevel,
+        message
+      });
+    }
+
+    return alerts.sort((a, b) => a.achievementPercent - b.achievementPercent);
   }
 }
 

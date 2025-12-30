@@ -3349,5 +3349,322 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // Seasons & Holidays Routes
+  // ==========================================
+
+  app.get("/api/seasons-holidays", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const seasons = await storage.getAllSeasonsHolidays();
+      res.json(seasons);
+    } catch (error) {
+      console.error("Error fetching seasons/holidays:", error);
+      res.status(500).json({ error: "Failed to fetch seasons/holidays" });
+    }
+  });
+
+  app.get("/api/seasons-holidays/active", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const seasons = await storage.getActiveSeasonsHolidays();
+      res.json(seasons);
+    } catch (error) {
+      console.error("Error fetching active seasons/holidays:", error);
+      res.status(500).json({ error: "Failed to fetch active seasons/holidays" });
+    }
+  });
+
+  app.post("/api/seasons-holidays", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { name, type, startDate, endDate, weightMultiplier, applicableBranches, description, isRecurring, recurringPattern } = req.body;
+      
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ error: "اسم الموسم/الإجازة مطلوب" });
+      }
+      if (!type || !['season', 'holiday', 'event'].includes(type)) {
+        return res.status(400).json({ error: "نوع غير صالح" });
+      }
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "تاريخ البداية والنهاية مطلوبان" });
+      }
+      
+      const parsedMultiplier = typeof weightMultiplier === 'string' ? parseFloat(weightMultiplier) : weightMultiplier;
+      if (parsedMultiplier !== undefined && (isNaN(parsedMultiplier) || parsedMultiplier <= 0)) {
+        return res.status(400).json({ error: "معامل الوزن يجب أن يكون رقماً موجباً" });
+      }
+      
+      const season = await storage.createSeasonHoliday({
+        name,
+        type,
+        startDate,
+        endDate,
+        weightMultiplier: parsedMultiplier || 1.0,
+        applicableBranches: applicableBranches || null,
+        description: description || null,
+        isRecurring: isRecurring || false,
+        recurringPattern: recurringPattern || null,
+        isActive: true,
+        createdBy: req.currentUser?.id
+      });
+      res.status(201).json(season);
+    } catch (error) {
+      console.error("Error creating season/holiday:", error);
+      res.status(500).json({ error: "Failed to create season/holiday" });
+    }
+  });
+
+  app.patch("/api/seasons-holidays/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const season = await storage.updateSeasonHoliday(id, req.body);
+      if (!season) {
+        return res.status(404).json({ error: "الموسم/الإجازة غير موجود" });
+      }
+      res.json(season);
+    } catch (error) {
+      console.error("Error updating season/holiday:", error);
+      res.status(500).json({ error: "Failed to update season/holiday" });
+    }
+  });
+
+  app.delete("/api/seasons-holidays/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      await storage.deleteSeasonHoliday(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting season/holiday:", error);
+      res.status(500).json({ error: "Failed to delete season/holiday" });
+    }
+  });
+
+  // ==========================================
+  // Commission Rates Routes
+  // ==========================================
+
+  app.get("/api/commission-rates", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const rates = await storage.getAllCommissionRates();
+      res.json(rates);
+    } catch (error) {
+      console.error("Error fetching commission rates:", error);
+      res.status(500).json({ error: "Failed to fetch commission rates" });
+    }
+  });
+
+  app.get("/api/commission-rates/active", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const rates = await storage.getActiveCommissionRates();
+      res.json(rates);
+    } catch (error) {
+      console.error("Error fetching active commission rates:", error);
+      res.status(500).json({ error: "Failed to fetch active commission rates" });
+    }
+  });
+
+  app.post("/api/commission-rates", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { name, description, minSalesAmount, maxSalesAmount, commissionType, fixedAmount, percentageRate, applicableTo, applicableBranches, validFrom, validTo } = req.body;
+      
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ error: "اسم نظام العمولة مطلوب" });
+      }
+      if (!commissionType || !['fixed', 'percentage', 'tiered'].includes(commissionType)) {
+        return res.status(400).json({ error: "نوع العمولة غير صالح" });
+      }
+      
+      const rate = await storage.createCommissionRate({
+        name,
+        description: description || null,
+        minSalesAmount: typeof minSalesAmount === 'string' ? parseFloat(minSalesAmount) : (minSalesAmount || 0),
+        maxSalesAmount: maxSalesAmount ? (typeof maxSalesAmount === 'string' ? parseFloat(maxSalesAmount) : maxSalesAmount) : null,
+        commissionType,
+        fixedAmount: fixedAmount ? (typeof fixedAmount === 'string' ? parseFloat(fixedAmount) : fixedAmount) : null,
+        percentageRate: percentageRate ? (typeof percentageRate === 'string' ? parseFloat(percentageRate) : percentageRate) : null,
+        applicableTo: applicableTo || 'cashier',
+        applicableBranches: applicableBranches || null,
+        isActive: true,
+        validFrom: validFrom || null,
+        validTo: validTo || null,
+        createdBy: req.currentUser?.id
+      });
+      res.status(201).json(rate);
+    } catch (error) {
+      console.error("Error creating commission rate:", error);
+      res.status(500).json({ error: "Failed to create commission rate" });
+    }
+  });
+
+  app.patch("/api/commission-rates/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const rate = await storage.updateCommissionRate(id, req.body);
+      if (!rate) {
+        return res.status(404).json({ error: "نظام العمولة غير موجود" });
+      }
+      res.json(rate);
+    } catch (error) {
+      console.error("Error updating commission rate:", error);
+      res.status(500).json({ error: "Failed to update commission rate" });
+    }
+  });
+
+  app.delete("/api/commission-rates/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      await storage.deleteCommissionRate(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting commission rate:", error);
+      res.status(500).json({ error: "Failed to delete commission rate" });
+    }
+  });
+
+  // ==========================================
+  // Commission Calculations Routes
+  // ==========================================
+
+  app.get("/api/commissions", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, cashierId, status } = req.query;
+      let commissions = await storage.getAllCommissionCalculations();
+      
+      if (branchId) {
+        commissions = commissions.filter(c => c.branchId === branchId);
+      }
+      if (cashierId) {
+        commissions = commissions.filter(c => c.cashierId === cashierId);
+      }
+      if (status) {
+        commissions = commissions.filter(c => c.status === status);
+      }
+      
+      res.json(commissions);
+    } catch (error) {
+      console.error("Error fetching commissions:", error);
+      res.status(500).json({ error: "Failed to fetch commissions" });
+    }
+  });
+
+  app.post("/api/commissions/calculate", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { cashierId, periodStart, periodEnd } = req.body;
+      
+      if (!cashierId || !periodStart || !periodEnd) {
+        return res.status(400).json({ error: "الكاشير وفترة الحساب مطلوبة" });
+      }
+      
+      const result = await storage.calculateCashierCommission(cashierId, periodStart, periodEnd);
+      res.json(result);
+    } catch (error) {
+      console.error("Error calculating commission:", error);
+      res.status(500).json({ error: "Failed to calculate commission" });
+    }
+  });
+
+  app.post("/api/commissions", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { cashierId, branchId, periodStart, periodEnd, totalSales, targetAmount, achievementPercent, rateId, calculatedCommission, finalCommission, journalIds, notes } = req.body;
+      
+      if (!periodStart || !periodEnd) {
+        return res.status(400).json({ error: "فترة الحساب مطلوبة" });
+      }
+      
+      const parsedTotalSales = typeof totalSales === 'string' ? parseFloat(totalSales) : totalSales;
+      const parsedCalculated = typeof calculatedCommission === 'string' ? parseFloat(calculatedCommission) : calculatedCommission;
+      const parsedFinal = typeof finalCommission === 'string' ? parseFloat(finalCommission) : (finalCommission || parsedCalculated);
+      
+      if (isNaN(parsedTotalSales) || isNaN(parsedCalculated) || isNaN(parsedFinal)) {
+        return res.status(400).json({ error: "قيم المبيعات والعمولة غير صالحة" });
+      }
+      
+      const commission = await storage.createCommissionCalculation({
+        cashierId: cashierId || null,
+        branchId: branchId || null,
+        periodStart,
+        periodEnd,
+        totalSales: parsedTotalSales,
+        targetAmount: targetAmount ? (typeof targetAmount === 'string' ? parseFloat(targetAmount) : targetAmount) : null,
+        achievementPercent: achievementPercent ? (typeof achievementPercent === 'string' ? parseFloat(achievementPercent) : achievementPercent) : null,
+        rateId: rateId ? parseInt(rateId, 10) : null,
+        calculatedCommission: parsedCalculated,
+        finalCommission: parsedFinal,
+        status: 'pending',
+        journalIds: journalIds || null,
+        notes: notes || null,
+        createdBy: req.currentUser?.id
+      });
+      res.status(201).json(commission);
+    } catch (error) {
+      console.error("Error creating commission:", error);
+      res.status(500).json({ error: "Failed to create commission" });
+    }
+  });
+
+  app.patch("/api/commissions/:id/approve", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const commission = await storage.approveCommissionCalculation(id, req.currentUser?.id);
+      if (!commission) {
+        return res.status(404).json({ error: "العمولة غير موجودة" });
+      }
+      res.json(commission);
+    } catch (error) {
+      console.error("Error approving commission:", error);
+      res.status(500).json({ error: "Failed to approve commission" });
+    }
+  });
+
+  app.patch("/api/commissions/:id/pay", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const commission = await storage.markCommissionAsPaid(id);
+      if (!commission) {
+        return res.status(404).json({ error: "العمولة غير موجودة" });
+      }
+      res.json(commission);
+    } catch (error) {
+      console.error("Error marking commission as paid:", error);
+      res.status(500).json({ error: "Failed to mark commission as paid" });
+    }
+  });
+
+  // ==========================================
+  // Target Alerts Routes
+  // ==========================================
+
+  app.get("/api/targets/alerts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { yearMonth } = req.query;
+      
+      if (!yearMonth) {
+        return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      const alerts = await storage.getTargetAlerts(yearMonth as string);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching target alerts:", error);
+      res.status(500).json({ error: "Failed to fetch target alerts" });
+    }
+  });
+
   return httpServer;
 }

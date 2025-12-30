@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
 import type { Branch } from "@shared/schema";
 
 interface BranchPerformance {
@@ -51,6 +51,32 @@ interface PerformanceData {
   dailyPerformance: DailyPerformance[];
 }
 
+interface TargetAlert {
+  branchId: string;
+  branchName: string;
+  targetAmount: number;
+  achievedAmount: number;
+  achievementPercent: number;
+  daysRemaining: number;
+  projectedAchievement: number;
+  alertLevel: 'critical' | 'warning' | 'on_track' | 'exceeding';
+  message: string;
+}
+
+const ALERT_COLORS = {
+  critical: { bg: "bg-red-100", border: "border-red-500", text: "text-red-700", icon: "text-red-500" },
+  warning: { bg: "bg-amber-100", border: "border-amber-500", text: "text-amber-700", icon: "text-amber-500" },
+  on_track: { bg: "bg-blue-100", border: "border-blue-500", text: "text-blue-700", icon: "text-blue-500" },
+  exceeding: { bg: "bg-green-100", border: "border-green-500", text: "text-green-700", icon: "text-green-500" },
+};
+
+const ALERT_ICONS = {
+  critical: AlertTriangle,
+  warning: Bell,
+  on_track: Clock,
+  exceeding: CheckCircle2,
+};
+
 export default function TargetsDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -80,6 +106,15 @@ export default function TargetsDashboard() {
       return res.json();
     },
     enabled: selectedBranch !== "all"
+  });
+
+  const { data: alerts = [], isLoading: alertsLoading } = useQuery<TargetAlert[]>({
+    queryKey: ["/api/targets/alerts", selectedMonth],
+    queryFn: async () => {
+      const res = await fetch(`/api/targets/alerts?yearMonth=${selectedMonth}`);
+      if (!res.ok) throw new Error("Failed to fetch alerts");
+      return res.json();
+    }
   });
 
   const formatCurrency = (amount: number) => {
@@ -205,8 +240,17 @@ export default function TargetsDashboard() {
           </Card>
         </div>
 
-        <Tabs defaultValue="branches" className="space-y-4">
+        <Tabs defaultValue="alerts" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="alerts" className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              التنبيهات
+              {alerts.filter(a => a.alertLevel === 'critical' || a.alertLevel === 'warning').length > 0 && (
+                <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
+                  {alerts.filter(a => a.alertLevel === 'critical' || a.alertLevel === 'warning').length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="branches" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               ترتيب الفروع
@@ -220,6 +264,125 @@ export default function TargetsDashboard() {
               تفاصيل الفرع
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="alerts">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Bell className="h-5 w-5 text-amber-600" />
+                      تنبيهات تحقيق الأهداف
+                    </CardTitle>
+                    <CardDescription>
+                      متابعة مباشرة لأداء الفروع مع التنبيه المبكر للمخاطر
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {alertsLoading ? (
+                      <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                    ) : alerts.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">لا توجد أهداف مسجلة لهذا الشهر</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {alerts.map((alert) => {
+                          const colors = ALERT_COLORS[alert.alertLevel];
+                          const AlertIcon = ALERT_ICONS[alert.alertLevel];
+                          return (
+                            <div
+                              key={alert.branchId}
+                              className={`p-4 rounded-lg border-r-4 ${colors.bg} ${colors.border}`}
+                              data-testid={`alert-${alert.branchId}`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <AlertIcon className={`h-5 w-5 mt-0.5 ${colors.icon}`} />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold">{alert.branchName}</span>
+                                    <Badge className={alert.alertLevel === 'exceeding' ? 'bg-green-500' : alert.alertLevel === 'critical' ? 'bg-red-500' : alert.alertLevel === 'warning' ? 'bg-amber-500' : 'bg-blue-500'}>
+                                      {alert.achievementPercent.toFixed(1)}%
+                                    </Badge>
+                                  </div>
+                                  <p className={`text-sm mt-1 ${colors.text}`}>{alert.message}</p>
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-600">
+                                    <span>الهدف: {formatCurrency(alert.targetAmount)}</span>
+                                    <span>المحقق: {formatCurrency(alert.achievedAmount)}</span>
+                                    <span>الأيام المتبقية: {alert.daysRemaining}</span>
+                                  </div>
+                                  <Progress 
+                                    value={Math.min(alert.achievementPercent, 100)} 
+                                    className="mt-2 h-2"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">ملخص التنبيهات</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-2 bg-red-50 rounded">
+                        <span className="flex items-center gap-2 text-red-700">
+                          <AlertTriangle className="h-4 w-4" />
+                          حرجة
+                        </span>
+                        <Badge variant="destructive">{alerts.filter(a => a.alertLevel === 'critical').length}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-2 bg-amber-50 rounded">
+                        <span className="flex items-center gap-2 text-amber-700">
+                          <Bell className="h-4 w-4" />
+                          تحذير
+                        </span>
+                        <Badge className="bg-amber-500">{alerts.filter(a => a.alertLevel === 'warning').length}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                        <span className="flex items-center gap-2 text-blue-700">
+                          <Clock className="h-4 w-4" />
+                          على المسار
+                        </span>
+                        <Badge className="bg-blue-500">{alerts.filter(a => a.alertLevel === 'on_track').length}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-2 bg-green-50 rounded">
+                        <span className="flex items-center gap-2 text-green-700">
+                          <CheckCircle2 className="h-4 w-4" />
+                          تجاوز الهدف
+                        </span>
+                        <Badge className="bg-green-500">{alerts.filter(a => a.alertLevel === 'exceeding').length}</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">متوسط التوقعات</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {alerts.length > 0 ? (
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-amber-600">
+                          {(alerts.reduce((sum, a) => sum + a.projectedAchievement, 0) / alerts.length).toFixed(1)}%
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1">التحقيق المتوقع نهاية الشهر</p>
+                      </div>
+                    ) : (
+                      <div className="text-center text-gray-500">لا توجد بيانات</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
 
           <TabsContent value="branches">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
