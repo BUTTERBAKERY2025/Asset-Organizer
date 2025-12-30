@@ -69,6 +69,7 @@ export default function TargetsPlanning() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [editingAllocation, setEditingAllocation] = useState<number | null>(null);
   const [allocationEditValue, setAllocationEditValue] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<string>("targets");
   
   const [newTarget, setNewTarget] = useState({
     branchId: "",
@@ -837,7 +838,7 @@ export default function TargetsPlanning() {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="targets" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="targets" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
@@ -938,7 +939,10 @@ export default function TargetsPlanning() {
                                 size="sm"
                                 variant="outline"
                                 className="bg-blue-50 hover:bg-blue-100 border-blue-300"
-                                onClick={() => setSelectedTargetId(target.id)}
+                                onClick={() => {
+                                  setSelectedTargetId(target.id);
+                                  setActiveTab("allocations");
+                                }}
                                 title="عرض التوزيع اليومي"
                                 data-testid={`button-view-${target.id}`}
                               >
