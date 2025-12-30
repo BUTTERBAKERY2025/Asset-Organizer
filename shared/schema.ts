@@ -1385,9 +1385,12 @@ export type InsertIncentiveAward = z.infer<typeof insertIncentiveAwardSchema>;
 export const seasonsHolidays = pgTable("seasons_holidays", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(), // اسم الموسم أو الإجازة
-  type: text("type").notNull(), // season, holiday, event
+  type: text("type").notNull(), // islamic, international, national, season, custom
+  category: text("category"), // eid, national_day, mothers_day, valentines, ramadan, etc.
   startDate: text("start_date").notNull(), // Format: "2025-01-15"
   endDate: text("end_date").notNull(),
+  color: text("color").default("#f59e0b"), // Badge color hex code
+  icon: text("icon"), // Icon name from lucide
   weightMultiplier: real("weight_multiplier").default(1.0).notNull(), // 1.5 for 150% target
   applicableBranches: jsonb("applicable_branches"), // Array of branch IDs or null for all
   description: text("description"),
