@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission } from "./auth";
 
@@ -2680,6 +2680,672 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching operations reports:", error);
       res.status(500).json({ error: "Failed to fetch operations reports" });
+    }
+  });
+
+  // ==========================================
+  // Targets & Incentives API Routes
+  // ==========================================
+
+  // Target Weight Profiles
+  app.get("/api/targets/profiles", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const profiles = await storage.getAllTargetWeightProfiles();
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching target weight profiles:", error);
+      res.status(500).json({ error: "Failed to fetch profiles" });
+    }
+  });
+
+  app.get("/api/targets/profiles/default", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const profile = await storage.getDefaultTargetWeightProfile();
+      res.json(profile || null);
+    } catch (error) {
+      console.error("Error fetching default profile:", error);
+      res.status(500).json({ error: "Failed to fetch default profile" });
+    }
+  });
+
+  app.get("/api/targets/profiles/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const profile = await storage.getTargetWeightProfile(id);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
+  app.post("/api/targets/profiles", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const parseResult = insertTargetWeightProfileSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.flatten() });
+      }
+      
+      const profile = await storage.createTargetWeightProfile({
+        ...parseResult.data,
+        createdBy: req.currentUser?.id
+      });
+      res.status(201).json(profile);
+    } catch (error) {
+      console.error("Error creating profile:", error);
+      res.status(500).json({ error: "Failed to create profile" });
+    }
+  });
+
+  app.patch("/api/targets/profiles/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      
+      const parseResult = insertTargetWeightProfileSchema.partial().safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.flatten() });
+      }
+      
+      const profile = await storage.updateTargetWeightProfile(id, parseResult.data);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+      res.json(profile);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  app.delete("/api/targets/profiles/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      await storage.deleteTargetWeightProfile(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting profile:", error);
+      res.status(500).json({ error: "Failed to delete profile" });
+    }
+  });
+
+  // Branch Monthly Targets
+  app.get("/api/targets/monthly", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, yearMonth } = req.query;
+      let targets = await storage.getAllBranchMonthlyTargets();
+      
+      if (branchId) {
+        targets = targets.filter(t => t.branchId === branchId);
+      }
+      if (yearMonth) {
+        targets = targets.filter(t => t.yearMonth === yearMonth);
+      }
+      
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching monthly targets:", error);
+      res.status(500).json({ error: "Failed to fetch targets" });
+    }
+  });
+
+  app.get("/api/targets/monthly/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const target = await storage.getBranchMonthlyTarget(id);
+      if (!target) {
+        return res.status(404).json({ error: "Target not found" });
+      }
+      res.json(target);
+    } catch (error) {
+      console.error("Error fetching target:", error);
+      res.status(500).json({ error: "Failed to fetch target" });
+    }
+  });
+
+  app.post("/api/targets/monthly", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { branchId, yearMonth, targetAmount, profileId, notes } = req.body;
+      
+      // Validate required fields
+      if (!branchId || typeof branchId !== 'string') {
+        return res.status(400).json({ error: "الفرع مطلوب" });
+      }
+      if (!yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth)) {
+        return res.status(400).json({ error: "الشهر مطلوب بصيغة YYYY-MM" });
+      }
+      
+      // Parse and validate targetAmount
+      const parsedTargetAmount = typeof targetAmount === 'string' ? parseFloat(targetAmount) : targetAmount;
+      if (typeof parsedTargetAmount !== 'number' || isNaN(parsedTargetAmount) || parsedTargetAmount <= 0) {
+        return res.status(400).json({ error: "الهدف الشهري يجب أن يكون رقماً موجباً" });
+      }
+      
+      // Validate profileId if provided
+      let validProfileId: number | null = null;
+      if (profileId !== undefined && profileId !== null && profileId !== '') {
+        validProfileId = typeof profileId === 'string' ? parseInt(profileId, 10) : profileId;
+        if (isNaN(validProfileId)) {
+          return res.status(400).json({ error: "معرف ملف التوزيع غير صالح" });
+        }
+      }
+      
+      // Check if target already exists for this branch/month
+      const existing = await storage.getBranchMonthlyTargetByMonth(branchId, yearMonth);
+      if (existing) {
+        return res.status(400).json({ error: "يوجد هدف مسجل لهذا الفرع في هذا الشهر" });
+      }
+      
+      const target = await storage.createBranchMonthlyTarget({
+        branchId,
+        yearMonth,
+        targetAmount: parsedTargetAmount,
+        profileId: validProfileId,
+        notes: notes || null,
+        createdBy: req.currentUser?.id,
+        status: 'draft'
+      });
+      
+      res.status(201).json(target);
+    } catch (error) {
+      console.error("Error creating monthly target:", error);
+      res.status(500).json({ error: "Failed to create target" });
+    }
+  });
+
+  app.patch("/api/targets/monthly/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const target = await storage.updateBranchMonthlyTarget(id, req.body);
+      if (!target) {
+        return res.status(404).json({ error: "Target not found" });
+      }
+      res.json(target);
+    } catch (error) {
+      console.error("Error updating target:", error);
+      res.status(500).json({ error: "Failed to update target" });
+    }
+  });
+
+  app.delete("/api/targets/monthly/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      await storage.deleteBranchMonthlyTarget(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting target:", error);
+      res.status(500).json({ error: "Failed to delete target" });
+    }
+  });
+
+  // Generate daily allocations for a monthly target
+  app.post("/api/targets/monthly/:id/generate-allocations", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const target = await storage.getBranchMonthlyTarget(id);
+      
+      if (!target) {
+        return res.status(404).json({ error: "Target not found" });
+      }
+      
+      // Get weight profile
+      let profile = target.profileId 
+        ? await storage.getTargetWeightProfile(target.profileId)
+        : await storage.getDefaultTargetWeightProfile();
+      
+      if (!profile) {
+        return res.status(400).json({ error: "No weight profile found" });
+      }
+      
+      // Parse year-month to get days
+      const [year, month] = target.yearMonth.split('-').map(Number);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      
+      // Calculate weights for each day
+      const dayWeights: number[] = [];
+      const weekdayWeights = [
+        profile.sundayWeight,
+        profile.mondayWeight,
+        profile.tuesdayWeight,
+        profile.wednesdayWeight,
+        profile.thursdayWeight,
+        profile.fridayWeight,
+        profile.saturdayWeight
+      ];
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month - 1, day);
+        const dayOfWeek = date.getDay();
+        dayWeights.push(weekdayWeights[dayOfWeek]);
+      }
+      
+      // Normalize weights to sum to 100
+      const totalWeight = dayWeights.reduce((sum, w) => sum + w, 0);
+      const normalizedWeights = dayWeights.map(w => (w / totalWeight) * 100);
+      
+      // Create allocations
+      const allocations = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayStr = day.toString().padStart(2, '0');
+        const targetDate = `${target.yearMonth}-${dayStr}`;
+        const weightPercent = normalizedWeights[day - 1];
+        const dailyTarget = (target.targetAmount * weightPercent) / 100;
+        
+        allocations.push({
+          monthlyTargetId: id,
+          targetDate,
+          weightPercent,
+          dailyTarget,
+          isHoliday: false,
+          isManualOverride: false
+        });
+      }
+      
+      // Delete existing allocations and create new ones
+      const existingAllocations = await storage.getTargetDailyAllocationsByMonth(id);
+      for (const alloc of existingAllocations) {
+        await storage.deleteTargetDailyAllocation(alloc.id);
+      }
+      
+      const created = await storage.bulkCreateTargetDailyAllocations(allocations);
+      
+      // Activate the target
+      await storage.updateBranchMonthlyTarget(id, { status: 'active' });
+      
+      res.json({ allocations: created, message: "تم توزيع الهدف على أيام الشهر بنجاح" });
+    } catch (error) {
+      console.error("Error generating allocations:", error);
+      res.status(500).json({ error: "Failed to generate allocations" });
+    }
+  });
+
+  // Get daily allocations for a monthly target
+  app.get("/api/targets/monthly/:id/allocations", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const allocations = await storage.getTargetDailyAllocationsByMonth(id);
+      res.json(allocations);
+    } catch (error) {
+      console.error("Error fetching allocations:", error);
+      res.status(500).json({ error: "Failed to fetch allocations" });
+    }
+  });
+
+  // Update a daily allocation (manual override)
+  app.patch("/api/targets/allocations/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { dailyTarget, isHoliday, overrideReason } = req.body;
+      
+      const allocation = await storage.updateTargetDailyAllocation(id, {
+        dailyTarget,
+        isHoliday,
+        isManualOverride: true,
+        overrideReason
+      });
+      
+      if (!allocation) {
+        return res.status(404).json({ error: "Allocation not found" });
+      }
+      res.json(allocation);
+    } catch (error) {
+      console.error("Error updating allocation:", error);
+      res.status(500).json({ error: "Failed to update allocation" });
+    }
+  });
+
+  // Incentive Tiers
+  app.get("/api/incentives/tiers", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const tiers = await storage.getAllIncentiveTiers();
+      res.json(tiers);
+    } catch (error) {
+      console.error("Error fetching incentive tiers:", error);
+      res.status(500).json({ error: "Failed to fetch tiers" });
+    }
+  });
+
+  app.get("/api/incentives/tiers/active", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const tiers = await storage.getActiveIncentiveTiers();
+      res.json(tiers);
+    } catch (error) {
+      console.error("Error fetching active tiers:", error);
+      res.status(500).json({ error: "Failed to fetch active tiers" });
+    }
+  });
+
+  app.post("/api/incentives/tiers", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { name, description, minAchievementPercent, maxAchievementPercent, rewardType, fixedAmount, percentageRate, applicableTo, sortOrder, isActive } = req.body;
+      
+      // Validate required fields
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: "اسم المستوى مطلوب" });
+      }
+      
+      // Parse and validate minAchievementPercent
+      const parsedMin = typeof minAchievementPercent === 'string' ? parseFloat(minAchievementPercent) : minAchievementPercent;
+      if (typeof parsedMin !== 'number' || isNaN(parsedMin) || parsedMin < 0) {
+        return res.status(400).json({ error: "الحد الأدنى للتحقيق يجب أن يكون رقماً موجباً" });
+      }
+      
+      // Parse and validate maxAchievementPercent if provided
+      let parsedMax: number | null = null;
+      if (maxAchievementPercent !== undefined && maxAchievementPercent !== null && maxAchievementPercent !== '') {
+        parsedMax = typeof maxAchievementPercent === 'string' ? parseFloat(maxAchievementPercent) : maxAchievementPercent;
+        if (isNaN(parsedMax) || parsedMax <= parsedMin) {
+          return res.status(400).json({ error: "الحد الأقصى يجب أن يكون أكبر من الحد الأدنى" });
+        }
+      }
+      
+      if (!['fixed', 'percentage', 'both'].includes(rewardType)) {
+        return res.status(400).json({ error: "نوع المكافأة غير صالح" });
+      }
+      
+      // Parse and validate fixedAmount
+      let parsedFixedAmount: number | null = null;
+      if (rewardType === 'fixed' || rewardType === 'both') {
+        parsedFixedAmount = typeof fixedAmount === 'string' ? parseFloat(fixedAmount) : fixedAmount;
+        if (typeof parsedFixedAmount !== 'number' || isNaN(parsedFixedAmount) || parsedFixedAmount <= 0) {
+          return res.status(400).json({ error: "المبلغ الثابت مطلوب ويجب أن يكون موجباً" });
+        }
+      }
+      
+      // Parse and validate percentageRate
+      let parsedPercentageRate: number | null = null;
+      if (rewardType === 'percentage' || rewardType === 'both') {
+        parsedPercentageRate = typeof percentageRate === 'string' ? parseFloat(percentageRate) : percentageRate;
+        if (typeof parsedPercentageRate !== 'number' || isNaN(parsedPercentageRate) || parsedPercentageRate <= 0) {
+          return res.status(400).json({ error: "نسبة المكافأة مطلوبة ويجب أن تكون موجبة" });
+        }
+      }
+      
+      const tier = await storage.createIncentiveTier({
+        name: name.trim(),
+        description: description || null,
+        minAchievementPercent: parsedMin,
+        maxAchievementPercent: parsedMax,
+        rewardType,
+        fixedAmount: parsedFixedAmount,
+        percentageRate: parsedPercentageRate,
+        applicableTo: applicableTo || 'all',
+        sortOrder: typeof sortOrder === 'number' && !isNaN(sortOrder) ? sortOrder : 0,
+        isActive: isActive !== false,
+        createdBy: req.currentUser?.id
+      });
+      res.status(201).json(tier);
+    } catch (error) {
+      console.error("Error creating tier:", error);
+      res.status(500).json({ error: "Failed to create tier" });
+    }
+  });
+
+  app.patch("/api/incentives/tiers/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const tier = await storage.updateIncentiveTier(id, req.body);
+      if (!tier) {
+        return res.status(404).json({ error: "Tier not found" });
+      }
+      res.json(tier);
+    } catch (error) {
+      console.error("Error updating tier:", error);
+      res.status(500).json({ error: "Failed to update tier" });
+    }
+  });
+
+  app.delete("/api/incentives/tiers/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      await storage.deleteIncentiveTier(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting tier:", error);
+      res.status(500).json({ error: "Failed to delete tier" });
+    }
+  });
+
+  // Incentive Awards
+  app.get("/api/incentives/awards", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, cashierId, status } = req.query;
+      let awards = await storage.getAllIncentiveAwards();
+      
+      if (branchId) {
+        awards = awards.filter(a => a.branchId === branchId);
+      }
+      if (cashierId) {
+        awards = awards.filter(a => a.cashierId === cashierId);
+      }
+      if (status) {
+        awards = awards.filter(a => a.status === status);
+      }
+      
+      res.json(awards);
+    } catch (error) {
+      console.error("Error fetching awards:", error);
+      res.status(500).json({ error: "Failed to fetch awards" });
+    }
+  });
+
+  app.post("/api/incentives/awards", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { awardType, branchId, cashierId, periodStart, periodEnd, targetAmount, achievedAmount, achievementPercent, tierId, calculatedReward, finalReward, notes } = req.body;
+      
+      // Validate required fields
+      if (!awardType || !['monthly', 'quarterly', 'annual', 'special'].includes(awardType)) {
+        return res.status(400).json({ error: "نوع الجائزة غير صالح" });
+      }
+      if (!branchId || typeof branchId !== 'string') {
+        return res.status(400).json({ error: "الفرع مطلوب" });
+      }
+      if (!periodStart || !periodEnd) {
+        return res.status(400).json({ error: "فترة الحافز مطلوبة" });
+      }
+      
+      // Parse and validate numeric fields
+      const parsedTargetAmount = typeof targetAmount === 'string' ? parseFloat(targetAmount) : targetAmount;
+      if (typeof parsedTargetAmount !== 'number' || isNaN(parsedTargetAmount) || parsedTargetAmount < 0) {
+        return res.status(400).json({ error: "الهدف يجب أن يكون رقماً صالحاً" });
+      }
+      
+      const parsedAchievedAmount = typeof achievedAmount === 'string' ? parseFloat(achievedAmount) : achievedAmount;
+      if (typeof parsedAchievedAmount !== 'number' || isNaN(parsedAchievedAmount) || parsedAchievedAmount < 0) {
+        return res.status(400).json({ error: "المحقق يجب أن يكون رقماً صالحاً" });
+      }
+      
+      const parsedAchievementPercent = typeof achievementPercent === 'string' ? parseFloat(achievementPercent) : achievementPercent;
+      if (typeof parsedAchievementPercent !== 'number' || isNaN(parsedAchievementPercent) || parsedAchievementPercent < 0) {
+        return res.status(400).json({ error: "نسبة التحقيق يجب أن تكون رقماً صالحاً" });
+      }
+      
+      const parsedCalculatedReward = typeof calculatedReward === 'string' ? parseFloat(calculatedReward) : calculatedReward;
+      if (typeof parsedCalculatedReward !== 'number' || isNaN(parsedCalculatedReward) || parsedCalculatedReward < 0) {
+        return res.status(400).json({ error: "الحافز المحسوب يجب أن يكون رقماً صالحاً" });
+      }
+      
+      const parsedFinalReward = finalReward !== undefined 
+        ? (typeof finalReward === 'string' ? parseFloat(finalReward) : finalReward)
+        : parsedCalculatedReward;
+      if (typeof parsedFinalReward !== 'number' || isNaN(parsedFinalReward) || parsedFinalReward < 0) {
+        return res.status(400).json({ error: "الحافز النهائي يجب أن يكون رقماً صالحاً" });
+      }
+      
+      // Parse tierId if provided
+      let parsedTierId: number | null = null;
+      if (tierId !== undefined && tierId !== null && tierId !== '') {
+        parsedTierId = typeof tierId === 'string' ? parseInt(tierId, 10) : tierId;
+        if (isNaN(parsedTierId)) {
+          return res.status(400).json({ error: "معرف مستوى الحافز غير صالح" });
+        }
+      }
+      
+      const award = await storage.createIncentiveAward({
+        awardType,
+        branchId,
+        cashierId: cashierId || null,
+        periodStart,
+        periodEnd,
+        targetAmount: parsedTargetAmount,
+        achievedAmount: parsedAchievedAmount,
+        achievementPercent: parsedAchievementPercent,
+        tierId: parsedTierId,
+        calculatedReward: parsedCalculatedReward,
+        finalReward: parsedFinalReward,
+        notes: notes || null,
+        status: 'pending',
+        createdBy: req.currentUser?.id
+      });
+      res.status(201).json(award);
+    } catch (error) {
+      console.error("Error creating award:", error);
+      res.status(500).json({ error: "Failed to create award" });
+    }
+  });
+
+  app.patch("/api/incentives/awards/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const award = await storage.updateIncentiveAward(id, req.body);
+      if (!award) {
+        return res.status(404).json({ error: "Award not found" });
+      }
+      res.json(award);
+    } catch (error) {
+      console.error("Error updating award:", error);
+      res.status(500).json({ error: "Failed to update award" });
+    }
+  });
+
+  app.post("/api/incentives/awards/:id/approve", isAuthenticated, requirePermission("operations", "approve"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const award = await storage.approveIncentiveAward(id, req.currentUser?.id);
+      if (!award) {
+        return res.status(404).json({ error: "Award not found" });
+      }
+      res.json(award);
+    } catch (error) {
+      console.error("Error approving award:", error);
+      res.status(500).json({ error: "Failed to approve award" });
+    }
+  });
+
+  app.post("/api/incentives/awards/:id/pay", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const award = await storage.markIncentiveAwardAsPaid(id);
+      if (!award) {
+        return res.status(404).json({ error: "Award not found" });
+      }
+      res.json(award);
+    } catch (error) {
+      console.error("Error marking award as paid:", error);
+      res.status(500).json({ error: "Failed to mark award as paid" });
+    }
+  });
+
+  // Performance & Leaderboard
+  app.get("/api/targets/performance/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const { yearMonth } = req.query;
+      
+      if (!yearMonth) {
+        return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      const performance = await storage.calculateBranchPerformance(branchId, yearMonth as string);
+      res.json(performance);
+    } catch (error) {
+      console.error("Error calculating performance:", error);
+      res.status(500).json({ error: "Failed to calculate performance" });
+    }
+  });
+
+  app.get("/api/targets/leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { yearMonth } = req.query;
+      
+      if (!yearMonth) {
+        return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      const leaderboard = await storage.getLeaderboard(yearMonth as string);
+      res.json(leaderboard);
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
+  // Calculate incentives for a period
+  app.post("/api/incentives/calculate", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { yearMonth, branchId } = req.body;
+      
+      if (!yearMonth) {
+        return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      const tiers = await storage.getActiveIncentiveTiers();
+      const branches = branchId 
+        ? [await storage.getBranch(branchId)].filter(Boolean) as any[]
+        : await storage.getAllBranches();
+      
+      const calculatedAwards = [];
+      
+      for (const branch of branches) {
+        const performance = await storage.calculateBranchPerformance(branch.id, yearMonth);
+        
+        if (performance.targetAmount === 0) continue;
+        
+        // Find applicable tier
+        const achievementPercent = performance.achievementPercent;
+        const applicableTier = tiers
+          .filter(t => achievementPercent >= t.minAchievementPercent)
+          .filter(t => !t.maxAchievementPercent || achievementPercent < t.maxAchievementPercent)
+          .sort((a, b) => b.minAchievementPercent - a.minAchievementPercent)[0];
+        
+        if (applicableTier) {
+          let calculatedReward = 0;
+          const excessAmount = performance.achievedAmount - performance.targetAmount;
+          
+          if (applicableTier.rewardType === 'fixed' && applicableTier.fixedAmount) {
+            calculatedReward = applicableTier.fixedAmount;
+          } else if (applicableTier.rewardType === 'percentage' && applicableTier.percentageRate && excessAmount > 0) {
+            calculatedReward = (excessAmount * applicableTier.percentageRate) / 100;
+          } else if (applicableTier.rewardType === 'both') {
+            calculatedReward = (applicableTier.fixedAmount || 0);
+            if (applicableTier.percentageRate && excessAmount > 0) {
+              calculatedReward += (excessAmount * applicableTier.percentageRate) / 100;
+            }
+          }
+          
+          calculatedAwards.push({
+            branchId: branch.id,
+            branchName: branch.name,
+            targetAmount: performance.targetAmount,
+            achievedAmount: performance.achievedAmount,
+            achievementPercent,
+            tierName: applicableTier.name,
+            tierId: applicableTier.id,
+            calculatedReward,
+            status: 'preview'
+          });
+        }
+      }
+      
+      res.json(calculatedAwards);
+    } catch (error) {
+      console.error("Error calculating incentives:", error);
+      res.status(500).json({ error: "Failed to calculate incentives" });
     }
   });
 

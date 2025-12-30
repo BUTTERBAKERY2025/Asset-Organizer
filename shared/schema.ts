@@ -1210,3 +1210,205 @@ export const JOURNAL_STATUS_LABELS: Record<JournalStatus, string> = {
   approved: "معتمد",
   rejected: "مرفوض",
 };
+
+// ==========================================
+// نظام الأهداف والحوافز - Targets & Incentives System
+// ==========================================
+
+// Target Weight Profiles - ملفات توزيع الأوزان للأيام والمواسم
+export const targetWeightProfiles = pgTable("target_weight_profiles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true).notNull(),
+  // Weekly weights (percentage multipliers)
+  sundayWeight: real("sunday_weight").default(100).notNull(),
+  mondayWeight: real("monday_weight").default(100).notNull(),
+  tuesdayWeight: real("tuesday_weight").default(100).notNull(),
+  wednesdayWeight: real("wednesday_weight").default(100).notNull(),
+  thursdayWeight: real("thursday_weight").default(130).notNull(), // Higher for weekends
+  fridayWeight: real("friday_weight").default(130).notNull(),
+  saturdayWeight: real("saturday_weight").default(100).notNull(),
+  // Seasonal adjustments (JSON array of {startDate, endDate, multiplier, name})
+  seasonalAdjustments: jsonb("seasonal_adjustments"),
+  // Holiday overrides (JSON array of {date, multiplier, name})
+  holidayOverrides: jsonb("holiday_overrides"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertTargetWeightProfileSchema = createInsertSchema(targetWeightProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TargetWeightProfile = typeof targetWeightProfiles.$inferSelect;
+export type InsertTargetWeightProfile = z.infer<typeof insertTargetWeightProfileSchema>;
+
+// Branch Monthly Targets - الأهداف الشهرية للفروع
+export const branchMonthlyTargets = pgTable("branch_monthly_targets", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  yearMonth: text("year_month").notNull(), // Format: "2025-01"
+  targetAmount: real("target_amount").notNull(), // Total monthly target in SAR
+  profileId: integer("profile_id").references(() => targetWeightProfiles.id),
+  status: text("status").default("draft").notNull(), // draft, active, locked, archived
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertBranchMonthlyTargetSchema = createInsertSchema(branchMonthlyTargets).omit({
+  id: true,
+  approvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchMonthlyTarget = typeof branchMonthlyTargets.$inferSelect;
+export type InsertBranchMonthlyTarget = z.infer<typeof insertBranchMonthlyTargetSchema>;
+
+// Target Daily Allocations - توزيع الهدف على الأيام
+export const targetDailyAllocations = pgTable("target_daily_allocations", {
+  id: serial("id").primaryKey(),
+  monthlyTargetId: integer("monthly_target_id").notNull().references(() => branchMonthlyTargets.id, { onDelete: "cascade" }),
+  targetDate: text("target_date").notNull(), // Format: "2025-01-15"
+  weightPercent: real("weight_percent").notNull(), // Percentage weight for this day
+  dailyTarget: real("daily_target").notNull(), // Calculated daily target amount
+  isHoliday: boolean("is_holiday").default(false),
+  isManualOverride: boolean("is_manual_override").default(false),
+  overrideReason: text("override_reason"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertTargetDailyAllocationSchema = createInsertSchema(targetDailyAllocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TargetDailyAllocation = typeof targetDailyAllocations.$inferSelect;
+export type InsertTargetDailyAllocation = z.infer<typeof insertTargetDailyAllocationSchema>;
+
+// Target Shift Allocations - توزيع الهدف على الورديات
+export const targetShiftAllocations = pgTable("target_shift_allocations", {
+  id: serial("id").primaryKey(),
+  dailyAllocationId: integer("daily_allocation_id").notNull().references(() => targetDailyAllocations.id, { onDelete: "cascade" }),
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  shiftTarget: real("shift_target").notNull(), // Target amount for this shift
+  shiftWeightPercent: real("shift_weight_percent").notNull(), // Percentage of daily target
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTargetShiftAllocationSchema = createInsertSchema(targetShiftAllocations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TargetShiftAllocation = typeof targetShiftAllocations.$inferSelect;
+export type InsertTargetShiftAllocation = z.infer<typeof insertTargetShiftAllocationSchema>;
+
+// Incentive Tiers - مستويات الحوافز
+export const incentiveTiers = pgTable("incentive_tiers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  minAchievementPercent: real("min_achievement_percent").notNull(), // e.g., 80%
+  maxAchievementPercent: real("max_achievement_percent"), // e.g., 99.99%
+  rewardType: text("reward_type").notNull(), // fixed, percentage, both
+  fixedAmount: real("fixed_amount"), // Fixed bonus amount
+  percentageRate: real("percentage_rate"), // Percentage of excess sales
+  isActive: boolean("is_active").default(true).notNull(),
+  applicableTo: text("applicable_to").default("all").notNull(), // all, cashier, branch
+  sortOrder: integer("sort_order").default(0),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertIncentiveTierSchema = createInsertSchema(incentiveTiers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type IncentiveTier = typeof incentiveTiers.$inferSelect;
+export type InsertIncentiveTier = z.infer<typeof insertIncentiveTierSchema>;
+
+// Incentive Awards - سجل المكافآت والحوافز الممنوحة
+export const incentiveAwards = pgTable("incentive_awards", {
+  id: serial("id").primaryKey(),
+  awardType: text("award_type").notNull(), // daily, monthly, special
+  branchId: varchar("branch_id").references(() => branches.id),
+  cashierId: varchar("cashier_id").references(() => users.id),
+  periodStart: text("period_start").notNull(), // Start date of achievement period
+  periodEnd: text("period_end").notNull(), // End date of achievement period
+  targetAmount: real("target_amount").notNull(),
+  achievedAmount: real("achieved_amount").notNull(),
+  achievementPercent: real("achievement_percent").notNull(),
+  tierId: integer("tier_id").references(() => incentiveTiers.id),
+  calculatedReward: real("calculated_reward").notNull(),
+  adjustedReward: real("adjusted_reward"), // Manual adjustment if needed
+  finalReward: real("final_reward").notNull(),
+  status: text("status").default("pending").notNull(), // pending, approved, paid, cancelled
+  notes: text("notes"),
+  journalIds: jsonb("journal_ids"), // Array of related cashier journal IDs
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertIncentiveAwardSchema = createInsertSchema(incentiveAwards).omit({
+  id: true,
+  approvedAt: true,
+  paidAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type IncentiveAward = typeof incentiveAwards.$inferSelect;
+export type InsertIncentiveAward = z.infer<typeof insertIncentiveAwardSchema>;
+
+// Target Status Labels
+export const TARGET_STATUS = ["draft", "active", "locked", "archived"] as const;
+export type TargetStatus = typeof TARGET_STATUS[number];
+
+export const TARGET_STATUS_LABELS: Record<TargetStatus, string> = {
+  draft: "مسودة",
+  active: "نشط",
+  locked: "مُقفل",
+  archived: "مؤرشف",
+};
+
+// Reward Types Labels
+export const REWARD_TYPES = ["fixed", "percentage", "both"] as const;
+export type RewardType = typeof REWARD_TYPES[number];
+
+export const REWARD_TYPE_LABELS: Record<RewardType, string> = {
+  fixed: "مبلغ ثابت",
+  percentage: "نسبة مئوية",
+  both: "ثابت + نسبة",
+};
+
+// Award Status Labels
+export const AWARD_STATUS = ["pending", "approved", "paid", "cancelled"] as const;
+export type AwardStatus = typeof AWARD_STATUS[number];
+
+export const AWARD_STATUS_LABELS: Record<AwardStatus, string> = {
+  pending: "قيد الانتظار",
+  approved: "معتمد",
+  paid: "مدفوع",
+  cancelled: "ملغى",
+};

@@ -11,12 +11,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { 
   BarChart3, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Factory, 
   CheckCircle, XCircle, Clock, AlertTriangle, Download, Wallet, CreditCard, Truck,
   Building2, Activity, Target, Package, FileText, Eye, Image, FileDown, Filter,
-  Calendar, RefreshCw, Printer, ExternalLink, Receipt, ClipboardList, PieChart as PieChartIcon
+  Calendar, RefreshCw, Printer, ExternalLink, Receipt, ClipboardList, PieChart as PieChartIcon,
+  Gift, Trophy
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -973,7 +974,25 @@ export default function OperationsReportsDashboardPage() {
             </h1>
             <p className="text-muted-foreground">تقارير تفصيلية لجميع عمليات التشغيل والإنتاج والمبيعات ويوميات الكاشير</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/targets-dashboard">
+              <Button variant="outline" className="gap-2" data-testid="button-targets-dashboard">
+                <Trophy className="w-4 h-4 text-amber-600" />
+                لوحة الأهداف
+              </Button>
+            </Link>
+            <Link href="/targets-planning">
+              <Button variant="outline" className="gap-2" data-testid="button-targets-planning">
+                <Target className="w-4 h-4 text-amber-600" />
+                تخطيط الأهداف
+              </Button>
+            </Link>
+            <Link href="/incentives-management">
+              <Button variant="outline" className="gap-2" data-testid="button-incentives">
+                <Gift className="w-4 h-4 text-amber-600" />
+                الحوافز
+              </Button>
+            </Link>
             <Button variant="outline" onClick={() => refetch()} className="gap-2" data-testid="button-refresh">
               <RefreshCw className="w-4 h-4" />
               تحديث

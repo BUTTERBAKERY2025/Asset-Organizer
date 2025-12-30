@@ -68,6 +68,18 @@ import {
   type InsertCashierPaymentBreakdown,
   type CashierSignature,
   type InsertCashierSignature,
+  type TargetWeightProfile,
+  type InsertTargetWeightProfile,
+  type BranchMonthlyTarget,
+  type InsertBranchMonthlyTarget,
+  type TargetDailyAllocation,
+  type InsertTargetDailyAllocation,
+  type TargetShiftAllocation,
+  type InsertTargetShiftAllocation,
+  type IncentiveTier,
+  type InsertIncentiveTier,
+  type IncentiveAward,
+  type InsertIncentiveAward,
   branches,
   inventoryItems,
   auditLogs,
@@ -105,7 +117,13 @@ import {
   journalAttachments,
   type JournalAttachment,
   type InsertJournalAttachment,
-  JOB_ROLE_PERMISSION_TEMPLATES
+  JOB_ROLE_PERMISSION_TEMPLATES,
+  targetWeightProfiles,
+  branchMonthlyTargets,
+  targetDailyAllocations,
+  targetShiftAllocations,
+  incentiveTiers,
+  incentiveAwards,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -311,6 +329,67 @@ export interface IStorage {
   // Operations Module - Daily Summary
   getDailyOperationsSummary(branchId: string, date: string): Promise<DailyOperationsSummary | undefined>;
   createOrUpdateDailyOperationsSummary(summary: InsertDailyOperationsSummary): Promise<DailyOperationsSummary>;
+  
+  // Targets & Incentives - Weight Profiles
+  getAllTargetWeightProfiles(): Promise<TargetWeightProfile[]>;
+  getTargetWeightProfile(id: number): Promise<TargetWeightProfile | undefined>;
+  getDefaultTargetWeightProfile(): Promise<TargetWeightProfile | undefined>;
+  createTargetWeightProfile(profile: InsertTargetWeightProfile): Promise<TargetWeightProfile>;
+  updateTargetWeightProfile(id: number, profile: Partial<InsertTargetWeightProfile>): Promise<TargetWeightProfile | undefined>;
+  deleteTargetWeightProfile(id: number): Promise<boolean>;
+  
+  // Targets & Incentives - Monthly Targets
+  getAllBranchMonthlyTargets(): Promise<BranchMonthlyTarget[]>;
+  getBranchMonthlyTargetsByBranch(branchId: string): Promise<BranchMonthlyTarget[]>;
+  getBranchMonthlyTarget(id: number): Promise<BranchMonthlyTarget | undefined>;
+  getBranchMonthlyTargetByMonth(branchId: string, yearMonth: string): Promise<BranchMonthlyTarget | undefined>;
+  createBranchMonthlyTarget(target: InsertBranchMonthlyTarget): Promise<BranchMonthlyTarget>;
+  updateBranchMonthlyTarget(id: number, target: Partial<InsertBranchMonthlyTarget>): Promise<BranchMonthlyTarget | undefined>;
+  deleteBranchMonthlyTarget(id: number): Promise<boolean>;
+  
+  // Targets & Incentives - Daily Allocations
+  getTargetDailyAllocationsByMonth(monthlyTargetId: number): Promise<TargetDailyAllocation[]>;
+  getTargetDailyAllocation(id: number): Promise<TargetDailyAllocation | undefined>;
+  createTargetDailyAllocation(allocation: InsertTargetDailyAllocation): Promise<TargetDailyAllocation>;
+  updateTargetDailyAllocation(id: number, allocation: Partial<InsertTargetDailyAllocation>): Promise<TargetDailyAllocation | undefined>;
+  deleteTargetDailyAllocation(id: number): Promise<boolean>;
+  bulkCreateTargetDailyAllocations(allocations: InsertTargetDailyAllocation[]): Promise<TargetDailyAllocation[]>;
+  
+  // Targets & Incentives - Shift Allocations
+  getTargetShiftAllocationsByDaily(dailyAllocationId: number): Promise<TargetShiftAllocation[]>;
+  createTargetShiftAllocation(allocation: InsertTargetShiftAllocation): Promise<TargetShiftAllocation>;
+  deleteTargetShiftAllocationsByDaily(dailyAllocationId: number): Promise<boolean>;
+  
+  // Targets & Incentives - Incentive Tiers
+  getAllIncentiveTiers(): Promise<IncentiveTier[]>;
+  getActiveIncentiveTiers(): Promise<IncentiveTier[]>;
+  getIncentiveTier(id: number): Promise<IncentiveTier | undefined>;
+  createIncentiveTier(tier: InsertIncentiveTier): Promise<IncentiveTier>;
+  updateIncentiveTier(id: number, tier: Partial<InsertIncentiveTier>): Promise<IncentiveTier | undefined>;
+  deleteIncentiveTier(id: number): Promise<boolean>;
+  
+  // Targets & Incentives - Incentive Awards
+  getAllIncentiveAwards(): Promise<IncentiveAward[]>;
+  getIncentiveAwardsByBranch(branchId: string): Promise<IncentiveAward[]>;
+  getIncentiveAwardsByCashier(cashierId: string): Promise<IncentiveAward[]>;
+  getIncentiveAward(id: number): Promise<IncentiveAward | undefined>;
+  createIncentiveAward(award: InsertIncentiveAward): Promise<IncentiveAward>;
+  updateIncentiveAward(id: number, award: Partial<InsertIncentiveAward>): Promise<IncentiveAward | undefined>;
+  approveIncentiveAward(id: number, approvedBy: string): Promise<IncentiveAward | undefined>;
+  markIncentiveAwardAsPaid(id: number): Promise<IncentiveAward | undefined>;
+  
+  // Targets Performance Calculation
+  calculateBranchPerformance(branchId: string, yearMonth: string): Promise<{
+    targetAmount: number;
+    achievedAmount: number;
+    achievementPercent: number;
+    dailyPerformance: { date: string; target: number; achieved: number; percent: number }[];
+  }>;
+  
+  getLeaderboard(yearMonth: string): Promise<{
+    branches: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[];
+    cashiers: { cashierId: string; cashierName: string; branchId: string; target: number; achieved: number; percent: number; rank: number }[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2334,6 +2413,358 @@ export class DatabaseStorage implements IStorage {
         employeesByRole,
       },
       branchComparison,
+    };
+  }
+
+  // ==========================================
+  // Targets & Incentives - Weight Profiles
+  // ==========================================
+  
+  async getAllTargetWeightProfiles(): Promise<TargetWeightProfile[]> {
+    return db.select().from(targetWeightProfiles).orderBy(desc(targetWeightProfiles.createdAt));
+  }
+
+  async getTargetWeightProfile(id: number): Promise<TargetWeightProfile | undefined> {
+    const [profile] = await db.select().from(targetWeightProfiles).where(eq(targetWeightProfiles.id, id));
+    return profile || undefined;
+  }
+
+  async getDefaultTargetWeightProfile(): Promise<TargetWeightProfile | undefined> {
+    const [profile] = await db.select().from(targetWeightProfiles).where(eq(targetWeightProfiles.isDefault, true));
+    return profile || undefined;
+  }
+
+  async createTargetWeightProfile(profile: InsertTargetWeightProfile): Promise<TargetWeightProfile> {
+    const [created] = await db.insert(targetWeightProfiles).values(profile).returning();
+    return created;
+  }
+
+  async updateTargetWeightProfile(id: number, profile: Partial<InsertTargetWeightProfile>): Promise<TargetWeightProfile | undefined> {
+    const [updated] = await db.update(targetWeightProfiles)
+      .set({ ...profile, updatedAt: new Date() })
+      .where(eq(targetWeightProfiles.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTargetWeightProfile(id: number): Promise<boolean> {
+    const result = await db.delete(targetWeightProfiles).where(eq(targetWeightProfiles.id, id));
+    return true;
+  }
+
+  // ==========================================
+  // Targets & Incentives - Monthly Targets
+  // ==========================================
+  
+  async getAllBranchMonthlyTargets(): Promise<BranchMonthlyTarget[]> {
+    return db.select().from(branchMonthlyTargets).orderBy(desc(branchMonthlyTargets.yearMonth));
+  }
+
+  async getBranchMonthlyTargetsByBranch(branchId: string): Promise<BranchMonthlyTarget[]> {
+    return db.select().from(branchMonthlyTargets)
+      .where(eq(branchMonthlyTargets.branchId, branchId))
+      .orderBy(desc(branchMonthlyTargets.yearMonth));
+  }
+
+  async getBranchMonthlyTarget(id: number): Promise<BranchMonthlyTarget | undefined> {
+    const [target] = await db.select().from(branchMonthlyTargets).where(eq(branchMonthlyTargets.id, id));
+    return target || undefined;
+  }
+
+  async getBranchMonthlyTargetByMonth(branchId: string, yearMonth: string): Promise<BranchMonthlyTarget | undefined> {
+    const [target] = await db.select().from(branchMonthlyTargets)
+      .where(and(eq(branchMonthlyTargets.branchId, branchId), eq(branchMonthlyTargets.yearMonth, yearMonth)));
+    return target || undefined;
+  }
+
+  async createBranchMonthlyTarget(target: InsertBranchMonthlyTarget): Promise<BranchMonthlyTarget> {
+    const [created] = await db.insert(branchMonthlyTargets).values(target).returning();
+    return created;
+  }
+
+  async updateBranchMonthlyTarget(id: number, target: Partial<InsertBranchMonthlyTarget>): Promise<BranchMonthlyTarget | undefined> {
+    const [updated] = await db.update(branchMonthlyTargets)
+      .set({ ...target, updatedAt: new Date() })
+      .where(eq(branchMonthlyTargets.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteBranchMonthlyTarget(id: number): Promise<boolean> {
+    await db.delete(branchMonthlyTargets).where(eq(branchMonthlyTargets.id, id));
+    return true;
+  }
+
+  // ==========================================
+  // Targets & Incentives - Daily Allocations
+  // ==========================================
+  
+  async getTargetDailyAllocationsByMonth(monthlyTargetId: number): Promise<TargetDailyAllocation[]> {
+    return db.select().from(targetDailyAllocations)
+      .where(eq(targetDailyAllocations.monthlyTargetId, monthlyTargetId))
+      .orderBy(targetDailyAllocations.targetDate);
+  }
+
+  async getTargetDailyAllocation(id: number): Promise<TargetDailyAllocation | undefined> {
+    const [allocation] = await db.select().from(targetDailyAllocations).where(eq(targetDailyAllocations.id, id));
+    return allocation || undefined;
+  }
+
+  async createTargetDailyAllocation(allocation: InsertTargetDailyAllocation): Promise<TargetDailyAllocation> {
+    const [created] = await db.insert(targetDailyAllocations).values(allocation).returning();
+    return created;
+  }
+
+  async updateTargetDailyAllocation(id: number, allocation: Partial<InsertTargetDailyAllocation>): Promise<TargetDailyAllocation | undefined> {
+    const [updated] = await db.update(targetDailyAllocations)
+      .set({ ...allocation, updatedAt: new Date() })
+      .where(eq(targetDailyAllocations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTargetDailyAllocation(id: number): Promise<boolean> {
+    await db.delete(targetDailyAllocations).where(eq(targetDailyAllocations.id, id));
+    return true;
+  }
+
+  async bulkCreateTargetDailyAllocations(allocations: InsertTargetDailyAllocation[]): Promise<TargetDailyAllocation[]> {
+    if (allocations.length === 0) return [];
+    return db.insert(targetDailyAllocations).values(allocations).returning();
+  }
+
+  // ==========================================
+  // Targets & Incentives - Shift Allocations
+  // ==========================================
+  
+  async getTargetShiftAllocationsByDaily(dailyAllocationId: number): Promise<TargetShiftAllocation[]> {
+    return db.select().from(targetShiftAllocations)
+      .where(eq(targetShiftAllocations.dailyAllocationId, dailyAllocationId));
+  }
+
+  async createTargetShiftAllocation(allocation: InsertTargetShiftAllocation): Promise<TargetShiftAllocation> {
+    const [created] = await db.insert(targetShiftAllocations).values(allocation).returning();
+    return created;
+  }
+
+  async deleteTargetShiftAllocationsByDaily(dailyAllocationId: number): Promise<boolean> {
+    await db.delete(targetShiftAllocations).where(eq(targetShiftAllocations.dailyAllocationId, dailyAllocationId));
+    return true;
+  }
+
+  // ==========================================
+  // Targets & Incentives - Incentive Tiers
+  // ==========================================
+  
+  async getAllIncentiveTiers(): Promise<IncentiveTier[]> {
+    return db.select().from(incentiveTiers).orderBy(incentiveTiers.sortOrder);
+  }
+
+  async getActiveIncentiveTiers(): Promise<IncentiveTier[]> {
+    return db.select().from(incentiveTiers)
+      .where(eq(incentiveTiers.isActive, true))
+      .orderBy(incentiveTiers.sortOrder);
+  }
+
+  async getIncentiveTier(id: number): Promise<IncentiveTier | undefined> {
+    const [tier] = await db.select().from(incentiveTiers).where(eq(incentiveTiers.id, id));
+    return tier || undefined;
+  }
+
+  async createIncentiveTier(tier: InsertIncentiveTier): Promise<IncentiveTier> {
+    const [created] = await db.insert(incentiveTiers).values(tier).returning();
+    return created;
+  }
+
+  async updateIncentiveTier(id: number, tier: Partial<InsertIncentiveTier>): Promise<IncentiveTier | undefined> {
+    const [updated] = await db.update(incentiveTiers)
+      .set({ ...tier, updatedAt: new Date() })
+      .where(eq(incentiveTiers.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteIncentiveTier(id: number): Promise<boolean> {
+    await db.delete(incentiveTiers).where(eq(incentiveTiers.id, id));
+    return true;
+  }
+
+  // ==========================================
+  // Targets & Incentives - Incentive Awards
+  // ==========================================
+  
+  async getAllIncentiveAwards(): Promise<IncentiveAward[]> {
+    return db.select().from(incentiveAwards).orderBy(desc(incentiveAwards.createdAt));
+  }
+
+  async getIncentiveAwardsByBranch(branchId: string): Promise<IncentiveAward[]> {
+    return db.select().from(incentiveAwards)
+      .where(eq(incentiveAwards.branchId, branchId))
+      .orderBy(desc(incentiveAwards.createdAt));
+  }
+
+  async getIncentiveAwardsByCashier(cashierId: string): Promise<IncentiveAward[]> {
+    return db.select().from(incentiveAwards)
+      .where(eq(incentiveAwards.cashierId, cashierId))
+      .orderBy(desc(incentiveAwards.createdAt));
+  }
+
+  async getIncentiveAward(id: number): Promise<IncentiveAward | undefined> {
+    const [award] = await db.select().from(incentiveAwards).where(eq(incentiveAwards.id, id));
+    return award || undefined;
+  }
+
+  async createIncentiveAward(award: InsertIncentiveAward): Promise<IncentiveAward> {
+    const [created] = await db.insert(incentiveAwards).values(award).returning();
+    return created;
+  }
+
+  async updateIncentiveAward(id: number, award: Partial<InsertIncentiveAward>): Promise<IncentiveAward | undefined> {
+    const [updated] = await db.update(incentiveAwards)
+      .set({ ...award, updatedAt: new Date() })
+      .where(eq(incentiveAwards.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async approveIncentiveAward(id: number, approvedBy: string): Promise<IncentiveAward | undefined> {
+    const [updated] = await db.update(incentiveAwards)
+      .set({ status: 'approved', approvedBy, approvedAt: new Date(), updatedAt: new Date() })
+      .where(eq(incentiveAwards.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markIncentiveAwardAsPaid(id: number): Promise<IncentiveAward | undefined> {
+    const [updated] = await db.update(incentiveAwards)
+      .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
+      .where(eq(incentiveAwards.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // ==========================================
+  // Targets Performance Calculation
+  // ==========================================
+  
+  async calculateBranchPerformance(branchId: string, yearMonth: string): Promise<{
+    targetAmount: number;
+    achievedAmount: number;
+    achievementPercent: number;
+    dailyPerformance: { date: string; target: number; achieved: number; percent: number }[];
+  }> {
+    const target = await this.getBranchMonthlyTargetByMonth(branchId, yearMonth);
+    if (!target) {
+      return { targetAmount: 0, achievedAmount: 0, achievementPercent: 0, dailyPerformance: [] };
+    }
+
+    const dailyAllocations = await this.getTargetDailyAllocationsByMonth(target.id);
+    const journals = await this.getCashierJournalsByBranch(branchId);
+    
+    const startDate = `${yearMonth}-01`;
+    const endDate = `${yearMonth}-31`;
+    const monthJournals = journals.filter((j: CashierSalesJournal) => 
+      j.journalDate >= startDate && j.journalDate <= endDate && j.status === 'approved'
+    );
+
+    const dailySalesMap: Record<string, number> = {};
+    monthJournals.forEach((j: CashierSalesJournal) => {
+      dailySalesMap[j.journalDate] = (dailySalesMap[j.journalDate] || 0) + j.totalSales;
+    });
+
+    const dailyPerformance = dailyAllocations.map(alloc => {
+      const achieved = dailySalesMap[alloc.targetDate] || 0;
+      const percent = alloc.dailyTarget > 0 ? (achieved / alloc.dailyTarget) * 100 : 0;
+      return {
+        date: alloc.targetDate,
+        target: alloc.dailyTarget,
+        achieved,
+        percent
+      };
+    });
+
+    const achievedAmount = monthJournals.reduce((sum: number, j: CashierSalesJournal) => sum + j.totalSales, 0);
+    const achievementPercent = target.targetAmount > 0 ? (achievedAmount / target.targetAmount) * 100 : 0;
+
+    return {
+      targetAmount: target.targetAmount,
+      achievedAmount,
+      achievementPercent,
+      dailyPerformance
+    };
+  }
+
+  async getLeaderboard(yearMonth: string): Promise<{
+    branches: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[];
+    cashiers: { cashierId: string; cashierName: string; branchId: string; target: number; achieved: number; percent: number; rank: number }[];
+  }> {
+    const allBranches = await this.getAllBranches();
+    const allTargets = await this.getAllBranchMonthlyTargets();
+    const monthTargets = allTargets.filter(t => t.yearMonth === yearMonth);
+    
+    const startDate = `${yearMonth}-01`;
+    const endDate = `${yearMonth}-31`;
+    
+    const branchPerformance: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[] = [];
+    
+    for (const branch of allBranches) {
+      const branchTarget = monthTargets.find(t => t.branchId === branch.id);
+      const journals = await this.getCashierJournalsByBranch(branch.id);
+      const branchMonthJournals = journals.filter((j: CashierSalesJournal) => 
+        j.journalDate >= startDate && j.journalDate <= endDate && j.status === 'approved'
+      );
+      
+      const achieved = branchMonthJournals.reduce((sum: number, j: CashierSalesJournal) => sum + j.totalSales, 0);
+      const target = branchTarget?.targetAmount || 0;
+      const percent = target > 0 ? (achieved / target) * 100 : 0;
+      
+      branchPerformance.push({
+        branchId: branch.id,
+        branchName: branch.name,
+        target,
+        achieved,
+        percent,
+        rank: 0
+      });
+    }
+
+    branchPerformance.sort((a, b) => b.percent - a.percent);
+    branchPerformance.forEach((b, i) => b.rank = i + 1);
+
+    const allJournals = await this.getAllCashierJournals();
+    const monthJournals = allJournals.filter((j: CashierSalesJournal) => 
+      j.journalDate >= startDate && j.journalDate <= endDate && j.status === 'approved'
+    );
+
+    const cashierSales: Record<string, { cashierName: string; branchId: string; total: number }> = {};
+    monthJournals.forEach((j: CashierSalesJournal) => {
+      if (!cashierSales[j.cashierId]) {
+        cashierSales[j.cashierId] = { cashierName: j.cashierName, branchId: j.branchId, total: 0 };
+      }
+      cashierSales[j.cashierId].total += j.totalSales;
+    });
+
+    const cashierPerformance = Object.entries(cashierSales).map(([cashierId, data]) => {
+      const branchTarget = monthTargets.find(t => t.branchId === data.branchId);
+      const target = branchTarget?.targetAmount ? branchTarget.targetAmount / 30 : 0;
+      const percent = target > 0 ? (data.total / target) * 100 : 0;
+      return {
+        cashierId,
+        cashierName: data.cashierName,
+        branchId: data.branchId,
+        target,
+        achieved: data.total,
+        percent,
+        rank: 0
+      };
+    });
+
+    cashierPerformance.sort((a, b) => b.achieved - a.achieved);
+    cashierPerformance.forEach((c, i) => c.rank = i + 1);
+
+    return {
+      branches: branchPerformance,
+      cashiers: cashierPerformance.slice(0, 20)
     };
   }
 }
