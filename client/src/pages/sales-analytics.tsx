@@ -21,8 +21,14 @@ import {
   Sunset,
   Moon,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  Building2,
+  Trophy,
+  Gift,
+  Download,
+  FileSpreadsheet
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   BarChart,
   Bar,
@@ -100,11 +106,75 @@ export default function SalesAnalytics() {
     },
   });
 
+  const { data: branchCompetition = [], isLoading: loadingBranches, refetch: refetchBranches } = useQuery<any[]>({
+    queryKey: ["/api/analytics/branch-competition", fromDate, toDate],
+    queryFn: async () => {
+      const params = new URLSearchParams({ fromDate, toDate });
+      const res = await fetch(`/api/analytics/branch-competition?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch branch competition");
+      return res.json();
+    },
+  });
+
   const handleRefresh = () => {
     refetchTargets();
     refetchShifts();
     refetchLeaderboard();
     refetchAvgTicket();
+    refetchBranches();
+  };
+
+  const exportToExcel = (data: any[], sheetName: string, fileName: string) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
+  };
+
+  const exportCashierLeaderboard = () => {
+    const exportData = cashierLeaderboard.map((c: any) => ({
+      'الترتيب': c.rank,
+      'الكاشير': c.cashierName,
+      'الفرع': c.branchName,
+      'إجمالي المبيعات': c.totalSales,
+      'الهدف': c.targetAmount || 0,
+      'نسبة الإنجاز': `${(c.achievementPercent || 0).toFixed(1)}%`,
+      'متوسط اليوم': c.averageDailySales,
+      'عدد اليوميات': c.journalCount,
+      'متوسط الفاتورة': c.averageTicket,
+      'المساهمة': `${c.contribution.toFixed(1)}%`,
+      'مستوى الحافز': c.incentiveTier?.name || '-',
+      'المكافأة المتوقعة': c.calculatedReward || 0
+    }));
+    exportToExcel(exportData, 'ترتيب الكاشيرين', `cashier-leaderboard-${yearMonth}`);
+  };
+
+  const exportBranchCompetition = () => {
+    const exportData = branchCompetition.map((b: any) => ({
+      'الترتيب': b.rank,
+      'الفرع': b.branchName,
+      'الهدف': b.targetAmount,
+      'الفعلي': b.totalSales,
+      'نسبة الإنجاز': `${b.achievementPercent.toFixed(1)}%`,
+      'الفرق': b.variance,
+      'عدد الكاشيرين': b.cashierCount,
+      'عدد المعاملات': b.totalTransactions,
+      'متوسط الفاتورة': b.averageTicket,
+      'مستوى الحافز': b.incentiveTier?.name || '-',
+      'المكافأة المتوقعة': b.calculatedReward || 0
+    }));
+    exportToExcel(exportData, 'منافسة الفروع', `branch-competition-${yearMonth}`);
+  };
+
+  const exportDailyPerformance = () => {
+    const exportData = targetsVsActuals.map((d: any) => ({
+      'التاريخ': d.date,
+      'الهدف': d.targetAmount,
+      'الفعلي': d.actualSales,
+      'نسبة الإنجاز': `${d.achievementPercent.toFixed(1)}%`,
+      'الفرق': d.variance
+    }));
+    exportToExcel(exportData, 'الأداء اليومي', `daily-performance-${yearMonth}`);
   };
 
   const totalActualSales = targetsVsActuals.reduce((sum, d) => sum + d.actualSales, 0);
@@ -307,8 +377,9 @@ export default function SalesAnalytics() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="bg-white/80 backdrop-blur border border-amber-200">
             <TabsTrigger value="overview" data-testid="tab-overview">نظرة عامة</TabsTrigger>
-            <TabsTrigger value="shifts" data-testid="tab-shifts">تحليل الورديات</TabsTrigger>
+            <TabsTrigger value="branches" data-testid="tab-branches">منافسة الفروع</TabsTrigger>
             <TabsTrigger value="cashiers" data-testid="tab-cashiers">ترتيب الكاشيرين</TabsTrigger>
+            <TabsTrigger value="shifts" data-testid="tab-shifts">تحليل الورديات</TabsTrigger>
             <TabsTrigger value="daily" data-testid="tab-daily">الأداء اليومي</TabsTrigger>
           </TabsList>
 
@@ -424,6 +495,115 @@ export default function SalesAnalytics() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="branches" className="space-y-4">
+            <Card className="bg-white/80 backdrop-blur border-amber-200">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-amber-600" />
+                    منافسة الفروع
+                  </CardTitle>
+                  <CardDescription>
+                    ترتيب الفروع حسب نسبة تحقيق الهدف للفترة: {fromDate} إلى {toDate}
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={exportBranchCompetition} data-testid="button-export-branches">
+                  <FileSpreadsheet className="h-4 w-4 ml-2" />
+                  تصدير Excel
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {loadingBranches ? (
+                  <div className="space-y-2">
+                    {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+                  </div>
+                ) : branchCompetition.length === 0 ? (
+                  <div className="h-40 flex items-center justify-center text-gray-500">
+                    لا توجد بيانات
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {branchCompetition.map((branch: any) => (
+                      <div 
+                        key={branch.branchId} 
+                        className={`p-4 rounded-lg border-2 ${
+                          branch.rank === 1 ? "bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-400" :
+                          branch.rank === 2 ? "bg-gray-50 border-gray-300" :
+                          branch.rank === 3 ? "bg-gradient-to-r from-amber-100 to-orange-50 border-amber-600" :
+                          "bg-white border-gray-200"
+                        }`}
+                        data-testid={`card-branch-${branch.branchId}`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${
+                              branch.rank === 1 ? "bg-amber-400 text-white" :
+                              branch.rank === 2 ? "bg-gray-400 text-white" :
+                              branch.rank === 3 ? "bg-amber-600 text-white" :
+                              "bg-gray-200 text-gray-600"
+                            }`}>
+                              {branch.rank === 1 && <Trophy className="h-6 w-6" />}
+                              {branch.rank !== 1 && branch.rank}
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-lg text-gray-900">{branch.branchName}</h3>
+                              <p className="text-sm text-gray-500">{branch.cashierCount} كاشير</p>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            {branch.incentiveTier ? (
+                              <Badge className="bg-green-100 text-green-800 border-green-200 mb-1">
+                                <Gift className="h-3 w-3 ml-1" />
+                                {branch.incentiveTier.name}
+                              </Badge>
+                            ) : null}
+                            {branch.calculatedReward > 0 && (
+                              <p className="text-sm font-medium text-green-600">
+                                مكافأة: {formatCurrency(branch.calculatedReward)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                          <div>
+                            <p className="text-xs text-gray-500">الهدف</p>
+                            <p className="font-medium">{formatCurrency(branch.targetAmount)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">الفعلي</p>
+                            <p className="font-bold text-amber-600">{formatCurrency(branch.totalSales)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">الفارق</p>
+                            <p className={`font-medium ${branch.variance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                              {branch.variance >= 0 ? "+" : ""}{formatCurrency(branch.variance)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">متوسط الفاتورة</p>
+                            <p className="font-medium">{formatCurrency(branch.averageTicket)}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          <Progress value={Math.min(branch.achievementPercent, 100)} className="flex-1 h-3" />
+                          <span className={`font-bold text-lg ${
+                            branch.achievementPercent >= 100 ? "text-green-600" :
+                            branch.achievementPercent >= 80 ? "text-amber-600" :
+                            "text-red-600"
+                          }`}>
+                            {formatPercent(branch.achievementPercent)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="shifts" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {shiftAnalytics.map((shift: any) => {
@@ -474,14 +654,20 @@ export default function SalesAnalytics() {
 
           <TabsContent value="cashiers" className="space-y-4">
             <Card className="bg-white/80 backdrop-blur border-amber-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Award className="h-5 w-5 text-amber-600" />
-                  ترتيب الكاشيرين حسب المبيعات
-                </CardTitle>
-                <CardDescription>
-                  الفترة: {fromDate} إلى {toDate}
-                </CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Award className="h-5 w-5 text-amber-600" />
+                    ترتيب الكاشيرين حسب المبيعات
+                  </CardTitle>
+                  <CardDescription>
+                    الفترة: {fromDate} إلى {toDate}
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={exportCashierLeaderboard} data-testid="button-export-cashiers">
+                  <FileSpreadsheet className="h-4 w-4 ml-2" />
+                  تصدير Excel
+                </Button>
               </CardHeader>
               <CardContent>
                 {loadingLeaderboard ? (
@@ -501,8 +687,9 @@ export default function SalesAnalytics() {
                           <th className="text-right py-3 px-2">الكاشير</th>
                           <th className="text-right py-3 px-2">الفرع</th>
                           <th className="text-right py-3 px-2">إجمالي المبيعات</th>
-                          <th className="text-right py-3 px-2">متوسط اليوم</th>
-                          <th className="text-right py-3 px-2">عدد اليوميات</th>
+                          <th className="text-right py-3 px-2">نسبة الإنجاز</th>
+                          <th className="text-right py-3 px-2">مستوى الحافز</th>
+                          <th className="text-right py-3 px-2">المكافأة المتوقعة</th>
                           <th className="text-right py-3 px-2">متوسط الفاتورة</th>
                           <th className="text-right py-3 px-2">المساهمة</th>
                         </tr>
@@ -523,8 +710,29 @@ export default function SalesAnalytics() {
                             <td className="py-3 px-2 font-medium">{cashier.cashierName}</td>
                             <td className="py-3 px-2 text-gray-600">{cashier.branchName}</td>
                             <td className="py-3 px-2 font-bold text-amber-600">{formatCurrency(cashier.totalSales)}</td>
-                            <td className="py-3 px-2">{formatCurrency(cashier.averageDailySales)}</td>
-                            <td className="py-3 px-2">{cashier.journalCount}</td>
+                            <td className="py-3 px-2">
+                              <div className="flex items-center gap-2">
+                                <Progress value={Math.min(cashier.achievementPercent || 0, 100)} className="h-2 w-16" />
+                                <span className="text-sm">{formatPercent(cashier.achievementPercent || 0)}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-2">
+                              {cashier.incentiveTier ? (
+                                <Badge className="bg-green-100 text-green-800 border-green-200">
+                                  <Gift className="h-3 w-3 ml-1" />
+                                  {cashier.incentiveTier.name}
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-400 text-sm">-</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-2">
+                              {cashier.calculatedReward > 0 ? (
+                                <span className="font-medium text-green-600">{formatCurrency(cashier.calculatedReward)}</span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
                             <td className="py-3 px-2">{formatCurrency(cashier.averageTicket)}</td>
                             <td className="py-3 px-2">
                               <Badge variant="secondary">{cashier.contribution.toFixed(1)}%</Badge>
@@ -541,11 +749,15 @@ export default function SalesAnalytics() {
 
           <TabsContent value="daily" className="space-y-4">
             <Card className="bg-white/80 backdrop-blur border-amber-200">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-amber-600" />
                   الأداء اليومي - الأهداف مقابل الفعلي
                 </CardTitle>
+                <Button variant="outline" size="sm" onClick={exportDailyPerformance} data-testid="button-export-daily">
+                  <FileSpreadsheet className="h-4 w-4 ml-2" />
+                  تصدير Excel
+                </Button>
               </CardHeader>
               <CardContent>
                 {loadingTargets ? (

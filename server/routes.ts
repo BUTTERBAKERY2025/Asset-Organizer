@@ -3840,10 +3840,145 @@ export async function registerRoutes(
         fromDate as string,
         toDate as string
       );
-      res.json(data);
+      
+      // Get incentive tiers to enrich the leaderboard
+      const incentiveTiers = await storage.getActiveIncentiveTiers();
+      
+      // Get monthly targets for the period to calculate achievement
+      const yearMonth = (fromDate as string).substring(0, 7);
+      
+      // Enrich each cashier with their incentive tier
+      const enrichedData = await Promise.all(data.map(async (cashier) => {
+        // Get branch target for calculating achievement
+        const branchTarget = await storage.getBranchMonthlyTargetByMonth(cashier.branchId, yearMonth);
+        const targetAmount = branchTarget?.targetAmount || 0;
+        const achievementPercent = targetAmount > 0 ? (cashier.totalSales / targetAmount) * 100 : 0;
+        
+        // Find applicable incentive tier
+        const applicableTier = incentiveTiers.find(tier => {
+          const minOk = achievementPercent >= (tier.minAchievementPercent || 0);
+          const maxOk = !tier.maxAchievementPercent || achievementPercent <= tier.maxAchievementPercent;
+          return minOk && maxOk && (tier.applicableTo === 'all' || tier.applicableTo === 'cashier');
+        });
+        
+        // Calculate potential reward
+        let calculatedReward = 0;
+        if (applicableTier) {
+          if (applicableTier.rewardType === 'fixed' && applicableTier.fixedAmount) {
+            calculatedReward = applicableTier.fixedAmount;
+          } else if (applicableTier.rewardType === 'percentage' && applicableTier.percentageRate) {
+            const excessSales = cashier.totalSales - targetAmount;
+            calculatedReward = excessSales > 0 ? (excessSales * applicableTier.percentageRate) / 100 : 0;
+          } else if (applicableTier.rewardType === 'both') {
+            if (applicableTier.fixedAmount) calculatedReward += applicableTier.fixedAmount;
+            if (applicableTier.percentageRate) {
+              const excessSales = cashier.totalSales - targetAmount;
+              if (excessSales > 0) calculatedReward += (excessSales * applicableTier.percentageRate) / 100;
+            }
+          }
+        }
+        
+        return {
+          ...cashier,
+          targetAmount,
+          achievementPercent,
+          incentiveTier: applicableTier ? {
+            id: applicableTier.id,
+            name: applicableTier.name,
+            minPercent: applicableTier.minAchievementPercent,
+            maxPercent: applicableTier.maxAchievementPercent
+          } : null,
+          calculatedReward
+        };
+      }));
+      
+      res.json(enrichedData);
     } catch (error) {
       console.error("Error fetching cashier leaderboard:", error);
       res.status(500).json({ error: "Failed to fetch cashier leaderboard" });
+    }
+  });
+
+  // Branch Competition - منافسة الفروع
+  app.get("/api/analytics/branch-competition", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { fromDate, toDate } = req.query;
+      
+      if (!fromDate || !toDate) {
+        return res.status(400).json({ error: "fromDate and toDate are required" });
+      }
+      
+      const yearMonth = (fromDate as string).substring(0, 7);
+      const branches = await storage.getAllBranches();
+      const incentiveTiers = await storage.getActiveIncentiveTiers();
+      
+      const branchStats = await Promise.all(branches.map(async (branch) => {
+        // Get branch target
+        const branchTarget = await storage.getBranchMonthlyTargetByMonth(branch.id, yearMonth);
+        const targetAmount = branchTarget?.targetAmount || 0;
+        
+        // Get cashier leaderboard for this branch to sum sales
+        const cashiers = await storage.getCashierLeaderboard(branch.id, fromDate as string, toDate as string);
+        const totalSales = cashiers.reduce((sum, c) => sum + c.totalSales, 0);
+        const cashierCount = cashiers.length;
+        const totalTransactions = cashiers.reduce((sum, c) => sum + c.transactionsCount, 0);
+        
+        const achievementPercent = targetAmount > 0 ? (totalSales / targetAmount) * 100 : 0;
+        const variance = totalSales - targetAmount;
+        
+        // Find applicable incentive tier for branch
+        const applicableTier = incentiveTiers.find(tier => {
+          const minOk = achievementPercent >= (tier.minAchievementPercent || 0);
+          const maxOk = !tier.maxAchievementPercent || achievementPercent <= tier.maxAchievementPercent;
+          return minOk && maxOk && (tier.applicableTo === 'all' || tier.applicableTo === 'branch');
+        });
+        
+        // Calculate potential reward
+        let calculatedReward = 0;
+        if (applicableTier) {
+          if (applicableTier.rewardType === 'fixed' && applicableTier.fixedAmount) {
+            calculatedReward = applicableTier.fixedAmount;
+          } else if (applicableTier.rewardType === 'percentage' && applicableTier.percentageRate) {
+            const excessSales = totalSales - targetAmount;
+            calculatedReward = excessSales > 0 ? (excessSales * applicableTier.percentageRate) / 100 : 0;
+          } else if (applicableTier.rewardType === 'both') {
+            if (applicableTier.fixedAmount) calculatedReward += applicableTier.fixedAmount;
+            if (applicableTier.percentageRate) {
+              const excessSales = totalSales - targetAmount;
+              if (excessSales > 0) calculatedReward += (excessSales * applicableTier.percentageRate) / 100;
+            }
+          }
+        }
+        
+        return {
+          branchId: branch.id,
+          branchName: branch.name,
+          targetAmount,
+          totalSales,
+          achievementPercent,
+          variance,
+          cashierCount,
+          totalTransactions,
+          averageTicket: totalTransactions > 0 ? totalSales / totalTransactions : 0,
+          incentiveTier: applicableTier ? {
+            id: applicableTier.id,
+            name: applicableTier.name,
+            minPercent: applicableTier.minAchievementPercent,
+            maxPercent: applicableTier.maxAchievementPercent
+          } : null,
+          calculatedReward,
+          rank: 0
+        };
+      }));
+      
+      // Sort by achievement percent and assign ranks
+      branchStats.sort((a, b) => b.achievementPercent - a.achievementPercent);
+      branchStats.forEach((branch, idx) => { branch.rank = idx + 1; });
+      
+      res.json(branchStats);
+    } catch (error) {
+      console.error("Error fetching branch competition:", error);
+      res.status(500).json({ error: "Failed to fetch branch competition" });
     }
   });
 
