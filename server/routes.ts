@@ -3411,14 +3411,36 @@ export async function registerRoutes(
     }
   });
 
+  // Get holidays by month (for target allocation display)
+  app.get("/api/seasons-holidays/by-month", isAuthenticated, async (req, res) => {
+    try {
+      const { yearMonth } = req.query;
+      if (!yearMonth || typeof yearMonth !== 'string') {
+        return res.status(400).json({ error: "yearMonth parameter required (format: YYYY-MM)" });
+      }
+      
+      // Calculate start and end of month
+      const [year, month] = yearMonth.split('-').map(Number);
+      const startDate = `${yearMonth}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${yearMonth}-${lastDay.toString().padStart(2, '0')}`;
+      
+      const holidays = await storage.getSeasonsHolidaysForDateRange(startDate, endDate);
+      res.json(holidays);
+    } catch (error) {
+      console.error("Error fetching holidays by month:", error);
+      res.status(500).json({ error: "Failed to fetch holidays" });
+    }
+  });
+
   app.post("/api/seasons-holidays", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
     try {
-      const { name, type, startDate, endDate, weightMultiplier, applicableBranches, description, isRecurring, recurringPattern } = req.body;
+      const { name, type, category, startDate, endDate, color, icon, weightMultiplier, applicableBranches, description, isRecurring, recurringPattern } = req.body;
       
       if (!name || typeof name !== 'string') {
         return res.status(400).json({ error: "اسم الموسم/الإجازة مطلوب" });
       }
-      if (!type || !['season', 'holiday', 'event'].includes(type)) {
+      if (!type || !['season', 'holiday', 'event', 'islamic', 'international', 'national', 'custom'].includes(type)) {
         return res.status(400).json({ error: "نوع غير صالح" });
       }
       if (!startDate || !endDate) {
@@ -3433,8 +3455,11 @@ export async function registerRoutes(
       const season = await storage.createSeasonHoliday({
         name,
         type,
+        category: category || null,
         startDate,
         endDate,
+        color: color || '#f59e0b',
+        icon: icon || null,
         weightMultiplier: parsedMultiplier || 1.0,
         applicableBranches: applicableBranches || null,
         description: description || null,
@@ -3447,6 +3472,57 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error creating season/holiday:", error);
       res.status(500).json({ error: "Failed to create season/holiday" });
+    }
+  });
+
+  // Seed default holidays for Saudi Arabia (national + international)
+  app.post("/api/seasons-holidays/seed-defaults", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const { year } = req.body;
+      const targetYear = year || new Date().getFullYear();
+      
+      const defaultHolidays = [
+        // Saudi National Days
+        { name: "اليوم الوطني السعودي", type: "national", category: "national_day", startDate: `${targetYear}-09-23`, endDate: `${targetYear}-09-23`, color: "#16a34a", icon: "flag", weightMultiplier: 1.5, description: "اليوم الوطني للمملكة العربية السعودية" },
+        { name: "يوم التأسيس", type: "national", category: "founding_day", startDate: `${targetYear}-02-22`, endDate: `${targetYear}-02-22`, color: "#16a34a", icon: "crown", weightMultiplier: 1.3, description: "يوم تأسيس الدولة السعودية الأولى" },
+        
+        // International Events
+        { name: "رأس السنة الميلادية", type: "international", category: "new_year", startDate: `${targetYear}-01-01`, endDate: `${targetYear}-01-01`, color: "#8b5cf6", icon: "party-popper", weightMultiplier: 1.2, description: "السنة الميلادية الجديدة" },
+        { name: "عيد الحب", type: "international", category: "valentines", startDate: `${targetYear}-02-14`, endDate: `${targetYear}-02-14`, color: "#ec4899", icon: "heart", weightMultiplier: 1.3, description: "عيد الحب العالمي" },
+        { name: "عيد الأم", type: "international", category: "mothers_day", startDate: `${targetYear}-03-21`, endDate: `${targetYear}-03-21`, color: "#f472b6", icon: "flower", weightMultiplier: 1.3, description: "عيد الأم" },
+        { name: "اليوم العالمي للقهوة", type: "international", category: "coffee_day", startDate: `${targetYear}-10-01`, endDate: `${targetYear}-10-01`, color: "#92400e", icon: "coffee", weightMultiplier: 1.2, description: "يوم القهوة العالمي" },
+        
+        // Islamic Holidays (approximate dates for 2025 - these should be updated yearly)
+        { name: "عيد الفطر المبارك", type: "islamic", category: "eid_fitr", startDate: `${targetYear}-03-30`, endDate: `${targetYear}-04-02`, color: "#0ea5e9", icon: "moon", weightMultiplier: 1.8, description: "عيد الفطر - أول شوال" },
+        { name: "عيد الأضحى المبارك", type: "islamic", category: "eid_adha", startDate: `${targetYear}-06-06`, endDate: `${targetYear}-06-10`, color: "#0ea5e9", icon: "moon", weightMultiplier: 1.8, description: "عيد الأضحى - 10 ذو الحجة" },
+        
+        // Seasons
+        { name: "موسم رمضان", type: "season", category: "ramadan", startDate: `${targetYear}-03-01`, endDate: `${targetYear}-03-29`, color: "#14b8a6", icon: "moon", weightMultiplier: 1.5, description: "شهر رمضان المبارك" },
+        { name: "موسم الصيف", type: "season", category: "summer", startDate: `${targetYear}-06-21`, endDate: `${targetYear}-09-22`, color: "#f97316", icon: "sun", weightMultiplier: 1.0, description: "فصل الصيف" },
+      ];
+      
+      const created = [];
+      for (const holiday of defaultHolidays) {
+        // Check if already exists
+        const existing = await storage.getSeasonsHolidaysForDateRange(holiday.startDate, holiday.endDate);
+        const exists = existing.some(h => h.name === holiday.name);
+        if (!exists) {
+          const newHoliday = await storage.createSeasonHoliday({
+            ...holiday,
+            applicableBranches: null,
+            isRecurring: true,
+            recurringPattern: 'yearly',
+            isActive: true,
+            createdBy: req.currentUser?.id
+          });
+          created.push(newHoliday);
+        }
+      }
+      
+      res.json({ message: `تم إضافة ${created.length} مناسبة جديدة`, created });
+    } catch (error) {
+      console.error("Error seeding holidays:", error);
+      res.status(500).json({ error: "Failed to seed holidays" });
     }
   });
 

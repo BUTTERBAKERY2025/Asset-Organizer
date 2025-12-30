@@ -17,7 +17,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Target, Plus, Calendar, TrendingUp, Building2, Settings, Play, Edit, Trash2, Copy, Lock, Unlock, FileSpreadsheet, FileText, CheckCircle, RefreshCw, Zap, PenLine, Save, X } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
-import type { Branch, BranchMonthlyTarget, TargetWeightProfile, TargetDailyAllocation } from "@shared/schema";
+import type { Branch, BranchMonthlyTarget, TargetWeightProfile, TargetDailyAllocation, SeasonHoliday } from "@shared/schema";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Moon, Sun, Heart, Flag, Coffee, PartyPopper, Star, Flower } from "lucide-react";
 
 const TARGET_STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -136,6 +138,47 @@ export default function TargetsPlanning() {
     },
     enabled: !!selectedTargetId
   });
+
+  // Fetch holidays for selected month
+  const { data: holidays = [] } = useQuery<SeasonHoliday[]>({
+    queryKey: ["/api/seasons-holidays/by-month", { yearMonth: selectedMonth }],
+    queryFn: async () => {
+      const res = await fetch(`/api/seasons-holidays/by-month?yearMonth=${selectedMonth}`);
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  // Helper to get holidays for a specific date
+  const getHolidaysForDate = (dateStr: string): SeasonHoliday[] => {
+    return holidays.filter(h => {
+      const date = new Date(dateStr);
+      const start = new Date(h.startDate);
+      const end = new Date(h.endDate);
+      return date >= start && date <= end;
+    });
+  };
+
+  // Holiday type colors
+  const HOLIDAY_TYPE_COLORS: Record<string, string> = {
+    islamic: "#0ea5e9",
+    national: "#16a34a", 
+    international: "#8b5cf6",
+    season: "#f97316",
+    custom: "#f59e0b",
+  };
+
+  // Holiday type icons
+  const getHolidayIcon = (type: string, category?: string | null) => {
+    if (category === 'eid_fitr' || category === 'eid_adha' || category === 'ramadan') return Moon;
+    if (category === 'valentines') return Heart;
+    if (category === 'national_day' || category === 'founding_day') return Flag;
+    if (category === 'coffee_day') return Coffee;
+    if (category === 'new_year') return PartyPopper;
+    if (category === 'mothers_day') return Flower;
+    if (type === 'season') return Sun;
+    return Star;
+  };
 
   const createTargetMutation = useMutation({
     mutationFn: async (data: typeof newTarget) => {
@@ -1083,11 +1126,14 @@ export default function TargetsPlanning() {
                         const dayOfMonth = date.getDate();
                         const isWeekend = date.getDay() === 4 || date.getDay() === 5;
                         const isEditing = editingAllocation === alloc.id;
+                        const dateHolidays = getHolidaysForDate(alloc.targetDate);
+                        const hasHoliday = dateHolidays.length > 0;
                         
                         return (
                           <div
                             key={alloc.id}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                            className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md relative ${
+                              hasHoliday ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300' :
                               alloc.isHoliday ? 'bg-red-50 border-red-200' :
                               alloc.isManualOverride ? 'bg-blue-50 border-blue-200' :
                               isWeekend ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'
@@ -1100,6 +1146,37 @@ export default function TargetsPlanning() {
                               }
                             }}
                           >
+                            {/* Holiday badges */}
+                            {hasHoliday && (
+                              <div className="absolute -top-2 -left-2 flex gap-1">
+                                <TooltipProvider>
+                                  {dateHolidays.slice(0, 2).map((holiday, idx) => {
+                                    const IconComponent = getHolidayIcon(holiday.type, holiday.category);
+                                    const bgColor = holiday.color || HOLIDAY_TYPE_COLORS[holiday.type] || '#f59e0b';
+                                    return (
+                                      <Tooltip key={idx}>
+                                        <TooltipTrigger asChild>
+                                          <div 
+                                            className="w-5 h-5 rounded-full flex items-center justify-center shadow-sm"
+                                            style={{ backgroundColor: bgColor }}
+                                          >
+                                            <IconComponent className="h-3 w-3 text-white" />
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="text-right">
+                                          <p className="font-bold">{holiday.name}</p>
+                                          {holiday.description && <p className="text-xs text-gray-500">{holiday.description}</p>}
+                                          {holiday.weightMultiplier > 1 && (
+                                            <p className="text-xs text-amber-600">معامل الهدف: {holiday.weightMultiplier}x</p>
+                                          )}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })}
+                                </TooltipProvider>
+                              </div>
+                            )}
+                            
                             <div className="flex justify-between items-start">
                               <div className="text-sm font-bold text-gray-800">{dayOfMonth}</div>
                               {isEditing ? (
@@ -1133,13 +1210,39 @@ export default function TargetsPlanning() {
                             <div className="text-xs text-gray-400">
                               {alloc.weightPercent.toFixed(1)}%
                             </div>
-                            {alloc.isManualOverride && (
+                            {/* Holiday name badge */}
+                            {hasHoliday && (
+                              <div className="text-xs mt-1 text-purple-600 font-medium truncate">
+                                {dateHolidays[0].name}
+                              </div>
+                            )}
+                            {alloc.isManualOverride && !hasHoliday && (
                               <Badge variant="outline" className="text-xs mt-1">معدل</Badge>
                             )}
                           </div>
                         );
                       })}
                     </div>
+                    
+                    {/* Holiday Legend */}
+                    {holidays.length > 0 && (
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-sm font-medium mb-2">دليل المناسبات لهذا الشهر:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {holidays.map((holiday, idx) => {
+                            const IconComponent = getHolidayIcon(holiday.type, holiday.category);
+                            const bgColor = holiday.color || HOLIDAY_TYPE_COLORS[holiday.type] || '#f59e0b';
+                            return (
+                              <div key={idx} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs" style={{ backgroundColor: `${bgColor}20`, border: `1px solid ${bgColor}` }}>
+                                <IconComponent className="h-3 w-3" style={{ color: bgColor }} />
+                                <span>{holiday.name}</span>
+                                <span className="text-gray-400">({new Date(holiday.startDate).toLocaleDateString('en-GB')})</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
                       <span className="font-medium">إجمالي التوزيع اليومي:</span>
