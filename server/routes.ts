@@ -3251,6 +3251,44 @@ export async function registerRoutes(
     }
   });
 
+  // Branch Daily Sales Progress
+  app.get("/api/targets/progress/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const { yearMonth } = req.query;
+      
+      if (!yearMonth) {
+        return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      const progress = await storage.getBranchDailySalesProgress(branchId, yearMonth as string);
+      if (!progress) {
+        return res.status(404).json({ error: "لا توجد بيانات أهداف لهذا الفرع" });
+      }
+      res.json(progress);
+    } catch (error) {
+      console.error("Error fetching branch progress:", error);
+      res.status(500).json({ error: "Failed to fetch branch progress" });
+    }
+  });
+
+  // All Branches Sales Progress Summary
+  app.get("/api/targets/progress-summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { yearMonth } = req.query;
+      
+      if (!yearMonth) {
+        return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      const summary = await storage.getAllBranchesSalesProgress(yearMonth as string);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching progress summary:", error);
+      res.status(500).json({ error: "Failed to fetch progress summary" });
+    }
+  });
+
   // Performance & Leaderboard
   app.get("/api/targets/performance/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {

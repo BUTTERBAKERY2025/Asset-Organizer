@@ -51,6 +51,44 @@ interface PerformanceData {
   dailyPerformance: DailyPerformance[];
 }
 
+interface BranchProgress {
+  branchId: string;
+  branchName: string;
+  yearMonth: string;
+  targetAmount: number;
+  achievedAmount: number;
+  achievementPercent: number;
+  remainingAmount: number;
+  dailyTargetAverage: number;
+  dailyProgress: {
+    date: string;
+    dayName: string;
+    targetAmount: number;
+    achievedAmount: number;
+    achievementPercent: number;
+    cumulativeTarget: number;
+    cumulativeAchieved: number;
+    cumulativePercent: number;
+    variance: number;
+    journalCount: number;
+    journalIds: number[];
+  }[];
+}
+
+interface ProgressSummary {
+  branchId: string;
+  branchName: string;
+  targetAmount: number;
+  achievedAmount: number;
+  achievementPercent: number;
+  remainingAmount: number;
+  daysWithSales: number;
+  averageDailySales: number;
+  projectedTotal: number;
+  projectedPercent: number;
+  trend: 'up' | 'down' | 'stable';
+}
+
 interface TargetAlert {
   branchId: string;
   branchName: string;
@@ -115,6 +153,26 @@ export default function TargetsDashboard() {
       if (!res.ok) throw new Error("Failed to fetch alerts");
       return res.json();
     }
+  });
+
+  const { data: progressSummary = [], isLoading: summaryLoading } = useQuery<ProgressSummary[]>({
+    queryKey: ["/api/targets/progress-summary", selectedMonth],
+    queryFn: async () => {
+      const res = await fetch(`/api/targets/progress-summary?yearMonth=${selectedMonth}`);
+      if (!res.ok) throw new Error("Failed to fetch progress summary");
+      return res.json();
+    }
+  });
+
+  const { data: branchProgress, isLoading: progressLoading } = useQuery<BranchProgress>({
+    queryKey: ["/api/targets/progress", selectedBranch, selectedMonth],
+    queryFn: async () => {
+      if (selectedBranch === "all") return null;
+      const res = await fetch(`/api/targets/progress/${selectedBranch}?yearMonth=${selectedMonth}`);
+      if (!res.ok) throw new Error("Failed to fetch branch progress");
+      return res.json();
+    },
+    enabled: selectedBranch !== "all"
   });
 
   const formatCurrency = (amount: number) => {
@@ -484,82 +542,231 @@ export default function TargetsDashboard() {
           </TabsContent>
 
           <TabsContent value="details">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-amber-600" />
-                  تفاصيل أداء الفرع
-                </CardTitle>
-                <div className="flex items-center gap-4 mt-4">
-                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                    <SelectTrigger className="w-48" data-testid="select-branch">
-                      <SelectValue placeholder="اختر الفرع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">اختر فرع</SelectItem>
-                      {branches.map(b => (
-                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {selectedBranch === "all" ? (
-                  <div className="text-center py-8 text-gray-500">اختر فرعًا لعرض التفاصيل</div>
-                ) : performanceLoading ? (
-                  <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
-                ) : !branchPerformance ? (
-                  <div className="text-center py-8 text-gray-500">لا توجد بيانات لهذا الفرع</div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card>
-                        <CardContent className="p-4 text-center">
-                          <div className="text-sm text-gray-500">الهدف الشهري</div>
-                          <div className="text-2xl font-bold text-amber-600">
-                            {formatCurrency(branchPerformance.targetAmount)}
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-4 text-center">
-                          <div className="text-sm text-gray-500">المحقق</div>
-                          <div className="text-2xl font-bold text-green-600">
-                            {formatCurrency(branchPerformance.achievedAmount)}
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-4 text-center">
-                          <div className="text-sm text-gray-500">نسبة التحقيق</div>
-                          <div className={`text-2xl font-bold ${getPercentColor(branchPerformance.achievementPercent)}`}>
-                            {branchPerformance.achievementPercent.toFixed(1)}%
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {branchPerformance.dailyPerformance.length > 0 && (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={branchPerformance.dailyPerformance}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" tickFormatter={(v) => new Date(v).getDate().toString()} />
-                          <YAxis />
-                          <Tooltip 
-                            formatter={(value: number) => formatCurrency(value)}
-                            labelFormatter={(v) => new Date(v).toLocaleDateString('ar-SA')}
-                          />
-                          <Legend />
-                          <Line type="monotone" dataKey="target" stroke="#f59e0b" name="الهدف" strokeWidth={2} />
-                          <Line type="monotone" dataKey="achieved" stroke="#22c55e" name="المحقق" strokeWidth={2} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    )}
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-amber-600" />
+                    التقدم اليومي للمبيعات مقابل الأهداف
+                  </CardTitle>
+                  <div className="flex items-center gap-4 mt-4">
+                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                      <SelectTrigger className="w-48" data-testid="select-branch">
+                        <SelectValue placeholder="اختر الفرع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">اختر فرع</SelectItem>
+                        {branches.map(b => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent>
+                  {selectedBranch === "all" ? (
+                    <div className="text-center py-8 text-gray-500">اختر فرعًا لعرض التقدم اليومي</div>
+                  ) : progressLoading ? (
+                    <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                  ) : !branchProgress ? (
+                    <div className="text-center py-8 text-gray-500">لا توجد أهداف مسجلة لهذا الفرع</div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <Card className="bg-amber-50">
+                          <CardContent className="p-4 text-center">
+                            <div className="text-xs text-gray-500">الهدف الشهري</div>
+                            <div className="text-xl font-bold text-amber-600">
+                              {formatCurrency(branchProgress.targetAmount)}
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-green-50">
+                          <CardContent className="p-4 text-center">
+                            <div className="text-xs text-gray-500">المحقق الفعلي</div>
+                            <div className="text-xl font-bold text-green-600">
+                              {formatCurrency(branchProgress.achievedAmount)}
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-blue-50">
+                          <CardContent className="p-4 text-center">
+                            <div className="text-xs text-gray-500">نسبة التحقيق</div>
+                            <div className={`text-xl font-bold ${getPercentColor(branchProgress.achievementPercent)}`}>
+                              {branchProgress.achievementPercent.toFixed(1)}%
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-red-50">
+                          <CardContent className="p-4 text-center">
+                            <div className="text-xs text-gray-500">المتبقي</div>
+                            <div className="text-xl font-bold text-red-600">
+                              {formatCurrency(branchProgress.remainingAmount)}
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-purple-50">
+                          <CardContent className="p-4 text-center">
+                            <div className="text-xs text-gray-500">متوسط الهدف اليومي</div>
+                            <div className="text-xl font-bold text-purple-600">
+                              {formatCurrency(branchProgress.dailyTargetAverage)}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {branchProgress.dailyProgress.length > 0 && (
+                        <>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <Card>
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-base">المبيعات اليومية مقابل الهدف</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <ResponsiveContainer width="100%" height={250}>
+                                  <BarChart data={branchProgress.dailyProgress.filter(d => d.achievedAmount > 0 || d.targetAmount > 0)}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="date" tickFormatter={(v) => new Date(v).getDate().toString()} />
+                                    <YAxis />
+                                    <Tooltip 
+                                      formatter={(value: number) => formatCurrency(value)}
+                                      labelFormatter={(v) => `${new Date(v).toLocaleDateString('ar-SA')}`}
+                                    />
+                                    <Legend />
+                                    <Bar dataKey="targetAmount" fill="#f59e0b" name="الهدف اليومي" />
+                                    <Bar dataKey="achievedAmount" fill="#22c55e" name="المحقق" />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </CardContent>
+                            </Card>
+                            
+                            <Card>
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-base">التقدم التراكمي</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <ResponsiveContainer width="100%" height={250}>
+                                  <LineChart data={branchProgress.dailyProgress.filter(d => d.cumulativeAchieved > 0)}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="date" tickFormatter={(v) => new Date(v).getDate().toString()} />
+                                    <YAxis />
+                                    <Tooltip 
+                                      formatter={(value: number) => formatCurrency(value)}
+                                      labelFormatter={(v) => new Date(v).toLocaleDateString('ar-SA')}
+                                    />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="cumulativeTarget" stroke="#f59e0b" name="الهدف التراكمي" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="cumulativeAchieved" stroke="#22c55e" name="المحقق التراكمي" strokeWidth={2} />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </CardContent>
+                            </Card>
+                          </div>
+
+                          <Card>
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-base">جدول التقدم اليومي التفصيلي</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="bg-gray-100">
+                                      <th className="p-2 text-right">التاريخ</th>
+                                      <th className="p-2 text-right">اليوم</th>
+                                      <th className="p-2 text-right">الهدف</th>
+                                      <th className="p-2 text-right">المحقق</th>
+                                      <th className="p-2 text-right">النسبة</th>
+                                      <th className="p-2 text-right">الفارق</th>
+                                      <th className="p-2 text-right">يوميات</th>
+                                      <th className="p-2 text-right">تراكمي%</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {branchProgress.dailyProgress
+                                      .filter(d => d.achievedAmount > 0 || new Date(d.date) <= new Date())
+                                      .map((day) => (
+                                      <tr key={day.date} className={`border-b hover:bg-gray-50 ${day.achievedAmount > 0 ? '' : 'text-gray-400'}`}>
+                                        <td className="p-2">{new Date(day.date).toLocaleDateString('ar-SA')}</td>
+                                        <td className="p-2">{day.dayName}</td>
+                                        <td className="p-2 font-mono">{formatCurrency(day.targetAmount)}</td>
+                                        <td className="p-2 font-mono font-bold">{formatCurrency(day.achievedAmount)}</td>
+                                        <td className={`p-2 font-bold ${getPercentColor(day.achievementPercent)}`}>
+                                          {day.achievementPercent.toFixed(0)}%
+                                        </td>
+                                        <td className={`p-2 font-mono ${day.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          {day.variance >= 0 ? '+' : ''}{formatCurrency(day.variance)}
+                                        </td>
+                                        <td className="p-2">
+                                          {day.journalCount > 0 && (
+                                            <Badge variant="outline">{day.journalCount} يومية</Badge>
+                                          )}
+                                        </td>
+                                        <td className={`p-2 font-bold ${getPercentColor(day.cumulativePercent)}`}>
+                                          {day.cumulativePercent.toFixed(1)}%
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {summaryLoading ? null : progressSummary.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">ملخص تقدم جميع الفروع</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="p-2 text-right">الفرع</th>
+                            <th className="p-2 text-right">الهدف</th>
+                            <th className="p-2 text-right">المحقق</th>
+                            <th className="p-2 text-right">النسبة</th>
+                            <th className="p-2 text-right">المتبقي</th>
+                            <th className="p-2 text-right">متوسط يومي</th>
+                            <th className="p-2 text-right">المتوقع</th>
+                            <th className="p-2 text-right">الاتجاه</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {progressSummary.map((branch) => (
+                            <tr key={branch.branchId} className="border-b hover:bg-gray-50">
+                              <td className="p-2 font-medium">{branch.branchName}</td>
+                              <td className="p-2 font-mono">{formatCurrency(branch.targetAmount)}</td>
+                              <td className="p-2 font-mono font-bold text-green-600">{formatCurrency(branch.achievedAmount)}</td>
+                              <td className={`p-2 font-bold ${getPercentColor(branch.achievementPercent)}`}>
+                                {branch.achievementPercent.toFixed(1)}%
+                              </td>
+                              <td className="p-2 font-mono text-red-600">{formatCurrency(branch.remainingAmount)}</td>
+                              <td className="p-2 font-mono">{formatCurrency(branch.averageDailySales)}</td>
+                              <td className={`p-2 font-bold ${getPercentColor(branch.projectedPercent)}`}>
+                                {branch.projectedPercent.toFixed(1)}%
+                              </td>
+                              <td className="p-2">
+                                {branch.trend === 'up' && <Badge className="bg-green-500">↑ صعود</Badge>}
+                                {branch.trend === 'down' && <Badge className="bg-red-500">↓ هبوط</Badge>}
+                                {branch.trend === 'stable' && <Badge variant="outline">→ مستقر</Badge>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

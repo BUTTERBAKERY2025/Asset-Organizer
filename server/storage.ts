@@ -2966,6 +2966,202 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  // Get daily sales progress for a branch with target comparison
+  async getBranchDailySalesProgress(branchId: string, yearMonth: string): Promise<{
+    branchId: string;
+    branchName: string;
+    yearMonth: string;
+    targetAmount: number;
+    achievedAmount: number;
+    achievementPercent: number;
+    remainingAmount: number;
+    dailyTargetAverage: number;
+    dailyProgress: {
+      date: string;
+      dayName: string;
+      targetAmount: number;
+      achievedAmount: number;
+      achievementPercent: number;
+      cumulativeTarget: number;
+      cumulativeAchieved: number;
+      cumulativePercent: number;
+      variance: number;
+      journalCount: number;
+      journalIds: number[];
+    }[];
+  } | null> {
+    const branch = await this.getBranch(branchId);
+    if (!branch) return null;
+
+    const branchTarget = await this.getBranchMonthlyTargetByMonth(branchId, yearMonth);
+    if (!branchTarget) return null;
+
+    const [year, month] = yearMonth.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const dailyTargetAverage = branchTarget.targetAmount / daysInMonth;
+
+    // Get daily allocations if exists
+    const allocations = await this.getTargetDailyAllocationsByMonth(branchTarget.id);
+    
+    // Get all journals for the month
+    const startDate = `${yearMonth}-01`;
+    const endDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
+    
+    const journals = await db.select().from(cashierSalesJournals)
+      .where(
+        and(
+          eq(cashierSalesJournals.branchId, branchId),
+          gte(cashierSalesJournals.journalDate, startDate),
+          lte(cashierSalesJournals.journalDate, endDate),
+          eq(cashierSalesJournals.status, 'approved')
+        )
+      );
+
+    const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const dailyProgress: {
+      date: string;
+      dayName: string;
+      targetAmount: number;
+      achievedAmount: number;
+      achievementPercent: number;
+      cumulativeTarget: number;
+      cumulativeAchieved: number;
+      cumulativePercent: number;
+      variance: number;
+      journalCount: number;
+      journalIds: number[];
+    }[] = [];
+
+    let cumulativeTarget = 0;
+    let cumulativeAchieved = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${yearMonth}-${String(day).padStart(2, '0')}`;
+      const dayOfWeek = new Date(year, month - 1, day).getDay();
+      const dayName = dayNames[dayOfWeek];
+      
+      // Get target for this day from allocations or use average
+      const allocation = allocations.find((a: { targetDate: string }) => a.targetDate === dateStr);
+      const dayTarget = allocation ? allocation.dailyTarget : dailyTargetAverage;
+      
+      // Get sales for this day
+      const dayJournals = journals.filter(j => j.journalDate === dateStr);
+      const dayAchieved = dayJournals.reduce((sum, j) => sum + j.totalSales, 0);
+      const journalIds = dayJournals.map(j => j.id);
+      
+      cumulativeTarget += dayTarget;
+      cumulativeAchieved += dayAchieved;
+      
+      dailyProgress.push({
+        date: dateStr,
+        dayName,
+        targetAmount: dayTarget,
+        achievedAmount: dayAchieved,
+        achievementPercent: dayTarget > 0 ? (dayAchieved / dayTarget) * 100 : 0,
+        cumulativeTarget,
+        cumulativeAchieved,
+        cumulativePercent: cumulativeTarget > 0 ? (cumulativeAchieved / cumulativeTarget) * 100 : 0,
+        variance: dayAchieved - dayTarget,
+        journalCount: dayJournals.length,
+        journalIds
+      });
+    }
+
+    const totalAchieved = journals.reduce((sum, j) => sum + j.totalSales, 0);
+    const achievementPercent = branchTarget.targetAmount > 0 
+      ? (totalAchieved / branchTarget.targetAmount) * 100 
+      : 0;
+
+    return {
+      branchId,
+      branchName: branch.name,
+      yearMonth,
+      targetAmount: branchTarget.targetAmount,
+      achievedAmount: totalAchieved,
+      achievementPercent,
+      remainingAmount: Math.max(0, branchTarget.targetAmount - totalAchieved),
+      dailyTargetAverage,
+      dailyProgress
+    };
+  }
+
+  // Get all branches sales progress summary
+  async getAllBranchesSalesProgress(yearMonth: string): Promise<{
+    branchId: string;
+    branchName: string;
+    targetAmount: number;
+    achievedAmount: number;
+    achievementPercent: number;
+    remainingAmount: number;
+    daysWithSales: number;
+    averageDailySales: number;
+    projectedTotal: number;
+    projectedPercent: number;
+    trend: 'up' | 'down' | 'stable';
+  }[]> {
+    const branches = await this.getAllBranches();
+    const [year, month] = yearMonth.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const today = new Date();
+    const currentDay = today.getMonth() + 1 === month && today.getFullYear() === year 
+      ? today.getDate() 
+      : (today > new Date(year, month - 1, 1) ? daysInMonth : 0);
+
+    const results: {
+      branchId: string;
+      branchName: string;
+      targetAmount: number;
+      achievedAmount: number;
+      achievementPercent: number;
+      remainingAmount: number;
+      daysWithSales: number;
+      averageDailySales: number;
+      projectedTotal: number;
+      projectedPercent: number;
+      trend: 'up' | 'down' | 'stable';
+    }[] = [];
+
+    for (const branch of branches) {
+      const progress = await this.getBranchDailySalesProgress(branch.id, yearMonth);
+      if (!progress) continue;
+
+      const daysWithSales = progress.dailyProgress.filter(d => d.achievedAmount > 0).length;
+      const averageDailySales = daysWithSales > 0 ? progress.achievedAmount / daysWithSales : 0;
+      const projectedTotal = averageDailySales * daysInMonth;
+      const projectedPercent = progress.targetAmount > 0 
+        ? (projectedTotal / progress.targetAmount) * 100 
+        : 0;
+
+      // Calculate trend from last 7 days
+      const recentDays = progress.dailyProgress.slice(-7).filter(d => d.achievedAmount > 0);
+      let trend: 'up' | 'down' | 'stable' = 'stable';
+      if (recentDays.length >= 2) {
+        const firstHalf = recentDays.slice(0, Math.floor(recentDays.length / 2));
+        const secondHalf = recentDays.slice(Math.floor(recentDays.length / 2));
+        const firstAvg = firstHalf.reduce((s, d) => s + d.achievedAmount, 0) / firstHalf.length;
+        const secondAvg = secondHalf.reduce((s, d) => s + d.achievedAmount, 0) / secondHalf.length;
+        if (secondAvg > firstAvg * 1.1) trend = 'up';
+        else if (secondAvg < firstAvg * 0.9) trend = 'down';
+      }
+
+      results.push({
+        branchId: branch.id,
+        branchName: branch.name,
+        targetAmount: progress.targetAmount,
+        achievedAmount: progress.achievedAmount,
+        achievementPercent: progress.achievementPercent,
+        remainingAmount: progress.remainingAmount,
+        daysWithSales,
+        averageDailySales,
+        projectedTotal,
+        projectedPercent,
+        trend
+      });
+    }
+
+    return results.sort((a, b) => b.achievementPercent - a.achievementPercent);
+  }
+
   // Get performance alerts for targets not being met
   async getTargetAlerts(yearMonth: string): Promise<{
     branchId: string;
