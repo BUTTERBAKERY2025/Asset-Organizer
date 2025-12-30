@@ -98,6 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/cashier-journals", label: "يومية الكاشير", icon: Wallet, module: "cashier_journal" },
           { href: "/targets-planning", label: "تخطيط الأهداف", icon: Target, module: "operations" },
           { href: "/targets-dashboard", label: "لوحة الأهداف", icon: TrendingUp, module: "operations" },
+          { href: "/sales-analytics", label: "تحليلات المبيعات", icon: BarChart3, module: "operations" },
           { href: "/incentives-management", label: "إدارة الحوافز", icon: Gift, module: "operations" },
         ],
       },

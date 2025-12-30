@@ -40,6 +40,7 @@ import OperationsEmployeesPage from "@/pages/operations-employees";
 import TargetsPlanningPage from "@/pages/targets-planning";
 import TargetsDashboardPage from "@/pages/targets-dashboard";
 import IncentivesManagementPage from "@/pages/incentives-management";
+import SalesAnalyticsPage from "@/pages/sales-analytics";
 
 function Router() {
   return (
@@ -79,6 +80,7 @@ function Router() {
       <Route path="/targets-planning" component={TargetsPlanningPage} />
       <Route path="/targets-dashboard" component={TargetsDashboardPage} />
       <Route path="/incentives-management" component={IncentivesManagementPage} />
+      <Route path="/sales-analytics" component={SalesAnalyticsPage} />
       <Route component={NotFound} />
     </Switch>
   );

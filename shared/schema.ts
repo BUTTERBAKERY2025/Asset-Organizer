@@ -1507,3 +1507,89 @@ export const AWARD_STATUS_LABELS: Record<AwardStatus, string> = {
   paid: "مدفوع",
   cancelled: "ملغى",
 };
+
+// ==========================================
+// Sales Analytics Tables - جداول التحليلات
+// ==========================================
+
+// Daily Sales Summary per Branch - ملخص المبيعات اليومية
+export const branchDailySales = pgTable("branch_daily_sales", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  salesDate: text("sales_date").notNull(), // YYYY-MM-DD
+  totalSales: real("total_sales").default(0).notNull(),
+  transactionsCount: integer("transactions_count").default(0),
+  averageTicket: real("average_ticket").default(0),
+  cashierCount: integer("cashier_count").default(0),
+  // Target comparison
+  targetAmount: real("target_amount").default(0),
+  achievementAmount: real("achievement_amount").default(0), // Difference from target
+  achievementPercent: real("achievement_percent").default(0),
+  // Shift breakdown
+  morningShiftSales: real("morning_shift_sales").default(0),
+  eveningShiftSales: real("evening_shift_sales").default(0),
+  nightShiftSales: real("night_shift_sales").default(0),
+  // Metadata
+  journalIds: jsonb("journal_ids"), // Array of related journal IDs
+  computedAt: timestamp("computed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertBranchDailySalesSchema = createInsertSchema(branchDailySales).omit({
+  id: true,
+  computedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchDailySales = typeof branchDailySales.$inferSelect;
+export type InsertBranchDailySales = z.infer<typeof insertBranchDailySalesSchema>;
+
+// Cashier Shift Performance - أداء الكاشير في الشفت
+export const cashierShiftPerformance = pgTable("cashier_shift_performance", {
+  id: serial("id").primaryKey(),
+  journalId: integer("journal_id").references(() => cashierSalesJournals.id),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  performanceDate: text("performance_date").notNull(), // YYYY-MM-DD
+  // Sales metrics
+  salesAmount: real("sales_amount").default(0).notNull(),
+  transactionsCount: integer("transactions_count").default(0),
+  averageTicket: real("average_ticket").default(0),
+  customerCount: integer("customer_count").default(0),
+  // Target metrics
+  targetShare: real("target_share").default(0), // Expected share of daily target
+  achievementPercent: real("achievement_percent").default(0),
+  // Cash handling
+  discrepancyAmount: real("discrepancy_amount").default(0),
+  discrepancyStatus: text("discrepancy_status").default("balanced"),
+  // Rankings (computed)
+  branchRank: integer("branch_rank"), // Rank among cashiers in same branch/day
+  shiftRank: integer("shift_rank"), // Rank among cashiers in same shift
+  // Metadata
+  computedAt: timestamp("computed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCashierShiftPerformanceSchema = createInsertSchema(cashierShiftPerformance).omit({
+  id: true,
+  computedAt: true,
+  createdAt: true,
+});
+
+export type CashierShiftPerformance = typeof cashierShiftPerformance.$inferSelect;
+export type InsertCashierShiftPerformance = z.infer<typeof insertCashierShiftPerformanceSchema>;
+
+// Shift Type Labels
+export const SHIFT_TYPES = ["morning", "evening", "night"] as const;
+export type ShiftType = typeof SHIFT_TYPES[number];
+
+export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
+  morning: "صباحي",
+  evening: "مسائي", 
+  night: "ليلي",
+};

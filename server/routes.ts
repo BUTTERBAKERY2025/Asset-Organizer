@@ -3780,5 +3780,113 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // Sales Analytics Routes - تحليلات المبيعات
+  // ==========================================
+
+  // Targets vs Actuals - مقارنة الأهداف بالفعليات
+  app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, fromDate, toDate } = req.query;
+      
+      if (!fromDate || !toDate) {
+        return res.status(400).json({ error: "fromDate and toDate are required" });
+      }
+      
+      const data = await storage.getTargetsVsActuals(
+        branchId as string | null,
+        fromDate as string,
+        toDate as string
+      );
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching targets vs actuals:", error);
+      res.status(500).json({ error: "Failed to fetch targets vs actuals" });
+    }
+  });
+
+  // Shift Analytics - تحليلات الورديات
+  app.get("/api/analytics/shifts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, fromDate, toDate } = req.query;
+      
+      if (!fromDate || !toDate) {
+        return res.status(400).json({ error: "fromDate and toDate are required" });
+      }
+      
+      const data = await storage.getShiftAnalytics(
+        branchId as string | null,
+        fromDate as string,
+        toDate as string
+      );
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching shift analytics:", error);
+      res.status(500).json({ error: "Failed to fetch shift analytics" });
+    }
+  });
+
+  // Cashier Leaderboard - ترتيب الكاشيرين
+  app.get("/api/analytics/cashier-leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, fromDate, toDate } = req.query;
+      
+      if (!fromDate || !toDate) {
+        return res.status(400).json({ error: "fromDate and toDate are required" });
+      }
+      
+      const data = await storage.getCashierLeaderboard(
+        branchId as string | null,
+        fromDate as string,
+        toDate as string
+      );
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching cashier leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch cashier leaderboard" });
+    }
+  });
+
+  // Average Ticket Analysis - تحليل متوسط الفاتورة
+  app.get("/api/analytics/average-ticket", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, groupBy, fromDate, toDate } = req.query;
+      
+      if (!fromDate || !toDate) {
+        return res.status(400).json({ error: "fromDate and toDate are required" });
+      }
+      
+      const validGroupBy = ['shift', 'cashier', 'date'].includes(groupBy as string) ? groupBy as 'shift' | 'cashier' | 'date' : 'shift';
+      
+      const data = await storage.getAverageTicketAnalysis(
+        branchId as string | null,
+        validGroupBy,
+        fromDate as string,
+        toDate as string
+      );
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching average ticket analysis:", error);
+      res.status(500).json({ error: "Failed to fetch average ticket analysis" });
+    }
+  });
+
+  // Compute/Update Branch Daily Sales Summary
+  app.post("/api/analytics/compute-daily-sales", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const { branchId, salesDate } = req.body;
+      
+      if (!branchId || !salesDate) {
+        return res.status(400).json({ error: "branchId and salesDate are required" });
+      }
+      
+      const summary = await storage.computeBranchDailySales(branchId, salesDate);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error computing daily sales:", error);
+      res.status(500).json({ error: "Failed to compute daily sales" });
+    }
+  });
+
   return httpServer;
 }

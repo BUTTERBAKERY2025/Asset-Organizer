@@ -83,6 +83,10 @@ import {
   type SeasonHoliday,
   type InsertSeasonHoliday,
   type CommissionRate,
+  type BranchDailySales,
+  type InsertBranchDailySales,
+  type CashierShiftPerformance,
+  type InsertCashierShiftPerformance,
   type InsertCommissionRate,
   type CommissionCalculation,
   type InsertCommissionCalculation,
@@ -133,6 +137,8 @@ import {
   seasonsHolidays,
   commissionRates,
   commissionCalculations,
+  branchDailySales,
+  cashierShiftPerformance,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
@@ -3255,6 +3261,448 @@ export class DatabaseStorage implements IStorage {
     }
 
     return alerts.sort((a, b) => a.achievementPercent - b.achievementPercent);
+  }
+
+  // ==========================================
+  // Sales Analytics Methods
+  // ==========================================
+
+  // Get targets vs actuals analysis for a date range
+  async getTargetsVsActuals(branchId: string | null, fromDate: string, toDate: string): Promise<{
+    date: string;
+    branchId: string;
+    branchName: string;
+    targetAmount: number;
+    actualSales: number;
+    variance: number;
+    achievementPercent: number;
+    shiftBreakdown: { morning: number; evening: number; night: number };
+    status: 'exceeding' | 'on_track' | 'warning' | 'critical';
+  }[]> {
+    const branches = await this.getAllBranches();
+    const targetBranches = branchId ? branches.filter(b => b.id === branchId) : branches;
+    const results: any[] = [];
+
+    for (const branch of targetBranches) {
+      // Get approved journals for the date range
+      const journals = await db.select()
+        .from(cashierSalesJournals)
+        .where(
+          and(
+            eq(cashierSalesJournals.branchId, branch.id),
+            gte(cashierSalesJournals.journalDate, fromDate),
+            lte(cashierSalesJournals.journalDate, toDate),
+            eq(cashierSalesJournals.status, 'approved')
+          )
+        );
+
+      // Group by date
+      const salesMap = new Map<string, {
+        totalSales: number;
+        morning: number;
+        evening: number;
+        night: number;
+      }>();
+
+      for (const j of journals) {
+        const existing = salesMap.get(j.journalDate) || { totalSales: 0, morning: 0, evening: 0, night: 0 };
+        existing.totalSales += j.totalSales || 0;
+        if (j.shiftType === 'morning') existing.morning += j.totalSales || 0;
+        else if (j.shiftType === 'evening') existing.evening += j.totalSales || 0;
+        else if (j.shiftType === 'night') existing.night += j.totalSales || 0;
+        salesMap.set(j.journalDate, existing);
+      }
+
+      // Get target allocations for date range
+      const yearMonth = fromDate.substring(0, 7);
+      const target = await db.select()
+        .from(branchMonthlyTargets)
+        .where(
+          and(
+            eq(branchMonthlyTargets.branchId, branch.id),
+            eq(branchMonthlyTargets.yearMonth, yearMonth)
+          )
+        );
+
+      const allocations = target.length > 0 
+        ? await db.select().from(targetDailyAllocations)
+            .where(
+              and(
+                eq(targetDailyAllocations.targetId, target[0].id),
+                gte(targetDailyAllocations.targetDate, fromDate),
+                lte(targetDailyAllocations.targetDate, toDate)
+              )
+            )
+        : [];
+
+      // Build a set of all dates (from both allocations and sales)
+      const allDates = new Set<string>();
+      for (const a of allocations) {
+        allDates.add(a.targetDate);
+      }
+      for (const date of salesMap.keys()) {
+        allDates.add(date);
+      }
+
+      // Build results for each date (including days with targets but no sales)
+      for (const date of allDates) {
+        const sales = salesMap.get(date) || { totalSales: 0, morning: 0, evening: 0, night: 0 };
+        const allocation = allocations.find(a => a.targetDate === date);
+        const targetAmount = allocation?.dailyTarget || 0;
+        const variance = sales.totalSales - targetAmount;
+        const achievementPercent = targetAmount > 0 ? (sales.totalSales / targetAmount) * 100 : (sales.totalSales > 0 ? 100 : 0);
+        let status: 'exceeding' | 'on_track' | 'warning' | 'critical';
+        
+        if (achievementPercent >= 100) status = 'exceeding';
+        else if (achievementPercent >= 80) status = 'on_track';
+        else if (achievementPercent >= 60) status = 'warning';
+        else status = 'critical';
+
+        results.push({
+          date,
+          branchId: branch.id,
+          branchName: branch.name,
+          targetAmount,
+          actualSales: sales.totalSales,
+          variance,
+          achievementPercent,
+          shiftBreakdown: { morning: sales.morning, evening: sales.evening, night: sales.night },
+          status
+        });
+      }
+    }
+
+    return results.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // Get shift performance analysis
+  async getShiftAnalytics(branchId: string | null, fromDate: string, toDate: string): Promise<{
+    shiftType: string;
+    shiftLabel: string;
+    totalSales: number;
+    averageSales: number;
+    transactionsCount: number;
+    averageTicket: number;
+    journalCount: number;
+    percentage: number;
+  }[]> {
+    const whereConditions: any[] = [
+      gte(cashierSalesJournals.journalDate, fromDate),
+      lte(cashierSalesJournals.journalDate, toDate),
+      eq(cashierSalesJournals.status, 'approved')
+    ];
+    
+    if (branchId) {
+      whereConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    }
+
+    const journals = await db.select()
+      .from(cashierSalesJournals)
+      .where(and(...whereConditions));
+
+    const shiftStats = new Map<string, {
+      totalSales: number;
+      transactionsCount: number;
+      journalCount: number;
+      totalTickets: number;
+    }>();
+
+    const shiftLabels: Record<string, string> = {
+      morning: 'صباحي',
+      evening: 'مسائي',
+      night: 'ليلي'
+    };
+
+    for (const j of journals) {
+      const shift = j.shiftType || 'unknown';
+      const existing = shiftStats.get(shift) || { totalSales: 0, transactionsCount: 0, journalCount: 0, totalTickets: 0 };
+      existing.totalSales += j.totalSales || 0;
+      existing.transactionsCount += j.transactionCount || 0;
+      existing.journalCount += 1;
+      existing.totalTickets += j.averageTicket || 0;
+      shiftStats.set(shift, existing);
+    }
+
+    const grandTotal = Array.from(shiftStats.values()).reduce((sum, s) => sum + s.totalSales, 0);
+
+    return Array.from(shiftStats.entries()).map(([shiftType, stats]) => ({
+      shiftType,
+      shiftLabel: shiftLabels[shiftType] || shiftType,
+      totalSales: stats.totalSales,
+      averageSales: stats.journalCount > 0 ? stats.totalSales / stats.journalCount : 0,
+      transactionsCount: stats.transactionsCount,
+      averageTicket: stats.journalCount > 0 ? stats.totalTickets / stats.journalCount : 0,
+      journalCount: stats.journalCount,
+      percentage: grandTotal > 0 ? (stats.totalSales / grandTotal) * 100 : 0
+    })).sort((a, b) => b.totalSales - a.totalSales);
+  }
+
+  // Get cashier leaderboard
+  async getCashierLeaderboard(branchId: string | null, fromDate: string, toDate: string): Promise<{
+    cashierId: string;
+    cashierName: string;
+    branchId: string;
+    branchName: string;
+    totalSales: number;
+    journalCount: number;
+    transactionsCount: number;
+    averageTicket: number;
+    averageDailySales: number;
+    rank: number;
+    contribution: number;
+    shiftDistribution: { morning: number; evening: number; night: number };
+  }[]> {
+    const whereConditions: any[] = [
+      gte(cashierSalesJournals.journalDate, fromDate),
+      lte(cashierSalesJournals.journalDate, toDate),
+      eq(cashierSalesJournals.status, 'approved')
+    ];
+    
+    if (branchId) {
+      whereConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    }
+
+    const journals = await db.select()
+      .from(cashierSalesJournals)
+      .where(and(...whereConditions));
+
+    const branches = await this.getAllBranches();
+    const branchMap = new Map(branches.map(b => [b.id, b.name]));
+
+    const cashierStats = new Map<string, {
+      cashierName: string;
+      branchId: string;
+      totalSales: number;
+      journalCount: number;
+      transactionsCount: number;
+      totalTickets: number;
+      morning: number;
+      evening: number;
+      night: number;
+      uniqueDates: Set<string>;
+    }>();
+
+    for (const j of journals) {
+      const key = j.cashierId;
+      const existing = cashierStats.get(key) || {
+        cashierName: j.cashierName,
+        branchId: j.branchId,
+        totalSales: 0,
+        journalCount: 0,
+        transactionsCount: 0,
+        totalTickets: 0,
+        morning: 0,
+        evening: 0,
+        night: 0,
+        uniqueDates: new Set<string>()
+      };
+      
+      existing.totalSales += j.totalSales || 0;
+      existing.journalCount += 1;
+      existing.transactionsCount += j.transactionCount || 0;
+      existing.totalTickets += j.averageTicket || 0;
+      existing.uniqueDates.add(j.journalDate);
+      
+      if (j.shiftType === 'morning') existing.morning += j.totalSales || 0;
+      else if (j.shiftType === 'evening') existing.evening += j.totalSales || 0;
+      else if (j.shiftType === 'night') existing.night += j.totalSales || 0;
+      
+      cashierStats.set(key, existing);
+    }
+
+    const grandTotal = Array.from(cashierStats.values()).reduce((sum, s) => sum + s.totalSales, 0);
+
+    const results = Array.from(cashierStats.entries()).map(([cashierId, stats]) => ({
+      cashierId,
+      cashierName: stats.cashierName,
+      branchId: stats.branchId,
+      branchName: branchMap.get(stats.branchId) || stats.branchId,
+      totalSales: stats.totalSales,
+      journalCount: stats.journalCount,
+      transactionsCount: stats.transactionsCount,
+      averageTicket: stats.journalCount > 0 ? stats.totalTickets / stats.journalCount : 0,
+      averageDailySales: stats.uniqueDates.size > 0 ? stats.totalSales / stats.uniqueDates.size : 0,
+      rank: 0,
+      contribution: grandTotal > 0 ? (stats.totalSales / grandTotal) * 100 : 0,
+      shiftDistribution: { morning: stats.morning, evening: stats.evening, night: stats.night }
+    })).sort((a, b) => b.totalSales - a.totalSales);
+
+    // Assign ranks
+    results.forEach((r, idx) => { r.rank = idx + 1; });
+
+    return results;
+  }
+
+  // Get average ticket analysis
+  async getAverageTicketAnalysis(branchId: string | null, groupBy: 'shift' | 'cashier' | 'date', fromDate: string, toDate: string): Promise<{
+    group: string;
+    groupLabel: string;
+    averageTicket: number;
+    transactionsCount: number;
+    totalSales: number;
+    journalCount: number;
+  }[]> {
+    const whereConditions: any[] = [
+      gte(cashierSalesJournals.journalDate, fromDate),
+      lte(cashierSalesJournals.journalDate, toDate),
+      eq(cashierSalesJournals.status, 'approved')
+    ];
+    
+    if (branchId) {
+      whereConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    }
+
+    const journals = await db.select()
+      .from(cashierSalesJournals)
+      .where(and(...whereConditions));
+
+    const shiftLabels: Record<string, string> = {
+      morning: 'صباحي',
+      evening: 'مسائي',
+      night: 'ليلي'
+    };
+
+    const stats = new Map<string, {
+      groupLabel: string;
+      totalSales: number;
+      transactionsCount: number;
+      journalCount: number;
+    }>();
+
+    for (const j of journals) {
+      let groupKey: string;
+      let groupLabel: string;
+      
+      if (groupBy === 'shift') {
+        groupKey = j.shiftType || 'unknown';
+        groupLabel = shiftLabels[groupKey] || groupKey;
+      } else if (groupBy === 'cashier') {
+        groupKey = j.cashierId;
+        groupLabel = j.cashierName;
+      } else {
+        groupKey = j.journalDate;
+        groupLabel = j.journalDate;
+      }
+
+      const existing = stats.get(groupKey) || { groupLabel, totalSales: 0, transactionsCount: 0, journalCount: 0 };
+      existing.totalSales += j.totalSales || 0;
+      existing.transactionsCount += j.transactionCount || 0;
+      existing.journalCount += 1;
+      stats.set(groupKey, existing);
+    }
+
+    return Array.from(stats.entries()).map(([group, s]) => ({
+      group,
+      groupLabel: s.groupLabel,
+      averageTicket: s.transactionsCount > 0 ? s.totalSales / s.transactionsCount : 0,
+      transactionsCount: s.transactionsCount,
+      totalSales: s.totalSales,
+      journalCount: s.journalCount
+    })).sort((a, b) => b.averageTicket - a.averageTicket);
+  }
+
+  // Compute and store daily branch sales summary
+  async computeBranchDailySales(branchId: string, salesDate: string): Promise<BranchDailySales> {
+    // Get all approved journals for this branch/date
+    const journals = await db.select()
+      .from(cashierSalesJournals)
+      .where(
+        and(
+          eq(cashierSalesJournals.branchId, branchId),
+          eq(cashierSalesJournals.journalDate, salesDate),
+          eq(cashierSalesJournals.status, 'approved')
+        )
+      );
+
+    // Calculate aggregates
+    let totalSales = 0;
+    let transactionsCount = 0;
+    let morningShiftSales = 0;
+    let eveningShiftSales = 0;
+    let nightShiftSales = 0;
+    const cashierIds = new Set<string>();
+    const journalIds: number[] = [];
+
+    for (const j of journals) {
+      totalSales += j.totalSales || 0;
+      transactionsCount += j.transactionCount || 0;
+      cashierIds.add(j.cashierId);
+      journalIds.push(j.id);
+      
+      if (j.shiftType === 'morning') morningShiftSales += j.totalSales || 0;
+      else if (j.shiftType === 'evening') eveningShiftSales += j.totalSales || 0;
+      else if (j.shiftType === 'night') nightShiftSales += j.totalSales || 0;
+    }
+
+    const averageTicket = transactionsCount > 0 ? totalSales / transactionsCount : 0;
+
+    // Get target for this date
+    const yearMonth = salesDate.substring(0, 7);
+    const targets = await db.select()
+      .from(branchMonthlyTargets)
+      .where(
+        and(
+          eq(branchMonthlyTargets.branchId, branchId),
+          eq(branchMonthlyTargets.yearMonth, yearMonth)
+        )
+      );
+
+    let targetAmount = 0;
+    if (targets.length > 0) {
+      const allocations = await db.select()
+        .from(targetDailyAllocations)
+        .where(
+          and(
+            eq(targetDailyAllocations.targetId, targets[0].id),
+            eq(targetDailyAllocations.targetDate, salesDate)
+          )
+        );
+      if (allocations.length > 0) {
+        targetAmount = allocations[0].dailyTarget;
+      }
+    }
+
+    const achievementAmount = totalSales - targetAmount;
+    const achievementPercent = targetAmount > 0 ? (totalSales / targetAmount) * 100 : 0;
+
+    // Check if record exists
+    const existing = await db.select()
+      .from(branchDailySales)
+      .where(
+        and(
+          eq(branchDailySales.branchId, branchId),
+          eq(branchDailySales.salesDate, salesDate)
+        )
+      );
+
+    const data = {
+      branchId,
+      salesDate,
+      totalSales,
+      transactionsCount,
+      averageTicket,
+      cashierCount: cashierIds.size,
+      targetAmount,
+      achievementAmount,
+      achievementPercent,
+      morningShiftSales,
+      eveningShiftSales,
+      nightShiftSales,
+      journalIds
+    };
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(branchDailySales)
+        .set({ ...data, computedAt: new Date(), updatedAt: new Date() })
+        .where(eq(branchDailySales.id, existing[0].id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(branchDailySales)
+        .values(data)
+        .returning();
+      return created;
+    }
   }
 }
 
