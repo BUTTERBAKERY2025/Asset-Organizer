@@ -117,11 +117,30 @@ const ALERT_ICONS = {
   exceeding: CheckCircle2,
 };
 
+const MONTHS = [
+  { value: "01", label: "يناير" },
+  { value: "02", label: "فبراير" },
+  { value: "03", label: "مارس" },
+  { value: "04", label: "أبريل" },
+  { value: "05", label: "مايو" },
+  { value: "06", label: "يونيو" },
+  { value: "07", label: "يوليو" },
+  { value: "08", label: "أغسطس" },
+  { value: "09", label: "سبتمبر" },
+  { value: "10", label: "أكتوبر" },
+  { value: "11", label: "نوفمبر" },
+  { value: "12", label: "ديسمبر" },
+];
+
+const YEARS = Array.from({ length: 10 }, (_, i) => {
+  const year = new Date().getFullYear() - 2 + i;
+  return { value: year.toString(), label: year.toString() };
+});
+
 export default function TargetsDashboard() {
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
+  const [selectedMonthNum, setSelectedMonthNum] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
+  const selectedMonth = `${selectedYear}-${selectedMonthNum}`;
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -465,14 +484,30 @@ export default function TargetsDashboard() {
           
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
+              <Label>السنة:</Label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-24" data-testid="select-year">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {YEARS.map(y => (
+                    <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
               <Label>الشهر:</Label>
-              <Input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-40"
-                data-testid="input-month-selector"
-              />
+              <Select value={selectedMonthNum} onValueChange={setSelectedMonthNum}>
+                <SelectTrigger className="w-28" data-testid="select-month">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
