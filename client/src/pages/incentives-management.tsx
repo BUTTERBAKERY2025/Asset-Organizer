@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus } from "lucide-react";
+import { Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus, FileSpreadsheet, FileText } from "lucide-react";
 import { Link } from "wouter";
+import * as XLSX from "xlsx";
 import type { Branch, IncentiveTier, IncentiveAward } from "@shared/schema";
 
 const REWARD_TYPE_LABELS: Record<string, string> = {
@@ -205,26 +207,115 @@ export default function IncentivesManagement() {
     return branches.find(b => b.id === branchId)?.name || branchId;
   };
 
+  const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    if (awards?.length) {
+      const filteredAwards = awards.filter(a => a.periodStart?.startsWith(selectedMonth));
+      const data = filteredAwards.map(a => ({
+        'الفرع': getBranchName(a.branchId || ''),
+        'الفترة من': a.periodStart,
+        'الفترة إلى': a.periodEnd,
+        'الهدف': a.targetAmount,
+        'المحقق': a.achievedAmount,
+        'النسبة': `${a.achievementPercent?.toFixed(1)}%`,
+        'المكافأة': a.finalReward,
+        'الحالة': AWARD_STATUS_LABELS[a.status] || a.status
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, 'سجل الحوافز');
+    }
+    
+    if (calculatedAwards?.length) {
+      const calcData = calculatedAwards.map(a => ({
+        'الفرع': a.branchName,
+        'الهدف': a.targetAmount,
+        'المحقق': a.achievedAmount,
+        'النسبة': `${a.achievementPercent.toFixed(1)}%`,
+        'المستوى': a.tierName,
+        'المكافأة المحسوبة': a.calculatedReward
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(calcData);
+      XLSX.utils.book_append_sheet(wb, ws2, 'الحوافز المحسوبة');
+    }
+    
+    if (tiers?.length) {
+      const tiersData = tiers.map(t => ({
+        'المستوى': t.name,
+        'الوصف': t.description || '',
+        'من نسبة': `${t.minAchievementPercent}%`,
+        'إلى نسبة': `${t.maxAchievementPercent}%`,
+        'نوع المكافأة': REWARD_TYPE_LABELS[t.rewardType] || t.rewardType,
+        'مبلغ ثابت': t.fixedAmount || 0,
+        'نسبة مئوية': `${t.percentageRate || 0}%`
+      }));
+      const ws3 = XLSX.utils.json_to_sheet(tiersData);
+      XLSX.utils.book_append_sheet(wb, ws3, 'مستويات الحوافز');
+    }
+    
+    XLSX.writeFile(wb, `الحوافز_${selectedMonth}.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="UTF-8">
+          <title>تقرير الحوافز - ${selectedMonth}</title>
+          <style>
+            body { font-family: 'Cairo', sans-serif; padding: 20px; direction: rtl; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+            th { background-color: #f59e0b; color: white; }
+            h1, h2 { color: #92400e; }
+            .header { text-align: center; margin-bottom: 30px; }
+            @media print { body { print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>تقرير الحوافز والمكافآت</h1>
+            <p>الشهر: ${selectedMonth}</p>
+          </div>
+          ${calculatedAwards?.length ? `
+            <h2>الحوافز المحسوبة</h2>
+            <table>
+              <thead><tr><th>الفرع</th><th>الهدف</th><th>المحقق</th><th>النسبة</th><th>المستوى</th><th>المكافأة</th></tr></thead>
+              <tbody>${calculatedAwards.map(a => `<tr><td>${a.branchName}</td><td>${formatCurrency(a.targetAmount)}</td><td>${formatCurrency(a.achievedAmount)}</td><td>${a.achievementPercent.toFixed(1)}%</td><td>${a.tierName}</td><td>${formatCurrency(a.calculatedReward)}</td></tr>`).join('')}</tbody>
+            </table>
+          ` : ''}
+          ${tiers?.length ? `
+            <h2>مستويات الحوافز</h2>
+            <table>
+              <thead><tr><th>المستوى</th><th>من %</th><th>إلى %</th><th>نوع المكافأة</th><th>المبلغ</th></tr></thead>
+              <tbody>${tiers.map(t => `<tr><td>${t.name}</td><td>${t.minAchievementPercent}%</td><td>${t.maxAchievementPercent}%</td><td>${REWARD_TYPE_LABELS[t.rewardType] || t.rewardType}</td><td>${formatCurrency(t.fixedAmount || 0)}</td></tr>`).join('')}</tbody>
+            </table>
+          ` : ''}
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 500);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-6" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/operations-reports">
-              <Button variant="ghost" size="icon">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
-                <Gift className="h-8 w-8" />
-                إدارة الحوافز والمكافآت
-              </h1>
-              <p className="text-amber-700 mt-1">تعريف مستويات الحوافز وإدارة المكافآت</p>
-            </div>
+    <Layout>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
+              <Gift className="h-8 w-8" />
+              إدارة الحوافز والمكافآت
+            </h1>
+            <p className="text-amber-700 mt-1">تعريف مستويات الحوافز وإدارة المكافآت</p>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Label>الشهر:</Label>
               <Input
@@ -235,6 +326,16 @@ export default function IncentivesManagement() {
                 data-testid="input-month-selector"
               />
             </div>
+            
+            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
+              <FileSpreadsheet className="h-4 w-4 ml-2" />
+              تصدير Excel
+            </Button>
+            
+            <Button variant="outline" onClick={exportToPDF} data-testid="button-export-pdf">
+              <FileText className="h-4 w-4 ml-2" />
+              طباعة PDF
+            </Button>
             
             <Button 
               onClick={() => calculateIncentivesMutation.mutate()}
@@ -567,6 +668,6 @@ export default function IncentivesManagement() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </Layout>
   );
 }

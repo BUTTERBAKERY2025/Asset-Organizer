@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Target, Plus, Calendar, TrendingUp, Building2, Settings, Play, Edit, Trash2, ChevronLeft } from "lucide-react";
+import { Target, Plus, Calendar, TrendingUp, Building2, Settings, Play, Edit, Trash2, ChevronLeft, FileSpreadsheet, FileText } from "lucide-react";
 import { Link } from "wouter";
+import * as XLSX from "xlsx";
 import type { Branch, BranchMonthlyTarget, TargetWeightProfile, TargetDailyAllocation } from "@shared/schema";
 
 const TARGET_STATUS_LABELS: Record<string, string> = {
@@ -154,26 +156,106 @@ export default function TargetsPlanning() {
     return days[date.getDay()];
   };
 
+  const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    if (targets?.length) {
+      const data = targets.map(t => ({
+        'الفرع': branches.find(b => b.id === t.branchId)?.name || t.branchId,
+        'الشهر': t.yearMonth,
+        'الهدف الشهري': t.targetAmount,
+        'الحالة': TARGET_STATUS_LABELS[t.status] || t.status,
+        'ملاحظات': t.notes || ''
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, 'الأهداف الشهرية');
+    }
+    
+    if (allocations?.length) {
+      const allocData = allocations.map(a => ({
+        'التاريخ': a.targetDate,
+        'اليوم': getDayName(a.targetDate),
+        'الهدف اليومي': a.dailyTarget,
+        'الوزن': `${a.weightPercent}%`,
+        'سبب التخصيص': a.overrideReason || ''
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(allocData);
+      XLSX.utils.book_append_sheet(wb, ws2, 'التوزيع اليومي');
+    }
+    
+    if (profiles?.length) {
+      const profileData = profiles.map(p => ({
+        'الملف': p.name,
+        'أحد': `${p.sundayWeight}%`,
+        'اثنين': `${p.mondayWeight}%`,
+        'ثلاثاء': `${p.tuesdayWeight}%`,
+        'أربعاء': `${p.wednesdayWeight}%`,
+        'خميس': `${p.thursdayWeight}%`,
+        'جمعة': `${p.fridayWeight}%`,
+        'سبت': `${p.saturdayWeight}%`,
+        'افتراضي': p.isDefault ? 'نعم' : 'لا',
+        'نشط': p.isActive ? 'نعم' : 'لا'
+      }));
+      const ws3 = XLSX.utils.json_to_sheet(profileData);
+      XLSX.utils.book_append_sheet(wb, ws3, 'ملفات التوزيع');
+    }
+    
+    XLSX.writeFile(wb, `الأهداف_الشهرية_${selectedMonth}.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="UTF-8">
+          <title>تخطيط الأهداف - ${selectedMonth}</title>
+          <style>
+            body { font-family: 'Cairo', sans-serif; padding: 20px; direction: rtl; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+            th { background-color: #f59e0b; color: white; }
+            h1, h2 { color: #92400e; }
+            .header { text-align: center; margin-bottom: 30px; }
+            @media print { body { print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>تخطيط الأهداف الشهرية</h1>
+            <p>الشهر: ${selectedMonth}</p>
+          </div>
+          ${targets?.length ? `
+            <h2>الأهداف الشهرية</h2>
+            <table>
+              <thead><tr><th>الفرع</th><th>الهدف الشهري</th><th>الحالة</th></tr></thead>
+              <tbody>${targets.map(t => `<tr><td>${branches.find(b => b.id === t.branchId)?.name || t.branchId}</td><td>${formatCurrency(t.targetAmount)}</td><td>${TARGET_STATUS_LABELS[t.status] || t.status}</td></tr>`).join('')}</tbody>
+            </table>
+          ` : ''}
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 500);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-6" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/operations-reports">
-              <Button variant="ghost" size="icon">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
-                <Target className="h-8 w-8" />
-                تخطيط الأهداف الشهرية
-              </h1>
-              <p className="text-amber-700 mt-1">تحديد وتوزيع الأهداف على الفروع والأيام</p>
-            </div>
+    <Layout>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
+              <Target className="h-8 w-8" />
+              تخطيط الأهداف الشهرية
+            </h1>
+            <p className="text-amber-700 mt-1">تحديد وتوزيع الأهداف على الفروع والأيام</p>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Label>الشهر:</Label>
               <Input
@@ -184,6 +266,16 @@ export default function TargetsPlanning() {
                 data-testid="input-month-selector"
               />
             </div>
+            
+            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
+              <FileSpreadsheet className="h-4 w-4 ml-2" />
+              تصدير Excel
+            </Button>
+            
+            <Button variant="outline" onClick={exportToPDF} data-testid="button-export-pdf">
+              <FileText className="h-4 w-4 ml-2" />
+              طباعة PDF
+            </Button>
             
             <Dialog open={showNewTargetDialog} onOpenChange={setShowNewTargetDialog}>
               <DialogTrigger asChild>
@@ -491,6 +583,6 @@ export default function TargetsPlanning() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </Layout>
   );
 }

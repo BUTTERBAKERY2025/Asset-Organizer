@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2 } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
+import * as XLSX from "xlsx";
 import type { Branch } from "@shared/schema";
 
 interface BranchPerformance {
@@ -207,26 +209,151 @@ export default function TargetsDashboard() {
   const totalAchieved = leaderboard?.branches.reduce((sum, b) => sum + b.achieved, 0) || 0;
   const overallPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
 
+  const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    if (leaderboard?.branches?.length) {
+      const branchData = leaderboard.branches.map(b => ({
+        'الفرع': b.branchName,
+        'الهدف': b.target,
+        'المحقق': b.achieved,
+        'النسبة': `${b.percent.toFixed(1)}%`,
+        'الترتيب': b.rank
+      }));
+      const ws1 = XLSX.utils.json_to_sheet(branchData);
+      XLSX.utils.book_append_sheet(wb, ws1, 'أداء الفروع');
+    }
+    
+    if (leaderboard?.cashiers?.length) {
+      const cashierData = leaderboard.cashiers.map(c => ({
+        'الكاشير': c.cashierName,
+        'الفرع': branches.find(br => br.id === c.branchId)?.name || c.branchId,
+        'المحقق': c.achieved,
+        'الترتيب': c.rank
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(cashierData);
+      XLSX.utils.book_append_sheet(wb, ws2, 'أداء الكاشير');
+    }
+    
+    if (progressSummary?.length) {
+      const summaryData = progressSummary.map(s => ({
+        'الفرع': s.branchName,
+        'الهدف': s.targetAmount,
+        'المحقق': s.achievedAmount,
+        'النسبة': `${s.achievementPercent.toFixed(1)}%`,
+        'المتبقي': s.remainingAmount,
+        'متوسط يومي': s.averageDailySales,
+        'المتوقع': `${s.projectedPercent.toFixed(1)}%`,
+        'الاتجاه': s.trend === 'up' ? 'صعود' : s.trend === 'down' ? 'هبوط' : 'مستقر'
+      }));
+      const ws3 = XLSX.utils.json_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, ws3, 'ملخص التقدم');
+    }
+    
+    if (alerts?.length) {
+      const alertsData = alerts.map(a => ({
+        'الفرع': a.branchName,
+        'النوع': a.alertLevel === 'critical' ? 'حرج' : a.alertLevel === 'warning' ? 'تحذير' : a.alertLevel === 'on_track' ? 'على المسار' : 'متجاوز',
+        'الرسالة': a.message,
+        'التقدم': `${a.achievementPercent.toFixed(1)}%`,
+        'الأيام المتبقية': a.daysRemaining
+      }));
+      const ws4 = XLSX.utils.json_to_sheet(alertsData);
+      XLSX.utils.book_append_sheet(wb, ws4, 'التنبيهات');
+    }
+    
+    if (branchProgress?.dailyProgress?.length) {
+      const dailyData = branchProgress.dailyProgress.map(d => ({
+        'التاريخ': d.date,
+        'اليوم': d.dayName,
+        'الهدف اليومي': d.targetAmount,
+        'المحقق': d.achievedAmount,
+        'النسبة': `${d.achievementPercent.toFixed(1)}%`,
+        'الفارق': d.variance,
+        'عدد اليوميات': d.journalCount,
+        'تراكمي الهدف': d.cumulativeTarget,
+        'تراكمي المحقق': d.cumulativeAchieved,
+        'تراكمي%': `${d.cumulativePercent.toFixed(1)}%`
+      }));
+      const ws5 = XLSX.utils.json_to_sheet(dailyData);
+      XLSX.utils.book_append_sheet(wb, ws5, 'التقدم اليومي');
+    }
+    
+    XLSX.writeFile(wb, `تقرير_الأهداف_${selectedMonth}.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    const printContent = document.getElementById('print-content');
+    if (!printContent) {
+      window.print();
+      return;
+    }
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="UTF-8">
+          <title>تقرير الأهداف - ${selectedMonth}</title>
+          <style>
+            body { font-family: 'Cairo', sans-serif; padding: 20px; direction: rtl; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+            th { background-color: #f59e0b; color: white; }
+            h1, h2 { color: #92400e; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .summary { display: flex; justify-content: space-around; margin: 20px 0; }
+            .card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; text-align: center; }
+            @media print { body { print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>تقرير الأداء والأهداف</h1>
+            <p>الشهر: ${selectedMonth}</p>
+          </div>
+          <div class="summary">
+            <div class="card"><strong>إجمالي الهدف:</strong> ${formatCurrency(totalTarget)}</div>
+            <div class="card"><strong>إجمالي المحقق:</strong> ${formatCurrency(totalAchieved)}</div>
+            <div class="card"><strong>نسبة الإنجاز:</strong> ${overallPercent.toFixed(1)}%</div>
+          </div>
+          ${leaderboard?.branches?.length ? `
+            <h2>أداء الفروع</h2>
+            <table>
+              <thead><tr><th>الترتيب</th><th>الفرع</th><th>الهدف</th><th>المحقق</th><th>النسبة</th></tr></thead>
+              <tbody>${leaderboard.branches.map(b => `<tr><td>${b.rank}</td><td>${b.branchName}</td><td>${formatCurrency(b.target)}</td><td>${formatCurrency(b.achieved)}</td><td>${b.percent.toFixed(1)}%</td></tr>`).join('')}</tbody>
+            </table>
+          ` : ''}
+          ${leaderboard?.cashiers?.length ? `
+            <h2>أداء الكاشير</h2>
+            <table>
+              <thead><tr><th>الترتيب</th><th>الكاشير</th><th>الفرع</th><th>المحقق</th></tr></thead>
+              <tbody>${leaderboard.cashiers.map(c => `<tr><td>${c.rank}</td><td>${c.cashierName}</td><td>${branches.find(br => br.id === c.branchId)?.name || c.branchId}</td><td>${formatCurrency(c.achieved)}</td></tr>`).join('')}</tbody>
+            </table>
+          ` : ''}
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 500);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-6" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/operations-reports">
-              <Button variant="ghost" size="icon">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
-                <TrendingUp className="h-8 w-8" />
-                لوحة الأداء والأهداف
-              </h1>
-              <p className="text-amber-700 mt-1">متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع</p>
-            </div>
+    <Layout>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
+              <TrendingUp className="h-8 w-8" />
+              لوحة الأداء والأهداف
+            </h1>
+            <p className="text-amber-700 mt-1">متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع</p>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Label>الشهر:</Label>
               <Input
@@ -237,6 +364,16 @@ export default function TargetsDashboard() {
                 data-testid="input-month-selector"
               />
             </div>
+            
+            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
+              <FileSpreadsheet className="h-4 w-4 ml-2" />
+              تصدير Excel
+            </Button>
+            
+            <Button variant="outline" onClick={exportToPDF} data-testid="button-export-pdf">
+              <FileText className="h-4 w-4 ml-2" />
+              طباعة PDF
+            </Button>
             
             <Link href="/targets-planning">
               <Button variant="outline" data-testid="button-goto-planning">
@@ -770,6 +907,6 @@ export default function TargetsDashboard() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </Layout>
   );
 }
