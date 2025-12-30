@@ -159,9 +159,14 @@ export default function SalesAnalytics() {
   });
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("ar-SA", {
-      style: "currency",
-      currency: "SAR",
+    return new Intl.NumberFormat("en-US", {
+      style: "decimal",
+      maximumFractionDigits: 0
+    }).format(value) + " ر.س";
+  };
+
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat("en-US", {
       maximumFractionDigits: 0
     }).format(value);
   };

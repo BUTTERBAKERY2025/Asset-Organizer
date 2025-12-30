@@ -3328,7 +3328,7 @@ export class DatabaseStorage implements IStorage {
         ? await db.select().from(targetDailyAllocations)
             .where(
               and(
-                eq(targetDailyAllocations.targetId, target[0].id),
+                eq(targetDailyAllocations.monthlyTargetId, target[0].id),
                 gte(targetDailyAllocations.targetDate, fromDate),
                 lte(targetDailyAllocations.targetDate, toDate)
               )
@@ -3337,15 +3337,11 @@ export class DatabaseStorage implements IStorage {
 
       // Build a set of all dates (from both allocations and sales)
       const allDates = new Set<string>();
-      for (const a of allocations) {
-        allDates.add(a.targetDate);
-      }
-      for (const date of salesMap.keys()) {
-        allDates.add(date);
-      }
+      allocations.forEach(a => allDates.add(a.targetDate));
+      Array.from(salesMap.keys()).forEach(date => allDates.add(date));
 
       // Build results for each date (including days with targets but no sales)
-      for (const date of allDates) {
+      Array.from(allDates).forEach(date => {
         const sales = salesMap.get(date) || { totalSales: 0, morning: 0, evening: 0, night: 0 };
         const allocation = allocations.find(a => a.targetDate === date);
         const targetAmount = allocation?.dailyTarget || 0;
@@ -3369,7 +3365,7 @@ export class DatabaseStorage implements IStorage {
           shiftBreakdown: { morning: sales.morning, evening: sales.evening, night: sales.night },
           status
         });
-      }
+      });
     }
 
     return results.sort((a, b) => a.date.localeCompare(b.date));
@@ -3653,7 +3649,7 @@ export class DatabaseStorage implements IStorage {
         .from(targetDailyAllocations)
         .where(
           and(
-            eq(targetDailyAllocations.targetId, targets[0].id),
+            eq(targetDailyAllocations.monthlyTargetId, targets[0].id),
             eq(targetDailyAllocations.targetDate, salesDate)
           )
         );
