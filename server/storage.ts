@@ -141,7 +141,7 @@ import {
   cashierShiftPerformance,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export interface IStorage {
@@ -2921,7 +2921,7 @@ export class DatabaseStorage implements IStorage {
           eq(cashierSalesJournals.cashierId, cashierId),
           gte(cashierSalesJournals.journalDate, periodStart),
           lte(cashierSalesJournals.journalDate, periodEnd),
-          eq(cashierSalesJournals.status, 'approved')
+          inArray(cashierSalesJournals.status, ['posted', 'approved'])
         )
       );
 
@@ -3019,7 +3019,7 @@ export class DatabaseStorage implements IStorage {
           eq(cashierSalesJournals.branchId, branchId),
           gte(cashierSalesJournals.journalDate, startDate),
           lte(cashierSalesJournals.journalDate, endDate),
-          eq(cashierSalesJournals.status, 'approved')
+          inArray(cashierSalesJournals.status, ['posted', 'approved'])
         )
       );
 
@@ -3292,7 +3292,7 @@ export class DatabaseStorage implements IStorage {
             eq(cashierSalesJournals.branchId, branch.id),
             gte(cashierSalesJournals.journalDate, fromDate),
             lte(cashierSalesJournals.journalDate, toDate),
-            eq(cashierSalesJournals.status, 'approved')
+            inArray(cashierSalesJournals.status, ['posted', 'approved'])
           )
         );
 
@@ -3385,7 +3385,7 @@ export class DatabaseStorage implements IStorage {
     const whereConditions: any[] = [
       gte(cashierSalesJournals.journalDate, fromDate),
       lte(cashierSalesJournals.journalDate, toDate),
-      eq(cashierSalesJournals.status, 'approved')
+      inArray(cashierSalesJournals.status, ['posted', 'approved'])
     ];
     
     if (branchId) {
@@ -3451,7 +3451,7 @@ export class DatabaseStorage implements IStorage {
     const whereConditions: any[] = [
       gte(cashierSalesJournals.journalDate, fromDate),
       lte(cashierSalesJournals.journalDate, toDate),
-      eq(cashierSalesJournals.status, 'approved')
+      inArray(cashierSalesJournals.status, ['posted', 'approved'])
     ];
     
     if (branchId) {
@@ -3541,7 +3541,7 @@ export class DatabaseStorage implements IStorage {
     const whereConditions: any[] = [
       gte(cashierSalesJournals.journalDate, fromDate),
       lte(cashierSalesJournals.journalDate, toDate),
-      eq(cashierSalesJournals.status, 'approved')
+      inArray(cashierSalesJournals.status, ['posted', 'approved'])
     ];
     
     if (branchId) {
@@ -3599,14 +3599,14 @@ export class DatabaseStorage implements IStorage {
 
   // Compute and store daily branch sales summary
   async computeBranchDailySales(branchId: string, salesDate: string): Promise<BranchDailySales> {
-    // Get all approved journals for this branch/date
+    // Get all posted/approved journals for this branch/date
     const journals = await db.select()
       .from(cashierSalesJournals)
       .where(
         and(
           eq(cashierSalesJournals.branchId, branchId),
           eq(cashierSalesJournals.journalDate, salesDate),
-          eq(cashierSalesJournals.status, 'approved')
+          inArray(cashierSalesJournals.status, ['posted', 'approved'])
         )
       );
 
