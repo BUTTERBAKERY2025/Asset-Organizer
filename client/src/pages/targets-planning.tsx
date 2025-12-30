@@ -919,69 +919,78 @@ export default function TargetsPlanning() {
                           </TableCell>
                           <TableCell className="max-w-xs truncate text-gray-500">{target.notes || '-'}</TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {target.status === 'draft' && (
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  className="bg-amber-50 hover:bg-amber-100 border-amber-300"
                                   onClick={() => generateAllocationsMutation.mutate(target.id)}
                                   disabled={generateAllocationsMutation.isPending}
                                   title="توزيع على الأيام"
                                   data-testid={`button-generate-${target.id}`}
                                 >
-                                  <Play className="h-4 w-4" />
+                                  <Play className="h-4 w-4 text-amber-600" />
+                                  <span className="mr-1 text-xs">توزيع</span>
                                 </Button>
                               )}
                               <Button
                                 size="sm"
-                                variant="ghost"
+                                variant="outline"
+                                className="bg-blue-50 hover:bg-blue-100 border-blue-300"
                                 onClick={() => setSelectedTargetId(target.id)}
-                                title="عرض التوزيع"
+                                title="عرض التوزيع اليومي"
                                 data-testid={`button-view-${target.id}`}
                               >
-                                <Calendar className="h-4 w-4" />
+                                <Calendar className="h-4 w-4 text-blue-600" />
+                                <span className="mr-1 text-xs">عرض</span>
                               </Button>
                               <Button
                                 size="sm"
-                                variant="ghost"
+                                variant="outline"
+                                className="bg-gray-50 hover:bg-gray-100 border-gray-300"
                                 onClick={() => handleEditTarget(target)}
-                                title="تعديل"
+                                title="تعديل الهدف"
                                 data-testid={`button-edit-${target.id}`}
                               >
-                                <Edit className="h-4 w-4" />
+                                <Edit className="h-4 w-4 text-gray-600" />
+                                <span className="mr-1 text-xs">تعديل</span>
                               </Button>
                               {target.status === 'draft' && (
                                 <>
                                   <Button
                                     size="sm"
-                                    variant="ghost"
-                                    className="text-green-600"
+                                    variant="outline"
+                                    className="bg-green-50 hover:bg-green-100 border-green-300"
                                     onClick={() => updateTargetMutation.mutate({ id: target.id, targetAmount: target.targetAmount, profileId: target.profileId, notes: target.notes || '', status: 'active' })}
-                                    title="تفعيل"
+                                    title="تفعيل الهدف"
                                   >
-                                    <CheckCircle className="h-4 w-4" />
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                    <span className="mr-1 text-xs">تفعيل</span>
                                   </Button>
                                   <Button
                                     size="sm"
-                                    variant="ghost"
-                                    className="text-red-600"
+                                    variant="outline"
+                                    className="bg-red-50 hover:bg-red-100 border-red-300"
                                     onClick={() => deleteTargetMutation.mutate(target.id)}
-                                    title="حذف"
+                                    title="حذف الهدف"
                                     data-testid={`button-delete-${target.id}`}
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                    <span className="mr-1 text-xs">حذف</span>
                                   </Button>
                                 </>
                               )}
                               {target.status === 'active' && (
                                 <Button
                                   size="sm"
-                                  variant="ghost"
-                                  className="text-blue-600"
+                                  variant="outline"
+                                  className="bg-indigo-50 hover:bg-indigo-100 border-indigo-300"
                                   onClick={() => updateTargetMutation.mutate({ id: target.id, targetAmount: target.targetAmount, profileId: target.profileId, notes: target.notes || '', status: 'locked' })}
-                                  title="قفل"
+                                  title="قفل الهدف"
                                 >
-                                  <Lock className="h-4 w-4" />
+                                  <Lock className="h-4 w-4 text-indigo-600" />
+                                  <span className="mr-1 text-xs">قفل</span>
                                 </Button>
                               )}
                             </div>
