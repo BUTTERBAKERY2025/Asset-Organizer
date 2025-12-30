@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,14 +11,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { 
   BarChart3, 
   TrendingUp, 
-  TrendingDown, 
   Users, 
   Clock, 
   Target, 
   Award, 
   ArrowUp, 
   ArrowDown, 
-  Minus,
   Sun,
   Sunset,
   Moon,
@@ -170,57 +169,58 @@ export default function SalesAnalytics() {
   const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-6" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <BarChart3 className="h-8 w-8 text-amber-600" />
-              تحليلات المبيعات
-            </h1>
-            <p className="text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-6" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <BarChart3 className="h-8 w-8 text-amber-600" />
+                تحليلات المبيعات
+              </h1>
+              <p className="text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-28" data-testid="select-year">
+                  <SelectValue placeholder="السنة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((y) => (
+                    <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-32" data-testid="select-month">
+                  <SelectValue placeholder="الشهر" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <SelectTrigger className="w-40" data-testid="select-branch">
+                  <SelectValue placeholder="الفرع" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="button-refresh">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-
-          <div className="flex flex-wrap gap-3 items-center">
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-28" data-testid="select-year">
-                <SelectValue placeholder="السنة" />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((y) => (
-                  <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-32" data-testid="select-month">
-                <SelectValue placeholder="الشهر" />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-40" data-testid="select-branch">
-                <SelectValue placeholder="الفرع" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الفروع</SelectItem>
-                {branches.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="button-refresh">
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="bg-white/80 backdrop-blur border-amber-200">
@@ -625,8 +625,9 @@ export default function SalesAnalytics() {
               </CardContent>
             </Card>
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
