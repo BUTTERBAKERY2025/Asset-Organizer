@@ -33,13 +33,32 @@ const TARGET_STATUS_COLORS: Record<string, string> = {
   archived: "bg-gray-400",
 };
 
+const MONTHS = [
+  { value: "01", label: "يناير" },
+  { value: "02", label: "فبراير" },
+  { value: "03", label: "مارس" },
+  { value: "04", label: "أبريل" },
+  { value: "05", label: "مايو" },
+  { value: "06", label: "يونيو" },
+  { value: "07", label: "يوليو" },
+  { value: "08", label: "أغسطس" },
+  { value: "09", label: "سبتمبر" },
+  { value: "10", label: "أكتوبر" },
+  { value: "11", label: "نوفمبر" },
+  { value: "12", label: "ديسمبر" },
+];
+
+const YEARS = Array.from({ length: 10 }, (_, i) => {
+  const year = new Date().getFullYear() - 2 + i;
+  return { value: year.toString(), label: year.toString() };
+});
+
 export default function TargetsPlanning() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
+  const [selectedMonthNum, setSelectedMonthNum] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
+  const selectedMonth = `${selectedYear}-${selectedMonthNum}`;
   const [showNewTargetDialog, setShowNewTargetDialog] = useState(false);
   const [showBulkCreateDialog, setShowBulkCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -428,17 +447,30 @@ export default function TargetsPlanning() {
           
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
+              <Label>السنة:</Label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-24" data-testid="select-year">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {YEARS.map(y => (
+                    <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
               <Label>الشهر:</Label>
-              <Input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(e.target.value);
-                  setNewTarget(prev => ({ ...prev, yearMonth: e.target.value }));
-                }}
-                className="w-40"
-                data-testid="input-month-selector"
-              />
+              <Select value={selectedMonthNum} onValueChange={setSelectedMonthNum}>
+                <SelectTrigger className="w-28" data-testid="select-month">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="button-export-excel">
@@ -520,13 +552,35 @@ export default function TargetsPlanning() {
                     </div>
                     
                     <div>
-                      <Label>الشهر</Label>
-                      <Input
-                        type="month"
-                        value={newTarget.yearMonth}
-                        onChange={(e) => setNewTarget({ ...newTarget, yearMonth: e.target.value })}
-                        data-testid="input-target-month"
-                      />
+                      <Label>السنة والشهر</Label>
+                      <div className="flex gap-2">
+                        <Select
+                          value={newTarget.yearMonth.split('-')[0]}
+                          onValueChange={(v) => setNewTarget({ ...newTarget, yearMonth: `${v}-${newTarget.yearMonth.split('-')[1]}` })}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {YEARS.map(y => (
+                              <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={newTarget.yearMonth.split('-')[1]}
+                          onValueChange={(v) => setNewTarget({ ...newTarget, yearMonth: `${newTarget.yearMonth.split('-')[0]}-${v}` })}
+                        >
+                          <SelectTrigger className="w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MONTHS.map(m => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     
                     <div>
@@ -715,11 +769,34 @@ export default function TargetsPlanning() {
                   <div className="space-y-4">
                     <div>
                       <Label>نسخ من شهر</Label>
-                      <Input
-                        type="month"
-                        value={copyFromMonth}
-                        onChange={(e) => setCopyFromMonth(e.target.value)}
-                      />
+                      <div className="flex gap-2">
+                        <Select
+                          value={copyFromMonth.split('-')[0]}
+                          onValueChange={(v) => setCopyFromMonth(`${v}-${copyFromMonth.split('-')[1]}`)}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {YEARS.map(y => (
+                              <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={copyFromMonth.split('-')[1]}
+                          onValueChange={(v) => setCopyFromMonth(`${copyFromMonth.split('-')[0]}-${v}`)}
+                        >
+                          <SelectTrigger className="w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MONTHS.map(m => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     
                     {previousMonthTargets.length > 0 ? (
