@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, CheckCircle, BarChart3 } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, CheckCircle, BarChart3, Target, Gift, TrendingUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -96,6 +96,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/production", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
           { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
           { href: "/cashier-journals", label: "يومية الكاشير", icon: Wallet, module: "cashier_journal" },
+          { href: "/targets-planning", label: "تخطيط الأهداف", icon: Target, module: "operations" },
+          { href: "/targets-dashboard", label: "لوحة الأهداف", icon: TrendingUp, module: "operations" },
+          { href: "/incentives-management", label: "إدارة الحوافز", icon: Gift, module: "operations" },
         ],
       },
     },
