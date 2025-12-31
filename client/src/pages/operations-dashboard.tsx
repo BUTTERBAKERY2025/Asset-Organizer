@@ -174,9 +174,9 @@ export default function OperationsDashboardPage() {
       <div className="space-y-6" dir="rtl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Factory className="w-6 h-6 text-primary" />
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Factory className="w-4 h-4 text-primary" />
               </div>
               لوحة تحكم التشغيل
             </h1>
@@ -204,7 +204,7 @@ export default function OperationsDashboardPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">{stat.title}</span>
-                      <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                      <stat.icon className={`w-4 h-4 ${stat.color}`} />
                     </div>
                     <div className="flex items-baseline gap-1">
                       <span className={`text-3xl font-bold ${stat.color}`}>{stat.value}</span>
@@ -224,7 +224,7 @@ export default function OperationsDashboardPage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-primary" />
+                <Zap className="w-4 h-4 text-primary" />
                 <CardTitle className="text-lg">إجراءات سريعة</CardTitle>
               </div>
             </div>
@@ -238,8 +238,8 @@ export default function OperationsDashboardPage() {
                     className="w-full h-auto py-4 flex flex-col items-center gap-2 hover:bg-background/80 hover:border-primary/30 transition-all"
                     data-testid={`quick-action-${index}`}
                   >
-                    <div className={`w-10 h-10 rounded-full bg-muted flex items-center justify-center`}>
-                      <action.icon className={`w-5 h-5 ${action.color}`} />
+                    <div className={`w-8 h-8 rounded-full bg-muted flex items-center justify-center`}>
+                      <action.icon className={`w-4 h-4 ${action.color}`} />
                     </div>
                     <span className="text-sm font-medium">{action.label}</span>
                   </Button>
@@ -251,7 +251,7 @@ export default function OperationsDashboardPage() {
 
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <Factory className="w-5 h-5 text-muted-foreground" />
+            <Factory className="w-4 h-4 text-muted-foreground" />
             <h2 className="text-lg font-semibold">أقسام التشغيل والإنتاج</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -263,8 +263,8 @@ export default function OperationsDashboardPage() {
                 >
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between">
-                      <div className={`w-12 h-12 rounded-xl ${module.color} flex items-center justify-center shadow-sm`}>
-                        <module.icon className="w-6 h-6 text-white" />
+                      <div className={`w-10 h-10 rounded-lg ${module.color} flex items-center justify-center shadow-sm`}>
+                        <module.icon className="w-5 h-5 text-white" />
                       </div>
                       <ArrowUpRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
@@ -286,7 +286,7 @@ export default function OperationsDashboardPage() {
 
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <Target className="w-5 h-5 text-muted-foreground" />
+            <Target className="w-4 h-4 text-muted-foreground" />
             <h2 className="text-lg font-semibold">المبيعات والأهداف</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -298,8 +298,8 @@ export default function OperationsDashboardPage() {
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-xl ${module.color} flex items-center justify-center shadow-sm flex-shrink-0`}>
-                        <module.icon className="w-6 h-6 text-white" />
+                      <div className={`w-10 h-10 rounded-lg ${module.color} flex items-center justify-center shadow-sm flex-shrink-0`}>
+                        <module.icon className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
@@ -319,7 +319,7 @@ export default function OperationsDashboardPage() {
         <Card className="bg-muted/30">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="w-4 h-4" />
+              <Activity className="w-3.5 h-3.5" />
               ملخص اليوم
             </CardTitle>
           </CardHeader>
