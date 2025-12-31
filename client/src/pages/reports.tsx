@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import * as XLSX from "xlsx";
 import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
+import { TablePagination } from "@/components/ui/pagination";
 
 const STATUS_LABELS: Record<string, string> = {
   good: "جيد",
@@ -46,7 +47,12 @@ export default function ReportsPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [reportType, setReportType] = useState<string>("overview");
+  const [inventoryPage, setInventoryPage] = useState(1);
   const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setInventoryPage(1);
+  }, [selectedBranch, selectedCategory]);
 
   const { data: branches = [] } = useQuery<any[]>({
     queryKey: ["/api/branches"],
@@ -833,12 +839,14 @@ export default function ReportsPage() {
             <TabsContent value="details" className="mt-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
+                  <div className="flex items-center gap-3">
                     <CardTitle className="flex items-center gap-2">
                       <Package className="w-5 h-5" />
                       جرد الأصول التفصيلي
                     </CardTitle>
-                    <CardDescription>عرض {filteredInventory.length} أصل</CardDescription>
+                    <Badge variant="secondary" className="text-sm" data-testid="badge-inventory-count">
+                      {filteredInventory.length} أصل
+                    </Badge>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => exportToExcel("assets")}>
                     <Download className="w-4 h-4 ml-1" />
@@ -861,9 +869,9 @@ export default function ReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredInventory.map((item: any, index: number) => (
+                        {filteredInventory.slice((inventoryPage - 1) * 15, inventoryPage * 15).map((item: any, index: number) => (
                           <TableRow key={item.id}>
-                            <TableCell className="text-muted-foreground">{index + 1}</TableCell>
+                            <TableCell className="text-muted-foreground">{(inventoryPage - 1) * 15 + index + 1}</TableCell>
                             <TableCell>{branches.find((b: any) => b.id === item.branchId)?.name}</TableCell>
                             <TableCell className="font-medium">{item.name}</TableCell>
                             <TableCell>{item.quantity} {item.unit}</TableCell>
@@ -886,6 +894,13 @@ export default function ReportsPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  <TablePagination
+                    currentPage={inventoryPage}
+                    totalItems={filteredInventory.length}
+                    itemsPerPage={15}
+                    onPageChange={setInventoryPage}
+                    data-testid="pagination-inventory"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>

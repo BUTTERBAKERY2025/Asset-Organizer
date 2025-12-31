@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
@@ -26,6 +26,7 @@ import type { Branch, InventoryItem } from "@shared/schema";
 import { AdvancedFilters, defaultFilters, type FilterConfig } from "@/components/advanced-filters";
 import { ItemCardDialog } from "@/components/item-card-dialog";
 import { ExcelImportDialog } from "@/components/excel-import-dialog";
+import { TablePagination } from "@/components/ui/pagination";
 
 type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
@@ -39,6 +40,7 @@ export default function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<InventoryItemWithBranch | null>(null);
   const [isItemCardOpen, setIsItemCardOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -164,6 +166,23 @@ export default function InventoryPage() {
       return hasMatchingItems || category.toLowerCase().includes(searchQuery.toLowerCase());
     });
   }, [groupedInventory, selectedCategory, searchQuery]);
+
+  const filteredItems = useMemo(() => {
+    return filteredCategories.flatMap(category => 
+      groupedInventory[category].filter(item => 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    );
+  }, [filteredCategories, groupedInventory, searchQuery]);
+
+  const ITEMS_PER_PAGE = 15;
+  const paginatedItems = useMemo(() => {
+    return filteredItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  }, [filteredItems, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeBranch, appliedFilters, selectedCategory]);
 
   const componentRef = useRef<HTMLDivElement>(null);
 
@@ -294,129 +313,115 @@ export default function InventoryPage() {
           <p className="text-muted-foreground text-lg">لا توجد بيانات متاحة لهذا الفرع حالياً</p>
         </div>
       ) : (
-        filteredCategories.map((category) => {
-          const categoryItems = groupedInventory[category];
-          const categoryTotalValue = categoryItems.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0);
+        <>
+          <div className="flex items-center justify-between mb-4 print:hidden">
+            <Badge variant="secondary" className="bg-primary/10 text-primary px-3 py-1 text-sm">
+              إجمالي النتائج: {formatNumber(filteredItems.length)} عنصر
+            </Badge>
+          </div>
           
-          return (
-            <Card key={category} className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6">
-              <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4 print:bg-transparent print:border-b-2 print:border-black">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-baseline gap-4">
-                    <CardTitle className="text-xl text-primary font-bold print:text-black">{category}</CardTitle>
-                    {showPrices && (
-                      <span className="text-sm text-muted-foreground font-mono print:text-black">
-                         (Total: {formatCurrency(categoryTotalValue)})
-                      </span>
+          <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/30 print:bg-transparent">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-right w-[50px] print:text-black font-bold">#</TableHead>
+                    <TableHead className="text-right w-[60px] print:text-black font-bold">الصورة</TableHead>
+                    {isGlobalSearch && (
+                      <TableHead className="text-right w-[120px] print:text-black font-bold text-primary">الفرع</TableHead>
                     )}
-                  </div>
-                  <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm print:hidden">
-                    {formatNumber(categoryItems.length)} عنصر
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader className="bg-muted/30 print:bg-transparent">
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-right w-[50px] print:text-black font-bold">#</TableHead>
-                      <TableHead className="text-right w-[60px] print:text-black font-bold">الصورة</TableHead>
-                      {isGlobalSearch && (
-                        <TableHead className="text-right w-[120px] print:text-black font-bold text-primary">الفرع</TableHead>
-                      )}
-                      <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
-                      <TableHead className="text-right w-[80px] print:text-black font-bold">الكمية</TableHead>
-                      {showPrices && (
-                        <>
-                          <TableHead className="text-right w-[100px] print:text-black font-bold">السعر</TableHead>
-                          <TableHead className="text-right w-[100px] print:text-black font-bold">الإجمالي</TableHead>
-                          <TableHead className="text-right w-[100px] print:text-black font-bold">الضريبة (15%)</TableHead>
-                          <TableHead className="text-right w-[110px] print:text-black font-bold">الصافي</TableHead>
-                        </>
-                      )}
-                      <TableHead className="text-right w-[100px] print:text-black font-bold">الحالة</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categoryItems
-                      .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map((item, index) => {
-                        const total = (item.price || 0) * item.quantity;
-                        const vat = total * 0.15;
-                        const totalWithVat = total + vat;
-                        
-                        return (
-                          <TableRow 
-                            key={item.id} 
-                            className="hover:bg-muted/20 transition-colors print:border-black cursor-pointer" 
-                            data-testid={`row-item-${item.id}`}
-                            onClick={() => { setSelectedItem(item); setIsItemCardOpen(true); }}
-                          >
-                            <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(index + 1)}</TableCell>
-                            <TableCell className="p-1">
-                              {item.imageUrl ? (
-                                <img 
-                                  src={item.imageUrl} 
-                                  alt={item.name}
-                                  className="w-12 h-12 object-cover rounded-md border border-border shadow-sm"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                              ) : (
-                                <div className="w-12 h-12 bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground/50 text-xs">
-                                  -
-                                </div>
-                              )}
+                    <TableHead className="text-right w-[120px] print:text-black font-bold">الفئة</TableHead>
+                    <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
+                    <TableHead className="text-right w-[80px] print:text-black font-bold">الكمية</TableHead>
+                    {showPrices && (
+                      <>
+                        <TableHead className="text-right w-[100px] print:text-black font-bold">السعر</TableHead>
+                        <TableHead className="text-right w-[100px] print:text-black font-bold">الإجمالي</TableHead>
+                        <TableHead className="text-right w-[100px] print:text-black font-bold">الضريبة (15%)</TableHead>
+                        <TableHead className="text-right w-[110px] print:text-black font-bold">الصافي</TableHead>
+                      </>
+                    )}
+                    <TableHead className="text-right w-[100px] print:text-black font-bold">الحالة</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedItems.map((item, index) => {
+                    const total = (item.price || 0) * item.quantity;
+                    const vat = total * 0.15;
+                    const totalWithVat = total + vat;
+                    const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+                    
+                    return (
+                      <TableRow 
+                        key={item.id} 
+                        className="hover:bg-muted/20 transition-colors print:border-black cursor-pointer" 
+                        data-testid={`row-item-${item.id}`}
+                        onClick={() => { setSelectedItem(item); setIsItemCardOpen(true); }}
+                      >
+                        <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(globalIndex)}</TableCell>
+                        <TableCell className="p-1">
+                          {item.imageUrl ? (
+                            <img 
+                              src={item.imageUrl} 
+                              alt={item.name}
+                              className="w-12 h-12 object-cover rounded-md border border-border shadow-sm"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-12 h-12 bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground/50 text-xs">
+                              -
+                            </div>
+                          )}
+                        </TableCell>
+                        {isGlobalSearch && (
+                           <TableCell className="font-medium text-primary print:text-black text-sm">{item.branchName}</TableCell>
+                        )}
+                        <TableCell className="text-muted-foreground print:text-black text-sm">{item.category}</TableCell>
+                        <TableCell className="font-semibold text-foreground/90 print:text-black">
+                          {item.name}
+                          {item.lastCheck && <div className="text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-bold min-w-[3rem] justify-center print:border-black print:text-black font-mono">
+                            {formatNumber(item.quantity)}
+                          </Badge>
+                        </TableCell>
+                        {showPrices && (
+                          <>
+                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(item.price) : "-"}
                             </TableCell>
-                            {isGlobalSearch && (
-                               <TableCell className="font-medium text-primary print:text-black text-sm">{item.branchName}</TableCell>
-                            )}
-                            <TableCell className="font-semibold text-foreground/90 print:text-black">
-                              {item.name}
-                              {item.lastCheck && <div className="text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
+                            <TableCell className="text-foreground print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(total) : "-"}
                             </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="font-bold min-w-[3rem] justify-center print:border-black print:text-black font-mono">
-                                {formatNumber(item.quantity)}
-                              </Badge>
+                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(vat) : "-"}
                             </TableCell>
-                            {showPrices && (
-                              <>
-                                <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
-                                  {item.price ? formatCurrency(item.price) : "-"}
-                                </TableCell>
-                                <TableCell className="text-foreground print:text-black font-mono text-xs">
-                                  {item.price ? formatCurrency(total) : "-"}
-                                </TableCell>
-                                <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
-                                  {item.price ? formatCurrency(vat) : "-"}
-                                </TableCell>
-                                <TableCell className="font-bold text-green-700 print:text-black font-mono text-xs">
-                                  {item.price ? formatCurrency(totalWithVat) : "-"}
-                                </TableCell>
-                              </>
-                            )}
-                            <TableCell className="print:text-black">
-                              <div className="print:hidden scale-90 origin-right">{getStatusBadge(item.status)}</div>
-                              <div className="hidden print:block text-xs">{getStatusLabel(item.status)}</div>
+                            <TableCell className="font-bold text-green-700 print:text-black font-mono text-xs">
+                              {item.price ? formatCurrency(totalWithVat) : "-"}
                             </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      {showPrices && (
-                        <TableRow className="bg-muted/50 font-bold border-t-2 border-primary/20 print:border-black">
-                          <TableCell colSpan={isGlobalSearch ? 6 : 5} className="text-center print:text-black">إجمالي {category}</TableCell>
-                          <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue)}</TableCell>
-                          <TableCell className="font-mono print:text-black">{formatCurrency(categoryTotalValue * 0.15)}</TableCell>
-                          <TableCell className="font-mono text-green-700 print:text-black">{formatCurrency(categoryTotalValue * 1.15)}</TableCell>
-                          <TableCell></TableCell>
-                        </TableRow>
-                      )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          );
-        })
+                          </>
+                        )}
+                        <TableCell className="print:text-black">
+                          <div className="print:hidden scale-90 origin-right">{getStatusBadge(item.status)}</div>
+                          <div className="hidden print:block text-xs">{getStatusLabel(item.status)}</div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          
+          <TablePagination
+            currentPage={currentPage}
+            totalItems={filteredItems.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setCurrentPage}
+            className="print:hidden"
+          />
+        </>
       )}
     </>
   );

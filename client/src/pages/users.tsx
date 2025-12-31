@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { TablePagination } from "@/components/ui/pagination";
 import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil } from "lucide-react";
 import type { User, UserPermission } from "@shared/schema";
 import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
@@ -52,6 +53,8 @@ export default function UsersPage() {
     role: "viewer",
     password: "",
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!authLoading && (!isAuthenticated || !isAdmin)) {
@@ -456,8 +459,9 @@ export default function UsersPage() {
             <CardTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
               قائمة المستخدمين
+              <Badge variant="secondary" className="mr-2">{users.length}</Badge>
             </CardTitle>
-            <CardDescription>عدد المستخدمين: {users.length}</CardDescription>
+            <CardDescription>إجمالي عدد المستخدمين: {users.length}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
@@ -479,7 +483,9 @@ export default function UsersPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    users.map((user) => (
+                    users
+                      .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                      .map((user) => (
                       <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                         <TableCell>
                           <div className="flex items-center gap-3">
@@ -561,6 +567,12 @@ export default function UsersPage() {
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              currentPage={currentPage}
+              totalItems={users.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+            />
           </CardContent>
         </Card>
       </div>

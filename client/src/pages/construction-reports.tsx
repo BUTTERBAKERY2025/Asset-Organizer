@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp, FileDown } from "lucide-react";
+import { TablePagination } from "@/components/ui/pagination";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
@@ -73,7 +74,12 @@ export default function ConstructionReportsPage() {
   const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
   const [sortField, setSortField] = useState<string>("actualCost");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [currentPage, setCurrentPage] = useState(1);
   const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedBranch, selectedCategory, selectedContractor, selectedStatus, searchQuery, minCost, maxCost]);
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -1254,8 +1260,11 @@ export default function ConstructionReportsPage() {
 
             <TabsContent value="details" className="mt-4">
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>تفاصيل جميع المشاريع</CardTitle>
+                  <Badge variant="secondary" className="text-sm">
+                    إجمالي: {filteredProjects.length} مشروع
+                  </Badge>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -1271,7 +1280,7 @@ export default function ConstructionReportsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredProjects.map((project) => (
+                      {filteredProjects.slice((currentPage - 1) * 10, currentPage * 10).map((project) => (
                         <TableRow key={project.id} data-testid={`row-project-${project.id}`}>
                           <TableCell>{branchMap[project.branchId]}</TableCell>
                           <TableCell className="font-medium">{project.title}</TableCell>
@@ -1293,6 +1302,12 @@ export default function ConstructionReportsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={currentPage}
+                    totalItems={filteredProjects.length}
+                    itemsPerPage={10}
+                    onPageChange={setCurrentPage}
+                  />
                   {filteredProjects.length === 0 && (
                     <p className="text-center text-muted-foreground py-8">لا توجد مشاريع</p>
                   )}
