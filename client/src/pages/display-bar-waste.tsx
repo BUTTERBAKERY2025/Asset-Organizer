@@ -23,6 +23,7 @@ import {
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 import { ProductSelector } from "@/components/product-selector";
+import { exportToExcel } from "@/lib/export-utils";
 import { WASTE_REASON_LABELS, DISPLAY_BAR_CATEGORY_LABELS } from "@shared/schema";
 import type { Branch, Product, WasteReport, WasteItem } from "@shared/schema";
 
@@ -100,6 +101,9 @@ export default function DisplayBarWastePage() {
   const [selectedWasteReportId, setSelectedWasteReportId] = useState<number | null>(null);
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<any | null>(null);
   const [showReceiptDetailDialog, setShowReceiptDetailDialog] = useState(false);
+  const [viewingReport, setViewingReport] = useState<WasteReport | null>(null);
+  const [showReportDetailsDialog, setShowReportDetailsDialog] = useState(false);
+  const reportPrintRef = useRef<HTMLDivElement>(null);
   
   const [dailyWasteEntries, setDailyWasteEntries] = useState<DailyWasteEntry[]>([]);
   const [showAddUnlistedProduct, setShowAddUnlistedProduct] = useState(false);
@@ -155,6 +159,118 @@ export default function DisplayBarWastePage() {
   const { data: wasteStats } = useQuery({
     queryKey: ["/api/waste-reports/stats"],
   });
+
+  const { data: viewingReportItems = [], isFetching: isFetchingItems, isSuccess: isItemsSuccess } = useQuery<WasteItem[]>({
+    queryKey: ["/api/waste-reports", viewingReport?.id, "items"],
+    queryFn: async () => {
+      if (!viewingReport?.id) return [];
+      const res = await fetch(`/api/waste-reports/${viewingReport.id}/items`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!viewingReport?.id && showReportDetailsDialog,
+    staleTime: 0,
+  });
+
+  const handleCloseReportDialog = () => {
+    setShowReportDetailsDialog(false);
+    setViewingReport(null);
+  };
+
+  const isItemsReady = isItemsSuccess && !isFetchingItems && viewingReportItems.length > 0;
+
+  const handleViewReport = (report: WasteReport) => {
+    setViewingReport(report);
+    setShowReportDetailsDialog(true);
+  };
+
+  const handlePrintReport = () => {
+    if (reportPrintRef.current) {
+      const printContent = reportPrintRef.current;
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html dir="rtl">
+            <head>
+              <title>تقرير الهالك - ${viewingReport?.reportDate}</title>
+              <style>
+                body { font-family: 'Cairo', Arial, sans-serif; padding: 20px; direction: rtl; }
+                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                th, td { border: 1px solid #ddd; padding: 10px; text-align: right; }
+                th { background-color: #f5f5f5; font-weight: bold; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .header h1 { color: #D4A574; margin: 0; }
+                .info-row { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 5px 0; border-bottom: 1px solid #eee; }
+                .total-row { background-color: #fef3c7; font-weight: bold; }
+                .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+                @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+              </style>
+            </head>
+            <body>
+              ${printContent.innerHTML}
+              <div class="footer">
+                <p>تم الطباعة بتاريخ: ${new Date().toLocaleDateString('ar-SA')}</p>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
+  const handleExportReportToExcel = () => {
+    if (!viewingReport) {
+      toast({ title: "لا يوجد تقرير للتصدير", variant: "destructive" });
+      return;
+    }
+    if (isFetchingItems) {
+      toast({ title: "جاري تحميل البيانات...", description: "يرجى الانتظار" });
+      return;
+    }
+    if (!isItemsReady) {
+      toast({ title: "التقرير فارغ - لا توجد أصناف للتصدير", variant: "destructive" });
+      return;
+    }
+
+    const exportData = viewingReportItems.map((item, index) => ({
+      rowNum: index + 1,
+      productName: getProductName(item.productId),
+      quantity: item.quantity,
+      unitPrice: item.unitPrice || 0,
+      totalValue: item.totalValue || 0,
+      wasteReason: WASTE_REASONS.find(r => r.value === item.wasteReason)?.label || item.wasteReason,
+      notes: item.reasonDetails || "-",
+    }));
+
+    const columns = [
+      { header: "#", key: "rowNum", width: 5 },
+      { header: "الصنف", key: "productName", width: 25 },
+      { header: "الكمية", key: "quantity", width: 10 },
+      { header: "سعر الوحدة", key: "unitPrice", width: 12 },
+      { header: "الإجمالي", key: "totalValue", width: 12 },
+      { header: "سبب الهالك", key: "wasteReason", width: 15 },
+      { header: "ملاحظات", key: "notes", width: 20 },
+    ];
+
+    const headerInfo = [
+      { label: "التاريخ", value: viewingReport.reportDate },
+      { label: "الفرع", value: getBranchName(viewingReport.branchId) },
+      { label: "المسجل", value: viewingReport.reporterName || "-" },
+      { label: "إجمالي الهالك", value: `${(viewingReport.totalValue || 0).toLocaleString()} ر.س` },
+    ];
+
+    exportToExcel(
+      exportData,
+      columns,
+      `تقرير-الهالك-${viewingReport.reportDate}`,
+      "تفاصيل الهالك",
+      headerInfo
+    );
+    
+    toast({ title: "تم تصدير التقرير بنجاح" });
+  };
 
   const createReceiptMutation = useMutation({
     mutationFn: async (data: any) => apiRequest("POST", "/api/display-bar/receipts", data),
@@ -267,7 +383,11 @@ export default function DisplayBarWastePage() {
   };
 
   const getProductName = (productId: number) => products.find(p => p.id === productId)?.name || "-";
-  const getBranchName = (branchId: string) => branches.find(b => b.id === branchId)?.name || "-";
+  const getBranchName = (branchId: string | number | null | undefined) => {
+    if (!branchId) return "-";
+    const id = String(branchId);
+    return branches.find(b => b.id === id)?.name || "-";
+  };
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
@@ -1487,6 +1607,15 @@ export default function DisplayBarWastePage() {
                             <td className="p-3">{report.reporterName || "-"}</td>
                             <td className="p-3">
                               <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleViewReport(report)}
+                                  title={report.totalItems === 0 ? "التقرير فارغ" : "عرض التفاصيل"}
+                                  disabled={report.totalItems === 0}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
                                 {report.status === "draft" && (
                                   <Button
                                     size="sm"
@@ -1528,6 +1657,137 @@ export default function DisplayBarWastePage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Report Details Dialog */}
+      <Dialog open={showReportDetailsDialog} onOpenChange={(open) => !open && handleCloseReportDialog()}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                تفاصيل تقرير الهالك
+              </span>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={handleExportReportToExcel}
+                  disabled={!isItemsReady}
+                >
+                  <FileDown className="w-4 h-4 ml-2" />
+                  {isFetchingItems ? "جاري التحميل..." : "Excel"}
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={handlePrintReport}
+                  disabled={!isItemsReady}
+                >
+                  <Printer className="w-4 h-4 ml-2" />
+                  {isFetchingItems ? "جاري التحميل..." : "طباعة"}
+                </Button>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div ref={reportPrintRef}>
+            <div className="header text-center mb-6">
+              <h1 className="text-2xl font-bold text-[#D4A574]">بتر بيكري</h1>
+              <p className="text-lg font-medium">تقرير الهالك اليومي</p>
+            </div>
+
+            {viewingReport && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div className="info-row">
+                    <span className="text-muted-foreground">التاريخ:</span>
+                    <span className="font-medium mr-2">{viewingReport.reportDate}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="text-muted-foreground">الفرع:</span>
+                    <span className="font-medium mr-2">{getBranchName(viewingReport.branchId)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="text-muted-foreground">الحالة:</span>
+                    <span className="mr-2">{getStatusBadge(viewingReport.status)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="text-muted-foreground">المسجل:</span>
+                    <span className="font-medium mr-2">{viewingReport.reporterName || "-"}</span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="p-3 text-right font-medium border">#</th>
+                        <th className="p-3 text-right font-medium border">الصنف</th>
+                        <th className="p-3 text-right font-medium border">الكمية</th>
+                        <th className="p-3 text-right font-medium border">سعر الوحدة</th>
+                        <th className="p-3 text-right font-medium border">الإجمالي</th>
+                        <th className="p-3 text-right font-medium border">سبب الهالك</th>
+                        <th className="p-3 text-right font-medium border">ملاحظات</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {isFetchingItems ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-muted-foreground border">
+                            <div className="flex items-center justify-center gap-2">
+                              <RefreshCw className="w-5 h-5 animate-spin" />
+                              جاري تحميل الأصناف...
+                            </div>
+                          </td>
+                        </tr>
+                      ) : viewingReportItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-muted-foreground border">
+                            لا توجد أصناف في هذا التقرير
+                          </td>
+                        </tr>
+                      ) : (
+                        viewingReportItems.map((item, index) => (
+                          <tr key={item.id} className="hover:bg-muted/30">
+                            <td className="p-3 border">{index + 1}</td>
+                            <td className="p-3 border">{getProductName(item.productId)}</td>
+                            <td className="p-3 border text-center">{item.quantity}</td>
+                            <td className="p-3 border">{(item.unitPrice || 0).toLocaleString()} ر.س</td>
+                            <td className="p-3 border font-medium">{(item.totalValue || 0).toLocaleString()} ر.س</td>
+                            <td className="p-3 border">
+                              {WASTE_REASONS.find(r => r.value === item.wasteReason)?.label || item.wasteReason}
+                            </td>
+                            <td className="p-3 border">{item.reasonDetails || "-"}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="total-row bg-amber-50 font-bold">
+                        <td colSpan={4} className="p-3 border text-left">الإجمالي</td>
+                        <td className="p-3 border text-red-600">
+                          {(viewingReport.totalValue || 0).toLocaleString()} ر.س
+                        </td>
+                        <td colSpan={2} className="p-3 border">
+                          عدد الأصناف: {viewingReportItems.length}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {viewingReport.status === "approved" && viewingReport.approvedAt && (
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-green-700">
+                      تم الاعتماد بتاريخ: {new Date(viewingReport.approvedAt).toLocaleDateString('ar-SA')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
