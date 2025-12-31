@@ -41,6 +41,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     assets: true,
     operations: false,
+    sales: false,
     construction: false,
     reports: false,
     settings: false,
@@ -89,17 +90,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Factory,
         items: [
           { href: "/operations", label: "لوحة التشغيل", icon: Factory, module: "operations" },
-          { href: "/operations-reports", label: "تقارير التشغيل", icon: BarChart3, module: "operations" },
-          { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
           { href: "/products", label: "المنتجات", icon: Package, module: "operations" },
           { href: "/shifts", label: "الورديات", icon: Clock, module: "shifts" },
           { href: "/production", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
           { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
+          { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
+        ],
+      },
+    },
+    {
+      key: "sales",
+      group: {
+        label: "المبيعات والأهداف",
+        icon: Target,
+        items: [
           { href: "/cashier-journals", label: "يومية الكاشير", icon: Wallet, module: "cashier_journal" },
+          { href: "/sales-analytics", label: "تحليلات المبيعات", icon: BarChart3, module: "operations" },
           { href: "/targets-planning", label: "تخطيط الأهداف", icon: Target, module: "operations" },
           { href: "/targets-dashboard", label: "لوحة الأهداف", icon: TrendingUp, module: "operations" },
-          { href: "/sales-analytics", label: "تحليلات المبيعات", icon: BarChart3, module: "operations" },
           { href: "/incentives-management", label: "إدارة الحوافز", icon: Gift, module: "operations" },
+          { href: "/operations-reports", label: "تقارير التشغيل", icon: BarChart3, module: "operations" },
         ],
       },
     },
