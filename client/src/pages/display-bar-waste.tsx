@@ -13,10 +13,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
-  FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2
+  FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User
 } from "lucide-react";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
@@ -42,8 +43,10 @@ const WASTE_REASONS = [
 
 export default function DisplayBarWastePage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [receiptBranch, setReceiptBranch] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [activeTab, setActiveTab] = useState("receipts");
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
@@ -178,17 +181,18 @@ export default function DisplayBarWastePage() {
   });
 
   const handleReceiptSubmit = () => {
-    if (!receiptForm.productId || !receiptForm.quantity) {
-      toast({ title: "يرجى تعبئة الحقول المطلوبة", variant: "destructive" });
+    if (!receiptForm.productId || !receiptForm.quantity || !receiptBranch) {
+      toast({ title: "يرجى اختيار الفرع والمنتج والكمية", variant: "destructive" });
       return;
     }
     createReceiptMutation.mutate({
-      branchId: selectedBranch === "all" ? branches[0]?.id : selectedBranch,
+      branchId: receiptBranch,
       productId: parseInt(receiptForm.productId),
       quantity: parseInt(receiptForm.quantity),
-      receiptDate: selectedDate,
+      receiptDate: new Date().toISOString().split("T")[0],
       receiptTime: new Date().toTimeString().slice(0, 5),
       notes: receiptForm.notes,
+      createdBy: user?.id,
     });
   };
 
@@ -408,33 +412,69 @@ export default function DisplayBarWastePage() {
                         استلام جديد
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
+                    <DialogContent className="max-w-3xl">
                       <DialogHeader>
-                        <DialogTitle className="flex items-center justify-between">
-                          <span>استلام إنتاج جديد</span>
-                          <div className="flex items-center gap-4 text-sm font-normal">
-                            <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
-                              <Calendar className="w-4 h-4" />
-                              {currentTime.toLocaleDateString('ar-SA')}
-                            </div>
-                            <div className="flex items-center gap-1 bg-green-50 text-green-700 px-3 py-1 rounded-full">
-                              <Clock className="w-4 h-4" />
-                              {currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                            </div>
-                          </div>
-                        </DialogTitle>
+                        <DialogTitle className="text-lg">استلام إنتاج جديد</DialogTitle>
                       </DialogHeader>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-gradient-to-l from-primary/5 to-primary/10 rounded-lg border">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Building2 className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">الفرع</p>
+                            <Select value={receiptBranch} onValueChange={setReceiptBranch}>
+                              <SelectTrigger className="h-7 text-xs w-[120px] border-0 bg-white/50 p-1">
+                                <SelectValue placeholder="اختر الفرع" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {branches.map(b => (
+                                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                            <User className="w-4 h-4 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">المسؤول</p>
+                            <p className="text-sm font-medium">{user?.fullName || user?.username || "غير معروف"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                            <Calendar className="w-4 h-4 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">التاريخ</p>
+                            <p className="text-sm font-medium">{currentTime.toLocaleDateString('ar-SA')}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                            <Clock className="w-4 h-4 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">الوقت</p>
+                            <p className="text-sm font-medium">{currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                         <div className="space-y-4">
                           <div className="bg-muted/30 p-4 rounded-lg border">
                             <h4 className="font-semibold mb-3 flex items-center gap-2">
                               <Plus className="w-4 h-4 text-primary" />
-                              إضافة صنف
+                              إضافة صنف سريع
                             </h4>
                             <div className="space-y-3">
                               <div>
-                                <Label className="text-xs">المنتج</Label>
+                                <Label className="text-xs">المنتج (ابحث بالاسم أو الكود)</Label>
                                 <ProductSelector
                                   products={products.filter(p => p.isActive !== "false")}
                                   value={receiptForm.productId}
@@ -443,31 +483,33 @@ export default function DisplayBarWastePage() {
                                   showPrice={true}
                                 />
                               </div>
-                              <div>
-                                <Label className="text-xs">الكمية</Label>
-                                <Input
-                                  type="number"
-                                  value={receiptForm.quantity}
-                                  onChange={(e) => setReceiptForm(f => ({ ...f, quantity: e.target.value }))}
-                                  placeholder="أدخل الكمية"
-                                  data-testid="input-quantity-receipt"
-                                  className="h-10"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">ملاحظات (اختياري)</Label>
-                                <Input
-                                  value={receiptForm.notes}
-                                  onChange={(e) => setReceiptForm(f => ({ ...f, notes: e.target.value }))}
-                                  placeholder="ملاحظات إضافية..."
-                                  data-testid="input-notes-receipt"
-                                  className="h-10"
-                                />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">الكمية</Label>
+                                  <Input
+                                    type="number"
+                                    value={receiptForm.quantity}
+                                    onChange={(e) => setReceiptForm(f => ({ ...f, quantity: e.target.value }))}
+                                    placeholder="الكمية"
+                                    data-testid="input-quantity-receipt"
+                                    className="h-10 text-center text-lg font-semibold"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">ملاحظات</Label>
+                                  <Input
+                                    value={receiptForm.notes}
+                                    onChange={(e) => setReceiptForm(f => ({ ...f, notes: e.target.value }))}
+                                    placeholder="اختياري"
+                                    data-testid="input-notes-receipt"
+                                    className="h-10"
+                                  />
+                                </div>
                               </div>
                               <Button 
                                 onClick={handleReceiptSubmit} 
-                                className="w-full gap-2" 
-                                disabled={createReceiptMutation.isPending || !receiptForm.productId || !receiptForm.quantity}
+                                className="w-full gap-2 h-11" 
+                                disabled={createReceiptMutation.isPending || !receiptForm.productId || !receiptForm.quantity || !receiptBranch}
                               >
                                 {createReceiptMutation.isPending ? (
                                   <>جاري الإضافة...</>
@@ -478,6 +520,9 @@ export default function DisplayBarWastePage() {
                                   </>
                                 )}
                               </Button>
+                              {!receiptBranch && (
+                                <p className="text-xs text-destructive text-center">يرجى اختيار الفرع أولاً</p>
+                              )}
                             </div>
                           </div>
                         </div>
