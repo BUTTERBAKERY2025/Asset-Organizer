@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,17 +9,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
-  FileText, TrendingDown, Clock, Building2, Calendar
+  FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2
 } from "lucide-react";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 import { WASTE_REASON_LABELS, DISPLAY_BAR_CATEGORY_LABELS } from "@shared/schema";
 import type { Branch, Product, WasteReport, WasteItem } from "@shared/schema";
+
+interface AddedReceiptItem {
+  id: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  time: string;
+}
 
 const WASTE_REASONS = [
   { value: "expired", label: "منتهي الصلاحية" },
@@ -47,6 +57,20 @@ export default function DisplayBarWastePage() {
     notes: "",
   });
 
+  const [addedReceiptItems, setAddedReceiptItems] = useState<AddedReceiptItem[]>([]);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!showReceiptDialog) {
+      setAddedReceiptItems([]);
+    }
+  }, [showReceiptDialog]);
+
   const [wasteForm, setWasteForm] = useState({
     productId: "",
     quantity: "",
@@ -72,7 +96,9 @@ export default function DisplayBarWastePage() {
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
       const res = await fetch(`/api/display-bar/receipts?${params}`);
-      return res.json();
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 
@@ -86,7 +112,9 @@ export default function DisplayBarWastePage() {
         params.append("dateTo", selectedDate);
       }
       const res = await fetch(`/api/waste-reports?${params}`);
-      return res.json();
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 
@@ -96,11 +124,18 @@ export default function DisplayBarWastePage() {
 
   const createReceiptMutation = useMutation({
     mutationFn: async (data: any) => apiRequest("POST", "/api/display-bar/receipts", data),
-    onSuccess: () => {
+    onSuccess: (result: any, variables: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/display-bar/receipts"] });
-      setShowReceiptDialog(false);
+      const product = products.find(p => p.id === variables.productId);
+      setAddedReceiptItems(prev => [...prev, {
+        id: Date.now(),
+        productId: variables.productId,
+        productName: product?.name || "منتج",
+        quantity: variables.quantity,
+        time: variables.receiptTime,
+      }]);
       setReceiptForm({ productId: "", quantity: "", notes: "" });
-      toast({ title: "تم إضافة الاستلام بنجاح" });
+      toast({ title: "تم إضافة الصنف بنجاح", description: "يمكنك إضافة صنف آخر" });
     },
     onError: () => toast({ title: "حدث خطأ", variant: "destructive" }),
   });
@@ -367,46 +402,137 @@ export default function DisplayBarWastePage() {
                         استلام جديد
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-md">
+                    <DialogContent className="max-w-2xl">
                       <DialogHeader>
-                        <DialogTitle>استلام إنتاج جديد</DialogTitle>
+                        <DialogTitle className="flex items-center justify-between">
+                          <span>استلام إنتاج جديد</span>
+                          <div className="flex items-center gap-4 text-sm font-normal">
+                            <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
+                              <Calendar className="w-4 h-4" />
+                              {currentTime.toLocaleDateString('ar-SA')}
+                            </div>
+                            <div className="flex items-center gap-1 bg-green-50 text-green-700 px-3 py-1 rounded-full">
+                              <Clock className="w-4 h-4" />
+                              {currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </div>
+                          </div>
+                        </DialogTitle>
                       </DialogHeader>
-                      <div className="space-y-4 pt-4">
-                        <div>
-                          <Label>المنتج</Label>
-                          <Select value={receiptForm.productId} onValueChange={(v) => setReceiptForm(f => ({ ...f, productId: v }))}>
-                            <SelectTrigger data-testid="select-product-receipt">
-                              <SelectValue placeholder="اختر المنتج" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products.filter(p => p.isActive === "true").map(p => (
-                                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                        <div className="space-y-4">
+                          <div className="bg-muted/30 p-4 rounded-lg border">
+                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                              <Plus className="w-4 h-4 text-primary" />
+                              إضافة صنف
+                            </h4>
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-xs">المنتج</Label>
+                                <Select value={receiptForm.productId} onValueChange={(v) => setReceiptForm(f => ({ ...f, productId: v }))}>
+                                  <SelectTrigger data-testid="select-product-receipt" className="h-10">
+                                    <SelectValue placeholder="اختر المنتج" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {products.filter(p => p.isActive === "true").map(p => (
+                                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">الكمية</Label>
+                                <Input
+                                  type="number"
+                                  value={receiptForm.quantity}
+                                  onChange={(e) => setReceiptForm(f => ({ ...f, quantity: e.target.value }))}
+                                  placeholder="أدخل الكمية"
+                                  data-testid="input-quantity-receipt"
+                                  className="h-10"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">ملاحظات (اختياري)</Label>
+                                <Input
+                                  value={receiptForm.notes}
+                                  onChange={(e) => setReceiptForm(f => ({ ...f, notes: e.target.value }))}
+                                  placeholder="ملاحظات إضافية..."
+                                  data-testid="input-notes-receipt"
+                                  className="h-10"
+                                />
+                              </div>
+                              <Button 
+                                onClick={handleReceiptSubmit} 
+                                className="w-full gap-2" 
+                                disabled={createReceiptMutation.isPending || !receiptForm.productId || !receiptForm.quantity}
+                              >
+                                {createReceiptMutation.isPending ? (
+                                  <>جاري الإضافة...</>
+                                ) : (
+                                  <>
+                                    <Plus className="w-4 h-4" />
+                                    إضافة الصنف
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <Label>الكمية</Label>
-                          <Input
-                            type="number"
-                            value={receiptForm.quantity}
-                            onChange={(e) => setReceiptForm(f => ({ ...f, quantity: e.target.value }))}
-                            placeholder="أدخل الكمية"
-                            data-testid="input-quantity-receipt"
-                          />
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-green-600" />
+                              الأصناف المضافة
+                            </h4>
+                            <Badge variant="secondary">{addedReceiptItems.length} صنف</Badge>
+                          </div>
+                          
+                          {addedReceiptItems.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                              <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                              <p className="text-sm">لم يتم إضافة أصناف بعد</p>
+                              <p className="text-xs">اختر المنتج والكمية ثم اضغط إضافة</p>
+                            </div>
+                          ) : (
+                            <ScrollArea className="h-[280px] border rounded-lg">
+                              <div className="p-2 space-y-2">
+                                {addedReceiptItems.map((item, index) => (
+                                  <div 
+                                    key={item.id} 
+                                    className="flex items-center justify-between p-3 bg-green-50/50 rounded-lg border border-green-100"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-semibold text-sm">
+                                        {index + 1}
+                                      </div>
+                                      <div>
+                                        <div className="font-medium text-sm">{item.productName}</div>
+                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          {item.time}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Badge className="bg-green-600">{item.quantity} وحدة</Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          )}
+                          
+                          {addedReceiptItems.length > 0 && (
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="outline" 
+                                className="flex-1"
+                                onClick={() => setShowReceiptDialog(false)}
+                              >
+                                إنهاء وإغلاق
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <Label>ملاحظات</Label>
-                          <Textarea
-                            value={receiptForm.notes}
-                            onChange={(e) => setReceiptForm(f => ({ ...f, notes: e.target.value }))}
-                            placeholder="ملاحظات إضافية..."
-                            data-testid="input-notes-receipt"
-                          />
-                        </div>
-                        <Button onClick={handleReceiptSubmit} className="w-full" disabled={createReceiptMutation.isPending}>
-                          {createReceiptMutation.isPending ? "جاري الحفظ..." : "حفظ الاستلام"}
-                        </Button>
                       </div>
                     </DialogContent>
                   </Dialog>
