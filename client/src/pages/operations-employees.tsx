@@ -13,7 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Loader2, Users, Plus, Pencil, Trash2, Building2, Briefcase, Phone, Mail, UserCheck, UserX, RefreshCw, Shield } from "lucide-react";
 import type { User, Branch } from "@shared/schema";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { TablePagination } from "@/components/ui/pagination";
 
 const JOB_TITLES = [
   { value: "cashier", label: "كاشير" },
@@ -42,6 +43,7 @@ export default function OperationsEmployeesPage() {
   const [filterJobTitle, setFilterJobTitle] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [newEmployee, setNewEmployee] = useState({
     username: "",
@@ -105,6 +107,10 @@ export default function OperationsEmployeesPage() {
     }
     return true;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterBranch, filterJobTitle, filterStatus]);
 
   const createEmployeeMutation = useMutation({
     mutationFn: async (data: typeof newEmployee) => {
@@ -479,7 +485,7 @@ export default function OperationsEmployeesPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredEmployees.map((emp) => (
+                    filteredEmployees.slice((currentPage - 1) * 10, currentPage * 10).map((emp) => (
                       <TableRow key={emp.id} data-testid={`employee-row-${emp.id}`}>
                         <TableCell>
                           <div className="flex flex-col">
@@ -572,6 +578,12 @@ export default function OperationsEmployeesPage() {
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              currentPage={currentPage}
+              totalItems={filteredEmployees.length}
+              itemsPerPage={10}
+              onPageChange={setCurrentPage}
+            />
           </CardContent>
         </Card>
 

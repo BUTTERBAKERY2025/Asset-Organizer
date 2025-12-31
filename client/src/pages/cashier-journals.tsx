@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { CashierSalesJournal, Branch } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
+import { TablePagination } from "@/components/ui/pagination";
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { label: "مسودة", variant: "secondary" },
@@ -34,6 +35,7 @@ export default function CashierJournalsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [discrepancyFilter, setDiscrepancyFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -96,6 +98,10 @@ export default function CashierJournalsPage() {
     const matchesDiscrepancy = discrepancyFilter === "all" || journal.discrepancyStatus === discrepancyFilter;
     return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [branchFilter, statusFilter, discrepancyFilter, searchTerm]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount);
@@ -319,7 +325,7 @@ export default function CashierJournalsPage() {
               <div>
                 <CardTitle>قائمة اليوميات</CardTitle>
                 <CardDescription>
-                  {filteredJournals?.length || 0} يومية
+                  إجمالي: {filteredJournals?.length || 0} يومية
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2 items-center">
@@ -386,7 +392,7 @@ export default function CashierJournalsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredJournals?.map((journal) => {
+                {filteredJournals?.slice((currentPage - 1) * 10, currentPage * 10).map((journal) => {
                   const discrepancy = DISCREPANCY_LABELS[journal.discrepancyStatus];
                   const status = STATUS_LABELS[journal.status];
                   const DiscrepancyIcon = discrepancy?.icon || Minus;
@@ -466,6 +472,12 @@ export default function CashierJournalsPage() {
                     </div>
                   );
                 })}
+                <TablePagination
+                  currentPage={currentPage}
+                  totalItems={filteredJournals?.length || 0}
+                  itemsPerPage={10}
+                  onPageChange={setCurrentPage}
+                />
               </div>
             )}
           </CardContent>

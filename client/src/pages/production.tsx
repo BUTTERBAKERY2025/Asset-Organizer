@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2, Factory, Clock, Calendar, CheckCircle, AlertTriangle, Play, Pause } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TablePagination } from "@/components/ui/pagination";
 import type { ProductionOrder, Product, Branch } from "@shared/schema";
 
 const ORDER_STATUS = {
@@ -31,6 +32,7 @@ const PRIORITY = {
 
 export default function ProductionPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ProductionOrder | null>(null);
   const [formData, setFormData] = useState({
@@ -140,6 +142,10 @@ export default function ProductionPage() {
     getProductName(o.productId).toLowerCase().includes(searchTerm.toLowerCase()) ||
     o.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   return (
     <Layout>
@@ -274,6 +280,12 @@ export default function ProductionPage() {
           <Badge variant="secondary">{orders?.length || 0} أمر</Badge>
         </div>
 
+        {filteredOrders && filteredOrders.length > 0 && (
+          <div className="text-sm text-muted-foreground">
+            إجمالي: {filteredOrders.length} أمر إنتاج
+          </div>
+        )}
+
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map(i => (
@@ -291,8 +303,9 @@ export default function ProductionPage() {
             </CardContent>
           </Card>
         ) : (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredOrders?.map(order => {
+            {filteredOrders?.slice((currentPage - 1) * 10, currentPage * 10).map(order => {
               const StatusIcon = ORDER_STATUS[order.status as keyof typeof ORDER_STATUS]?.icon || Clock;
               return (
                 <Card key={order.id} data-testid={`order-card-${order.id}`}>
@@ -380,6 +393,13 @@ export default function ProductionPage() {
               );
             })}
           </div>
+          <TablePagination
+            currentPage={currentPage}
+            totalItems={filteredOrders?.length || 0}
+            itemsPerPage={10}
+            onPageChange={setCurrentPage}
+          />
+          </>
         )}
       </div>
     </Layout>

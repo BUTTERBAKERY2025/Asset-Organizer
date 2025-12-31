@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { Link } from "wouter";
 import * as XLSX from "xlsx";
 import type { Branch, BranchMonthlyTarget, TargetWeightProfile, TargetDailyAllocation, SeasonHoliday } from "@shared/schema";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TablePagination } from "@/components/ui/pagination";
 import { Moon, Sun, Heart, Flag, Coffee, PartyPopper, Star, Flower } from "lucide-react";
 
 const TARGET_STATUS_LABELS: Record<string, string> = {
@@ -69,6 +70,7 @@ export default function TargetsPlanning() {
   const [editingTarget, setEditingTarget] = useState<BranchMonthlyTarget | null>(null);
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [editingAllocation, setEditingAllocation] = useState<number | null>(null);
   const [allocationEditValue, setAllocationEditValue] = useState<string>("");
   const [activeTab, setActiveTab] = useState<string>("targets");
@@ -179,6 +181,10 @@ export default function TargetsPlanning() {
     if (type === 'season') return Sun;
     return Star;
   };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedYear, selectedMonthNum, filterBranch, filterStatus]);
 
   const createTargetMutation = useMutation({
     mutationFn: async (data: typeof newTarget) => {
@@ -904,6 +910,9 @@ export default function TargetsPlanning() {
                   <CardTitle className="flex items-center gap-2">
                     <Target className="h-5 w-5 text-amber-600" />
                     أهداف الفروع لشهر {selectedMonth}
+                    <Badge variant="secondary" className="mr-2">
+                      {filteredTargets.length} هدف
+                    </Badge>
                   </CardTitle>
                   <div className="flex items-center gap-3">
                     <Select value={filterBranch} onValueChange={setFilterBranch}>
@@ -939,6 +948,7 @@ export default function TargetsPlanning() {
                     لا توجد أهداف مسجلة لهذا الشهر
                   </div>
                 ) : (
+                  <>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -951,7 +961,7 @@ export default function TargetsPlanning() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredTargets.map((target) => (
+                      {filteredTargets.slice((currentPage - 1) * 10, currentPage * 10).map((target) => (
                         <TableRow key={target.id} data-testid={`row-target-${target.id}`}>
                           <TableCell className="font-medium">{getBranchName(target.branchId)}</TableCell>
                           <TableCell className="font-mono text-lg font-bold text-amber-700">{formatCurrency(target.targetAmount)}</TableCell>
@@ -1046,6 +1056,13 @@ export default function TargetsPlanning() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={currentPage}
+                    totalItems={filteredTargets.length}
+                    itemsPerPage={10}
+                    onPageChange={setCurrentPage}
+                  />
+                  </>
                 )}
               </CardContent>
             </Card>

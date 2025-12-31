@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -39,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { TablePagination } from "@/components/ui/pagination";
 import { Plus, Pencil, Trash2, Loader2, FileText, Calendar, DollarSign, Eye, Building2, User } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import type { ConstructionContract, Contractor, ConstructionProject, ConstructionCategory } from "@shared/schema";
@@ -85,6 +86,7 @@ export default function ContractsPage() {
   const [selectedContract, setSelectedContract] = useState<ConstructionContract | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -236,6 +238,10 @@ export default function ContractsPage() {
     if (projectFilter !== "all" && contract.projectId !== parseInt(projectFilter, 10)) return false;
     return true;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, projectFilter]);
 
   const getProjectName = (projectId: number) => {
     const project = projects.find((p) => p.id === projectId);
@@ -391,10 +397,17 @@ export default function ContractsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>قائمة العقود</CardTitle>
-            <CardDescription>
-              عرض {filteredContracts.length} من {contracts.length} عقد
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>قائمة العقود</CardTitle>
+                <CardDescription>
+                  عرض {filteredContracts.length} من {contracts.length} عقد
+                </CardDescription>
+              </div>
+              <Badge variant="secondary" className="text-sm">
+                إجمالي: {filteredContracts.length} عقد
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -420,7 +433,7 @@ export default function ContractsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredContracts.map((contract) => {
+                    filteredContracts.slice((currentPage - 1) * 10, currentPage * 10).map((contract) => {
                       const statusInfo = getStatusInfo(contract.status);
                       const paidPercent = contract.totalAmount > 0
                         ? ((contract.paidAmount || 0) / contract.totalAmount) * 100
@@ -495,6 +508,12 @@ export default function ContractsPage() {
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              currentPage={currentPage}
+              totalItems={filteredContracts.length}
+              itemsPerPage={10}
+              onPageChange={setCurrentPage}
+            />
           </CardContent>
         </Card>
       </div>

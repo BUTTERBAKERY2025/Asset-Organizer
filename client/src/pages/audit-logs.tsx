@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
+import { TablePagination } from "@/components/ui/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedModule, setSelectedModule] = useState("all");
   const [isSearching, setIsSearching] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: logs = [], isLoading, refetch } = useQuery<SystemAuditLog[]>({
     queryKey: ["/api/system-audit-logs", selectedModule, searchQuery],
@@ -59,6 +61,10 @@ export default function AuditLogsPage() {
       return res.json();
     },
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedModule, searchQuery]);
 
   const handleSearch = () => {
     setIsSearching(true);
@@ -155,7 +161,8 @@ export default function AuditLogsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              سجل العمليات ({logs.length} سجل)
+              سجل العمليات
+              <Badge variant="secondary" className="mr-2">{logs.length} سجل</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -182,7 +189,7 @@ export default function AuditLogsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logs.map((log) => (
+                    {logs.slice((currentPage - 1) * 15, currentPage * 15).map((log) => (
                       <TableRow key={log.id} data-testid={`row-audit-log-${log.id}`}>
                         <TableCell className="text-sm">
                           {formatDate(log.createdAt)}
@@ -202,6 +209,12 @@ export default function AuditLogsPage() {
                     ))}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  currentPage={currentPage}
+                  totalItems={logs.length}
+                  itemsPerPage={15}
+                  onPageChange={setCurrentPage}
+                />
               </div>
             )}
           </CardContent>

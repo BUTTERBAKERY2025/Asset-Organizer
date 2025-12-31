@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { TablePagination } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -44,6 +45,7 @@ export default function BackupsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState<Backup | null>(null);
   const [backupName, setBackupName] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -225,10 +227,15 @@ export default function BackupsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HardDrive className="w-5 h-5" />
-              قائمة النسخ الاحتياطية
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <HardDrive className="w-5 h-5" />
+                قائمة النسخ الاحتياطية
+              </CardTitle>
+              <Badge variant="outline" data-testid="badge-total-backups">
+                إجمالي: {backups.length} نسخة احتياطية
+              </Badge>
+            </div>
             <CardDescription>
               جميع النسخ الاحتياطية المحفوظة في النظام
             </CardDescription>
@@ -245,6 +252,7 @@ export default function BackupsPage() {
                 <p className="text-sm mt-2">أنشئ نسخة احتياطية لحماية بياناتك</p>
               </div>
             ) : (
+              <>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -257,7 +265,7 @@ export default function BackupsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {backups.map((backup) => (
+                  {backups.slice((currentPage - 1) * 10, currentPage * 10).map((backup) => (
                     <TableRow key={backup.id} data-testid={`row-backup-${backup.id}`}>
                       <TableCell className="font-medium">{backup.name}</TableCell>
                       <TableCell>{getTypeLabel(backup.type)}</TableCell>
@@ -283,6 +291,13 @@ export default function BackupsPage() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={currentPage}
+                totalItems={backups.length}
+                itemsPerPage={10}
+                onPageChange={setCurrentPage}
+              />
+              </>
             )}
           </CardContent>
         </Card>

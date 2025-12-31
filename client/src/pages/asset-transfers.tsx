@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, Plus, Search, Check, X, Clock, Send, Package, Building2, FileText, Eye, Hash, MapPin, Tag, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
+import { TablePagination } from "@/components/ui/pagination";
 import type { AssetTransfer, InventoryItem, Branch } from "@shared/schema";
 
 const statusLabels: Record<string, string> = {
@@ -62,6 +63,7 @@ export default function AssetTransfersPage() {
   const [assetSearch, setAssetSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: transfers = [], isLoading } = useQuery<AssetTransfer[]>({
     queryKey: ["/api/asset-transfers"],
@@ -240,6 +242,10 @@ export default function AssetTransfersPage() {
   const pendingCount = transfers.filter((t) => t.status === "pending").length;
   const approvedCount = transfers.filter((t) => t.status === "approved").length;
   const completedCount = transfers.filter((t) => t.status === "completed").length;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
 
   if (isLoading) {
     return (
@@ -565,6 +571,9 @@ export default function AssetTransfersPage() {
               <CardTitle className="flex items-center gap-2">
                 <ArrowLeftRight className="h-5 w-5" />
                 سجل التحويلات
+                <Badge variant="secondary" className="mr-2">
+                  إجمالي: {filteredTransfers.length} عملية نقل
+                </Badge>
               </CardTitle>
               <div className="flex items-center gap-4">
                 <div className="relative">
@@ -613,7 +622,7 @@ export default function AssetTransfersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTransfers.map((transfer) => (
+                    {filteredTransfers.slice((currentPage - 1) * 10, currentPage * 10).map((transfer) => (
                       <tr key={transfer.id} className="border-b hover:bg-gray-50" data-testid={`row-transfer-${transfer.id}`}>
                         <td className="py-3 px-4 font-mono text-sm">{transfer.transferNumber}</td>
                         <td className="py-3 px-4">{getItemName(transfer.itemId)}</td>
@@ -693,6 +702,12 @@ export default function AssetTransfersPage() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination
+                  currentPage={currentPage}
+                  totalItems={filteredTransfers.length}
+                  itemsPerPage={10}
+                  onPageChange={setCurrentPage}
+                />
               </div>
             )}
           </CardContent>
