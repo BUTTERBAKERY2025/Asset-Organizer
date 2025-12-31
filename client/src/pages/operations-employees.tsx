@@ -15,6 +15,18 @@ import { Loader2, Users, Plus, Pencil, Trash2, Building2, Briefcase, Phone, Mail
 import type { User, Branch } from "@shared/schema";
 import React, { useState, useEffect } from "react";
 import { TablePagination } from "@/components/ui/pagination";
+import { ExportButtons } from "@/components/export-buttons";
+
+const exportColumns = [
+  { header: "الاسم", key: "name", width: 20 },
+  { header: "اسم المستخدم", key: "username", width: 15 },
+  { header: "الدور", key: "role", width: 12 },
+  { header: "الفرع", key: "branchId", width: 15 },
+  { header: "المسمى الوظيفي", key: "jobTitle", width: 15 },
+  { header: "الهاتف", key: "phone", width: 15 },
+  { header: "البريد", key: "email", width: 25 },
+  { header: "الحالة", key: "status", width: 10 },
+];
 
 const JOB_TITLES = [
   { value: "cashier", label: "كاشير" },
@@ -408,14 +420,23 @@ export default function OperationsEmployeesPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              قائمة الموظفين
-            </CardTitle>
-            <CardDescription>
-              إجمالي {filteredEmployees.length} موظف
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                قائمة الموظفين
+              </CardTitle>
+              <CardDescription>
+                إجمالي {filteredEmployees.length} موظف
+              </CardDescription>
+            </div>
+            <ExportButtons
+              data={filteredEmployees}
+              columns={exportColumns}
+              fileName={`الموظفين-${new Date().toISOString().split('T')[0]}`}
+              title="تقرير الموظفين"
+              sheetName="الموظفين"
+            />
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4 mb-6">

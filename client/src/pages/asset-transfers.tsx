@@ -17,7 +17,19 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, Plus, Search, Check, X, Clock, Send, Package, Building2, FileText, Eye, Hash, MapPin, Tag, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import { TablePagination } from "@/components/ui/pagination";
+import { ExportButtons } from "@/components/export-buttons";
 import type { AssetTransfer, InventoryItem, Branch } from "@shared/schema";
+
+const exportColumns = [
+  { header: "رقم النقل", key: "transferNumber", width: 15 },
+  { header: "الأصل", key: "itemName", width: 25 },
+  { header: "من فرع", key: "fromBranchName", width: 15 },
+  { header: "إلى فرع", key: "toBranchName", width: 15 },
+  { header: "الكمية", key: "quantity", width: 10 },
+  { header: "تاريخ النقل", key: "transferDate", width: 12 },
+  { header: "الحالة", key: "status", width: 12 },
+  { header: "ملاحظات", key: "notes", width: 25 },
+];
 
 const statusLabels: Record<string, string> = {
   pending: "قيد الانتظار",
@@ -242,6 +254,20 @@ export default function AssetTransfersPage() {
   const pendingCount = transfers.filter((t) => t.status === "pending").length;
   const approvedCount = transfers.filter((t) => t.status === "approved").length;
   const completedCount = transfers.filter((t) => t.status === "completed").length;
+
+  const exportData = filteredTransfers.map(t => {
+    const item = items.find(i => i.id === t.itemId);
+    const fromBranch = branches.find(b => b.id === t.fromBranchId);
+    const toBranch = branches.find(b => b.id === t.toBranchId);
+    return {
+      ...t,
+      itemName: item?.name || '',
+      fromBranchName: fromBranch?.name || '',
+      toBranchName: toBranch?.name || '',
+      transferDate: t.requestedAt ? format(new Date(t.requestedAt), "dd/MM/yyyy") : '',
+      status: statusLabels[t.status] || t.status,
+    };
+  });
 
   useEffect(() => {
     setCurrentPage(1);
@@ -598,6 +624,14 @@ export default function AssetTransfersPage() {
                     <SelectItem value="cancelled">ملغي</SelectItem>
                   </SelectContent>
                 </Select>
+                <ExportButtons
+                  data={exportData}
+                  columns={exportColumns}
+                  fileName="تحويلات_الأصول"
+                  title="تقرير تحويلات الأصول"
+                  subtitle="سجل جميع عمليات نقل الأصول بين الفروع"
+                  sheetName="التحويلات"
+                />
               </div>
             </div>
           </CardHeader>

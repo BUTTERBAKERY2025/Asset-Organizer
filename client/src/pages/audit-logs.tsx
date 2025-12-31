@@ -19,6 +19,16 @@ import { Search, Loader2, FileText, RefreshCw, Filter } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SystemAuditLog } from "@shared/schema";
+import { ExportButtons } from "@/components/export-buttons";
+
+const exportColumns = [
+  { header: "التاريخ", key: "createdAt", width: 18 },
+  { header: "الوحدة", key: "module", width: 15 },
+  { header: "الإجراء", key: "action", width: 12 },
+  { header: "العنصر", key: "entityName", width: 20 },
+  { header: "المستخدم", key: "userName", width: 15 },
+  { header: "التفاصيل", key: "details", width: 35 },
+];
 
 const MODULES = [
   { value: "all", label: "جميع الأقسام" },
@@ -158,12 +168,20 @@ export default function AuditLogsPage() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
               سجل العمليات
               <Badge variant="secondary" className="mr-2">{logs.length} سجل</Badge>
             </CardTitle>
+            <ExportButtons
+              data={logs}
+              columns={exportColumns}
+              fileName="سجل_التدقيق"
+              title="سجل التدقيق"
+              subtitle="جميع العمليات والتغييرات في النظام"
+              sheetName="سجل التدقيق"
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (

@@ -16,6 +16,7 @@ import { ar } from "date-fns/locale";
 import type { CashierSalesJournal, Branch } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
 import { TablePagination } from "@/components/ui/pagination";
+import { ExportButtons } from "@/components/export-buttons";
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { label: "مسودة", variant: "secondary" },
@@ -29,6 +30,21 @@ const DISCREPANCY_LABELS: Record<string, { label: string; color: string; icon: a
   shortage: { label: "عجز", color: "text-red-600", icon: TrendingDown },
   surplus: { label: "زيادة", color: "text-amber-600", icon: TrendingUp },
 };
+
+const exportColumns = [
+  { header: "التاريخ", key: "journalDate", width: 12 },
+  { header: "الكاشير", key: "cashierName", width: 20 },
+  { header: "الفرع", key: "branchId", width: 15 },
+  { header: "الوردية", key: "shiftType", width: 10 },
+  { header: "إجمالي المبيعات", key: "totalSales", width: 15 },
+  { header: "النقدي", key: "cashTotal", width: 12 },
+  { header: "الشبكة", key: "networkTotal", width: 12 },
+  { header: "التوصيل", key: "deliveryTotal", width: 12 },
+  { header: "عدد العملاء", key: "customerCount", width: 12 },
+  { header: "حالة العجز", key: "discrepancyStatus", width: 12 },
+  { header: "قيمة العجز", key: "discrepancyAmount", width: 12 },
+  { header: "الحالة", key: "status", width: 10 },
+];
 
 export default function CashierJournalsPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -375,6 +391,14 @@ export default function CashierJournalsPage() {
                     <SelectItem value="surplus">زيادة</SelectItem>
                   </SelectContent>
                 </Select>
+                <ExportButtons
+                  data={filteredJournals || []}
+                  columns={exportColumns}
+                  fileName={`يوميات-الكاشير-${new Date().toISOString().split('T')[0]}`}
+                  title="تقرير يوميات الكاشير"
+                  subtitle={`الفترة: ${branchFilter !== 'all' ? getBranchName(branchFilter) : 'جميع الفروع'}`}
+                  sheetName="يوميات الكاشير"
+                />
               </div>
             </div>
           </CardHeader>

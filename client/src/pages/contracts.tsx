@@ -45,6 +45,7 @@ import { Link, useLocation } from "wouter";
 import type { ConstructionContract, Contractor, ConstructionProject, ConstructionCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { ExportButtons } from "@/components/export-buttons";
 
 const contractFormSchema = z.object({
   projectId: z.coerce.number().min(1, "اختر المشروع"),
@@ -76,6 +77,17 @@ const CONTRACT_TYPES = [
   { value: "fixed_price", label: "سعر ثابت" },
   { value: "cost_plus", label: "التكلفة + نسبة" },
   { value: "unit_price", label: "سعر الوحدة" },
+];
+
+const exportColumns = [
+  { header: "رقم العقد", key: "contractNumber", width: 15 },
+  { header: "العنوان", key: "title", width: 25 },
+  { header: "المقاول", key: "contractorName", width: 20 },
+  { header: "المشروع", key: "projectTitle", width: 20 },
+  { header: "القيمة", key: "totalAmount", width: 15 },
+  { header: "تاريخ البداية", key: "startDate", width: 12 },
+  { header: "تاريخ النهاية", key: "endDate", width: 12 },
+  { header: "الحالة", key: "status", width: 12 },
 ];
 
 export default function ContractsPage() {
@@ -265,6 +277,14 @@ export default function ContractsPage() {
   const totalPaid = contracts.reduce((sum, c) => sum + (c.paidAmount || 0), 0);
   const activeContractsCount = contracts.filter((c) => c.status === "active").length;
 
+  const exportData = filteredContracts.map((contract) => ({
+    ...contract,
+    contractNumber: contract.contractNumber || `#${contract.id}`,
+    contractorName: getContractorName(contract.contractorId),
+    projectTitle: getProjectName(contract.projectId),
+    status: getStatusInfo(contract.status).label,
+  }));
+
   if (isLoading) {
     return (
       <Layout>
@@ -404,9 +424,19 @@ export default function ContractsPage() {
                   عرض {filteredContracts.length} من {contracts.length} عقد
                 </CardDescription>
               </div>
-              <Badge variant="secondary" className="text-sm">
-                إجمالي: {filteredContracts.length} عقد
-              </Badge>
+              <div className="flex items-center gap-2">
+                <ExportButtons
+                  data={exportData}
+                  columns={exportColumns}
+                  fileName="contracts"
+                  title="تقرير العقود"
+                  subtitle={`إجمالي ${filteredContracts.length} عقد`}
+                  sheetName="العقود"
+                />
+                <Badge variant="secondary" className="text-sm">
+                  إجمالي: {filteredContracts.length} عقد
+                </Badge>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

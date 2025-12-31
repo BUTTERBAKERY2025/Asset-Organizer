@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { ExportButtons } from "@/components/export-buttons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,6 +23,14 @@ const ROLES = [
   { value: "admin", label: "مدير", icon: Shield, description: "صلاحيات كاملة" },
   { value: "employee", label: "موظف", icon: UserCog, description: "حسب الصلاحيات المحددة" },
   { value: "viewer", label: "مشاهد", icon: Eye, description: "حسب الصلاحيات المحددة" },
+];
+
+const exportColumns = [
+  { header: "الاسم", key: "name", width: 20 },
+  { header: "اسم المستخدم", key: "username", width: 15 },
+  { header: "البريد", key: "email", width: 25 },
+  { header: "الدور", key: "role", width: 12 },
+  { header: "الفرع", key: "branchId", width: 15 },
 ];
 
 type SafeUser = Omit<User, 'password'>;
@@ -455,13 +464,25 @@ export default function UsersPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              قائمة المستخدمين
-              <Badge variant="secondary" className="mr-2">{users.length}</Badge>
-            </CardTitle>
-            <CardDescription>إجمالي عدد المستخدمين: {users.length}</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                قائمة المستخدمين
+                <Badge variant="secondary" className="mr-2">{users.length}</Badge>
+              </CardTitle>
+              <CardDescription>إجمالي عدد المستخدمين: {users.length}</CardDescription>
+            </div>
+            <ExportButtons
+              data={users.map(user => ({
+                ...user,
+                name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'مستخدم',
+              }))}
+              columns={exportColumns}
+              fileName="users"
+              title="تقرير المستخدمين"
+              sheetName="المستخدمين"
+            />
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">

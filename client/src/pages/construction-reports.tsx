@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp, FileDown } from "lucide-react";
+import { ExportButtons } from "@/components/export-buttons";
 import { TablePagination } from "@/components/ui/pagination";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
@@ -156,6 +157,30 @@ export default function ConstructionReportsPage() {
     }
     return result;
   }, [projects, selectedBranch]);
+
+  const exportColumns = [
+    { header: "اسم المشروع", key: "title", width: 25 },
+    { header: "الفرع", key: "branchName", width: 15 },
+    { header: "الميزانية", key: "budget", width: 15 },
+    { header: "التكلفة الفعلية", key: "actualCost", width: 15 },
+    { header: "نسبة الإنجاز", key: "progress", width: 12 },
+    { header: "الحالة", key: "status", width: 12 },
+    { header: "تاريخ البداية", key: "startDate", width: 12 },
+    { header: "تاريخ النهاية", key: "endDate", width: 12 },
+  ];
+
+  const projectsExportData = useMemo(() => {
+    return filteredProjects.map(project => ({
+      title: project.title,
+      branchName: branchMap[project.branchId] || project.branchId,
+      budget: Number(project.budget) || 0,
+      actualCost: Number(project.actualCost) || 0,
+      progress: `${project.progressPercent || 0}%`,
+      status: STATUS_LABELS[project.status] || project.status,
+      startDate: project.startDate || "-",
+      endDate: project.targetCompletionDate || "-",
+    }));
+  }, [filteredProjects, branchMap]);
 
   const projectComparisonData = useMemo(() => {
     return filteredProjects.map(project => ({
@@ -540,6 +565,14 @@ export default function ConstructionReportsPage() {
             <p className="text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
           </div>
           <div className="flex items-center gap-3">
+            <ExportButtons
+              data={projectsExportData}
+              columns={exportColumns}
+              fileName="تقرير_المشاريع_الإنشائية"
+              title="تقرير المشاريع الإنشائية"
+              subtitle={selectedBranch !== "all" ? branchMap[selectedBranch] : "جميع الفروع"}
+              sheetName="المشاريع"
+            />
             <Button variant="outline" onClick={() => handlePrint()} data-testid="button-print">
               <Printer className="w-4 h-4 ml-2" />
               طباعة

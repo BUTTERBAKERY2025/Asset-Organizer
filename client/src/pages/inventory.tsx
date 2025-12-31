@@ -27,6 +27,7 @@ import { AdvancedFilters, defaultFilters, type FilterConfig } from "@/components
 import { ItemCardDialog } from "@/components/item-card-dialog";
 import { ExcelImportDialog } from "@/components/excel-import-dialog";
 import { TablePagination } from "@/components/ui/pagination";
+import { ExportButtons } from "@/components/export-buttons";
 
 type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
@@ -306,6 +307,26 @@ export default function InventoryPage() {
     };
   });
 
+  const exportColumns = [
+    { header: "اسم الصنف", key: "name", width: 25 },
+    { header: "الفرع", key: "branchName", width: 15 },
+    { header: "الفئة", key: "category", width: 15 },
+    { header: "الكمية", key: "quantity", width: 10 },
+    { header: "السعر", key: "price", width: 12 },
+    { header: "القيمة", key: "totalValue", width: 15 },
+    { header: "الحالة", key: "status", width: 12 },
+    { header: "الموقع", key: "location", width: 15 },
+  ];
+
+  const exportData = useMemo(() => {
+    return filteredItems.map(item => ({
+      ...item,
+      branchName: item.branchName || branchMap[item.branchId] || item.branchId,
+      totalValue: (item.price || 0) * item.quantity,
+      status: getStatusLabel(item.status),
+    }));
+  }, [filteredItems, branchMap]);
+
   const InventoryList = () => (
     <>
       {displayedInventory.length === 0 ? (
@@ -452,6 +473,14 @@ export default function InventoryPage() {
               <Printer className="w-4 h-4" />
               <span>طباعة</span>
             </Button>
+            <ExportButtons
+              data={exportData}
+              columns={exportColumns}
+              fileName={`inventory_${isGlobalSearch ? 'all_branches' : activeBranch}_${new Date().toISOString().split('T')[0]}`}
+              title={isGlobalSearch ? "جرد الأصول - جميع الفروع" : `جرد الأصول - ${currentBranchName}`}
+              subtitle={`تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`}
+              sheetName="المخزون"
+            />
             <Button className="gap-2" onClick={handleExport} data-testid="button-export">
               <Download className="w-4 h-4" />
               <span>تصدير Excel</span>

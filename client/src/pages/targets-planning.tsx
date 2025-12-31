@@ -21,6 +21,7 @@ import type { Branch, BranchMonthlyTarget, TargetWeightProfile, TargetDailyAlloc
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { TablePagination } from "@/components/ui/pagination";
 import { Moon, Sun, Heart, Flag, Coffee, PartyPopper, Star, Flower } from "lucide-react";
+import { ExportButtons } from "@/components/export-buttons";
 
 const TARGET_STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -55,6 +56,14 @@ const YEARS = Array.from({ length: 10 }, (_, i) => {
   const year = new Date().getFullYear() - 2 + i;
   return { value: year.toString(), label: year.toString() };
 });
+
+const exportColumns = [
+  { header: "الفرع", key: "branchName", width: 20 },
+  { header: "الهدف الشهري", key: "targetAmount", width: 15 },
+  { header: "الشهر", key: "yearMonth", width: 12 },
+  { header: "الحالة", key: "status", width: 12 },
+  { header: "ملاحظات", key: "notes", width: 30 },
+];
 
 export default function TargetsPlanning() {
   const { toast } = useToast();
@@ -371,6 +380,11 @@ export default function TargetsPlanning() {
     if (filterStatus !== "all" && t.status !== filterStatus) return false;
     return true;
   });
+
+  const exportData = filteredTargets.map(t => ({
+    ...t,
+    branchName: getBranchName(t.branchId),
+  }));
 
   const totalTarget = filteredTargets.reduce((sum, t) => sum + t.targetAmount, 0);
   const branchesWithTargets = new Set(targets.map(t => t.branchId));
@@ -937,6 +951,14 @@ export default function TargetsPlanning() {
                         <SelectItem value="locked">مُقفل</SelectItem>
                       </SelectContent>
                     </Select>
+                    <ExportButtons
+                      data={exportData}
+                      columns={exportColumns}
+                      fileName={`الأهداف-${selectedMonth}`}
+                      title="تقرير الأهداف الشهرية"
+                      subtitle={`الشهر: ${selectedMonthNum}/${selectedYear}`}
+                      sheetName="الأهداف"
+                    />
                   </div>
                 </div>
               </CardHeader>

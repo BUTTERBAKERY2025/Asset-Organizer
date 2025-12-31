@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExportButtons } from "@/components/export-buttons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,16 @@ const PRIORITY = {
   normal: { label: "عادي", color: "bg-gray-100 text-gray-800" },
   low: { label: "منخفض", color: "bg-blue-100 text-blue-800" },
 };
+
+const exportColumns = [
+  { header: "رقم الأمر", key: "id", width: 10 },
+  { header: "المنتج", key: "productName", width: 20 },
+  { header: "الفرع", key: "branchId", width: 15 },
+  { header: "الكمية", key: "quantity", width: 10 },
+  { header: "تاريخ الإنتاج", key: "productionDate", width: 12 },
+  { header: "الحالة", key: "status", width: 12 },
+  { header: "ملاحظات", key: "notes", width: 25 },
+];
 
 export default function ProductionPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -278,6 +289,13 @@ export default function ProductionPage() {
             />
           </div>
           <Badge variant="secondary">{orders?.length || 0} أمر</Badge>
+          <ExportButtons
+            data={filteredOrders || []}
+            columns={exportColumns}
+            fileName={`أوامر-الإنتاج-${new Date().toISOString().split('T')[0]}`}
+            title="تقرير أوامر الإنتاج"
+            sheetName="أوامر الإنتاج"
+          />
         </div>
 
         {filteredOrders && filteredOrders.length > 0 && (

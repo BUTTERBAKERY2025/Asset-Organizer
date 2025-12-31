@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ExportButtons } from "@/components/export-buttons";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,14 @@ import { Plus, Trash2, Loader2, Database, Clock, CheckCircle, XCircle, HardDrive
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { Backup } from "@shared/schema";
+
+const exportColumns = [
+  { header: "اسم النسخة", key: "name", width: 25 },
+  { header: "النوع", key: "type", width: 12 },
+  { header: "الحالة", key: "status", width: 12 },
+  { header: "تاريخ الإنشاء", key: "createdAt", width: 18 },
+  { header: "الجداول", key: "tables", width: 30 },
+];
 
 export default function BackupsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -232,9 +241,20 @@ export default function BackupsPage() {
                 <HardDrive className="w-5 h-5" />
                 قائمة النسخ الاحتياطية
               </CardTitle>
-              <Badge variant="outline" data-testid="badge-total-backups">
-                إجمالي: {backups.length} نسخة احتياطية
-              </Badge>
+              <div className="flex items-center gap-2">
+                <ExportButtons
+                  data={backups}
+                  columns={exportColumns}
+                  fileName="النسخ_الاحتياطية"
+                  title="تقرير النسخ الاحتياطية"
+                  subtitle="قائمة جميع النسخ الاحتياطية في النظام"
+                  sheetName="النسخ الاحتياطية"
+                  disabled={isLoading}
+                />
+                <Badge variant="outline" data-testid="badge-total-backups">
+                  إجمالي: {backups.length} نسخة احتياطية
+                </Badge>
+              </div>
             </div>
             <CardDescription>
               جميع النسخ الاحتياطية المحفوظة في النظام
