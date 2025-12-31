@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -336,7 +336,7 @@ export default function DisplayBarWastePage() {
     return Object.values(productMap).sort((a, b) => a.productName.localeCompare(b.productName, "ar"));
   }, [filteredReceipts, products]);
 
-  const initializeDailyWasteEntries = () => {
+  const initializeWasteEntriesFromProducts = useCallback(() => {
     const entries: DailyWasteEntry[] = aggregatedReceivedProducts.map(p => ({
       productId: p.productId,
       productName: p.productName,
@@ -350,18 +350,18 @@ export default function DisplayBarWastePage() {
       isFromReceipt: true,
     }));
     setDailyWasteEntries(entries);
-  };
+  }, [aggregatedReceivedProducts]);
 
   useEffect(() => {
     if (selectedBranch !== "all" && aggregatedReceivedProducts.length > 0) {
-      initializeDailyWasteEntries();
+      initializeWasteEntriesFromProducts();
     } else if (selectedBranch === "all") {
       setDailyWasteEntries([]);
     }
-  }, [aggregatedReceivedProducts, selectedBranch, selectedDate]);
+  }, [aggregatedReceivedProducts.length, selectedBranch, selectedDate]);
 
   useEffect(() => {
-    if (selectedBranch !== "all" && !wasteBranch) {
+    if (selectedBranch !== "all") {
       setWasteBranch(selectedBranch);
     }
   }, [selectedBranch]);
@@ -448,7 +448,7 @@ export default function DisplayBarWastePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
       toast({ title: "تم حفظ تقرير الهالك اليومي بنجاح" });
       setDailyWasteEntries([]);
-      initializeDailyWasteEntries();
+      initializeWasteEntriesFromProducts();
     },
     onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
   });
@@ -1170,7 +1170,7 @@ export default function DisplayBarWastePage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => { setDailyWasteEntries([]); initializeDailyWasteEntries(); }}
+                      onClick={() => { setDailyWasteEntries([]); initializeWasteEntriesFromProducts(); }}
                       className="gap-1"
                     >
                       <RefreshCw className="w-4 h-4" />
