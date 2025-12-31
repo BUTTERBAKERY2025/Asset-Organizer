@@ -847,9 +847,13 @@ export type InsertAccountingExport = z.infer<typeof insertAccountingExportSchema
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  sku: text("sku"), // رمز المنتج
   category: text("category").notNull(), // bread, pastry, cake, sandwich, etc.
   unit: text("unit").default("قطعة"), // قطعة، كيلو، صينية
-  basePrice: doublePrecision("base_price"), // السعر الأساسي
+  basePrice: doublePrecision("base_price"), // السعر شامل الضريبة
+  priceExclVat: doublePrecision("price_excl_vat"), // السعر بدون ضريبة
+  vatAmount: doublePrecision("vat_amount"), // قيمة الضريبة
+  vatRate: doublePrecision("vat_rate").default(0.15), // نسبة الضريبة
   isActive: text("is_active").default("true"),
   description: text("description"), // وصف المنتج
   notes: text("notes"),
