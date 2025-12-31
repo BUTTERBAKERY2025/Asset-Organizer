@@ -42,6 +42,10 @@ import TargetsDashboardPage from "@/pages/targets-dashboard";
 import IncentivesManagementPage from "@/pages/incentives-management";
 import SalesAnalyticsPage from "@/pages/sales-analytics";
 import DisplayBarWastePage from "@/pages/display-bar-waste";
+import AdvancedProductionOrdersPage from "@/pages/advanced-production-orders";
+import AdvancedProductionOrderFormPage from "@/pages/advanced-production-order-form";
+import AdvancedProductionPlannerPage from "@/pages/ai-production-planner";
+import SalesDataUploadsPage from "@/pages/sales-data-uploads";
 
 function Router() {
   return (
@@ -83,6 +87,11 @@ function Router() {
       <Route path="/incentives-management" component={IncentivesManagementPage} />
       <Route path="/sales-analytics" component={SalesAnalyticsPage} />
       <Route path="/display-bar-waste" component={DisplayBarWastePage} />
+      <Route path="/advanced-production-orders" component={AdvancedProductionOrdersPage} />
+      <Route path="/advanced-production-orders/new" component={AdvancedProductionOrderFormPage} />
+      <Route path="/advanced-production-orders/:id/edit" component={AdvancedProductionOrderFormPage} />
+      <Route path="/ai-production-planner" component={AdvancedProductionPlannerPage} />
+      <Route path="/sales-data-uploads" component={SalesDataUploadsPage} />
       <Route component={NotFound} />
     </Switch>
   );

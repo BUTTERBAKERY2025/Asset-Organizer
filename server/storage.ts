@@ -98,6 +98,18 @@ import {
   type InsertWasteReport,
   type WasteItem,
   type InsertWasteItem,
+  type AdvancedProductionOrder,
+  type InsertAdvancedProductionOrder,
+  type ProductionOrderItem,
+  type InsertProductionOrderItem,
+  type ProductionOrderSchedule,
+  type InsertProductionOrderSchedule,
+  type ProductionAiPlan,
+  type InsertProductionAiPlan,
+  type SalesDataUpload,
+  type InsertSalesDataUpload,
+  type ProductSalesAnalytics,
+  type InsertProductSalesAnalytics,
   branches,
   inventoryItems,
   auditLogs,
@@ -151,6 +163,12 @@ import {
   displayBarDailySummary,
   wasteReports,
   wasteItems,
+  advancedProductionOrders,
+  productionOrderItems,
+  productionOrderSchedules,
+  productionAiPlans,
+  salesDataUploads,
+  productSalesAnalytics,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -438,6 +456,54 @@ export interface IStorage {
   createWasteItem(data: InsertWasteItem): Promise<WasteItem>;
   updateWasteItem(id: number, data: Partial<InsertWasteItem>): Promise<WasteItem | undefined>;
   deleteWasteItem(id: number): Promise<boolean>;
+
+  // Advanced Production Orders
+  getAllAdvancedProductionOrders(): Promise<AdvancedProductionOrder[]>;
+  getAdvancedProductionOrder(id: number): Promise<AdvancedProductionOrder | undefined>;
+  getAdvancedProductionOrdersByBranch(branchId: string): Promise<AdvancedProductionOrder[]>;
+  createAdvancedProductionOrder(order: InsertAdvancedProductionOrder): Promise<AdvancedProductionOrder>;
+  updateAdvancedProductionOrder(id: number, order: Partial<InsertAdvancedProductionOrder>): Promise<AdvancedProductionOrder | undefined>;
+  deleteAdvancedProductionOrder(id: number): Promise<boolean>;
+  getAdvancedProductionOrderWithItems(id: number): Promise<{ order: AdvancedProductionOrder; items: ProductionOrderItem[] } | undefined>;
+
+  // Production Order Items
+  getProductionOrderItems(orderId: number): Promise<ProductionOrderItem[]>;
+  createProductionOrderItem(item: InsertProductionOrderItem): Promise<ProductionOrderItem>;
+  bulkCreateProductionOrderItems(items: InsertProductionOrderItem[]): Promise<ProductionOrderItem[]>;
+  updateProductionOrderItem(id: number, item: Partial<InsertProductionOrderItem>): Promise<ProductionOrderItem | undefined>;
+  deleteProductionOrderItem(id: number): Promise<boolean>;
+
+  // Production Order Schedules
+  getProductionOrderSchedules(orderId: number): Promise<ProductionOrderSchedule[]>;
+  createProductionOrderSchedule(schedule: InsertProductionOrderSchedule): Promise<ProductionOrderSchedule>;
+  bulkCreateProductionOrderSchedules(schedules: InsertProductionOrderSchedule[]): Promise<ProductionOrderSchedule[]>;
+
+  // AI Plans
+  getAllProductionAiPlans(): Promise<ProductionAiPlan[]>;
+  getProductionAiPlan(id: number): Promise<ProductionAiPlan | undefined>;
+  createProductionAiPlan(plan: InsertProductionAiPlan): Promise<ProductionAiPlan>;
+  updateProductionAiPlan(id: number, plan: Partial<InsertProductionAiPlan>): Promise<ProductionAiPlan | undefined>;
+
+  // Sales Data Uploads
+  getAllSalesDataUploads(): Promise<SalesDataUpload[]>;
+  getSalesDataUpload(id: number): Promise<SalesDataUpload | undefined>;
+  createSalesDataUpload(upload: InsertSalesDataUpload): Promise<SalesDataUpload>;
+  updateSalesDataUpload(id: number, upload: Partial<InsertSalesDataUpload>): Promise<SalesDataUpload | undefined>;
+
+  // Product Sales Analytics
+  getProductSalesAnalytics(uploadId: number): Promise<ProductSalesAnalytics[]>;
+  bulkCreateProductSalesAnalytics(analytics: InsertProductSalesAnalytics[]): Promise<ProductSalesAnalytics[]>;
+
+  // Production Order Stats
+  getAdvancedProductionOrderStats(): Promise<{
+    totalOrders: number;
+    pendingOrders: number;
+    inProgressOrders: number;
+    completedOrders: number;
+    dailyOrders: number;
+    weeklyOrders: number;
+    longTermOrders: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3882,6 +3948,177 @@ export class DatabaseStorage implements IStorage {
   async deleteWasteItem(id: number): Promise<boolean> {
     const result = await db.delete(wasteItems).where(eq(wasteItems.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Advanced Production Orders
+  async getAllAdvancedProductionOrders(): Promise<AdvancedProductionOrder[]> {
+    return await db.select().from(advancedProductionOrders).orderBy(desc(advancedProductionOrders.createdAt));
+  }
+
+  async getAdvancedProductionOrder(id: number): Promise<AdvancedProductionOrder | undefined> {
+    const [order] = await db.select().from(advancedProductionOrders).where(eq(advancedProductionOrders.id, id));
+    return order || undefined;
+  }
+
+  async getAdvancedProductionOrdersByBranch(branchId: string): Promise<AdvancedProductionOrder[]> {
+    return await db.select().from(advancedProductionOrders)
+      .where(or(
+        eq(advancedProductionOrders.sourceBranchId, branchId),
+        eq(advancedProductionOrders.targetBranchId, branchId)
+      ))
+      .orderBy(desc(advancedProductionOrders.createdAt));
+  }
+
+  async createAdvancedProductionOrder(order: InsertAdvancedProductionOrder): Promise<AdvancedProductionOrder> {
+    const [newOrder] = await db.insert(advancedProductionOrders).values(order).returning();
+    return newOrder;
+  }
+
+  async updateAdvancedProductionOrder(id: number, order: Partial<InsertAdvancedProductionOrder>): Promise<AdvancedProductionOrder | undefined> {
+    const [updated] = await db.update(advancedProductionOrders)
+      .set({ ...order, updatedAt: new Date() })
+      .where(eq(advancedProductionOrders.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteAdvancedProductionOrder(id: number): Promise<boolean> {
+    const result = await db.delete(advancedProductionOrders).where(eq(advancedProductionOrders.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getAdvancedProductionOrderWithItems(id: number): Promise<{ order: AdvancedProductionOrder; items: ProductionOrderItem[] } | undefined> {
+    const order = await this.getAdvancedProductionOrder(id);
+    if (!order) return undefined;
+    const items = await this.getProductionOrderItems(id);
+    return { order, items };
+  }
+
+  // Production Order Items
+  async getProductionOrderItems(orderId: number): Promise<ProductionOrderItem[]> {
+    return await db.select().from(productionOrderItems)
+      .where(eq(productionOrderItems.orderId, orderId))
+      .orderBy(productionOrderItems.priority);
+  }
+
+  async createProductionOrderItem(item: InsertProductionOrderItem): Promise<ProductionOrderItem> {
+    const [newItem] = await db.insert(productionOrderItems).values(item).returning();
+    return newItem;
+  }
+
+  async bulkCreateProductionOrderItems(items: InsertProductionOrderItem[]): Promise<ProductionOrderItem[]> {
+    if (items.length === 0) return [];
+    return await db.insert(productionOrderItems).values(items).returning();
+  }
+
+  async updateProductionOrderItem(id: number, item: Partial<InsertProductionOrderItem>): Promise<ProductionOrderItem | undefined> {
+    const [updated] = await db.update(productionOrderItems)
+      .set({ ...item, updatedAt: new Date() })
+      .where(eq(productionOrderItems.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProductionOrderItem(id: number): Promise<boolean> {
+    const result = await db.delete(productionOrderItems).where(eq(productionOrderItems.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Production Order Schedules
+  async getProductionOrderSchedules(orderId: number): Promise<ProductionOrderSchedule[]> {
+    return await db.select().from(productionOrderSchedules)
+      .where(eq(productionOrderSchedules.orderId, orderId))
+      .orderBy(productionOrderSchedules.scheduledDate);
+  }
+
+  async createProductionOrderSchedule(schedule: InsertProductionOrderSchedule): Promise<ProductionOrderSchedule> {
+    const [newSchedule] = await db.insert(productionOrderSchedules).values(schedule).returning();
+    return newSchedule;
+  }
+
+  async bulkCreateProductionOrderSchedules(schedules: InsertProductionOrderSchedule[]): Promise<ProductionOrderSchedule[]> {
+    if (schedules.length === 0) return [];
+    return await db.insert(productionOrderSchedules).values(schedules).returning();
+  }
+
+  // AI Plans
+  async getAllProductionAiPlans(): Promise<ProductionAiPlan[]> {
+    return await db.select().from(productionAiPlans).orderBy(desc(productionAiPlans.createdAt));
+  }
+
+  async getProductionAiPlan(id: number): Promise<ProductionAiPlan | undefined> {
+    const [plan] = await db.select().from(productionAiPlans).where(eq(productionAiPlans.id, id));
+    return plan || undefined;
+  }
+
+  async createProductionAiPlan(plan: InsertProductionAiPlan): Promise<ProductionAiPlan> {
+    const [newPlan] = await db.insert(productionAiPlans).values(plan).returning();
+    return newPlan;
+  }
+
+  async updateProductionAiPlan(id: number, plan: Partial<InsertProductionAiPlan>): Promise<ProductionAiPlan | undefined> {
+    const [updated] = await db.update(productionAiPlans)
+      .set(plan)
+      .where(eq(productionAiPlans.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Sales Data Uploads
+  async getAllSalesDataUploads(): Promise<SalesDataUpload[]> {
+    return await db.select().from(salesDataUploads).orderBy(desc(salesDataUploads.createdAt));
+  }
+
+  async getSalesDataUpload(id: number): Promise<SalesDataUpload | undefined> {
+    const [upload] = await db.select().from(salesDataUploads).where(eq(salesDataUploads.id, id));
+    return upload || undefined;
+  }
+
+  async createSalesDataUpload(upload: InsertSalesDataUpload): Promise<SalesDataUpload> {
+    const [newUpload] = await db.insert(salesDataUploads).values(upload).returning();
+    return newUpload;
+  }
+
+  async updateSalesDataUpload(id: number, upload: Partial<InsertSalesDataUpload>): Promise<SalesDataUpload | undefined> {
+    const [updated] = await db.update(salesDataUploads)
+      .set(upload)
+      .where(eq(salesDataUploads.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Product Sales Analytics
+  async getProductSalesAnalytics(uploadId: number): Promise<ProductSalesAnalytics[]> {
+    return await db.select().from(productSalesAnalytics)
+      .where(eq(productSalesAnalytics.uploadId, uploadId));
+  }
+
+  async bulkCreateProductSalesAnalytics(analytics: InsertProductSalesAnalytics[]): Promise<ProductSalesAnalytics[]> {
+    if (analytics.length === 0) return [];
+    return await db.insert(productSalesAnalytics).values(analytics).returning();
+  }
+
+  // Production Order Stats
+  async getAdvancedProductionOrderStats(): Promise<{
+    totalOrders: number;
+    pendingOrders: number;
+    inProgressOrders: number;
+    completedOrders: number;
+    dailyOrders: number;
+    weeklyOrders: number;
+    longTermOrders: number;
+  }> {
+    const allOrders = await db.select().from(advancedProductionOrders);
+    
+    return {
+      totalOrders: allOrders.length,
+      pendingOrders: allOrders.filter(o => o.status === 'pending' || o.status === 'draft').length,
+      inProgressOrders: allOrders.filter(o => o.status === 'in_progress' || o.status === 'approved').length,
+      completedOrders: allOrders.filter(o => o.status === 'completed').length,
+      dailyOrders: allOrders.filter(o => o.orderType === 'daily').length,
+      weeklyOrders: allOrders.filter(o => o.orderType === 'weekly').length,
+      longTermOrders: allOrders.filter(o => o.orderType === 'long_term').length,
+    };
   }
 }
 

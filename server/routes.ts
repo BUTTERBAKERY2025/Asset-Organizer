@@ -4345,5 +4345,492 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Advanced Production Orders ====================
+  
+  // Get all advanced production orders
+  app.get("/api/advanced-production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const { branchId, status, orderType } = req.query;
+      let orders = await storage.getAllAdvancedProductionOrders();
+      
+      if (branchId && typeof branchId === 'string') {
+        orders = orders.filter(o => o.sourceBranchId === branchId || o.targetBranchId === branchId);
+      }
+      if (status && typeof status === 'string') {
+        orders = orders.filter(o => o.status === status);
+      }
+      if (orderType && typeof orderType === 'string') {
+        orders = orders.filter(o => o.orderType === orderType);
+      }
+      
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching production orders:", error);
+      res.status(500).json({ error: "Failed to fetch production orders" });
+    }
+  });
+
+  // Get production order stats
+  app.get("/api/advanced-production-orders/stats", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const stats = await storage.getAdvancedProductionOrderStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching production order stats:", error);
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  // Get single production order with items
+  app.get("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid order ID" });
+      }
+      
+      const result = await storage.getAdvancedProductionOrderWithItems(id);
+      if (!result) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      
+      const schedules = await storage.getProductionOrderSchedules(id);
+      res.json({ ...result, schedules });
+    } catch (error) {
+      console.error("Error fetching production order:", error);
+      res.status(500).json({ error: "Failed to fetch production order" });
+    }
+  });
+
+  // Create production order
+  app.post("/api/advanced-production-orders", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+    try {
+      const { items, schedules, ...orderData } = req.body;
+      
+      // Generate order number
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      orderData.orderNumber = `PO-${timestamp}-${random}`;
+      orderData.createdBy = (req as any).user?.id;
+      
+      const order = await storage.createAdvancedProductionOrder(orderData);
+      
+      // Create items if provided
+      if (items && Array.isArray(items) && items.length > 0) {
+        const itemsWithOrderId = items.map((item: any) => ({
+          ...item,
+          orderId: order.id
+        }));
+        await storage.bulkCreateProductionOrderItems(itemsWithOrderId);
+        
+        // Update order totals
+        await storage.updateAdvancedProductionOrder(order.id, {
+          totalItems: items.length,
+          estimatedCost: items.reduce((sum: number, i: any) => sum + (i.totalValue || 0), 0)
+        });
+      }
+      
+      // Create schedules if provided
+      if (schedules && Array.isArray(schedules) && schedules.length > 0) {
+        const schedulesWithOrderId = schedules.map((s: any) => ({
+          ...s,
+          orderId: order.id
+        }));
+        await storage.bulkCreateProductionOrderSchedules(schedulesWithOrderId);
+      }
+      
+      const result = await storage.getAdvancedProductionOrderWithItems(order.id);
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error creating production order:", error);
+      res.status(500).json({ error: "Failed to create production order" });
+    }
+  });
+
+  // Update production order
+  app.patch("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid order ID" });
+      }
+      
+      const { items, ...updateData } = req.body;
+      
+      // Handle approval
+      if (updateData.status === 'approved') {
+        updateData.approvedBy = (req as any).user?.id;
+        updateData.approvedAt = new Date();
+      }
+      
+      const order = await storage.updateAdvancedProductionOrder(id, updateData);
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      
+      const result = await storage.getAdvancedProductionOrderWithItems(id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error updating production order:", error);
+      res.status(500).json({ error: "Failed to update production order" });
+    }
+  });
+
+  // Delete production order
+  app.delete("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid order ID" });
+      }
+      
+      const success = await storage.deleteAdvancedProductionOrder(id);
+      if (!success) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting production order:", error);
+      res.status(500).json({ error: "Failed to delete production order" });
+    }
+  });
+
+  // ==================== Production Order Items ====================
+  
+  // Add item to order
+  app.post("/api/advanced-production-orders/:orderId/items", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.orderId, 10);
+      if (isNaN(orderId)) {
+        return res.status(400).json({ error: "Invalid order ID" });
+      }
+      
+      const item = await storage.createProductionOrderItem({
+        ...req.body,
+        orderId
+      });
+      
+      // Update order totals
+      const allItems = await storage.getProductionOrderItems(orderId);
+      await storage.updateAdvancedProductionOrder(orderId, {
+        totalItems: allItems.length,
+        estimatedCost: allItems.reduce((sum, i) => sum + (i.totalValue || 0), 0)
+      });
+      
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error adding order item:", error);
+      res.status(500).json({ error: "Failed to add item" });
+    }
+  });
+
+  // Update order item
+  app.patch("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+      }
+      
+      const item = await storage.updateProductionOrderItem(id, req.body);
+      if (!item) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      // Update order completion percentage
+      const allItems = await storage.getProductionOrderItems(item.orderId);
+      const completedItems = allItems.filter(i => i.status === 'completed').length;
+      const completionPercent = allItems.length > 0 ? (completedItems / allItems.length) * 100 : 0;
+      
+      await storage.updateAdvancedProductionOrder(item.orderId, {
+        completedItems,
+        completionPercent,
+        actualCost: allItems.reduce((sum, i) => sum + ((i.producedQuantity || 0) * (i.unitPrice || 0)), 0)
+      });
+      
+      res.json(item);
+    } catch (error) {
+      console.error("Error updating order item:", error);
+      res.status(500).json({ error: "Failed to update item" });
+    }
+  });
+
+  // Delete order item
+  app.delete("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+      }
+      
+      const success = await storage.deleteProductionOrderItem(id);
+      if (!success) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting order item:", error);
+      res.status(500).json({ error: "Failed to delete item" });
+    }
+  });
+
+  // ==================== AI Production Plans ====================
+  
+  // Get all AI plans
+  app.get("/api/production-ai-plans", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const plans = await storage.getAllProductionAiPlans();
+      res.json(plans);
+    } catch (error) {
+      console.error("Error fetching AI plans:", error);
+      res.status(500).json({ error: "Failed to fetch AI plans" });
+    }
+  });
+
+  // Generate AI production plan
+  app.post("/api/production-ai-plans/generate", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+    try {
+      const { branchId, targetSalesValue, planDate, uploadId } = req.body;
+      
+      // Get products and their sales analytics if available
+      const products = await storage.getAllProducts();
+      let productAnalytics: any[] = [];
+      
+      if (uploadId) {
+        productAnalytics = await storage.getProductSalesAnalytics(parseInt(uploadId, 10));
+      }
+      
+      // Simple AI algorithm: distribute target sales across products based on sales velocity
+      const activeProducts = products.filter(p => p.isActive);
+      const totalVelocity = productAnalytics.length > 0 
+        ? productAnalytics.reduce((sum, a) => sum + (a.salesVelocity || 1), 0)
+        : activeProducts.length;
+      
+      const recommendedProducts = activeProducts.slice(0, 50).map(product => {
+        const analytics = productAnalytics.find(a => a.productId === product.id);
+        const velocity = analytics?.salesVelocity || 1;
+        const share = velocity / totalVelocity;
+        const allocatedValue = targetSalesValue * share;
+        const productPrice = product.basePrice || 10;
+        const quantity = Math.ceil(allocatedValue / productPrice);
+        
+        return {
+          productId: product.id,
+          productName: product.name,
+          category: product.category,
+          quantity,
+          estimatedValue: quantity * (product.basePrice || 0),
+          salesVelocity: velocity,
+          priority: analytics ? 'high' : 'normal'
+        };
+      }).filter(p => p.quantity > 0);
+      
+      const totalEstimatedValue = recommendedProducts.reduce((sum, p) => sum + p.estimatedValue, 0);
+      const estimatedCost = totalEstimatedValue * 0.4; // Assume 40% cost
+      
+      const plan = await storage.createProductionAiPlan({
+        branchId,
+        planName: `خطة إنتاج ${planDate}`,
+        targetSalesValue,
+        planDate,
+        datasetId: uploadId ? parseInt(uploadId, 10) : null,
+        algorithmVersion: 'v1.0',
+        confidenceScore: productAnalytics.length > 0 ? 0.85 : 0.6,
+        recommendedProducts,
+        totalEstimatedValue,
+        totalEstimatedCost: estimatedCost,
+        profitMargin: ((totalEstimatedValue - estimatedCost) / totalEstimatedValue) * 100,
+        status: 'generated',
+        createdBy: (req as any).user?.id
+      });
+      
+      res.status(201).json(plan);
+    } catch (error) {
+      console.error("Error generating AI plan:", error);
+      res.status(500).json({ error: "Failed to generate AI plan" });
+    }
+  });
+
+  // Apply AI plan to create production order
+  app.post("/api/production-ai-plans/:id/apply", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+    try {
+      const planId = parseInt(req.params.id, 10);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      
+      const plan = await storage.getProductionAiPlan(planId);
+      if (!plan) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      
+      // Create production order from plan
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+      
+      const order = await storage.createAdvancedProductionOrder({
+        orderNumber: `PO-AI-${timestamp}-${random}`,
+        orderType: 'daily',
+        sourceBranchId: plan.branchId,
+        targetBranchId: plan.branchId,
+        title: plan.planName,
+        description: `تم إنشاؤه بواسطة الذكاء الاصطناعي - مستوى الثقة: ${(plan.confidenceScore! * 100).toFixed(0)}%`,
+        status: 'pending',
+        priority: 'normal',
+        startDate: plan.planDate,
+        endDate: plan.planDate,
+        targetSalesValue: plan.targetSalesValue,
+        estimatedCost: plan.totalEstimatedCost,
+        isAiGenerated: true,
+        aiPlanId: planId,
+        createdBy: (req as any).user?.id
+      });
+      
+      // Create order items from recommended products
+      const recommendedProducts = plan.recommendedProducts as any[];
+      if (recommendedProducts && recommendedProducts.length > 0) {
+        const items = recommendedProducts.map((p: any) => ({
+          orderId: order.id,
+          productId: p.productId,
+          productName: p.productName,
+          productCategory: p.category,
+          targetQuantity: p.quantity,
+          unitPrice: p.estimatedValue / p.quantity,
+          totalValue: p.estimatedValue,
+          salesVelocity: p.salesVelocity,
+          priority: p.priority === 'high' ? 1 : 0,
+          status: 'pending'
+        }));
+        
+        await storage.bulkCreateProductionOrderItems(items);
+        await storage.updateAdvancedProductionOrder(order.id, { totalItems: items.length });
+      }
+      
+      // Update plan status
+      await storage.updateProductionAiPlan(planId, {
+        status: 'applied',
+        appliedToOrderId: order.id,
+        reviewedBy: (req as any).user?.id
+      });
+      
+      const result = await storage.getAdvancedProductionOrderWithItems(order.id);
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error applying AI plan:", error);
+      res.status(500).json({ error: "Failed to apply AI plan" });
+    }
+  });
+
+  // ==================== Sales Data Uploads ====================
+  
+  // Get all uploads
+  app.get("/api/sales-data-uploads", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const uploads = await storage.getAllSalesDataUploads();
+      res.json(uploads);
+    } catch (error) {
+      console.error("Error fetching uploads:", error);
+      res.status(500).json({ error: "Failed to fetch uploads" });
+    }
+  });
+
+  // Upload sales data file
+  app.post("/api/sales-data-uploads", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+    try {
+      const { branchId, fileName, fileData, periodStart, periodEnd } = req.body;
+      
+      // Create upload record
+      const upload = await storage.createSalesDataUpload({
+        branchId,
+        fileName,
+        fileType: 'excel',
+        periodStart,
+        periodEnd,
+        status: 'processing',
+        uploadedBy: (req as any).user?.id
+      });
+      
+      // Parse and analyze the data (simplified - in production would use xlsx library)
+      try {
+        // Simulate parsing Excel data
+        const parsedData = JSON.parse(fileData || '[]');
+        const productVelocity: Record<string, number> = {};
+        let totalSales = 0;
+        const uniqueProducts = new Set<string>();
+        
+        if (Array.isArray(parsedData)) {
+          parsedData.forEach((row: any) => {
+            const productName = row.product || row.productName || row.منتج;
+            const quantity = parseInt(row.quantity || row.كمية || 0);
+            const revenue = parseFloat(row.revenue || row.إيرادات || 0);
+            
+            if (productName) {
+              uniqueProducts.add(productName);
+              productVelocity[productName] = (productVelocity[productName] || 0) + quantity;
+              totalSales += revenue;
+            }
+          });
+        }
+        
+        await storage.updateSalesDataUpload(upload.id, {
+          status: 'completed',
+          totalRecords: parsedData.length,
+          totalSalesValue: totalSales,
+          uniqueProducts: uniqueProducts.size,
+          parsedData,
+          productVelocity
+        });
+        
+        // Create analytics records
+        const products = await storage.getAllProducts();
+        const analyticsRecords = Object.entries(productVelocity).map(([name, velocity]) => {
+          const product = products.find(p => p.name === name);
+          return {
+            uploadId: upload.id,
+            productId: product?.id || null,
+            productName: name,
+            productCategory: product?.category,
+            totalQuantitySold: velocity,
+            salesVelocity: velocity
+          };
+        });
+        
+        if (analyticsRecords.length > 0) {
+          await storage.bulkCreateProductSalesAnalytics(analyticsRecords);
+        }
+        
+      } catch (parseError) {
+        await storage.updateSalesDataUpload(upload.id, {
+          status: 'failed',
+          errorMessage: 'Failed to parse file data'
+        });
+      }
+      
+      const updatedUpload = await storage.getSalesDataUpload(upload.id);
+      res.status(201).json(updatedUpload);
+    } catch (error) {
+      console.error("Error uploading sales data:", error);
+      res.status(500).json({ error: "Failed to upload sales data" });
+    }
+  });
+
+  // Get upload analytics
+  app.get("/api/sales-data-uploads/:id/analytics", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid upload ID" });
+      }
+      
+      const analytics = await storage.getProductSalesAnalytics(id);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
   return httpServer;
 }

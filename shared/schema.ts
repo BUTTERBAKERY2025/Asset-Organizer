@@ -1717,3 +1717,224 @@ export const DISPLAY_BAR_CATEGORY_LABELS: Record<DisplayBarCategory, string> = {
   breakfast: "فطور",
   sandwich: "ساندويتش",
 };
+
+// ==================== Advanced Production Orders Module ====================
+
+// Production Order Types
+export const PRODUCTION_ORDER_TYPES = ["daily", "weekly", "long_term"] as const;
+export type ProductionOrderType = typeof PRODUCTION_ORDER_TYPES[number];
+
+export const PRODUCTION_ORDER_TYPE_LABELS: Record<ProductionOrderType, string> = {
+  daily: "يومي (فرش)",
+  weekly: "أسبوعي",
+  long_term: "طويل الأمد",
+};
+
+// Production Order Priorities
+export const PRODUCTION_PRIORITIES = ["urgent", "high", "normal", "low"] as const;
+export type ProductionPriority = typeof PRODUCTION_PRIORITIES[number];
+
+export const PRODUCTION_PRIORITY_LABELS: Record<ProductionPriority, string> = {
+  urgent: "عاجل جداً",
+  high: "عالي",
+  normal: "عادي",
+  low: "منخفض",
+};
+
+// Production Order Statuses
+export const PRODUCTION_ORDER_STATUSES = ["draft", "pending", "approved", "in_progress", "completed", "cancelled"] as const;
+export type ProductionOrderStatus = typeof PRODUCTION_ORDER_STATUSES[number];
+
+export const PRODUCTION_ORDER_STATUS_LABELS: Record<ProductionOrderStatus, string> = {
+  draft: "مسودة",
+  pending: "قيد الانتظار",
+  approved: "معتمد",
+  in_progress: "قيد التنفيذ",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+};
+
+// Advanced Production Orders - أوامر الإنتاج المتقدمة
+export const advancedProductionOrders = pgTable("advanced_production_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").unique().notNull(),
+  orderType: text("order_type").default("daily").notNull(), // daily, weekly, long_term
+  sourceBranchId: varchar("source_branch_id").notNull().references(() => branches.id), // الفرع المُرسِل
+  targetBranchId: varchar("target_branch_id").notNull().references(() => branches.id), // الفرع المُستهدف
+  targetDepartment: text("target_department"), // القسم المستهدف (مخبز، بسترى، ساندويتش، إلخ)
+  title: text("title").notNull(), // عنوان الأمر
+  description: text("description"),
+  status: text("status").default("draft").notNull(),
+  priority: text("priority").default("normal").notNull(),
+  startDate: text("start_date").notNull(), // تاريخ البداية
+  endDate: text("end_date").notNull(), // تاريخ النهاية (نفس تاريخ البداية للأوامر اليومية)
+  targetSalesValue: real("target_sales_value"), // قيمة المبيعات المستهدفة (للذكاء الاصطناعي)
+  estimatedCost: real("estimated_cost").default(0),
+  actualCost: real("actual_cost").default(0),
+  totalItems: integer("total_items").default(0),
+  completedItems: integer("completed_items").default(0),
+  completionPercent: real("completion_percent").default(0),
+  isAiGenerated: boolean("is_ai_generated").default(false),
+  aiPlanId: integer("ai_plan_id"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAdvancedProductionOrderSchema = createInsertSchema(advancedProductionOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  approvedAt: true,
+});
+
+export type AdvancedProductionOrder = typeof advancedProductionOrders.$inferSelect;
+export type InsertAdvancedProductionOrder = z.infer<typeof insertAdvancedProductionOrderSchema>;
+
+// Production Order Items - عناصر أمر الإنتاج
+export const productionOrderItems = pgTable("production_order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  targetQuantity: integer("target_quantity").notNull(),
+  producedQuantity: integer("produced_quantity").default(0),
+  wastedQuantity: integer("wasted_quantity").default(0),
+  unitPrice: real("unit_price").default(0), // سعر الوحدة
+  totalValue: real("total_value").default(0), // القيمة الإجمالية
+  scheduledDate: text("scheduled_date"), // تاريخ الإنتاج المجدول
+  scheduledShift: text("scheduled_shift"), // الوردية المجدولة (morning, evening, night)
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed, cancelled
+  assignedTo: text("assigned_to"), // الموظف المسؤول
+  priority: integer("priority").default(0), // ترتيب الأولوية
+  salesVelocity: real("sales_velocity"), // سرعة البيع (للذكاء الاصطناعي)
+  notes: text("notes"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProductionOrderItemSchema = createInsertSchema(productionOrderItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type ProductionOrderItem = typeof productionOrderItems.$inferSelect;
+export type InsertProductionOrderItem = z.infer<typeof insertProductionOrderItemSchema>;
+
+// Production Order Schedule - جدولة أوامر الإنتاج (للأوامر طويلة الأمد)
+export const productionOrderSchedules = pgTable("production_order_schedules", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
+  scheduledDate: text("scheduled_date").notNull(),
+  dayOfWeek: text("day_of_week"), // saturday, sunday, monday, etc.
+  shift: text("shift"), // morning, evening, night
+  targetQuantity: integer("target_quantity").default(0),
+  completedQuantity: integer("completed_quantity").default(0),
+  status: text("status").default("pending").notNull(),
+  assignedDepartment: text("assigned_department"),
+  assignedEmployees: text("assigned_employees"), // JSON array of employee names
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertProductionOrderScheduleSchema = createInsertSchema(productionOrderSchedules).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductionOrderSchedule = typeof productionOrderSchedules.$inferSelect;
+export type InsertProductionOrderSchedule = z.infer<typeof insertProductionOrderScheduleSchema>;
+
+// Production AI Plans - خطط الذكاء الاصطناعي
+export const productionAiPlans = pgTable("production_ai_plans", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  planName: text("plan_name").notNull(),
+  targetSalesValue: real("target_sales_value").notNull(), // قيمة المبيعات المستهدفة
+  planDate: text("plan_date").notNull(),
+  datasetId: integer("dataset_id"), // مرجع لمجموعة البيانات المستخدمة
+  algorithmVersion: text("algorithm_version").default("v1.0"),
+  confidenceScore: real("confidence_score").default(0), // نسبة الثقة 0-100
+  recommendedProducts: jsonb("recommended_products"), // JSON array of product recommendations
+  totalEstimatedValue: real("total_estimated_value").default(0),
+  totalEstimatedCost: real("total_estimated_cost").default(0),
+  profitMargin: real("profit_margin").default(0),
+  status: text("status").default("generated").notNull(), // generated, reviewed, approved, applied, rejected
+  appliedToOrderId: integer("applied_to_order_id"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertProductionAiPlanSchema = createInsertSchema(productionAiPlans).omit({
+  id: true,
+  createdAt: true,
+  reviewedAt: true,
+});
+
+export type ProductionAiPlan = typeof productionAiPlans.$inferSelect;
+export type InsertProductionAiPlan = z.infer<typeof insertProductionAiPlanSchema>;
+
+// Sales Data Uploads - رفع بيانات المبيعات
+export const salesDataUploads = pgTable("sales_data_uploads", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").default("excel"), // excel, csv
+  fileSize: integer("file_size"),
+  periodStart: text("period_start"), // بداية فترة البيانات
+  periodEnd: text("period_end"), // نهاية فترة البيانات
+  totalRecords: integer("total_records").default(0),
+  totalSalesValue: real("total_sales_value").default(0),
+  uniqueProducts: integer("unique_products").default(0),
+  parsedData: jsonb("parsed_data"), // البيانات المحللة
+  productVelocity: jsonb("product_velocity"), // سرعة بيع المنتجات
+  status: text("status").default("pending").notNull(), // pending, processing, completed, failed
+  errorMessage: text("error_message"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSalesDataUploadSchema = createInsertSchema(salesDataUploads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SalesDataUpload = typeof salesDataUploads.$inferSelect;
+export type InsertSalesDataUpload = z.infer<typeof insertSalesDataUploadSchema>;
+
+// Product Sales Analytics - تحليلات مبيعات المنتجات (من البيانات المرفوعة)
+export const productSalesAnalytics = pgTable("product_sales_analytics", {
+  id: serial("id").primaryKey(),
+  uploadId: integer("upload_id").notNull().references(() => salesDataUploads.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  totalQuantitySold: integer("total_quantity_sold").default(0),
+  totalRevenue: real("total_revenue").default(0),
+  averageDailySales: real("average_daily_sales").default(0),
+  salesVelocity: real("sales_velocity").default(0), // سرعة البيع (نسبة)
+  profitMargin: real("profit_margin").default(0),
+  peakHours: text("peak_hours"), // ساعات الذروة (JSON)
+  weekdayPattern: text("weekday_pattern"), // نمط أيام الأسبوع (JSON)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertProductSalesAnalyticsSchema = createInsertSchema(productSalesAnalytics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductSalesAnalytics = typeof productSalesAnalytics.$inferSelect;
+export type InsertProductSalesAnalytics = z.infer<typeof insertProductSalesAnalyticsSchema>;
