@@ -11,6 +11,7 @@ interface ExportButtonsProps {
   subtitle?: string;
   sheetName?: string;
   disabled?: boolean;
+  headerInfo?: { label: string; value: string }[];
 }
 
 export function ExportButtons({
@@ -21,9 +22,10 @@ export function ExportButtons({
   subtitle,
   sheetName = "البيانات",
   disabled = false,
+  headerInfo,
 }: ExportButtonsProps) {
   const handleExcelExport = () => {
-    exportToExcel(data, columns, fileName, sheetName);
+    exportToExcel(data, columns, fileName, sheetName, headerInfo);
   };
 
   const handleCSVExport = () => {
@@ -31,7 +33,7 @@ export function ExportButtons({
   };
 
   const handlePrint = () => {
-    printAsPDF(data, columns, title, subtitle);
+    printAsPDF(data, columns, title, subtitle, headerInfo);
   };
 
   return (

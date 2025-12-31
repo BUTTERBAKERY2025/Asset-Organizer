@@ -279,8 +279,10 @@ export default function DisplayBarWastePage() {
           lastTime: r.receiptTime,
         };
       }
+      const itemIndex = orderMap[key].items.length + 1;
       orderMap[key].items.push({
         ...r,
+        index: itemIndex,
         productName: getProductName(r.productId),
       });
       orderMap[key].totalQuantity += r.quantity || 0;
@@ -852,14 +854,25 @@ export default function DisplayBarWastePage() {
                     <ExportButtons
                       data={selectedReceiptOrder?.items || []}
                       columns={[
+                        { header: "#", key: "index", width: 5 },
                         { header: "الصنف", key: "productName", width: 30 },
                         { header: "الكمية", key: "quantity", width: 10 },
                         { header: "الوقت", key: "receiptTime", width: 10 },
                         { header: "ملاحظات", key: "notes", width: 25 },
                       ]}
                       fileName={`سند_استلام_${selectedReceiptOrder?.orderNumber || ''}`}
-                      title="سند استلام إنتاج"
-                      subtitle={`الفرع: ${selectedReceiptOrder?.branchName || ''} - التاريخ: ${selectedReceiptOrder?.receiptDate || ''}`}
+                      title="سند استلام إنتاج للعرض"
+                      subtitle={`فرع ${selectedReceiptOrder?.branchName || ''}`}
+                      headerInfo={selectedReceiptOrder ? [
+                        { label: "رقم السند", value: `#${selectedReceiptOrder.orderNumber}` },
+                        { label: "الفرع", value: selectedReceiptOrder.branchName },
+                        { label: "المستلم", value: selectedReceiptOrder.createdByName },
+                        { label: "التاريخ", value: selectedReceiptOrder.receiptDate },
+                        { label: "وقت البداية", value: selectedReceiptOrder.firstTime },
+                        { label: "وقت النهاية", value: selectedReceiptOrder.lastTime },
+                        { label: "عدد الأصناف", value: `${selectedReceiptOrder.items.length} صنف` },
+                        { label: "إجمالي الوحدات", value: `${selectedReceiptOrder.totalQuantity} وحدة` },
+                      ] : []}
                     />
                   </div>
                 </DialogTitle>

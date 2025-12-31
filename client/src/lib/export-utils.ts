@@ -10,8 +10,21 @@ export function exportToExcel(
   data: any[],
   columns: ExportColumn[],
   fileName: string,
-  sheetName: string = "البيانات"
+  sheetName: string = "البيانات",
+  headerInfo?: { label: string; value: string }[]
 ) {
+  const headerRows: any[][] = [];
+  
+  if (headerInfo?.length) {
+    headerRows.push([fileName]);
+    headerRows.push([]);
+    headerInfo.forEach(h => {
+      headerRows.push([h.label, h.value]);
+    });
+    headerRows.push([]);
+    headerRows.push(columns.map(c => c.header));
+  }
+
   const exportData = data.map((item) => {
     const row: Record<string, any> = {};
     columns.forEach((col) => {
@@ -25,7 +38,15 @@ export function exportToExcel(
     return row;
   });
 
-  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  let worksheet: XLSX.WorkSheet;
+  
+  if (headerInfo?.length) {
+    const dataRows = exportData.map(item => columns.map(col => item[col.header]));
+    const allRows = [...headerRows, ...dataRows];
+    worksheet = XLSX.utils.aoa_to_sheet(allRows);
+  } else {
+    worksheet = XLSX.utils.json_to_sheet(exportData);
+  }
   
   const colWidths = columns.map((col) => ({ wch: col.width || 15 }));
   worksheet["!cols"] = colWidths;
@@ -76,14 +97,9 @@ export function printAsPDF(
   data: any[],
   columns: ExportColumn[],
   title: string,
-  subtitle?: string
+  subtitle?: string,
+  headerInfo?: { label: string; value: string }[]
 ) {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    alert("يرجى السماح بالنوافذ المنبثقة لطباعة التقرير");
-    return;
-  }
-
   const tableRows = data
     .map((item, idx) => {
       const cells = columns
@@ -106,6 +122,12 @@ export function printAsPDF(
         `<th style="border: 1px solid #ddd; padding: 10px; background-color: #f5a623; color: white; text-align: right;">${col.header}</th>`
     )
     .join("");
+
+  const headerInfoHtml = headerInfo?.length ? `
+    <div class="info-grid">
+      ${headerInfo.map(h => `<div class="info-item"><span class="info-label">${h.label}:</span> <span class="info-value">${h.value}</span></div>`).join("")}
+    </div>
+  ` : "";
 
   const html = `
     <!DOCTYPE html>
@@ -133,6 +155,26 @@ export function printAsPDF(
         .header p {
           color: #666;
           margin: 0;
+        }
+        .info-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 10px;
+          background: #f9f9f9;
+          padding: 15px;
+          border-radius: 8px;
+          margin-bottom: 15px;
+          border: 1px solid #eee;
+        }
+        .info-item {
+          font-size: 13px;
+        }
+        .info-label {
+          color: #666;
+          font-weight: 600;
+        }
+        .info-value {
+          color: #333;
         }
         .meta {
           display: flex;
@@ -164,8 +206,9 @@ export function printAsPDF(
         <h1>${title}</h1>
         ${subtitle ? `<p>${subtitle}</p>` : ""}
       </div>
+      ${headerInfoHtml}
       <div class="meta">
-        <span>تاريخ الطباعة: ${new Date().toLocaleDateString("ar-SA")}</span>
+        <span>تاريخ الطباعة: ${new Date().toLocaleDateString("en-GB")}</span>
         <span>إجمالي السجلات: ${data.length}</span>
       </div>
       <table>
@@ -183,12 +226,29 @@ export function printAsPDF(
     </html>
   `;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
-  
-  printWindow.onload = () => {
-    printWindow.print();
-  };
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "none";
+  iframe.style.left = "-9999px";
+  document.body.appendChild(iframe);
+
+  const iframeDoc = iframe.contentWindow?.document;
+  if (iframeDoc) {
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1000);
+      }, 250);
+    };
+  }
 }
 
 export function formatCurrencyForExport(value: number | null | undefined): string {
