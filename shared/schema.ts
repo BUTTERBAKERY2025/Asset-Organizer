@@ -1593,3 +1593,123 @@ export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
   evening: "مسائي", 
   night: "ليلي",
 };
+
+// Display Bar Receipts - استلام الإنتاج لبار العرض
+export const displayBarReceipts = pgTable("display_bar_receipts", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  receiptDate: text("receipt_date").notNull(), // YYYY-MM-DD
+  receiptTime: text("receipt_time").notNull(), // HH:MM
+  shiftId: integer("shift_id").references(() => shifts.id),
+  quantity: integer("quantity").notNull(),
+  receivedBy: varchar("received_by").references(() => users.id),
+  productionBatch: text("production_batch"), // رقم دفعة الإنتاج
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDisplayBarReceiptSchema = createInsertSchema(displayBarReceipts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DisplayBarReceipt = typeof displayBarReceipts.$inferSelect;
+export type InsertDisplayBarReceipt = z.infer<typeof insertDisplayBarReceiptSchema>;
+
+// Display Bar Daily Summary - ملخص بار العرض اليومي
+export const displayBarDailySummary = pgTable("display_bar_daily_summary", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  summaryDate: text("summary_date").notNull(), // YYYY-MM-DD
+  openingQuantity: integer("opening_quantity").default(0).notNull(), // الكمية الافتتاحية
+  receivedQuantity: integer("received_quantity").default(0).notNull(), // الكمية المستلمة
+  soldQuantity: integer("sold_quantity").default(0).notNull(), // الكمية المباعة
+  wastedQuantity: integer("wasted_quantity").default(0).notNull(), // الكمية التالفة
+  closingQuantity: integer("closing_quantity").default(0).notNull(), // الكمية الختامية
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDisplayBarDailySummarySchema = createInsertSchema(displayBarDailySummary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DisplayBarDailySummary = typeof displayBarDailySummary.$inferSelect;
+export type InsertDisplayBarDailySummary = z.infer<typeof insertDisplayBarDailySummarySchema>;
+
+// Waste Reports - تقارير الهالك
+export const wasteReports = pgTable("waste_reports", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  reportDate: text("report_date").notNull(), // YYYY-MM-DD
+  shiftId: integer("shift_id").references(() => shifts.id),
+  reportedBy: varchar("reported_by").references(() => users.id),
+  reporterName: text("reporter_name"),
+  totalItems: integer("total_items").default(0).notNull(),
+  totalValue: real("total_value").default(0),
+  status: text("status").default("draft").notNull(), // draft, submitted, approved, rejected
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWasteReportSchema = createInsertSchema(wasteReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type WasteReport = typeof wasteReports.$inferSelect;
+export type InsertWasteReport = z.infer<typeof insertWasteReportSchema>;
+
+// Waste Items - تفاصيل الهالك
+export const wasteItems = pgTable("waste_items", {
+  id: serial("id").primaryKey(),
+  wasteReportId: integer("waste_report_id").notNull().references(() => wasteReports.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  quantity: integer("quantity").notNull(),
+  unitPrice: real("unit_price").default(0),
+  totalValue: real("total_value").default(0),
+  wasteReason: text("waste_reason").notNull(), // expired, damaged, quality_issue, other
+  reasonDetails: text("reason_details"),
+  imageUrl: text("image_url"), // صورة المنتج التالف
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWasteItemSchema = createInsertSchema(wasteItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WasteItem = typeof wasteItems.$inferSelect;
+export type InsertWasteItem = z.infer<typeof insertWasteItemSchema>;
+
+// Waste Reasons Labels
+export const WASTE_REASONS = ["expired", "damaged", "quality_issue", "overproduction", "other"] as const;
+export type WasteReason = typeof WASTE_REASONS[number];
+
+export const WASTE_REASON_LABELS: Record<WasteReason, string> = {
+  expired: "منتهي الصلاحية",
+  damaged: "تالف",
+  quality_issue: "مشكلة جودة",
+  overproduction: "إنتاج زائد",
+  other: "أخرى",
+};
+
+// Product Categories for Display Bar
+export const DISPLAY_BAR_CATEGORIES = ["bakery", "dessert", "breakfast", "sandwich"] as const;
+export type DisplayBarCategory = typeof DISPLAY_BAR_CATEGORIES[number];
+
+export const DISPLAY_BAR_CATEGORY_LABELS: Record<DisplayBarCategory, string> = {
+  bakery: "مخبوزات",
+  dessert: "حلويات",
+  breakfast: "فطور",
+  sandwich: "ساندويتش",
+};
