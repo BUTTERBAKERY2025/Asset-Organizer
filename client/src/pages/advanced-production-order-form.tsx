@@ -102,8 +102,10 @@ export default function AdvancedProductionOrderFormPage() {
     queryKey: ["/api/branches"],
   });
 
-  const { data: products } = useQuery<Product[]>({
+  const { data: products, isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+    enabled: currentStep === "products" || currentStep === "schedule" || currentStep === "review" || isEdit,
+    retry: 2,
   });
 
   const { data: existingOrder, isLoading: loadingOrder } = useQuery<AdvancedProductionOrder>({
@@ -489,14 +491,14 @@ export default function AdvancedProductionOrderFormPage() {
                   <div className="space-y-2">
                     <Label htmlFor="targetBranchId">الفرع المستهدف</Label>
                     <Select
-                      value={formData.targetBranchId}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, targetBranchId: value }))}
+                      value={formData.targetBranchId || "same_branch"}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, targetBranchId: value === "same_branch" ? "" : value }))}
                     >
                       <SelectTrigger id="targetBranchId" data-testid="select-target-branch">
                         <SelectValue placeholder="اختر الفرع المستهدف" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">نفس الفرع</SelectItem>
+                        <SelectItem value="same_branch">نفس الفرع</SelectItem>
                         {branches?.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
                             {branch.name}
