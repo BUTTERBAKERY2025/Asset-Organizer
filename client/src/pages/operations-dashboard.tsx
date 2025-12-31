@@ -4,8 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Factory, Users, Clock, CheckCircle, AlertTriangle, TrendingUp, Calendar, ClipboardCheck, Plus, Wallet } from "lucide-react";
+import { 
+  Factory, Users, Clock, CheckCircle, AlertTriangle, TrendingUp, Calendar, 
+  ClipboardCheck, Plus, Wallet, Package, BarChart3, Target, Gift, 
+  ArrowUpRight, Zap, Activity, Boxes, RefreshCw, FileText
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 
 interface OperationsStats {
   productsCount: number;
@@ -20,98 +26,192 @@ interface OperationsStats {
 }
 
 export default function OperationsDashboardPage() {
-  const { data: stats, isLoading } = useQuery<OperationsStats>({
+  const { data: stats, isLoading, refetch } = useQuery<OperationsStats>({
     queryKey: ["/api/operations/stats"],
   });
 
-  const statCards = [
+  const completionRate = stats?.todayOrders 
+    ? Math.round((stats.completedOrders / stats.todayOrders) * 100) 
+    : 0;
+
+  const operationsModules = [
     {
-      title: "المنتجات النشطة",
-      value: stats?.productsCount || 0,
-      icon: Factory,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100",
+      title: "المنتجات",
+      description: "إدارة كتالوج المنتجات والأسعار",
+      href: "/products",
+      icon: Package,
+      color: "bg-blue-500",
+      stats: `${stats?.productsCount || 0} منتج نشط`,
     },
     {
-      title: "ورديات اليوم",
-      value: stats?.todayShifts || 0,
+      title: "الورديات",
+      description: "جدولة وإدارة ورديات العمل",
+      href: "/shifts",
       icon: Clock,
-      color: "text-amber-600",
-      bgColor: "bg-amber-100",
+      color: "bg-amber-500",
+      stats: `${stats?.todayShifts || 0} وردية اليوم`,
     },
     {
       title: "أوامر الإنتاج",
-      value: `${stats?.completedOrders || 0}/${stats?.todayOrders || 0}`,
+      description: "متابعة أوامر الإنتاج اليومية",
+      href: "/production",
       icon: ClipboardCheck,
-      color: "text-green-600",
-      bgColor: "bg-green-100",
-      subtitle: "مكتمل/إجمالي",
+      color: "bg-green-500",
+      stats: `${stats?.completedOrders || 0}/${stats?.todayOrders || 0} مكتمل`,
     },
     {
-      title: "إجمالي الإنتاج",
-      value: stats?.totalProduced || 0,
-      icon: TrendingUp,
-      color: "text-indigo-600",
-      bgColor: "bg-indigo-100",
-      subtitle: "وحدة اليوم",
-    },
-    {
-      title: "نسبة الهالك",
-      value: `${stats?.wastePercentage || 0}%`,
-      icon: AlertTriangle,
-      color: parseFloat(stats?.wastePercentage || "0") > 5 ? "text-red-600" : "text-green-600",
-      bgColor: parseFloat(stats?.wastePercentage || "0") > 5 ? "bg-red-100" : "bg-green-100",
-    },
-    {
-      title: "معدل الجودة",
-      value: `${stats?.qualityPassRate || 100}%`,
+      title: "مراقبة الجودة",
+      description: "فحوصات الجودة والتقييم",
+      href: "/quality-control",
       icon: CheckCircle,
-      color: "text-emerald-600",
-      bgColor: "bg-emerald-100",
-      subtitle: `${stats?.qualityChecks || 0} فحص`,
+      color: "bg-emerald-500",
+      stats: `${stats?.qualityPassRate || 100}% معدل النجاح`,
+    },
+    {
+      title: "موظفي التشغيل",
+      description: "إدارة فريق العمل",
+      href: "/operations-employees",
+      icon: Users,
+      color: "bg-purple-500",
+      stats: "إدارة الموظفين",
+    },
+  ];
+
+  const salesModules = [
+    {
+      title: "يومية الكاشير",
+      description: "تسجيل ومتابعة المبيعات اليومية",
+      href: "/cashier-journals",
+      icon: Wallet,
+      color: "bg-orange-500",
+    },
+    {
+      title: "تحليلات المبيعات",
+      description: "تحليل أداء المبيعات والفروع",
+      href: "/sales-analytics",
+      icon: BarChart3,
+      color: "bg-indigo-500",
+    },
+    {
+      title: "تخطيط الأهداف",
+      description: "تحديد الأهداف الشهرية للفروع",
+      href: "/targets-planning",
+      icon: Target,
+      color: "bg-rose-500",
+    },
+    {
+      title: "لوحة الأهداف",
+      description: "متابعة تحقيق الأهداف",
+      href: "/targets-dashboard",
+      icon: TrendingUp,
+      color: "bg-cyan-500",
+    },
+    {
+      title: "إدارة الحوافز",
+      description: "نظام الحوافز والمكافآت",
+      href: "/incentives-management",
+      icon: Gift,
+      color: "bg-pink-500",
+    },
+    {
+      title: "تقارير التشغيل",
+      description: "تقارير شاملة للعمليات",
+      href: "/operations-reports",
+      icon: FileText,
+      color: "bg-slate-500",
     },
   ];
 
   const quickActions = [
-    { label: "يومية الكاشير", href: "/cashier-journals", icon: Wallet },
-    { label: "إنشاء وردية", href: "/shifts", icon: Plus },
-    { label: "أمر إنتاج جديد", href: "/production", icon: Plus },
-    { label: "فحص جودة", href: "/quality-control", icon: ClipboardCheck },
-    { label: "إدارة المنتجات", href: "/products", icon: Factory },
-    { label: "إدارة الموظفين", href: "/operations-employees", icon: Users },
+    { label: "إضافة يومية كاشير", href: "/cashier-journals", icon: Plus, color: "text-orange-600" },
+    { label: "إنشاء وردية جديدة", href: "/shifts", icon: Plus, color: "text-amber-600" },
+    { label: "أمر إنتاج جديد", href: "/production", icon: Plus, color: "text-green-600" },
+    { label: "إجراء فحص جودة", href: "/quality-control", icon: CheckCircle, color: "text-emerald-600" },
+  ];
+
+  const statCards = [
+    {
+      title: "إجمالي الإنتاج",
+      value: stats?.totalProduced || 0,
+      suffix: "وحدة",
+      icon: Boxes,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+    },
+    {
+      title: "نسبة الإنجاز",
+      value: completionRate,
+      suffix: "%",
+      icon: Activity,
+      color: "text-green-600",
+      bgColor: "bg-green-50",
+      borderColor: "border-green-200",
+      showProgress: true,
+    },
+    {
+      title: "نسبة الهالك",
+      value: parseFloat(stats?.wastePercentage || "0"),
+      suffix: "%",
+      icon: AlertTriangle,
+      color: parseFloat(stats?.wastePercentage || "0") > 5 ? "text-red-600" : "text-green-600",
+      bgColor: parseFloat(stats?.wastePercentage || "0") > 5 ? "bg-red-50" : "bg-green-50",
+      borderColor: parseFloat(stats?.wastePercentage || "0") > 5 ? "border-red-200" : "border-green-200",
+    },
+    {
+      title: "فحوصات الجودة",
+      value: stats?.qualityChecks || 0,
+      suffix: "فحص",
+      icon: CheckCircle,
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+      borderColor: "border-emerald-200",
+    },
   ];
 
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">لوحة تحكم التشغيل</h1>
-            <p className="text-muted-foreground">نظرة عامة على عمليات الإنتاج والتشغيل اليومية</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Factory className="w-6 h-6 text-primary" />
+              </div>
+              لوحة تحكم التشغيل
+            </h1>
+            <p className="text-muted-foreground mt-1">نظرة عامة شاملة على عمليات الإنتاج والتشغيل اليومية</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-sm">
-              <Calendar className="w-3 h-3 ml-1" />
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+              <RefreshCw className="w-4 h-4" />
+              تحديث
+            </Button>
+            <Badge variant="outline" className="text-sm py-1.5 px-3">
+              <Calendar className="w-4 h-4 ml-2" />
               {new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </Badge>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {statCards.map((stat, index) => (
-            <Card key={index} data-testid={`stat-card-${index}`}>
+            <Card key={index} className={`${stat.bgColor} ${stat.borderColor} border`} data-testid={`stat-card-${index}`}>
               <CardContent className="p-4">
                 {isLoading ? (
-                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-20 w-full" />
                 ) : (
-                  <div className="flex flex-col items-center text-center gap-2">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${stat.bgColor}`}>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">{stat.title}</span>
                       <stat.icon className={`w-5 h-5 ${stat.color}`} />
                     </div>
-                    <div className="text-2xl font-bold">{stat.value}</div>
-                    <div className="text-xs text-muted-foreground">{stat.title}</div>
-                    {stat.subtitle && (
-                      <div className="text-xs text-muted-foreground/70">{stat.subtitle}</div>
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-3xl font-bold ${stat.color}`}>{stat.value}</span>
+                      <span className="text-sm text-muted-foreground">{stat.suffix}</span>
+                    </div>
+                    {stat.showProgress && (
+                      <Progress value={stat.value as number} className="h-2" />
                     )}
                   </div>
                 )}
@@ -120,65 +220,130 @@ export default function OperationsDashboardPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">إجراءات سريعة</CardTitle>
-              <CardDescription>الوصول السريع للمهام الشائعة</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
+        <Card className="border-primary/20 bg-gradient-to-l from-primary/5 to-transparent">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-primary" />
+                <CardTitle className="text-lg">إجراءات سريعة</CardTitle>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {quickActions.map((action, index) => (
                 <Link key={index} href={action.href}>
-                  <Button variant="outline" className="w-full justify-start gap-2" data-testid={`quick-action-${index}`}>
-                    <action.icon className="w-4 h-4" />
-                    {action.label}
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-auto py-4 flex flex-col items-center gap-2 hover:bg-background/80 hover:border-primary/30 transition-all"
+                    data-testid={`quick-action-${index}`}
+                  >
+                    <div className={`w-10 h-10 rounded-full bg-muted flex items-center justify-center`}>
+                      <action.icon className={`w-5 h-5 ${action.color}`} />
+                    </div>
+                    <span className="text-sm font-medium">{action.label}</span>
                   </Button>
                 </Link>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">أقسام التشغيل</CardTitle>
-              <CardDescription>الوصول لجميع أقسام نظام التشغيل</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3">
-              <Link href="/products">
-                <Card className="cursor-pointer hover:bg-secondary/50 transition-colors" data-testid="link-products">
-                  <CardContent className="p-4 flex flex-col items-center text-center gap-2">
-                    <Factory className="w-8 h-8 text-blue-500" />
-                    <span className="text-sm font-medium">المنتجات</span>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Factory className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">أقسام التشغيل والإنتاج</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {operationsModules.map((module, index) => (
+              <Link key={index} href={module.href}>
+                <Card 
+                  className="h-full cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group"
+                  data-testid={`module-${module.href.replace('/', '')}`}
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className={`w-12 h-12 rounded-xl ${module.color} flex items-center justify-center shadow-sm`}>
+                        <module.icon className="w-6 h-6 text-white" />
+                      </div>
+                      <ArrowUpRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground">{module.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-1">{module.description}</p>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {module.stats}
+                    </Badge>
                   </CardContent>
                 </Card>
               </Link>
-              <Link href="/shifts">
-                <Card className="cursor-pointer hover:bg-secondary/50 transition-colors" data-testid="link-shifts">
-                  <CardContent className="p-4 flex flex-col items-center text-center gap-2">
-                    <Clock className="w-8 h-8 text-amber-500" />
-                    <span className="text-sm font-medium">الورديات</span>
-                  </CardContent>
-                </Card>
-              </Link>
-              <Link href="/production">
-                <Card className="cursor-pointer hover:bg-secondary/50 transition-colors" data-testid="link-production">
-                  <CardContent className="p-4 flex flex-col items-center text-center gap-2">
-                    <ClipboardCheck className="w-8 h-8 text-green-500" />
-                    <span className="text-sm font-medium">الإنتاج</span>
-                  </CardContent>
-                </Card>
-              </Link>
-              <Link href="/quality-control">
-                <Card className="cursor-pointer hover:bg-secondary/50 transition-colors" data-testid="link-quality">
-                  <CardContent className="p-4 flex flex-col items-center text-center gap-2">
-                    <CheckCircle className="w-8 h-8 text-emerald-500" />
-                    <span className="text-sm font-medium">الجودة</span>
-                  </CardContent>
-                </Card>
-              </Link>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         </div>
+
+        <Separator className="my-6" />
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">المبيعات والأهداف</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {salesModules.map((module, index) => (
+              <Link key={index} href={module.href}>
+                <Card 
+                  className="h-full cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group"
+                  data-testid={`sales-module-${module.href.replace('/', '')}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-xl ${module.color} flex items-center justify-center shadow-sm flex-shrink-0`}>
+                        <module.icon className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-foreground">{module.title}</h3>
+                          <ArrowUpRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{module.description}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <Card className="bg-muted/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              ملخص اليوم
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div className="space-y-1">
+                <div className="text-2xl font-bold text-primary">{stats?.todayShifts || 0}</div>
+                <div className="text-xs text-muted-foreground">ورديات نشطة</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-bold text-green-600">{stats?.completedOrders || 0}</div>
+                <div className="text-xs text-muted-foreground">أوامر مكتملة</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-bold text-blue-600">{stats?.totalProduced || 0}</div>
+                <div className="text-xs text-muted-foreground">وحدات منتجة</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-bold text-emerald-600">{stats?.qualityPassRate || 100}%</div>
+                <div className="text-xs text-muted-foreground">جودة الإنتاج</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );
