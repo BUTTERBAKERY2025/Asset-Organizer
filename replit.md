@@ -255,3 +255,30 @@ CREATE TABLE journal_attachments (
     uploaded_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 ```
+
+## Recent Changes (December 2025)
+
+### Pagination System
+Added comprehensive pagination system across all data-heavy pages to handle large datasets efficiently:
+- **Reusable Component**: `TablePagination` component in `client/src/components/ui/pagination.tsx`
+- **Pages with Pagination**:
+  - Cashier Journals (يوميات الكاشير) - 10 items per page
+  - Operations Employees (الموظفين) - 10 items per page
+  - Production Orders (أوامر الإنتاج) - 10 items per page
+  - Targets Planning (تخطيط الأهداف) - 10 items per page
+  - Asset Transfers (نقل الأصول) - 10 items per page
+  - Audit Logs (سجلات التدقيق) - 15 items per page
+  - Contracts (العقود) - 10 items per page
+  - Backups (النسخ الاحتياطية) - 10 items per page
+  - Inventory (المخزون) - 15 items per page
+  - Reports (التقارير) - 15 items per page
+  - Construction Reports (تقارير المشاريع) - 10 items per page
+  - Users (المستخدمين) - 10 items per page
+  - Sales Analytics Daily Performance - 10 items per page
+- **Features**: Page navigation buttons (first, previous, next, last), page number display, total items count, auto-reset on filter changes
+
+### Sales Analytics Enhancements
+- Advanced filters: Journal status (posted, approved, submitted, draft) and discrepancy type (balanced, shortage, surplus)
+- CSV export alongside Excel for all reports
+- Seasonal/holiday factors display with monthly adjustment rates
+- Auto-refresh toggle with 60-second interval and "last updated" indicator
