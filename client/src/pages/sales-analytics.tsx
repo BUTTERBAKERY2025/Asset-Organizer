@@ -32,7 +32,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Sparkles
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -62,6 +66,11 @@ export default function SalesAnalytics() {
   const [discrepancyType, setDiscrepancyType] = useState<string>("all");
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [autoRefresh, setAutoRefresh] = useState(false);
+  
+  // Pagination state
+  const [dailyPerformancePage, setDailyPerformancePage] = useState(1);
+  const [cashierLeaderboardPage, setCashierLeaderboardPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -74,6 +83,12 @@ export default function SalesAnalytics() {
       if (interval) clearInterval(interval);
     };
   }, [autoRefresh]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setDailyPerformancePage(1);
+    setCashierLeaderboardPage(1);
+  }, [selectedBranch, selectedMonth, selectedYear, journalStatus, discrepancyType]);
 
   const yearMonth = `${selectedYear}-${selectedMonth}`;
   const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
@@ -971,7 +986,14 @@ export default function SalesAnalytics() {
 
             <Card className="bg-white/80 backdrop-blur border-amber-200">
               <CardHeader>
-                <CardTitle>تفاصيل الأداء اليومي</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>تفاصيل الأداء اليومي</CardTitle>
+                  {targetsVsActuals.length > 0 && (
+                    <span className="text-sm text-gray-500">
+                      إجمالي: {targetsVsActuals.length} سجل
+                    </span>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {loadingTargets ? (
@@ -983,45 +1005,129 @@ export default function SalesAnalytics() {
                     لا توجد بيانات
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-right py-3 px-2">التاريخ</th>
-                          <th className="text-right py-3 px-2">الفرع</th>
-                          <th className="text-right py-3 px-2">الهدف</th>
-                          <th className="text-right py-3 px-2">الفعلي</th>
-                          <th className="text-right py-3 px-2">الفارق</th>
-                          <th className="text-right py-3 px-2">التحقيق</th>
-                          <th className="text-right py-3 px-2">الحالة</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {targetsVsActuals.slice(0, 15).map((day: any, idx: number) => (
-                          <tr key={`${day.date}-${day.branchId}`} className="border-b hover:bg-gray-50" data-testid={`row-daily-${idx}`}>
-                            <td className="py-3 px-2">{day.date}</td>
-                            <td className="py-3 px-2">{day.branchName}</td>
-                            <td className="py-3 px-2">{formatCurrency(day.targetAmount)}</td>
-                            <td className="py-3 px-2 font-medium">{formatCurrency(day.actualSales)}</td>
-                            <td className={`py-3 px-2 ${day.variance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              {day.variance >= 0 ? "+" : ""}{formatCurrency(day.variance)}
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="flex items-center gap-2">
-                                <Progress value={Math.min(day.achievementPercent, 100)} className="w-16 h-2" />
-                                <span className="text-sm">{day.achievementPercent.toFixed(0)}%</span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <Badge className={statusColors[day.status]}>
-                                {statusLabels[day.status]}
-                              </Badge>
-                            </td>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b bg-amber-50/50">
+                            <th className="text-right py-3 px-2 font-semibold">التاريخ</th>
+                            <th className="text-right py-3 px-2 font-semibold">الفرع</th>
+                            <th className="text-right py-3 px-2 font-semibold">الهدف</th>
+                            <th className="text-right py-3 px-2 font-semibold">الفعلي</th>
+                            <th className="text-right py-3 px-2 font-semibold">الفارق</th>
+                            <th className="text-right py-3 px-2 font-semibold">التحقيق</th>
+                            <th className="text-right py-3 px-2 font-semibold">الحالة</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {targetsVsActuals
+                            .slice((dailyPerformancePage - 1) * itemsPerPage, dailyPerformancePage * itemsPerPage)
+                            .map((day: any, idx: number) => (
+                            <tr key={`${day.date}-${day.branchId}`} className="border-b hover:bg-amber-50/30 transition-colors" data-testid={`row-daily-${idx}`}>
+                              <td className="py-3 px-2">{day.date}</td>
+                              <td className="py-3 px-2">{day.branchName}</td>
+                              <td className="py-3 px-2">{formatCurrency(day.targetAmount)}</td>
+                              <td className="py-3 px-2 font-medium">{formatCurrency(day.actualSales)}</td>
+                              <td className={`py-3 px-2 ${day.variance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {day.variance >= 0 ? "+" : ""}{formatCurrency(day.variance)}
+                              </td>
+                              <td className="py-3 px-2">
+                                <div className="flex items-center gap-2">
+                                  <Progress value={Math.min(day.achievementPercent, 100)} className="w-16 h-2" />
+                                  <span className="text-sm">{day.achievementPercent.toFixed(0)}%</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-2">
+                                <Badge className={statusColors[day.status]}>
+                                  {statusLabels[day.status]}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {/* Pagination Controls */}
+                    {targetsVsActuals.length > itemsPerPage && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                        <div className="text-sm text-gray-600">
+                          عرض {((dailyPerformancePage - 1) * itemsPerPage) + 1} - {Math.min(dailyPerformancePage * itemsPerPage, targetsVsActuals.length)} من {targetsVsActuals.length}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDailyPerformancePage(1)}
+                            disabled={dailyPerformancePage === 1}
+                            className="h-8 w-8 p-0"
+                            data-testid="btn-first-page"
+                          >
+                            <ChevronsRight className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDailyPerformancePage(p => Math.max(1, p - 1))}
+                            disabled={dailyPerformancePage === 1}
+                            className="h-8 w-8 p-0"
+                            data-testid="btn-prev-page"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                          
+                          <div className="flex items-center gap-1 mx-2">
+                            {Array.from({ length: Math.min(5, Math.ceil(targetsVsActuals.length / itemsPerPage)) }, (_, i) => {
+                              const totalPages = Math.ceil(targetsVsActuals.length / itemsPerPage);
+                              let pageNum;
+                              if (totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (dailyPerformancePage <= 3) {
+                                pageNum = i + 1;
+                              } else if (dailyPerformancePage >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i;
+                              } else {
+                                pageNum = dailyPerformancePage - 2 + i;
+                              }
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={dailyPerformancePage === pageNum ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setDailyPerformancePage(pageNum)}
+                                  className={`h-8 w-8 p-0 ${dailyPerformancePage === pageNum ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
+                                  data-testid={`btn-page-${pageNum}`}
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDailyPerformancePage(p => Math.min(Math.ceil(targetsVsActuals.length / itemsPerPage), p + 1))}
+                            disabled={dailyPerformancePage >= Math.ceil(targetsVsActuals.length / itemsPerPage)}
+                            className="h-8 w-8 p-0"
+                            data-testid="btn-next-page"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDailyPerformancePage(Math.ceil(targetsVsActuals.length / itemsPerPage))}
+                            disabled={dailyPerformancePage >= Math.ceil(targetsVsActuals.length / itemsPerPage)}
+                            className="h-8 w-8 p-0"
+                            data-testid="btn-last-page"
+                          >
+                            <ChevronsLeft className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
