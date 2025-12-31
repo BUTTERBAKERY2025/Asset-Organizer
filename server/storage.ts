@@ -2712,7 +2712,7 @@ export class DatabaseStorage implements IStorage {
     const startDate = `${yearMonth}-01`;
     const endDate = `${yearMonth}-31`;
     const monthJournals = journals.filter((j: CashierSalesJournal) => 
-      j.journalDate >= startDate && j.journalDate <= endDate && j.status === 'approved'
+      j.journalDate >= startDate && j.journalDate <= endDate && (j.status === 'approved' || j.status === 'posted')
     );
 
     const dailySalesMap: Record<string, number> = {};
@@ -2759,7 +2759,7 @@ export class DatabaseStorage implements IStorage {
       const branchTarget = monthTargets.find(t => t.branchId === branch.id);
       const journals = await this.getCashierJournalsByBranch(branch.id);
       const branchMonthJournals = journals.filter((j: CashierSalesJournal) => 
-        j.journalDate >= startDate && j.journalDate <= endDate && j.status === 'approved'
+        j.journalDate >= startDate && j.journalDate <= endDate && (j.status === 'approved' || j.status === 'posted')
       );
       
       const achieved = branchMonthJournals.reduce((sum: number, j: CashierSalesJournal) => sum + j.totalSales, 0);
@@ -2781,7 +2781,7 @@ export class DatabaseStorage implements IStorage {
 
     const allJournals = await this.getAllCashierJournals();
     const monthJournals = allJournals.filter((j: CashierSalesJournal) => 
-      j.journalDate >= startDate && j.journalDate <= endDate && j.status === 'approved'
+      j.journalDate >= startDate && j.journalDate <= endDate && (j.status === 'approved' || j.status === 'posted')
     );
 
     const cashierSales: Record<string, { cashierName: string; branchId: string; total: number }> = {};
