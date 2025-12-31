@@ -87,6 +87,11 @@ export default function DisplayBarWastePage() {
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+    queryFn: async () => {
+      const res = await fetch("/api/products");
+      if (!res.ok) return [];
+      return res.json();
+    },
   });
 
   const { data: receipts = [] } = useQuery({
@@ -434,7 +439,7 @@ export default function DisplayBarWastePage() {
                                     <SelectValue placeholder="اختر المنتج" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {products.filter(p => p.isActive === "true").map(p => (
+                                    {products.filter(p => p.isActive !== "false").map(p => (
                                       <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                                     ))}
                                   </SelectContent>
@@ -579,8 +584,8 @@ export default function DisplayBarWastePage() {
                                   <SelectValue placeholder="اختر المنتج" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {products.filter(p => p.isActive === "true").map(p => (
-                                    <SelectItem key={p.id} value={String(p.id)}>{p.name} - {p.basePrice} ر.س</SelectItem>
+                                  {products.filter(p => p.isActive !== "false").map(p => (
+                                    <SelectItem key={p.id} value={String(p.id)}>{p.name} - {(p.basePrice || 0).toFixed(2)} ر.س</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
