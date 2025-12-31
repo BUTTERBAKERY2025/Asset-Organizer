@@ -175,13 +175,16 @@ export default function DisplayBarWastePage() {
   });
 
   const createWasteReportMutation = useMutation({
-    mutationFn: async (data: any) => apiRequest("POST", "/api/waste-reports", data),
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", "/api/waste-reports", data);
+      return response.json();
+    },
     onSuccess: (report: any) => {
       setSelectedWasteReportId(report.id);
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
       toast({ title: "تم إنشاء تقرير الهالك" });
     },
-    onError: () => toast({ title: "حدث خطأ", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
   });
 
   const addWasteItemMutation = useMutation({
@@ -196,13 +199,16 @@ export default function DisplayBarWastePage() {
   });
 
   const updateWasteReportMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => 
-      apiRequest("PATCH", `/api/waste-reports/${id}`, data),
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      if (!id || isNaN(id)) throw new Error("معرف التقرير غير صالح");
+      const response = await apiRequest("PATCH", `/api/waste-reports/${id}`, data);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
       toast({ title: "تم تحديث التقرير" });
     },
-    onError: () => toast({ title: "حدث خطأ", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err.message || "حدث خطأ في تحديث التقرير", variant: "destructive" }),
   });
 
   const handleReceiptSubmit = () => {
@@ -426,7 +432,7 @@ export default function DisplayBarWastePage() {
       if (!wasteBranch) throw new Error("يرجى اختيار الفرع");
       if (wasteEntriesWithQuantity.length === 0) throw new Error("لا يوجد أصناف هالكة للحفظ");
       
-      const reportRes: any = await apiRequest("POST", "/api/waste-reports", {
+      const response = await apiRequest("POST", "/api/waste-reports", {
         branchId: wasteBranch,
         reportDate: selectedDate,
         status: "draft",
@@ -434,9 +440,10 @@ export default function DisplayBarWastePage() {
         totalItems: totalWasteItems,
         totalValue: totalWasteValue,
       });
+      const reportData = await response.json();
       
       for (const entry of wasteEntriesWithQuantity) {
-        await apiRequest("POST", `/api/waste-reports/${reportRes.id}/items`, {
+        await apiRequest("POST", `/api/waste-reports/${reportData.id}/items`, {
           productId: entry.productId,
           quantity: entry.wasteQuantity,
           unitPrice: entry.unitPrice,
@@ -446,7 +453,7 @@ export default function DisplayBarWastePage() {
           imageUrl: entry.imageUrl,
         });
       }
-      return reportRes;
+      return reportData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
