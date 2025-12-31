@@ -108,6 +108,7 @@ export default function DisplayBarWastePage() {
   const [wasteBranch, setWasteBranch] = useState("");
   const [wasteImageInputRef, setWasteImageInputRef] = useState<number | null>(null);
   const wasteFileInputRef = useRef<HTMLInputElement>(null);
+  const [wasteEntriesInitialized, setWasteEntriesInitialized] = useState("");
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -353,12 +354,15 @@ export default function DisplayBarWastePage() {
   }, [aggregatedReceivedProducts]);
 
   useEffect(() => {
-    if (selectedBranch !== "all" && aggregatedReceivedProducts.length > 0) {
+    const initKey = `${selectedBranch}_${selectedDate}`;
+    if (selectedBranch !== "all" && aggregatedReceivedProducts.length > 0 && wasteEntriesInitialized !== initKey) {
       initializeWasteEntriesFromProducts();
+      setWasteEntriesInitialized(initKey);
     } else if (selectedBranch === "all") {
       setDailyWasteEntries([]);
+      setWasteEntriesInitialized("");
     }
-  }, [aggregatedReceivedProducts.length, selectedBranch, selectedDate]);
+  }, [aggregatedReceivedProducts.length, selectedBranch, selectedDate, wasteEntriesInitialized]);
 
   useEffect(() => {
     if (selectedBranch !== "all") {
@@ -448,7 +452,7 @@ export default function DisplayBarWastePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
       toast({ title: "تم حفظ تقرير الهالك اليومي بنجاح" });
       setDailyWasteEntries([]);
-      initializeWasteEntriesFromProducts();
+      setWasteEntriesInitialized("");
     },
     onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
   });
@@ -1170,7 +1174,7 @@ export default function DisplayBarWastePage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => { setDailyWasteEntries([]); initializeWasteEntriesFromProducts(); }}
+                      onClick={() => { setDailyWasteEntries([]); setWasteEntriesInitialized(""); }}
                       className="gap-1"
                     >
                       <RefreshCw className="w-4 h-4" />
