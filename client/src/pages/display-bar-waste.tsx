@@ -442,7 +442,7 @@ export default function DisplayBarWastePage() {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">المسؤول</p>
-                            <p className="text-sm font-medium">{user?.fullName || user?.username || "غير معروف"}</p>
+                            <p className="text-sm font-medium">{user?.username || "غير معروف"}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
