@@ -94,6 +94,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/shifts", label: "الورديات", icon: Clock, module: "shifts" },
           { href: "/production", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
           { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
+          { href: "/display-bar-waste", label: "بار العرض والهالك", icon: Package, module: "operations" },
           { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
         ],
       },

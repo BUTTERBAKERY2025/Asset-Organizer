@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission } from "./auth";
 
@@ -4034,6 +4034,314 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error computing daily sales:", error);
       res.status(500).json({ error: "Failed to compute daily sales" });
+    }
+  });
+
+  // ===== Display Bar Routes =====
+
+  // Get Display Bar Receipts
+  app.get("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const date = req.query.date as string | undefined;
+      const receipts = await storage.getDisplayBarReceipts(branchId, date);
+      res.json(receipts);
+    } catch (error) {
+      console.error("Error fetching display bar receipts:", error);
+      res.status(500).json({ error: "Failed to fetch display bar receipts" });
+    }
+  });
+
+  // Create Display Bar Receipt
+  app.post("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const validatedData = insertDisplayBarReceiptSchema.parse(req.body);
+      const receipt = await storage.createDisplayBarReceipt(validatedData);
+      res.status(201).json(receipt);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating display bar receipt:", error);
+      res.status(500).json({ error: "Failed to create display bar receipt" });
+    }
+  });
+
+  // Get Display Bar Daily Summary
+  app.get("/api/display-bar/summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const date = req.query.date as string | undefined;
+      const summaries = await storage.getDisplayBarDailySummary(branchId, date);
+      res.json(summaries);
+    } catch (error) {
+      console.error("Error fetching display bar summary:", error);
+      res.status(500).json({ error: "Failed to fetch display bar summary" });
+    }
+  });
+
+  // Update Display Bar Daily Summary
+  app.patch("/api/display-bar/summary/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid summary ID" });
+      }
+      const partialData = insertDisplayBarDailySummarySchema.partial().parse(req.body);
+      const summary = await storage.updateDisplayBarDailySummary(id, partialData);
+      if (!summary) {
+        return res.status(404).json({ error: "Summary not found" });
+      }
+      res.json(summary);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating display bar summary:", error);
+      res.status(500).json({ error: "Failed to update display bar summary" });
+    }
+  });
+
+  // ===== Waste Reports Routes =====
+
+  // Get Waste Stats - today's summary by branch (must be before /:id route)
+  app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const branchId = req.query.branchId as string | undefined;
+      
+      const reports = await storage.getWasteReports(branchId, today, today);
+      
+      const branchStats = new Map<string, { totalItems: number; totalValue: number; reportCount: number }>();
+      
+      for (const report of reports) {
+        const existing = branchStats.get(report.branchId) || { totalItems: 0, totalValue: 0, reportCount: 0 };
+        branchStats.set(report.branchId, {
+          totalItems: existing.totalItems + (report.totalItems || 0),
+          totalValue: existing.totalValue + (report.totalValue || 0),
+          reportCount: existing.reportCount + 1,
+        });
+      }
+      
+      const stats = Array.from(branchStats.entries()).map(([branchId, data]) => ({
+        branchId,
+        date: today,
+        ...data,
+      }));
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching waste stats:", error);
+      res.status(500).json({ error: "Failed to fetch waste stats" });
+    }
+  });
+
+  // Get All Waste Reports
+  app.get("/api/waste-reports", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const dateFrom = req.query.dateFrom as string | undefined;
+      const dateTo = req.query.dateTo as string | undefined;
+      const reports = await storage.getWasteReports(branchId, dateFrom, dateTo);
+      res.json(reports);
+    } catch (error) {
+      console.error("Error fetching waste reports:", error);
+      res.status(500).json({ error: "Failed to fetch waste reports" });
+    }
+  });
+
+  // Get Single Waste Report
+  app.get("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      const report = await storage.getWasteReport(id);
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching waste report:", error);
+      res.status(500).json({ error: "Failed to fetch waste report" });
+    }
+  });
+
+  // Create Waste Report
+  app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const validatedData = insertWasteReportSchema.parse({
+        ...req.body,
+        reportedBy: currentUser?.id,
+        reporterName: currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() : null,
+      });
+      const report = await storage.createWasteReport(validatedData);
+      res.status(201).json(report);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating waste report:", error);
+      res.status(500).json({ error: "Failed to create waste report" });
+    }
+  });
+
+  // Update Waste Report
+  app.patch("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      
+      const partialData = insertWasteReportSchema.partial().parse(req.body);
+      
+      if (req.body.status === 'approved') {
+        const currentUser = req.currentUser;
+        (partialData as any).approvedBy = currentUser?.id;
+        (partialData as any).approvedAt = new Date();
+      }
+      
+      const report = await storage.updateWasteReport(id, partialData);
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      res.json(report);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating waste report:", error);
+      res.status(500).json({ error: "Failed to update waste report" });
+    }
+  });
+
+  // Delete Waste Report
+  app.delete("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      const success = await storage.deleteWasteReport(id);
+      if (!success) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting waste report:", error);
+      res.status(500).json({ error: "Failed to delete waste report" });
+    }
+  });
+
+  // ===== Waste Items Routes =====
+
+  // Get Waste Items for a Report
+  app.get("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const reportId = parseInt(req.params.reportId, 10);
+      if (isNaN(reportId)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      const items = await storage.getWasteItems(reportId);
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching waste items:", error);
+      res.status(500).json({ error: "Failed to fetch waste items" });
+    }
+  });
+
+  // Create Waste Item
+  app.post("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const reportId = parseInt(req.params.reportId, 10);
+      if (isNaN(reportId)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      
+      const report = await storage.getWasteReport(reportId);
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      const validatedData = insertWasteItemSchema.parse({
+        ...req.body,
+        wasteReportId: reportId,
+      });
+      const item = await storage.createWasteItem(validatedData);
+      
+      const allItems = await storage.getWasteItems(reportId);
+      const totalItems = allItems.reduce((sum, i) => sum + i.quantity, 0);
+      const totalValue = allItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
+      await storage.updateWasteReport(reportId, { totalItems, totalValue });
+      
+      res.status(201).json(item);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating waste item:", error);
+      res.status(500).json({ error: "Failed to create waste item" });
+    }
+  });
+
+  // Update Waste Item
+  app.patch("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+      }
+      const partialData = insertWasteItemSchema.partial().parse(req.body);
+      const item = await storage.updateWasteItem(id, partialData);
+      if (!item) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      const allItems = await storage.getWasteItems(item.wasteReportId);
+      const totalItems = allItems.reduce((sum, i) => sum + i.quantity, 0);
+      const totalValue = allItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
+      await storage.updateWasteReport(item.wasteReportId, { totalItems, totalValue });
+      
+      res.json(item);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating waste item:", error);
+      res.status(500).json({ error: "Failed to update waste item" });
+    }
+  });
+
+  // Delete Waste Item
+  app.delete("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+      }
+      
+      const items = await storage.getWasteItems(id);
+      const targetItem = items.find(i => i.id === id);
+      
+      const success = await storage.deleteWasteItem(id);
+      if (!success) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      if (targetItem) {
+        const remainingItems = await storage.getWasteItems(targetItem.wasteReportId);
+        const totalItems = remainingItems.reduce((sum, i) => sum + i.quantity, 0);
+        const totalValue = remainingItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
+        await storage.updateWasteReport(targetItem.wasteReportId, { totalItems, totalValue });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting waste item:", error);
+      res.status(500).json({ error: "Failed to delete waste item" });
     }
   });
 

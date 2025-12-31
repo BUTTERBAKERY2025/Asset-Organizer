@@ -90,6 +90,14 @@ import {
   type InsertCommissionRate,
   type CommissionCalculation,
   type InsertCommissionCalculation,
+  type DisplayBarReceipt,
+  type InsertDisplayBarReceipt,
+  type DisplayBarDailySummary,
+  type InsertDisplayBarDailySummary,
+  type WasteReport,
+  type InsertWasteReport,
+  type WasteItem,
+  type InsertWasteItem,
   branches,
   inventoryItems,
   auditLogs,
@@ -139,6 +147,10 @@ import {
   commissionCalculations,
   branchDailySales,
   cashierShiftPerformance,
+  displayBarReceipts,
+  displayBarDailySummary,
+  wasteReports,
+  wasteItems,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -405,6 +417,27 @@ export interface IStorage {
     branches: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[];
     cashiers: { cashierId: string; cashierName: string; branchId: string; target: number; achieved: number; percent: number; rank: number }[];
   }>;
+  
+  // Display Bar Receipts
+  getDisplayBarReceipts(branchId?: string, date?: string): Promise<DisplayBarReceipt[]>;
+  createDisplayBarReceipt(data: InsertDisplayBarReceipt): Promise<DisplayBarReceipt>;
+  
+  // Display Bar Daily Summary
+  getDisplayBarDailySummary(branchId?: string, date?: string): Promise<DisplayBarDailySummary[]>;
+  updateDisplayBarDailySummary(id: number, data: Partial<InsertDisplayBarDailySummary>): Promise<DisplayBarDailySummary | undefined>;
+  
+  // Waste Reports
+  getWasteReports(branchId?: string, dateFrom?: string, dateTo?: string): Promise<WasteReport[]>;
+  getWasteReport(id: number): Promise<WasteReport | undefined>;
+  createWasteReport(data: InsertWasteReport): Promise<WasteReport>;
+  updateWasteReport(id: number, data: Partial<InsertWasteReport>): Promise<WasteReport | undefined>;
+  deleteWasteReport(id: number): Promise<boolean>;
+  
+  // Waste Items
+  getWasteItems(wasteReportId: number): Promise<WasteItem[]>;
+  createWasteItem(data: InsertWasteItem): Promise<WasteItem>;
+  updateWasteItem(id: number, data: Partial<InsertWasteItem>): Promise<WasteItem | undefined>;
+  deleteWasteItem(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3739,6 +3772,116 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // Display Bar Receipts
+  async getDisplayBarReceipts(branchId?: string, date?: string): Promise<DisplayBarReceipt[]> {
+    const conditions = [];
+    if (branchId) {
+      conditions.push(eq(displayBarReceipts.branchId, branchId));
+    }
+    if (date) {
+      conditions.push(eq(displayBarReceipts.receiptDate, date));
+    }
+    
+    if (conditions.length > 0) {
+      return await db.select().from(displayBarReceipts).where(and(...conditions)).orderBy(desc(displayBarReceipts.createdAt));
+    }
+    return await db.select().from(displayBarReceipts).orderBy(desc(displayBarReceipts.createdAt));
+  }
+
+  async createDisplayBarReceipt(data: InsertDisplayBarReceipt): Promise<DisplayBarReceipt> {
+    const [receipt] = await db.insert(displayBarReceipts).values(data).returning();
+    return receipt;
+  }
+
+  // Display Bar Daily Summary
+  async getDisplayBarDailySummary(branchId?: string, date?: string): Promise<DisplayBarDailySummary[]> {
+    const conditions = [];
+    if (branchId) {
+      conditions.push(eq(displayBarDailySummary.branchId, branchId));
+    }
+    if (date) {
+      conditions.push(eq(displayBarDailySummary.summaryDate, date));
+    }
+    
+    if (conditions.length > 0) {
+      return await db.select().from(displayBarDailySummary).where(and(...conditions)).orderBy(desc(displayBarDailySummary.summaryDate));
+    }
+    return await db.select().from(displayBarDailySummary).orderBy(desc(displayBarDailySummary.summaryDate));
+  }
+
+  async updateDisplayBarDailySummary(id: number, data: Partial<InsertDisplayBarDailySummary>): Promise<DisplayBarDailySummary | undefined> {
+    const [summary] = await db.update(displayBarDailySummary)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(displayBarDailySummary.id, id))
+      .returning();
+    return summary || undefined;
+  }
+
+  // Waste Reports
+  async getWasteReports(branchId?: string, dateFrom?: string, dateTo?: string): Promise<WasteReport[]> {
+    const conditions = [];
+    if (branchId) {
+      conditions.push(eq(wasteReports.branchId, branchId));
+    }
+    if (dateFrom) {
+      conditions.push(gte(wasteReports.reportDate, dateFrom));
+    }
+    if (dateTo) {
+      conditions.push(lte(wasteReports.reportDate, dateTo));
+    }
+    
+    if (conditions.length > 0) {
+      return await db.select().from(wasteReports).where(and(...conditions)).orderBy(desc(wasteReports.reportDate));
+    }
+    return await db.select().from(wasteReports).orderBy(desc(wasteReports.reportDate));
+  }
+
+  async getWasteReport(id: number): Promise<WasteReport | undefined> {
+    const [report] = await db.select().from(wasteReports).where(eq(wasteReports.id, id));
+    return report || undefined;
+  }
+
+  async createWasteReport(data: InsertWasteReport): Promise<WasteReport> {
+    const [report] = await db.insert(wasteReports).values(data).returning();
+    return report;
+  }
+
+  async updateWasteReport(id: number, data: Partial<InsertWasteReport>): Promise<WasteReport | undefined> {
+    const [report] = await db.update(wasteReports)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(wasteReports.id, id))
+      .returning();
+    return report || undefined;
+  }
+
+  async deleteWasteReport(id: number): Promise<boolean> {
+    const result = await db.delete(wasteReports).where(eq(wasteReports.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Waste Items
+  async getWasteItems(wasteReportId: number): Promise<WasteItem[]> {
+    return await db.select().from(wasteItems).where(eq(wasteItems.wasteReportId, wasteReportId));
+  }
+
+  async createWasteItem(data: InsertWasteItem): Promise<WasteItem> {
+    const [item] = await db.insert(wasteItems).values(data).returning();
+    return item;
+  }
+
+  async updateWasteItem(id: number, data: Partial<InsertWasteItem>): Promise<WasteItem | undefined> {
+    const [item] = await db.update(wasteItems)
+      .set(data)
+      .where(eq(wasteItems.id, id))
+      .returning();
+    return item || undefined;
+  }
+
+  async deleteWasteItem(id: number): Promise<boolean> {
+    const result = await db.delete(wasteItems).where(eq(wasteItems.id, id)).returning();
+    return result.length > 0;
   }
 }
 

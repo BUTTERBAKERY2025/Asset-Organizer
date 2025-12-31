@@ -41,6 +41,7 @@ import TargetsPlanningPage from "@/pages/targets-planning";
 import TargetsDashboardPage from "@/pages/targets-dashboard";
 import IncentivesManagementPage from "@/pages/incentives-management";
 import SalesAnalyticsPage from "@/pages/sales-analytics";
+import DisplayBarWastePage from "@/pages/display-bar-waste";
 
 function Router() {
   return (
@@ -81,6 +82,7 @@ function Router() {
       <Route path="/targets-dashboard" component={TargetsDashboardPage} />
       <Route path="/incentives-management" component={IncentivesManagementPage} />
       <Route path="/sales-analytics" component={SalesAnalyticsPage} />
+      <Route path="/display-bar-waste" component={DisplayBarWastePage} />
       <Route component={NotFound} />
     </Switch>
   );
