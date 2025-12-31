@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
-  FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User
+  FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User,
+  Eye, Printer, FileDown, Hash
 } from "lucide-react";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
@@ -84,6 +85,8 @@ export default function DisplayBarWastePage() {
   });
 
   const [selectedWasteReportId, setSelectedWasteReportId] = useState<number | null>(null);
+  const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<any | null>(null);
+  const [showReceiptDetailDialog, setShowReceiptDetailDialog] = useState(false);
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -257,7 +260,39 @@ export default function DisplayBarWastePage() {
   const filteredReceipts = receipts;
   const filteredWasteReports = wasteReports;
 
-  const paginatedReceipts = filteredReceipts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const receiptOrders = useMemo(() => {
+    const orderMap: Record<string, any> = {};
+    filteredReceipts.forEach((r: any) => {
+      const key = `${r.branchId}_${r.receiptDate}_${r.createdBy || 'unknown'}`;
+      if (!orderMap[key]) {
+        orderMap[key] = {
+          id: key,
+          orderNumber: Object.keys(orderMap).length + 1,
+          branchId: r.branchId,
+          branchName: getBranchName(r.branchId),
+          receiptDate: r.receiptDate,
+          createdBy: r.createdBy,
+          createdByName: r.createdByName || user?.username || "غير معروف",
+          items: [],
+          totalQuantity: 0,
+          firstTime: r.receiptTime,
+          lastTime: r.receiptTime,
+        };
+      }
+      orderMap[key].items.push({
+        ...r,
+        productName: getProductName(r.productId),
+      });
+      orderMap[key].totalQuantity += r.quantity || 0;
+      if (r.receiptTime < orderMap[key].firstTime) orderMap[key].firstTime = r.receiptTime;
+      if (r.receiptTime > orderMap[key].lastTime) orderMap[key].lastTime = r.receiptTime;
+    });
+    return Object.values(orderMap).sort((a: any, b: any) => 
+      b.lastTime.localeCompare(a.lastTime)
+    );
+  }, [filteredReceipts, branches, products, user]);
+
+  const paginatedReceiptOrders = receiptOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const paginatedWasteReports = filteredWasteReports.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const receiptExportColumns = [
@@ -332,8 +367,8 @@ export default function DisplayBarWastePage() {
                   <Package className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-blue-700">{filteredReceipts.length}</div>
-                  <div className="text-[11px] text-blue-600/70">استلام اليوم</div>
+                  <div className="text-xl font-bold text-blue-700">{receiptOrders.length}</div>
+                  <div className="text-[11px] text-blue-600/70">أوامر استلام</div>
                 </div>
               </div>
             </CardContent>
@@ -729,46 +764,73 @@ export default function DisplayBarWastePage() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="p-3 text-right font-medium">الوقت</th>
-                        <th className="p-3 text-right font-medium">المنتج</th>
-                        <th className="p-3 text-right font-medium">الكمية</th>
+                        <th className="p-3 text-right font-medium">رقم الأمر</th>
                         <th className="p-3 text-right font-medium">الفرع</th>
-                        <th className="p-3 text-right font-medium">ملاحظات</th>
+                        <th className="p-3 text-right font-medium">المستلم</th>
+                        <th className="p-3 text-right font-medium">التاريخ</th>
+                        <th className="p-3 text-right font-medium">الوقت</th>
+                        <th className="p-3 text-right font-medium">عدد الأصناف</th>
+                        <th className="p-3 text-right font-medium">إجراءات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {paginatedReceipts.length === 0 ? (
+                      {paginatedReceiptOrders.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                            لا توجد عمليات استلام لهذا اليوم
+                          <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                            لا توجد أوامر استلام لهذا اليوم
                           </td>
                         </tr>
                       ) : (
-                        paginatedReceipts.map((receipt: any) => (
-                          <tr key={receipt.id} className="hover:bg-muted/30">
+                        paginatedReceiptOrders.map((order: any, index: number) => (
+                          <tr key={order.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setSelectedReceiptOrder(order); setShowReceiptDetailDialog(true); }}>
                             <td className="p-3">
-                              <div className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
-                                {receipt.receiptTime}
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                  <Hash className="w-4 h-4 text-primary" />
+                                </div>
+                                <span className="font-bold text-primary">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
                               </div>
                             </td>
-                            <td className="p-3 font-medium">{getProductName(receipt.productId)}</td>
                             <td className="p-3">
-                              <Badge variant="secondary">{receipt.quantity}</Badge>
+                              <Badge variant="outline" className="gap-1">
+                                <Building2 className="w-3 h-3" />
+                                {order.branchName}
+                              </Badge>
                             </td>
-                            <td className="p-3">{getBranchName(receipt.branchId)}</td>
-                            <td className="p-3 text-muted-foreground">{receipt.notes || "-"}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-1">
+                                <User className="w-3 h-3 text-muted-foreground" />
+                                {order.createdByName}
+                              </div>
+                            </td>
+                            <td className="p-3">{order.receiptDate}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                {order.firstTime} - {order.lastTime}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <Badge className="bg-green-100 text-green-700">{order.items.length} صنف</Badge>
+                              <span className="text-xs text-muted-foreground mr-2">({order.totalQuantity} وحدة)</span>
+                            </td>
+                            <td className="p-3">
+                              <Button size="sm" variant="ghost" className="gap-1" onClick={(e) => { e.stopPropagation(); setSelectedReceiptOrder(order); setShowReceiptDetailDialog(true); }}>
+                                <Eye className="w-4 h-4" />
+                                عرض
+                              </Button>
+                            </td>
                           </tr>
                         ))
                       )}
                     </tbody>
                   </table>
                 </div>
-                {filteredReceipts.length > itemsPerPage && (
+                {receiptOrders.length > itemsPerPage && (
                   <div className="p-3 border-t">
                     <TablePagination
                       currentPage={currentPage}
-                      totalItems={filteredReceipts.length}
+                      totalItems={receiptOrders.length}
                       itemsPerPage={itemsPerPage}
                       onPageChange={setCurrentPage}
                     />
@@ -777,6 +839,123 @@ export default function DisplayBarWastePage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <Dialog open={showReceiptDetailDialog} onOpenChange={setShowReceiptDetailDialog}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary" />
+                    سند استلام إنتاج للعرض
+                  </span>
+                  <div className="flex gap-2">
+                    <ExportButtons
+                      data={selectedReceiptOrder?.items || []}
+                      columns={[
+                        { header: "الصنف", key: "productName", width: 30 },
+                        { header: "الكمية", key: "quantity", width: 10 },
+                        { header: "الوقت", key: "receiptTime", width: 10 },
+                        { header: "ملاحظات", key: "notes", width: 25 },
+                      ]}
+                      fileName={`سند_استلام_${selectedReceiptOrder?.orderNumber || ''}`}
+                      title="سند استلام إنتاج"
+                      subtitle={`الفرع: ${selectedReceiptOrder?.branchName || ''} - التاريخ: ${selectedReceiptOrder?.receiptDate || ''}`}
+                    />
+                  </div>
+                </DialogTitle>
+              </DialogHeader>
+              
+              {selectedReceiptOrder && (
+                <div className="space-y-4 pt-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-lg border">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <Hash className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">رقم السند</p>
+                        <p className="text-lg font-bold text-primary">#{selectedReceiptOrder.orderNumber}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">الفرع</p>
+                        <p className="font-medium">{selectedReceiptOrder.branchName}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                        <User className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">المستلم</p>
+                        <p className="font-medium">{selectedReceiptOrder.createdByName}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                        <Calendar className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">التاريخ والوقت</p>
+                        <p className="font-medium">{selectedReceiptOrder.receiptDate}</p>
+                        <p className="text-xs text-muted-foreground">{selectedReceiptOrder.firstTime} - {selectedReceiptOrder.lastTime}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 px-4 py-2 font-semibold flex items-center justify-between">
+                      <span>الأصناف المستلمة</span>
+                      <Badge variant="secondary">{selectedReceiptOrder.items.length} صنف - {selectedReceiptOrder.totalQuantity} وحدة</Badge>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="p-3 text-right font-medium">#</th>
+                          <th className="p-3 text-right font-medium">الصنف</th>
+                          <th className="p-3 text-right font-medium">الكمية</th>
+                          <th className="p-3 text-right font-medium">الوقت</th>
+                          <th className="p-3 text-right font-medium">ملاحظات</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {selectedReceiptOrder.items.map((item: any, idx: number) => (
+                          <tr key={item.id} className="hover:bg-muted/20">
+                            <td className="p-3 text-muted-foreground">{idx + 1}</td>
+                            <td className="p-3 font-medium">{item.productName}</td>
+                            <td className="p-3">
+                              <Badge variant="secondary">{item.quantity}</Badge>
+                            </td>
+                            <td className="p-3 text-muted-foreground">{item.receiptTime}</td>
+                            <td className="p-3 text-muted-foreground">{item.notes || "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-primary/5">
+                        <tr>
+                          <td colSpan={2} className="p-3 font-bold">الإجمالي</td>
+                          <td className="p-3">
+                            <Badge className="bg-primary text-white">{selectedReceiptOrder.totalQuantity} وحدة</Badge>
+                          </td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setShowReceiptDetailDialog(false)}>
+                      إغلاق
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           <TabsContent value="waste" className="mt-4">
             <Card>
