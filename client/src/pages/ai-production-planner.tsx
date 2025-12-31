@@ -227,12 +227,12 @@ export default function AdvancedProductionPlannerPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="salesData">بيانات المبيعات السابقة (اختياري)</Label>
-                <Select value={salesDataFileId} onValueChange={setSalesDataFileId}>
+                <Select value={salesDataFileId || "none"} onValueChange={(val) => setSalesDataFileId(val === "none" ? "" : val)}>
                   <SelectTrigger data-testid="select-sales-data">
                     <SelectValue placeholder="اختر ملف بيانات المبيعات" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">بدون بيانات سابقة</SelectItem>
+                    <SelectItem value="none">بدون بيانات سابقة</SelectItem>
                     {salesDataFiles?.filter(f => f.status === 'completed').map((file) => (
                       <SelectItem key={file.id} value={file.id.toString()}>
                         {file.fileName} ({file.periodStart} - {file.periodEnd})
