@@ -198,7 +198,7 @@ export function ProductSelector({
               </div>
             </div>
 
-            <ScrollArea className="max-h-[320px]" ref={listRef}>
+            <div className="max-h-[400px] overflow-y-auto" ref={listRef}>
               {filteredProducts.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
                   <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
@@ -207,9 +207,9 @@ export function ProductSelector({
               ) : (
                 <div className="p-1">
                   {groupedProducts.map(([category, items]) => (
-                    <div key={category} className="mb-2">
+                    <div key={category} className="mb-1">
                       <div className={cn(
-                        "sticky top-0 px-2 py-1.5 text-xs font-semibold rounded flex items-center justify-between",
+                        "sticky top-0 z-10 px-2 py-1 text-xs font-semibold rounded flex items-center justify-between",
                         CATEGORY_COLORS[category] || "bg-gray-100 text-gray-700"
                       )}>
                         <span>{category}</span>
@@ -217,36 +217,37 @@ export function ProductSelector({
                           {items.length}
                         </Badge>
                       </div>
-                      {items.map(product => {
-                        const flatIndex = flatList.findIndex(p => p.id === product.id);
-                        const isHighlighted = flatIndex === highlightedIndex;
-                        const isSelected = String(product.id) === value;
+                      <div className="grid grid-cols-1 gap-0.5">
+                        {items.map(product => {
+                          const flatIndex = flatList.findIndex(p => p.id === product.id);
+                          const isHighlighted = flatIndex === highlightedIndex;
+                          const isSelected = String(product.id) === value;
 
-                        return (
-                          <div
-                            key={product.id}
-                            className={cn(
-                              "flex items-center justify-between px-3 py-2 rounded cursor-pointer transition-all",
-                              isHighlighted && "bg-primary/10",
-                              isSelected && "bg-primary/20",
-                              !isHighlighted && !isSelected && "hover:bg-muted/50"
-                            )}
-                            onClick={() => handleSelect(product)}
-                            onMouseEnter={() => setHighlightedIndex(flatIndex)}
-                            data-testid={`product-option-${product.id}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {isSelected && <Check className="w-4 h-4 text-primary" />}
-                              <span className={cn("text-sm", isSelected && "font-medium")}>
-                                {product.name}
-                              </span>
-                              {product.sku && (
-                                <code className="text-xs bg-muted px-1 py-0.5 rounded text-muted-foreground">
-                                  {product.sku}
-                                </code>
+                          return (
+                            <div
+                              key={product.id}
+                              className={cn(
+                                "flex items-center justify-between px-3 py-1.5 rounded cursor-pointer transition-colors",
+                                isHighlighted && "bg-primary/15 border-r-2 border-primary",
+                                isSelected && "bg-primary/25 border-r-2 border-primary",
+                                !isHighlighted && !isSelected && "hover:bg-muted/70"
                               )}
-                            </div>
-                            {showPrice && (
+                              onClick={() => handleSelect(product)}
+                              onMouseEnter={() => setHighlightedIndex(flatIndex)}
+                              data-testid={`product-option-${product.id}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {isSelected && <Check className="w-4 h-4 text-primary" />}
+                                <span className={cn("text-sm", isSelected && "font-medium")}>
+                                  {product.name}
+                                </span>
+                                {product.sku && (
+                                  <code className="text-xs bg-muted px-1 py-0.5 rounded text-muted-foreground">
+                                    {product.sku}
+                                  </code>
+                                )}
+                              </div>
+                              {showPrice && (
                               <div className="flex items-center gap-2 text-xs">
                                 {product.priceExclVat && (
                                   <span className="text-muted-foreground">
@@ -263,11 +264,12 @@ export function ProductSelector({
                           </div>
                         );
                       })}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
-            </ScrollArea>
+            </div>
 
             <div className="p-2 border-t bg-muted/30 text-xs text-muted-foreground flex items-center justify-between">
               <span>{filteredProducts.length} منتج</span>

@@ -451,7 +451,7 @@ export default function DisplayBarWastePage() {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">التاريخ</p>
-                            <p className="text-sm font-medium">{currentTime.toLocaleDateString('ar-SA')}</p>
+                            <p className="text-sm font-medium">{currentTime.toLocaleDateString('en-GB')}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -460,7 +460,7 @@ export default function DisplayBarWastePage() {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">الوقت</p>
-                            <p className="text-sm font-medium">{currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="text-sm font-medium">{currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
                           </div>
                         </div>
                       </div>
