@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
+import { ProductSelector } from "@/components/product-selector";
 import { WASTE_REASON_LABELS, DISPLAY_BAR_CATEGORY_LABELS } from "@shared/schema";
 import type { Branch, Product, WasteReport, WasteItem } from "@shared/schema";
 
@@ -434,16 +435,13 @@ export default function DisplayBarWastePage() {
                             <div className="space-y-3">
                               <div>
                                 <Label className="text-xs">المنتج</Label>
-                                <Select value={receiptForm.productId} onValueChange={(v) => setReceiptForm(f => ({ ...f, productId: v }))}>
-                                  <SelectTrigger data-testid="select-product-receipt" className="h-10">
-                                    <SelectValue placeholder="اختر المنتج" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {products.filter(p => p.isActive !== "false").map(p => (
-                                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <ProductSelector
+                                  products={products.filter(p => p.isActive !== "false")}
+                                  value={receiptForm.productId}
+                                  onSelect={(id) => setReceiptForm(f => ({ ...f, productId: id }))}
+                                  placeholder="ابحث عن المنتج..."
+                                  showPrice={true}
+                                />
                               </div>
                               <div>
                                 <Label className="text-xs">الكمية</Label>
@@ -579,16 +577,13 @@ export default function DisplayBarWastePage() {
                             </div>
                             <div>
                               <Label>المنتج التالف</Label>
-                              <Select value={wasteForm.productId} onValueChange={(v) => setWasteForm(f => ({ ...f, productId: v }))}>
-                                <SelectTrigger data-testid="select-product-waste">
-                                  <SelectValue placeholder="اختر المنتج" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {products.filter(p => p.isActive !== "false").map(p => (
-                                    <SelectItem key={p.id} value={String(p.id)}>{p.name} - {(p.basePrice || 0).toFixed(2)} ر.س</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <ProductSelector
+                                  products={products.filter(p => p.isActive !== "false")}
+                                  value={wasteForm.productId}
+                                  onSelect={(id) => setWasteForm(f => ({ ...f, productId: id }))}
+                                  placeholder="ابحث عن المنتج..."
+                                  showPrice={true}
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
