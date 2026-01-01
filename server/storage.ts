@@ -484,6 +484,7 @@ export interface IStorage {
   getProductionAiPlan(id: number): Promise<ProductionAiPlan | undefined>;
   createProductionAiPlan(plan: InsertProductionAiPlan): Promise<ProductionAiPlan>;
   updateProductionAiPlan(id: number, plan: Partial<InsertProductionAiPlan>): Promise<ProductionAiPlan | undefined>;
+  deleteProductionAiPlan(id: number): Promise<boolean>;
 
   // Sales Data Uploads
   getAllSalesDataUploads(): Promise<SalesDataUpload[]>;
@@ -4094,6 +4095,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(productionAiPlans.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async deleteProductionAiPlan(id: number): Promise<boolean> {
+    const result = await db.delete(productionAiPlans).where(eq(productionAiPlans.id, id)).returning();
+    return result.length > 0;
   }
 
   // Sales Data Uploads

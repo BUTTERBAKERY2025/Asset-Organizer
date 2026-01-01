@@ -4611,6 +4611,26 @@ export async function registerRoutes(
     }
   });
 
+  // Delete AI production plan
+  app.delete("/api/production-ai-plans/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      
+      const success = await storage.deleteProductionAiPlan(id);
+      if (!success) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting AI plan:", error);
+      res.status(500).json({ error: "Failed to delete AI plan" });
+    }
+  });
+
   // Generate AI production plan
   app.post("/api/production-ai-plans/generate", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {

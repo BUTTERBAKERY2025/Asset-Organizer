@@ -16,7 +16,19 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch } from "@shared/schema";
-import { Brain, Calendar, DollarSign, Percent, Package, CheckCircle, Clock, Sparkles, TrendingUp, History, FileText, Loader2, AlertCircle, RefreshCw, ArrowLeft } from "lucide-react";
+import { Brain, Calendar, DollarSign, Percent, Package, CheckCircle, Clock, Sparkles, TrendingUp, History, FileText, Loader2, AlertCircle, RefreshCw, ArrowLeft, Trash2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface AIPlanProduct {
   productId: number;
@@ -119,6 +131,19 @@ export default function AdvancedProductionPlannerPage() {
     },
     onError: (error: any) => {
       toast({ title: "خطأ في تطبيق الخطة", description: error.message || "حدث خطأ أثناء تطبيق خطة الإنتاج", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (planId: number): Promise<void> => {
+      await apiRequest("DELETE", `/api/production-ai-plans/${planId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/production-ai-plans"] });
+      toast({ title: "تم حذف الخطة بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ في حذف الخطة", description: error.message || "حدث خطأ أثناء حذف الخطة", variant: "destructive" });
     },
   });
 
@@ -463,15 +488,14 @@ export default function AdvancedProductionPlannerPage() {
           </CardHeader>
           <CardContent>
             {historyLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[...Array(3)].map((_, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-4">
-                      <Skeleton className="h-6 w-3/4 mb-2" />
-                      <Skeleton className="h-4 w-1/2 mb-4" />
-                      <Skeleton className="h-20 w-full" />
-                    </CardContent>
-                  </Card>
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-24" />
+                    <Skeleton className="h-10 flex-1" />
+                    <Skeleton className="h-10 w-20" />
+                    <Skeleton className="h-10 w-24" />
+                  </div>
                 ))}
               </div>
             ) : !planHistory || planHistory.length === 0 ? (
@@ -482,68 +506,118 @@ export default function AdvancedProductionPlannerPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {paginatedHistory.map((plan) => {
-                    const statusConfig = STATUS_CONFIG[plan.status];
-                    return (
-                      <Card key={plan.id} className="hover:shadow-md transition-shadow" data-testid={`card-plan-${plan.id}`}>
-                        <CardContent className="p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium" data-testid={`text-plan-branch-${plan.id}`}>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-gray-50/80">
+                      <TableRow>
+                        <TableHead className="text-right font-semibold">التاريخ</TableHead>
+                        <TableHead className="text-right font-semibold">الفرع</TableHead>
+                        <TableHead className="text-right font-semibold">المستهدف</TableHead>
+                        <TableHead className="text-right font-semibold">الثقة</TableHead>
+                        <TableHead className="text-right font-semibold">المنتجات</TableHead>
+                        <TableHead className="text-right font-semibold">الحالة</TableHead>
+                        <TableHead className="text-left font-semibold">الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedHistory.map((plan, index) => {
+                        const statusConfig = STATUS_CONFIG[plan.status];
+                        return (
+                          <TableRow 
+                            key={plan.id} 
+                            className={`hover:bg-purple-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                            data-testid={`row-plan-${plan.id}`}
+                          >
+                            <TableCell className="font-medium" data-testid={`text-plan-date-${plan.id}`}>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                                {formatDate(plan.planDate)}
+                              </div>
+                            </TableCell>
+                            <TableCell data-testid={`text-plan-branch-${plan.id}`}>
                               {getBranchName(plan.branchId)}
-                            </span>
-                            <Badge className={statusConfig?.color || ""} data-testid={`badge-status-${plan.id}`}>
-                              {statusConfig?.label || plan.status}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="w-4 h-4" />
-                            <span data-testid={`text-plan-date-${plan.id}`}>{formatDate(plan.planDate)}</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">المستهدف</p>
-                              <p className="font-semibold" data-testid={`text-target-${plan.id}`}>
-                                {formatCurrency(plan.targetSales)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">مستوى الثقة</p>
-                              <p className="font-semibold" data-testid={`text-confidence-${plan.id}`}>
-                                {(plan.confidenceScore * 100).toFixed(0)}%
-                              </p>
-                            </div>
-                          </div>
-                          <Progress value={plan.confidenceScore * 100} className="h-2" />
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{plan.products?.length || 0} منتج</span>
-                            <span>{formatDate(plan.createdAt)}</span>
-                          </div>
-                          {plan.status === "generated" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleApply(plan.id)}
-                              disabled={applyMutation.isPending}
-                              className="w-full"
-                              data-testid={`button-apply-${plan.id}`}
-                            >
-                              <CheckCircle className="w-4 h-4 ml-1" />
-                              تطبيق الخطة
-                            </Button>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                            </TableCell>
+                            <TableCell className="text-left font-semibold text-purple-700" data-testid={`text-target-${plan.id}`}>
+                              {formatCurrency(plan.targetSales)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Progress value={plan.confidenceScore * 100} className="h-2 w-16" />
+                                <span className="text-sm font-medium" data-testid={`text-confidence-${plan.id}`}>
+                                  {(plan.confidenceScore * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline">{plan.products?.length || 0}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={statusConfig?.color || ""} data-testid={`badge-status-${plan.id}`}>
+                                {statusConfig?.label || plan.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                {plan.status === "generated" && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleApply(plan.id)}
+                                    disabled={applyMutation.isPending}
+                                    className="h-8 hover:bg-green-100 hover:text-green-700"
+                                    data-testid={`button-apply-${plan.id}`}
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-8 hover:bg-red-100 hover:text-red-700"
+                                      data-testid={`button-delete-${plan.id}`}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent dir="rtl">
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>هل أنت متأكد من الحذف؟</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        سيتم حذف خطة الإنتاج بتاريخ {formatDate(plan.planDate)} نهائياً. هذا الإجراء لا يمكن التراجع عنه.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="gap-2">
+                                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => deleteMutation.mutate(plan.id)}
+                                        className="bg-destructive hover:bg-destructive/90"
+                                      >
+                                        حذف
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
 
-                <TablePagination
-                  currentPage={historyPage}
-                  totalItems={planHistory?.length || 0}
-                  itemsPerPage={itemsPerPage}
-                  onPageChange={setHistoryPage}
-                />
+                {planHistory && planHistory.length > itemsPerPage && (
+                  <div className="mt-4">
+                    <TablePagination
+                      currentPage={historyPage}
+                      totalItems={planHistory?.length || 0}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={setHistoryPage}
+                    />
+                  </div>
+                )}
               </>
             )}
           </CardContent>
