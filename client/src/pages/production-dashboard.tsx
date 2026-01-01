@@ -22,7 +22,8 @@ import {
   Target,
   Zap,
   Brain,
-  RefreshCw
+  RefreshCw,
+  ChefHat
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -53,6 +54,14 @@ interface SalesUpload {
 
 const QUICK_ACTIONS = [
   {
+    title: "الإنتاج الفعلي اليومي",
+    description: "تسجيل دفعات الإنتاج على مدار اليوم",
+    icon: ChefHat,
+    href: "/daily-production",
+    color: "from-amber-500 to-orange-600",
+    badge: "جديد"
+  },
+  {
     title: "مخطط الإنتاج الذكي",
     description: "تخطيط الإنتاج بناءً على البيانات والتوقعات",
     icon: Brain,
@@ -73,7 +82,7 @@ const QUICK_ACTIONS = [
     description: "إدارة ومتابعة جميع أوامر الإنتاج",
     icon: ClipboardList,
     href: "/advanced-production-orders",
-    color: "from-amber-500 to-orange-600",
+    color: "from-slate-500 to-gray-600",
     badge: null
   },
   {

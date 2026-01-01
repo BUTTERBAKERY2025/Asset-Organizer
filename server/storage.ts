@@ -110,6 +110,8 @@ import {
   type InsertSalesDataUpload,
   type ProductSalesAnalytics,
   type InsertProductSalesAnalytics,
+  type DailyProductionBatch,
+  type InsertDailyProductionBatch,
   branches,
   inventoryItems,
   auditLogs,
@@ -169,6 +171,7 @@ import {
   productionAiPlans,
   salesDataUploads,
   productSalesAnalytics,
+  dailyProductionBatches,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -509,6 +512,20 @@ export interface IStorage {
     weekly: number;
     longTerm: number;
     totalEstimatedCost: number;
+  }>;
+
+  // Daily Production Batches
+  getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string }): Promise<DailyProductionBatch[]>;
+  getDailyProductionBatch(id: number): Promise<DailyProductionBatch | undefined>;
+  createDailyProductionBatch(batch: InsertDailyProductionBatch): Promise<DailyProductionBatch>;
+  updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined>;
+  deleteDailyProductionBatch(id: number): Promise<boolean>;
+  getDailyProductionStats(branchId: string, date: string): Promise<{
+    totalBatches: number;
+    totalQuantity: number;
+    byDestination: Record<string, number>;
+    byCategory: Record<string, number>;
+    byHour: Record<string, number>;
   }>;
 }
 
@@ -4173,6 +4190,104 @@ export class DatabaseStorage implements IStorage {
       weekly: allOrders.filter(o => o.orderType === 'weekly').length,
       longTerm: allOrders.filter(o => o.orderType === 'long_term').length,
       totalEstimatedCost,
+    };
+  }
+
+  // Daily Production Batches
+  async getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string }): Promise<DailyProductionBatch[]> {
+    let query = db.select().from(dailyProductionBatches);
+    
+    const conditions = [];
+    if (filters?.branchId) {
+      conditions.push(eq(dailyProductionBatches.branchId, filters.branchId));
+    }
+    if (filters?.date) {
+      const startOfDay = new Date(filters.date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(filters.date);
+      endOfDay.setHours(23, 59, 59, 999);
+      conditions.push(gte(dailyProductionBatches.producedAt, startOfDay));
+      conditions.push(lte(dailyProductionBatches.producedAt, endOfDay));
+    }
+    if (filters?.destination) {
+      conditions.push(eq(dailyProductionBatches.destination, filters.destination));
+    }
+    
+    if (conditions.length > 0) {
+      return await db.select().from(dailyProductionBatches).where(and(...conditions)).orderBy(desc(dailyProductionBatches.producedAt));
+    }
+    return await db.select().from(dailyProductionBatches).orderBy(desc(dailyProductionBatches.producedAt));
+  }
+
+  async getDailyProductionBatch(id: number): Promise<DailyProductionBatch | undefined> {
+    const [batch] = await db.select().from(dailyProductionBatches).where(eq(dailyProductionBatches.id, id));
+    return batch || undefined;
+  }
+
+  async createDailyProductionBatch(batch: InsertDailyProductionBatch): Promise<DailyProductionBatch> {
+    const [newBatch] = await db.insert(dailyProductionBatches).values(batch).returning();
+    return newBatch;
+  }
+
+  async updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined> {
+    const [updated] = await db.update(dailyProductionBatches)
+      .set(batch)
+      .where(eq(dailyProductionBatches.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteDailyProductionBatch(id: number): Promise<boolean> {
+    const result = await db.delete(dailyProductionBatches).where(eq(dailyProductionBatches.id, id));
+    return true;
+  }
+
+  async getDailyProductionStats(branchId: string, date: string): Promise<{
+    totalBatches: number;
+    totalQuantity: number;
+    byDestination: Record<string, number>;
+    byCategory: Record<string, number>;
+    byHour: Record<string, number>;
+  }> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const batches = await db.select().from(dailyProductionBatches)
+      .where(and(
+        eq(dailyProductionBatches.branchId, branchId),
+        gte(dailyProductionBatches.producedAt, startOfDay),
+        lte(dailyProductionBatches.producedAt, endOfDay)
+      ));
+
+    const byDestination: Record<string, number> = {};
+    const byCategory: Record<string, number> = {};
+    const byHour: Record<string, number> = {};
+    let totalQuantity = 0;
+
+    for (const batch of batches) {
+      totalQuantity += batch.quantity;
+      
+      // By destination
+      const dest = batch.destination;
+      byDestination[dest] = (byDestination[dest] || 0) + batch.quantity;
+      
+      // By category
+      const cat = batch.productCategory || 'غير محدد';
+      byCategory[cat] = (byCategory[cat] || 0) + batch.quantity;
+      
+      // By hour
+      const hour = batch.producedAt.getHours().toString().padStart(2, '0') + ':00';
+      byHour[hour] = (byHour[hour] || 0) + batch.quantity;
+    }
+
+    return {
+      totalBatches: batches.length,
+      totalQuantity,
+      byDestination,
+      byCategory,
+      byHour,
     };
   }
 }

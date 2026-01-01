@@ -5384,5 +5384,169 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Daily Production Batches ====================
+  
+  // Get all batches with optional filters
+  app.get("/api/daily-production/batches", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const { branchId, date, destination } = req.query;
+      const batches = await storage.getAllDailyProductionBatches({
+        branchId: branchId as string,
+        date: date as string,
+        destination: destination as string,
+      });
+      res.json(batches);
+    } catch (error) {
+      console.error("Error fetching daily production batches:", error);
+      res.status(500).json({ error: "فشل في جلب دفعات الإنتاج اليومي" });
+    }
+  });
+
+  // Get single batch
+  app.get("/api/daily-production/batches/:id", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const batch = await storage.getDailyProductionBatch(id);
+      if (!batch) {
+        return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+      }
+      res.json(batch);
+    } catch (error) {
+      console.error("Error fetching batch:", error);
+      res.status(500).json({ error: "فشل في جلب دفعة الإنتاج" });
+    }
+  });
+
+  // Create new batch
+  app.post("/api/daily-production/batches", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt } = req.body;
+      
+      // Validate required fields
+      if (!branchId || typeof branchId !== 'string') {
+        return res.status(400).json({ error: "الفرع مطلوب" });
+      }
+      if (!productName || typeof productName !== 'string') {
+        return res.status(400).json({ error: "اسم المنتج مطلوب" });
+      }
+      if (quantity === undefined || quantity === null || isNaN(Number(quantity)) || Number(quantity) <= 0) {
+        return res.status(400).json({ error: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر" });
+      }
+      if (!destination || typeof destination !== 'string') {
+        return res.status(400).json({ error: "الوجهة مطلوبة" });
+      }
+      
+      // Validate destination value
+      const validDestinations = ['display_bar', 'kitchen_trolley', 'freezer', 'refrigerator'];
+      if (!validDestinations.includes(destination)) {
+        return res.status(400).json({ error: "الوجهة غير صالحة" });
+      }
+      
+      const batchData = {
+        branchId,
+        productId: productId ? Number(productId) : null,
+        productName: productName.trim(),
+        productCategory: productCategory || null,
+        quantity: Number(quantity),
+        unit: unit || 'قطعة',
+        destination,
+        notes: notes || null,
+        recordedBy: user?.id || null,
+        recorderName: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || null,
+        producedAt: producedAt ? new Date(producedAt) : new Date(),
+      };
+      
+      const batch = await storage.createDailyProductionBatch(batchData);
+      res.status(201).json(batch);
+    } catch (error) {
+      console.error("Error creating batch:", error);
+      res.status(500).json({ error: "فشل في إنشاء دفعة الإنتاج" });
+    }
+  });
+
+  // Update batch
+  app.patch("/api/daily-production/batches/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      
+      // Validate allowed update fields
+      const allowedFields = ['productName', 'productCategory', 'quantity', 'unit', 'destination', 'notes'];
+      const updateData: any = {};
+      
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          if (field === 'quantity') {
+            const qty = Number(req.body[field]);
+            if (isNaN(qty) || qty <= 0) {
+              return res.status(400).json({ error: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر" });
+            }
+            updateData[field] = qty;
+          } else if (field === 'destination') {
+            const validDestinations = ['display_bar', 'kitchen_trolley', 'freezer', 'refrigerator'];
+            if (!validDestinations.includes(req.body[field])) {
+              return res.status(400).json({ error: "الوجهة غير صالحة" });
+            }
+            updateData[field] = req.body[field];
+          } else {
+            updateData[field] = req.body[field];
+          }
+        }
+      }
+      
+      const updated = await storage.updateDailyProductionBatch(id, updateData);
+      if (!updated) {
+        return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating batch:", error);
+      res.status(500).json({ error: "فشل في تحديث دفعة الإنتاج" });
+    }
+  });
+
+  // Delete batch
+  app.delete("/api/daily-production/batches/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      
+      // Check if batch exists first
+      const existing = await storage.getDailyProductionBatch(id);
+      if (!existing) {
+        return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+      }
+      
+      await storage.deleteDailyProductionBatch(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting batch:", error);
+      res.status(500).json({ error: "فشل في حذف دفعة الإنتاج" });
+    }
+  });
+
+  // Get daily stats
+  app.get("/api/daily-production/stats", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const { branchId, date } = req.query;
+      if (!branchId || !date) {
+        return res.status(400).json({ error: "الفرع والتاريخ مطلوبان" });
+      }
+      const stats = await storage.getDailyProductionStats(branchId as string, date as string);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching daily production stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات الإنتاج اليومي" });
+    }
+  });
+
   return httpServer;
 }
