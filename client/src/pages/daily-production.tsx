@@ -120,6 +120,9 @@ export default function DailyProductionPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<string>("entry");
   const [productSearch, setProductSearch] = useState<string>("");
+  const [batchSearch, setBatchSearch] = useState<string>("");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterDestination, setFilterDestination] = useState<string>("all");
   const [quickMode, setQuickMode] = useState<boolean>(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
   const [editingBatch, setEditingBatch] = useState<DailyProductionBatch | null>(null);
@@ -127,6 +130,8 @@ export default function DailyProductionPage() {
   const [editDestination, setEditDestination] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+  const productInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -230,6 +235,61 @@ export default function DailyProductionPage() {
     },
   });
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        // Allow Enter to submit form when in quantity field
+        if (e.key === "Enter" && quantityInputRef.current === e.target) {
+          return; // Let form handle submission
+        }
+        return;
+      }
+      
+      // Alt+N: Focus on product name input (new entry)
+      if (e.altKey && e.key === "n") {
+        e.preventDefault();
+        productInputRef.current?.focus();
+        setActiveTab("entry");
+      }
+      
+      // Alt+Q: Focus on quantity input
+      if (e.altKey && e.key === "q") {
+        e.preventDefault();
+        quantityInputRef.current?.focus();
+      }
+      
+      // Alt+R: Refresh data
+      if (e.altKey && e.key === "r") {
+        e.preventDefault();
+        refetchBatches();
+        toast({ title: "تم تحديث البيانات" });
+      }
+      
+      // Alt+1-4: Quick destination select
+      if (e.altKey && ["1", "2", "3", "4"].includes(e.key)) {
+        e.preventDefault();
+        const destIndex = parseInt(e.key) - 1;
+        if (DESTINATIONS[destIndex]) {
+          setDestination(DESTINATIONS[destIndex].value);
+          toast({ title: `الوجهة: ${DESTINATIONS[destIndex].label}` });
+        }
+      }
+      
+      // Escape: Clear entry form only (not batch filters)
+      if (e.key === "Escape") {
+        setProductName("");
+        setQuantity("");
+        setNotes("");
+        setProductSearch("");
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [refetchBatches, toast]);
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `/api/daily-production/batches/${id}`);
@@ -329,8 +389,6 @@ export default function DailyProductionPage() {
 
   const getBranchName = (id: string) => branches?.find(b => b.id === id)?.name || id;
 
-  const paginatedBatches = getPageItems(batches || [], currentPage);
-
   const batchesByHour = (batches || []).reduce((acc, batch) => {
     const hour = format(new Date(batch.producedAt), "HH");
     if (!acc[hour]) acc[hour] = [];
@@ -371,6 +429,45 @@ export default function DailyProductionPage() {
       (p.category ?? "").toLowerCase().includes(search)
     );
   }, [products, productSearch]);
+
+  // Filter batches by search, category, and destination
+  const filteredBatches = useMemo(() => {
+    if (!batches) return [];
+    let result = [...batches];
+    
+    // Filter by search term
+    if (batchSearch) {
+      const search = batchSearch.toLowerCase();
+      result = result.filter(b =>
+        b.productName.toLowerCase().includes(search) ||
+        (b.productCategory ?? "").toLowerCase().includes(search) ||
+        (b.notes ?? "").toLowerCase().includes(search) ||
+        (b.recorderName ?? "").toLowerCase().includes(search)
+      );
+    }
+    
+    // Filter by category
+    if (filterCategory !== "all") {
+      result = result.filter(b => b.productCategory === filterCategory);
+    }
+    
+    // Filter by destination
+    if (filterDestination !== "all") {
+      result = result.filter(b => b.destination === filterDestination);
+    }
+    
+    return result;
+  }, [batches, batchSearch, filterCategory, filterDestination]);
+
+  const paginatedBatches = getPageItems(filteredBatches, currentPage);
+
+  // Reset to page 1 when filtered results change
+  useEffect(() => {
+    const totalPages = Math.ceil(filteredBatches.length / itemsPerPage);
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [filteredBatches.length, currentPage, itemsPerPage]);
 
   // Popular products (most used today)
   const popularProducts = useMemo(() => {
@@ -822,6 +919,7 @@ export default function DailyProductionPage() {
                         value={quantity}
                         onChange={(e) => setQuantity(e.target.value)}
                         placeholder="أدخل الكمية"
+                        ref={quantityInputRef}
                         data-testid="input-quantity"
                       />
                       <div className="flex flex-wrap gap-1">
@@ -920,6 +1018,63 @@ export default function DailyProductionPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {/* Filter Bar */}
+                  {batches && batches.length > 0 && (
+                    <div className="flex flex-wrap gap-3 mb-4 p-3 bg-muted/30 rounded-lg">
+                      <div className="flex-1 min-w-[180px]">
+                        <Input
+                          placeholder="بحث في الدفعات..."
+                          value={batchSearch}
+                          onChange={(e) => { setBatchSearch(e.target.value); setCurrentPage(1); }}
+                          className="h-9"
+                          data-testid="input-batch-search"
+                        />
+                      </div>
+                      <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v); setCurrentPage(1); }}>
+                        <SelectTrigger className="w-[140px] h-9" data-testid="select-filter-category">
+                          <SelectValue placeholder="الفئة" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">كل الفئات</SelectItem>
+                          {BAKERY_CATEGORIES.map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterDestination} onValueChange={(v) => { setFilterDestination(v); setCurrentPage(1); }}>
+                        <SelectTrigger className="w-[140px] h-9" data-testid="select-filter-destination">
+                          <SelectValue placeholder="الوجهة" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">كل الوجهات</SelectItem>
+                          {DESTINATIONS.map(d => (
+                            <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(batchSearch || filterCategory !== "all" || filterDestination !== "all") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9"
+                          onClick={() => {
+                            setBatchSearch("");
+                            setFilterCategory("all");
+                            setFilterDestination("all");
+                            setCurrentPage(1);
+                          }}
+                          data-testid="btn-clear-filters"
+                        >
+                          <X className="h-4 w-4 ml-1" />
+                          مسح
+                        </Button>
+                      )}
+                      <Badge variant="secondary" className="h-9 px-3 flex items-center">
+                        {filteredBatches.length} نتيجة
+                      </Badge>
+                    </div>
+                  )}
+                  
                   {!branchId ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Factory className="w-12 h-12 mx-auto mb-4 opacity-20" />
@@ -934,6 +1089,12 @@ export default function DailyProductionPage() {
                       <Package className="w-12 h-12 mx-auto mb-4 opacity-20" />
                       <p>لا توجد دفعات مسجلة لهذا اليوم</p>
                       <p className="text-sm">ابدأ بتسجيل الإنتاج من النموذج</p>
+                    </div>
+                  ) : filteredBatches.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Search className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                      <p>لا توجد نتائج مطابقة للفلترة</p>
+                      <p className="text-sm">حاول تغيير معايير البحث</p>
                     </div>
                   ) : (
                     <>

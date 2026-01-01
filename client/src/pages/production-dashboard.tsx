@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { 
@@ -33,6 +34,9 @@ import {
   Activity,
   AlertTriangle
 } from "lucide-react";
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -151,6 +155,8 @@ const QUICK_ACTIONS = [
 
 export default function ProductionDashboardPage() {
   const { selectedBranch, setSelectedBranch, selectedDate, setSelectedDate } = useProductionContext();
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
   // Initialize branch to "all" for dashboard if empty
   useEffect(() => {
@@ -182,12 +188,18 @@ export default function ProductionDashboardPage() {
           today: { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} },
           yesterday: { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} },
           deltas: { quantity: 0, batches: 0, quantityPercent: 0, batchesPercent: 0 },
+          target: { totalTarget: 0, totalProduced: 0, gap: 0, completionRate: 0 },
           activeOrders: 0,
           date: selectedDate,
           branchId: selectedBranch,
         };
       }
-      return res.json();
+      const data = await res.json();
+      // Ensure target object always exists
+      if (!data.target) {
+        data.target = { totalTarget: 0, totalProduced: 0, gap: 0, completionRate: 0 };
+      }
+      return data;
     },
   });
 
@@ -214,9 +226,27 @@ export default function ProductionDashboardPage() {
   const qtyDiff = getDiff(dailyStats?.totalQuantity || 0, prevDayStats?.totalQuantity || 0);
   const batchDiff = getDiff(dailyStats?.totalBatches || 0, prevDayStats?.totalBatches || 0);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     refetchStats();
     refetchDaily();
+    setLastUpdated(new Date());
+  }, [refetchStats, refetchDaily]);
+
+  // Auto-refresh every 60 seconds when enabled
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      handleRefresh();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, handleRefresh]);
+
+  const formatLastUpdated = () => {
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - lastUpdated.getTime()) / 1000);
+    if (diff < 60) return `منذ ${diff} ثانية`;
+    const mins = Math.floor(diff / 60);
+    return `منذ ${mins} دقيقة`;
   };
 
   return (
@@ -230,9 +260,32 @@ export default function ProductionDashboardPage() {
             </h1>
             <p className="text-gray-600 mt-1">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Auto-refresh toggle */}
+            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+              <Switch
+                id="auto-refresh"
+                checked={autoRefresh}
+                onCheckedChange={setAutoRefresh}
+                data-testid="switch-auto-refresh"
+              />
+              <Label htmlFor="auto-refresh" className="text-sm text-gray-600 cursor-pointer">
+                تحديث تلقائي
+              </Label>
+              {autoRefresh && (
+                <Badge variant="secondary" className="text-xs animate-pulse">
+                  كل 60 ثانية
+                </Badge>
+              )}
+            </div>
+            
+            {/* Last updated indicator */}
+            <span className="text-xs text-gray-500" data-testid="text-last-updated">
+              {formatLastUpdated()}
+            </span>
+            
             <Button variant="outline" size="sm" onClick={handleRefresh} data-testid="btn-refresh">
-              <RefreshCw className="h-4 w-4 ml-2" />
+              <RefreshCw className={`h-4 w-4 ml-2 ${dailyLoading ? 'animate-spin' : ''}`} />
               تحديث
             </Button>
             <Link href="/advanced-production-orders/new">
@@ -430,18 +483,49 @@ export default function ProductionDashboardPage() {
                   </div>
                 </div>
 
-                {/* Progress bar */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">التقدم</span>
-                    <span className={`font-medium ${hubData.target.completionRate >= 100 ? 'text-green-600' : 'text-amber-600'}`}>
+                {/* Enhanced Progress bar with color coding */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      التقدم نحو الهدف
+                      {hubData.target.completionRate >= 100 && (
+                        <Badge className="bg-green-100 text-green-700 text-xs">تم تحقيق الهدف</Badge>
+                      )}
+                      {hubData.target.completionRate >= 80 && hubData.target.completionRate < 100 && (
+                        <Badge className="bg-amber-100 text-amber-700 text-xs">قريب من الهدف</Badge>
+                      )}
+                      {hubData.target.completionRate < 80 && hubData.target.completionRate > 0 && (
+                        <Badge className="bg-red-100 text-red-700 text-xs">يحتاج متابعة</Badge>
+                      )}
+                    </span>
+                    <span className={`font-bold text-lg ${
+                      hubData.target.completionRate >= 100 ? 'text-green-600' : 
+                      hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'
+                    }`}>
                       {hubData.target.completionRate}%
                     </span>
                   </div>
-                  <Progress 
-                    value={Math.min(hubData.target.completionRate, 100)} 
-                    className="h-4"
-                  />
+                  <div className="relative">
+                    <Progress 
+                      value={Math.min(hubData.target.completionRate, 100)} 
+                      className={`h-5 ${
+                        hubData.target.completionRate >= 100 ? '[&>div]:bg-green-500' : 
+                        hubData.target.completionRate >= 80 ? '[&>div]:bg-amber-500' : '[&>div]:bg-red-500'
+                      }`}
+                    />
+                    {hubData.target.completionRate > 100 && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-xs font-medium text-white drop-shadow">
+                          +{hubData.target.completionRate - 100}% إضافي
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>0</span>
+                    <span>الهدف: {hubData.target.totalTarget} قطعة</span>
+                    <span>100%</span>
+                  </div>
                 </div>
 
                 {/* Comparison with yesterday */}
@@ -459,6 +543,55 @@ export default function ProductionDashboardPage() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Comparison Chart - Today vs Yesterday vs Target */}
+        {hubData && (dailyStats?.totalQuantity || prevDayStats?.totalQuantity || (hubData.target && hubData.target.totalTarget > 0)) && (
+          <Card className="border-indigo-200" data-testid="card-comparison-chart">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg text-indigo-800">
+                <BarChart3 className="h-5 w-5" />
+                مقارنة الإنتاج
+              </CardTitle>
+              <CardDescription>اليوم مقابل أمس والهدف</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart
+                  data={[
+                    {
+                      name: "الإجمالي",
+                      اليوم: dailyStats?.totalQuantity || 0,
+                      أمس: prevDayStats?.totalQuantity || 0,
+                      الهدف: hubData.target?.totalTarget || 0
+                    },
+                    {
+                      name: "بار العرض",
+                      اليوم: dailyStats?.byDestination?.display_bar || 0,
+                      أمس: prevDayStats?.byDestination?.display_bar || 0,
+                      الهدف: 0
+                    },
+                    {
+                      name: "التخزين",
+                      اليوم: (dailyStats?.byDestination?.freezer || 0) + (dailyStats?.byDestination?.refrigerator || 0),
+                      أمس: (prevDayStats?.byDestination?.freezer || 0) + (prevDayStats?.byDestination?.refrigerator || 0),
+                      الهدف: 0
+                    }
+                  ]}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="اليوم" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="أمس" fill="#6b7280" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="الهدف" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         )}
