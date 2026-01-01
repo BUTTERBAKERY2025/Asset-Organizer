@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { Plus, Search, Eye, Trash2, Calendar, DollarSign, Clock, CheckCircle, AlertTriangle, Factory, FileText, Play, Pause, XCircle, ClipboardList } from "lucide-react";
+import { Plus, Search, Eye, Trash2, Calendar, DollarSign, Clock, CheckCircle, AlertTriangle, Factory, FileText, Play, Pause, XCircle, ClipboardList, ArrowRight, RefreshCw, Edit, Building2, Filter, LayoutGrid, List, Brain } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface AdvancedProductionOrder {
   id: number;
@@ -165,18 +166,48 @@ export default function AdvancedProductionOrdersPage() {
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">أوامر الإنتاج المتقدمة</h1>
-            <p className="text-muted-foreground">إدارة أوامر الإنتاج اليومية والأسبوعية وطويلة الأمد</p>
+      <div className="space-y-6 p-6" dir="rtl">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Link href="/production-dashboard">
+              <Button variant="ghost" size="sm" className="gap-1 hover:text-amber-600" data-testid="btn-back-dashboard">
+                <ArrowRight className="h-4 w-4" />
+                لوحة الإنتاج
+              </Button>
+            </Link>
+            <span>/</span>
+            <span className="text-foreground">أوامر الإنتاج</span>
           </div>
-          <Link href="/advanced-production-orders/new">
-            <Button data-testid="button-new-order">
-              <Plus className="w-4 h-4 ml-2" />
-              أمر جديد
-            </Button>
-          </Link>
+          
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                <ClipboardList className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">أوامر الإنتاج</h1>
+                <p className="text-muted-foreground text-sm">إدارة ومتابعة جميع أوامر الإنتاج اليومية والأسبوعية</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') })} data-testid="btn-refresh">
+                <RefreshCw className="h-4 w-4 ml-2" />
+                تحديث
+              </Button>
+              <Link href="/ai-production-planner">
+                <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50" data-testid="btn-ai-planner">
+                  <Brain className="h-4 w-4 ml-2" />
+                  المخطط الذكي
+                </Button>
+              </Link>
+              <Link href="/advanced-production-orders/new">
+                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700" data-testid="button-new-order">
+                  <Plus className="w-4 h-4 ml-2" />
+                  أمر جديد
+                </Button>
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -224,24 +255,33 @@ export default function AdvancedProductionOrdersPage() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg">تصفية الأوامر</CardTitle>
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-amber-600" />
+              <CardTitle className="text-base">تصفية الأوامر</CardTitle>
+              {(branchFilter !== "all" || statusFilter !== "all" || orderTypeFilter !== "all" || searchTerm) && (
+                <Badge variant="secondary" className="mr-auto">
+                  فلاتر نشطة
+                </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="relative">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="relative lg:col-span-2">
                 <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
                   placeholder="بحث بالرقم أو العنوان..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-10"
+                  className="pr-10 bg-gray-50 border-gray-200 focus:bg-white"
                   data-testid="input-search"
                 />
               </div>
               <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger data-testid="select-branch">
+                <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-branch">
+                  <Building2 className="h-4 w-4 ml-2 text-muted-foreground" />
                   <SelectValue placeholder="الفرع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -254,7 +294,7 @@ export default function AdvancedProductionOrdersPage() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger data-testid="select-status">
+                <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-status">
                   <SelectValue placeholder="الحالة" />
                 </SelectTrigger>
                 <SelectContent>
@@ -267,7 +307,7 @@ export default function AdvancedProductionOrdersPage() {
                 </SelectContent>
               </Select>
               <Select value={orderTypeFilter} onValueChange={setOrderTypeFilter}>
-                <SelectTrigger data-testid="select-order-type">
+                <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-order-type">
                   <SelectValue placeholder="نوع الأمر" />
                 </SelectTrigger>
                 <SelectContent>
@@ -280,6 +320,25 @@ export default function AdvancedProductionOrdersPage() {
                 </SelectContent>
               </Select>
             </div>
+            {(branchFilter !== "all" || statusFilter !== "all" || orderTypeFilter !== "all" || searchTerm) && (
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                <span className="text-sm text-muted-foreground">النتائج: {filteredOrders?.length || 0} أمر</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="mr-auto text-amber-600 hover:text-amber-700"
+                  onClick={() => {
+                    setBranchFilter("all");
+                    setStatusFilter("all");
+                    setOrderTypeFilter("all");
+                    setSearchTerm("");
+                  }}
+                  data-testid="btn-clear-filters"
+                >
+                  مسح الفلاتر
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -316,7 +375,15 @@ export default function AdvancedProductionOrdersPage() {
                 const statusConfig = STATUS_CONFIG[order.status];
                 const typeConfig = ORDER_TYPE_CONFIG[order.orderType];
                 return (
-                  <Card key={order.id} className="hover:shadow-md transition-shadow" data-testid={`card-order-${order.id}`}>
+                  <Card key={order.id} className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-0 shadow-sm bg-white overflow-hidden" data-testid={`card-order-${order.id}`}>
+                    <div className={`h-1.5 ${
+                      order.status === 'completed' ? 'bg-green-500' :
+                      order.status === 'in_progress' ? 'bg-purple-500' :
+                      order.status === 'approved' ? 'bg-blue-500' :
+                      order.status === 'pending' ? 'bg-yellow-500' :
+                      order.status === 'cancelled' ? 'bg-red-500' :
+                      'bg-gray-300'
+                    }`} />
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
@@ -362,27 +429,32 @@ export default function AdvancedProductionOrdersPage() {
                         </div>
                         <Progress value={order.completionPercentage} className="h-2" />
                       </div>
-                      <div className="flex items-center gap-2 pt-2 border-t">
+                      <div className="flex items-center gap-2 pt-3 border-t">
                         <Link href={`/advanced-production-orders/${order.id}`} className="flex-1">
-                          <Button variant="outline" size="sm" className="w-full" data-testid={`button-view-${order.id}`}>
+                          <Button variant="outline" size="sm" className="w-full hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700" data-testid={`button-view-${order.id}`}>
                             <Eye className="w-4 h-4 ml-1" />
                             عرض
                           </Button>
                         </Link>
+                        <Link href={`/advanced-production-orders/${order.id}/edit`}>
+                          <Button variant="outline" size="sm" className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700" data-testid={`button-edit-${order.id}`}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </Link>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" data-testid={`button-delete-${order.id}`}>
+                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-red-50" data-testid={`button-delete-${order.id}`}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent>
+                          <AlertDialogContent dir="rtl">
                             <AlertDialogHeader>
                               <AlertDialogTitle>هل أنت متأكد من الحذف؟</AlertDialogTitle>
                               <AlertDialogDescription>
                                 سيتم حذف الأمر "{order.title || order.orderNumber}" نهائياً. هذا الإجراء لا يمكن التراجع عنه.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
-                            <AlertDialogFooter>
+                            <AlertDialogFooter className="gap-2">
                               <AlertDialogCancel>إلغاء</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => deleteMutation.mutate(order.id)}
