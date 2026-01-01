@@ -116,7 +116,7 @@ export default function AdvancedProductionOrdersPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/advanced-production-orders/${id}`, "DELETE"),
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/advanced-production-orders/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) => 
         Array.isArray(query.queryKey) && 
