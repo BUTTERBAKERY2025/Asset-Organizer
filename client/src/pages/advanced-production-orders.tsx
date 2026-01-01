@@ -32,7 +32,8 @@ interface AdvancedProductionOrder {
   id: number;
   orderNumber: string;
   title: string;
-  branchId: string;
+  sourceBranchId: string;
+  targetBranchId?: string;
   orderType: "daily" | "weekly" | "long_term";
   status: "draft" | "pending" | "approved" | "in_progress" | "completed" | "cancelled";
   startDate: string;
@@ -118,9 +119,9 @@ export default function AdvancedProductionOrdersPage() {
     const matchesSearch =
       order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getBranchName(order.branchId).toLowerCase().includes(searchTerm.toLowerCase());
+      getBranchName(order.sourceBranchId).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-    const matchesBranch = branchFilter === "all" || order.branchId === branchFilter;
+    const matchesBranch = branchFilter === "all" || order.sourceBranchId === branchFilter;
     const matchesType = orderTypeFilter === "all" || order.orderType === orderTypeFilter;
     return matchesSearch && matchesStatus && matchesBranch && matchesType;
   });
@@ -328,7 +329,7 @@ export default function AdvancedProductionOrdersPage() {
                     <CardContent className="space-y-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">الفرع:</span>
-                        <span className="font-medium" data-testid={`text-branch-${order.id}`}>{getBranchName(order.branchId)}</span>
+                        <span className="font-medium" data-testid={`text-branch-${order.id}`}>{getBranchName(order.sourceBranchId)}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">من/إلى:</span>
