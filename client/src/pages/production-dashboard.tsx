@@ -39,7 +39,8 @@ import {
   Trash2,
   CreditCard,
   Receipt,
-  AlertCircle
+  AlertCircle,
+  FileBarChart2
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -141,6 +142,14 @@ const QUICK_ACTIONS = [
     href: "/advanced-production-orders/new",
     color: "from-green-500 to-emerald-600",
     badge: null
+  },
+  {
+    title: "التقارير الشاملة",
+    description: "جميع تقارير الإنتاج والتصدير Excel/PDF",
+    icon: FileBarChart2,
+    href: "/production-reports",
+    color: "from-rose-500 to-pink-600",
+    badge: "جديد"
   },
   {
     title: "تقارير التشغيل",

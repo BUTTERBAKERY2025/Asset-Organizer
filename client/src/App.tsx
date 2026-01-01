@@ -50,6 +50,7 @@ import AdvancedProductionPlannerPage from "@/pages/ai-production-planner";
 import SalesDataUploadsPage from "@/pages/sales-data-uploads";
 import ProductionDashboardPage from "@/pages/production-dashboard";
 import DailyProductionPage from "@/pages/daily-production";
+import ProductionReportsPage from "@/pages/production-reports";
 
 function Router() {
   return (
@@ -99,6 +100,7 @@ function Router() {
       <Route path="/ai-production-planner" component={AdvancedProductionPlannerPage} />
       <Route path="/sales-data-uploads" component={SalesDataUploadsPage} />
       <Route path="/daily-production" component={DailyProductionPage} />
+      <Route path="/production-reports" component={ProductionReportsPage} />
       <Route component={NotFound} />
     </Switch>
   );
