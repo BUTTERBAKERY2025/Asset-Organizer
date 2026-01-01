@@ -4992,14 +4992,16 @@ export async function registerRoutes(
       const orderNumber = `FCST-${Date.now().toString(36).toUpperCase()}`;
       const orderData = {
         orderNumber,
-        branchId,
-        createdBy: (req as any).user?.id,
-        assignedTo: null,
+        sourceBranchId: branchId,
+        targetBranchId: branchId,
+        title: `توقعات إنتاج ${planDate}`,
+        createdBy: (req as any).user?.id || null,
         orderType: 'daily' as const,
-        scheduledDate: planDate,
-        dueDate: planDate,
-        priority: 'medium' as const,
-        status: 'pending' as const,
+        startDate: planDate,
+        endDate: planDate,
+        priority: 'normal' as const,
+        status: 'draft' as const,
+        targetSalesValue: targetSalesNum,
         notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('ar-SA')} ريال`,
         totalItems: forecastItems.length,
         completedItems: 0
