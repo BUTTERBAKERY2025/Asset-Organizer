@@ -98,6 +98,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/sales-data-uploads", label: "رفع بيانات المبيعات", icon: Upload, module: "production" },
           { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
           { href: "/display-bar-waste", label: "بار العرض والهالك", icon: Package, module: "operations" },
+          { href: "/daily-production", label: "الإنتاج الفعلي اليومي", icon: ClipboardCheck, module: "production" },
+          { href: "/production-reports", label: "تقارير الإنتاج", icon: FileBarChart, module: "production" },
           { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
         ],
       },

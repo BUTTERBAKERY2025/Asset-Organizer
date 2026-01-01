@@ -24,6 +24,7 @@ import {
   Users,
   Loader2,
 } from "lucide-react";
+import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -279,8 +280,8 @@ export default function ProductionReportsPage() {
   }, [reportData, startDate, endDate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 p-4 md:p-6" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-4">
+    <Layout>
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/production-dashboard">
@@ -771,6 +772,6 @@ export default function ProductionReportsPage() {
           )}
         </Tabs>
       </div>
-    </div>
+    </Layout>
   );
 }
