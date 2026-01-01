@@ -5676,7 +5676,7 @@ export async function registerRoutes(
       });
       
       // Get products for performance analysis
-      const products = await storage.getProducts();
+      const products = await storage.getAllProducts();
       
       // Get branches for comparison
       const branches = await storage.getBranches();
