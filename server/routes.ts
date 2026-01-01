@@ -4644,10 +4644,33 @@ export async function registerRoutes(
       const products = await storage.getAllProducts();
       let productAnalytics: any[] = [];
       let salesDataUpload = null;
+      let uploadFileName = null;
+      let uploadAnalyticsSummary: any = null;
       
       if (uploadId) {
         productAnalytics = await storage.getProductSalesAnalytics(parseInt(uploadId, 10));
         salesDataUpload = await storage.getSalesDataUpload(parseInt(uploadId, 10));
+        uploadFileName = salesDataUpload?.fileName || null;
+        
+        // Log analytics found from file
+        console.log(`AI Planner: Found ${productAnalytics.length} products from uploaded file "${uploadFileName}"`);
+        
+        if (productAnalytics.length > 0) {
+          const totalRev = productAnalytics.reduce((sum, a) => sum + (a.totalRevenue || 0), 0);
+          const totalQty = productAnalytics.reduce((sum, a) => sum + (a.totalQuantitySold || 0), 0);
+          console.log(`AI Planner: File contains total revenue: ${totalRev.toFixed(2)} SAR, total quantity: ${totalQty}`);
+          
+          uploadAnalyticsSummary = {
+            fileName: uploadFileName,
+            productsCount: productAnalytics.length,
+            totalRevenue: totalRev,
+            totalQuantity: totalQty,
+            topProducts: productAnalytics
+              .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
+              .slice(0, 5)
+              .map(p => ({ name: p.productName, revenue: p.totalRevenue, quantity: p.totalQuantitySold }))
+          };
+        }
       }
       
       const activeProducts = products.filter(p => p.isActive);
@@ -4870,8 +4893,11 @@ export async function registerRoutes(
         analysisMethod,
         analysisMethodLabel: analysisMethodLabels[analysisMethod] || analysisMethod,
         targetAccuracy: Math.min(100, Math.max(0, targetAccuracy)),
+        uploadAnalytics: uploadAnalyticsSummary,
         createdAt: plan.createdAt
       };
+      
+      console.log(`AI Planner: Generated plan with ${recommendedProducts.length} products, target accuracy: ${targetAccuracy}%`);
       
       res.status(201).json(response);
     } catch (error) {

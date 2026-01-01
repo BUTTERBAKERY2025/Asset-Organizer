@@ -42,6 +42,14 @@ interface AIPlanProduct {
   priority?: string;
 }
 
+interface UploadAnalyticsSummary {
+  fileName: string;
+  productsCount: number;
+  totalRevenue: number;
+  totalQuantity: number;
+  topProducts: { name: string; revenue: number; quantity: number }[];
+}
+
 interface AIProductionPlan {
   id: number;
   branchId: string;
@@ -58,6 +66,7 @@ interface AIProductionPlan {
   analysisMethod?: string;
   analysisMethodLabel?: string;
   targetAccuracy?: number;
+  uploadAnalytics?: UploadAnalyticsSummary;
   createdAt: string;
 }
 
@@ -329,6 +338,40 @@ export default function AdvancedProductionPlannerPage() {
                         }`}>
                           دقة المطابقة: {generatedPlan.targetAccuracy}%
                         </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {generatedPlan.uploadAnalytics && (
+                    <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                        <span className="text-sm font-semibold text-blue-800">
+                          بيانات من الملف: {generatedPlan.uploadAnalytics.fileName}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div className="text-center p-2 bg-white/60 rounded">
+                          <p className="text-lg font-bold text-blue-700">{generatedPlan.uploadAnalytics.productsCount}</p>
+                          <p className="text-xs text-blue-600">منتج</p>
+                        </div>
+                        <div className="text-center p-2 bg-white/60 rounded">
+                          <p className="text-lg font-bold text-green-700">{formatCurrency(generatedPlan.uploadAnalytics.totalRevenue)}</p>
+                          <p className="text-xs text-green-600">إجمالي المبيعات السابقة</p>
+                        </div>
+                      </div>
+                      {generatedPlan.uploadAnalytics.topProducts.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-blue-700 mb-2">أعلى 5 منتجات مبيعاً:</p>
+                          <div className="space-y-1">
+                            {generatedPlan.uploadAnalytics.topProducts.slice(0, 5).map((p, i) => (
+                              <div key={i} className="flex justify-between text-xs bg-white/40 rounded px-2 py-1">
+                                <span className="text-gray-700">{p.name}</span>
+                                <span className="text-green-700 font-medium">{formatCurrency(p.revenue)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
