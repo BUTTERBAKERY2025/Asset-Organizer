@@ -113,6 +113,13 @@ export default function DailyProductionPage() {
     queryKey: ["/api/products"],
   });
 
+  // Auto-select first branch when branches load
+  useEffect(() => {
+    if (branches && branches.length > 0 && !branchId) {
+      setBranchId(branches[0].id);
+    }
+  }, [branches, branchId]);
+
   const { data: batches, isLoading: batchesLoading, refetch: refetchBatches } = useQuery<DailyProductionBatch[]>({
     queryKey: ["/api/daily-production/batches", branchId, selectedDate],
     queryFn: async () => {
