@@ -117,6 +117,8 @@ export default function AdvancedProductionOrderFormPage() {
     if (existingOrder) {
       setFormData({
         ...existingOrder,
+        branchId: (existingOrder as any).sourceBranchId || existingOrder.branchId || "",
+        targetBranchId: (existingOrder as any).targetBranchId || existingOrder.targetBranchId || "",
         items: existingOrder.items || [],
         schedule: existingOrder.schedule || [],
       });
@@ -348,7 +350,7 @@ export default function AdvancedProductionOrderFormPage() {
       case "info":
         return formData.title && formData.branchId && formData.startDate;
       case "products":
-        return formData.items.length > 0 && formData.items.every((item) => item.productId && item.quantity > 0);
+        return formData.items.length > 0 && formData.items.every((item) => (item.productId || item.productName) && item.quantity > 0);
       case "schedule":
         return true;
       default:
