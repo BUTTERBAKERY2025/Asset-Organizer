@@ -5652,7 +5652,7 @@ export async function registerRoutes(
   });
 
   // Production Reports API - comprehensive reports with date range
-  app.get("/api/production/reports", isAuthenticated, async (req, res) => {
+  app.get("/api/production/reports", async (req, res) => {
     try {
       const branchId = (req.query.branchId as string) || 'all';
       const startDate = (req.query.startDate as string) || new Date().toISOString().split('T')[0];
