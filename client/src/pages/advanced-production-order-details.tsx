@@ -6,7 +6,7 @@ import { useParams, Link } from "wouter";
 import { 
   ArrowRight, Edit, Printer, Package, Calendar, Factory, 
   ClipboardList, Building2, User, Clock, TrendingUp, CheckCircle,
-  AlertCircle, Loader2, FileText
+  AlertCircle, Loader2, FileText, Download, FileSpreadsheet
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { Branch } from "@shared/schema";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { useRef } from "react";
+import { useReactToPrint } from "react-to-print";
+import * as XLSX from "xlsx";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+
+pdfMake.vfs = pdfFonts.vfs;
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
   draft: { label: "مسودة", color: "text-gray-700", bgColor: "bg-gray-100" },
@@ -84,6 +91,7 @@ interface OrderResponse {
 
 export default function AdvancedProductionOrderDetailsPage() {
   const { id } = useParams();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const { data: rawData, isLoading } = useQuery<OrderResponse>({
     queryKey: [`/api/advanced-production-orders/${id}`],
@@ -92,6 +100,11 @@ export default function AdvancedProductionOrderDetailsPage() {
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
+  });
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `أمر إنتاج`,
   });
 
   const orderData = rawData ? (() => {
@@ -139,6 +152,134 @@ export default function AdvancedProductionOrderDetailsPage() {
     } catch {
       return dateStr;
     }
+  };
+
+  const exportToExcel = () => {
+    if (!orderData) return;
+    const { order, items } = orderData;
+    
+    const orderInfo = [
+      ["رقم الأمر", order.orderNumber],
+      ["العنوان", order.title || "-"],
+      ["الحالة", STATUS_CONFIG[order.status]?.label || order.status],
+      ["النوع", ORDER_TYPE_CONFIG[order.orderType]?.label || order.orderType],
+      ["الأولوية", PRIORITY_CONFIG[order.priority]?.label || order.priority],
+      ["الفرع المصدر", getBranchName(order.sourceBranchId)],
+      ["الفرع المستهدف", getBranchName(order.targetBranchId)],
+      ["تاريخ البدء", formatDate(order.startDate)],
+      ["تاريخ الانتهاء", formatDate(order.endDate)],
+      ["نسبة الإنجاز", `${order.completionPercentage || 0}%`],
+      ["التكلفة المقدرة", formatCurrency(order.estimatedCost || 0)],
+      ["التكلفة الفعلية", formatCurrency(order.actualCost || 0)],
+    ];
+
+    const itemsData = items.map((item: OrderItem, index: number) => [
+      index + 1,
+      item.productName,
+      item.targetQuantity,
+      item.producedQuantity || 0,
+      item.unit,
+      item.unitPrice,
+      (item.targetQuantity || 0) * (item.unitPrice || 0)
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    
+    const wsInfo = XLSX.utils.aoa_to_sheet(orderInfo);
+    XLSX.utils.book_append_sheet(wb, wsInfo, "معلومات الأمر");
+
+    const wsItems = XLSX.utils.aoa_to_sheet([
+      ["#", "المنتج", "الكمية المطلوبة", "الكمية المنتجة", "الوحدة", "سعر الوحدة", "الإجمالي"],
+      ...itemsData
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsItems, "المنتجات");
+
+    XLSX.writeFile(wb, `امر_انتاج_${order.orderNumber}.xlsx`);
+  };
+
+  const exportToPdf = () => {
+    if (!orderData) return;
+    const { order, items } = orderData;
+
+    const docDefinition: any = {
+      pageOrientation: "portrait",
+      pageSize: "A4",
+      content: [
+        { text: `أمر إنتاج: ${order.orderNumber}`, style: "header", alignment: "right" },
+        { text: order.title || "", style: "subheader", alignment: "right" },
+        { text: " ", margin: [0, 10, 0, 10] },
+        {
+          columns: [
+            {
+              width: "*",
+              stack: [
+                { text: `الحالة: ${STATUS_CONFIG[order.status]?.label || order.status}`, alignment: "right" },
+                { text: `النوع: ${ORDER_TYPE_CONFIG[order.orderType]?.label || order.orderType}`, alignment: "right" },
+                { text: `الأولوية: ${PRIORITY_CONFIG[order.priority]?.label || order.priority}`, alignment: "right" },
+              ]
+            },
+            {
+              width: "*",
+              stack: [
+                { text: `تاريخ البدء: ${formatDate(order.startDate)}`, alignment: "right" },
+                { text: `تاريخ الانتهاء: ${formatDate(order.endDate)}`, alignment: "right" },
+                { text: `نسبة الإنجاز: ${order.completionPercentage || 0}%`, alignment: "right" },
+              ]
+            }
+          ]
+        },
+        { text: " ", margin: [0, 10, 0, 10] },
+        {
+          columns: [
+            { text: `الفرع المصدر: ${getBranchName(order.sourceBranchId)}`, alignment: "right" },
+            { text: `الفرع المستهدف: ${getBranchName(order.targetBranchId)}`, alignment: "right" },
+          ]
+        },
+        { text: " ", margin: [0, 15, 0, 5] },
+        { text: "منتجات الأمر", style: "sectionHeader", alignment: "right" },
+        {
+          table: {
+            headerRows: 1,
+            widths: ["auto", "*", "auto", "auto", "auto", "auto"],
+            body: [
+              [
+                { text: "الإجمالي", alignment: "right", bold: true },
+                { text: "سعر الوحدة", alignment: "right", bold: true },
+                { text: "الكمية المنتجة", alignment: "right", bold: true },
+                { text: "الكمية المطلوبة", alignment: "right", bold: true },
+                { text: "المنتج", alignment: "right", bold: true },
+                { text: "#", alignment: "right", bold: true },
+              ],
+              ...items.map((item: OrderItem, index: number) => [
+                { text: formatCurrency((item.targetQuantity || 0) * (item.unitPrice || 0)), alignment: "right" },
+                { text: formatCurrency(item.unitPrice), alignment: "right" },
+                { text: `${item.producedQuantity || 0}`, alignment: "right" },
+                { text: `${item.targetQuantity}`, alignment: "right" },
+                { text: item.productName, alignment: "right" },
+                { text: `${index + 1}`, alignment: "right" },
+              ])
+            ]
+          }
+        },
+        { text: " ", margin: [0, 15, 0, 5] },
+        {
+          columns: [
+            { text: `التكلفة المقدرة: ${formatCurrency(order.estimatedCost || 0)}`, alignment: "right" },
+            { text: `التكلفة الفعلية: ${formatCurrency(order.actualCost || 0)}`, alignment: "right" },
+          ]
+        }
+      ],
+      styles: {
+        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+        subheader: { fontSize: 14, margin: [0, 0, 0, 5] },
+        sectionHeader: { fontSize: 14, bold: true, margin: [0, 0, 0, 10] },
+      },
+      defaultStyle: {
+        font: "Roboto"
+      }
+    };
+
+    pdfMake.createPdf(docDefinition).download(`امر_انتاج_${order.orderNumber}.pdf`);
   };
 
   if (isLoading) {
@@ -214,9 +355,17 @@ export default function AdvancedProductionOrderDetailsPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" data-testid="btn-print">
+            <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="btn-print">
               <Printer className="h-4 w-4 ml-2" />
               طباعة
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportToPdf} data-testid="btn-pdf">
+              <Download className="h-4 w-4 ml-2" />
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="btn-excel">
+              <FileSpreadsheet className="h-4 w-4 ml-2" />
+              Excel
             </Button>
             <Link href={`/advanced-production-orders/${id}/edit`}>
               <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700" data-testid="btn-edit">
@@ -227,7 +376,7 @@ export default function AdvancedProductionOrderDetailsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div ref={printRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:block">
           <div className="lg:col-span-2 space-y-6">
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
