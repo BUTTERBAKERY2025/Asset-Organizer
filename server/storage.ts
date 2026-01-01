@@ -472,6 +472,7 @@ export interface IStorage {
 
   // Production Order Items
   getProductionOrderItems(orderId: number): Promise<ProductionOrderItem[]>;
+  getProductionTargetsByDate(branchId: string, date: string): Promise<{ totalTarget: number; totalProduced: number }>;
   createProductionOrderItem(item: InsertProductionOrderItem): Promise<ProductionOrderItem>;
   bulkCreateProductionOrderItems(items: InsertProductionOrderItem[]): Promise<ProductionOrderItem[]>;
   updateProductionOrderItem(id: number, item: Partial<InsertProductionOrderItem>): Promise<ProductionOrderItem | undefined>;
@@ -4053,6 +4054,53 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(productionOrderItems)
       .where(eq(productionOrderItems.orderId, orderId))
       .orderBy(productionOrderItems.priority);
+  }
+
+  async getProductionTargetsByDate(branchId: string, date: string): Promise<{ totalTarget: number; totalProduced: number }> {
+    // Build conditions array, only adding branch filter if not "all"
+    const statusFilter = or(
+      eq(advancedProductionOrders.status, 'pending'),
+      eq(advancedProductionOrders.status, 'approved'),
+      eq(advancedProductionOrders.status, 'in_progress')
+    );
+    
+    const dateFilter = or(
+      eq(productionOrderItems.scheduledDate, date),
+      and(
+        lte(advancedProductionOrders.startDate, date),
+        gte(advancedProductionOrders.endDate, date)
+      )
+    );
+    
+    // Build where clause based on whether we need branch filtering
+    let whereClause;
+    if (branchId !== "all") {
+      const branchFilter = or(
+        eq(advancedProductionOrders.sourceBranchId, branchId),
+        eq(advancedProductionOrders.targetBranchId, branchId)
+      );
+      whereClause = and(branchFilter, statusFilter, dateFilter);
+    } else {
+      whereClause = and(statusFilter, dateFilter);
+    }
+    
+    const items = await db.select({
+      targetQuantity: productionOrderItems.targetQuantity,
+      producedQuantity: productionOrderItems.producedQuantity,
+    })
+      .from(productionOrderItems)
+      .innerJoin(advancedProductionOrders, eq(productionOrderItems.orderId, advancedProductionOrders.id))
+      .where(whereClause);
+    
+    // Sum in JS to avoid SQL complexity
+    let totalTarget = 0;
+    let totalProduced = 0;
+    for (const item of items) {
+      totalTarget += item.targetQuantity || 0;
+      totalProduced += item.producedQuantity || 0;
+    }
+    
+    return { totalTarget, totalProduced };
   }
 
   async createProductionOrderItem(item: InsertProductionOrderItem): Promise<ProductionOrderItem> {

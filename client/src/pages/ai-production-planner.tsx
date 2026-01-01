@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch } from "@shared/schema";
 import { Brain, Calendar, DollarSign, Percent, Package, CheckCircle, Clock, Sparkles, TrendingUp, History, FileText, Loader2, AlertCircle, RefreshCw, ArrowLeft, Trash2 } from "lucide-react";
+import { useProductionContext } from "@/contexts/ProductionContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertDialog,
@@ -87,9 +88,15 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }>
 };
 
 export default function AdvancedProductionPlannerPage() {
-  const [branchId, setBranchId] = useState<string>("");
+  // Use shared context for branch and date
+  const { 
+    selectedBranch: branchId, 
+    setSelectedBranch: setBranchId, 
+    selectedDate: planDate, 
+    setSelectedDate: setPlanDate 
+  } = useProductionContext();
+  
   const [targetSales, setTargetSales] = useState<string>("");
-  const [planDate, setPlanDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [salesDataFileId, setSalesDataFileId] = useState<string>("");
   const [generatedPlan, setGeneratedPlan] = useState<AIProductionPlan | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
@@ -101,6 +108,13 @@ export default function AdvancedProductionPlannerPage() {
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
   });
+  
+  // Initialize branch from context or fallback to first branch
+  useEffect(() => {
+    if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
+      setBranchId(branches[0].id);
+    }
+  }, [branches, branchId, setBranchId]);
 
   const { data: salesDataFiles } = useQuery<SalesDataFile[]>({
     queryKey: ["/api/sales-data-uploads"],

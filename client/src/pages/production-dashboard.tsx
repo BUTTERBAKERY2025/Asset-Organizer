@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { Branch } from "@shared/schema";
+import { useProductionContext } from "@/contexts/ProductionContext";
 
 interface OrderStats {
   total: number;
@@ -68,6 +69,12 @@ interface ProductionHubData {
     batches: number;
     quantityPercent: number;
     batchesPercent: number;
+  };
+  target: {
+    totalTarget: number;
+    totalProduced: number;
+    gap: number;
+    completionRate: number;
   };
   activeOrders: number;
   date: string;
@@ -143,8 +150,14 @@ const QUICK_ACTIONS = [
 ];
 
 export default function ProductionDashboardPage() {
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const { selectedBranch, setSelectedBranch, selectedDate, setSelectedDate } = useProductionContext();
+  
+  // Initialize branch to "all" for dashboard if empty
+  useEffect(() => {
+    if (!selectedBranch) {
+      setSelectedBranch("all");
+    }
+  }, [selectedBranch, setSelectedBranch]);
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -380,6 +393,75 @@ export default function ProductionDashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Smart Production Dashboard - Target vs Actual */}
+        {hubData?.target && hubData.target.totalTarget > 0 && (
+          <Card className="border-2 border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50" data-testid="card-target-vs-actual">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg text-amber-800">
+                <Target className="h-5 w-5" />
+                لوحة الإنتاج الموحدة
+              </CardTitle>
+              <CardDescription>الهدف مقابل الإنتاج الفعلي</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Main stats row */}
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div className="bg-white rounded-lg p-3 shadow-sm border">
+                    <p className="text-xs text-gray-500 mb-1">الهدف</p>
+                    <p className="text-2xl font-bold text-gray-800">{hubData.target.totalTarget}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm border">
+                    <p className="text-xs text-gray-500 mb-1">المُنتَج</p>
+                    <p className="text-2xl font-bold text-green-600">{hubData.target.totalProduced}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm border">
+                    <p className="text-xs text-gray-500 mb-1">الفرق</p>
+                    <p className={`text-2xl font-bold ${hubData.target.gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {hubData.target.gap > 0 ? `-${hubData.target.gap}` : hubData.target.gap === 0 ? '0' : `+${Math.abs(hubData.target.gap)}`}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm border">
+                    <p className="text-xs text-gray-500 mb-1">نسبة الإنجاز</p>
+                    <p className={`text-2xl font-bold ${hubData.target.completionRate >= 100 ? 'text-green-600' : hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                      {hubData.target.completionRate}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">التقدم</span>
+                    <span className={`font-medium ${hubData.target.completionRate >= 100 ? 'text-green-600' : 'text-amber-600'}`}>
+                      {hubData.target.completionRate}%
+                    </span>
+                  </div>
+                  <Progress 
+                    value={Math.min(hubData.target.completionRate, 100)} 
+                    className="h-4"
+                  />
+                </div>
+
+                {/* Comparison with yesterday */}
+                <div className="flex items-center gap-4 pt-2 border-t">
+                  <div className="flex items-center gap-2 text-sm">
+                    {qtyDiff.direction === "up" ? (
+                      <TrendingUp className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-600" />
+                    )}
+                    <span className="text-gray-600">مقارنة مع أمس:</span>
+                    <span className={`font-medium ${qtyDiff.direction === "up" ? 'text-green-600' : 'text-red-600'}`}>
+                      {qtyDiff.direction === "up" ? '+' : '-'}{qtyDiff.percentage}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Orders Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

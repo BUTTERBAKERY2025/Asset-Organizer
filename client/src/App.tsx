@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
+import { ProductionProvider } from "@/contexts/ProductionContext";
 import NotFound from "@/pages/not-found";
 import PlatformHomePage from "@/pages/platform-home";
 import DashboardPage from "@/pages/dashboard";
@@ -106,12 +107,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-        <PWAInstallPrompt />
-        <OfflineIndicator />
-      </TooltipProvider>
+      <ProductionProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+          <PWAInstallPrompt />
+          <OfflineIndicator />
+        </TooltipProvider>
+      </ProductionProvider>
     </QueryClientProvider>
   );
 }

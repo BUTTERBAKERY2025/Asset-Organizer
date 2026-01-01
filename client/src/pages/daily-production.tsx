@@ -19,6 +19,7 @@ import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch, Product } from "@shared/schema";
+import { useProductionContext } from "@/contexts/ProductionContext";
 import { 
   Factory, Plus, Clock, Package, Trash2, RefreshCw, Calendar,
   Refrigerator, ShoppingCart, Snowflake, ChefHat, ArrowLeft,
@@ -101,13 +102,20 @@ const HOUR_LABELS: Record<string, string> = {
 const QUICK_QUANTITIES = [1, 2, 3, 5, 10, 12, 15, 20, 24, 30];
 
 export default function DailyProductionPage() {
-  const [branchId, setBranchId] = useState<string>("");
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  // Use shared context for branch, date, and shift
+  const { 
+    selectedBranch: branchId, 
+    setSelectedBranch: setBranchId, 
+    selectedDate, 
+    setSelectedDate,
+    selectedShift,
+    setSelectedShift 
+  } = useProductionContext();
+  
   const [productName, setProductName] = useState<string>("");
   const [productCategory, setProductCategory] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
   const [destination, setDestination] = useState<string>("display_bar");
-  const [selectedShift, setSelectedShift] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<string>("entry");
@@ -137,19 +145,12 @@ export default function DailyProductionPage() {
     queryKey: ["/api/products"],
   });
 
+  // Initialize branch from context or fallback to first branch
   useEffect(() => {
-    if (branches && branches.length > 0 && !branchId) {
+    if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
       setBranchId(branches[0].id);
     }
-  }, [branches, branchId]);
-
-  // Auto-detect current shift
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour >= 6 && hour < 14) setSelectedShift("morning");
-    else if (hour >= 14 && hour < 22) setSelectedShift("evening");
-    else setSelectedShift("night");
-  }, []);
+  }, [branches, branchId, setBranchId]);
 
   const { data: batches, isLoading: batchesLoading, refetch: refetchBatches } = useQuery<DailyProductionBatch[]>({
     queryKey: ["/api/daily-production/batches", branchId, selectedDate],

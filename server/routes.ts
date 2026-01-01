@@ -5615,6 +5615,13 @@ export async function registerRoutes(
         ).length;
       }
       
+      // Get target vs actual from production orders scheduled for this date
+      // Uses bulk query to avoid O(N) round trips
+      const targetData = await storage.getProductionTargetsByDate(branchId as string, dateStr);
+      const { totalTarget, totalProduced } = targetData;
+      const completionRate = totalTarget > 0 ? Math.round((totalProduced / totalTarget) * 100) : (totalProduced > 0 ? 100 : 0);
+      const gap = totalTarget - totalProduced;
+      
       // Calculate deltas
       const qtyDelta = todayStats.totalQuantity - (yesterdayStats?.totalQuantity || 0);
       const batchDelta = todayStats.totalBatches - (yesterdayStats?.totalBatches || 0);
@@ -5627,6 +5634,12 @@ export async function registerRoutes(
           batches: batchDelta,
           quantityPercent: yesterdayStats?.totalQuantity ? Math.round((qtyDelta / yesterdayStats.totalQuantity) * 100) : 0,
           batchesPercent: yesterdayStats?.totalBatches ? Math.round((batchDelta / yesterdayStats.totalBatches) * 100) : 0,
+        },
+        target: {
+          totalTarget,
+          totalProduced,
+          gap,
+          completionRate,
         },
         activeOrders,
         date: dateStr,
