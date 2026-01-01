@@ -788,11 +788,18 @@ export default function SalesDataUploadsPage() {
 
                                         <div className="flex gap-2">
                                           <Button
-                                            onClick={() => navigate("/advanced-production-orders")}
+                                            onClick={() => {
+                                              const orderId = forecastResult?.productionOrder?.order?.id || forecastResult?.productionOrder?.id;
+                                              if (orderId) {
+                                                navigate(`/advanced-production-orders/${orderId}/edit`);
+                                              } else {
+                                                navigate("/advanced-production-orders");
+                                              }
+                                            }}
                                             className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600"
                                           >
                                             <Send className="w-4 h-4 ml-2" />
-                                            عرض أوامر الإنتاج
+                                            عرض أمر الإنتاج
                                           </Button>
                                           <Button variant="outline" onClick={() => {
                                             setForecastResult(null);
