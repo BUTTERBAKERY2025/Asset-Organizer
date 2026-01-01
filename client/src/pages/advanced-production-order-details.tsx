@@ -49,6 +49,7 @@ interface OrderItem {
   id: number;
   productId: number;
   productName: string;
+  category?: string;
   targetQuantity: number;
   producedQuantity: number;
   unit: string;
@@ -117,6 +118,7 @@ export default function AdvancedProductionOrderDetailsPage() {
       id: item.id,
       productId: item.productId || item.product_id,
       productName: item.productName || item.product_name || "",
+      category: item.category || item.productCategory || item.product_category || "",
       targetQuantity: Number(item.targetQuantity || item.target_quantity || item.quantity) || 0,
       producedQuantity: Number(item.producedQuantity || item.produced_quantity) || 0,
       unit: item.unit || "قطعة",
@@ -176,6 +178,7 @@ export default function AdvancedProductionOrderDetailsPage() {
     const itemsData = items.map((item: OrderItem, index: number) => [
       index + 1,
       item.productName,
+      item.category || 'عام',
       item.targetQuantity,
       item.producedQuantity || 0,
       item.unit,
@@ -189,7 +192,7 @@ export default function AdvancedProductionOrderDetailsPage() {
     XLSX.utils.book_append_sheet(wb, wsInfo, "معلومات الأمر");
 
     const wsItems = XLSX.utils.aoa_to_sheet([
-      ["#", "المنتج", "الكمية المطلوبة", "الكمية المنتجة", "الوحدة", "سعر الوحدة", "الإجمالي"],
+      ["#", "المنتج", "الفئة", "الكمية المطلوبة", "الكمية المنتجة", "الوحدة", "سعر الوحدة", "الإجمالي"],
       ...itemsData
     ]);
     XLSX.utils.book_append_sheet(wb, wsItems, "المنتجات");
@@ -240,13 +243,14 @@ export default function AdvancedProductionOrderDetailsPage() {
         {
           table: {
             headerRows: 1,
-            widths: ["auto", "*", "auto", "auto", "auto", "auto"],
+            widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto"],
             body: [
               [
                 { text: "الإجمالي", alignment: "right", bold: true },
                 { text: "سعر الوحدة", alignment: "right", bold: true },
                 { text: "الكمية المنتجة", alignment: "right", bold: true },
                 { text: "الكمية المطلوبة", alignment: "right", bold: true },
+                { text: "الفئة", alignment: "right", bold: true },
                 { text: "المنتج", alignment: "right", bold: true },
                 { text: "#", alignment: "right", bold: true },
               ],
@@ -255,6 +259,7 @@ export default function AdvancedProductionOrderDetailsPage() {
                 { text: formatCurrency(item.unitPrice), alignment: "right" },
                 { text: `${item.producedQuantity || 0}`, alignment: "right" },
                 { text: `${item.targetQuantity}`, alignment: "right" },
+                { text: item.category || 'عام', alignment: "right" },
                 { text: item.productName, alignment: "right" },
                 { text: `${index + 1}`, alignment: "right" },
               ])
@@ -470,6 +475,7 @@ export default function AdvancedProductionOrderDetailsPage() {
                         <TableRow className="bg-gray-50">
                           <TableHead className="text-right">#</TableHead>
                           <TableHead className="text-right">المنتج</TableHead>
+                          <TableHead className="text-right">الفئة</TableHead>
                           <TableHead className="text-right">الكمية المطلوبة</TableHead>
                           <TableHead className="text-right">الكمية المنتجة</TableHead>
                           <TableHead className="text-right">سعر الوحدة</TableHead>
@@ -485,6 +491,11 @@ export default function AdvancedProductionOrderDetailsPage() {
                                 <p className="font-medium">{item.productName}</p>
                                 {item.notes && <p className="text-xs text-gray-500">{item.notes}</p>}
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs bg-slate-50 border-slate-300 text-slate-600">
+                                {item.category || 'عام'}
+                              </Badge>
                             </TableCell>
                             <TableCell>{item.targetQuantity} {item.unit}</TableCell>
                             <TableCell>
