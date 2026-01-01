@@ -4588,7 +4588,23 @@ export async function registerRoutes(
   app.get("/api/production-ai-plans", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const plans = await storage.getAllProductionAiPlans();
-      res.json(plans);
+      // Format response for frontend compatibility
+      const formattedPlans = plans.map(plan => ({
+        id: plan.id,
+        branchId: plan.branchId,
+        planDate: plan.planDate,
+        targetSales: plan.targetSalesValue,
+        confidenceScore: plan.confidenceScore,
+        totalEstimatedValue: plan.totalEstimatedValue,
+        estimatedCost: plan.totalEstimatedCost,
+        profitMargin: plan.profitMargin,
+        status: plan.status,
+        products: plan.recommendedProducts || [],
+        salesDataFileId: plan.datasetId,
+        appliedOrderId: plan.appliedToOrderId,
+        createdAt: plan.createdAt
+      }));
+      res.json(formattedPlans);
     } catch (error) {
       console.error("Error fetching AI plans:", error);
       res.status(500).json({ error: "Failed to fetch AI plans" });
@@ -4600,41 +4616,88 @@ export async function registerRoutes(
     try {
       const { branchId, targetSalesValue, planDate, uploadId } = req.body;
       
+      if (!branchId || !targetSalesValue || !planDate) {
+        return res.status(400).json({ error: "Missing required fields: branchId, targetSalesValue, planDate" });
+      }
+      
       // Get products and their sales analytics if available
       const products = await storage.getAllProducts();
       let productAnalytics: any[] = [];
+      let salesDataUpload = null;
       
       if (uploadId) {
         productAnalytics = await storage.getProductSalesAnalytics(parseInt(uploadId, 10));
+        salesDataUpload = await storage.getSalesDataUpload(parseInt(uploadId, 10));
       }
       
-      // Simple AI algorithm: distribute target sales across products based on sales velocity
+      // Enhanced AI algorithm: distribute target sales across products based on:
+      // 1. Sales velocity from historical data (if available)
+      // 2. Product base price for value calculation
+      // 3. Category distribution for variety
       const activeProducts = products.filter(p => p.isActive);
-      const totalVelocity = productAnalytics.length > 0 
-        ? productAnalytics.reduce((sum, a) => sum + (a.salesVelocity || 1), 0)
-        : activeProducts.length;
       
-      const recommendedProducts = activeProducts.slice(0, 50).map(product => {
-        const analytics = productAnalytics.find(a => a.productId === product.id);
-        const velocity = analytics?.salesVelocity || 1;
-        const share = velocity / totalVelocity;
-        const allocatedValue = targetSalesValue * share;
-        const productPrice = product.basePrice || 10;
-        const quantity = Math.ceil(allocatedValue / productPrice);
-        
+      if (activeProducts.length === 0) {
+        return res.status(400).json({ error: "لا توجد منتجات نشطة في النظام. يرجى إضافة منتجات أولاً." });
+      }
+      
+      // Calculate velocity weights - products with analytics get higher priority
+      const productWeights = activeProducts.map(product => {
+        const analytics = productAnalytics.find(a => 
+          a.productId === product.id || 
+          a.productName?.toLowerCase() === product.name?.toLowerCase()
+        );
+        const baseVelocity = analytics?.salesVelocity || analytics?.totalQuantity || 1;
+        const hasAnalytics = !!analytics;
         return {
-          productId: product.id,
-          productName: product.name,
-          category: product.category,
-          quantity,
-          estimatedValue: quantity * (product.basePrice || 0),
-          salesVelocity: velocity,
-          priority: analytics ? 'high' : 'normal'
+          product,
+          velocity: baseVelocity,
+          hasAnalytics,
+          weight: hasAnalytics ? baseVelocity * 1.5 : baseVelocity // Boost products with actual sales data
         };
-      }).filter(p => p.quantity > 0);
+      });
       
-      const totalEstimatedValue = recommendedProducts.reduce((sum, p) => sum + p.estimatedValue, 0);
-      const estimatedCost = totalEstimatedValue * 0.4; // Assume 40% cost
+      const totalWeight = productWeights.reduce((sum, pw) => sum + pw.weight, 0);
+      
+      // Generate recommended products with proper pricing
+      const recommendedProducts = productWeights
+        .slice(0, 30) // Limit to top 30 products
+        .map(pw => {
+          const { product, velocity, hasAnalytics, weight } = pw;
+          const share = weight / totalWeight;
+          const allocatedValue = targetSalesValue * share;
+          const unitPrice = product.basePrice || product.price || 15; // Default price if not set
+          const quantity = Math.max(1, Math.round(allocatedValue / unitPrice));
+          const totalPrice = quantity * unitPrice;
+          const costRatio = 0.4; // Assume 40% production cost
+          const estimatedCost = totalPrice * costRatio;
+          
+          return {
+            productId: product.id,
+            productName: product.name,
+            category: product.category || 'عام',
+            quantity,
+            unitPrice,
+            totalPrice,
+            estimatedCost,
+            salesVelocity: velocity,
+            priority: hasAnalytics ? 'high' : 'normal'
+          };
+        })
+        .filter(p => p.quantity > 0 && p.totalPrice > 0)
+        .sort((a, b) => b.totalPrice - a.totalPrice); // Sort by value descending
+      
+      const totalEstimatedValue = recommendedProducts.reduce((sum, p) => sum + p.totalPrice, 0);
+      const totalEstimatedCost = recommendedProducts.reduce((sum, p) => sum + p.estimatedCost, 0);
+      const profitMargin = totalEstimatedValue > 0 
+        ? ((totalEstimatedValue - totalEstimatedCost) / totalEstimatedValue) * 100 
+        : 0;
+      
+      // Confidence score based on data quality
+      const analyticsCount = productWeights.filter(pw => pw.hasAnalytics).length;
+      const dataQuality = analyticsCount / Math.max(recommendedProducts.length, 1);
+      const confidenceScore = productAnalytics.length > 0 
+        ? Math.min(0.95, 0.6 + (dataQuality * 0.35)) 
+        : 0.55;
       
       const plan = await storage.createProductionAiPlan({
         branchId,
@@ -4642,17 +4705,33 @@ export async function registerRoutes(
         targetSalesValue,
         planDate,
         datasetId: uploadId ? parseInt(uploadId, 10) : null,
-        algorithmVersion: 'v1.0',
-        confidenceScore: productAnalytics.length > 0 ? 0.85 : 0.6,
+        algorithmVersion: 'v1.1',
+        confidenceScore,
         recommendedProducts,
         totalEstimatedValue,
-        totalEstimatedCost: estimatedCost,
-        profitMargin: ((totalEstimatedValue - estimatedCost) / totalEstimatedValue) * 100,
+        totalEstimatedCost,
+        profitMargin,
         status: 'generated',
         createdBy: (req as any).user?.id
       });
       
-      res.status(201).json(plan);
+      // Format response for frontend compatibility
+      const response = {
+        id: plan.id,
+        branchId: plan.branchId,
+        planDate: plan.planDate,
+        targetSales: plan.targetSalesValue,
+        confidenceScore: plan.confidenceScore,
+        totalEstimatedValue: plan.totalEstimatedValue,
+        estimatedCost: plan.totalEstimatedCost,
+        profitMargin: plan.profitMargin,
+        status: plan.status,
+        products: recommendedProducts,
+        salesDataFileId: plan.datasetId,
+        createdAt: plan.createdAt
+      };
+      
+      res.status(201).json(response);
     } catch (error) {
       console.error("Error generating AI plan:", error);
       res.status(500).json({ error: "Failed to generate AI plan" });
@@ -4703,8 +4782,8 @@ export async function registerRoutes(
           productName: p.productName,
           productCategory: p.category,
           targetQuantity: p.quantity,
-          unitPrice: p.estimatedValue / p.quantity,
-          totalValue: p.estimatedValue,
+          unitPrice: p.unitPrice || (p.totalPrice ? p.totalPrice / p.quantity : p.estimatedValue / p.quantity),
+          totalValue: p.totalPrice || p.estimatedValue,
           salesVelocity: p.salesVelocity,
           priority: p.priority === 'high' ? 1 : 0,
           status: 'pending'
