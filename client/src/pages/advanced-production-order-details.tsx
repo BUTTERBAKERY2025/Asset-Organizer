@@ -94,11 +94,35 @@ export default function AdvancedProductionOrderDetailsPage() {
     queryKey: ["/api/branches"],
   });
 
-  const orderData = rawData ? {
-    order: rawData.order || rawData,
-    items: rawData.items || [],
-    schedules: rawData.schedules || [],
-  } : null;
+  const orderData = rawData ? (() => {
+    const response = rawData as any;
+    const order = response.order || response;
+    const rawItems = response.items || [];
+    const rawSchedules = response.schedules || [];
+    
+    const items = rawItems.map((item: any) => ({
+      id: item.id,
+      productId: item.productId || item.product_id,
+      productName: item.productName || item.product_name || "",
+      targetQuantity: Number(item.targetQuantity || item.target_quantity || item.quantity) || 0,
+      producedQuantity: Number(item.producedQuantity || item.produced_quantity) || 0,
+      unit: item.unit || "قطعة",
+      unitPrice: Number(item.unitPrice || item.unit_price) || 0,
+      notes: item.notes || ""
+    }));
+    
+    const schedules = rawSchedules.map((schedule: any) => ({
+      id: schedule.id,
+      scheduleDate: schedule.scheduleDate || schedule.schedule_date,
+      shift: schedule.shift,
+      productId: schedule.productId || schedule.product_id,
+      productName: schedule.productName || schedule.product_name || "",
+      quantity: Number(schedule.quantity) || 0,
+      status: schedule.status || "pending"
+    }));
+    
+    return { order, items, schedules };
+  })() : null;
 
   const getBranchName = (branchId: string) => {
     return branches?.find((b) => b.id === branchId)?.name || branchId;
@@ -160,9 +184,9 @@ export default function AdvancedProductionOrderDetailsPage() {
   const typeConfig = ORDER_TYPE_CONFIG[order.orderType] || ORDER_TYPE_CONFIG.daily;
   const priorityConfig = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.normal;
 
-  const totalTargetQuantity = items.reduce((sum, item) => sum + (item.targetQuantity || 0), 0);
-  const totalProducedQuantity = items.reduce((sum, item) => sum + (item.producedQuantity || 0), 0);
-  const totalItemsCost = items.reduce((sum, item) => sum + ((item.targetQuantity || 0) * (item.unitPrice || 0)), 0);
+  const totalTargetQuantity = items.reduce((sum: number, item: OrderItem) => sum + (item.targetQuantity || 0), 0);
+  const totalProducedQuantity = items.reduce((sum: number, item: OrderItem) => sum + (item.producedQuantity || 0), 0);
+  const totalItemsCost = items.reduce((sum: number, item: OrderItem) => sum + ((item.targetQuantity || 0) * (item.unitPrice || 0)), 0);
 
   return (
     <Layout>
@@ -304,7 +328,7 @@ export default function AdvancedProductionOrderDetailsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {items.map((item, index) => (
+                        {items.map((item: OrderItem, index: number) => (
                           <TableRow key={item.id || index}>
                             <TableCell className="font-medium">{index + 1}</TableCell>
                             <TableCell>
@@ -359,7 +383,7 @@ export default function AdvancedProductionOrderDetailsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {schedules.map((schedule, index) => (
+                        {schedules.map((schedule: OrderSchedule, index: number) => (
                           <TableRow key={schedule.id || index}>
                             <TableCell>{formatDate(schedule.scheduleDate)}</TableCell>
                             <TableCell>

@@ -410,24 +410,45 @@ export default function AdvancedProductionOrderFormPage() {
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
+      <div className="space-y-6 p-6" dir="rtl">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+          <Link href="/production-dashboard" className="hover:text-amber-600 transition-colors">لوحة الإنتاج</Link>
+          <span>/</span>
+          <Link href="/advanced-production-orders" className="hover:text-amber-600 transition-colors">أوامر الإنتاج</Link>
+          <span>/</span>
+          <span className="text-foreground font-medium">{isEdit ? "تعديل" : "إنشاء جديد"}</span>
+        </div>
+
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">
-              {isEdit ? "تعديل أمر الإنتاج" : "إنشاء أمر إنتاج جديد"}
-            </h1>
-            <p className="text-muted-foreground">
-              {isEdit && formData.orderNumber
-                ? `رقم الأمر: ${formData.orderNumber}`
-                : "أدخل تفاصيل أمر الإنتاج"}
-            </p>
+          <div className="flex items-center gap-4">
+            <Link href="/advanced-production-orders">
+              <Button variant="ghost" size="icon" className="hover:bg-amber-50">
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3" data-testid="text-page-title">
+                <div className="h-10 w-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center">
+                  <Factory className="h-5 w-5 text-white" />
+                </div>
+                {isEdit ? "تعديل أمر الإنتاج" : "إنشاء أمر إنتاج جديد"}
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                {isEdit && formData.orderNumber
+                  ? `رقم الأمر: ${formData.orderNumber}`
+                  : "أدخل تفاصيل أمر الإنتاج في الخطوات التالية"}
+              </p>
+            </div>
           </div>
-          <Link href="/advanced-production-orders">
-            <Button variant="outline" data-testid="button-back">
-              <ArrowRight className="w-4 h-4 ml-2" />
-              العودة للقائمة
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            {isEdit && (
+              <Link href={`/advanced-production-orders/${id}`}>
+                <Button variant="outline" data-testid="button-view">
+                  عرض التفاصيل
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-center gap-2 mb-6">
