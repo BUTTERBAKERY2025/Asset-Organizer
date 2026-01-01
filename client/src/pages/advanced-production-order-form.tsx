@@ -764,7 +764,7 @@ export default function AdvancedProductionOrderFormPage() {
                             <div className="flex items-center gap-2">
                               <Calendar className="w-5 h-5 text-primary" />
                               <span className="font-semibold">
-                                {format(date, "EEEE, dd/MM/yyyy")}
+                                {format(date, "EEEE", { locale: ar })} - {format(date, "dd/MM/yyyy")}
                               </span>
                               <Badge variant="secondary">{dateSchedules.length} مهمة</Badge>
                             </div>
