@@ -114,7 +114,7 @@ export default function ProductionReportsPage() {
     queryKey: ["/api/branches"],
   });
 
-  const { data: reportData, isLoading, refetch } = useQuery<ReportData>({
+  const { data: reportData, isLoading, isError, error, refetch } = useQuery<ReportData>({
     queryKey: ["/api/production/reports", selectedBranch, startDate, endDate],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -123,9 +123,14 @@ export default function ProductionReportsPage() {
         endDate,
       });
       const res = await fetch(`/api/production/reports?${params}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch reports");
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("يرجى تسجيل الدخول أولاً");
+        throw new Error("فشل في جلب التقارير");
+      }
       return res.json();
     },
+    retry: 1,
+    staleTime: 30000,
   });
 
   const applyDatePreset = (preset: typeof DATE_PRESETS[0]) => {
@@ -282,7 +287,7 @@ export default function ProductionReportsPage() {
   return (
     <Layout>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <Link href="/production-dashboard">
               <Button variant="ghost" size="icon" data-testid="btn-back">
@@ -294,13 +299,38 @@ export default function ProductionReportsPage() {
               <p className="text-sm text-gray-500">جميع تقارير الإنتاج والتحليلات</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Link href="/daily-production">
+              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-daily-production">
+                <Package className="h-3 w-3 ml-1" />
+                الإنتاج اليومي
+              </Button>
+            </Link>
+            <Link href="/advanced-production-orders">
+              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-orders">
+                <Target className="h-3 w-3 ml-1" />
+                أوامر الإنتاج
+              </Button>
+            </Link>
+            <Link href="/display-bar-waste">
+              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-waste">
+                <Trash2 className="h-3 w-3 ml-1" />
+                الهدر
+              </Button>
+            </Link>
+            <Link href="/quality-control">
+              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-quality">
+                <CheckCircle className="h-3 w-3 ml-1" />
+                الجودة
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"
               onClick={() => refetch()}
               disabled={isLoading}
               data-testid="btn-refresh"
+              className="h-8"
             >
               <RefreshCw className={`h-4 w-4 ml-1 ${isLoading ? 'animate-spin' : ''}`} />
               تحديث
@@ -445,6 +475,25 @@ export default function ProductionReportsPage() {
                 </Card>
               ))}
             </div>
+          ) : isError ? (
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="p-8 text-center">
+                <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-red-700 mb-2">خطأ في جلب التقارير</h3>
+                <p className="text-red-600 mb-4">{error?.message || "حدث خطأ غير متوقع"}</p>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={() => refetch()} variant="outline" data-testid="btn-retry">
+                    <RefreshCw className="h-4 w-4 ml-2" />
+                    إعادة المحاولة
+                  </Button>
+                  <Link href="/login">
+                    <Button variant="default" data-testid="btn-login">
+                      تسجيل الدخول
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
             <>
               <TabsContent value="summary" className="space-y-4">
