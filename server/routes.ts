@@ -5651,5 +5651,24 @@ export async function registerRoutes(
     }
   });
 
+  // Unified Command Center API - aggregates all KPIs in one call
+  app.get("/api/command-center", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = (req.query.branchId as string) || 'all';
+      const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
+      
+      const data = await storage.getCommandCenterData(branchId, date);
+      res.json({
+        ...data,
+        branchId,
+        date,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error fetching command center data:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات مركز القيادة" });
+    }
+  });
+
   return httpServer;
 }

@@ -4338,6 +4338,166 @@ export class DatabaseStorage implements IStorage {
       byHour,
     };
   }
+
+  // Unified Command Center - aggregates all KPIs
+  async getCommandCenterData(branchId: string, date: string): Promise<{
+    production: {
+      totalBatches: number;
+      totalQuantity: number;
+      targetQuantity: number;
+      completionRate: number;
+      gap: number;
+      byDestination: Record<string, number>;
+      activeOrders: number;
+      completedOrders: number;
+    };
+    inventory: {
+      totalItems: number;
+      totalValue: number;
+      lowStockCount: number;
+      maintenanceNeeded: number;
+      goodCondition: number;
+      damaged: number;
+    };
+    cashier: {
+      totalSales: number;
+      totalJournals: number;
+      shortages: number;
+      surpluses: number;
+      shortageAmount: number;
+      surplusAmount: number;
+      averageTicket: number;
+    };
+    waste: {
+      totalReports: number;
+      totalWastedQuantity: number;
+      totalWastedValue: number;
+      wasteByReason: Record<string, number>;
+    };
+    comparison: {
+      productionVsYesterday: number;
+      salesVsYesterday: number;
+    };
+  }> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const yesterday = new Date(date);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Production data
+    const prodStats = await this.getDailyProductionStats(branchId, date);
+    const yesterdayProdStats = await this.getDailyProductionStats(branchId, yesterdayStr);
+    
+    // Get production targets - returns { totalTarget, totalProduced }
+    const targetData = await this.getProductionTargetsByDate(branchId, date);
+    const totalTarget = targetData.totalTarget;
+    const totalProduced = targetData.totalProduced;
+    
+    // Active production orders - filter by sourceBranchId or targetBranchId
+    const allOrders = await db.select().from(advancedProductionOrders);
+    const filteredOrders = branchId !== 'all' 
+      ? allOrders.filter(o => o.sourceBranchId === branchId || o.targetBranchId === branchId)
+      : allOrders;
+    const activeOrders = filteredOrders.filter(o => o.status === 'pending' || o.status === 'in_progress').length;
+    const completedOrders = filteredOrders.filter(o => o.status === 'completed').length;
+
+    // Inventory data
+    let invItems: InventoryItem[];
+    if (branchId === 'all') {
+      invItems = await db.select().from(inventoryItems);
+    } else {
+      invItems = await this.getInventoryItemsByBranch(branchId);
+    }
+    const totalValue = invItems.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || 1)), 0);
+    const lowStockCount = invItems.filter(i => (i.quantity || 0) < 5).length;
+    const maintenanceNeeded = invItems.filter(i => i.status === 'maintenance').length;
+    const goodCondition = invItems.filter(i => i.status === 'good').length;
+    const damaged = invItems.filter(i => i.status === 'damaged' || i.status === 'missing').length;
+
+    // Cashier data (for today)
+    let journals = await this.getCashierJournalsByDate(date);
+    if (branchId !== 'all') {
+      journals = journals.filter(j => j.branchId === branchId);
+    }
+    const yesterdayJournals = await this.getCashierJournalsByDate(yesterdayStr);
+    const filteredYesterdayJournals = branchId !== 'all' 
+      ? yesterdayJournals.filter(j => j.branchId === branchId) 
+      : yesterdayJournals;
+    
+    const totalSales = journals.reduce((sum, j) => sum + j.totalSales, 0);
+    const yesterdaySales = filteredYesterdayJournals.reduce((sum, j) => sum + j.totalSales, 0);
+    const shortageJournals = journals.filter(j => j.discrepancyStatus === 'shortage');
+    const surplusJournals = journals.filter(j => j.discrepancyStatus === 'surplus');
+
+    // Waste data
+    const wasteReports = await this.getWasteReports(branchId !== 'all' ? branchId : undefined, date, date);
+    let totalWastedQuantity = 0;
+    let totalWastedValue = 0;
+    const wasteByReason: Record<string, number> = {};
+    
+    for (const report of wasteReports) {
+      const items = await this.getWasteItems(report.id);
+      for (const item of items) {
+        totalWastedQuantity += item.quantity;
+        totalWastedValue += item.totalValue || 0;
+        wasteByReason[item.wasteReason] = (wasteByReason[item.wasteReason] || 0) + item.quantity;
+      }
+    }
+
+    const completionRate = totalTarget > 0 ? (totalProduced / totalTarget) * 100 : 0;
+    const productionVsYesterday = yesterdayProdStats.totalQuantity > 0 
+      ? ((prodStats.totalQuantity - yesterdayProdStats.totalQuantity) / yesterdayProdStats.totalQuantity) * 100 
+      : 0;
+    const salesVsYesterday = yesterdaySales > 0 
+      ? ((totalSales - yesterdaySales) / yesterdaySales) * 100 
+      : 0;
+
+    return {
+      production: {
+        totalBatches: prodStats.totalBatches,
+        totalQuantity: prodStats.totalQuantity,
+        targetQuantity: totalTarget,
+        completionRate,
+        gap: totalTarget - totalProduced,
+        byDestination: prodStats.byDestination,
+        activeOrders,
+        completedOrders,
+      },
+      inventory: {
+        totalItems: invItems.length,
+        totalValue,
+        lowStockCount,
+        maintenanceNeeded,
+        goodCondition,
+        damaged,
+      },
+      cashier: {
+        totalSales,
+        totalJournals: journals.length,
+        shortages: shortageJournals.length,
+        surpluses: surplusJournals.length,
+        shortageAmount: shortageJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0),
+        surplusAmount: surplusJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0),
+        averageTicket: journals.length > 0 
+          ? journals.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / journals.length 
+          : 0,
+      },
+      waste: {
+        totalReports: wasteReports.length,
+        totalWastedQuantity,
+        totalWastedValue,
+        wasteByReason,
+      },
+      comparison: {
+        productionVsYesterday,
+        salesVsYesterday,
+      },
+    };
+  }
 }
 
 export const storage = new DatabaseStorage();
