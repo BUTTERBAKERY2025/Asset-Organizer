@@ -685,189 +685,113 @@ export default function ProductionDashboardPage() {
             <CardDescription>مؤشرات الأداء من جميع الأنظمة</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Inventory Stats */}
-              <Card className="border-r-4 border-r-teal-500 bg-gradient-to-br from-teal-50 to-white" data-testid="card-inventory-kpi">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-10 w-10 bg-teal-100 rounded-full flex items-center justify-center">
-                      <Boxes className="h-5 w-5 text-teal-600" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Inventory Stats - Compact */}
+              <Link href="/inventory" className="block group" data-testid="card-inventory-kpi">
+                <div className="rounded-lg border border-teal-200 bg-white/80 hover:bg-teal-50/50 p-3 transition-all hover:shadow-sm cursor-pointer">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-7 w-7 bg-teal-100 rounded-full flex items-center justify-center">
+                      <Boxes className="h-4 w-4 text-teal-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-teal-800">الجرد</p>
-                    </div>
+                    <span className="text-xs font-semibold text-teal-800">الجرد</span>
+                    <ArrowUpRight className="h-3 w-3 text-teal-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   {commandCenterLoading ? (
-                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-10 w-full" />
                   ) : (
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">إجمالي الأصناف</span>
-                        <span className="font-bold text-teal-700">{commandCenterData?.inventory?.totalItems || 0}</span>
+                    <div className="grid grid-cols-2 gap-1 text-xs">
+                      <div><span className="text-gray-500">الأصناف:</span> <span className="font-bold text-teal-700">{commandCenterData?.inventory?.totalItems || 0}</span></div>
+                      <div><span className="text-gray-500">القيمة:</span> <span className="font-bold text-teal-700">{formatCurrency(commandCenterData?.inventory?.totalValue || 0)}</span></div>
+                      <div className="flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3 text-amber-500" />
+                        <span className="text-amber-700 font-medium">{commandCenterData?.inventory?.lowStockCount || 0}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">القيمة الإجمالية</span>
-                        <span className="font-bold text-teal-700">{formatCurrency(commandCenterData?.inventory?.totalValue || 0)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3 text-amber-500" />
-                          مخزون منخفض
-                        </span>
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                          {commandCenterData?.inventory?.lowStockCount || 0}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 flex items-center gap-1">
-                          <Wrench className="h-3 w-3 text-orange-500" />
-                          تحتاج صيانة
-                        </span>
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                          {commandCenterData?.inventory?.maintenanceNeeded || 0}
-                        </Badge>
+                      <div className="flex items-center gap-1">
+                        <Wrench className="h-3 w-3 text-orange-500" />
+                        <span className="text-orange-700 font-medium">{commandCenterData?.inventory?.maintenanceNeeded || 0}</span>
                       </div>
                     </div>
                   )}
-                  <Link href="/inventory" className="block mt-3">
-                    <Button variant="outline" size="sm" className="w-full text-teal-700 border-teal-200 hover:bg-teal-50">
-                      عرض الجرد
-                      <ArrowUpRight className="h-3 w-3 mr-1" />
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+                </div>
+              </Link>
 
-              {/* Cashier Stats */}
-              <Card className="border-r-4 border-r-emerald-500 bg-gradient-to-br from-emerald-50 to-white" data-testid="card-cashier-kpi">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-10 w-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <CreditCard className="h-5 w-5 text-emerald-600" />
+              {/* Cashier Stats - Compact */}
+              <Link href="/cashier-journals" className="block group" data-testid="card-cashier-kpi">
+                <div className="rounded-lg border border-emerald-200 bg-white/80 hover:bg-emerald-50/50 p-3 transition-all hover:shadow-sm cursor-pointer">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-7 w-7 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <CreditCard className="h-4 w-4 text-emerald-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-emerald-800">الكاشير</p>
-                    </div>
+                    <span className="text-xs font-semibold text-emerald-800">الكاشير</span>
+                    <ArrowUpRight className="h-3 w-3 text-emerald-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   {commandCenterLoading ? (
-                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-10 w-full" />
                   ) : (
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">مبيعات اليوم</span>
-                        <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.totalSales || 0)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">عدد اليوميات</span>
-                        <span className="font-bold text-emerald-700">{commandCenterData?.cashier?.totalJournals || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">متوسط الفاتورة</span>
-                        <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.averageTicket || 0)}</span>
-                      </div>
+                    <div className="grid grid-cols-2 gap-1 text-xs">
+                      <div><span className="text-gray-500">المبيعات:</span> <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.totalSales || 0)}</span></div>
+                      <div><span className="text-gray-500">اليوميات:</span> <span className="font-bold text-emerald-700">{commandCenterData?.cashier?.totalJournals || 0}</span></div>
+                      <div><span className="text-gray-500">المتوسط:</span> <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.averageTicket || 0)}</span></div>
                       {(commandCenterData?.cashier?.shortages || 0) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-red-600 flex items-center gap-1">
-                            <TrendingDown className="h-3 w-3" />
-                            عجز
-                          </span>
-                          <Badge variant="destructive" className="text-xs">
-                            {formatCurrency(commandCenterData?.cashier?.shortageAmount || 0)}
-                          </Badge>
+                        <div className="flex items-center gap-1">
+                          <TrendingDown className="h-3 w-3 text-red-500" />
+                          <span className="text-red-600 font-medium text-xs">{formatCurrency(commandCenterData?.cashier?.shortageAmount || 0)}</span>
                         </div>
                       )}
                     </div>
                   )}
-                  <Link href="/cashier-journals" className="block mt-3">
-                    <Button variant="outline" size="sm" className="w-full text-emerald-700 border-emerald-200 hover:bg-emerald-50">
-                      عرض اليوميات
-                      <ArrowUpRight className="h-3 w-3 mr-1" />
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+                </div>
+              </Link>
 
-              {/* Waste Stats */}
-              <Card className="border-r-4 border-r-red-500 bg-gradient-to-br from-red-50 to-white" data-testid="card-waste-kpi">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center">
-                      <Trash2 className="h-5 w-5 text-red-600" />
+              {/* Waste Stats - Compact */}
+              <Link href="/waste-reports" className="block group" data-testid="card-waste-kpi">
+                <div className="rounded-lg border border-red-200 bg-white/80 hover:bg-red-50/50 p-3 transition-all hover:shadow-sm cursor-pointer">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-7 w-7 bg-red-100 rounded-full flex items-center justify-center">
+                      <Trash2 className="h-4 w-4 text-red-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-red-800">الهدر</p>
-                    </div>
+                    <span className="text-xs font-semibold text-red-800">الهدر</span>
+                    <ArrowUpRight className="h-3 w-3 text-red-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   {commandCenterLoading ? (
-                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-10 w-full" />
                   ) : (
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">تقارير الهدر</span>
-                        <span className="font-bold text-red-700">{commandCenterData?.waste?.totalReports || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">الكمية المهدرة</span>
-                        <span className="font-bold text-red-700">{commandCenterData?.waste?.totalWastedQuantity || 0} قطعة</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">قيمة الهدر</span>
-                        <span className="font-bold text-red-700">{formatCurrency(commandCenterData?.waste?.totalWastedValue || 0)}</span>
-                      </div>
+                    <div className="grid grid-cols-2 gap-1 text-xs">
+                      <div><span className="text-gray-500">التقارير:</span> <span className="font-bold text-red-700">{commandCenterData?.waste?.totalReports || 0}</span></div>
+                      <div><span className="text-gray-500">الكمية:</span> <span className="font-bold text-red-700">{commandCenterData?.waste?.totalWastedQuantity || 0}</span></div>
+                      <div className="col-span-2"><span className="text-gray-500">القيمة:</span> <span className="font-bold text-red-700">{formatCurrency(commandCenterData?.waste?.totalWastedValue || 0)}</span></div>
                     </div>
                   )}
-                  <Link href="/waste-reports" className="block mt-3">
-                    <Button variant="outline" size="sm" className="w-full text-red-700 border-red-200 hover:bg-red-50">
-                      عرض تقارير الهدر
-                      <ArrowUpRight className="h-3 w-3 mr-1" />
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+                </div>
+              </Link>
 
-              {/* Comparison Stats */}
-              <Card className="border-r-4 border-r-indigo-500 bg-gradient-to-br from-indigo-50 to-white" data-testid="card-comparison-kpi">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <BarChart3 className="h-5 w-5 text-indigo-600" />
+              {/* Comparison Stats - Compact */}
+              <div className="rounded-lg border border-indigo-200 bg-white/80 p-3" data-testid="card-comparison-kpi">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-7 w-7 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <BarChart3 className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <span className="text-xs font-semibold text-indigo-800">المقارنات</span>
+                </div>
+                {commandCenterLoading ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : (
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">الإنتاج</span>
+                      <span className={`font-bold ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.productionVsYesterday || 0).toFixed(0)}%
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-indigo-800">المقارنات</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">المبيعات</span>
+                      <span className={`font-bold ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.salesVsYesterday || 0).toFixed(0)}%
+                      </span>
                     </div>
                   </div>
-                  {commandCenterLoading ? (
-                    <Skeleton className="h-16 w-full" />
-                  ) : (
-                    <div className="space-y-3 text-sm">
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-gray-600">الإنتاج vs أمس</span>
-                          <span className={`font-bold ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.productionVsYesterday || 0).toFixed(1)}%
-                          </span>
-                        </div>
-                        <Progress 
-                          value={Math.min(Math.abs(commandCenterData?.comparison?.productionVsYesterday || 0), 100)} 
-                          className={`h-2 ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '[&>div]:bg-green-500' : '[&>div]:bg-red-500'}`}
-                        />
-                      </div>
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-gray-600">المبيعات vs أمس</span>
-                          <span className={`font-bold ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.salesVsYesterday || 0).toFixed(1)}%
-                          </span>
-                        </div>
-                        <Progress 
-                          value={Math.min(Math.abs(commandCenterData?.comparison?.salesVsYesterday || 0), 100)} 
-                          className={`h-2 ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '[&>div]:bg-green-500' : '[&>div]:bg-red-500'}`}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
