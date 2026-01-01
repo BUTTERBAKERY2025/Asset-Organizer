@@ -1,0 +1,698 @@
+import { useState, useEffect } from "react";
+import { Layout } from "@/components/layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
+import { ar } from "date-fns/locale";
+import { TablePagination, usePagination } from "@/components/ui/pagination";
+import type { Branch } from "@shared/schema";
+import { Brain, Calendar, DollarSign, Percent, Package, CheckCircle, Clock, Sparkles, TrendingUp, History, FileText, Loader2, AlertCircle, RefreshCw, ArrowLeft, Trash2 } from "lucide-react";
+import { useProductionContext } from "@/contexts/ProductionContext";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+interface AIPlanProduct {
+  productId: number;
+  productName: string;
+  category?: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  estimatedCost: number;
+  salesVelocity?: number;
+  revenueShare?: number;
+  priority?: string;
+}
+
+interface UploadAnalyticsSummary {
+  fileName: string;
+  productsCount: number;
+  totalRevenue: number;
+  totalQuantity: number;
+  topProducts: { name: string; category?: string; revenue: number; quantity: number }[];
+}
+
+interface AIProductionPlan {
+  id: number;
+  branchId: string;
+  planDate: string;
+  targetSales: number;
+  confidenceScore: number;
+  totalEstimatedValue: number;
+  estimatedCost: number;
+  profitMargin: number;
+  status: "generated" | "applied";
+  products: AIPlanProduct[];
+  salesDataFileId?: number;
+  appliedOrderId?: number;
+  analysisMethod?: string;
+  analysisMethodLabel?: string;
+  targetAccuracy?: number;
+  uploadAnalytics?: UploadAnalyticsSummary;
+  createdAt: string;
+}
+
+interface SalesDataFile {
+  id: number;
+  fileName: string;
+  branchId: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  status: string;
+  createdAt: string;
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  generated: { label: "تم التوليد", color: "bg-blue-100 text-blue-800", icon: Sparkles },
+  applied: { label: "تم التطبيق", color: "bg-green-100 text-green-800", icon: CheckCircle },
+};
+
+export default function AdvancedProductionPlannerPage() {
+  // Use shared context for branch and date
+  const { 
+    selectedBranch: branchId, 
+    setSelectedBranch: setBranchId, 
+    selectedDate: planDate, 
+    setSelectedDate: setPlanDate 
+  } = useProductionContext();
+  
+  const [targetSales, setTargetSales] = useState<string>("");
+  const [salesDataFileId, setSalesDataFileId] = useState<string>("");
+  const [generatedPlan, setGeneratedPlan] = useState<AIProductionPlan | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { itemsPerPage, getPageItems } = usePagination(6);
+
+  const { data: branches } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+  });
+  
+  // Initialize branch from context or fallback to first branch
+  useEffect(() => {
+    if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
+      setBranchId(branches[0].id);
+    }
+  }, [branches, branchId, setBranchId]);
+
+  const { data: salesDataFiles } = useQuery<SalesDataFile[]>({
+    queryKey: ["/api/sales-data-uploads"],
+  });
+
+  const { data: planHistory, isLoading: historyLoading } = useQuery<AIProductionPlan[]>({
+    queryKey: ["/api/production-ai-plans"],
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async (data: { branchId: string; targetSalesValue: number; planDate: string; uploadId?: number }): Promise<AIProductionPlan> => {
+      const res = await apiRequest("POST", "/api/production-ai-plans/generate", data);
+      return res.json();
+    },
+    onSuccess: (data: AIProductionPlan) => {
+      setGeneratedPlan(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/production-ai-plans"] });
+      toast({ title: "تم توليد الخطة بنجاح", description: `مستوى الثقة: ${(data.confidenceScore * 100).toFixed(0)}%` });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ في توليد الخطة", description: error.message || "حدث خطأ أثناء توليد خطة الإنتاج", variant: "destructive" });
+    },
+  });
+
+  const applyMutation = useMutation({
+    mutationFn: async (planId: number): Promise<void> => {
+      await apiRequest("POST", `/api/production-ai-plans/${planId}/apply`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/production-ai-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/advanced-production-orders"] });
+      setGeneratedPlan(null);
+      setBranchId("");
+      setTargetSales("");
+      setPlanDate(format(new Date(), "yyyy-MM-dd"));
+      setSalesDataFileId("");
+      toast({ title: "تم تطبيق الخطة بنجاح", description: "تم إنشاء أمر إنتاج جديد بناءً على الخطة" });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ في تطبيق الخطة", description: error.message || "حدث خطأ أثناء تطبيق خطة الإنتاج", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (planId: number): Promise<void> => {
+      await apiRequest("DELETE", `/api/production-ai-plans/${planId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/production-ai-plans"] });
+      toast({ title: "تم حذف الخطة بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ في حذف الخطة", description: error.message || "حدث خطأ أثناء حذف الخطة", variant: "destructive" });
+    },
+  });
+
+  const handleGenerate = () => {
+    if (!branchId || !targetSales || !planDate) {
+      toast({ title: "بيانات ناقصة", description: "يرجى تعبئة جميع الحقول المطلوبة", variant: "destructive" });
+      return;
+    }
+    generateMutation.mutate({
+      branchId,
+      targetSalesValue: parseFloat(targetSales),
+      planDate,
+      uploadId: salesDataFileId ? parseInt(salesDataFileId) : undefined,
+    });
+  };
+
+  const handleApply = (planId: number) => {
+    applyMutation.mutate(planId);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount);
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      return format(new Date(dateStr), "dd/MM/yyyy");
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getBranchName = (branchId: string) => {
+    return branches?.find((b) => b.id === branchId)?.name || branchId;
+  };
+
+  const paginatedHistory = getPageItems(planHistory || [], historyPage);
+
+  return (
+    <Layout>
+      <div className="space-y-6" dir="rtl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl">
+              <Brain className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">مخطط الإنتاج الذكي</h1>
+              <p className="text-muted-foreground">توليد خطط إنتاج ذكية باستخدام الذكاء الاصطناعي</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-500" />
+                توليد خطة إنتاج
+              </CardTitle>
+              <CardDescription>أدخل البيانات لتوليد خطة إنتاج ذكية</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="branch">الفرع *</Label>
+                <Select value={branchId} onValueChange={setBranchId}>
+                  <SelectTrigger data-testid="select-branch">
+                    <SelectValue placeholder="اختر الفرع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches?.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="targetSales">المبيعات المستهدفة بالريال *</Label>
+                <div className="relative">
+                  <DollarSign className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    id="targetSales"
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={targetSales}
+                    onChange={(e) => setTargetSales(e.target.value)}
+                    placeholder="مثال: 50000"
+                    className="pr-10"
+                    data-testid="input-target-sales"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="planDate">تاريخ الخطة *</Label>
+                <div className="relative">
+                  <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    id="planDate"
+                    type="date"
+                    value={planDate}
+                    onChange={(e) => setPlanDate(e.target.value)}
+                    className="pr-10"
+                    data-testid="input-plan-date"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="salesData">بيانات المبيعات السابقة (اختياري)</Label>
+                <Select value={salesDataFileId || "none"} onValueChange={(val) => setSalesDataFileId(val === "none" ? "" : val)}>
+                  <SelectTrigger data-testid="select-sales-data">
+                    <SelectValue placeholder="اختر ملف بيانات المبيعات" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">بدون بيانات سابقة</SelectItem>
+                    {salesDataFiles?.filter(f => f.status === 'completed').map((file) => (
+                      <SelectItem key={file.id} value={file.id.toString()}>
+                        {file.fileName} ({file.periodStart} - {file.periodEnd})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                onClick={handleGenerate}
+                disabled={generateMutation.isPending || !branchId || !targetSales || !planDate}
+                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
+                data-testid="button-generate-plan"
+              >
+                {generateMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                    جاري التوليد...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="w-4 h-4 ml-2" />
+                    توليد الخطة
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-500" />
+                نتيجة الخطة
+              </CardTitle>
+              <CardDescription>تفاصيل خطة الإنتاج المولدة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {generateMutation.isPending ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 animate-pulse" />
+                    <Brain className="w-8 h-8 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                  </div>
+                  <p className="text-muted-foreground">جاري تحليل البيانات وتوليد الخطة...</p>
+                </div>
+              ) : generatedPlan ? (
+                <div className="space-y-6">
+                  {generatedPlan.analysisMethodLabel && (
+                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100">
+                      <div className="flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-indigo-600" />
+                        <span className="text-sm font-medium text-indigo-700">
+                          طريقة التحليل: {generatedPlan.analysisMethodLabel}
+                        </span>
+                      </div>
+                      {generatedPlan.targetAccuracy !== undefined && (
+                        <Badge className={`${
+                          generatedPlan.targetAccuracy >= 95 ? 'bg-green-100 text-green-700' :
+                          generatedPlan.targetAccuracy >= 85 ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          دقة المطابقة: {generatedPlan.targetAccuracy}%
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {generatedPlan.uploadAnalytics && (
+                    <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                        <span className="text-sm font-semibold text-blue-800">
+                          بيانات من الملف: {generatedPlan.uploadAnalytics.fileName}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div className="text-center p-2 bg-white/60 rounded">
+                          <p className="text-lg font-bold text-blue-700">{generatedPlan.uploadAnalytics.productsCount}</p>
+                          <p className="text-xs text-blue-600">منتج</p>
+                        </div>
+                        <div className="text-center p-2 bg-white/60 rounded">
+                          <p className="text-lg font-bold text-green-700">{formatCurrency(generatedPlan.uploadAnalytics.totalRevenue)}</p>
+                          <p className="text-xs text-green-600">إجمالي المبيعات السابقة</p>
+                        </div>
+                      </div>
+                      {generatedPlan.uploadAnalytics.topProducts.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-blue-700 mb-2">أعلى 5 منتجات مبيعاً:</p>
+                          <div className="space-y-1">
+                            {generatedPlan.uploadAnalytics.topProducts.slice(0, 5).map((p, i) => (
+                              <div key={i} className="flex justify-between items-center text-xs bg-white/40 rounded px-2 py-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-700">{p.name}</span>
+                                  {p.category && (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">
+                                      {p.category}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-green-700 font-medium">{formatCurrency(p.revenue)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center">
+                      <Percent className="w-6 h-6 mx-auto mb-2 text-purple-600" />
+                      <p className="text-2xl font-bold text-purple-700" data-testid="text-confidence">
+                        {(generatedPlan.confidenceScore * 100).toFixed(0)}%
+                      </p>
+                      <p className="text-xs text-purple-600">مستوى الثقة</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 text-center">
+                      <TrendingUp className="w-6 h-6 mx-auto mb-2 text-green-600" />
+                      <p className="text-lg font-bold text-green-700" data-testid="text-estimated-value">
+                        {formatCurrency(generatedPlan.totalEstimatedValue)}
+                      </p>
+                      <p className="text-xs text-green-600">القيمة المتوقعة</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 text-center">
+                      <DollarSign className="w-6 h-6 mx-auto mb-2 text-amber-600" />
+                      <p className="text-lg font-bold text-amber-700" data-testid="text-estimated-cost">
+                        {formatCurrency(generatedPlan.estimatedCost)}
+                      </p>
+                      <p className="text-xs text-amber-600">التكلفة المتوقعة</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center">
+                      <Percent className="w-6 h-6 mx-auto mb-2 text-blue-600" />
+                      <p className="text-2xl font-bold text-blue-700" data-testid="text-profit-margin">
+                        {generatedPlan.profitMargin.toFixed(1)}%
+                      </p>
+                      <p className="text-xs text-blue-600">هامش الربح</p>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      المنتجات الموصى بها ({generatedPlan.products?.length || 0})
+                    </h3>
+                    {generatedPlan.products && generatedPlan.products.length > 0 ? (
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {generatedPlan.products.map((product, index) => (
+                          <div
+                            key={index}
+                            className={`flex items-center justify-between p-3 rounded-lg border ${
+                              product.priority === 'high' 
+                                ? 'bg-green-50/50 border-green-200' 
+                                : product.priority === 'medium'
+                                ? 'bg-amber-50/50 border-amber-200'
+                                : 'bg-secondary/50 border-transparent'
+                            }`}
+                            data-testid={`product-row-${index}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                product.priority === 'high' 
+                                  ? 'bg-green-100' 
+                                  : product.priority === 'medium'
+                                  ? 'bg-amber-100'
+                                  : 'bg-primary/10'
+                              }`}>
+                                <Package className={`w-4 h-4 ${
+                                  product.priority === 'high' 
+                                    ? 'text-green-600' 
+                                    : product.priority === 'medium'
+                                    ? 'text-amber-600'
+                                    : 'text-primary'
+                                }`} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{product.productName}</p>
+                                  {product.category && (
+                                    <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-300 text-slate-600">
+                                      {product.category}
+                                    </Badge>
+                                  )}
+                                  {product.priority === 'high' && (
+                                    <Badge className="bg-green-100 text-green-700 text-[10px]">الأكثر مبيعاً</Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {product.quantity} وحدة × {formatCurrency(product.unitPrice)}
+                                  {product.revenueShare && (
+                                    <span className="mr-2 text-indigo-600">({product.revenueShare}% من المبيعات)</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-left">
+                              <p className="font-semibold">{formatCurrency(product.totalPrice)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                تكلفة: {formatCurrency(product.estimatedCost)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-muted-foreground">
+                        <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>لا توجد منتجات في هذه الخطة</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => handleApply(generatedPlan.id)}
+                      disabled={applyMutation.isPending || generatedPlan.status === "applied"}
+                      className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                      data-testid="button-apply-plan"
+                    >
+                      {applyMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                          جاري التطبيق...
+                        </>
+                      ) : generatedPlan.status === "applied" ? (
+                        <>
+                          <CheckCircle className="w-4 h-4 ml-2" />
+                          تم التطبيق
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4 ml-2" />
+                          تطبيق الخطة
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setGeneratedPlan(null)}
+                      data-testid="button-new-plan"
+                    >
+                      <RefreshCw className="w-4 h-4 ml-2" />
+                      خطة جديدة
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <Brain className="w-16 h-16 mb-4 opacity-20" />
+                  <p className="text-lg">أدخل البيانات واضغط على "توليد الخطة"</p>
+                  <p className="text-sm">سيتم تحليل البيانات وتوليد خطة إنتاج ذكية</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-gray-500" />
+              تاريخ الخطط السابقة
+            </CardTitle>
+            <CardDescription>عرض جميع خطط الإنتاج الذكية السابقة</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {historyLoading ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-24" />
+                    <Skeleton className="h-10 flex-1" />
+                    <Skeleton className="h-10 w-20" />
+                    <Skeleton className="h-10 w-24" />
+                  </div>
+                ))}
+              </div>
+            ) : !planHistory || planHistory.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <History className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                <p className="text-lg">لا توجد خطط سابقة</p>
+                <p className="text-sm">ابدأ بتوليد خطة إنتاج جديدة</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-gray-50/80">
+                      <TableRow>
+                        <TableHead className="text-right font-semibold">التاريخ</TableHead>
+                        <TableHead className="text-right font-semibold">الفرع</TableHead>
+                        <TableHead className="text-right font-semibold">المستهدف</TableHead>
+                        <TableHead className="text-right font-semibold">الثقة</TableHead>
+                        <TableHead className="text-right font-semibold">المنتجات</TableHead>
+                        <TableHead className="text-right font-semibold">الحالة</TableHead>
+                        <TableHead className="text-left font-semibold">الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedHistory.map((plan, index) => {
+                        const statusConfig = STATUS_CONFIG[plan.status];
+                        return (
+                          <TableRow 
+                            key={plan.id} 
+                            className={`hover:bg-purple-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                            data-testid={`row-plan-${plan.id}`}
+                          >
+                            <TableCell className="font-medium" data-testid={`text-plan-date-${plan.id}`}>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                                {formatDate(plan.planDate)}
+                              </div>
+                            </TableCell>
+                            <TableCell data-testid={`text-plan-branch-${plan.id}`}>
+                              {getBranchName(plan.branchId)}
+                            </TableCell>
+                            <TableCell className="text-left font-semibold text-purple-700" data-testid={`text-target-${plan.id}`}>
+                              {formatCurrency(plan.targetSales)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Progress value={plan.confidenceScore * 100} className="h-2 w-16" />
+                                <span className="text-sm font-medium" data-testid={`text-confidence-${plan.id}`}>
+                                  {(plan.confidenceScore * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline">{plan.products?.length || 0}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={statusConfig?.color || ""} data-testid={`badge-status-${plan.id}`}>
+                                {statusConfig?.label || plan.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                {plan.status === "generated" && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleApply(plan.id)}
+                                    disabled={applyMutation.isPending}
+                                    className="h-8 hover:bg-green-100 hover:text-green-700"
+                                    data-testid={`button-apply-${plan.id}`}
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-8 hover:bg-red-100 hover:text-red-700"
+                                      data-testid={`button-delete-${plan.id}`}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent dir="rtl">
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>هل أنت متأكد من الحذف؟</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        سيتم حذف خطة الإنتاج بتاريخ {formatDate(plan.planDate)} نهائياً. هذا الإجراء لا يمكن التراجع عنه.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="gap-2">
+                                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => deleteMutation.mutate(plan.id)}
+                                        className="bg-destructive hover:bg-destructive/90"
+                                      >
+                                        حذف
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {planHistory && planHistory.length > itemsPerPage && (
+                  <div className="mt-4">
+                    <TablePagination
+                      currentPage={historyPage}
+                      totalItems={planHistory?.length || 0}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={setHistoryPage}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
+  );
+}
