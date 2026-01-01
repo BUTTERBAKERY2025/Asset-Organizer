@@ -5027,10 +5027,18 @@ export async function registerRoutes(
       // Create order and items in a single transaction
       let txResult;
       try {
+        console.log("Creating production order with items:", { 
+          orderData, 
+          itemCount: orderItems.length,
+          firstItem: orderItems[0]
+        });
         txResult = await storage.createAdvancedProductionOrderWithItems(orderData, orderItems);
-      } catch (txError) {
+        console.log("Transaction result:", txResult);
+      } catch (txError: any) {
         console.error("Error creating production order with items:", txError);
-        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج وعناصره" });
+        console.error("Error stack:", txError?.stack);
+        console.error("Error message:", txError?.message);
+        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج وعناصره", details: txError?.message });
       }
       
       // Verify transaction result
