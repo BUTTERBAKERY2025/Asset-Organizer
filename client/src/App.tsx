@@ -44,6 +44,7 @@ import SalesAnalyticsPage from "@/pages/sales-analytics";
 import DisplayBarWastePage from "@/pages/display-bar-waste";
 import AdvancedProductionOrdersPage from "@/pages/advanced-production-orders";
 import AdvancedProductionOrderFormPage from "@/pages/advanced-production-order-form";
+import AdvancedProductionOrderDetailsPage from "@/pages/advanced-production-order-details";
 import AdvancedProductionPlannerPage from "@/pages/ai-production-planner";
 import SalesDataUploadsPage from "@/pages/sales-data-uploads";
 import ProductionDashboardPage from "@/pages/production-dashboard";
@@ -91,6 +92,7 @@ function Router() {
       <Route path="/production-dashboard" component={ProductionDashboardPage} />
       <Route path="/advanced-production-orders" component={AdvancedProductionOrdersPage} />
       <Route path="/advanced-production-orders/new" component={AdvancedProductionOrderFormPage} />
+      <Route path="/advanced-production-orders/:id" component={AdvancedProductionOrderDetailsPage} />
       <Route path="/advanced-production-orders/:id/edit" component={AdvancedProductionOrderFormPage} />
       <Route path="/ai-production-planner" component={AdvancedProductionPlannerPage} />
       <Route path="/sales-data-uploads" component={SalesDataUploadsPage} />

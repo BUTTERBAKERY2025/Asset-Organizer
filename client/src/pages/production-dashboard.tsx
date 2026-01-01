@@ -153,7 +153,7 @@ export default function ProductionDashboardPage() {
               <RefreshCw className="h-4 w-4 ml-2" />
               تحديث
             </Button>
-            <Link href="/advanced-production-order-form">
+            <Link href="/advanced-production-orders/new">
               <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700" data-testid="btn-new-order">
                 <Plus className="h-4 w-4 ml-2" />
                 أمر إنتاج جديد
