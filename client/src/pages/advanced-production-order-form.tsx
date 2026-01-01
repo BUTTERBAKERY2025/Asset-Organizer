@@ -129,14 +129,15 @@ export default function AdvancedProductionOrderFormPage() {
         startDate: order.startDate || new Date().toISOString().split("T")[0],
         endDate: order.endDate || order.startDate || new Date().toISOString().split("T")[0],
         items: items.map((item: any) => {
-          console.log("Mapping item:", item);
+          const qty = Number(item.targetQuantity || item.target_quantity || item.quantity) || 0;
+          const price = Number(item.unitPrice || item.unit_price) || 0;
           return {
             productId: item.productId ? String(item.productId) : "",
             productName: item.productName || item.product_name || "",
-            quantity: item.targetQuantity || item.target_quantity || item.quantity || 0,
+            quantity: qty,
             unit: item.unit || "قطعة",
-            unitPrice: item.unitPrice || item.unit_price || 0,
-            total: (item.targetQuantity || item.target_quantity || item.quantity || 0) * (item.unitPrice || item.unit_price || 0),
+            unitPrice: price,
+            total: qty * price,
             notes: item.notes || ""
           };
         }),
@@ -179,8 +180,8 @@ export default function AdvancedProductionOrderFormPage() {
   });
 
   const calculateTotals = useMemo(() => {
-    const totalQuantity = formData.items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalCost = formData.items.reduce((sum, item) => sum + item.total, 0);
+    const totalQuantity = formData.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const totalCost = formData.items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
     return { totalQuantity, totalCost };
   }, [formData.items]);
 
@@ -211,13 +212,15 @@ export default function AdvancedProductionOrderFormPage() {
     updated[index] = { ...updated[index], [field]: value };
     
     if (field === "quantity" || field === "unitPrice") {
-      updated[index].total = updated[index].quantity * updated[index].unitPrice;
+      const qty = Number(updated[index].quantity) || 0;
+      const price = Number(updated[index].unitPrice) || 0;
+      updated[index].total = qty * price;
     }
     
     setFormData((prev) => ({
       ...prev,
       items: updated,
-      estimatedCost: updated.reduce((sum, item) => sum + item.total, 0),
+      estimatedCost: updated.reduce((sum, item) => sum + (Number(item.total) || 0), 0),
     }));
   };
 
@@ -226,7 +229,7 @@ export default function AdvancedProductionOrderFormPage() {
     setFormData((prev) => ({
       ...prev,
       items: updated,
-      estimatedCost: updated.reduce((sum, item) => sum + item.total, 0),
+      estimatedCost: updated.reduce((sum, item) => sum + (Number(item.total) || 0), 0),
     }));
   };
 
