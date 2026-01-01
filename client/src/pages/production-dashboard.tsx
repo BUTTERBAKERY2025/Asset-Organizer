@@ -250,6 +250,7 @@ export default function ProductionDashboardPage() {
   // Auto-refresh is handled by the shared context
 
   const formatLastUpdated = () => {
+    if (!lastUpdated) return "جارٍ التحميل...";
     const now = new Date();
     const diff = Math.floor((now.getTime() - lastUpdated.getTime()) / 1000);
     if (diff < 60) return `منذ ${diff} ثانية`;
