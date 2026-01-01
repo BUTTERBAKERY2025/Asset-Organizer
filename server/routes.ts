@@ -4890,5 +4890,201 @@ export async function registerRoutes(
     }
   });
 
+  // Generate production forecast from sales data
+  app.post("/api/sales-data-uploads/:id/generate-forecast", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+    try {
+      const uploadId = parseInt(req.params.id, 10);
+      if (isNaN(uploadId)) {
+        return res.status(400).json({ error: "Invalid upload ID" });
+      }
+      
+      const { branchId, targetSales, planDate, planPeriod, notes } = req.body;
+      
+      if (!branchId || !targetSales || !planDate) {
+        return res.status(400).json({ error: "الفرع والمبيعات المستهدفة والتاريخ مطلوبة" });
+      }
+      
+      // Get the upload and analytics
+      const upload = await storage.getSalesDataUpload(uploadId);
+      if (!upload) {
+        return res.status(404).json({ error: "لم يتم العثور على بيانات المبيعات" });
+      }
+      
+      if (upload.status !== 'completed') {
+        return res.status(400).json({ error: "بيانات المبيعات لم تكتمل معالجتها بعد" });
+      }
+      
+      const analytics = await storage.getProductSalesAnalytics(uploadId);
+      if (!analytics || analytics.length === 0) {
+        return res.status(400).json({ error: "لا توجد بيانات تحليل للمنتجات - تأكد من رفع ملف يحتوي على بيانات صحيحة" });
+      }
+      
+      // Calculate total historical quantity and revenue with guards against zero
+      const totalHistoricalQuantity = analytics.reduce((sum, a) => sum + (a.totalQuantitySold || 0), 0);
+      const totalHistoricalRevenue = analytics.reduce((sum, a) => sum + (a.totalRevenue || 0), 0);
+      
+      // Guard against zero totals
+      if (totalHistoricalQuantity === 0 && totalHistoricalRevenue === 0) {
+        return res.status(400).json({ error: "لا توجد بيانات مبيعات كافية لتوليد التوقعات - تأكد من أن الملف يحتوي على كميات أو إيرادات" });
+      }
+      
+      // Calculate product ratios and forecast quantities
+      const targetSalesNum = parseFloat(targetSales);
+      if (isNaN(targetSalesNum) || targetSalesNum <= 0) {
+        return res.status(400).json({ error: "قيمة المبيعات المستهدفة غير صالحة" });
+      }
+      
+      const forecastItems = analytics.map(product => {
+        // Calculate ratio based on revenue if available, otherwise quantity
+        // Safe division with guards against zero
+        let ratio = 0;
+        if (totalHistoricalRevenue > 0) {
+          ratio = (product.totalRevenue || 0) / totalHistoricalRevenue;
+        } else if (totalHistoricalQuantity > 0) {
+          ratio = (product.totalQuantitySold || 0) / totalHistoricalQuantity;
+        }
+        
+        // Guard against NaN
+        if (isNaN(ratio)) ratio = 0;
+        
+        // Calculate forecasted sales amount for this product
+        const forecastedSalesAmount = targetSalesNum * ratio;
+        
+        // Get average price per unit from historical data
+        const avgPricePerUnit = product.totalQuantitySold > 0 && product.totalRevenue 
+          ? product.totalRevenue / product.totalQuantitySold 
+          : 0;
+        
+        // Calculate forecasted quantity with fallback
+        let forecastedQuantity = 0;
+        if (avgPricePerUnit > 0 && forecastedSalesAmount > 0) {
+          forecastedQuantity = Math.ceil(forecastedSalesAmount / avgPricePerUnit);
+        } else if (product.averageDailySales && product.averageDailySales > 0) {
+          forecastedQuantity = Math.ceil(product.averageDailySales);
+        } else if (ratio > 0) {
+          // Fallback: use ratio-based quantity distribution
+          forecastedQuantity = Math.max(1, Math.ceil(ratio * 100));
+        }
+        
+        return {
+          productId: product.productId,
+          productName: product.productName,
+          productCategory: product.productCategory,
+          historicalQuantity: product.totalQuantitySold || 0,
+          historicalRevenue: product.totalRevenue || 0,
+          salesRatio: Math.round(ratio * 10000) / 100, // percentage with 2 decimals
+          forecastedQuantity: Math.max(1, forecastedQuantity),
+          forecastedSalesAmount: Math.round(forecastedSalesAmount * 100) / 100
+        };
+      }).filter(item => item.forecastedQuantity > 0 && item.salesRatio > 0);
+      
+      // Fail fast if no items could be forecasted
+      if (forecastItems.length === 0) {
+        return res.status(400).json({ 
+          error: "لا يمكن توليد توقعات الإنتاج - لم يتم العثور على منتجات بنسب مبيعات صالحة. تأكد من أن بيانات المبيعات تحتوي على كميات أو إيرادات للمنتجات." 
+        });
+      }
+      
+      // Create advanced production order
+      const orderNumber = `FCST-${Date.now().toString(36).toUpperCase()}`;
+      let order;
+      try {
+        order = await storage.createAdvancedProductionOrder({
+          orderNumber,
+          branchId,
+          createdBy: (req as any).user?.id,
+          assignedTo: null,
+          orderType: 'daily',
+          scheduledDate: planDate,
+          dueDate: planDate,
+          priority: 'medium',
+          status: 'pending',
+          notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('ar-SA')} ريال`,
+          totalItems: forecastItems.length,
+          completedItems: 0
+        });
+      } catch (orderError) {
+        console.error("Error creating production order:", orderError);
+        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج" });
+      }
+      
+      if (!order || !order.id) {
+        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج - لم يتم إرجاع معرف الأمر" });
+      }
+      
+      // Create order items
+      const products = await storage.getAllProducts();
+      const orderItems = forecastItems.map((item, index) => {
+        const product = products.find(p => p.id === item.productId || p.name === item.productName);
+        return {
+          orderId: order.id,
+          productId: product?.id || null,
+          productName: item.productName,
+          quantity: item.forecastedQuantity,
+          unit: product?.unit || 'قطعة',
+          status: 'pending' as const,
+          notes: `نسبة المبيعات: ${item.salesRatio}%`,
+          sortOrder: index + 1
+        };
+      });
+      
+      if (orderItems.length > 0) {
+        try {
+          await storage.bulkCreateProductionOrderItems(orderItems);
+        } catch (itemsError) {
+          console.error("Error creating order items:", itemsError);
+          // Items failed - attempt to delete the order to maintain consistency
+          try {
+            await storage.deleteAdvancedProductionOrder(order.id);
+          } catch (deleteError) {
+            console.error("Error deleting orphaned order:", deleteError);
+          }
+          return res.status(500).json({ error: "فشل في إنشاء عناصر أمر الإنتاج" });
+        }
+      }
+      
+      // Verify order was created successfully with items
+      const result = await storage.getAdvancedProductionOrderWithItems(order.id);
+      if (!result) {
+        // Order exists but couldn't be retrieved - try to clean up
+        try {
+          await storage.deleteAdvancedProductionOrder(order.id);
+        } catch (deleteError) {
+          console.error("Error deleting orphaned order:", deleteError);
+        }
+        return res.status(500).json({ error: "فشل في استرجاع أمر الإنتاج بعد الإنشاء" });
+      }
+      
+      // Verify items were created
+      if (!result.items || result.items.length === 0) {
+        // Order exists but without items - clean up
+        try {
+          await storage.deleteAdvancedProductionOrder(order.id);
+        } catch (deleteError) {
+          console.error("Error deleting orphaned order:", deleteError);
+        }
+        return res.status(500).json({ error: "تم إنشاء الأمر ولكن فشل في إنشاء عناصر الإنتاج" });
+      }
+      
+      res.status(201).json({
+        success: true,
+        message: 'تم إنشاء توقعات الإنتاج وأمر الإنتاج بنجاح',
+        forecast: {
+          uploadId,
+          branchId,
+          targetSales: targetSalesNum,
+          planDate,
+          totalProducts: forecastItems.length,
+          totalForecastedQuantity: forecastItems.reduce((sum, i) => sum + i.forecastedQuantity, 0),
+          items: forecastItems
+        },
+        productionOrder: result
+      });
+    } catch (error) {
+      console.error("Error generating forecast:", error);
+      res.status(500).json({ error: "فشل في توليد توقعات الإنتاج" });
+    }
+  });
+
   return httpServer;
 }
