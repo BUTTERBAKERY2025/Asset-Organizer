@@ -5687,7 +5687,7 @@ export async function registerRoutes(
       let totalWastedValue = 0;
       
       for (const report of wasteReports) {
-        const items = await storage.getWasteItemsByReportId(report.id);
+        const items = await storage.getWasteItems(report.id);
         for (const item of items) {
           totalWastedQuantity += item.quantity || 0;
           totalWastedValue += (item.quantity || 0) * (item.unitCost || 0);
