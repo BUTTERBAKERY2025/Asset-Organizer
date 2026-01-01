@@ -115,13 +115,32 @@ export default function AdvancedProductionOrderFormPage() {
 
   useEffect(() => {
     if (existingOrder) {
-      setFormData({
-        ...existingOrder,
-        branchId: (existingOrder as any).sourceBranchId || existingOrder.branchId || "",
-        targetBranchId: (existingOrder as any).targetBranchId || existingOrder.targetBranchId || "",
-        items: existingOrder.items || [],
-        schedule: existingOrder.schedule || [],
-      });
+      console.log("Loading existing order response:", existingOrder);
+      const response = existingOrder as any;
+      const order = response.order || response;
+      const items = response.items || order.items || [];
+      const schedules = response.schedules || order.schedule || [];
+      
+      const mappedData = {
+        ...order,
+        title: order.title || "",
+        branchId: order.sourceBranchId || order.branchId || "",
+        targetBranchId: order.targetBranchId || "",
+        startDate: order.startDate || new Date().toISOString().split("T")[0],
+        endDate: order.endDate || order.startDate || new Date().toISOString().split("T")[0],
+        items: items.map((item: any) => ({
+          productId: item.productId,
+          productName: item.productName || "",
+          quantity: item.targetQuantity || item.quantity || 0,
+          unit: item.unit || "قطعة",
+          unitPrice: item.unitPrice || 0,
+          total: (item.targetQuantity || item.quantity || 0) * (item.unitPrice || 0),
+          notes: item.notes || ""
+        })),
+        schedule: schedules,
+      };
+      console.log("Mapped form data:", mappedData);
+      setFormData(mappedData);
     }
   }, [existingOrder]);
 
