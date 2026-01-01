@@ -676,37 +676,33 @@ export default function ProductionDashboardPage() {
         </div>
 
         {/* Unified Command Center - All Systems KPIs */}
-        <Card className="border-2 border-slate-200 bg-gradient-to-r from-slate-50 via-white to-gray-50" data-testid="card-command-center">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
-              <Activity className="h-5 w-5" />
+        <Card className="border border-slate-200 bg-slate-50/50" data-testid="card-command-center">
+          <CardHeader className="py-2 px-3">
+            <CardTitle className="flex items-center gap-1.5 text-xs text-slate-700">
+              <Activity className="h-3.5 w-3.5" />
               مركز القيادة الموحد
             </CardTitle>
-            <CardDescription>مؤشرات الأداء من جميع الأنظمة</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0 pb-2 px-3">
             <div className="grid grid-cols-3 gap-2">
-              {/* Cashier Stats - Compact */}
+              {/* Cashier Stats - Ultra Compact */}
               <Link href="/cashier-journals" className="block group" data-testid="card-cashier-kpi">
-                <div className="rounded-lg border border-emerald-200 bg-white/80 hover:bg-emerald-50/50 p-3 transition-all hover:shadow-sm cursor-pointer">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-7 w-7 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <CreditCard className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-emerald-800">الكاشير</span>
-                    <ArrowUpRight className="h-3 w-3 text-emerald-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="rounded-lg border border-emerald-200 bg-white/80 hover:bg-emerald-50/50 p-2 transition-all hover:shadow-sm cursor-pointer">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-[10px] font-semibold text-emerald-800">الكاشير</span>
+                    <ArrowUpRight className="h-2.5 w-2.5 text-emerald-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   {commandCenterLoading ? (
-                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-6 w-full" />
                   ) : (
-                    <div className="grid grid-cols-2 gap-1 text-xs">
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
                       <div><span className="text-gray-500">المبيعات:</span> <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.totalSales || 0)}</span></div>
-                      <div><span className="text-gray-500">اليوميات:</span> <span className="font-bold text-emerald-700">{commandCenterData?.cashier?.totalJournals || 0}</span></div>
                       <div><span className="text-gray-500">المتوسط:</span> <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.averageTicket || 0)}</span></div>
                       {(commandCenterData?.cashier?.shortages || 0) > 0 && (
-                        <div className="flex items-center gap-1">
-                          <TrendingDown className="h-3 w-3 text-red-500" />
-                          <span className="text-red-600 font-medium text-xs">{formatCurrency(commandCenterData?.cashier?.shortageAmount || 0)}</span>
+                        <div className="flex items-center gap-0.5 text-red-600">
+                          <TrendingDown className="h-2.5 w-2.5" />
+                          <span className="font-medium">{formatCurrency(commandCenterData?.cashier?.shortageAmount || 0)}</span>
                         </div>
                       )}
                     </div>
@@ -714,48 +710,44 @@ export default function ProductionDashboardPage() {
                 </div>
               </Link>
 
-              {/* Waste Stats - Compact */}
+              {/* Waste Stats - Ultra Compact */}
               <Link href="/waste-reports" className="block group" data-testid="card-waste-kpi">
-                <div className="rounded-lg border border-red-200 bg-white/80 hover:bg-red-50/50 p-3 transition-all hover:shadow-sm cursor-pointer">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-7 w-7 bg-red-100 rounded-full flex items-center justify-center">
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-red-800">الهدر</span>
-                    <ArrowUpRight className="h-3 w-3 text-red-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="rounded-lg border border-red-200 bg-white/80 hover:bg-red-50/50 p-2 transition-all hover:shadow-sm cursor-pointer">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                    <span className="text-[10px] font-semibold text-red-800">الهدر</span>
+                    <ArrowUpRight className="h-2.5 w-2.5 text-red-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   {commandCenterLoading ? (
-                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-6 w-full" />
                   ) : (
-                    <div className="grid grid-cols-2 gap-1 text-xs">
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
                       <div><span className="text-gray-500">التقارير:</span> <span className="font-bold text-red-700">{commandCenterData?.waste?.totalReports || 0}</span></div>
                       <div><span className="text-gray-500">الكمية:</span> <span className="font-bold text-red-700">{commandCenterData?.waste?.totalWastedQuantity || 0}</span></div>
-                      <div className="col-span-2"><span className="text-gray-500">القيمة:</span> <span className="font-bold text-red-700">{formatCurrency(commandCenterData?.waste?.totalWastedValue || 0)}</span></div>
+                      <div><span className="text-gray-500">القيمة:</span> <span className="font-bold text-red-700">{formatCurrency(commandCenterData?.waste?.totalWastedValue || 0)}</span></div>
                     </div>
                   )}
                 </div>
               </Link>
 
-              {/* Comparison Stats - Compact */}
-              <div className="rounded-lg border border-indigo-200 bg-white/80 p-3" data-testid="card-comparison-kpi">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-7 w-7 bg-indigo-100 rounded-full flex items-center justify-center">
-                    <BarChart3 className="h-4 w-4 text-indigo-600" />
-                  </div>
-                  <span className="text-xs font-semibold text-indigo-800">المقارنات</span>
+              {/* Comparison Stats - Ultra Compact */}
+              <div className="rounded-lg border border-indigo-200 bg-white/80 p-2" data-testid="card-comparison-kpi">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <BarChart3 className="h-3.5 w-3.5 text-indigo-600" />
+                  <span className="text-[10px] font-semibold text-indigo-800">المقارنات</span>
                 </div>
                 {commandCenterLoading ? (
-                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-6 w-full" />
                 ) : (
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-500">الإنتاج</span>
+                  <div className="flex gap-3 text-[10px]">
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">الإنتاج:</span>
                       <span className={`font-bold ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.productionVsYesterday || 0).toFixed(0)}%
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-500">المبيعات</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">المبيعات:</span>
                       <span className={`font-bold ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.salesVsYesterday || 0).toFixed(0)}%
                       </span>
