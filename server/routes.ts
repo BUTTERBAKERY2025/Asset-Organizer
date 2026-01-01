@@ -5548,5 +5548,95 @@ export async function registerRoutes(
     }
   });
 
+  // Production Hub - unified endpoint for dashboard (supports branchId=all)
+  app.get("/api/production/hub", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const { branchId, date } = req.query;
+      if (!branchId || !date) {
+        return res.status(400).json({ error: "الفرع والتاريخ مطلوبان" });
+      }
+      
+      const dateStr = date as string;
+      const prevDate = new Date(dateStr);
+      prevDate.setDate(prevDate.getDate() - 1);
+      const prevDateStr = prevDate.toISOString().split('T')[0];
+      
+      interface AggStats {
+        totalBatches: number;
+        totalQuantity: number;
+        byDestination: Record<string, number>;
+        byCategory: Record<string, number>;
+        byHour: Record<string, number>;
+      }
+      
+      // Create fresh objects per request to avoid reference reuse
+      const createEmptyStats = (): AggStats => ({ 
+        totalBatches: 0, 
+        totalQuantity: 0, 
+        byDestination: {}, 
+        byCategory: {}, 
+        byHour: {} 
+      });
+      
+      let todayStats: AggStats = createEmptyStats();
+      let yesterdayStats: AggStats = createEmptyStats();
+      let activeOrders = 0;
+      
+      if (branchId === "all") {
+        // Aggregate across all branches
+        const allBranches = await storage.getAllBranches();
+        const allOrders = await storage.getAllAdvancedProductionOrders();
+        activeOrders = allOrders.filter(o => 
+          o.status === 'pending' || o.status === 'approved' || o.status === 'in_progress'
+        ).length;
+        
+        for (const branch of allBranches) {
+          const branchToday = await storage.getDailyProductionStats(branch.id, dateStr);
+          todayStats.totalBatches += branchToday.totalBatches;
+          todayStats.totalQuantity += branchToday.totalQuantity;
+          for (const [k, v] of Object.entries(branchToday.byDestination || {})) {
+            todayStats.byDestination[k] = (todayStats.byDestination[k] || 0) + v;
+          }
+          for (const [k, v] of Object.entries(branchToday.byCategory || {})) {
+            todayStats.byCategory[k] = (todayStats.byCategory[k] || 0) + v;
+          }
+          
+          const branchYesterday = await storage.getDailyProductionStats(branch.id, prevDateStr);
+          yesterdayStats.totalBatches += branchYesterday.totalBatches;
+          yesterdayStats.totalQuantity += branchYesterday.totalQuantity;
+        }
+      } else {
+        // Single branch
+        todayStats = await storage.getDailyProductionStats(branchId as string, dateStr);
+        yesterdayStats = await storage.getDailyProductionStats(branchId as string, prevDateStr);
+        const branchOrders = await storage.getAdvancedProductionOrdersByBranch(branchId as string);
+        activeOrders = branchOrders.filter(o => 
+          o.status === 'pending' || o.status === 'approved' || o.status === 'in_progress'
+        ).length;
+      }
+      
+      // Calculate deltas
+      const qtyDelta = todayStats.totalQuantity - (yesterdayStats?.totalQuantity || 0);
+      const batchDelta = todayStats.totalBatches - (yesterdayStats?.totalBatches || 0);
+      
+      res.json({
+        today: todayStats,
+        yesterday: yesterdayStats,
+        deltas: {
+          quantity: qtyDelta,
+          batches: batchDelta,
+          quantityPercent: yesterdayStats?.totalQuantity ? Math.round((qtyDelta / yesterdayStats.totalQuantity) * 100) : 0,
+          batchesPercent: yesterdayStats?.totalBatches ? Math.round((batchDelta / yesterdayStats.totalBatches) * 100) : 0,
+        },
+        activeOrders,
+        date: dateStr,
+        branchId: branchId,
+      });
+    } catch (error) {
+      console.error("Error fetching production hub:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات مركز الإنتاج" });
+    }
+  });
+
   return httpServer;
 }

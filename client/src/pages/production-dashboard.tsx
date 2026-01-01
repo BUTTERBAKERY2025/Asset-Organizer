@@ -60,6 +60,20 @@ interface DailyStats {
   byHour: Record<string, number>;
 }
 
+interface ProductionHubData {
+  today: DailyStats;
+  yesterday: DailyStats;
+  deltas: {
+    quantity: number;
+    batches: number;
+    quantityPercent: number;
+    batchesPercent: number;
+  };
+  activeOrders: number;
+  date: string;
+  branchId: string;
+}
+
 interface SalesUpload {
   id: number;
   fileName: string;
@@ -144,66 +158,28 @@ export default function ProductionDashboardPage() {
     queryKey: ["/api/sales-data-uploads?limit=5"],
   });
 
-  // Daily production stats for selected branch
-  const { data: dailyStats, isLoading: dailyLoading, refetch: refetchDaily } = useQuery<DailyStats>({
-    queryKey: ["/api/daily-production/stats", selectedBranch, selectedDate],
+  // Production Hub - unified endpoint for dashboard (includes today, yesterday, deltas, activeOrders)
+  const { data: hubData, isLoading: dailyLoading, refetch: refetchDaily } = useQuery<ProductionHubData>({
+    queryKey: ["/api/production/hub", selectedBranch, selectedDate],
     queryFn: async () => {
-      if (selectedBranch === "all") {
-        // Aggregate all branches
-        const allStats: DailyStats = { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
-        if (!branches) return allStats;
-        
-        for (const branch of branches) {
-          try {
-            const params = new URLSearchParams({ branchId: branch.id, date: selectedDate });
-            const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
-            if (res.ok) {
-              const branchStats: DailyStats = await res.json();
-              allStats.totalBatches += branchStats.totalBatches || 0;
-              allStats.totalQuantity += branchStats.totalQuantity || 0;
-              for (const [k, v] of Object.entries(branchStats.byDestination || {})) {
-                allStats.byDestination[k] = (allStats.byDestination[k] || 0) + v;
-              }
-            }
-          } catch {}
-        }
-        return allStats;
-      }
       const params = new URLSearchParams({ branchId: selectedBranch, date: selectedDate });
-      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
-      if (!res.ok) return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
+      const res = await fetch(`/api/production/hub?${params}`, { credentials: "include" });
+      if (!res.ok) {
+        return {
+          today: { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} },
+          yesterday: { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} },
+          deltas: { quantity: 0, batches: 0, quantityPercent: 0, batchesPercent: 0 },
+          activeOrders: 0,
+          date: selectedDate,
+          branchId: selectedBranch,
+        };
+      }
       return res.json();
     },
-    enabled: true,
   });
 
-  // Previous day stats for comparison
-  const previousDate = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
-  const { data: prevDayStats } = useQuery<DailyStats>({
-    queryKey: ["/api/daily-production/stats", selectedBranch, previousDate],
-    queryFn: async () => {
-      if (selectedBranch === "all" && branches) {
-        const allStats: DailyStats = { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
-        for (const branch of branches) {
-          try {
-            const params = new URLSearchParams({ branchId: branch.id, date: previousDate });
-            const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
-            if (res.ok) {
-              const branchStats: DailyStats = await res.json();
-              allStats.totalBatches += branchStats.totalBatches || 0;
-              allStats.totalQuantity += branchStats.totalQuantity || 0;
-            }
-          } catch {}
-        }
-        return allStats;
-      }
-      if (selectedBranch === "all") return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
-      const params = new URLSearchParams({ branchId: selectedBranch, date: previousDate });
-      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
-      if (!res.ok) return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
-      return res.json();
-    },
-  });
+  const dailyStats = hubData?.today;
+  const prevDayStats = hubData?.yesterday;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount || 0);
@@ -212,7 +188,8 @@ export default function ProductionDashboardPage() {
   const completionRate = stats ? 
     Math.round((stats.completed / Math.max(stats.total, 1)) * 100) : 0;
 
-  const activeOrders = stats ? stats.pending + stats.approved + stats.inProgress : 0;
+  // Use active orders from hub (includes branch filtering)
+  const activeOrders = hubData?.activeOrders ?? (stats ? stats.pending + stats.approved + stats.inProgress : 0);
 
   const getDiff = (current: number, previous: number) => {
     if (!previous) return { value: current, percentage: 100, direction: "up" as const };
