@@ -5006,18 +5006,50 @@ export async function registerRoutes(
       };
       
       // Prepare items (without orderId - will be added in transaction)
-      const orderItems = forecastItems.map((item, index) => {
+      // Filter to only include items that have matching products in the database
+      const orderItems: Array<{
+        productId: number;
+        productName: string;
+        productCategory: string | null;
+        targetQuantity: number;
+        producedQuantity: number;
+        wastedQuantity: number;
+        unitPrice: number;
+        totalValue: number;
+        status: 'pending';
+        priority: number;
+        notes: string;
+      }> = [];
+      
+      forecastItems.forEach((item, index) => {
         const product = products.find(p => p.id === item.productId || p.name === item.productName);
-        return {
-          productId: product?.id || null,
-          productName: item.productName,
-          quantity: item.forecastedQuantity,
-          unit: product?.unit || 'قطعة',
-          status: 'pending' as const,
-          notes: `نسبة المبيعات: ${item.salesRatio}%`,
-          sortOrder: index + 1
-        };
+        if (product && product.id) {
+          orderItems.push({
+            productId: product.id,
+            productName: item.productName,
+            productCategory: item.productCategory || null,
+            targetQuantity: item.forecastedQuantity,
+            producedQuantity: 0,
+            wastedQuantity: 0,
+            unitPrice: product.price || 0,
+            totalValue: (product.price || 0) * item.forecastedQuantity,
+            status: 'pending',
+            priority: index + 1,
+            notes: `نسبة المبيعات: ${item.salesRatio}%`
+          });
+        }
       });
+      
+      // If no items could be matched, return an error
+      if (orderItems.length === 0) {
+        return res.status(400).json({ 
+          error: "لا توجد منتجات متطابقة في قاعدة البيانات. يرجى إضافة المنتجات أولاً في قائمة المنتجات.",
+          missingProducts: forecastItems.map(i => i.productName)
+        });
+      }
+      
+      // Update totalItems to reflect actual matched items
+      orderData.totalItems = orderItems.length;
       
       // Create order and items in a single transaction
       let txResult;
