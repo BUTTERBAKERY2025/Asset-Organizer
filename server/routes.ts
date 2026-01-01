@@ -4630,46 +4630,139 @@ export async function registerRoutes(
         salesDataUpload = await storage.getSalesDataUpload(parseInt(uploadId, 10));
       }
       
-      // Enhanced AI algorithm: distribute target sales across products based on:
-      // 1. Sales velocity from historical data (if available)
-      // 2. Product base price for value calculation
-      // 3. Category distribution for variety
       const activeProducts = products.filter(p => p.isActive);
       
-      if (activeProducts.length === 0) {
-        return res.status(400).json({ error: "لا توجد منتجات نشطة في النظام. يرجى إضافة منتجات أولاً." });
+      // SMART AI ALGORITHM - Revenue-Based Analysis
+      // If we have sales analytics with revenue data, use revenue shares to distribute production
+      // This ensures the production plan matches actual historical sales patterns
+      
+      let recommendedProducts: any[] = [];
+      let confidenceScore = 0.5;
+      let analysisMethod = 'default';
+      
+      if (productAnalytics.length > 0) {
+        // Calculate total revenue from uploaded data
+        const totalRevenue = productAnalytics.reduce((sum, a) => sum + (a.totalRevenue || 0), 0);
+        const totalQuantity = productAnalytics.reduce((sum, a) => sum + (a.totalQuantitySold || 0), 0);
+        
+        // Data quality check: count how many products have complete data
+        const productsWithRevenue = productAnalytics.filter(a => (a.totalRevenue || 0) > 0).length;
+        const productsWithQuantity = productAnalytics.filter(a => (a.totalQuantitySold || 0) > 0).length;
+        const revenueCompleteness = productsWithRevenue / Math.max(productAnalytics.length, 1);
+        
+        // Only use revenue-based if at least 50% of products have revenue data
+        if (totalRevenue > 0 && revenueCompleteness >= 0.5) {
+          // REVENUE-BASED ALLOCATION: Use actual sales ratios from the file
+          analysisMethod = 'revenue_based';
+          
+          // Sort analytics by revenue (best sellers first)
+          const sortedAnalytics = [...productAnalytics]
+            .filter(a => a.totalRevenue > 0 || a.totalQuantitySold > 0)
+            .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0));
+          
+          recommendedProducts = sortedAnalytics.slice(0, 40).map(analytics => {
+            // Calculate this product's share of total revenue
+            const revenueShare = (analytics.totalRevenue || 0) / totalRevenue;
+            
+            // Allocate target sales based on this revenue share
+            const allocatedSalesValue = targetSalesValue * revenueShare;
+            
+            // Find matching product for pricing
+            const product = activeProducts.find(p => 
+              p.id === analytics.productId || 
+              p.name?.toLowerCase() === analytics.productName?.toLowerCase()
+            );
+            
+            // Calculate unit price from historical data or product catalog
+            let unitPrice = 0;
+            if (analytics.totalQuantitySold > 0 && analytics.totalRevenue > 0) {
+              // Use actual average price from sales data
+              unitPrice = analytics.totalRevenue / analytics.totalQuantitySold;
+            } else if (product) {
+              unitPrice = product.basePrice || product.price || 15;
+            } else {
+              unitPrice = 15; // Default fallback
+            }
+            
+            // Calculate quantity needed to reach allocated value
+            const quantity = Math.max(1, Math.round(allocatedSalesValue / unitPrice));
+            const totalPrice = quantity * unitPrice;
+            const costRatio = 0.4; // Assume 40% production cost
+            const estimatedCost = totalPrice * costRatio;
+            
+            return {
+              productId: analytics.productId || product?.id || null,
+              productName: analytics.productName,
+              category: analytics.productCategory || product?.category || 'عام',
+              quantity,
+              unitPrice: Math.round(unitPrice * 100) / 100,
+              totalPrice: Math.round(totalPrice * 100) / 100,
+              estimatedCost: Math.round(estimatedCost * 100) / 100,
+              salesVelocity: analytics.totalQuantitySold || 0,
+              revenueShare: Math.round(revenueShare * 10000) / 100, // As percentage
+              historicalRevenue: analytics.totalRevenue || 0,
+              priority: revenueShare > 0.05 ? 'high' : revenueShare > 0.02 ? 'medium' : 'normal'
+            };
+          }).filter(p => p.quantity > 0 && p.totalPrice > 0);
+          
+          // High confidence when using actual revenue data
+          const matchedProducts = recommendedProducts.filter(p => p.productId !== null).length;
+          confidenceScore = Math.min(0.95, 0.75 + (matchedProducts / Math.max(recommendedProducts.length, 1)) * 0.2);
+          
+        } else if (totalQuantity > 0) {
+          // QUANTITY-BASED ALLOCATION: Use quantity ratios when no revenue data
+          analysisMethod = 'quantity_based';
+          
+          const sortedAnalytics = [...productAnalytics]
+            .filter(a => a.totalQuantitySold > 0)
+            .sort((a, b) => (b.totalQuantitySold || 0) - (a.totalQuantitySold || 0));
+          
+          recommendedProducts = sortedAnalytics.slice(0, 40).map(analytics => {
+            const quantityShare = (analytics.totalQuantitySold || 0) / totalQuantity;
+            const product = activeProducts.find(p => 
+              p.id === analytics.productId || 
+              p.name?.toLowerCase() === analytics.productName?.toLowerCase()
+            );
+            
+            const unitPrice = product?.basePrice || product?.price || 15;
+            const allocatedValue = targetSalesValue * quantityShare;
+            const quantity = Math.max(1, Math.round(allocatedValue / unitPrice));
+            const totalPrice = quantity * unitPrice;
+            const estimatedCost = totalPrice * 0.4;
+            
+            return {
+              productId: analytics.productId || product?.id || null,
+              productName: analytics.productName,
+              category: analytics.productCategory || product?.category || 'عام',
+              quantity,
+              unitPrice: Math.round(unitPrice * 100) / 100,
+              totalPrice: Math.round(totalPrice * 100) / 100,
+              estimatedCost: Math.round(estimatedCost * 100) / 100,
+              salesVelocity: analytics.totalQuantitySold || 0,
+              quantityShare: Math.round(quantityShare * 10000) / 100,
+              priority: quantityShare > 0.05 ? 'high' : quantityShare > 0.02 ? 'medium' : 'normal'
+            };
+          }).filter(p => p.quantity > 0 && p.totalPrice > 0);
+          
+          confidenceScore = Math.min(0.85, 0.65 + (recommendedProducts.length / 40) * 0.2);
+        }
       }
       
-      // Calculate velocity weights - products with analytics get higher priority
-      const productWeights = activeProducts.map(product => {
-        const analytics = productAnalytics.find(a => 
-          a.productId === product.id || 
-          a.productName?.toLowerCase() === product.name?.toLowerCase()
-        );
-        const baseVelocity = analytics?.salesVelocity || analytics?.totalQuantity || 1;
-        const hasAnalytics = !!analytics;
-        return {
-          product,
-          velocity: baseVelocity,
-          hasAnalytics,
-          weight: hasAnalytics ? baseVelocity * 1.5 : baseVelocity // Boost products with actual sales data
-        };
-      });
-      
-      const totalWeight = productWeights.reduce((sum, pw) => sum + pw.weight, 0);
-      
-      // Generate recommended products with proper pricing
-      const recommendedProducts = productWeights
-        .slice(0, 30) // Limit to top 30 products
-        .map(pw => {
-          const { product, velocity, hasAnalytics, weight } = pw;
-          const share = weight / totalWeight;
-          const allocatedValue = targetSalesValue * share;
-          const unitPrice = product.basePrice || product.price || 15; // Default price if not set
+      // FALLBACK: Equal distribution across active products (no sales data)
+      if (recommendedProducts.length === 0) {
+        if (activeProducts.length === 0) {
+          return res.status(400).json({ error: "لا توجد منتجات نشطة في النظام. يرجى إضافة منتجات أولاً." });
+        }
+        
+        analysisMethod = 'equal_distribution';
+        const equalShare = 1 / activeProducts.length;
+        
+        recommendedProducts = activeProducts.slice(0, 30).map(product => {
+          const unitPrice = product.basePrice || product.price || 15;
+          const allocatedValue = targetSalesValue * equalShare;
           const quantity = Math.max(1, Math.round(allocatedValue / unitPrice));
           const totalPrice = quantity * unitPrice;
-          const costRatio = 0.4; // Assume 40% production cost
-          const estimatedCost = totalPrice * costRatio;
+          const estimatedCost = totalPrice * 0.4;
           
           return {
             productId: product.id,
@@ -4679,12 +4772,34 @@ export async function registerRoutes(
             unitPrice,
             totalPrice,
             estimatedCost,
-            salesVelocity: velocity,
-            priority: hasAnalytics ? 'high' : 'normal'
+            salesVelocity: 0,
+            priority: 'normal'
           };
-        })
-        .filter(p => p.quantity > 0 && p.totalPrice > 0)
-        .sort((a, b) => b.totalPrice - a.totalPrice); // Sort by value descending
+        }).filter(p => p.quantity > 0);
+        
+        confidenceScore = 0.45; // Low confidence without sales data
+      }
+      
+      // Sort by total price (highest value products first)
+      recommendedProducts.sort((a, b) => b.totalPrice - a.totalPrice);
+      
+      // NORMALIZATION: Adjust quantities to match target sales value more closely
+      const rawTotalValue = recommendedProducts.reduce((sum, p) => sum + p.totalPrice, 0);
+      if (rawTotalValue > 0 && Math.abs(rawTotalValue - targetSalesValue) > targetSalesValue * 0.05) {
+        // If we're more than 5% off target, normalize quantities
+        const scaleFactor = targetSalesValue / rawTotalValue;
+        recommendedProducts = recommendedProducts.map(p => {
+          const adjustedQuantity = Math.max(1, Math.round(p.quantity * scaleFactor));
+          const adjustedTotalPrice = adjustedQuantity * p.unitPrice;
+          const adjustedCost = adjustedTotalPrice * 0.4;
+          return {
+            ...p,
+            quantity: adjustedQuantity,
+            totalPrice: Math.round(adjustedTotalPrice * 100) / 100,
+            estimatedCost: Math.round(adjustedCost * 100) / 100
+          };
+        }).filter(p => p.quantity > 0);
+      }
       
       const totalEstimatedValue = recommendedProducts.reduce((sum, p) => sum + p.totalPrice, 0);
       const totalEstimatedCost = recommendedProducts.reduce((sum, p) => sum + p.estimatedCost, 0);
@@ -4692,12 +4807,8 @@ export async function registerRoutes(
         ? ((totalEstimatedValue - totalEstimatedCost) / totalEstimatedValue) * 100 
         : 0;
       
-      // Confidence score based on data quality
-      const analyticsCount = productWeights.filter(pw => pw.hasAnalytics).length;
-      const dataQuality = analyticsCount / Math.max(recommendedProducts.length, 1);
-      const confidenceScore = productAnalytics.length > 0 
-        ? Math.min(0.95, 0.6 + (dataQuality * 0.35)) 
-        : 0.55;
+      // Calculate accuracy: how close are we to the target
+      const targetAccuracy = Math.round((1 - Math.abs(totalEstimatedValue - targetSalesValue) / targetSalesValue) * 100);
       
       const plan = await storage.createProductionAiPlan({
         branchId,
@@ -4705,7 +4816,7 @@ export async function registerRoutes(
         targetSalesValue,
         planDate,
         datasetId: uploadId ? parseInt(uploadId, 10) : null,
-        algorithmVersion: 'v1.1',
+        algorithmVersion: 'v2.0-smart',
         confidenceScore,
         recommendedProducts,
         totalEstimatedValue,
@@ -4714,6 +4825,14 @@ export async function registerRoutes(
         status: 'generated',
         createdBy: (req as any).user?.id
       });
+      
+      // Analysis method descriptions in Arabic
+      const analysisMethodLabels: Record<string, string> = {
+        'revenue_based': 'تحليل مبني على الإيرادات الفعلية من الملف',
+        'quantity_based': 'تحليل مبني على كميات المبيعات من الملف',
+        'equal_distribution': 'توزيع متساوي (لا يوجد ملف مبيعات)',
+        'default': 'تحليل افتراضي'
+      };
       
       // Format response for frontend compatibility
       const response = {
@@ -4728,6 +4847,9 @@ export async function registerRoutes(
         status: plan.status,
         products: recommendedProducts,
         salesDataFileId: plan.datasetId,
+        analysisMethod,
+        analysisMethodLabel: analysisMethodLabels[analysisMethod] || analysisMethod,
+        targetAccuracy: Math.min(100, Math.max(0, targetAccuracy)),
         createdAt: plan.createdAt
       };
       

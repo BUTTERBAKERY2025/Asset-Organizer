@@ -25,6 +25,9 @@ interface AIPlanProduct {
   unitPrice: number;
   totalPrice: number;
   estimatedCost: number;
+  salesVelocity?: number;
+  revenueShare?: number;
+  priority?: string;
 }
 
 interface AIProductionPlan {
@@ -40,6 +43,9 @@ interface AIProductionPlan {
   products: AIPlanProduct[];
   salesDataFileId?: number;
   appliedOrderId?: number;
+  analysisMethod?: string;
+  analysisMethodLabel?: string;
+  targetAccuracy?: number;
   createdAt: string;
 }
 
@@ -282,6 +288,26 @@ export default function AdvancedProductionPlannerPage() {
                 </div>
               ) : generatedPlan ? (
                 <div className="space-y-6">
+                  {generatedPlan.analysisMethodLabel && (
+                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100">
+                      <div className="flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-indigo-600" />
+                        <span className="text-sm font-medium text-indigo-700">
+                          طريقة التحليل: {generatedPlan.analysisMethodLabel}
+                        </span>
+                      </div>
+                      {generatedPlan.targetAccuracy !== undefined && (
+                        <Badge className={`${
+                          generatedPlan.targetAccuracy >= 95 ? 'bg-green-100 text-green-700' :
+                          generatedPlan.targetAccuracy >= 85 ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          دقة المطابقة: {generatedPlan.targetAccuracy}%
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center">
                       <Percent className="w-6 h-6 mx-auto mb-2 text-purple-600" />
@@ -321,21 +347,47 @@ export default function AdvancedProductionPlannerPage() {
                       المنتجات الموصى بها ({generatedPlan.products?.length || 0})
                     </h3>
                     {generatedPlan.products && generatedPlan.products.length > 0 ? (
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
                         {generatedPlan.products.map((product, index) => (
                           <div
                             key={index}
-                            className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
+                            className={`flex items-center justify-between p-3 rounded-lg border ${
+                              product.priority === 'high' 
+                                ? 'bg-green-50/50 border-green-200' 
+                                : product.priority === 'medium'
+                                ? 'bg-amber-50/50 border-amber-200'
+                                : 'bg-secondary/50 border-transparent'
+                            }`}
                             data-testid={`product-row-${index}`}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                                <Package className="w-4 h-4 text-primary" />
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                product.priority === 'high' 
+                                  ? 'bg-green-100' 
+                                  : product.priority === 'medium'
+                                  ? 'bg-amber-100'
+                                  : 'bg-primary/10'
+                              }`}>
+                                <Package className={`w-4 h-4 ${
+                                  product.priority === 'high' 
+                                    ? 'text-green-600' 
+                                    : product.priority === 'medium'
+                                    ? 'text-amber-600'
+                                    : 'text-primary'
+                                }`} />
                               </div>
                               <div>
-                                <p className="font-medium">{product.productName}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{product.productName}</p>
+                                  {product.priority === 'high' && (
+                                    <Badge className="bg-green-100 text-green-700 text-[10px]">الأكثر مبيعاً</Badge>
+                                  )}
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                   {product.quantity} وحدة × {formatCurrency(product.unitPrice)}
+                                  {product.revenueShare && (
+                                    <span className="mr-2 text-indigo-600">({product.revenueShare}% من المبيعات)</span>
+                                  )}
                                 </p>
                               </div>
                             </div>
