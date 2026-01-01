@@ -385,8 +385,9 @@ export default function AdvancedProductionOrderFormPage() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
+  const formatCurrency = (amount: number | null | undefined) => {
+    const safeAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
+    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(safeAmount);
   };
 
   const getBranchName = (branchId: string) => {
