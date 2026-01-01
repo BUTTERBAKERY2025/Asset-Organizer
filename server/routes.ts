@@ -5679,7 +5679,7 @@ export async function registerRoutes(
       const products = await storage.getAllProducts();
       
       // Get branches for comparison
-      const branches = await storage.getBranches();
+      const branches = await storage.getAllBranches();
       
       // Calculate waste analysis
       const wasteByReason: Record<string, number> = {};
