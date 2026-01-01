@@ -498,13 +498,17 @@ export interface IStorage {
 
   // Production Order Stats
   getAdvancedProductionOrderStats(): Promise<{
-    totalOrders: number;
-    pendingOrders: number;
-    inProgressOrders: number;
-    completedOrders: number;
-    dailyOrders: number;
-    weeklyOrders: number;
-    longTermOrders: number;
+    total: number;
+    draft: number;
+    pending: number;
+    approved: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+    daily: number;
+    weekly: number;
+    longTerm: number;
+    totalEstimatedCost: number;
   }>;
 }
 
@@ -4138,24 +4142,37 @@ export class DatabaseStorage implements IStorage {
 
   // Production Order Stats
   async getAdvancedProductionOrderStats(): Promise<{
-    totalOrders: number;
-    pendingOrders: number;
-    inProgressOrders: number;
-    completedOrders: number;
-    dailyOrders: number;
-    weeklyOrders: number;
-    longTermOrders: number;
+    total: number;
+    draft: number;
+    pending: number;
+    approved: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+    daily: number;
+    weekly: number;
+    longTerm: number;
+    totalEstimatedCost: number;
   }> {
     const allOrders = await db.select().from(advancedProductionOrders);
     
+    // Calculate total estimated cost from all active orders
+    const totalEstimatedCost = allOrders
+      .filter(o => o.status !== 'cancelled' && o.status !== 'completed')
+      .reduce((sum, o) => sum + (o.estimatedCost || 0), 0);
+    
     return {
-      totalOrders: allOrders.length,
-      pendingOrders: allOrders.filter(o => o.status === 'pending' || o.status === 'draft').length,
-      inProgressOrders: allOrders.filter(o => o.status === 'in_progress' || o.status === 'approved').length,
-      completedOrders: allOrders.filter(o => o.status === 'completed').length,
-      dailyOrders: allOrders.filter(o => o.orderType === 'daily').length,
-      weeklyOrders: allOrders.filter(o => o.orderType === 'weekly').length,
-      longTermOrders: allOrders.filter(o => o.orderType === 'long_term').length,
+      total: allOrders.length,
+      draft: allOrders.filter(o => o.status === 'draft').length,
+      pending: allOrders.filter(o => o.status === 'pending').length,
+      approved: allOrders.filter(o => o.status === 'approved').length,
+      inProgress: allOrders.filter(o => o.status === 'in_progress').length,
+      completed: allOrders.filter(o => o.status === 'completed').length,
+      cancelled: allOrders.filter(o => o.status === 'cancelled').length,
+      daily: allOrders.filter(o => o.orderType === 'daily').length,
+      weekly: allOrders.filter(o => o.orderType === 'weekly').length,
+      longTerm: allOrders.filter(o => o.orderType === 'long_term').length,
+      totalEstimatedCost,
     };
   }
 }
