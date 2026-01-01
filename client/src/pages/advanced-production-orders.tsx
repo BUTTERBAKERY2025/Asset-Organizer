@@ -86,8 +86,17 @@ export default function AdvancedProductionOrdersPage() {
   const queryClient = useQueryClient();
   const { itemsPerPage, getPageItems } = usePagination(12);
 
+  const ordersQueryUrl = (() => {
+    const params = new URLSearchParams();
+    if (branchFilter !== "all") params.append("branchId", branchFilter);
+    if (statusFilter !== "all") params.append("status", statusFilter);
+    if (orderTypeFilter !== "all") params.append("orderType", orderTypeFilter);
+    const queryString = params.toString();
+    return queryString ? `/api/advanced-production-orders?${queryString}` : "/api/advanced-production-orders";
+  })();
+
   const { data: orders, isLoading } = useQuery<AdvancedProductionOrder[]>({
-    queryKey: ["/api/advanced-production-orders", { branchId: branchFilter !== "all" ? branchFilter : undefined, status: statusFilter !== "all" ? statusFilter : undefined, orderType: orderTypeFilter !== "all" ? orderTypeFilter : undefined }],
+    queryKey: [ordersQueryUrl],
   });
 
   const { data: branches } = useQuery<Branch[]>({
@@ -101,8 +110,11 @@ export default function AdvancedProductionOrdersPage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => apiRequest(`/api/advanced-production-orders/${id}`, "DELETE"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/advanced-production-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/advanced-production-orders/stats"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        Array.isArray(query.queryKey) && 
+        typeof query.queryKey[0] === 'string' && 
+        query.queryKey[0].startsWith("/api/advanced-production-orders") 
+      });
       toast({ title: "تم حذف الأمر بنجاح" });
     },
     onError: () => {

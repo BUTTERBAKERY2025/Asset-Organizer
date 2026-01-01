@@ -4351,18 +4351,24 @@ export async function registerRoutes(
   app.get("/api/advanced-production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const { branchId, status, orderType } = req.query;
+      console.log("Fetching advanced production orders with filters:", { branchId, status, orderType });
       let orders = await storage.getAllAdvancedProductionOrders();
+      console.log("Found orders in DB:", orders.length);
       
       if (branchId && typeof branchId === 'string') {
         orders = orders.filter(o => o.sourceBranchId === branchId || o.targetBranchId === branchId);
+        console.log("After branchId filter:", orders.length);
       }
       if (status && typeof status === 'string') {
         orders = orders.filter(o => o.status === status);
+        console.log("After status filter:", orders.length);
       }
       if (orderType && typeof orderType === 'string') {
         orders = orders.filter(o => o.orderType === orderType);
+        console.log("After orderType filter:", orders.length);
       }
       
+      console.log("Returning orders:", orders.length);
       res.json(orders);
     } catch (error) {
       console.error("Error fetching production orders:", error);
