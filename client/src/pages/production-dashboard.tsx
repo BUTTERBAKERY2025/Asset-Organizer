@@ -424,7 +424,7 @@ export default function ProductionDashboardPage() {
                         {upload.status === "processed" ? "تمت المعالجة" : upload.status}
                       </Badge>
                       <p className="text-xs text-gray-500 mt-1">
-                        {format(new Date(upload.uploadDate), "dd MMM yyyy", { locale: ar })}
+                        {upload.createdAt ? format(new Date(upload.createdAt), "dd MMM yyyy", { locale: ar }) : ""}
                       </p>
                     </div>
                   </div>
