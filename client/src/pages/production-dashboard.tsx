@@ -1,8 +1,12 @@
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { 
@@ -11,23 +15,28 @@ import {
   ClipboardList, 
   BarChart3, 
   TrendingUp, 
+  TrendingDown,
   Upload, 
   Plus, 
   Calendar, 
   CheckCircle, 
   Clock, 
-  AlertTriangle,
   ArrowUpRight,
   Package,
   Target,
   Zap,
   Brain,
   RefreshCw,
-  ChefHat
+  ChefHat,
+  ShoppingCart,
+  Snowflake,
+  Activity,
+  AlertTriangle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
+import type { Branch } from "@shared/schema";
 
 interface OrderStats {
   total: number;
@@ -41,6 +50,14 @@ interface OrderStats {
   weekly: number;
   longTerm: number;
   totalEstimatedCost: number;
+}
+
+interface DailyStats {
+  totalBatches: number;
+  totalQuantity: number;
+  byDestination: Record<string, number>;
+  byCategory: Record<string, number>;
+  byHour: Record<string, number>;
 }
 
 interface SalesUpload {
@@ -111,31 +128,81 @@ const QUICK_ACTIONS = [
   }
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-800 border-gray-300",
-  pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  approved: "bg-blue-100 text-blue-800 border-blue-300",
-  in_progress: "bg-purple-100 text-purple-800 border-purple-300",
-  completed: "bg-green-100 text-green-800 border-green-300",
-  cancelled: "bg-red-100 text-red-800 border-red-300"
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
-  pending: "قيد الانتظار",
-  approved: "معتمد",
-  in_progress: "قيد التنفيذ",
-  completed: "مكتمل",
-  cancelled: "ملغي"
-};
-
 export default function ProductionDashboardPage() {
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+
+  const { data: branches } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+  });
+
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<OrderStats>({
     queryKey: ["/api/advanced-production-orders/stats"],
   });
 
   const { data: recentUploads, isLoading: uploadsLoading } = useQuery<SalesUpload[]>({
     queryKey: ["/api/sales-data-uploads?limit=5"],
+  });
+
+  // Daily production stats for selected branch
+  const { data: dailyStats, isLoading: dailyLoading, refetch: refetchDaily } = useQuery<DailyStats>({
+    queryKey: ["/api/daily-production/stats", selectedBranch, selectedDate],
+    queryFn: async () => {
+      if (selectedBranch === "all") {
+        // Aggregate all branches
+        const allStats: DailyStats = { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
+        if (!branches) return allStats;
+        
+        for (const branch of branches) {
+          try {
+            const params = new URLSearchParams({ branchId: branch.id, date: selectedDate });
+            const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
+            if (res.ok) {
+              const branchStats: DailyStats = await res.json();
+              allStats.totalBatches += branchStats.totalBatches || 0;
+              allStats.totalQuantity += branchStats.totalQuantity || 0;
+              for (const [k, v] of Object.entries(branchStats.byDestination || {})) {
+                allStats.byDestination[k] = (allStats.byDestination[k] || 0) + v;
+              }
+            }
+          } catch {}
+        }
+        return allStats;
+      }
+      const params = new URLSearchParams({ branchId: selectedBranch, date: selectedDate });
+      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
+      if (!res.ok) return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
+      return res.json();
+    },
+    enabled: true,
+  });
+
+  // Previous day stats for comparison
+  const previousDate = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
+  const { data: prevDayStats } = useQuery<DailyStats>({
+    queryKey: ["/api/daily-production/stats", selectedBranch, previousDate],
+    queryFn: async () => {
+      if (selectedBranch === "all" && branches) {
+        const allStats: DailyStats = { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
+        for (const branch of branches) {
+          try {
+            const params = new URLSearchParams({ branchId: branch.id, date: previousDate });
+            const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
+            if (res.ok) {
+              const branchStats: DailyStats = await res.json();
+              allStats.totalBatches += branchStats.totalBatches || 0;
+              allStats.totalQuantity += branchStats.totalQuantity || 0;
+            }
+          } catch {}
+        }
+        return allStats;
+      }
+      if (selectedBranch === "all") return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
+      const params = new URLSearchParams({ branchId: selectedBranch, date: previousDate });
+      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
+      if (!res.ok) return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
+      return res.json();
+    },
   });
 
   const formatCurrency = (amount: number) => {
@@ -146,6 +213,21 @@ export default function ProductionDashboardPage() {
     Math.round((stats.completed / Math.max(stats.total, 1)) * 100) : 0;
 
   const activeOrders = stats ? stats.pending + stats.approved + stats.inProgress : 0;
+
+  const getDiff = (current: number, previous: number) => {
+    if (!previous) return { value: current, percentage: 100, direction: "up" as const };
+    const diff = current - previous;
+    const percentage = Math.round(Math.abs(diff / previous) * 100);
+    return { value: Math.abs(diff), percentage, direction: diff >= 0 ? "up" as const : "down" as const };
+  };
+
+  const qtyDiff = getDiff(dailyStats?.totalQuantity || 0, prevDayStats?.totalQuantity || 0);
+  const batchDiff = getDiff(dailyStats?.totalBatches || 0, prevDayStats?.totalBatches || 0);
+
+  const handleRefresh = () => {
+    refetchStats();
+    refetchDaily();
+  };
 
   return (
     <Layout>
@@ -159,7 +241,7 @@ export default function ProductionDashboardPage() {
             <p className="text-gray-600 mt-1">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetchStats()} data-testid="btn-refresh">
+            <Button variant="outline" size="sm" onClick={handleRefresh} data-testid="btn-refresh">
               <RefreshCw className="h-4 w-4 ml-2" />
               تحديث
             </Button>
@@ -172,26 +254,137 @@ export default function ProductionDashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-r-4 border-r-blue-500 bg-gradient-to-br from-blue-50 to-white" data-testid="card-total-orders">
+        {/* Branch and Date Filters */}
+        <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-2 min-w-[180px]">
+                <Label className="text-amber-800">الفرع</Label>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                  <SelectTrigger className="bg-white border-amber-200">
+                    <SelectValue placeholder="كل الفروع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الفروع</SelectItem>
+                    {branches?.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-amber-800">التاريخ</Label>
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-[160px] bg-white border-amber-200"
+                />
+              </div>
+              <div className="text-sm text-amber-700">
+                {format(new Date(selectedDate), "EEEE dd MMMM yyyy", { locale: ar })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Daily Production Performance */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card className="border-r-4 border-r-green-500 bg-gradient-to-br from-green-50 to-white" data-testid="card-daily-qty">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">إجمالي الأوامر</p>
-                  {statsLoading ? (
-                    <Skeleton className="h-8 w-16 mt-1" />
+                  <p className="text-sm text-gray-600">إنتاج اليوم</p>
+                  {dailyLoading ? (
+                    <Skeleton className="h-8 w-20 mt-1" />
                   ) : (
-                    <p className="text-3xl font-bold text-blue-700">{stats?.total || 0}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-green-700">{dailyStats?.totalQuantity || 0}</p>
+                      {prevDayStats && (prevDayStats.totalQuantity || 0) > 0 && (
+                        <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
+                          {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {qtyDiff.percentage}%
+                        </Badge>
+                      )}
+                    </div>
                   )}
+                  <p className="text-xs text-gray-500">قطعة</p>
                 </div>
-                <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <ClipboardList className="h-6 w-6 text-blue-600" />
+                <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <Activity className="h-6 w-6 text-green-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-r-4 border-r-amber-500 bg-gradient-to-br from-amber-50 to-white" data-testid="card-active-orders">
+          <Card className="border-r-4 border-r-amber-500 bg-gradient-to-br from-amber-50 to-white" data-testid="card-daily-batches">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">دفعات اليوم</p>
+                  {dailyLoading ? (
+                    <Skeleton className="h-8 w-16 mt-1" />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-amber-700">{dailyStats?.totalBatches || 0}</p>
+                      {prevDayStats && (prevDayStats.totalBatches || 0) > 0 && (
+                        <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
+                          {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {batchDiff.percentage}%
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">دفعة</p>
+                </div>
+                <div className="h-12 w-12 bg-amber-100 rounded-full flex items-center justify-center">
+                  <Package className="h-6 w-6 text-amber-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-r-4 border-r-blue-500 bg-gradient-to-br from-blue-50 to-white" data-testid="card-display">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">بار العرض</p>
+                  {dailyLoading ? (
+                    <Skeleton className="h-8 w-16 mt-1" />
+                  ) : (
+                    <p className="text-3xl font-bold text-blue-700">{dailyStats?.byDestination?.display_bar || 0}</p>
+                  )}
+                  <p className="text-xs text-gray-500">قطعة</p>
+                </div>
+                <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
+                  <ShoppingCart className="h-6 w-6 text-blue-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-r-4 border-r-cyan-500 bg-gradient-to-br from-cyan-50 to-white" data-testid="card-storage">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">التخزين</p>
+                  {dailyLoading ? (
+                    <Skeleton className="h-8 w-16 mt-1" />
+                  ) : (
+                    <p className="text-3xl font-bold text-cyan-700">
+                      {(dailyStats?.byDestination?.freezer || 0) + (dailyStats?.byDestination?.refrigerator || 0)}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500">قطعة</p>
+                </div>
+                <div className="h-12 w-12 bg-cyan-100 rounded-full flex items-center justify-center">
+                  <Snowflake className="h-6 w-6 text-cyan-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-r-4 border-r-purple-500 bg-gradient-to-br from-purple-50 to-white" data-testid="card-active-orders">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -199,47 +392,82 @@ export default function ProductionDashboardPage() {
                   {statsLoading ? (
                     <Skeleton className="h-8 w-16 mt-1" />
                   ) : (
-                    <p className="text-3xl font-bold text-amber-700">{activeOrders}</p>
+                    <p className="text-3xl font-bold text-purple-700">{activeOrders}</p>
                   )}
-                </div>
-                <div className="h-12 w-12 bg-amber-100 rounded-full flex items-center justify-center">
-                  <Clock className="h-6 w-6 text-amber-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-r-4 border-r-green-500 bg-gradient-to-br from-green-50 to-white" data-testid="card-completed">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">مكتملة</p>
-                  {statsLoading ? (
-                    <Skeleton className="h-8 w-16 mt-1" />
-                  ) : (
-                    <p className="text-3xl font-bold text-green-700">{stats?.completed || 0}</p>
-                  )}
-                </div>
-                <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-r-4 border-r-purple-500 bg-gradient-to-br from-purple-50 to-white" data-testid="card-estimated-cost">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">التكلفة المتوقعة</p>
-                  {statsLoading ? (
-                    <Skeleton className="h-8 w-24 mt-1" />
-                  ) : (
-                    <p className="text-xl font-bold text-purple-700">{formatCurrency(stats?.totalEstimatedCost || 0)}</p>
-                  )}
+                  <p className="text-xs text-gray-500">أمر</p>
                 </div>
                 <div className="h-12 w-12 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Target className="h-6 w-6 text-purple-600" />
+                  <Clock className="h-6 w-6 text-purple-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Orders Stats Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-slate-50 to-white" data-testid="card-total-orders">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center">
+                  <ClipboardList className="h-5 w-5 text-slate-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">إجمالي الأوامر</p>
+                  {statsLoading ? <Skeleton className="h-6 w-12" /> : (
+                    <p className="text-xl font-bold text-slate-700">{stats?.total || 0}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-green-50 to-white" data-testid="card-completed">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">مكتملة</p>
+                  {statsLoading ? <Skeleton className="h-6 w-12" /> : (
+                    <p className="text-xl font-bold text-green-700">{stats?.completed || 0}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-50 to-white" data-testid="card-estimated-cost">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center">
+                  <Target className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">التكلفة المتوقعة</p>
+                  {statsLoading ? <Skeleton className="h-6 w-20" /> : (
+                    <p className="text-lg font-bold text-amber-700">{formatCurrency(stats?.totalEstimatedCost || 0)}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-indigo-50 to-white" data-testid="card-completion-rate">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <BarChart3 className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500">نسبة الإنجاز</p>
+                  {statsLoading ? <Skeleton className="h-6 w-12" /> : (
+                    <div className="flex items-center gap-2">
+                      <p className="text-xl font-bold text-indigo-700">{completionRate}%</p>
+                      <Progress value={completionRate} className="h-2 flex-1" />
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -346,13 +574,6 @@ export default function ProductionDashboardPage() {
                     </div>
                   </>
                 )}
-                <div className="pt-2 border-t">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">نسبة الإنجاز</span>
-                    <span className="text-sm font-medium">{completionRate}%</span>
-                  </div>
-                  <Progress value={completionRate} className="h-2" />
-                </div>
               </CardContent>
             </Card>
 
