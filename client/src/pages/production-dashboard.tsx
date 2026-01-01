@@ -48,6 +48,7 @@ interface SalesUpload {
   uploadDate: string;
   branchId: string;
   status: string;
+  createdAt?: string;
 }
 
 const QUICK_ACTIONS = [
@@ -129,7 +130,7 @@ export default function ProductionDashboardPage() {
   });
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount || 0);
+    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount || 0);
   };
 
   const completionRate = stats ? 
@@ -424,7 +425,7 @@ export default function ProductionDashboardPage() {
                         {upload.status === "processed" ? "تمت المعالجة" : upload.status}
                       </Badge>
                       <p className="text-xs text-gray-500 mt-1">
-                        {upload.createdAt ? format(new Date(upload.createdAt), "dd MMM yyyy", { locale: ar }) : ""}
+                        {upload.createdAt ? format(new Date(upload.createdAt), "dd/MM/yyyy") : ""}
                       </p>
                     </div>
                   </div>

@@ -129,13 +129,13 @@ export default function AdvancedProductionOrderDetailsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount || 0);
+    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount || 0);
   };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
     try {
-      return format(new Date(dateStr), "dd MMMM yyyy", { locale: ar });
+      return format(new Date(dateStr), "dd/MM/yyyy");
     } catch {
       return dateStr;
     }

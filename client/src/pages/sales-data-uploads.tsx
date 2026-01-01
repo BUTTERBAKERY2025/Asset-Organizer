@@ -285,14 +285,14 @@ export default function SalesDataUploadsPage() {
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
     try {
-      return format(new Date(dateStr), "dd MMM yyyy", { locale: ar });
+      return format(new Date(dateStr), "dd/MM/yyyy");
     } catch {
       return dateStr;
     }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
+    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount);
   };
 
   const getStatusConfig = (status: string) => {
@@ -491,7 +491,7 @@ export default function SalesDataUploadsPage() {
                           </TableCell>
                           <TableCell>
                             <span data-testid={`text-records-${upload.id}`}>
-                              {upload.totalRecords?.toLocaleString('ar-SA') || 0}
+                              {upload.totalRecords?.toLocaleString('en-US') || 0}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -576,7 +576,7 @@ export default function SalesDataUploadsPage() {
                                           <Card>
                                             <CardContent className="p-4 text-center">
                                               <TrendingUp className="w-8 h-8 mx-auto mb-2 text-green-500" />
-                                              <div className="text-2xl font-bold">{analytics.reduce((sum, a) => sum + (a.totalQuantitySold || 0), 0).toLocaleString('ar-SA')}</div>
+                                              <div className="text-2xl font-bold">{analytics.reduce((sum, a) => sum + (a.totalQuantitySold || 0), 0).toLocaleString('en-US')}</div>
                                               <div className="text-sm text-muted-foreground">إجمالي الكمية</div>
                                             </CardContent>
                                           </Card>
@@ -605,7 +605,7 @@ export default function SalesDataUploadsPage() {
                                                 <TableCell>
                                                   <Badge variant="outline">{item.productCategory || "-"}</Badge>
                                                 </TableCell>
-                                                <TableCell>{item.totalQuantitySold?.toLocaleString('ar-SA')}</TableCell>
+                                                <TableCell>{item.totalQuantitySold?.toLocaleString('en-US')}</TableCell>
                                                 <TableCell className="text-green-600">
                                                   {formatCurrency(item.totalRevenue || 0)}
                                                 </TableCell>
@@ -734,7 +734,7 @@ export default function SalesDataUploadsPage() {
                                               <div className="text-sm text-green-600">منتج</div>
                                             </div>
                                             <div className="text-center">
-                                              <div className="text-2xl font-bold text-green-700">{(forecastResult.forecast.totalForecastedQuantity || 0).toLocaleString('ar-SA')}</div>
+                                              <div className="text-2xl font-bold text-green-700">{(forecastResult.forecast.totalForecastedQuantity || 0).toLocaleString('en-US')}</div>
                                               <div className="text-sm text-green-600">إجمالي الكمية</div>
                                             </div>
                                             <div className="text-center">
@@ -772,7 +772,7 @@ export default function SalesDataUploadsPage() {
                                                       <Badge className="bg-blue-100 text-blue-800">{item.salesRatio}%</Badge>
                                                     </TableCell>
                                                     <TableCell className="font-bold text-green-600">
-                                                      {item.forecastedQuantity.toLocaleString('ar-SA')}
+                                                      {item.forecastedQuantity.toLocaleString('en-US')}
                                                     </TableCell>
                                                   </TableRow>
                                                 ))}

@@ -390,7 +390,7 @@ export default function AdvancedProductionOrderFormPage() {
 
   const formatCurrency = (amount: number | null | undefined) => {
     const safeAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(safeAmount);
+    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(safeAmount);
   };
 
   const getBranchName = (branchId: string) => {
@@ -764,7 +764,7 @@ export default function AdvancedProductionOrderFormPage() {
                             <div className="flex items-center gap-2">
                               <Calendar className="w-5 h-5 text-primary" />
                               <span className="font-semibold">
-                                {format(date, "EEEE, dd MMMM yyyy", { locale: ar })}
+                                {format(date, "EEEE, dd/MM/yyyy")}
                               </span>
                               <Badge variant="secondary">{dateSchedules.length} مهمة</Badge>
                             </div>

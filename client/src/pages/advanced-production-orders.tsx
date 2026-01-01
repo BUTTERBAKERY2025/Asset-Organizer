@@ -153,12 +153,12 @@ export default function AdvancedProductionOrdersPage() {
   }, [branchFilter, statusFilter, orderTypeFilter, searchTerm]);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
+    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount);
   };
 
   const formatDate = (dateStr: string) => {
     try {
-      return format(new Date(dateStr), "dd/MM/yyyy", { locale: ar });
+      return format(new Date(dateStr), "dd/MM/yyyy");
     } catch {
       return dateStr;
     }
