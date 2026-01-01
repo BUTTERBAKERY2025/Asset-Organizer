@@ -223,6 +223,20 @@ export default function SalesDataUploadsPage() {
             </CardTitle>
             <CardDescription>اختر ملف Excel يحتوي على بيانات المبيعات</CardDescription>
           </CardHeader>
+          <div className="px-6 pb-4">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                تنسيق الملف المطلوب
+              </h4>
+              <p className="text-sm text-blue-800 mb-2">يجب أن يحتوي ملف Excel على الأعمدة التالية (اسم أي من هذه الأعمدة مقبول):</p>
+              <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
+                <li><strong>اسم المنتج:</strong> منتج، اسم المنتج، product، name، item</li>
+                <li><strong>الكمية:</strong> كمية، الكمية، quantity، qty، sold</li>
+                <li><strong>الإيرادات (اختياري):</strong> إيرادات، المبيعات، revenue، total، sales</li>
+              </ul>
+            </div>
+          </div>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">

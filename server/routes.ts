@@ -4752,27 +4752,77 @@ export async function registerRoutes(
         uploadedBy: (req as any).user?.id
       });
       
-      // Parse and analyze the data (simplified - in production would use xlsx library)
+      // Parse and analyze the data
       try {
-        // Simulate parsing Excel data
         const parsedData = JSON.parse(fileData || '[]');
         const productVelocity: Record<string, number> = {};
+        const productRevenue: Record<string, number> = {};
         let totalSales = 0;
         const uniqueProducts = new Set<string>();
         
+        // Helper function to find a value from multiple possible column names
+        const findValue = (row: any, possibleKeys: string[]): any => {
+          for (const key of possibleKeys) {
+            // Check exact match first
+            if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+              return row[key];
+            }
+            // Check case-insensitive match
+            const lowerKey = key.toLowerCase();
+            for (const rowKey of Object.keys(row)) {
+              if (rowKey.toLowerCase() === lowerKey && row[rowKey] !== undefined && row[rowKey] !== null && row[rowKey] !== '') {
+                return row[rowKey];
+              }
+            }
+          }
+          return null;
+        };
+
+        // Extended column name variations for different sources (Foodics, POS systems, etc.)
+        const productColumns = [
+          'product', 'productName', 'product_name', 'Product', 'ProductName', 'Product Name',
+          'منتج', 'اسم المنتج', 'المنتج', 'الصنف', 'اسم الصنف', 'item', 'Item', 'item_name',
+          'name', 'Name', 'الاسم', 'sku', 'SKU', 'sku_name', 'SKU Name'
+        ];
+        
+        const quantityColumns = [
+          'quantity', 'qty', 'Quantity', 'Qty', 'QTY', 'count', 'Count',
+          'كمية', 'الكمية', 'عدد', 'العدد', 'sold_quantity', 'Sold Quantity',
+          'units', 'Units', 'الوحدات', 'sold', 'Sold', 'المباع'
+        ];
+        
+        const revenueColumns = [
+          'revenue', 'Revenue', 'total', 'Total', 'amount', 'Amount',
+          'إيرادات', 'الإيرادات', 'المبيعات', 'إجمالي', 'الإجمالي', 'المبلغ',
+          'sales', 'Sales', 'price', 'Price', 'السعر', 'total_sales', 'Total Sales',
+          'net_sales', 'Net Sales', 'صافي المبيعات', 'gross_sales', 'Gross Sales'
+        ];
+
+        // Log column names for debugging
+        if (Array.isArray(parsedData) && parsedData.length > 0) {
+          console.log('Excel columns found:', Object.keys(parsedData[0]));
+        }
+        
         if (Array.isArray(parsedData)) {
           parsedData.forEach((row: any) => {
-            const productName = row.product || row.productName || row.منتج;
-            const quantity = parseInt(row.quantity || row.كمية || 0);
-            const revenue = parseFloat(row.revenue || row.إيرادات || 0);
+            const productName = findValue(row, productColumns);
+            const quantity = parseInt(findValue(row, quantityColumns) || 0, 10);
+            const revenue = parseFloat(findValue(row, revenueColumns) || 0);
             
-            if (productName) {
-              uniqueProducts.add(productName);
-              productVelocity[productName] = (productVelocity[productName] || 0) + quantity;
-              totalSales += revenue;
+            if (productName && typeof productName === 'string' && productName.trim()) {
+              const cleanName = productName.trim();
+              uniqueProducts.add(cleanName);
+              productVelocity[cleanName] = (productVelocity[cleanName] || 0) + (isNaN(quantity) ? 1 : quantity);
+              productRevenue[cleanName] = (productRevenue[cleanName] || 0) + (isNaN(revenue) ? 0 : revenue);
+              totalSales += isNaN(revenue) ? 0 : revenue;
             }
           });
         }
+        
+        // Calculate days in period for average calculations
+        const startDate = new Date(periodStart);
+        const endDate = new Date(periodEnd);
+        const daysInPeriod = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
         
         await storage.updateSalesDataUpload(upload.id, {
           status: 'completed',
@@ -4783,28 +4833,36 @@ export async function registerRoutes(
           productVelocity
         });
         
-        // Create analytics records
+        // Create analytics records with more detailed data
         const products = await storage.getAllProducts();
         const analyticsRecords = Object.entries(productVelocity).map(([name, velocity]) => {
           const product = products.find(p => p.name === name);
+          const revenue = productRevenue[name] || 0;
           return {
             uploadId: upload.id,
             productId: product?.id || null,
             productName: name,
-            productCategory: product?.category,
+            productCategory: product?.category || null,
             totalQuantitySold: velocity,
+            totalRevenue: revenue,
+            averageDailySales: Math.round((velocity / daysInPeriod) * 100) / 100,
             salesVelocity: velocity
           };
         });
         
         if (analyticsRecords.length > 0) {
           await storage.bulkCreateProductSalesAnalytics(analyticsRecords);
+          console.log(`Created ${analyticsRecords.length} analytics records for upload ${upload.id}`);
+        } else {
+          console.log('No analytics records created - check if Excel columns match expected names');
+          console.log('Expected product columns:', productColumns.slice(0, 5).join(', '), '...');
         }
         
       } catch (parseError) {
+        console.error('Error parsing file data:', parseError);
         await storage.updateSalesDataUpload(upload.id, {
           status: 'failed',
-          errorMessage: 'Failed to parse file data'
+          errorMessage: 'فشل في تحليل بيانات الملف - تأكد من تنسيق الأعمدة'
         });
       }
       
