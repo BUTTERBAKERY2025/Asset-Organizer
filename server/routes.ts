@@ -5669,9 +5669,9 @@ export async function registerRoutes(
         : allWasteReports.filter(w => w.branchId === branchId);
       
       // Get quality checks
-      const allQualityChecks = await storage.getQualityChecks();
+      const allQualityChecks = await storage.getAllQualityChecks();
       const qualityChecks = allQualityChecks.filter(q => {
-        const checkDate = new Date(q.checkedAt).toISOString().split('T')[0];
+        const checkDate = q.checkDate || (q.createdAt ? new Date(q.createdAt).toISOString().split('T')[0] : '');
         return checkDate >= startDate && checkDate <= endDate;
       });
       
@@ -5697,8 +5697,8 @@ export async function registerRoutes(
       }
       
       // Calculate quality stats
-      const passed = qualityChecks.filter(q => q.status === 'passed').length;
-      const failed = qualityChecks.filter(q => q.status === 'failed').length;
+      const passed = qualityChecks.filter(q => q.result === 'passed').length;
+      const failed = qualityChecks.filter(q => q.result === 'failed').length;
       const passRate = qualityChecks.length > 0 ? (passed / qualityChecks.length) * 100 : 100;
       
       // Build product performance
@@ -5756,10 +5756,10 @@ export async function registerRoutes(
           passed,
           failed,
           passRate,
-          issues: qualityChecks.filter(q => q.status === 'failed').slice(0, 5).map(q => ({
+          issues: qualityChecks.filter(q => q.result === 'failed').slice(0, 5).map(q => ({
             product: 'منتج',
             issue: q.notes || 'مشكلة جودة',
-            date: new Date(q.checkedAt).toLocaleDateString('ar-SA'),
+            date: q.checkDate || '',
           })),
         },
         shiftPerformance,
