@@ -1798,7 +1798,7 @@ export type InsertAdvancedProductionOrder = z.infer<typeof insertAdvancedProduct
 export const productionOrderItems = pgTable("production_order_items", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
-  productId: integer("product_id").notNull().references(() => products.id),
+  productId: integer("product_id").references(() => products.id),
   productName: text("product_name").notNull(),
   productCategory: text("product_category"),
   targetQuantity: integer("target_quantity").notNull(),
