@@ -594,7 +594,7 @@ export default function DailyProductionPage() {
                         <SelectTrigger data-testid="select-product">
                           <SelectValue placeholder="اختر المنتج" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-[300px] overflow-y-auto">
                           {bakeryProducts.map((product) => (
                             <SelectItem key={product.id} value={product.name}>
                               {product.name} ({product.category})
