@@ -619,14 +619,35 @@ export default function AdvancedProductionOrderFormPage() {
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                           <div className="md:col-span-5 space-y-2">
                             <Label>المنتج</Label>
-                            <ProductSelector
-                              products={products || []}
-                              value={item.productId}
-                              onSelect={(productId, product) =>
-                                handleProductSelect(index, productId, product)
-                              }
-                              placeholder="اختر المنتج"
-                            />
+                            {item.productName && !item.productId ? (
+                              <div className="space-y-2">
+                                <Input
+                                  value={item.productName}
+                                  onChange={(e) => updateProduct(index, "productName", e.target.value)}
+                                  placeholder="اسم المنتج"
+                                  className="font-medium"
+                                  data-testid={`input-product-name-${index}`}
+                                />
+                                <p className="text-xs text-muted-foreground">منتج من التوقعات - يمكنك تعديل الاسم أو اختيار منتج من القائمة</p>
+                                <ProductSelector
+                                  products={products || []}
+                                  value={undefined}
+                                  onSelect={(productId, product) =>
+                                    handleProductSelect(index, productId, product)
+                                  }
+                                  placeholder="أو اختر من القائمة"
+                                />
+                              </div>
+                            ) : (
+                              <ProductSelector
+                                products={products || []}
+                                value={item.productId}
+                                onSelect={(productId, product) =>
+                                  handleProductSelect(index, productId, product)
+                                }
+                                placeholder="اختر المنتج"
+                              />
+                            )}
                           </div>
                           <div className="md:col-span-2 space-y-2">
                             <Label>الكمية المطلوبة</Label>
