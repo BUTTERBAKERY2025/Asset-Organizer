@@ -5035,7 +5035,7 @@ export async function registerRoutes(
         const productColumns = [
           'product', 'productName', 'product_name', 'Product', 'ProductName', 'Product Name',
           'منتج', 'اسم المنتج', 'المنتج', 'الصنف', 'اسم الصنف', 'item', 'Item', 'item_name',
-          'name', 'Name', 'الاسم', 'sku', 'SKU', 'sku_name', 'SKU Name'
+          'name', 'Name', 'الاسم', 'sku', 'SKU', 'sku_name', 'SKU Name', 'الفروع'
         ];
         
         const quantityColumns = [
@@ -5054,23 +5054,76 @@ export async function registerRoutes(
         // Log column names for debugging
         if (Array.isArray(parsedData) && parsedData.length > 0) {
           console.log('Excel columns found:', Object.keys(parsedData[0]));
+          console.log('First row values:', parsedData[0]);
         }
         
-        if (Array.isArray(parsedData)) {
-          parsedData.forEach((row: any) => {
-            const productName = findValue(row, productColumns);
-            const quantity = parseInt(findValue(row, quantityColumns) || 0, 10);
-            const revenue = parseFloat(findValue(row, revenueColumns) || 0);
+        // Detect if first row contains header labels (common in Foodics exports)
+        // If first row values contain words like "Product", "Quantity", "Sales", create a column mapping
+        let columnMapping: Record<string, string> = {};
+        let dataStartIndex = 0;
+        
+        if (Array.isArray(parsedData) && parsedData.length > 1) {
+          const firstRow = parsedData[0];
+          const firstRowValues = Object.values(firstRow).map(v => String(v).toLowerCase().trim());
+          
+          // Check if first row looks like header labels
+          const hasProductHeader = firstRowValues.some(v => 
+            v === 'product' || v === 'المنتج' || v === 'منتج' || v === 'item' || v === 'الصنف'
+          );
+          const hasQuantityHeader = firstRowValues.some(v => 
+            v === 'quantity' || v === 'الكمية' || v === 'كمية' || v === 'qty'
+          );
+          const hasSalesHeader = firstRowValues.some(v => 
+            v === 'sales' || v === 'المبيعات' || v === 'revenue' || v === 'total' || v === 'الإيرادات'
+          );
+          
+          if (hasProductHeader || hasQuantityHeader || hasSalesHeader) {
+            console.log('Detected header row in first data row, creating column mapping...');
+            dataStartIndex = 1; // Skip first row as it's headers
             
-            if (productName && typeof productName === 'string' && productName.trim()) {
-              const cleanName = productName.trim();
-              uniqueProducts.add(cleanName);
-              productVelocity[cleanName] = (productVelocity[cleanName] || 0) + (isNaN(quantity) ? 1 : quantity);
-              productRevenue[cleanName] = (productRevenue[cleanName] || 0) + (isNaN(revenue) ? 0 : revenue);
-              totalSales += isNaN(revenue) ? 0 : revenue;
+            // Create mapping from Excel column keys to semantic names
+            for (const [key, value] of Object.entries(firstRow)) {
+              const valLower = String(value).toLowerCase().trim();
+              if (valLower === 'product' || valLower === 'المنتج' || valLower === 'منتج' || valLower === 'item') {
+                columnMapping['product'] = key;
+              } else if (valLower === 'quantity' || valLower === 'الكمية' || valLower === 'كمية' || valLower === 'qty') {
+                columnMapping['quantity'] = key;
+              } else if (valLower === 'sales' || valLower === 'المبيعات' || valLower === 'revenue' || valLower === 'total') {
+                columnMapping['revenue'] = key;
+              }
             }
-          });
+            console.log('Column mapping:', columnMapping);
+          }
         }
+        
+        // Process data rows (skipping header if detected)
+        const dataRows = Array.isArray(parsedData) ? parsedData.slice(dataStartIndex) : [];
+        
+        dataRows.forEach((row: any) => {
+          let productName: any;
+          let quantity: number;
+          let revenue: number;
+          
+          if (Object.keys(columnMapping).length > 0) {
+            // Use column mapping if we detected a header row
+            productName = columnMapping['product'] ? row[columnMapping['product']] : null;
+            quantity = parseInt(row[columnMapping['quantity']] || 0, 10);
+            revenue = parseFloat(row[columnMapping['revenue']] || 0);
+          } else {
+            // Fall back to standard column name detection
+            productName = findValue(row, productColumns);
+            quantity = parseInt(findValue(row, quantityColumns) || 0, 10);
+            revenue = parseFloat(findValue(row, revenueColumns) || 0);
+          }
+          
+          if (productName && typeof productName === 'string' && productName.trim()) {
+            const cleanName = productName.trim();
+            uniqueProducts.add(cleanName);
+            productVelocity[cleanName] = (productVelocity[cleanName] || 0) + (isNaN(quantity) ? 1 : quantity);
+            productRevenue[cleanName] = (productRevenue[cleanName] || 0) + (isNaN(revenue) ? 0 : revenue);
+            totalSales += isNaN(revenue) ? 0 : revenue;
+          }
+        });
         
         // Calculate days in period for average calculations
         const startDate = new Date(periodStart);
@@ -5079,10 +5132,10 @@ export async function registerRoutes(
         
         await storage.updateSalesDataUpload(upload.id, {
           status: 'completed',
-          totalRecords: parsedData.length,
+          totalRecords: dataRows.length,
           totalSalesValue: totalSales,
           uniqueProducts: uniqueProducts.size,
-          parsedData,
+          parsedData: dataRows,
           productVelocity
         });
         
