@@ -4668,7 +4668,7 @@ export async function registerRoutes(
             topProducts: productAnalytics
               .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
               .slice(0, 5)
-              .map(p => ({ name: p.productName, revenue: p.totalRevenue, quantity: p.totalQuantitySold }))
+              .map(p => ({ name: p.productName, category: p.productCategory || 'عام', revenue: p.totalRevenue, quantity: p.totalQuantitySold }))
           };
         }
       }

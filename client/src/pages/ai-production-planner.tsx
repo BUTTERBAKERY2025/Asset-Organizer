@@ -33,6 +33,7 @@ import {
 interface AIPlanProduct {
   productId: number;
   productName: string;
+  category?: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
@@ -47,7 +48,7 @@ interface UploadAnalyticsSummary {
   productsCount: number;
   totalRevenue: number;
   totalQuantity: number;
-  topProducts: { name: string; revenue: number; quantity: number }[];
+  topProducts: { name: string; category?: string; revenue: number; quantity: number }[];
 }
 
 interface AIProductionPlan {
@@ -365,8 +366,15 @@ export default function AdvancedProductionPlannerPage() {
                           <p className="text-xs font-medium text-blue-700 mb-2">أعلى 5 منتجات مبيعاً:</p>
                           <div className="space-y-1">
                             {generatedPlan.uploadAnalytics.topProducts.slice(0, 5).map((p, i) => (
-                              <div key={i} className="flex justify-between text-xs bg-white/40 rounded px-2 py-1">
-                                <span className="text-gray-700">{p.name}</span>
+                              <div key={i} className="flex justify-between items-center text-xs bg-white/40 rounded px-2 py-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-700">{p.name}</span>
+                                  {p.category && (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">
+                                      {p.category}
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-green-700 font-medium">{formatCurrency(p.revenue)}</span>
                               </div>
                             ))}
@@ -447,6 +455,11 @@ export default function AdvancedProductionPlannerPage() {
                               <div>
                                 <div className="flex items-center gap-2">
                                   <p className="font-medium">{product.productName}</p>
+                                  {product.category && (
+                                    <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-300 text-slate-600">
+                                      {product.category}
+                                    </Badge>
+                                  )}
                                   {product.priority === 'high' && (
                                     <Badge className="bg-green-100 text-green-700 text-[10px]">الأكثر مبيعاً</Badge>
                                   )}
