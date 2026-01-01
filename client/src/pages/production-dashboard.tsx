@@ -685,36 +685,7 @@ export default function ProductionDashboardPage() {
             <CardDescription>مؤشرات الأداء من جميع الأنظمة</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Inventory Stats - Compact */}
-              <Link href="/inventory" className="block group" data-testid="card-inventory-kpi">
-                <div className="rounded-lg border border-teal-200 bg-white/80 hover:bg-teal-50/50 p-3 transition-all hover:shadow-sm cursor-pointer">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-7 w-7 bg-teal-100 rounded-full flex items-center justify-center">
-                      <Boxes className="h-4 w-4 text-teal-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-teal-800">الجرد</span>
-                    <ArrowUpRight className="h-3 w-3 text-teal-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  {commandCenterLoading ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : (
-                    <div className="grid grid-cols-2 gap-1 text-xs">
-                      <div><span className="text-gray-500">الأصناف:</span> <span className="font-bold text-teal-700">{commandCenterData?.inventory?.totalItems || 0}</span></div>
-                      <div><span className="text-gray-500">القيمة:</span> <span className="font-bold text-teal-700">{formatCurrency(commandCenterData?.inventory?.totalValue || 0)}</span></div>
-                      <div className="flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3 text-amber-500" />
-                        <span className="text-amber-700 font-medium">{commandCenterData?.inventory?.lowStockCount || 0}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Wrench className="h-3 w-3 text-orange-500" />
-                        <span className="text-orange-700 font-medium">{commandCenterData?.inventory?.maintenanceNeeded || 0}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Link>
-
+            <div className="grid grid-cols-3 gap-2">
               {/* Cashier Stats - Compact */}
               <Link href="/cashier-journals" className="block group" data-testid="card-cashier-kpi">
                 <div className="rounded-lg border border-emerald-200 bg-white/80 hover:bg-emerald-50/50 p-3 transition-all hover:shadow-sm cursor-pointer">
