@@ -346,11 +346,16 @@ export default function AdvancedProductionOrderFormPage() {
   };
 
   const canProceed = () => {
+    console.log("canProceed check:", { currentStep, title: formData.title, branchId: formData.branchId, startDate: formData.startDate, itemsLen: formData.items.length });
     switch (currentStep) {
       case "info":
-        return formData.title && formData.branchId && formData.startDate;
+        const infoValid = !!(formData.title && formData.branchId && formData.startDate);
+        console.log("info step valid:", infoValid);
+        return infoValid;
       case "products":
-        return formData.items.length > 0 && formData.items.every((item) => (item.productId || item.productName) && item.quantity > 0);
+        const productsValid = formData.items.length > 0 && formData.items.every((item) => (item.productId || item.productName) && item.quantity > 0);
+        console.log("products step valid:", productsValid);
+        return productsValid;
       case "schedule":
         return true;
       default:
