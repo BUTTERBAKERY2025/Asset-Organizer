@@ -5011,6 +5011,10 @@ export async function registerRoutes(
       // Products can have null productId if no matching product exists in the database
       const orderItems = forecastItems.map((item, index) => {
         const product = products.find(p => p.id === item.productId || p.name === item.productName);
+        // استخدام السعر من جدول المنتجات (basePrice) أو السعر المحسوب من بيانات المبيعات
+        const unitPrice = product?.basePrice || (item.historicalRevenue > 0 && item.historicalQuantity > 0 
+          ? item.historicalRevenue / item.historicalQuantity 
+          : 0);
         return {
           productId: product?.id || null,
           productName: item.productName,
@@ -5018,8 +5022,8 @@ export async function registerRoutes(
           targetQuantity: item.forecastedQuantity,
           producedQuantity: 0,
           wastedQuantity: 0,
-          unitPrice: product?.price || 0,
-          totalValue: (product?.price || 0) * item.forecastedQuantity,
+          unitPrice: Math.round(unitPrice * 100) / 100,
+          totalValue: Math.round(unitPrice * item.forecastedQuantity * 100) / 100,
           status: 'pending' as const,
           priority: index + 1,
           notes: `نسبة المبيعات: ${item.salesRatio}%`
