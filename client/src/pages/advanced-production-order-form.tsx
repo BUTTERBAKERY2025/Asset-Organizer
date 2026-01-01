@@ -128,15 +128,18 @@ export default function AdvancedProductionOrderFormPage() {
         targetBranchId: order.targetBranchId || "",
         startDate: order.startDate || new Date().toISOString().split("T")[0],
         endDate: order.endDate || order.startDate || new Date().toISOString().split("T")[0],
-        items: items.map((item: any) => ({
-          productId: item.productId,
-          productName: item.productName || "",
-          quantity: item.targetQuantity || item.quantity || 0,
-          unit: item.unit || "قطعة",
-          unitPrice: item.unitPrice || 0,
-          total: (item.targetQuantity || item.quantity || 0) * (item.unitPrice || 0),
-          notes: item.notes || ""
-        })),
+        items: items.map((item: any) => {
+          console.log("Mapping item:", item);
+          return {
+            productId: item.productId ? String(item.productId) : "",
+            productName: item.productName || item.product_name || "",
+            quantity: item.targetQuantity || item.target_quantity || item.quantity || 0,
+            unit: item.unit || "قطعة",
+            unitPrice: item.unitPrice || item.unit_price || 0,
+            total: (item.targetQuantity || item.target_quantity || item.quantity || 0) * (item.unitPrice || item.unit_price || 0),
+            notes: item.notes || ""
+          };
+        }),
         schedule: schedules,
       };
       console.log("Mapped form data:", mappedData);
@@ -619,24 +622,17 @@ export default function AdvancedProductionOrderFormPage() {
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                           <div className="md:col-span-5 space-y-2">
                             <Label>المنتج</Label>
-                            {item.productName && !item.productId ? (
-                              <div className="space-y-2">
-                                <Input
-                                  value={item.productName}
-                                  onChange={(e) => updateProduct(index, "productName", e.target.value)}
-                                  placeholder="اسم المنتج"
-                                  className="font-medium"
-                                  data-testid={`input-product-name-${index}`}
-                                />
-                                <p className="text-xs text-muted-foreground">منتج من التوقعات - يمكنك تعديل الاسم أو اختيار منتج من القائمة</p>
-                                <ProductSelector
-                                  products={products || []}
-                                  value={undefined}
-                                  onSelect={(productId, product) =>
-                                    handleProductSelect(index, productId, product)
-                                  }
-                                  placeholder="أو اختر من القائمة"
-                                />
+                            {item.productName ? (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={item.productName}
+                                    onChange={(e) => updateProduct(index, "productName", e.target.value)}
+                                    placeholder="اسم المنتج"
+                                    className="font-medium text-lg"
+                                    data-testid={`input-product-name-${index}`}
+                                  />
+                                </div>
                               </div>
                             ) : (
                               <ProductSelector
