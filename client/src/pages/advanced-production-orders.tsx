@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { Plus, Search, Eye, Trash2, Calendar, DollarSign, Clock, CheckCircle, AlertTriangle, Factory, FileText, Play, Pause, XCircle, ClipboardList, ArrowRight, RefreshCw, Edit, Building2, Filter, LayoutGrid, List, Brain } from "lucide-react";
+import { Plus, Search, Eye, Trash2, Calendar, DollarSign, Clock, CheckCircle, AlertTriangle, Factory, FileText, Play, Pause, XCircle, ClipboardList, ArrowRight, RefreshCw, Edit, Building2, Filter, Brain } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -27,7 +27,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface AdvancedProductionOrder {
   id: number;
@@ -85,7 +92,7 @@ export default function AdvancedProductionOrdersPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { itemsPerPage, getPageItems } = usePagination(12);
+  const { itemsPerPage, getPageItems } = usePagination(15);
 
   const ordersQueryUrl = (() => {
     const params = new URLSearchParams();
@@ -151,7 +158,7 @@ export default function AdvancedProductionOrdersPage() {
 
   const formatDate = (dateStr: string) => {
     try {
-      return format(new Date(dateStr), "dd MMM yyyy", { locale: ar });
+      return format(new Date(dateStr), "dd/MM/yyyy", { locale: ar });
     } catch {
       return dateStr;
     }
@@ -343,17 +350,21 @@ export default function AdvancedProductionOrdersPage() {
         </Card>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-4">
-                  <Skeleton className="h-6 w-3/4 mb-2" />
-                  <Skeleton className="h-4 w-1/2 mb-4" />
-                  <Skeleton className="h-20 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <Card>
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-24" />
+                    <Skeleton className="h-10 flex-1" />
+                    <Skeleton className="h-10 w-20" />
+                    <Skeleton className="h-10 w-24" />
+                    <Skeleton className="h-10 w-32" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         ) : filteredOrders?.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
@@ -369,116 +380,130 @@ export default function AdvancedProductionOrdersPage() {
             </CardContent>
           </Card>
         ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {paginatedOrders?.map((order) => {
-                const statusConfig = STATUS_CONFIG[order.status];
-                const typeConfig = ORDER_TYPE_CONFIG[order.orderType];
-                return (
-                  <Card key={order.id} className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-0 shadow-sm bg-white overflow-hidden" data-testid={`card-order-${order.id}`}>
-                    <div className={`h-1.5 ${
-                      order.status === 'completed' ? 'bg-green-500' :
-                      order.status === 'in_progress' ? 'bg-purple-500' :
-                      order.status === 'approved' ? 'bg-blue-500' :
-                      order.status === 'pending' ? 'bg-yellow-500' :
-                      order.status === 'cancelled' ? 'bg-red-500' :
-                      'bg-gray-300'
-                    }`} />
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base truncate" data-testid={`text-order-title-${order.id}`}>
-                            {order.title || order.orderNumber}
-                          </CardTitle>
-                          <CardDescription className="flex items-center gap-2 mt-1">
-                            <span className="text-xs font-mono">{order.orderNumber}</span>
-                          </CardDescription>
-                        </div>
-                        <div className="flex flex-col gap-1 items-end">
-                          <Badge className={statusConfig?.color || ""} data-testid={`badge-status-${order.id}`}>
-                            {getStatusIcon(order.status)}
-                            <span className="mr-1">{statusConfig?.label || order.status}</span>
-                          </Badge>
-                          <Badge variant="outline" className={typeConfig?.color || ""} data-testid={`badge-type-${order.id}`}>
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-gray-50/80 sticky top-0">
+                  <TableRow>
+                    <TableHead className="text-right font-semibold w-[120px]">رقم الأمر</TableHead>
+                    <TableHead className="text-right font-semibold">العنوان</TableHead>
+                    <TableHead className="text-right font-semibold w-[120px]">الفرع</TableHead>
+                    <TableHead className="text-right font-semibold w-[100px]">النوع</TableHead>
+                    <TableHead className="text-right font-semibold w-[100px]">الحالة</TableHead>
+                    <TableHead className="text-right font-semibold w-[180px]">الفترة</TableHead>
+                    <TableHead className="text-right font-semibold w-[80px]">الإنجاز</TableHead>
+                    <TableHead className="text-right font-semibold w-[120px]">التكلفة</TableHead>
+                    <TableHead className="text-left font-semibold w-[120px]">الإجراءات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedOrders?.map((order, index) => {
+                    const statusConfig = STATUS_CONFIG[order.status];
+                    const typeConfig = ORDER_TYPE_CONFIG[order.orderType];
+                    return (
+                      <TableRow 
+                        key={order.id} 
+                        className={`hover:bg-amber-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                        data-testid={`row-order-${order.id}`}
+                      >
+                        <TableCell className="font-mono text-sm text-amber-700" data-testid={`text-order-number-${order.id}`}>
+                          {order.orderNumber}
+                        </TableCell>
+                        <TableCell data-testid={`text-order-title-${order.id}`}>
+                          <div className="font-medium truncate max-w-[200px]" title={order.title}>
+                            {order.title || "بدون عنوان"}
+                          </div>
+                        </TableCell>
+                        <TableCell data-testid={`text-branch-${order.id}`}>
+                          <div className="flex items-center gap-1.5">
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-sm">{getBranchName(order.sourceBranchId)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`${typeConfig?.color || ""} text-xs`} data-testid={`badge-type-${order.id}`}>
                             {typeConfig?.label || order.orderType}
                           </Badge>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">الفرع:</span>
-                        <span className="font-medium" data-testid={`text-branch-${order.id}`}>{getBranchName(order.sourceBranchId)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">من/إلى:</span>
-                        <span className="font-medium text-xs" data-testid={`text-dates-${order.id}`}>
-                          {formatDate(order.startDate)} - {formatDate(order.endDate)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">التكلفة المتوقعة:</span>
-                        <span className="font-medium text-amber-600" data-testid={`text-cost-${order.id}`}>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`${statusConfig?.color || ""} text-xs gap-1`} data-testid={`badge-status-${order.id}`}>
+                            {getStatusIcon(order.status)}
+                            {statusConfig?.label || order.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell data-testid={`text-dates-${order.id}`}>
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>{formatDate(order.startDate)}</span>
+                            <span>←</span>
+                            <span>{formatDate(order.endDate)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Progress value={order.completionPercentage} className="h-2 w-12" />
+                            <span className="text-xs font-medium" data-testid={`text-progress-${order.id}`}>{order.completionPercentage}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-left font-medium text-amber-700" data-testid={`text-cost-${order.id}`}>
                           {formatCurrency(order.estimatedCost)}
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">نسبة الإنجاز:</span>
-                          <span className="font-medium" data-testid={`text-progress-${order.id}`}>{order.completionPercentage}%</span>
-                        </div>
-                        <Progress value={order.completionPercentage} className="h-2" />
-                      </div>
-                      <div className="flex items-center gap-2 pt-3 border-t">
-                        <Link href={`/advanced-production-orders/${order.id}`} className="flex-1">
-                          <Button variant="outline" size="sm" className="w-full hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700" data-testid={`button-view-${order.id}`}>
-                            <Eye className="w-4 h-4 ml-1" />
-                            عرض
-                          </Button>
-                        </Link>
-                        <Link href={`/advanced-production-orders/${order.id}/edit`}>
-                          <Button variant="outline" size="sm" className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700" data-testid={`button-edit-${order.id}`}>
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-red-50" data-testid={`button-delete-${order.id}`}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent dir="rtl">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>هل أنت متأكد من الحذف؟</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                سيتم حذف الأمر "{order.title || order.orderNumber}" نهائياً. هذا الإجراء لا يمكن التراجع عنه.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter className="gap-2">
-                              <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteMutation.mutate(order.id)}
-                                className="bg-destructive hover:bg-destructive/90"
-                              >
-                                حذف
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Link href={`/advanced-production-orders/${order.id}`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-amber-100 hover:text-amber-700" data-testid={`button-view-${order.id}`}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Link href={`/advanced-production-orders/${order.id}/edit`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-100 hover:text-blue-700" data-testid={`button-edit-${order.id}`}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-red-100 hover:text-red-700" data-testid={`button-delete-${order.id}`}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent dir="rtl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>هل أنت متأكد من الحذف؟</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    سيتم حذف الأمر "{order.title || order.orderNumber}" نهائياً. هذا الإجراء لا يمكن التراجع عنه.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="gap-2">
+                                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteMutation.mutate(order.id)}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                  >
+                                    حذف
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
-
-            <TablePagination
-              currentPage={currentPage}
-              totalItems={filteredOrders?.length || 0}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-            />
-          </>
+            
+            {filteredOrders && filteredOrders.length > itemsPerPage && (
+              <div className="p-4 border-t">
+                <TablePagination
+                  currentPage={currentPage}
+                  totalItems={filteredOrders.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
+          </Card>
         )}
       </div>
     </Layout>
