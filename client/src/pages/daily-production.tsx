@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, parseISO, startOfDay, endOfDay, differenceInMinutes } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch, Product } from "@shared/schema";
@@ -23,7 +23,8 @@ import {
   Factory, Plus, Clock, Package, Trash2, RefreshCw, Calendar,
   Refrigerator, ShoppingCart, Snowflake, ChefHat, ArrowLeft,
   BarChart3, TrendingUp, FileSpreadsheet, User, Shield, FileText,
-  Printer, Eye, AlertTriangle, CheckCircle2, Timer, Activity, PieChart
+  Printer, AlertTriangle, Timer, Activity, PieChart, Search, Zap,
+  Sun, Moon, Sunset, Edit2, X, Check, ArrowUpDown, TrendingDown
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -37,6 +38,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
 
@@ -73,6 +82,12 @@ const DESTINATIONS = [
   { value: "refrigerator", label: "الثلاجة", icon: Refrigerator, color: "bg-cyan-100 text-cyan-800", bgClass: "from-cyan-500 to-teal-600" },
 ];
 
+const SHIFTS = [
+  { value: "morning", label: "صباحي", icon: Sun, time: "6:00 - 14:00", color: "bg-amber-100 text-amber-800" },
+  { value: "evening", label: "مسائي", icon: Sunset, time: "14:00 - 22:00", color: "bg-orange-100 text-orange-800" },
+  { value: "night", label: "ليلي", icon: Moon, time: "22:00 - 6:00", color: "bg-indigo-100 text-indigo-800" },
+];
+
 const BAKERY_CATEGORIES = ["مخبوزات", "حلويات", "معجنات", "كيك", "خبز"];
 
 const HOUR_LABELS: Record<string, string> = {
@@ -83,25 +98,34 @@ const HOUR_LABELS: Record<string, string> = {
   "22": "10 مساءً", "23": "11 مساءً", "00": "12 منتصف الليل",
 };
 
+const QUICK_QUANTITIES = [1, 2, 3, 5, 10, 12, 15, 20, 24, 30];
+
 export default function DailyProductionPage() {
   const [branchId, setBranchId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [productName, setProductName] = useState<string>("");
   const [productCategory, setProductCategory] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
-  const [destination, setDestination] = useState<string>("");
+  const [destination, setDestination] = useState<string>("display_bar");
+  const [selectedShift, setSelectedShift] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<string>("entry");
+  const [productSearch, setProductSearch] = useState<string>("");
+  const [quickMode, setQuickMode] = useState<boolean>(false);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
+  const [editingBatch, setEditingBatch] = useState<DailyProductionBatch | null>(null);
+  const [editQuantity, setEditQuantity] = useState<string>("");
+  const [editDestination, setEditDestination] = useState<string>("");
+  const [editNotes, setEditNotes] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { itemsPerPage, getPageItems } = usePagination(15);
   const { user, isAdmin } = useAuth();
-  const { canEdit, canDelete, canApprove } = usePermissions();
+  const { canEdit, canDelete } = usePermissions();
 
-  // Check if user can modify records (admin or has edit permission for production)
   const canModifyRecords = isAdmin || canEdit("production");
   const canDeleteRecords = isAdmin || canDelete("production");
 
@@ -113,12 +137,19 @@ export default function DailyProductionPage() {
     queryKey: ["/api/products"],
   });
 
-  // Auto-select first branch when branches load
   useEffect(() => {
     if (branches && branches.length > 0 && !branchId) {
       setBranchId(branches[0].id);
     }
   }, [branches, branchId]);
+
+  // Auto-detect current shift
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 14) setSelectedShift("morning");
+    else if (hour >= 14 && hour < 22) setSelectedShift("evening");
+    else setSelectedShift("night");
+  }, []);
 
   const { data: batches, isLoading: batchesLoading, refetch: refetchBatches } = useQuery<DailyProductionBatch[]>({
     queryKey: ["/api/daily-production/batches", branchId, selectedDate],
@@ -126,19 +157,34 @@ export default function DailyProductionPage() {
       const params = new URLSearchParams();
       if (branchId) params.set("branchId", branchId);
       if (selectedDate) params.set("date", selectedDate);
-      const res = await fetch(`/api/daily-production/batches?${params}`);
+      const res = await fetch(`/api/daily-production/batches?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch batches");
       return res.json();
     },
     enabled: !!branchId,
+    refetchInterval: autoRefresh ? 60000 : false,
   });
 
-  const { data: stats, isLoading: statsLoading } = useQuery<DailyStats>({
+  const { data: stats } = useQuery<DailyStats>({
     queryKey: ["/api/daily-production/stats", branchId, selectedDate],
     queryFn: async () => {
       const params = new URLSearchParams({ branchId, date: selectedDate });
-      const res = await fetch(`/api/daily-production/stats?${params}`);
+      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+    enabled: !!branchId && !!selectedDate,
+    refetchInterval: autoRefresh ? 60000 : false,
+  });
+
+  // Previous day stats for comparison
+  const previousDate = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
+  const { data: prevStats } = useQuery<DailyStats>({
+    queryKey: ["/api/daily-production/stats", branchId, previousDate],
+    queryFn: async () => {
+      const params = new URLSearchParams({ branchId, date: previousDate });
+      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch prev stats");
       return res.json();
     },
     enabled: !!branchId && !!selectedDate,
@@ -152,12 +198,31 @@ export default function DailyProductionPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
-      setProductName("");
-      setProductCategory("");
-      setQuantity("");
-      setDestination("");
-      setNotes("");
+      if (!quickMode) {
+        setProductName("");
+        setProductCategory("");
+        setQuantity("");
+        setNotes("");
+      } else {
+        setQuantity("");
+      }
       toast({ title: "تم تسجيل الدفعة بنجاح", description: `سجلها: ${user?.firstName || user?.username}` });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/daily-production/batches/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
+      setEditingBatch(null);
+      toast({ title: "تم تحديث الدفعة بنجاح" });
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
@@ -204,6 +269,43 @@ export default function DailyProductionPage() {
     });
   };
 
+  const handleQuickEntry = (product: Product, qty: number) => {
+    createMutation.mutate({
+      branchId,
+      productId: product.id,
+      productName: product.name,
+      productCategory: product.category,
+      quantity: qty,
+      unit: product.unit || "قطعة",
+      destination,
+      notes: null,
+    });
+  };
+
+  const handleEditSave = () => {
+    if (!editingBatch) return;
+    const qty = parseInt(editQuantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: "خطأ", description: "الكمية غير صحيحة", variant: "destructive" });
+      return;
+    }
+    updateMutation.mutate({
+      id: editingBatch.id,
+      data: {
+        quantity: qty,
+        destination: editDestination,
+        notes: editNotes || null,
+      },
+    });
+  };
+
+  const openEditDialog = (batch: DailyProductionBatch) => {
+    setEditingBatch(batch);
+    setEditQuantity(batch.quantity.toString());
+    setEditDestination(batch.destination);
+    setEditNotes(batch.notes || "");
+  };
+
   const getDestinationInfo = (dest: string) => {
     return DESTINATIONS.find(d => d.value === dest) || { label: dest, color: "bg-gray-100 text-gray-800", icon: Package, bgClass: "from-gray-500 to-slate-600" };
   };
@@ -213,14 +315,6 @@ export default function DailyProductionPage() {
       return format(new Date(dateStr), "HH:mm", { locale: ar });
     } catch {
       return "";
-    }
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    try {
-      return format(new Date(dateStr), "dd/MM HH:mm", { locale: ar });
-    } catch {
-      return dateStr;
     }
   };
 
@@ -236,7 +330,6 @@ export default function DailyProductionPage() {
 
   const paginatedBatches = getPageItems(batches || [], currentPage);
 
-  // Group batches by hour for timeline view
   const batchesByHour = (batches || []).reduce((acc, batch) => {
     const hour = format(new Date(batch.producedAt), "HH");
     if (!acc[hour]) acc[hour] = [];
@@ -244,7 +337,6 @@ export default function DailyProductionPage() {
     return acc;
   }, {} as Record<string, DailyProductionBatch[]>);
 
-  // Group batches by category
   const batchesByCategory = (batches || []).reduce((acc, batch) => {
     const cat = batch.productCategory || "غير مصنف";
     if (!acc[cat]) acc[cat] = { batches: [], totalQty: 0 };
@@ -253,7 +345,6 @@ export default function DailyProductionPage() {
     return acc;
   }, {} as Record<string, { batches: DailyProductionBatch[], totalQty: number }>);
 
-  // Group batches by destination
   const batchesByDestination = (batches || []).reduce((acc, batch) => {
     if (!acc[batch.destination]) acc[batch.destination] = { batches: [], totalQty: 0 };
     acc[batch.destination].batches.push(batch);
@@ -261,7 +352,6 @@ export default function DailyProductionPage() {
     return acc;
   }, {} as Record<string, { batches: DailyProductionBatch[], totalQty: number }>);
 
-  // Group batches by recorder
   const batchesByRecorder = (batches || []).reduce((acc, batch) => {
     const recorder = batch.recorderName || "غير معروف";
     if (!acc[recorder]) acc[recorder] = { batches: [], totalQty: 0 };
@@ -269,6 +359,36 @@ export default function DailyProductionPage() {
     acc[recorder].totalQty += batch.quantity;
     return acc;
   }, {} as Record<string, { batches: DailyProductionBatch[], totalQty: number }>);
+
+  // Filter products by search
+  const bakeryProducts = useMemo(() => {
+    const filtered = products?.filter(p => p.category && BAKERY_CATEGORIES.includes(p.category)) || [];
+    if (!productSearch) return filtered;
+    const search = productSearch.toLowerCase();
+    return filtered.filter(p => 
+      p.name.toLowerCase().includes(search) ||
+      (p.category ?? "").toLowerCase().includes(search)
+    );
+  }, [products, productSearch]);
+
+  // Popular products (most used today)
+  const popularProducts = useMemo(() => {
+    if (!batches || !products) return [];
+    const productCounts: Record<string, number> = {};
+    batches.forEach(b => {
+      productCounts[b.productName] = (productCounts[b.productName] || 0) + 1;
+    });
+    return products
+      .filter(p => p.category && BAKERY_CATEGORIES.includes(p.category))
+      .sort((a, b) => (productCounts[b.name] || 0) - (productCounts[a.name] || 0))
+      .slice(0, 8);
+  }, [batches, products]);
+
+  const getDiff = (current: number, previous: number) => {
+    if (!previous) return { value: current, direction: "up" };
+    const diff = current - previous;
+    return { value: Math.abs(diff), direction: diff >= 0 ? "up" : "down" };
+  };
 
   const exportToExcel = () => {
     if (!batches || batches.length === 0) return;
@@ -284,7 +404,6 @@ export default function DailyProductionPage() {
       "ملاحظات": b.notes || "-",
     }));
 
-    // Add summary sheet
     const summaryData = [
       { "البيان": "الفرع", "القيمة": getBranchName(branchId) },
       { "البيان": "التاريخ", "القيمة": selectedDate },
@@ -308,9 +427,6 @@ export default function DailyProductionPage() {
   };
 
   const handlePrint = () => {
-    const printContent = printRef.current;
-    if (!printContent) return;
-    
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     
@@ -424,7 +540,8 @@ export default function DailyProductionPage() {
     printWindow.print();
   };
 
-  const bakeryProducts = products?.filter(p => BAKERY_CATEGORIES.includes(p.category)) || [];
+  const qtyDiff = getDiff(stats?.totalQuantity || 0, prevStats?.totalQuantity || 0);
+  const batchDiff = getDiff(stats?.totalBatches || 0, prevStats?.totalBatches || 0);
 
   return (
     <Layout>
@@ -456,7 +573,7 @@ export default function DailyProductionPage() {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters and Controls */}
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-2 min-w-[200px]">
             <Label>الفرع *</Label>
@@ -481,6 +598,40 @@ export default function DailyProductionPage() {
               data-testid="input-date"
             />
           </div>
+          <div className="space-y-2">
+            <Label>الوردية</Label>
+            <Select value={selectedShift} onValueChange={setSelectedShift}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="الوردية" />
+              </SelectTrigger>
+              <SelectContent>
+                {SHIFTS.map((shift) => {
+                  const Icon = shift.icon;
+                  return (
+                    <SelectItem key={shift.value} value={shift.value}>
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        {shift.label}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 bg-muted/50 px-3 py-2 rounded-lg">
+            <Switch
+              checked={autoRefresh}
+              onCheckedChange={setAutoRefresh}
+              id="auto-refresh"
+            />
+            <Label htmlFor="auto-refresh" className="text-sm cursor-pointer">
+              تحديث تلقائي
+            </Label>
+            {autoRefresh && (
+              <Badge variant="secondary" className="text-xs">كل دقيقة</Badge>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => refetchBatches()} data-testid="btn-refresh">
               <RefreshCw className="h-4 w-4 ml-2" />
@@ -497,7 +648,7 @@ export default function DailyProductionPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards with Comparison */}
         {branchId && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="border-r-4 border-r-amber-500">
@@ -505,7 +656,15 @@ export default function DailyProductionPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">إجمالي الدفعات</p>
-                    <p className="text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
+                      {prevStats && (
+                        <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
+                          {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {batchDiff.value}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <Package className="h-8 w-8 text-amber-500 opacity-50" />
                 </div>
@@ -516,7 +675,15 @@ export default function DailyProductionPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">إجمالي الكميات</p>
-                    <p className="text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
+                      {prevStats && (
+                        <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
+                          {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {qtyDiff.value}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <TrendingUp className="h-8 w-8 text-green-500 opacity-50" />
                 </div>
@@ -576,16 +743,38 @@ export default function DailyProductionPage() {
               {/* Entry Form */}
               <Card className="lg:col-span-1">
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Plus className="w-5 h-5 text-green-600" />
-                    تسجيل دفعة جديدة
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Plus className="w-5 h-5 text-green-600" />
+                      تسجيل دفعة جديدة
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={quickMode}
+                        onCheckedChange={setQuickMode}
+                        id="quick-mode"
+                      />
+                      <Label htmlFor="quick-mode" className="text-xs cursor-pointer flex items-center gap-1">
+                        <Zap className="h-3 w-3" />
+                        سريع
+                      </Label>
+                    </div>
+                  </div>
                   <CardDescription>سجل الإنتاج فور خروجه من المطبخ</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <Label>المنتج *</Label>
+                      <div className="relative">
+                        <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="ابحث عن منتج..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          className="pr-10"
+                        />
+                      </div>
                       <Select value={productName} onValueChange={(val) => {
                         setProductName(val);
                         const prod = products?.find(p => p.name === val);
@@ -634,6 +823,20 @@ export default function DailyProductionPage() {
                         placeholder="أدخل الكمية"
                         data-testid="input-quantity"
                       />
+                      <div className="flex flex-wrap gap-1">
+                        {QUICK_QUANTITIES.map((q) => (
+                          <Button
+                            key={q}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setQuantity(q.toString())}
+                          >
+                            {q}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -646,7 +849,7 @@ export default function DailyProductionPage() {
                               key={dest.value}
                               type="button"
                               variant={destination === dest.value ? "default" : "outline"}
-                              className={`h-auto py-3 flex flex-col gap-1 ${destination === dest.value ? "" : ""}`}
+                              className="h-auto py-3 flex flex-col gap-1"
                               onClick={() => setDestination(dest.value)}
                               data-testid={`btn-dest-${dest.value}`}
                             >
@@ -658,16 +861,18 @@ export default function DailyProductionPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>ملاحظات</Label>
-                      <Textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="ملاحظات إضافية (اختياري)"
-                        rows={2}
-                        data-testid="input-notes"
-                      />
-                    </div>
+                    {!quickMode && (
+                      <div className="space-y-2">
+                        <Label>ملاحظات</Label>
+                        <Textarea
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="ملاحظات إضافية (اختياري)"
+                          rows={2}
+                          data-testid="input-notes"
+                        />
+                      </div>
+                    )}
 
                     <Button
                       type="submit"
@@ -678,6 +883,27 @@ export default function DailyProductionPage() {
                       {createMutation.isPending ? "جاري التسجيل..." : "تسجيل الدفعة"}
                     </Button>
                   </form>
+
+                  {/* Quick Entry Buttons */}
+                  {quickMode && popularProducts.length > 0 && (
+                    <div className="mt-4 pt-4 border-t">
+                      <Label className="text-sm text-muted-foreground mb-2 block">تسجيل سريع:</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {popularProducts.slice(0, 6).map((product) => (
+                          <Button
+                            key={product.id}
+                            variant="outline"
+                            size="sm"
+                            className="h-auto py-2 text-xs text-right justify-start"
+                            onClick={() => handleQuickEntry(product, parseInt(quantity) || 1)}
+                            disabled={createMutation.isPending || !branchId}
+                          >
+                            <span className="truncate">{product.name}</span>
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -755,41 +981,53 @@ export default function DailyProductionPage() {
                                     </Badge>
                                   </TableCell>
                                   <TableCell>
-                                    {canDeleteRecords ? (
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700">
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>حذف الدفعة</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              هل أنت متأكد من حذف دفعة "{batch.productName}"؟
-                                              <br />
-                                              <span className="text-xs text-muted-foreground">
-                                                سجلها: {batch.recorderName || "-"} في {formatTime(batch.producedAt)}
-                                              </span>
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                            <AlertDialogAction
-                                              className="bg-red-600 hover:bg-red-700"
-                                              onClick={() => deleteMutation.mutate(batch.id)}
-                                            >
-                                              حذف
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
-                                    ) : (
-                                      <Badge variant="outline" className="text-xs text-muted-foreground gap-1">
-                                        <Shield className="h-3 w-3" />
-                                        مقفل
-                                      </Badge>
-                                    )}
+                                    <div className="flex items-center gap-1">
+                                      {canModifyRecords && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 text-blue-500 hover:text-blue-700"
+                                          onClick={() => openEditDialog(batch)}
+                                        >
+                                          <Edit2 className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                      {canDeleteRecords ? (
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700">
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>حذف الدفعة</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                هل أنت متأكد من حذف دفعة "{batch.productName}"؟
+                                                <br />
+                                                <span className="text-xs text-muted-foreground">
+                                                  سجلها: {batch.recorderName || "-"} في {formatTime(batch.producedAt)}
+                                                </span>
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                className="bg-red-600 hover:bg-red-700"
+                                                onClick={() => deleteMutation.mutate(batch.id)}
+                                              >
+                                                حذف
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      ) : (
+                                        <Badge variant="outline" className="text-xs text-muted-foreground gap-1">
+                                          <Shield className="h-3 w-3" />
+                                          مقفل
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               );
@@ -911,7 +1149,6 @@ export default function DailyProductionPage() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* By Destination */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -953,7 +1190,6 @@ export default function DailyProductionPage() {
                   </CardContent>
                 </Card>
 
-                {/* By Category */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -997,7 +1233,6 @@ export default function DailyProductionPage() {
                   </CardContent>
                 </Card>
 
-                {/* By Recorder */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1034,7 +1269,6 @@ export default function DailyProductionPage() {
                   </CardContent>
                 </Card>
 
-                {/* Hourly Distribution */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -1077,7 +1311,6 @@ export default function DailyProductionPage() {
               </Card>
             ) : (
               <div className="space-y-6" ref={printRef}>
-                {/* Journal Header */}
                 <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
                   <CardContent className="p-6">
                     <div className="text-center mb-4">
@@ -1107,7 +1340,6 @@ export default function DailyProductionPage() {
                   </CardContent>
                 </Card>
 
-                {/* Detailed Table */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
@@ -1186,7 +1418,6 @@ export default function DailyProductionPage() {
                   </CardContent>
                 </Card>
 
-                {/* Summary by Recorders */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1232,7 +1463,6 @@ export default function DailyProductionPage() {
                   </CardContent>
                 </Card>
 
-                {/* Permission Notice */}
                 {!canModifyRecords && (
                   <Card className="border-amber-200 bg-amber-50">
                     <CardContent className="p-4">
@@ -1253,6 +1483,60 @@ export default function DailyProductionPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingBatch} onOpenChange={() => setEditingBatch(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تعديل الدفعة</DialogTitle>
+            <DialogDescription>
+              تعديل بيانات دفعة: {editingBatch?.productName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>الكمية</Label>
+              <Input
+                type="number"
+                min="1"
+                value={editQuantity}
+                onChange={(e) => setEditQuantity(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>الوجهة</Label>
+              <Select value={editDestination} onValueChange={setEditDestination}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DESTINATIONS.map((dest) => (
+                    <SelectItem key={dest.value} value={dest.value}>{dest.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>ملاحظات</Label>
+              <Textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingBatch(null)}>
+              <X className="h-4 w-4 ml-2" />
+              إلغاء
+            </Button>
+            <Button onClick={handleEditSave} disabled={updateMutation.isPending}>
+              <Check className="h-4 w-4 ml-2" />
+              {updateMutation.isPending ? "جاري الحفظ..." : "حفظ التعديلات"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
