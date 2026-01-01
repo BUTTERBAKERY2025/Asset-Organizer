@@ -465,6 +465,7 @@ export interface IStorage {
   updateAdvancedProductionOrder(id: number, order: Partial<InsertAdvancedProductionOrder>): Promise<AdvancedProductionOrder | undefined>;
   deleteAdvancedProductionOrder(id: number): Promise<boolean>;
   getAdvancedProductionOrderWithItems(id: number): Promise<{ order: AdvancedProductionOrder; items: ProductionOrderItem[] } | undefined>;
+  createAdvancedProductionOrderWithItems(order: InsertAdvancedProductionOrder, items: Omit<InsertProductionOrderItem, 'orderId'>[]): Promise<{ order: AdvancedProductionOrder; items: ProductionOrderItem[] }>;
 
   // Production Order Items
   getProductionOrderItems(orderId: number): Promise<ProductionOrderItem[]>;
@@ -3992,6 +3993,37 @@ export class DatabaseStorage implements IStorage {
     if (!order) return undefined;
     const items = await this.getProductionOrderItems(id);
     return { order, items };
+  }
+
+  async createAdvancedProductionOrderWithItems(
+    order: InsertAdvancedProductionOrder, 
+    items: Omit<InsertProductionOrderItem, 'orderId'>[]
+  ): Promise<{ order: AdvancedProductionOrder; items: ProductionOrderItem[] }> {
+    return await db.transaction(async (tx) => {
+      // Create the order
+      const [newOrder] = await tx.insert(advancedProductionOrders).values(order).returning();
+      
+      if (!newOrder) {
+        throw new Error("فشل في إنشاء أمر الإنتاج");
+      }
+      
+      // Create the items with the order ID
+      const itemsWithOrderId = items.map(item => ({
+        ...item,
+        orderId: newOrder.id
+      }));
+      
+      let createdItems: ProductionOrderItem[] = [];
+      if (itemsWithOrderId.length > 0) {
+        createdItems = await tx.insert(productionOrderItems).values(itemsWithOrderId).returning();
+      }
+      
+      if (itemsWithOrderId.length > 0 && createdItems.length === 0) {
+        throw new Error("فشل في إنشاء عناصر أمر الإنتاج");
+      }
+      
+      return { order: newOrder, items: createdItems };
+    });
   }
 
   // Production Order Items

@@ -4985,39 +4985,30 @@ export async function registerRoutes(
         });
       }
       
-      // Create advanced production order
-      const orderNumber = `FCST-${Date.now().toString(36).toUpperCase()}`;
-      let order;
-      try {
-        order = await storage.createAdvancedProductionOrder({
-          orderNumber,
-          branchId,
-          createdBy: (req as any).user?.id,
-          assignedTo: null,
-          orderType: 'daily',
-          scheduledDate: planDate,
-          dueDate: planDate,
-          priority: 'medium',
-          status: 'pending',
-          notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('ar-SA')} ريال`,
-          totalItems: forecastItems.length,
-          completedItems: 0
-        });
-      } catch (orderError) {
-        console.error("Error creating production order:", orderError);
-        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج" });
-      }
-      
-      if (!order || !order.id) {
-        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج - لم يتم إرجاع معرف الأمر" });
-      }
-      
-      // Create order items
+      // Get all products for matching
       const products = await storage.getAllProducts();
+      
+      // Prepare order data
+      const orderNumber = `FCST-${Date.now().toString(36).toUpperCase()}`;
+      const orderData = {
+        orderNumber,
+        branchId,
+        createdBy: (req as any).user?.id,
+        assignedTo: null,
+        orderType: 'daily' as const,
+        scheduledDate: planDate,
+        dueDate: planDate,
+        priority: 'medium' as const,
+        status: 'pending' as const,
+        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('ar-SA')} ريال`,
+        totalItems: forecastItems.length,
+        completedItems: 0
+      };
+      
+      // Prepare items (without orderId - will be added in transaction)
       const orderItems = forecastItems.map((item, index) => {
         const product = products.find(p => p.id === item.productId || p.name === item.productName);
         return {
-          orderId: order.id,
           productId: product?.id || null,
           productName: item.productName,
           quantity: item.forecastedQuantity,
@@ -5028,42 +5019,24 @@ export async function registerRoutes(
         };
       });
       
-      if (orderItems.length > 0) {
-        try {
-          await storage.bulkCreateProductionOrderItems(orderItems);
-        } catch (itemsError) {
-          console.error("Error creating order items:", itemsError);
-          // Items failed - attempt to delete the order to maintain consistency
-          try {
-            await storage.deleteAdvancedProductionOrder(order.id);
-          } catch (deleteError) {
-            console.error("Error deleting orphaned order:", deleteError);
-          }
-          return res.status(500).json({ error: "فشل في إنشاء عناصر أمر الإنتاج" });
-        }
+      // Create order and items in a single transaction
+      let txResult;
+      try {
+        txResult = await storage.createAdvancedProductionOrderWithItems(orderData, orderItems);
+      } catch (txError) {
+        console.error("Error creating production order with items:", txError);
+        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج وعناصره" });
       }
       
-      // Verify order was created successfully with items
-      const result = await storage.getAdvancedProductionOrderWithItems(order.id);
+      // Verify transaction result
+      if (!txResult || !txResult.order || !txResult.items || txResult.items.length === 0) {
+        return res.status(500).json({ error: "فشل في إنشاء أمر الإنتاج بشكل كامل" });
+      }
+      
+      // Fetch canonical result with proper sorting and hydration
+      const result = await storage.getAdvancedProductionOrderWithItems(txResult.order.id);
       if (!result) {
-        // Order exists but couldn't be retrieved - try to clean up
-        try {
-          await storage.deleteAdvancedProductionOrder(order.id);
-        } catch (deleteError) {
-          console.error("Error deleting orphaned order:", deleteError);
-        }
-        return res.status(500).json({ error: "فشل في استرجاع أمر الإنتاج بعد الإنشاء" });
-      }
-      
-      // Verify items were created
-      if (!result.items || result.items.length === 0) {
-        // Order exists but without items - clean up
-        try {
-          await storage.deleteAdvancedProductionOrder(order.id);
-        } catch (deleteError) {
-          console.error("Error deleting orphaned order:", deleteError);
-        }
-        return res.status(500).json({ error: "تم إنشاء الأمر ولكن فشل في إنشاء عناصر الإنتاج" });
+        return res.status(500).json({ error: "تم إنشاء الأمر لكن فشل في استرجاعه" });
       }
       
       res.status(201).json({
