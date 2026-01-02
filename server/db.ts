@@ -17,7 +17,14 @@ if (!connectionString) {
   );
 }
 
-const isSupabase = useSupabase && !!process.env.SUPABASE_DATABASE_URL;
+// Auto-detect Supabase from connection string (contains 'supabase' in URL)
+const isSupabaseUrl = connectionString.includes('supabase');
+const isSupabase = useSupabase || isSupabaseUrl;
+
+// Log connection info for debugging (without password)
+const sanitizedUrl = connectionString.replace(/:([^:@]+)@/, ':***@');
+console.log(`Database connection: ${sanitizedUrl.substring(0, 50)}...`);
+console.log(`SSL enabled: ${isSupabase}`);
 
 export const pool = new Pool({ 
   connectionString,

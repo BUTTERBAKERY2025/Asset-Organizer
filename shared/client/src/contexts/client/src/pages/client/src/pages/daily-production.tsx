@@ -861,7 +861,7 @@ export default function DailyProductionPage() {
                   <CardDescription>سجل الإنتاج فور خروجه من المطبخ</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <Label>المنتج *</Label>
                       <div className="relative">

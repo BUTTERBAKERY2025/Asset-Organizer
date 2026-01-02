@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from "react";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 
@@ -60,16 +67,19 @@ interface ProductionContextType {
   refetch: () => void;
 }
 
-const ProductionContext = createContext<ProductionContextType | undefined>(undefined);
+const ProductionContext = createContext<ProductionContextType | undefined>(
+  undefined,
+);
 
 export function ProductionProvider({ children }: { children: ReactNode }) {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [selectedDate, setSelectedDate] = useState<string>(
+    format(new Date(), "yyyy-MM-dd"),
+  );
   const [selectedShift, setSelectedShift] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Auto-detect current shift
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour >= 6 && hour < 14) setSelectedShift("morning");
@@ -77,12 +87,20 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     else setSelectedShift("night");
   }, []);
 
-  // Fetch command center data
-  const { data: commandCenterData, isLoading, refetch } = useQuery<CommandCenterData>({
+  const {
+    data: commandCenterData,
+    isLoading,
+    refetch,
+  } = useQuery<CommandCenterData>({
     queryKey: ["/api/command-center", selectedBranch, selectedDate],
     queryFn: async () => {
-      const params = new URLSearchParams({ branchId: selectedBranch, date: selectedDate });
-      const res = await fetch(`/api/command-center?${params}`, { credentials: "include" });
+      const params = new URLSearchParams({
+        branchId: selectedBranch,
+        date: selectedDate,
+      });
+      const res = await fetch(`/api/command-center?${params}`, {
+        credentials: "include",
+      });
       if (!res.ok) {
         throw new Error("Failed to fetch command center data");
       }
@@ -122,7 +140,9 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
 export function useProductionContext() {
   const context = useContext(ProductionContext);
   if (context === undefined) {
-    throw new Error("useProductionContext must be used within a ProductionProvider");
+    throw new Error(
+      "useProductionContext must be used within a ProductionProvider",
+    );
   }
   return context;
 }

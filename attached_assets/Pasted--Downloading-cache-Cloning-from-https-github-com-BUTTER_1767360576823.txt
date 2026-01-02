@@ -1,0 +1,147 @@
+==> Downloading cache...
+==> Cloning from https://github.com/BUTTERBAKERY2025/Asset-Organizer
+==> Checking out commit 705e3e2198c12d2401ea16053bd490aa19156ee1 in branch main
+==> Downloaded 186MB in 3s. Extraction took 4s.
+==> Using Node.js version 22.16.0 (default)
+==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+==> Running build command 'npm install && npm run build'...
+(node:68) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+up to date, audited 514 packages in 1s
+54 packages are looking for funding
+  run `npm fund` for details
+10 vulnerabilities (2 low, 4 moderate, 4 high)
+To address issues that do not require attention, run:
+  npm audit fix
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+Some issues need review, and may require choosing
+a different dependency.
+Run `npm audit` for details.
+> rest-express@1.0.0 build
+> tsx script/build.ts
+building client...
+vite v7.1.12 building for production...
+transforming...
+✓ 30 modules transformed.
+✗ Build failed in 889ms
+[vite:load-fallback] Could not load /opt/render/project/src/client/src/pages/sales-data-uploads (imported by client/src/App.tsx): ENOENT: no such file or directory, open '/opt/render/project/src/client/src/pages/sales-data-uploads'
+    at async open (node:internal/fs/promises:633:25)
+    at async Object.readFile (node:internal/fs/promises:1237:14)
+    at async Object.handler (/opt/render/project/src/node_modules/vite/dist/node/chunks/config.js:33504:21)
+    at async PluginDriver.hookFirstAndGetPlugin (/opt/render/project/src/node_modules/rollup/dist/es/shared/node-entry.js:22308:28)
+    at async <anonymous> (/opt/render/project/src/node_modules/rollup/dist/es/shared/node-entry.js:21308:33)
+    at async Queue.work (/opt/render/project/src/node_modules/rollup/dist/es/shared/node-entry.js:22536:32) {
+  errno: -2,
+  code: 'PLUGIN_ERROR',
+  syscall: 'open',
+  path: '/opt/render/project/src/client/src/pages/sales-data-uploads',
+  pluginCode: 'ENOENT',
+  plugin: 'vite:load-fallback',
+  hook: 'load',
+  watchFiles: [
+    '/opt/render/project/src/client/index.html',
+    '/opt/render/project/src/client/src/main.tsx',
+    '/opt/render/project/src/package.json',
+    '/opt/render/project/src/node_modules/react/jsx-runtime.js',
+    '/opt/render/project/src/node_modules/react-dom/client.js',
+    '/opt/render/project/src/client/src/App.tsx',
+    '/opt/render/project/src/client/src/index.css',
+    '/opt/render/project/src/node_modules/tailwindcss/index.css',
+    '/opt/render/project/src/node_modules/tw-animate-css/dist/tw-animate.css',
+    '/opt/render/project/src/node_modules/react/cjs/react-jsx-runtime.production.js',
+    '/opt/render/project/src/client/src/contexts/ProductionContext.tsx',
+    '/opt/render/project/src/client/src/pages/advanced-production-order-details.tsx',
+    '/opt/render/project/src/client/src/pages/manage.tsx',
+    '/opt/render/project/src/client/src/pages/asset-transfers.tsx',
+    '/opt/render/project/src/client/src/pages/incentives-management.tsx',
+    '/opt/render/project/src/client/src/pages/login.tsx',
+    '/opt/render/project/src/client/src/pages/payment-requests.tsx',
+    '/opt/render/project/src/client/src/pages/contractors.tsx',
+    '/opt/render/project/src/client/src/pages/construction-dashboard.tsx',
+    '/opt/render/project/src/client/src/pages/production-dashboard.tsx',
+    '/opt/render/project/src/client/src/pages/branches.tsx',
+    '/opt/render/project/src/client/src/pages/operations-employees.tsx',
+    '/opt/render/project/src/client/src/pages/production-reports.tsx',
+    '/opt/render/project/src/client/src/pages/construction-project-detail.tsx',
+    '/opt/render/project/src/client/src/pages/operations-reports-dashboard.tsx',
+    '/opt/render/project/src/client/src/pages/targets-planning.tsx',
+    '/opt/render/project/src/client/src/pages/not-found.tsx',
+    '/opt/render/project/src/client/src/pages/platform-home.tsx',
+    '/opt/render/project/src/client/src/pages/reports.tsx',
+    '/opt/render/project/src/client/src/pages/backups.tsx',
+    '/opt/render/project/src/client/src/pages/users.tsx',
+    '/opt/render/project/src/client/src/pages/advanced-production-orders.tsx',
+    '/opt/render/project/src/client/src/pages/construction-reports.tsx',
+    '/opt/render/project/src/client/src/pages/dashboard.tsx',
+    '/opt/render/project/src/client/src/pages/inventory.tsx',
+    '/opt/render/project/src/client/src/pages/inspections.tsx',
+    '/opt/render/project/src/client/src/pages/operations-dashboard.tsx',
+    '/opt/render/project/src/client/src/pages/budget-planning.tsx',
+    '/opt/render/project/src/client/src/pages/daily-production.tsx',
+    '/opt/render/project/src/client/src/pages/shifts.tsx',
+    '/opt/render/project/src/client/src/pages/display-bar-waste.tsx',
+    '/opt/render/project/src/client/src/pages/construction-projects.tsx',
+    '/opt/render/project/src/client/src/pages/contracts.tsx',
+    '/opt/render/project/src/client/src/pages/cashier-journals.tsx',
+    '/opt/render/project/src/client/src/pages/cashier-journal-form.tsx',
+    '/opt/render/project/src/client/src/pages/audit-logs.tsx',
+    '/opt/render/project/src/client/src/pages/integrations.tsx',
+    '/opt/render/project/src/client/src/pages/advanced-production-order-form.tsx',
+    '/opt/render/project/src/client/src/pages/quality-control.tsx',
+    '/opt/render/project/src/client/src/pages/maintenance.tsx',
+    '/opt/render/project/src/client/src/pages/sales-analytics.tsx',
+    '/opt/render/project/src/client/src/pages/products.tsx',
+    '/opt/render/project/src/client/src/pages/targets-dashboard.tsx',
+    '/opt/render/project/src/client/src/pages/production.tsx',
+    '/opt/render/project/src/client/src/pages/ai-production-planner.tsx',
+    '/opt/render/project/src/client/src/components/advanced-filters.tsx',
+    '/opt/render/project/src/client/src/components/product-selector.tsx',
+    '/opt/render/project/src/client/src/components/export-buttons.tsx',
+    '/opt/render/project/src/client/src/components/offline-indicator.tsx',
+    '/opt/render/project/src/client/src/components/layout.tsx',
+    '/opt/render/project/src/client/src/components/global-search.tsx',
+    '/opt/render/project/src/client/src/components/camera-capture.tsx',
+    '/opt/render/project/src/client/src/components/asset-details-dialog.tsx',
+    '/opt/render/project/src/client/src/components/ui/select.tsx',
+    '/opt/render/project/src/client/src/components/ui/toast.tsx',
+    '/opt/render/project/src/client/src/components/ui/avatar.tsx',
+    '/opt/render/project/src/client/src/components/ui/kbd.tsx',
+    '/opt/render/project/src/client/src/components/ui/input-group.tsx',
+    '/opt/render/project/src/client/src/components/ui/label.tsx',
+    '/opt/render/project/src/client/src/components/ui/scroll-area.tsx',
+    '/opt/render/project/src/client/src/components/ui/toggle.tsx',
+    '/opt/render/project/src/client/src/components/ui/button-group.tsx',
+    '/opt/render/project/src/client/src/components/ui/menubar.tsx',
+    '/opt/render/project/src/client/src/components/ui/item.tsx',
+    '/opt/render/project/src/client/src/components/ui/input-otp.tsx',
+    '/opt/render/project/src/client/src/components/ui/spinner.tsx',
+    '/opt/render/project/src/client/src/components/ui/textarea.tsx',
+    '/opt/render/project/src/client/src/components/ui/form.tsx',
+    '/opt/render/project/src/client/src/components/ui/popover.tsx',
+    '/opt/render/project/src/client/src/components/ui/hover-card.tsx',
+    '/opt/render/project/src/client/src/components/ui/toaster.tsx',
+    '/opt/render/project/src/client/src/components/ui/slider.tsx',
+    '/opt/render/project/src/client/src/components/ui/field.tsx',
+    '/opt/render/project/src/client/src/components/ui/collapsible.tsx',
+    '/opt/render/project/src/client/src/components/ui/alert-dialog.tsx',
+    '/opt/render/project/src/client/src/components/ui/pagination.tsx',
+    '/opt/render/project/src/client/src/components/ui/sonner.tsx',
+    '/opt/render/project/src/client/src/components/ui/dropdown-menu.tsx',
+    '/opt/render/project/src/client/src/components/ui/chart.tsx',
+    '/opt/render/project/src/client/src/components/ui/command.tsx',
+    '/opt/render/project/src/client/src/components/ui/table.tsx',
+    '/opt/render/project/src/client/src/components/ui/context-menu.tsx',
+    '/opt/render/project/src/client/src/components/ui/skeleton.tsx',
+    '/opt/render/project/src/client/src/components/ui/badge.tsx',
+    '/opt/render/project/src/client/src/components/ui/dialog.tsx',
+    '/opt/render/project/src/client/src/components/ui/drawer.tsx',
+    '/opt/render/project/src/client/src/components/ui/carousel.tsx',
+    '/opt/render/project/src/client/src/components/ui/button.tsx',
+    '/opt/render/project/src/client/src/components/ui/switch.tsx',
+    '/opt/render/project/src/client/src/components/ui/tooltip.tsx',
+    ... 48 more items
+  ]
+}
+==> Build failed 😞
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys

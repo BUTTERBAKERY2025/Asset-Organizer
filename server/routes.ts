@@ -4447,9 +4447,21 @@ export async function registerRoutes(
       
       const result = await storage.getAdvancedProductionOrderWithItems(order.id);
       res.status(201).json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating production order:", error);
-      res.status(500).json({ error: "Failed to create production order" });
+      console.error("Error details:", error?.message, error?.code, error?.detail);
+      
+      // Return detailed error message
+      let errorMessage = "فشل في إنشاء أمر الإنتاج";
+      if (error?.code === '23503') {
+        errorMessage = "خطأ: المنتج أو الفرع غير موجود في قاعدة البيانات - " + (error?.detail || '');
+      } else if (error?.code === '23505') {
+        errorMessage = "خطأ: رقم الأمر مكرر";
+      } else if (error?.message) {
+        errorMessage = "خطأ: " + error.message;
+      }
+      
+      res.status(500).json({ error: errorMessage, details: error?.message, code: error?.code });
     }
   });
 
@@ -5174,9 +5186,18 @@ export async function registerRoutes(
       
       const updatedUpload = await storage.getSalesDataUpload(upload.id);
       res.status(201).json(updatedUpload);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading sales data:", error);
-      res.status(500).json({ error: "Failed to upload sales data" });
+      console.error("Error details:", error?.message, error?.code, error?.detail);
+      
+      let errorMessage = "فشل في رفع بيانات المبيعات";
+      if (error?.code === '23503') {
+        errorMessage = "خطأ: الفرع غير موجود في قاعدة البيانات - " + (error?.detail || '');
+      } else if (error?.message) {
+        errorMessage = "خطأ: " + error.message;
+      }
+      
+      res.status(500).json({ error: errorMessage, details: error?.message, code: error?.code });
     }
   });
 

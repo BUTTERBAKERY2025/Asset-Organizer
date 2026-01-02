@@ -48,7 +48,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Close mobile menu when route changes
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location]);

@@ -1,17 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  pgTable,
-  text,
-  varchar,
-  integer,
-  real,
-  timestamp,
-  serial,
-  index,
-  jsonb,
-  boolean,
-  doublePrecision,
-} from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, timestamp, serial, index, jsonb, boolean, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -28,9 +16,7 @@ export const sessions = pgTable(
 
 // User storage table
 export const users = pgTable("users", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: varchar("username").unique(),
   password: varchar("password"),
   phone: varchar("phone"),
@@ -73,9 +59,7 @@ export type InsertBranch = z.infer<typeof insertBranchSchema>;
 // Inventory items table
 export const inventoryItems = pgTable("inventory_items", {
   id: varchar("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   quantity: integer("quantity").notNull(),
   unit: text("unit").notNull(),
@@ -92,9 +76,7 @@ export const inventoryItems = pgTable("inventory_items", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertInventoryItemSchema = createInsertSchema(
-  inventoryItems,
-).omit({
+export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit({
   createdAt: true,
   updatedAt: true,
 });
@@ -105,9 +87,7 @@ export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 // Audit logs table for tracking changes (legacy - for inventory items)
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
-  itemId: varchar("item_id")
-    .notNull()
-    .references(() => inventoryItems.id, { onDelete: "cascade" }),
+  itemId: varchar("item_id").notNull().references(() => inventoryItems.id, { onDelete: "cascade" }),
   action: text("action").notNull(), // 'create', 'update', 'delete'
   fieldName: text("field_name"),
   oldValue: text("old_value"),
@@ -139,9 +119,7 @@ export const systemAuditLogs = pgTable("system_audit_logs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertSystemAuditLogSchema = createInsertSchema(
-  systemAuditLogs,
-).omit({
+export const insertSystemAuditLogSchema = createInsertSchema(systemAuditLogs).omit({
   id: true,
   createdAt: true,
 });
@@ -196,17 +174,13 @@ export const constructionCategories = pgTable("construction_categories", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertConstructionCategorySchema = createInsertSchema(
-  constructionCategories,
-).omit({
+export const insertConstructionCategorySchema = createInsertSchema(constructionCategories).omit({
   id: true,
   createdAt: true,
 });
 
 export type ConstructionCategory = typeof constructionCategories.$inferSelect;
-export type InsertConstructionCategory = z.infer<
-  typeof insertConstructionCategorySchema
->;
+export type InsertConstructionCategory = z.infer<typeof insertConstructionCategorySchema>;
 
 // Contractors table
 export const contractors = pgTable("contractors", {
@@ -233,9 +207,7 @@ export type InsertContractor = z.infer<typeof insertContractorSchema>;
 // Construction Projects table
 export const constructionProjects = pgTable("construction_projects", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
   status: text("status").default("planned").notNull(), // planned, in_progress, completed, on_hold
@@ -250,28 +222,20 @@ export const constructionProjects = pgTable("construction_projects", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertConstructionProjectSchema = createInsertSchema(
-  constructionProjects,
-).omit({
+export const insertConstructionProjectSchema = createInsertSchema(constructionProjects).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type ConstructionProject = typeof constructionProjects.$inferSelect;
-export type InsertConstructionProject = z.infer<
-  typeof insertConstructionProjectSchema
->;
+export type InsertConstructionProject = z.infer<typeof insertConstructionProjectSchema>;
 
 // Project Work Items table
 export const projectWorkItems = pgTable("project_work_items", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id")
-    .notNull()
-    .references(() => constructionProjects.id, { onDelete: "cascade" }),
-  categoryId: integer("category_id").references(
-    () => constructionCategories.id,
-  ),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
   name: text("name").notNull(),
   description: text("description"),
   status: text("status").default("pending").notNull(), // pending, in_progress, completed
@@ -286,9 +250,7 @@ export const projectWorkItems = pgTable("project_work_items", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertProjectWorkItemSchema = createInsertSchema(
-  projectWorkItems,
-).omit({
+export const insertProjectWorkItemSchema = createInsertSchema(projectWorkItems).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -300,41 +262,28 @@ export type InsertProjectWorkItem = z.infer<typeof insertProjectWorkItemSchema>;
 // Project Budget Allocations table - for planning budget per category
 export const projectBudgetAllocations = pgTable("project_budget_allocations", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id")
-    .notNull()
-    .references(() => constructionProjects.id, { onDelete: "cascade" }),
-  categoryId: integer("category_id").references(
-    () => constructionCategories.id,
-  ),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
   plannedAmount: real("planned_amount").notNull().default(0),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertProjectBudgetAllocationSchema = createInsertSchema(
-  projectBudgetAllocations,
-).omit({
+export const insertProjectBudgetAllocationSchema = createInsertSchema(projectBudgetAllocations).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export type ProjectBudgetAllocation =
-  typeof projectBudgetAllocations.$inferSelect;
-export type InsertProjectBudgetAllocation = z.infer<
-  typeof insertProjectBudgetAllocationSchema
->;
+export type ProjectBudgetAllocation = typeof projectBudgetAllocations.$inferSelect;
+export type InsertProjectBudgetAllocation = z.infer<typeof insertProjectBudgetAllocationSchema>;
 
 // Construction Contracts table - عقود الإنشاءات مع المقاولين
 export const constructionContracts = pgTable("construction_contracts", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id")
-    .notNull()
-    .references(() => constructionProjects.id, { onDelete: "cascade" }),
-  contractorId: integer("contractor_id")
-    .notNull()
-    .references(() => contractors.id),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractorId: integer("contractor_id").notNull().references(() => contractors.id),
   contractNumber: text("contract_number").unique(),
   title: text("title").notNull(),
   description: text("description"),
@@ -353,28 +302,20 @@ export const constructionContracts = pgTable("construction_contracts", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertConstructionContractSchema = createInsertSchema(
-  constructionContracts,
-).omit({
+export const insertConstructionContractSchema = createInsertSchema(constructionContracts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type ConstructionContract = typeof constructionContracts.$inferSelect;
-export type InsertConstructionContract = z.infer<
-  typeof insertConstructionContractSchema
->;
+export type InsertConstructionContract = z.infer<typeof insertConstructionContractSchema>;
 
 // Contract Items table - بنود العقد
 export const contractItems = pgTable("contract_items", {
   id: serial("id").primaryKey(),
-  contractId: integer("contract_id")
-    .notNull()
-    .references(() => constructionContracts.id, { onDelete: "cascade" }),
-  categoryId: integer("category_id").references(
-    () => constructionCategories.id,
-  ),
+  contractId: integer("contract_id").notNull().references(() => constructionContracts.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
   description: text("description").notNull(),
   unit: text("unit").default("قطعة"),
   quantity: real("quantity").notNull().default(1),
@@ -399,9 +340,7 @@ export type InsertContractItem = z.infer<typeof insertContractItemSchema>;
 // Payment Requests table - طلبات الحوالات والمصروفات
 export const paymentRequests = pgTable("payment_requests", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id")
-    .notNull()
-    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
   contractId: integer("contract_id").references(() => constructionContracts.id),
   requestNumber: text("request_number"),
   requestType: text("request_type").notNull(), // transfer (حوالة), expense (مصروف), advance (سلفة)
@@ -410,9 +349,7 @@ export const paymentRequests = pgTable("payment_requests", {
   beneficiaryName: text("beneficiary_name"), // اسم المستفيد
   beneficiaryBank: text("beneficiary_bank"), // البنك
   beneficiaryIban: text("beneficiary_iban"), // رقم الحساب
-  categoryId: integer("category_id").references(
-    () => constructionCategories.id,
-  ),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
   status: text("status").default("pending").notNull(), // pending, approved, rejected, paid
   priority: text("priority").default("normal"), // urgent, high, normal, low
   requestDate: text("request_date"),
@@ -429,9 +366,7 @@ export const paymentRequests = pgTable("payment_requests", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertPaymentRequestSchema = createInsertSchema(
-  paymentRequests,
-).omit({
+export const insertPaymentRequestSchema = createInsertSchema(paymentRequests).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -445,12 +380,8 @@ export type InsertPaymentRequest = z.infer<typeof insertPaymentRequestSchema>;
 // Contract Payments table - سجل دفعات العقود
 export const contractPayments = pgTable("contract_payments", {
   id: serial("id").primaryKey(),
-  contractId: integer("contract_id")
-    .notNull()
-    .references(() => constructionContracts.id, { onDelete: "cascade" }),
-  paymentRequestId: integer("payment_request_id").references(
-    () => paymentRequests.id,
-  ),
+  contractId: integer("contract_id").notNull().references(() => constructionContracts.id, { onDelete: "cascade" }),
+  paymentRequestId: integer("payment_request_id").references(() => paymentRequests.id),
   amount: real("amount").notNull(),
   paymentDate: text("payment_date").notNull(),
   paymentMethod: text("payment_method"), // bank_transfer, cash, check
@@ -460,9 +391,7 @@ export const contractPayments = pgTable("contract_payments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertContractPaymentSchema = createInsertSchema(
-  contractPayments,
-).omit({
+export const insertContractPaymentSchema = createInsertSchema(contractPayments).omit({
   id: true,
   createdAt: true,
 });
@@ -490,7 +419,7 @@ export const SYSTEM_MODULES = [
   "cashier_journal",
 ] as const;
 
-export type SystemModule = (typeof SYSTEM_MODULES)[number];
+export type SystemModule = typeof SYSTEM_MODULES[number];
 
 // Actions for each module
 export const MODULE_ACTIONS = [
@@ -502,23 +431,19 @@ export const MODULE_ACTIONS = [
   "export",
 ] as const;
 
-export type ModuleAction = (typeof MODULE_ACTIONS)[number];
+export type ModuleAction = typeof MODULE_ACTIONS[number];
 
 // User Permissions table - صلاحيات المستخدمين التفصيلية
 export const userPermissions = pgTable("user_permissions", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   module: text("module").notNull(), // e.g., 'inventory', 'construction_projects'
   actions: text("actions").array().notNull(), // e.g., ['view', 'create', 'edit', 'delete']
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertUserPermissionSchema = createInsertSchema(
-  userPermissions,
-).omit({
+export const insertUserPermissionSchema = createInsertSchema(userPermissions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -559,77 +484,37 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
 
 // Module groups for UI organization
 export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
-  {
-    label: "الأساسية",
-    modules: ["dashboard", "inventory", "asset_transfers", "reports"],
-  },
-  {
-    label: "التشغيل",
-    modules: [
-      "operations",
-      "production",
-      "shifts",
-      "quality_control",
-      "cashier_journal",
-    ],
-  },
-  {
-    label: "إدارة الإنشاءات",
-    modules: [
-      "construction_projects",
-      "construction_work_items",
-      "contractors",
-    ],
-  },
-  {
-    label: "المالية والعقود",
-    modules: ["contracts", "budget_planning", "payment_requests"],
-  },
+  { label: "الأساسية", modules: ["dashboard", "inventory", "asset_transfers", "reports"] },
+  { label: "التشغيل", modules: ["operations", "production", "shifts", "quality_control", "cashier_journal"] },
+  { label: "إدارة الإنشاءات", modules: ["construction_projects", "construction_work_items", "contractors"] },
+  { label: "المالية والعقود", modules: ["contracts", "budget_planning", "payment_requests"] },
   { label: "إدارة النظام", modules: ["users"] },
 ];
 
 // Role permission templates - قوالب الصلاحيات الافتراضية لكل دور
-export const ROLE_PERMISSION_TEMPLATES: Record<
-  string,
-  { module: SystemModule; actions: ModuleAction[] }[]
-> = {
+export const ROLE_PERMISSION_TEMPLATES: Record<string, { module: SystemModule; actions: ModuleAction[] }[]> = {
   // Admin gets full access (handled separately in middleware)
-  admin: SYSTEM_MODULES.map((module) => ({
+  admin: SYSTEM_MODULES.map(module => ({
     module,
     actions: [...MODULE_ACTIONS] as ModuleAction[],
   })),
-
+  
   // Employee: Can view, create, edit most things, but no delete/approve for sensitive modules
   employee: [
     { module: "dashboard", actions: ["view", "export"] },
     { module: "inventory", actions: ["view", "create", "edit", "export"] },
-    {
-      module: "asset_transfers",
-      actions: ["view", "create", "edit", "export"],
-    },
-    {
-      module: "construction_projects",
-      actions: ["view", "create", "edit", "export"],
-    },
-    {
-      module: "construction_work_items",
-      actions: ["view", "create", "edit", "export"],
-    },
+    { module: "asset_transfers", actions: ["view", "create", "edit", "export"] },
+    { module: "construction_projects", actions: ["view", "create", "edit", "export"] },
+    { module: "construction_work_items", actions: ["view", "create", "edit", "export"] },
     { module: "contractors", actions: ["view", "create", "edit", "export"] },
     { module: "contracts", actions: ["view", "create", "edit", "export"] },
-    {
-      module: "budget_planning",
-      actions: ["view", "create", "edit", "export"],
-    },
-    {
-      module: "payment_requests",
-      actions: ["view", "create", "edit", "export"],
-    },
+    { module: "budget_planning", actions: ["view", "create", "edit", "export"] },
+    { module: "payment_requests", actions: ["view", "create", "edit", "export"] },
     { module: "reports", actions: ["view", "export"] },
   ],
-
+  
   // Viewer: View-only access to all modules
-  viewer: SYSTEM_MODULES.filter((m) => m !== "users").map((module) => ({
+  viewer: SYSTEM_MODULES.filter(m => m !== "users").map(module => ({
     module,
     actions: ["view"] as ModuleAction[],
   })),
@@ -649,7 +534,7 @@ export const JOB_TITLES = [
   "other",
 ] as const;
 
-export type JobTitle = (typeof JOB_TITLES)[number];
+export type JobTitle = typeof JOB_TITLES[number];
 
 // Job Title Labels - مسميات الوظائف بالعربية
 export const JOB_TITLE_LABELS: Record<JobTitle, string> = {
@@ -666,23 +551,20 @@ export const JOB_TITLE_LABELS: Record<JobTitle, string> = {
 };
 
 // Job Role Permission Templates - قوالب صلاحيات الوظائف
-export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
-  JobTitle,
-  { module: SystemModule; actions: ModuleAction[] }[]
-> = {
+export const JOB_ROLE_PERMISSION_TEMPLATES: Record<JobTitle, { module: SystemModule; actions: ModuleAction[] }[]> = {
   // كاشير - يومية الكاشير فقط
   cashier: [
     { module: "dashboard", actions: ["view"] },
     { module: "cashier_journal", actions: ["view", "create", "edit"] },
   ],
-
+  
   // خباز - الإنتاج ومراقبة الجودة
   baker: [
     { module: "dashboard", actions: ["view"] },
     { module: "production", actions: ["view", "create", "edit"] },
     { module: "quality_control", actions: ["view"] },
   ],
-
+  
   // مشرف - نظرة عامة على التشغيل مع عرض الأقسام الأساسية
   supervisor: [
     { module: "dashboard", actions: ["view", "export"] },
@@ -693,7 +575,7 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     { module: "cashier_journal", actions: ["view", "approve"] },
     { module: "inventory", actions: ["view"] },
   ],
-
+  
   // مدير فرع - صلاحيات واسعة على فرعه
   branch_manager: [
     { module: "dashboard", actions: ["view", "export"] },
@@ -701,56 +583,52 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     { module: "production", actions: ["view", "create", "edit"] },
     { module: "shifts", actions: ["view", "create", "edit", "delete"] },
     { module: "quality_control", actions: ["view", "create", "edit"] },
-    {
-      module: "cashier_journal",
-      actions: ["view", "create", "edit", "approve"],
-    },
+    { module: "cashier_journal", actions: ["view", "create", "edit", "approve"] },
     { module: "inventory", actions: ["view", "create", "edit"] },
     { module: "asset_transfers", actions: ["view", "create", "edit"] },
     { module: "reports", actions: ["view", "export"] },
   ],
-
+  
   // مدير إنتاج - الإنتاج والورديات ومراقبة الجودة
   production_manager: [
     { module: "dashboard", actions: ["view", "export"] },
     { module: "production", actions: ["view", "create", "edit", "delete"] },
     { module: "shifts", actions: ["view", "create", "edit", "delete"] },
-    {
-      module: "quality_control",
-      actions: ["view", "create", "edit", "delete"],
-    },
+    { module: "quality_control", actions: ["view", "create", "edit", "delete"] },
     { module: "operations", actions: ["view"] },
     { module: "inventory", actions: ["view"] },
   ],
-
+  
   // مفتش جودة - مراقبة الجودة والإنتاج
   quality_inspector: [
     { module: "dashboard", actions: ["view"] },
     { module: "quality_control", actions: ["view", "create", "edit"] },
     { module: "production", actions: ["view"] },
   ],
-
+  
   // توصيل - عرض يومية الكاشير
   delivery: [
     { module: "dashboard", actions: ["view"] },
     { module: "cashier_journal", actions: ["view"] },
   ],
-
+  
   // نظافة - عرض محدود
   cleaner: [
     { module: "dashboard", actions: ["view"] },
     { module: "operations", actions: ["view"] },
   ],
-
+  
   // صيانة - المخزون وتحويلات الأصول
   maintenance: [
     { module: "dashboard", actions: ["view"] },
     { module: "inventory", actions: ["view", "edit"] },
     { module: "asset_transfers", actions: ["view", "create"] },
   ],
-
+  
   // أخرى - عرض لوحة التحكم فقط
-  other: [{ module: "dashboard", actions: ["view"] }],
+  other: [
+    { module: "dashboard", actions: ["view"] },
+  ],
 };
 
 // Job Role Permissions table - جدول صلاحيات الوظائف (للتخصيص)
@@ -764,28 +642,20 @@ export const jobRolePermissions = pgTable("job_role_permissions", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertJobRolePermissionSchema = createInsertSchema(
-  jobRolePermissions,
-).omit({
+export const insertJobRolePermissionSchema = createInsertSchema(jobRolePermissions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type JobRolePermission = typeof jobRolePermissions.$inferSelect;
-export type InsertJobRolePermission = z.infer<
-  typeof insertJobRolePermissionSchema
->;
+export type InsertJobRolePermission = z.infer<typeof insertJobRolePermissionSchema>;
 
 // Permission Audit Logs - سجل تغييرات الصلاحيات
 export const permissionAuditLogs = pgTable("permission_audit_logs", {
   id: serial("id").primaryKey(),
-  targetUserId: varchar("target_user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  changedByUserId: varchar("changed_by_user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
+  targetUserId: varchar("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  changedByUserId: varchar("changed_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   action: text("action").notNull(), // 'grant', 'revoke', 'modify', 'apply_template'
   module: text("module"), // The module affected
   oldActions: text("old_actions").array(), // Previous actions
@@ -794,32 +664,22 @@ export const permissionAuditLogs = pgTable("permission_audit_logs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertPermissionAuditLogSchema = createInsertSchema(
-  permissionAuditLogs,
-).omit({
+export const insertPermissionAuditLogSchema = createInsertSchema(permissionAuditLogs).omit({
   id: true,
   createdAt: true,
 });
 
 export type PermissionAuditLog = typeof permissionAuditLogs.$inferSelect;
-export type InsertPermissionAuditLog = z.infer<
-  typeof insertPermissionAuditLogSchema
->;
+export type InsertPermissionAuditLog = z.infer<typeof insertPermissionAuditLogSchema>;
 
 // Asset Transfers table - تحويلات الأصول بين الفروع
 export const assetTransfers = pgTable("asset_transfers", {
   id: serial("id").primaryKey(),
   transferNumber: text("transfer_number").unique().notNull(),
-  itemId: varchar("item_id")
-    .notNull()
-    .references(() => inventoryItems.id, { onDelete: "cascade" }),
+  itemId: varchar("item_id").notNull().references(() => inventoryItems.id, { onDelete: "cascade" }),
   quantity: integer("quantity").notNull().default(1),
-  fromBranchId: varchar("from_branch_id")
-    .notNull()
-    .references(() => branches.id),
-  toBranchId: varchar("to_branch_id")
-    .notNull()
-    .references(() => branches.id),
+  fromBranchId: varchar("from_branch_id").notNull().references(() => branches.id),
+  toBranchId: varchar("to_branch_id").notNull().references(() => branches.id),
   status: text("status").default("pending").notNull(), // pending, approved, in_transit, completed, cancelled
   reason: text("reason"),
   notes: text("notes"),
@@ -835,9 +695,7 @@ export const assetTransfers = pgTable("asset_transfers", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertAssetTransferSchema = createInsertSchema(
-  assetTransfers,
-).omit({
+export const insertAssetTransferSchema = createInsertSchema(assetTransfers).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -852,26 +710,20 @@ export type InsertAssetTransfer = z.infer<typeof insertAssetTransferSchema>;
 // Asset Transfer Events table - أحداث التحويل
 export const assetTransferEvents = pgTable("asset_transfer_events", {
   id: serial("id").primaryKey(),
-  transferId: integer("transfer_id")
-    .notNull()
-    .references(() => assetTransfers.id, { onDelete: "cascade" }),
+  transferId: integer("transfer_id").notNull().references(() => assetTransfers.id, { onDelete: "cascade" }),
   eventType: text("event_type").notNull(), // created, approved, dispatched, received, cancelled
   actorId: varchar("actor_id").references(() => users.id),
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertAssetTransferEventSchema = createInsertSchema(
-  assetTransferEvents,
-).omit({
+export const insertAssetTransferEventSchema = createInsertSchema(assetTransferEvents).omit({
   id: true,
   createdAt: true,
 });
 
 export type AssetTransferEvent = typeof assetTransferEvents.$inferSelect;
-export type InsertAssetTransferEvent = z.infer<
-  typeof insertAssetTransferEventSchema
->;
+export type InsertAssetTransferEvent = z.infer<typeof insertAssetTransferEventSchema>;
 
 // External System Integrations - التكاملات مع الأنظمة الخارجية
 export const externalIntegrations = pgTable("external_integrations", {
@@ -885,18 +737,14 @@ export const externalIntegrations = pgTable("external_integrations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertExternalIntegrationSchema = createInsertSchema(
-  externalIntegrations,
-).omit({
+export const insertExternalIntegrationSchema = createInsertSchema(externalIntegrations).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type ExternalIntegration = typeof externalIntegrations.$inferSelect;
-export type InsertExternalIntegration = z.infer<
-  typeof insertExternalIntegrationSchema
->;
+export type InsertExternalIntegration = z.infer<typeof insertExternalIntegrationSchema>;
 
 // Notification Templates - قوالب الإشعارات
 export const notificationTemplates = pgTable("notification_templates", {
@@ -909,17 +757,13 @@ export const notificationTemplates = pgTable("notification_templates", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertNotificationTemplateSchema = createInsertSchema(
-  notificationTemplates,
-).omit({
+export const insertNotificationTemplateSchema = createInsertSchema(notificationTemplates).omit({
   id: true,
   createdAt: true,
 });
 
 export type NotificationTemplate = typeof notificationTemplates.$inferSelect;
-export type InsertNotificationTemplate = z.infer<
-  typeof insertNotificationTemplateSchema
->;
+export type InsertNotificationTemplate = z.infer<typeof insertNotificationTemplateSchema>;
 
 // Notification Queue - قائمة الإشعارات المنتظرة
 export const notificationQueue = pgTable("notification_queue", {
@@ -936,18 +780,14 @@ export const notificationQueue = pgTable("notification_queue", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertNotificationQueueSchema = createInsertSchema(
-  notificationQueue,
-).omit({
+export const insertNotificationQueueSchema = createInsertSchema(notificationQueue).omit({
   id: true,
   createdAt: true,
   sentAt: true,
 });
 
 export type NotificationQueueItem = typeof notificationQueue.$inferSelect;
-export type InsertNotificationQueueItem = z.infer<
-  typeof insertNotificationQueueSchema
->;
+export type InsertNotificationQueueItem = z.infer<typeof insertNotificationQueueSchema>;
 
 // Data Import Jobs - وظائف استيراد البيانات
 export const dataImportJobs = pgTable("data_import_jobs", {
@@ -966,9 +806,7 @@ export const dataImportJobs = pgTable("data_import_jobs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertDataImportJobSchema = createInsertSchema(
-  dataImportJobs,
-).omit({
+export const insertDataImportJobSchema = createInsertSchema(dataImportJobs).omit({
   id: true,
   createdAt: true,
   startedAt: true,
@@ -992,18 +830,14 @@ export const accountingExports = pgTable("accounting_exports", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertAccountingExportSchema = createInsertSchema(
-  accountingExports,
-).omit({
+export const insertAccountingExportSchema = createInsertSchema(accountingExports).omit({
   id: true,
   createdAt: true,
   syncedAt: true,
 });
 
 export type AccountingExport = typeof accountingExports.$inferSelect;
-export type InsertAccountingExport = z.infer<
-  typeof insertAccountingExportSchema
->;
+export type InsertAccountingExport = z.infer<typeof insertAccountingExportSchema>;
 
 // ============================================
 // نظام التشغيل - Operations Module
@@ -1039,9 +873,7 @@ export type InsertProduct = z.infer<typeof insertProductSchema>;
 // Shifts table - الورديات
 export const shifts = pgTable("shifts", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   name: text("name").notNull(), // الوردية الصباحية، المسائية، الليلية
   date: text("date").notNull(), // التاريخ
   startTime: text("start_time").notNull(), // وقت البدء
@@ -1067,9 +899,7 @@ export type InsertShift = z.infer<typeof insertShiftSchema>;
 // Shift Employees table - موظفي الوردية
 export const shiftEmployees = pgTable("shift_employees", {
   id: serial("id").primaryKey(),
-  shiftId: integer("shift_id")
-    .notNull()
-    .references(() => shifts.id, { onDelete: "cascade" }),
+  shiftId: integer("shift_id").notNull().references(() => shifts.id, { onDelete: "cascade" }),
   employeeName: text("employee_name").notNull(),
   role: text("role"), // خباز، معجناتي، كاشير، منظف، إلخ
   checkInTime: text("check_in_time"),
@@ -1079,9 +909,7 @@ export const shiftEmployees = pgTable("shift_employees", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertShiftEmployeeSchema = createInsertSchema(
-  shiftEmployees,
-).omit({
+export const insertShiftEmployeeSchema = createInsertSchema(shiftEmployees).omit({
   id: true,
   createdAt: true,
 });
@@ -1093,13 +921,9 @@ export type InsertShiftEmployee = z.infer<typeof insertShiftEmployeeSchema>;
 export const productionOrders = pgTable("production_orders", {
   id: serial("id").primaryKey(),
   orderNumber: text("order_number").unique(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   shiftId: integer("shift_id").references(() => shifts.id),
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id),
+  productId: integer("product_id").notNull().references(() => products.id),
   targetQuantity: integer("target_quantity").notNull(), // الكمية المطلوبة
   producedQuantity: integer("produced_quantity").default(0), // الكمية المنتجة
   wastedQuantity: integer("wasted_quantity").default(0), // الكمية التالفة
@@ -1116,9 +940,7 @@ export const productionOrders = pgTable("production_orders", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertProductionOrderSchema = createInsertSchema(
-  productionOrders,
-).omit({
+export const insertProductionOrderSchema = createInsertSchema(productionOrders).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1132,13 +954,9 @@ export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 // Quality Checks table - فحوصات الجودة
 export const qualityChecks = pgTable("quality_checks", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   shiftId: integer("shift_id").references(() => shifts.id),
-  productionOrderId: integer("production_order_id").references(
-    () => productionOrders.id,
-  ),
+  productionOrderId: integer("production_order_id").references(() => productionOrders.id),
   checkType: text("check_type").notNull(), // temperature, appearance, taste, weight, packaging, cleanliness
   checkDate: text("check_date").notNull(),
   checkTime: text("check_time"),
@@ -1165,9 +983,7 @@ export type InsertQualityCheck = z.infer<typeof insertQualityCheckSchema>;
 // Daily Operations Summary - ملخص العمليات اليومية
 export const dailyOperationsSummary = pgTable("daily_operations_summary", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   date: text("date").notNull(),
   totalOrders: integer("total_orders").default(0),
   completedOrders: integer("completed_orders").default(0),
@@ -1182,72 +998,62 @@ export const dailyOperationsSummary = pgTable("daily_operations_summary", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertDailyOperationsSummarySchema = createInsertSchema(
-  dailyOperationsSummary,
-).omit({
+export const insertDailyOperationsSummarySchema = createInsertSchema(dailyOperationsSummary).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type DailyOperationsSummary = typeof dailyOperationsSummary.$inferSelect;
-export type InsertDailyOperationsSummary = z.infer<
-  typeof insertDailyOperationsSummarySchema
->;
+export type InsertDailyOperationsSummary = z.infer<typeof insertDailyOperationsSummarySchema>;
 
 // ==================== Cashier Sales Journal Module ====================
 
 // Cashier Sales Journals table - يومية مبيعات الكاشير
 export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   shiftId: integer("shift_id").references(() => shifts.id),
-  cashierId: varchar("cashier_id")
-    .notNull()
-    .references(() => users.id),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
   cashierName: text("cashier_name").notNull(),
   journalDate: text("journal_date").notNull(), // تاريخ اليومية
   shiftType: text("shift_type"), // صباحي، مسائي، ليلي
   shiftStartTime: text("shift_start_time"), // وقت بدء الشفت
   shiftEndTime: text("shift_end_time"), // وقت انتهاء الشفت
-
+  
   // رصيد افتتاحي
   openingBalance: real("opening_balance").default(0).notNull(), // رصيد الافتتاح في الصندوق
-
+  
   // إجمالي المبيعات
   totalSales: real("total_sales").default(0).notNull(), // إجمالي المبيعات
   cashTotal: real("cash_total").default(0).notNull(), // إجمالي النقد
   networkTotal: real("network_total").default(0).notNull(), // إجمالي الشبكة
   deliveryTotal: real("delivery_total").default(0).notNull(), // إجمالي التوصيل
-
+  
   // مقارنة الصندوق
   expectedCash: real("expected_cash").default(0).notNull(), // النقد المتوقع
   actualCashDrawer: real("actual_cash_drawer").default(0).notNull(), // النقد الفعلي بالصندوق
   discrepancyAmount: real("discrepancy_amount").default(0).notNull(), // مبلغ الفرق
   discrepancyStatus: text("discrepancy_status").default("balanced").notNull(), // balanced, shortage, surplus
-
+  
   // إحصائيات
   customerCount: integer("customer_count").default(0), // عدد العملاء
   transactionCount: integer("transaction_count").default(0), // عدد الفواتير
   averageTicket: real("average_ticket").default(0), // متوسط الفاتورة
-
+  
   // الحالة والتوقيع
   status: text("status").default("draft").notNull(), // draft, submitted, approved, rejected
   submittedAt: timestamp("submitted_at"),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
-
+  
   notes: text("notes"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertCashierSalesJournalSchema = createInsertSchema(
-  cashierSalesJournals,
-).omit({
+export const insertCashierSalesJournalSchema = createInsertSchema(cashierSalesJournals).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1256,16 +1062,12 @@ export const insertCashierSalesJournalSchema = createInsertSchema(
 });
 
 export type CashierSalesJournal = typeof cashierSalesJournals.$inferSelect;
-export type InsertCashierSalesJournal = z.infer<
-  typeof insertCashierSalesJournalSchema
->;
+export type InsertCashierSalesJournal = z.infer<typeof insertCashierSalesJournalSchema>;
 
 // Payment Breakdown table - تفصيل المبيعات حسب وسيلة الدفع
 export const cashierPaymentBreakdowns = pgTable("cashier_payment_breakdowns", {
   id: serial("id").primaryKey(),
-  journalId: integer("journal_id")
-    .notNull()
-    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  journalId: integer("journal_id").notNull().references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
   paymentMethod: text("payment_method").notNull(), // cash, card, mada, stc_pay, apple_pay, visa, mastercard, delivery_app, other
   amount: real("amount").default(0).notNull(),
   transactionCount: integer("transaction_count").default(0),
@@ -1273,23 +1075,18 @@ export const cashierPaymentBreakdowns = pgTable("cashier_payment_breakdowns", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertCashierPaymentBreakdownSchema = createInsertSchema(
-  cashierPaymentBreakdowns,
-).omit({
+export const insertCashierPaymentBreakdownSchema = createInsertSchema(cashierPaymentBreakdowns).omit({
   id: true,
   createdAt: true,
 });
 
-export type CashierPaymentBreakdown =
-  typeof cashierPaymentBreakdowns.$inferSelect;
-export type InsertCashierPaymentBreakdown = z.infer<
-  typeof insertCashierPaymentBreakdownSchema
->;
+export type CashierPaymentBreakdown = typeof cashierPaymentBreakdowns.$inferSelect;
+export type InsertCashierPaymentBreakdown = z.infer<typeof insertCashierPaymentBreakdownSchema>;
 
 // Payment Methods labels
 export const PAYMENT_METHODS = [
   "cash",
-  "card",
+  "card", 
   "mada",
   "stc_pay",
   "apple_pay",
@@ -1307,23 +1104,13 @@ export const PAYMENT_METHODS = [
   "other",
 ] as const;
 
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+export type PaymentMethod = typeof PAYMENT_METHODS[number];
 
 // Payment method categories for reporting
 export const PAYMENT_CATEGORIES = {
   cash: ["cash"],
   cards: ["card", "mada", "stc_pay", "apple_pay", "visa", "mastercard"],
-  apps: [
-    "delivery_app",
-    "hunger_station",
-    "hungerstation",
-    "toyou",
-    "jahez",
-    "marsool",
-    "keeta",
-    "the_chefs",
-    "talabat",
-  ],
+  apps: ["delivery_app", "hunger_station", "hungerstation", "toyou", "jahez", "marsool", "keeta", "the_chefs", "talabat"],
 } as const;
 
 export type PaymentCategory = keyof typeof PAYMENT_CATEGORIES;
@@ -1357,9 +1144,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
 // Cashier Signatures table - التوقيعات الإلكترونية
 export const cashierSignatures = pgTable("cashier_signatures", {
   id: serial("id").primaryKey(),
-  journalId: integer("journal_id")
-    .notNull()
-    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  journalId: integer("journal_id").notNull().references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
   signatureType: text("signature_type").notNull(), // cashier, supervisor, manager
   signerName: text("signer_name").notNull(),
   signerId: varchar("signer_id").references(() => users.id),
@@ -1369,25 +1154,17 @@ export const cashierSignatures = pgTable("cashier_signatures", {
   notes: text("notes"),
 });
 
-export const insertCashierSignatureSchema = createInsertSchema(
-  cashierSignatures,
-).omit({
+export const insertCashierSignatureSchema = createInsertSchema(cashierSignatures).omit({
   id: true,
   signedAt: true,
 });
 
 export type CashierSignature = typeof cashierSignatures.$inferSelect;
-export type InsertCashierSignature = z.infer<
-  typeof insertCashierSignatureSchema
->;
+export type InsertCashierSignature = z.infer<typeof insertCashierSignatureSchema>;
 
 // Journal Attachments - for storing photos (Foodics report, network device report, etc.)
-export const ATTACHMENT_TYPES = [
-  "foodics_report",
-  "network_report",
-  "other",
-] as const;
-export type AttachmentType = (typeof ATTACHMENT_TYPES)[number];
+export const ATTACHMENT_TYPES = ["foodics_report", "network_report", "other"] as const;
+export type AttachmentType = typeof ATTACHMENT_TYPES[number];
 
 export const ATTACHMENT_TYPE_LABELS: Record<AttachmentType, string> = {
   foodics_report: "تقرير فوديكس",
@@ -1397,9 +1174,7 @@ export const ATTACHMENT_TYPE_LABELS: Record<AttachmentType, string> = {
 
 export const journalAttachments = pgTable("journal_attachments", {
   id: serial("id").primaryKey(),
-  journalId: integer("journal_id")
-    .notNull()
-    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  journalId: integer("journal_id").notNull().references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
   attachmentType: text("attachment_type").notNull(), // foodics_report, network_report, other
   fileName: text("file_name").notNull(),
   fileData: text("file_data").notNull(), // Base64 encoded image
@@ -1410,21 +1185,17 @@ export const journalAttachments = pgTable("journal_attachments", {
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
 });
 
-export const insertJournalAttachmentSchema = createInsertSchema(
-  journalAttachments,
-).omit({
+export const insertJournalAttachmentSchema = createInsertSchema(journalAttachments).omit({
   id: true,
   uploadedAt: true,
 });
 
 export type JournalAttachment = typeof journalAttachments.$inferSelect;
-export type InsertJournalAttachment = z.infer<
-  typeof insertJournalAttachmentSchema
->;
+export type InsertJournalAttachment = z.infer<typeof insertJournalAttachmentSchema>;
 
 // Discrepancy status labels
 export const DISCREPANCY_STATUS = ["balanced", "shortage", "surplus"] as const;
-export type DiscrepancyStatus = (typeof DISCREPANCY_STATUS)[number];
+export type DiscrepancyStatus = typeof DISCREPANCY_STATUS[number];
 
 export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
   balanced: "متوازن",
@@ -1433,14 +1204,8 @@ export const DISCREPANCY_STATUS_LABELS: Record<DiscrepancyStatus, string> = {
 };
 
 // Journal status labels
-export const JOURNAL_STATUS = [
-  "draft",
-  "posted",
-  "submitted",
-  "approved",
-  "rejected",
-] as const;
-export type JournalStatus = (typeof JOURNAL_STATUS)[number];
+export const JOURNAL_STATUS = ["draft", "posted", "submitted", "approved", "rejected"] as const;
+export type JournalStatus = typeof JOURNAL_STATUS[number];
 
 export const JOURNAL_STATUS_LABELS: Record<JournalStatus, string> = {
   draft: "مسودة",
@@ -1478,25 +1243,19 @@ export const targetWeightProfiles = pgTable("target_weight_profiles", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertTargetWeightProfileSchema = createInsertSchema(
-  targetWeightProfiles,
-).omit({
+export const insertTargetWeightProfileSchema = createInsertSchema(targetWeightProfiles).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type TargetWeightProfile = typeof targetWeightProfiles.$inferSelect;
-export type InsertTargetWeightProfile = z.infer<
-  typeof insertTargetWeightProfileSchema
->;
+export type InsertTargetWeightProfile = z.infer<typeof insertTargetWeightProfileSchema>;
 
 // Branch Monthly Targets - الأهداف الشهرية للفروع
 export const branchMonthlyTargets = pgTable("branch_monthly_targets", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   yearMonth: text("year_month").notNull(), // Format: "2025-01"
   targetAmount: real("target_amount").notNull(), // Total monthly target in SAR
   profileId: integer("profile_id").references(() => targetWeightProfiles.id),
@@ -1509,9 +1268,7 @@ export const branchMonthlyTargets = pgTable("branch_monthly_targets", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertBranchMonthlyTargetSchema = createInsertSchema(
-  branchMonthlyTargets,
-).omit({
+export const insertBranchMonthlyTargetSchema = createInsertSchema(branchMonthlyTargets).omit({
   id: true,
   approvedAt: true,
   createdAt: true,
@@ -1519,16 +1276,12 @@ export const insertBranchMonthlyTargetSchema = createInsertSchema(
 });
 
 export type BranchMonthlyTarget = typeof branchMonthlyTargets.$inferSelect;
-export type InsertBranchMonthlyTarget = z.infer<
-  typeof insertBranchMonthlyTargetSchema
->;
+export type InsertBranchMonthlyTarget = z.infer<typeof insertBranchMonthlyTargetSchema>;
 
 // Target Daily Allocations - توزيع الهدف على الأيام
 export const targetDailyAllocations = pgTable("target_daily_allocations", {
   id: serial("id").primaryKey(),
-  monthlyTargetId: integer("monthly_target_id")
-    .notNull()
-    .references(() => branchMonthlyTargets.id, { onDelete: "cascade" }),
+  monthlyTargetId: integer("monthly_target_id").notNull().references(() => branchMonthlyTargets.id, { onDelete: "cascade" }),
   targetDate: text("target_date").notNull(), // Format: "2025-01-15"
   weightPercent: real("weight_percent").notNull(), // Percentage weight for this day
   dailyTarget: real("daily_target").notNull(), // Calculated daily target amount
@@ -1540,25 +1293,19 @@ export const targetDailyAllocations = pgTable("target_daily_allocations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertTargetDailyAllocationSchema = createInsertSchema(
-  targetDailyAllocations,
-).omit({
+export const insertTargetDailyAllocationSchema = createInsertSchema(targetDailyAllocations).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type TargetDailyAllocation = typeof targetDailyAllocations.$inferSelect;
-export type InsertTargetDailyAllocation = z.infer<
-  typeof insertTargetDailyAllocationSchema
->;
+export type InsertTargetDailyAllocation = z.infer<typeof insertTargetDailyAllocationSchema>;
 
 // Target Shift Allocations - توزيع الهدف على الورديات
 export const targetShiftAllocations = pgTable("target_shift_allocations", {
   id: serial("id").primaryKey(),
-  dailyAllocationId: integer("daily_allocation_id")
-    .notNull()
-    .references(() => targetDailyAllocations.id, { onDelete: "cascade" }),
+  dailyAllocationId: integer("daily_allocation_id").notNull().references(() => targetDailyAllocations.id, { onDelete: "cascade" }),
   shiftType: text("shift_type").notNull(), // morning, evening, night
   shiftTarget: real("shift_target").notNull(), // Target amount for this shift
   shiftWeightPercent: real("shift_weight_percent").notNull(), // Percentage of daily target
@@ -1566,17 +1313,13 @@ export const targetShiftAllocations = pgTable("target_shift_allocations", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertTargetShiftAllocationSchema = createInsertSchema(
-  targetShiftAllocations,
-).omit({
+export const insertTargetShiftAllocationSchema = createInsertSchema(targetShiftAllocations).omit({
   id: true,
   createdAt: true,
 });
 
 export type TargetShiftAllocation = typeof targetShiftAllocations.$inferSelect;
-export type InsertTargetShiftAllocation = z.infer<
-  typeof insertTargetShiftAllocationSchema
->;
+export type InsertTargetShiftAllocation = z.infer<typeof insertTargetShiftAllocationSchema>;
 
 // Incentive Tiers - مستويات الحوافز
 export const incentiveTiers = pgTable("incentive_tiers", {
@@ -1596,9 +1339,7 @@ export const incentiveTiers = pgTable("incentive_tiers", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertIncentiveTierSchema = createInsertSchema(
-  incentiveTiers,
-).omit({
+export const insertIncentiveTierSchema = createInsertSchema(incentiveTiers).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1633,9 +1374,7 @@ export const incentiveAwards = pgTable("incentive_awards", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertIncentiveAwardSchema = createInsertSchema(
-  incentiveAwards,
-).omit({
+export const insertIncentiveAwardSchema = createInsertSchema(incentiveAwards).omit({
   id: true,
   approvedAt: true,
   paidAt: true,
@@ -1667,9 +1406,7 @@ export const seasonsHolidays = pgTable("seasons_holidays", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertSeasonHolidaySchema = createInsertSchema(
-  seasonsHolidays,
-).omit({
+export const insertSeasonHolidaySchema = createInsertSchema(seasonsHolidays).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1698,9 +1435,7 @@ export const commissionRates = pgTable("commission_rates", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertCommissionRateSchema = createInsertSchema(
-  commissionRates,
-).omit({
+export const insertCommissionRateSchema = createInsertSchema(commissionRates).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1734,9 +1469,7 @@ export const commissionCalculations = pgTable("commission_calculations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertCommissionCalculationSchema = createInsertSchema(
-  commissionCalculations,
-).omit({
+export const insertCommissionCalculationSchema = createInsertSchema(commissionCalculations).omit({
   id: true,
   approvedAt: true,
   paidAt: true,
@@ -1745,13 +1478,11 @@ export const insertCommissionCalculationSchema = createInsertSchema(
 });
 
 export type CommissionCalculation = typeof commissionCalculations.$inferSelect;
-export type InsertCommissionCalculation = z.infer<
-  typeof insertCommissionCalculationSchema
->;
+export type InsertCommissionCalculation = z.infer<typeof insertCommissionCalculationSchema>;
 
 // Target Status Labels
 export const TARGET_STATUS = ["draft", "active", "locked", "archived"] as const;
-export type TargetStatus = (typeof TARGET_STATUS)[number];
+export type TargetStatus = typeof TARGET_STATUS[number];
 
 export const TARGET_STATUS_LABELS: Record<TargetStatus, string> = {
   draft: "مسودة",
@@ -1762,7 +1493,7 @@ export const TARGET_STATUS_LABELS: Record<TargetStatus, string> = {
 
 // Reward Types Labels
 export const REWARD_TYPES = ["fixed", "percentage", "both"] as const;
-export type RewardType = (typeof REWARD_TYPES)[number];
+export type RewardType = typeof REWARD_TYPES[number];
 
 export const REWARD_TYPE_LABELS: Record<RewardType, string> = {
   fixed: "مبلغ ثابت",
@@ -1771,13 +1502,8 @@ export const REWARD_TYPE_LABELS: Record<RewardType, string> = {
 };
 
 // Award Status Labels
-export const AWARD_STATUS = [
-  "pending",
-  "approved",
-  "paid",
-  "cancelled",
-] as const;
-export type AwardStatus = (typeof AWARD_STATUS)[number];
+export const AWARD_STATUS = ["pending", "approved", "paid", "cancelled"] as const;
+export type AwardStatus = typeof AWARD_STATUS[number];
 
 export const AWARD_STATUS_LABELS: Record<AwardStatus, string> = {
   pending: "قيد الانتظار",
@@ -1793,9 +1519,7 @@ export const AWARD_STATUS_LABELS: Record<AwardStatus, string> = {
 // Daily Sales Summary per Branch - ملخص المبيعات اليومية
 export const branchDailySales = pgTable("branch_daily_sales", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
   salesDate: text("sales_date").notNull(), // YYYY-MM-DD
   totalSales: real("total_sales").default(0).notNull(),
   transactionsCount: integer("transactions_count").default(0),
@@ -1816,9 +1540,7 @@ export const branchDailySales = pgTable("branch_daily_sales", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertBranchDailySalesSchema = createInsertSchema(
-  branchDailySales,
-).omit({
+export const insertBranchDailySalesSchema = createInsertSchema(branchDailySales).omit({
   id: true,
   computedAt: true,
   createdAt: true,
@@ -1826,23 +1548,17 @@ export const insertBranchDailySalesSchema = createInsertSchema(
 });
 
 export type BranchDailySales = typeof branchDailySales.$inferSelect;
-export type InsertBranchDailySales = z.infer<
-  typeof insertBranchDailySalesSchema
->;
+export type InsertBranchDailySales = z.infer<typeof insertBranchDailySalesSchema>;
 
 // Cashier Shift Performance - أداء الكاشير في الشفت
 export const cashierShiftPerformance = pgTable("cashier_shift_performance", {
   id: serial("id").primaryKey(),
   journalId: integer("journal_id").references(() => cashierSalesJournals.id),
-  cashierId: varchar("cashier_id")
-    .notNull()
-    .references(() => users.id),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
   cashierName: text("cashier_name").notNull(),
   shiftId: integer("shift_id").references(() => shifts.id),
   shiftType: text("shift_type").notNull(), // morning, evening, night
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
   performanceDate: text("performance_date").notNull(), // YYYY-MM-DD
   // Sales metrics
   salesAmount: real("sales_amount").default(0).notNull(),
@@ -1863,39 +1579,30 @@ export const cashierShiftPerformance = pgTable("cashier_shift_performance", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertCashierShiftPerformanceSchema = createInsertSchema(
-  cashierShiftPerformance,
-).omit({
+export const insertCashierShiftPerformanceSchema = createInsertSchema(cashierShiftPerformance).omit({
   id: true,
   computedAt: true,
   createdAt: true,
 });
 
-export type CashierShiftPerformance =
-  typeof cashierShiftPerformance.$inferSelect;
-export type InsertCashierShiftPerformance = z.infer<
-  typeof insertCashierShiftPerformanceSchema
->;
+export type CashierShiftPerformance = typeof cashierShiftPerformance.$inferSelect;
+export type InsertCashierShiftPerformance = z.infer<typeof insertCashierShiftPerformanceSchema>;
 
 // Shift Type Labels
 export const SHIFT_TYPES = ["morning", "evening", "night"] as const;
-export type ShiftType = (typeof SHIFT_TYPES)[number];
+export type ShiftType = typeof SHIFT_TYPES[number];
 
 export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
   morning: "صباحي",
-  evening: "مسائي",
+  evening: "مسائي", 
   night: "ليلي",
 };
 
 // Display Bar Receipts - استلام الإنتاج لبار العرض
 export const displayBarReceipts = pgTable("display_bar_receipts", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
   receiptDate: text("receipt_date").notNull(), // YYYY-MM-DD
   receiptTime: text("receipt_time").notNull(), // HH:MM
   shiftId: integer("shift_id").references(() => shifts.id),
@@ -1906,27 +1613,19 @@ export const displayBarReceipts = pgTable("display_bar_receipts", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertDisplayBarReceiptSchema = createInsertSchema(
-  displayBarReceipts,
-).omit({
+export const insertDisplayBarReceiptSchema = createInsertSchema(displayBarReceipts).omit({
   id: true,
   createdAt: true,
 });
 
 export type DisplayBarReceipt = typeof displayBarReceipts.$inferSelect;
-export type InsertDisplayBarReceipt = z.infer<
-  typeof insertDisplayBarReceiptSchema
->;
+export type InsertDisplayBarReceipt = z.infer<typeof insertDisplayBarReceiptSchema>;
 
 // Display Bar Daily Summary - ملخص بار العرض اليومي
 export const displayBarDailySummary = pgTable("display_bar_daily_summary", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
   summaryDate: text("summary_date").notNull(), // YYYY-MM-DD
   openingQuantity: integer("opening_quantity").default(0).notNull(), // الكمية الافتتاحية
   receivedQuantity: integer("received_quantity").default(0).notNull(), // الكمية المستلمة
@@ -1938,25 +1637,19 @@ export const displayBarDailySummary = pgTable("display_bar_daily_summary", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertDisplayBarDailySummarySchema = createInsertSchema(
-  displayBarDailySummary,
-).omit({
+export const insertDisplayBarDailySummarySchema = createInsertSchema(displayBarDailySummary).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export type DisplayBarDailySummary = typeof displayBarDailySummary.$inferSelect;
-export type InsertDisplayBarDailySummary = z.infer<
-  typeof insertDisplayBarDailySummarySchema
->;
+export type InsertDisplayBarDailySummary = z.infer<typeof insertDisplayBarDailySummarySchema>;
 
 // Waste Reports - تقارير الهالك
 export const wasteReports = pgTable("waste_reports", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   reportDate: text("report_date").notNull(), // YYYY-MM-DD
   shiftId: integer("shift_id").references(() => shifts.id),
   reportedBy: varchar("reported_by").references(() => users.id),
@@ -1983,12 +1676,8 @@ export type InsertWasteReport = z.infer<typeof insertWasteReportSchema>;
 // Waste Items - تفاصيل الهالك
 export const wasteItems = pgTable("waste_items", {
   id: serial("id").primaryKey(),
-  wasteReportId: integer("waste_report_id")
-    .notNull()
-    .references(() => wasteReports.id, { onDelete: "cascade" }),
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id),
+  wasteReportId: integer("waste_report_id").notNull().references(() => wasteReports.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
   quantity: integer("quantity").notNull(),
   unitPrice: real("unit_price").default(0),
   totalValue: real("total_value").default(0),
@@ -2007,14 +1696,8 @@ export type WasteItem = typeof wasteItems.$inferSelect;
 export type InsertWasteItem = z.infer<typeof insertWasteItemSchema>;
 
 // Waste Reasons Labels
-export const WASTE_REASONS = [
-  "expired",
-  "damaged",
-  "quality_issue",
-  "overproduction",
-  "other",
-] as const;
-export type WasteReason = (typeof WASTE_REASONS)[number];
+export const WASTE_REASONS = ["expired", "damaged", "quality_issue", "overproduction", "other"] as const;
+export type WasteReason = typeof WASTE_REASONS[number];
 
 export const WASTE_REASON_LABELS: Record<WasteReason, string> = {
   expired: "منتهي الصلاحية",
@@ -2025,13 +1708,8 @@ export const WASTE_REASON_LABELS: Record<WasteReason, string> = {
 };
 
 // Product Categories for Display Bar
-export const DISPLAY_BAR_CATEGORIES = [
-  "bakery",
-  "dessert",
-  "breakfast",
-  "sandwich",
-] as const;
-export type DisplayBarCategory = (typeof DISPLAY_BAR_CATEGORIES)[number];
+export const DISPLAY_BAR_CATEGORIES = ["bakery", "dessert", "breakfast", "sandwich"] as const;
+export type DisplayBarCategory = typeof DISPLAY_BAR_CATEGORIES[number];
 
 export const DISPLAY_BAR_CATEGORY_LABELS: Record<DisplayBarCategory, string> = {
   bakery: "مخبوزات",
@@ -2039,28 +1717,23 @@ export const DISPLAY_BAR_CATEGORY_LABELS: Record<DisplayBarCategory, string> = {
   breakfast: "فطور",
   sandwich: "ساندويتش",
 };
+<<<<<<< HEAD
 
 // ==================== Advanced Production Orders Module ====================
 
 // Production Order Types
 export const PRODUCTION_ORDER_TYPES = ["daily", "weekly", "long_term"] as const;
-export type ProductionOrderType = (typeof PRODUCTION_ORDER_TYPES)[number];
+export type ProductionOrderType = typeof PRODUCTION_ORDER_TYPES[number];
 
-export const PRODUCTION_ORDER_TYPE_LABELS: Record<ProductionOrderType, string> =
-  {
-    daily: "يومي (فرش)",
-    weekly: "أسبوعي",
-    long_term: "طويل الأمد",
-  };
+export const PRODUCTION_ORDER_TYPE_LABELS: Record<ProductionOrderType, string> = {
+  daily: "يومي (فرش)",
+  weekly: "أسبوعي",
+  long_term: "طويل الأمد",
+};
 
 // Production Order Priorities
-export const PRODUCTION_PRIORITIES = [
-  "urgent",
-  "high",
-  "normal",
-  "low",
-] as const;
-export type ProductionPriority = (typeof PRODUCTION_PRIORITIES)[number];
+export const PRODUCTION_PRIORITIES = ["urgent", "high", "normal", "low"] as const;
+export type ProductionPriority = typeof PRODUCTION_PRIORITIES[number];
 
 export const PRODUCTION_PRIORITY_LABELS: Record<ProductionPriority, string> = {
   urgent: "عاجل جداً",
@@ -2070,20 +1743,10 @@ export const PRODUCTION_PRIORITY_LABELS: Record<ProductionPriority, string> = {
 };
 
 // Production Order Statuses
-export const PRODUCTION_ORDER_STATUSES = [
-  "draft",
-  "pending",
-  "approved",
-  "in_progress",
-  "completed",
-  "cancelled",
-] as const;
-export type ProductionOrderStatus = (typeof PRODUCTION_ORDER_STATUSES)[number];
+export const PRODUCTION_ORDER_STATUSES = ["draft", "pending", "approved", "in_progress", "completed", "cancelled"] as const;
+export type ProductionOrderStatus = typeof PRODUCTION_ORDER_STATUSES[number];
 
-export const PRODUCTION_ORDER_STATUS_LABELS: Record<
-  ProductionOrderStatus,
-  string
-> = {
+export const PRODUCTION_ORDER_STATUS_LABELS: Record<ProductionOrderStatus, string> = {
   draft: "مسودة",
   pending: "قيد الانتظار",
   approved: "معتمد",
@@ -2097,12 +1760,8 @@ export const advancedProductionOrders = pgTable("advanced_production_orders", {
   id: serial("id").primaryKey(),
   orderNumber: text("order_number").unique().notNull(),
   orderType: text("order_type").default("daily").notNull(), // daily, weekly, long_term
-  sourceBranchId: varchar("source_branch_id")
-    .notNull()
-    .references(() => branches.id), // الفرع المُرسِل
-  targetBranchId: varchar("target_branch_id")
-    .notNull()
-    .references(() => branches.id), // الفرع المُستهدف
+  sourceBranchId: varchar("source_branch_id").notNull().references(() => branches.id), // الفرع المُرسِل
+  targetBranchId: varchar("target_branch_id").notNull().references(() => branches.id), // الفرع المُستهدف
   targetDepartment: text("target_department"), // القسم المستهدف (مخبز، بسترى، ساندويتش، إلخ)
   title: text("title").notNull(), // عنوان الأمر
   description: text("description"),
@@ -2126,27 +1785,20 @@ export const advancedProductionOrders = pgTable("advanced_production_orders", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertAdvancedProductionOrderSchema = createInsertSchema(
-  advancedProductionOrders,
-).omit({
+export const insertAdvancedProductionOrderSchema = createInsertSchema(advancedProductionOrders).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
   approvedAt: true,
 });
 
-export type AdvancedProductionOrder =
-  typeof advancedProductionOrders.$inferSelect;
-export type InsertAdvancedProductionOrder = z.infer<
-  typeof insertAdvancedProductionOrderSchema
->;
+export type AdvancedProductionOrder = typeof advancedProductionOrders.$inferSelect;
+export type InsertAdvancedProductionOrder = z.infer<typeof insertAdvancedProductionOrderSchema>;
 
 // Production Order Items - عناصر أمر الإنتاج
 export const productionOrderItems = pgTable("production_order_items", {
   id: serial("id").primaryKey(),
-  orderId: integer("order_id")
-    .notNull()
-    .references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
+  orderId: integer("order_id").notNull().references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
   productId: integer("product_id").references(() => products.id),
   productName: text("product_name").notNull(),
   productCategory: text("product_category"),
@@ -2168,9 +1820,7 @@ export const productionOrderItems = pgTable("production_order_items", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertProductionOrderItemSchema = createInsertSchema(
-  productionOrderItems,
-).omit({
+export const insertProductionOrderItemSchema = createInsertSchema(productionOrderItems).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -2179,16 +1829,12 @@ export const insertProductionOrderItemSchema = createInsertSchema(
 });
 
 export type ProductionOrderItem = typeof productionOrderItems.$inferSelect;
-export type InsertProductionOrderItem = z.infer<
-  typeof insertProductionOrderItemSchema
->;
+export type InsertProductionOrderItem = z.infer<typeof insertProductionOrderItemSchema>;
 
 // Production Order Schedule - جدولة أوامر الإنتاج (للأوامر طويلة الأمد)
 export const productionOrderSchedules = pgTable("production_order_schedules", {
   id: serial("id").primaryKey(),
-  orderId: integer("order_id")
-    .notNull()
-    .references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
+  orderId: integer("order_id").notNull().references(() => advancedProductionOrders.id, { onDelete: "cascade" }),
   scheduledDate: text("scheduled_date").notNull(),
   dayOfWeek: text("day_of_week"), // saturday, sunday, monday, etc.
   shift: text("shift"), // morning, evening, night
@@ -2201,25 +1847,18 @@ export const productionOrderSchedules = pgTable("production_order_schedules", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertProductionOrderScheduleSchema = createInsertSchema(
-  productionOrderSchedules,
-).omit({
+export const insertProductionOrderScheduleSchema = createInsertSchema(productionOrderSchedules).omit({
   id: true,
   createdAt: true,
 });
 
-export type ProductionOrderSchedule =
-  typeof productionOrderSchedules.$inferSelect;
-export type InsertProductionOrderSchedule = z.infer<
-  typeof insertProductionOrderScheduleSchema
->;
+export type ProductionOrderSchedule = typeof productionOrderSchedules.$inferSelect;
+export type InsertProductionOrderSchedule = z.infer<typeof insertProductionOrderScheduleSchema>;
 
 // Production AI Plans - خطط الذكاء الاصطناعي
 export const productionAiPlans = pgTable("production_ai_plans", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
   planName: text("plan_name").notNull(),
   targetSalesValue: real("target_sales_value").notNull(), // قيمة المبيعات المستهدفة
   planDate: text("plan_date").notNull(),
@@ -2239,25 +1878,19 @@ export const productionAiPlans = pgTable("production_ai_plans", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertProductionAiPlanSchema = createInsertSchema(
-  productionAiPlans,
-).omit({
+export const insertProductionAiPlanSchema = createInsertSchema(productionAiPlans).omit({
   id: true,
   createdAt: true,
   reviewedAt: true,
 });
 
 export type ProductionAiPlan = typeof productionAiPlans.$inferSelect;
-export type InsertProductionAiPlan = z.infer<
-  typeof insertProductionAiPlanSchema
->;
+export type InsertProductionAiPlan = z.infer<typeof insertProductionAiPlanSchema>;
 
 // Sales Data Uploads - رفع بيانات المبيعات
 export const salesDataUploads = pgTable("sales_data_uploads", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
   fileName: text("file_name").notNull(),
   fileType: text("file_type").default("excel"), // excel, csv
   fileSize: integer("file_size"),
@@ -2274,9 +1907,7 @@ export const salesDataUploads = pgTable("sales_data_uploads", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertSalesDataUploadSchema = createInsertSchema(
-  salesDataUploads,
-).omit({
+export const insertSalesDataUploadSchema = createInsertSchema(salesDataUploads).omit({
   id: true,
   createdAt: true,
 });
@@ -2287,9 +1918,7 @@ export type InsertSalesDataUpload = z.infer<typeof insertSalesDataUploadSchema>;
 // Product Sales Analytics - تحليلات مبيعات المنتجات (من البيانات المرفوعة)
 export const productSalesAnalytics = pgTable("product_sales_analytics", {
   id: serial("id").primaryKey(),
-  uploadId: integer("upload_id")
-    .notNull()
-    .references(() => salesDataUploads.id, { onDelete: "cascade" }),
+  uploadId: integer("upload_id").notNull().references(() => salesDataUploads.id, { onDelete: "cascade" }),
   productId: integer("product_id").references(() => products.id),
   productName: text("product_name").notNull(),
   productCategory: text("product_category"),
@@ -2303,32 +1932,34 @@ export const productSalesAnalytics = pgTable("product_sales_analytics", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertProductSalesAnalyticsSchema = createInsertSchema(
-  productSalesAnalytics,
-).omit({
+export const insertProductSalesAnalyticsSchema = createInsertSchema(productSalesAnalytics).omit({
   id: true,
   createdAt: true,
 });
 
 export type ProductSalesAnalytics = typeof productSalesAnalytics.$inferSelect;
-export type InsertProductSalesAnalytics = z.infer<
-  typeof insertProductSalesAnalyticsSchema
->;
+export type InsertProductSalesAnalytics = z.infer<typeof insertProductSalesAnalyticsSchema>;
 
+=======
+>>>>>>> 41a825ba7c68872778a4d6ec925d42194eee6a63
 // Daily Production Batches - دفعات الإنتاج الفعلي اليومي
 export const dailyProductionBatches = pgTable("daily_production_batches", {
   id: serial("id").primaryKey(),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
   productId: integer("product_id").references(() => products.id),
   productName: text("product_name").notNull(),
   productCategory: text("product_category"),
   quantity: integer("quantity").notNull(),
   unit: text("unit").default("قطعة"),
+<<<<<<< HEAD
   destination: text("destination").notNull(), // display_bar, kitchen_trolley, freezer, refrigerator
   shiftId: integer("shift_id").references(() => shifts.id),
+  productionOrderId: integer("production_order_id").references(() => advancedProductionOrders.id),
+=======
+  destination: text("destination").notNull(),
+  shiftId: integer("shift_id").references(() => shifts.id),
   productionOrderId: integer("production_order_id"),
+>>>>>>> 41a825ba7c68872778a4d6ec925d42194eee6a63
   producedAt: timestamp("produced_at").defaultNow().notNull(),
   recordedBy: varchar("recorded_by").references(() => users.id),
   recorderName: text("recorder_name"),
@@ -2336,14 +1967,10 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertDailyProductionBatchSchema = createInsertSchema(
-  dailyProductionBatches,
-).omit({
+export const insertDailyProductionBatchSchema = createInsertSchema(dailyProductionBatches).omit({
   id: true,
   createdAt: true,
 });
 
 export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;
-export type InsertDailyProductionBatch = z.infer<
-  typeof insertDailyProductionBatchSchema
->;
+export type InsertDailyProductionBatch = z.infer<typeof insertDailyProductionBatchSchema>;
