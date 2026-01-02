@@ -4104,6 +4104,84 @@ export async function registerRoutes(
 
   // ===== Waste Reports Routes =====
 
+  // Get Waste Analytics - waste vs sales comparison (must be before /:id route)
+  app.get("/api/waste-reports/analytics", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const date = req.query.date as string || new Date().toISOString().split('T')[0];
+      
+      // Get current month date range
+      const currentMonth = date.substring(0, 7);
+      const monthStart = `${currentMonth}-01`;
+      const monthEnd = `${currentMonth}-31`;
+      
+      // Get daily waste reports
+      const dailyWasteReports = await storage.getWasteReports(branchId, date, date);
+      const dailyWasteValue = dailyWasteReports.reduce((sum, r) => sum + (r.totalValue || 0), 0);
+      const dailyWasteItems = dailyWasteReports.reduce((sum, r) => sum + (r.totalItems || 0), 0);
+      
+      // Get monthly waste reports
+      const monthlyWasteReports = await storage.getWasteReports(branchId, monthStart, monthEnd);
+      const monthlyWasteValue = monthlyWasteReports.reduce((sum, r) => sum + (r.totalValue || 0), 0);
+      const monthlyWasteItems = monthlyWasteReports.reduce((sum, r) => sum + (r.totalItems || 0), 0);
+      
+      // Get daily sales from cashier journals
+      const allJournals = await storage.getAllCashierJournals();
+      const dailyJournals = allJournals.filter(j => 
+        j.journalDate === date && (!branchId || j.branchId === branchId)
+      );
+      const dailySales = dailyJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+      
+      // Get monthly sales
+      const monthlyJournals = allJournals.filter(j => 
+        j.journalDate >= monthStart && j.journalDate <= monthEnd && 
+        (!branchId || j.branchId === branchId)
+      );
+      const monthlySales = monthlyJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+      
+      // Calculate waste percentages
+      const dailyWastePercent = dailySales > 0 ? (dailyWasteValue / dailySales) * 100 : 0;
+      const monthlyWastePercent = monthlySales > 0 ? (monthlyWasteValue / monthlySales) * 100 : 0;
+      
+      // Get waste by reason
+      const wasteByReason: Record<string, { count: number; value: number }> = {};
+      for (const report of dailyWasteReports) {
+        const items = await storage.getWasteItems(report.id);
+        for (const item of items) {
+          const reason = item.wasteReason || 'other';
+          if (!wasteByReason[reason]) {
+            wasteByReason[reason] = { count: 0, value: 0 };
+          }
+          wasteByReason[reason].count += item.quantity || 0;
+          wasteByReason[reason].value += item.totalValue || 0;
+        }
+      }
+      
+      res.json({
+        date,
+        branchId: branchId || 'all',
+        daily: {
+          wasteValue: dailyWasteValue,
+          wasteItems: dailyWasteItems,
+          sales: dailySales,
+          wastePercent: Math.round(dailyWastePercent * 100) / 100,
+          reportsCount: dailyWasteReports.length,
+        },
+        monthly: {
+          wasteValue: monthlyWasteValue,
+          wasteItems: monthlyWasteItems,
+          sales: monthlySales,
+          wastePercent: Math.round(monthlyWastePercent * 100) / 100,
+          reportsCount: monthlyWasteReports.length,
+        },
+        wasteByReason,
+      });
+    } catch (error) {
+      console.error("Error fetching waste analytics:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات الهالك" });
+    }
+  });
+
   // Get Waste Stats - today's summary by branch (must be before /:id route)
   app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {

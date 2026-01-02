@@ -110,9 +110,16 @@ export default function DisplayBarWastePage() {
   const [unlistedProductId, setUnlistedProductId] = useState("");
   const [dailyWasteSearch, setDailyWasteSearch] = useState("");
   const [wasteBranch, setWasteBranch] = useState("");
+  const [wasteShift, setWasteShift] = useState<string>("morning");
   const [wasteImageInputRef, setWasteImageInputRef] = useState<number | null>(null);
   const wasteFileInputRef = useRef<HTMLInputElement>(null);
   const [wasteEntriesInitialized, setWasteEntriesInitialized] = useState("");
+  
+  const SHIFT_OPTIONS = [
+    { value: "morning", label: "الوردية الصباحية", time: "06:00 - 14:00" },
+    { value: "evening", label: "الوردية المسائية", time: "14:00 - 22:00" },
+    { value: "night", label: "الوردية الليلية", time: "22:00 - 06:00" },
+  ];
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -158,6 +165,27 @@ export default function DisplayBarWastePage() {
 
   const { data: wasteStats } = useQuery({
     queryKey: ["/api/waste-reports/stats"],
+  });
+
+  // Waste Analytics - waste vs sales comparison
+  interface WasteAnalytics {
+    date: string;
+    branchId: string;
+    daily: { wasteValue: number; wasteItems: number; sales: number; wastePercent: number; reportsCount: number };
+    monthly: { wasteValue: number; wasteItems: number; sales: number; wastePercent: number; reportsCount: number };
+    wasteByReason: Record<string, { count: number; value: number }>;
+  }
+  
+  const { data: wasteAnalytics } = useQuery<WasteAnalytics>({
+    queryKey: ["/api/waste-reports/analytics", selectedBranch, selectedDate],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (selectedDate) params.append("date", selectedDate);
+      const res = await fetch(`/api/waste-reports/analytics?${params}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
   });
 
   const { data: viewingReportItems = [], isFetching: isFetchingItems, isSuccess: isItemsSuccess } = useQuery<WasteItem[]>({
@@ -555,6 +583,7 @@ export default function DisplayBarWastePage() {
       const response = await apiRequest("POST", "/api/waste-reports", {
         branchId: wasteBranch,
         reportDate: selectedDate,
+        shiftName: wasteShift,
         status: "draft",
         reporterName: user?.username,
         totalItems: totalWasteItems,
@@ -648,6 +677,7 @@ export default function DisplayBarWastePage() {
           </div>
         </div>
 
+        {/* Stats Cards - Basic */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card className="bg-blue-50/50 border-blue-100">
             <CardContent className="p-3">
@@ -706,6 +736,79 @@ export default function DisplayBarWastePage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Waste vs Sales Analytics */}
+        {wasteAnalytics && (
+          <Card className="border-2 border-primary/20 bg-gradient-to-l from-primary/5 to-amber-50/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingDown className="w-5 h-5 text-primary" />
+                تحليل الهدر مقابل المبيعات
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Daily Waste */}
+                <div className="bg-white rounded-lg p-3 border shadow-sm">
+                  <div className="text-xs text-muted-foreground mb-1">هالك اليوم</div>
+                  <div className="text-lg font-bold text-red-600">
+                    {(wasteAnalytics.daily?.wasteValue || 0).toLocaleString()} ر.س
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {wasteAnalytics.daily?.wasteItems || 0} صنف
+                  </div>
+                </div>
+                
+                {/* Daily Sales */}
+                <div className="bg-white rounded-lg p-3 border shadow-sm">
+                  <div className="text-xs text-muted-foreground mb-1">مبيعات اليوم</div>
+                  <div className="text-lg font-bold text-green-600">
+                    {(wasteAnalytics.daily?.sales || 0).toLocaleString()} ر.س
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    من يومية الكاشير
+                  </div>
+                </div>
+                
+                {/* Daily Waste % */}
+                <div className="bg-white rounded-lg p-3 border shadow-sm">
+                  <div className="text-xs text-muted-foreground mb-1">نسبة الهدر اليومي</div>
+                  <div className={`text-lg font-bold ${(wasteAnalytics.daily?.wastePercent || 0) > 5 ? 'text-red-600' : (wasteAnalytics.daily?.wastePercent || 0) > 2 ? 'text-amber-600' : 'text-green-600'}`}>
+                    {(wasteAnalytics.daily?.wastePercent || 0).toFixed(2)}%
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {(wasteAnalytics.daily?.wastePercent || 0) > 5 ? 'مرتفع - يحتاج مراجعة' : (wasteAnalytics.daily?.wastePercent || 0) > 2 ? 'متوسط' : 'ممتاز'}
+                  </div>
+                </div>
+                
+                {/* Monthly Waste % */}
+                <div className="bg-white rounded-lg p-3 border shadow-sm">
+                  <div className="text-xs text-muted-foreground mb-1">نسبة الهدر الشهري</div>
+                  <div className={`text-lg font-bold ${(wasteAnalytics.monthly?.wastePercent || 0) > 5 ? 'text-red-600' : (wasteAnalytics.monthly?.wastePercent || 0) > 2 ? 'text-amber-600' : 'text-green-600'}`}>
+                    {(wasteAnalytics.monthly?.wastePercent || 0).toFixed(2)}%
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    هالك: {(wasteAnalytics.monthly?.wasteValue || 0).toLocaleString()} من {(wasteAnalytics.monthly?.sales || 0).toLocaleString()} ر.س
+                  </div>
+                </div>
+              </div>
+              
+              {/* Waste by Reason */}
+              {wasteAnalytics.wasteByReason && Object.keys(wasteAnalytics.wasteByReason).length > 0 && (
+                <div className="mt-4 pt-3 border-t">
+                  <div className="text-sm font-medium mb-2">أسباب الهالك اليوم</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(wasteAnalytics.wasteByReason).map(([reason, data]) => (
+                      <Badge key={reason} variant="outline" className="text-xs">
+                        {WASTE_REASONS.find(r => r.value === reason)?.label || reason}: {data.count} قطعة ({data.value.toLocaleString()} ر.س)
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setCurrentPage(1); }}>
           <div className="flex items-center justify-between">
@@ -1298,6 +1401,22 @@ export default function DisplayBarWastePage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Select value={wasteShift} onValueChange={setWasteShift}>
+                      <SelectTrigger className="w-44 h-9" data-testid="select-waste-shift">
+                        <Clock className="w-4 h-4 ml-2" />
+                        <SelectValue placeholder="الوردية" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SHIFT_OPTIONS.map(shift => (
+                          <SelectItem key={shift.value} value={shift.value}>
+                            <div className="flex flex-col">
+                              <span>{shift.label}</span>
+                              <span className="text-[10px] text-muted-foreground">{shift.time}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -1311,7 +1430,7 @@ export default function DisplayBarWastePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
                   <div className="bg-white rounded-lg p-3 border">
                     <div className="text-xs text-muted-foreground">أصناف مستلمة</div>
                     <div className="text-xl font-bold text-blue-600">{aggregatedReceivedProducts.length}</div>
@@ -1323,6 +1442,12 @@ export default function DisplayBarWastePage() {
                   <div className="bg-white rounded-lg p-3 border">
                     <div className="text-xs text-muted-foreground">إجمالي قيمة الهالك</div>
                     <div className="text-xl font-bold text-red-600">{totalWasteValue.toLocaleString()} ر.س</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border">
+                    <div className="text-xs text-muted-foreground">الوردية</div>
+                    <div className="text-lg font-bold text-purple-600">
+                      {SHIFT_OPTIONS.find(s => s.value === wasteShift)?.label || "صباحية"}
+                    </div>
                   </div>
                   <div className="bg-white rounded-lg p-3 border">
                     <div className="text-xs text-muted-foreground">التاريخ</div>

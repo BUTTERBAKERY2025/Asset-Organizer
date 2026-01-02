@@ -1959,6 +1959,7 @@ export const wasteReports = pgTable("waste_reports", {
     .references(() => branches.id, { onDelete: "cascade" }),
   reportDate: text("report_date").notNull(), // YYYY-MM-DD
   shiftId: integer("shift_id").references(() => shifts.id),
+  shiftName: text("shift_name"), // morning, evening, night - اسم الوردية
   reportedBy: varchar("reported_by").references(() => users.id),
   reporterName: text("reporter_name"),
   totalItems: integer("total_items").default(0).notNull(),
