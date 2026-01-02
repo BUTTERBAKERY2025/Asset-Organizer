@@ -914,10 +914,13 @@ export default function DailyProductionPage() {
                     <div className="space-y-2">
                       <Label>الكمية *</Label>
                       <Input
-                        type="number"
-                        min="1"
+                        type="text"
+                        inputMode="numeric"
                         value={quantity}
-                        onChange={(e) => setQuantity(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, '');
+                          setQuantity(val);
+                        }}
                         placeholder="أدخل الكمية"
                         ref={quantityInputRef}
                         data-testid="input-quantity"
@@ -1659,10 +1662,13 @@ export default function DailyProductionPage() {
             <div className="space-y-2">
               <Label>الكمية</Label>
               <Input
-                type="number"
-                min="1"
+                type="text"
+                inputMode="numeric"
                 value={editQuantity}
-                onChange={(e) => setEditQuantity(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  setEditQuantity(val);
+                }}
               />
             </div>
             <div className="space-y-2">
