@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
+import { ProductionProvider } from "@/contexts/ProductionContext";
 import NotFound from "@/pages/not-found";
 import PlatformHomePage from "@/pages/platform-home";
 import DashboardPage from "@/pages/dashboard";
@@ -42,6 +43,14 @@ import TargetsDashboardPage from "@/pages/targets-dashboard";
 import IncentivesManagementPage from "@/pages/incentives-management";
 import SalesAnalyticsPage from "@/pages/sales-analytics";
 import DisplayBarWastePage from "@/pages/display-bar-waste";
+import AdvancedProductionOrdersPage from "@/pages/advanced-production-orders";
+import AdvancedProductionOrderFormPage from "@/pages/advanced-production-order-form";
+import AdvancedProductionOrderDetailsPage from "@/pages/advanced-production-order-details";
+import AdvancedProductionPlannerPage from "@/pages/ai-production-planner";
+import SalesDataUploadsPage from "@/pages/sales-data-uploads";
+import ProductionDashboardPage from "@/pages/production-dashboard";
+import DailyProductionPage from "@/pages/daily-production";
+import ProductionReportsPage from "@/pages/production-reports";
 
 function Router() {
   return (
@@ -83,6 +92,15 @@ function Router() {
       <Route path="/incentives-management" component={IncentivesManagementPage} />
       <Route path="/sales-analytics" component={SalesAnalyticsPage} />
       <Route path="/display-bar-waste" component={DisplayBarWastePage} />
+      <Route path="/production-dashboard" component={ProductionDashboardPage} />
+      <Route path="/advanced-production-orders" component={AdvancedProductionOrdersPage} />
+      <Route path="/advanced-production-orders/new" component={AdvancedProductionOrderFormPage} />
+      <Route path="/advanced-production-orders/:id" component={AdvancedProductionOrderDetailsPage} />
+      <Route path="/advanced-production-orders/:id/edit" component={AdvancedProductionOrderFormPage} />
+      <Route path="/ai-production-planner" component={AdvancedProductionPlannerPage} />
+      <Route path="/sales-data-uploads" component={SalesDataUploadsPage} />
+      <Route path="/daily-production" component={DailyProductionPage} />
+      <Route path="/production-reports" component={ProductionReportsPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -91,12 +109,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-        <PWAInstallPrompt />
-        <OfflineIndicator />
-      </TooltipProvider>
+      <ProductionProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+          <PWAInstallPrompt />
+          <OfflineIndicator />
+        </TooltipProvider>
+      </ProductionProvider>
     </QueryClientProvider>
   );
 }
