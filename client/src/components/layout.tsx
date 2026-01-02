@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, CheckCircle, BarChart3, Target, Gift, TrendingUp } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -48,7 +48,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Close mobile menu when route changes
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location]);
@@ -90,11 +89,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Factory,
         items: [
           { href: "/operations", label: "لوحة التشغيل", icon: Factory, module: "operations" },
+          { href: "/production-dashboard", label: "لوحة الإنتاج", icon: ClipboardList, module: "production" },
           { href: "/products", label: "المنتجات", icon: Package, module: "operations" },
           { href: "/shifts", label: "الورديات", icon: Clock, module: "shifts" },
-          { href: "/production", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
+          { href: "/advanced-production-orders", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
+          { href: "/ai-production-planner", label: "مخطط الإنتاج الذكي", icon: Brain, module: "production" },
+          { href: "/sales-data-uploads", label: "رفع بيانات المبيعات", icon: Upload, module: "production" },
           { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
           { href: "/display-bar-waste", label: "بار العرض والهالك", icon: Package, module: "operations" },
+          { href: "/daily-production", label: "الإنتاج الفعلي اليومي", icon: ClipboardCheck, module: "production" },
+          { href: "/production-reports", label: "تقارير الإنتاج", icon: FileBarChart, module: "production" },
           { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
         ],
       },
