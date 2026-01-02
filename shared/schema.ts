@@ -1717,3 +1717,29 @@ export const DISPLAY_BAR_CATEGORY_LABELS: Record<DisplayBarCategory, string> = {
   breakfast: "فطور",
   sandwich: "ساندويتش",
 };
+// Daily Production Batches - دفعات الإنتاج الفعلي اليومي
+export const dailyProductionBatches = pgTable("daily_production_batches", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").default("قطعة"),
+  destination: text("destination").notNull(),
+  shiftId: integer("shift_id").references(() => shifts.id),
+  productionOrderId: integer("production_order_id"),
+  producedAt: timestamp("produced_at").defaultNow().notNull(),
+  recordedBy: varchar("recorded_by").references(() => users.id),
+  recorderName: text("recorder_name"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDailyProductionBatchSchema = createInsertSchema(dailyProductionBatches).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;
+export type InsertDailyProductionBatch = z.infer<typeof insertDailyProductionBatchSchema>;
