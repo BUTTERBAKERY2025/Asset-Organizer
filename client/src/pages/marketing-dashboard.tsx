@@ -102,44 +102,16 @@ export default function MarketingDashboardPage() {
     {
       title: "الحملات التسويقية",
       description: "إدارة ومتابعة جميع الحملات التسويقية",
-      href: "/marketing/campaigns",
+      href: "/marketing-campaigns",
       icon: Megaphone,
       color: "bg-amber-500",
     },
     {
       title: "المؤثرين والبلوجرز",
       description: "إدارة علاقات المؤثرين والتعاونات",
-      href: "/marketing/influencers",
+      href: "/marketing-influencers",
       icon: Users,
       color: "bg-blue-500",
-    },
-    {
-      title: "تقويم التسويق",
-      description: "جدولة الحملات والفعاليات التسويقية",
-      href: "/marketing/calendar",
-      icon: Calendar,
-      color: "bg-purple-500",
-    },
-    {
-      title: "مهام التسويق",
-      description: "متابعة المهام والأنشطة التسويقية",
-      href: "/marketing/tasks",
-      icon: Target,
-      color: "bg-orange-500",
-    },
-    {
-      title: "تقارير الأداء",
-      description: "تحليلات وتقارير أداء الحملات",
-      href: "/marketing/reports",
-      icon: FileBarChart,
-      color: "bg-green-500",
-    },
-    {
-      title: "فريق التسويق",
-      description: "إدارة فريق التسويق والمهام",
-      href: "/marketing/team",
-      icon: TrendingUp,
-      color: "bg-indigo-500",
     },
   ];
 
