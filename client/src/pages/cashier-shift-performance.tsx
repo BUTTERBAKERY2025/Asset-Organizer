@@ -64,8 +64,8 @@ export default function CashierShiftPerformance() {
     shiftType: "morning",
     cashierRole: "main",
     targetAmount: 0,
-    minTransactions: 0,
-    avgTicketTarget: 0,
+    targetTransactions: 0,
+    targetTicketValue: 0,
   });
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -136,8 +136,8 @@ export default function CashierShiftPerformance() {
       shiftType: "morning",
       cashierRole: "main",
       targetAmount: 0,
-      minTransactions: 0,
-      avgTicketTarget: 0,
+      targetTransactions: 0,
+      targetTicketValue: 0,
     });
   };
 
@@ -255,6 +255,16 @@ export default function CashierShiftPerformance() {
                     </Select>
                   </div>
                   <div className="grid gap-2">
+                    <Label>رقم/معرّف الكاشير</Label>
+                    <Input 
+                      type="text" 
+                      value={newTarget.cashierId} 
+                      onChange={(e) => setNewTarget({...newTarget, cashierId: e.target.value})}
+                      placeholder="أدخل معرّف الكاشير"
+                      data-testid="input-cashier-id"
+                    />
+                  </div>
+                  <div className="grid gap-2">
                     <Label>نوع الشفت</Label>
                     <Select value={newTarget.shiftType} onValueChange={(v) => setNewTarget({...newTarget, shiftType: v})}>
                       <SelectTrigger data-testid="select-shift-type">
@@ -290,21 +300,21 @@ export default function CashierShiftPerformance() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>الحد الأدنى للمعاملات</Label>
+                    <Label>عدد المعاملات المستهدف</Label>
                     <Input 
                       type="number" 
-                      value={newTarget.minTransactions} 
-                      onChange={(e) => setNewTarget({...newTarget, minTransactions: Number(e.target.value)})}
-                      data-testid="input-min-transactions"
+                      value={newTarget.targetTransactions} 
+                      onChange={(e) => setNewTarget({...newTarget, targetTransactions: Number(e.target.value)})}
+                      data-testid="input-target-transactions"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label>هدف متوسط الفاتورة (ريال)</Label>
                     <Input 
                       type="number" 
-                      value={newTarget.avgTicketTarget} 
-                      onChange={(e) => setNewTarget({...newTarget, avgTicketTarget: Number(e.target.value)})}
-                      data-testid="input-avg-ticket-target"
+                      value={newTarget.targetTicketValue} 
+                      onChange={(e) => setNewTarget({...newTarget, targetTicketValue: Number(e.target.value)})}
+                      data-testid="input-target-ticket-value"
                     />
                   </div>
                 </div>
@@ -314,7 +324,7 @@ export default function CashierShiftPerformance() {
                   </Button>
                   <Button onClick={() => createTargetMutation.mutate({
                     ...newTarget,
-                    date: selectedDate,
+                    targetDate: selectedDate,
                   })} data-testid="button-save-target">
                     حفظ الهدف
                   </Button>
