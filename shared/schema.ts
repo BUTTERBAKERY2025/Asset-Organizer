@@ -2511,3 +2511,197 @@ export const insertUserBranchAccessSchema = createInsertSchema(userBranchAccess)
 
 export type UserBranchAccess = typeof userBranchAccess.$inferSelect;
 export type InsertUserBranchAccess = z.infer<typeof insertUserBranchAccessSchema>;
+
+// ==========================================
+// نظام أهداف الشفت والكاشير - Shift & Cashier Targets
+// ==========================================
+
+// Cashier Shift Targets - أهداف الكاشير داخل الشفت
+export const cashierShiftTargets = pgTable("cashier_shift_targets", {
+  id: serial("id").primaryKey(),
+  shiftAllocationId: integer("shift_allocation_id")
+    .references(() => targetShiftAllocations.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  cashierId: varchar("cashier_id")
+    .notNull()
+    .references(() => users.id),
+  targetDate: text("target_date").notNull(), // YYYY-MM-DD
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  cashierRole: text("cashier_role").default("main").notNull(), // main, assistant
+  targetAmount: real("target_amount").notNull(), // هدف المبيعات
+  targetTicketValue: real("target_ticket_value"), // هدف متوسط الفاتورة
+  targetTransactions: integer("target_transactions"), // عدد المعاملات المستهدف
+  shiftStartTime: text("shift_start_time"), // وقت بدء الشفت HH:MM
+  shiftEndTime: text("shift_end_time"), // وقت انتهاء الشفت HH:MM
+  shiftDurationHours: real("shift_duration_hours"), // مدة الشفت بالساعات
+  // Alert thresholds
+  alertThresholdPercent: real("alert_threshold_percent").default(80), // تنبيه عند الوصول لهذه النسبة
+  belowTrackThreshold: real("below_track_threshold").default(70), // تحذير التأخر عن المسار
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCashierShiftTargetSchema = createInsertSchema(cashierShiftTargets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CashierShiftTarget = typeof cashierShiftTargets.$inferSelect;
+export type InsertCashierShiftTarget = z.infer<typeof insertCashierShiftTargetSchema>;
+
+// Average Ticket Targets - أهداف متوسط الفاتورة
+export const averageTicketTargets = pgTable("average_ticket_targets", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .references(() => branches.id),
+  cashierId: varchar("cashier_id")
+    .references(() => users.id),
+  shiftType: text("shift_type"), // morning, evening, night, or null for all
+  targetType: text("target_type").notNull(), // branch, cashier, shift
+  targetValue: real("target_value").notNull(), // القيمة المستهدفة لمتوسط الفاتورة
+  minAcceptable: real("min_acceptable"), // الحد الأدنى المقبول
+  bonusThreshold: real("bonus_threshold"), // عتبة المكافأة
+  bonusPerRiyal: real("bonus_per_riyal"), // مكافأة لكل ريال فوق الهدف
+  validFrom: text("valid_from").notNull(), // تاريخ البدء
+  validTo: text("valid_to"), // تاريخ الانتهاء
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAverageTicketTargetSchema = createInsertSchema(averageTicketTargets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AverageTicketTarget = typeof averageTicketTargets.$inferSelect;
+export type InsertAverageTicketTarget = z.infer<typeof insertAverageTicketTargetSchema>;
+
+// Performance Alerts - تنبيهات الأداء الفورية
+export const performanceAlerts = pgTable("performance_alerts", {
+  id: serial("id").primaryKey(),
+  alertType: text("alert_type").notNull(), // shift_behind, shift_ahead, cashier_behind, cashier_ahead, ticket_low
+  severity: text("severity").notNull(), // info, warning, critical, success
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  cashierId: varchar("cashier_id")
+    .references(() => users.id),
+  shiftType: text("shift_type"), // morning, evening, night
+  alertDate: text("alert_date").notNull(), // YYYY-MM-DD
+  alertTime: text("alert_time").notNull(), // HH:MM:SS
+  targetAmount: real("target_amount"),
+  currentAmount: real("current_amount"),
+  achievementPercent: real("achievement_percent"),
+  message: text("message").notNull(),
+  messageAr: text("message_ar"), // الرسالة بالعربية
+  isRead: boolean("is_read").default(false).notNull(),
+  isAcknowledged: boolean("is_acknowledged").default(false).notNull(),
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  metadata: jsonb("metadata"), // بيانات إضافية
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPerformanceAlertSchema = createInsertSchema(performanceAlerts).omit({
+  id: true,
+  acknowledgedAt: true,
+  createdAt: true,
+});
+
+export type PerformanceAlert = typeof performanceAlerts.$inferSelect;
+export type InsertPerformanceAlert = z.infer<typeof insertPerformanceAlertSchema>;
+
+// Real-time Shift Performance Tracking - تتبع أداء الشفت المباشر
+export const shiftPerformanceTracking = pgTable("shift_performance_tracking", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  trackingDate: text("tracking_date").notNull(), // YYYY-MM-DD
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  shiftStartTime: text("shift_start_time").notNull(), // HH:MM
+  shiftEndTime: text("shift_end_time"), // HH:MM (null if ongoing)
+  // Target metrics
+  shiftTargetAmount: real("shift_target_amount").notNull(),
+  expectedAtCurrentTime: real("expected_at_current_time").default(0), // المتوقع حتى الآن
+  // Actual metrics
+  currentSalesAmount: real("current_sales_amount").default(0).notNull(),
+  currentTransactions: integer("current_transactions").default(0),
+  currentAverageTicket: real("current_average_ticket").default(0),
+  currentCashierCount: integer("current_cashier_count").default(0),
+  // Performance indicators
+  achievementPercent: real("achievement_percent").default(0),
+  progressStatus: text("progress_status").default("on_track"), // on_track, behind, ahead, critical
+  estimatedEndAmount: real("estimated_end_amount").default(0), // التقدير للنهاية
+  // Cashier breakdown
+  topCashierId: varchar("top_cashier_id").references(() => users.id),
+  topCashierSales: real("top_cashier_sales").default(0),
+  lowestCashierId: varchar("lowest_cashier_id").references(() => users.id),
+  lowestCashierSales: real("lowest_cashier_sales").default(0),
+  // Timestamps
+  lastUpdatedAt: timestamp("last_updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertShiftPerformanceTrackingSchema = createInsertSchema(shiftPerformanceTracking).omit({
+  id: true,
+  lastUpdatedAt: true,
+  createdAt: true,
+});
+
+export type ShiftPerformanceTracking = typeof shiftPerformanceTracking.$inferSelect;
+export type InsertShiftPerformanceTracking = z.infer<typeof insertShiftPerformanceTrackingSchema>;
+
+// Performance Alert Types
+export const PERFORMANCE_ALERT_TYPES = [
+  "shift_behind",
+  "shift_ahead", 
+  "cashier_behind",
+  "cashier_ahead",
+  "ticket_low",
+  "ticket_high",
+  "target_achieved",
+  "target_exceeded",
+] as const;
+export type PerformanceAlertType = (typeof PERFORMANCE_ALERT_TYPES)[number];
+
+export const PERFORMANCE_ALERT_LABELS: Record<PerformanceAlertType, string> = {
+  shift_behind: "الشفت متأخر عن الهدف",
+  shift_ahead: "الشفت متقدم على الهدف",
+  cashier_behind: "الكاشير متأخر",
+  cashier_ahead: "الكاشير متقدم",
+  ticket_low: "متوسط الفاتورة منخفض",
+  ticket_high: "متوسط الفاتورة مرتفع",
+  target_achieved: "تم تحقيق الهدف",
+  target_exceeded: "تم تجاوز الهدف",
+};
+
+// Progress Status Types
+export const PROGRESS_STATUS = ["on_track", "behind", "ahead", "critical"] as const;
+export type ProgressStatus = (typeof PROGRESS_STATUS)[number];
+
+export const PROGRESS_STATUS_LABELS: Record<ProgressStatus, string> = {
+  on_track: "في المسار",
+  behind: "متأخر",
+  ahead: "متقدم",
+  critical: "حرج",
+};
+
+// Cashier Role Types
+export const CASHIER_ROLES = ["main", "assistant", "trainee"] as const;
+export type CashierRole = (typeof CASHIER_ROLES)[number];
+
+export const CASHIER_ROLE_LABELS: Record<CashierRole, string> = {
+  main: "كاشير رئيسي",
+  assistant: "كاشير مساعد",
+  trainee: "متدرب",
+};
