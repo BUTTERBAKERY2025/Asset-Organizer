@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   if (isAuthenticated) {
-    setLocation("/dashboard");
+    setLocation("/");
     return null;
   }
 
@@ -26,7 +26,7 @@ export default function LoginPage() {
     
     try {
       await login({ username, password });
-      setLocation("/dashboard");
+      setLocation("/");
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول");
     }
