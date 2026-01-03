@@ -52,6 +52,7 @@ import ProductionDashboardPage from "@/pages/production-dashboard";
 import DailyProductionPage from "@/pages/daily-production";
 import ProductionReportsPage from "@/pages/production-reports";
 import RBACManagementPage from "@/pages/rbac-management";
+import CashierShiftPerformancePage from "@/pages/cashier-shift-performance";
 
 function Router() {
   return (
@@ -103,6 +104,7 @@ function Router() {
       <Route path="/daily-production" component={DailyProductionPage} />
       <Route path="/production-reports" component={ProductionReportsPage} />
       <Route path="/rbac-management" component={RBACManagementPage} />
+      <Route path="/cashier-shift-performance" component={CashierShiftPerformancePage} />
       <Route component={NotFound} />
     </Switch>
   );
