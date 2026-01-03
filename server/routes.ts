@@ -2472,6 +2472,25 @@ export async function registerRoutes(
             details: { breakdownTotal, totalSales, difference: Math.abs(breakdownTotal - totalSales) }
           });
         }
+        
+        // Calculate networkTotal and deliveryTotal from payment breakdowns
+        const cardMethods = ['card', 'mada', 'stc_pay', 'apple_pay', 'visa', 'mastercard'];
+        const deliveryMethods = ['delivery_app', 'hunger_station', 'hungerstation', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'];
+        
+        journalData.networkTotal = paymentBreakdowns
+          .filter((b: any) => cardMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        
+        journalData.deliveryTotal = paymentBreakdowns
+          .filter((b: any) => deliveryMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+      }
+      
+      // Calculate average ticket from transaction count
+      const transactionCount = parseInt(journalData.transactionCount) || 0;
+      const totalSalesAmount = parseFloat(journalData.totalSales) || 0;
+      if (transactionCount > 0) {
+        journalData.averageTicket = totalSalesAmount / transactionCount;
       }
       
       // Add creator info
@@ -2535,6 +2554,25 @@ export async function registerRoutes(
         if (diff > 0.01) {
           return res.status(400).json({ error: "Payment breakdown total must match total sales" });
         }
+        
+        // Calculate networkTotal and deliveryTotal from payment breakdowns
+        const cardMethods = ['card', 'mada', 'stc_pay', 'apple_pay', 'visa', 'mastercard'];
+        const deliveryMethods = ['delivery_app', 'hunger_station', 'hungerstation', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'];
+        
+        journalData.networkTotal = paymentBreakdowns
+          .filter((b: any) => cardMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        
+        journalData.deliveryTotal = paymentBreakdowns
+          .filter((b: any) => deliveryMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+      }
+      
+      // Calculate average ticket from transaction count
+      const transactionCount = parseInt(journalData.transactionCount) || 0;
+      const totalSalesAmount = parseFloat(journalData.totalSales) || 0;
+      if (transactionCount > 0) {
+        journalData.averageTicket = totalSalesAmount / transactionCount;
       }
       
       const journal = await storage.updateCashierJournal(id, journalData);
