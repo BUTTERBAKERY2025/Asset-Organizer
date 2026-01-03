@@ -23,6 +23,11 @@ import {
   Trash2,
   Users,
   Loader2,
+  DollarSign,
+  Percent,
+  Factory,
+  ClipboardCheck,
+  Sparkles,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -34,6 +39,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProductionContext } from "@/contexts/ProductionContext";
 import * as XLSX from "xlsx";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart as RechartsPie,
+  Pie,
+  Cell,
+  ComposedChart,
+  Area,
+} from "recharts";
 
 interface Branch {
   id: string;
@@ -56,10 +78,15 @@ interface ReportData {
     gap: number;
     status: string;
   };
+  salesData?: {
+    totalSales: number;
+    journalCount: number;
+  };
   wasteAnalysis: {
     totalReports: number;
     totalQuantity: number;
     totalValue: number;
+    wastePercentage?: number;
     byReason: Record<string, number>;
     byProduct: Array<{ name: string; quantity: number; value: number }>;
   };
@@ -89,10 +116,12 @@ interface ReportData {
     efficiency: number;
   }>;
   trends: {
-    daily: Array<{ date: string; production: number; target: number }>;
+    daily: Array<{ date: string; production: number; target: number; sales?: number; waste?: number }>;
     weekly: Array<{ week: string; production: number }>;
   };
 }
+
+const CHART_COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
 
 const DATE_PRESETS = [
   { label: "اليوم", getValue: () => ({ start: new Date(), end: new Date() }) },
@@ -300,30 +329,6 @@ export default function ProductionReportsPage() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Link href="/daily-production">
-              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-daily-production">
-                <Package className="h-3 w-3 ml-1" />
-                الإنتاج اليومي
-              </Button>
-            </Link>
-            <Link href="/advanced-production-orders">
-              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-orders">
-                <Target className="h-3 w-3 ml-1" />
-                أوامر الإنتاج
-              </Button>
-            </Link>
-            <Link href="/display-bar-waste">
-              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-waste">
-                <Trash2 className="h-3 w-3 ml-1" />
-                الهدر
-              </Button>
-            </Link>
-            <Link href="/quality-control">
-              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="link-quality">
-                <CheckCircle className="h-3 w-3 ml-1" />
-                الجودة
-              </Button>
-            </Link>
             <Button
               variant="outline"
               size="sm"
@@ -337,6 +342,66 @@ export default function ProductionReportsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Quick Links to Related Pages */}
+        <Card className="bg-gradient-to-l from-amber-50 to-white border-amber-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-medium text-gray-700">روابط سريعة للصفحات ذات الصلة</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+              <Link href="/daily-production">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-amber-50 hover:border-amber-300" data-testid="link-daily-production">
+                  <Package className="h-4 w-4 text-amber-600" />
+                  <span className="text-xs">الإنتاج اليومي</span>
+                </Button>
+              </Link>
+              <Link href="/advanced-production-orders">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-blue-50 hover:border-blue-300" data-testid="link-orders">
+                  <Target className="h-4 w-4 text-blue-600" />
+                  <span className="text-xs">أوامر الإنتاج</span>
+                </Button>
+              </Link>
+              <Link href="/ai-production-planner">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-purple-50 hover:border-purple-300" data-testid="link-ai-planner">
+                  <Sparkles className="h-4 w-4 text-purple-600" />
+                  <span className="text-xs">التخطيط الذكي</span>
+                </Button>
+              </Link>
+              <Link href="/display-bar-waste">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-red-50 hover:border-red-300" data-testid="link-waste">
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                  <span className="text-xs">إدارة الهالك</span>
+                </Button>
+              </Link>
+              <Link href="/quality-control">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-green-50 hover:border-green-300" data-testid="link-quality">
+                  <ClipboardCheck className="h-4 w-4 text-green-600" />
+                  <span className="text-xs">مراقبة الجودة</span>
+                </Button>
+              </Link>
+              <Link href="/cashier-journal">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-emerald-50 hover:border-emerald-300" data-testid="link-cashier">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs">يوميات الكاشير</span>
+                </Button>
+              </Link>
+              <Link href="/production-dashboard">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-cyan-50 hover:border-cyan-300" data-testid="link-dashboard">
+                  <Factory className="h-4 w-4 text-cyan-600" />
+                  <span className="text-xs">لوحة الإنتاج</span>
+                </Button>
+              </Link>
+              <Link href="/command-center">
+                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-orange-50 hover:border-orange-300" data-testid="link-command">
+                  <BarChart3 className="h-4 w-4 text-orange-600" />
+                  <span className="text-xs">مركز القيادة</span>
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="border-amber-200">
           <CardContent className="p-3">
@@ -497,7 +562,8 @@ export default function ProductionReportsPage() {
           ) : (
             <>
               <TabsContent value="summary" className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {/* KPI Cards Row */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                   <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
                     <CardContent className="p-3">
                       <div className="flex items-center gap-2 mb-2">
@@ -531,18 +597,70 @@ export default function ProductionReportsPage() {
                       <p className="text-2xl font-bold text-amber-700">{reportData?.targetComparison.completionRate?.toFixed(0) || 0}%</p>
                     </CardContent>
                   </Card>
-                  <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
+                  <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
                     <CardContent className="p-3">
                       <div className="flex items-center gap-2 mb-2">
-                        <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                          <PieChart className="h-4 w-4 text-purple-600" />
+                        <div className="h-8 w-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                          <DollarSign className="h-4 w-4 text-emerald-600" />
                         </div>
-                        <span className="text-xs text-gray-600">متوسط الدفعة</span>
+                        <span className="text-xs text-gray-600">إجمالي المبيعات</span>
                       </div>
-                      <p className="text-2xl font-bold text-purple-700">{reportData?.dailySummary.avgBatchSize?.toFixed(0) || 0}</p>
+                      <p className="text-xl font-bold text-emerald-700">{formatCurrency(reportData?.salesData?.totalSales || 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-red-50 to-white border-red-200">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </div>
+                        <span className="text-xs text-gray-600">قيمة الهالك</span>
+                      </div>
+                      <p className="text-xl font-bold text-red-700">{formatCurrency(reportData?.wasteAnalysis.totalValue || 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className={`bg-gradient-to-br ${(reportData?.wasteAnalysis.wastePercentage || 0) > 5 ? 'from-red-50 border-red-300' : (reportData?.wasteAnalysis.wastePercentage || 0) > 2 ? 'from-amber-50 border-amber-300' : 'from-green-50 border-green-300'} to-white`}>
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${(reportData?.wasteAnalysis.wastePercentage || 0) > 5 ? 'bg-red-100' : (reportData?.wasteAnalysis.wastePercentage || 0) > 2 ? 'bg-amber-100' : 'bg-green-100'}`}>
+                          <Percent className={`h-4 w-4 ${(reportData?.wasteAnalysis.wastePercentage || 0) > 5 ? 'text-red-600' : (reportData?.wasteAnalysis.wastePercentage || 0) > 2 ? 'text-amber-600' : 'text-green-600'}`} />
+                        </div>
+                        <span className="text-xs text-gray-600">نسبة الهدر</span>
+                      </div>
+                      <p className={`text-xl font-bold ${(reportData?.wasteAnalysis.wastePercentage || 0) > 5 ? 'text-red-700' : (reportData?.wasteAnalysis.wastePercentage || 0) > 2 ? 'text-amber-700' : 'text-green-700'}`}>
+                        {(reportData?.wasteAnalysis.wastePercentage || 0).toFixed(2)}%
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Production Trends Chart */}
+                {reportData?.trends?.daily && reportData.trends.daily.length > 0 && (
+                  <Card>
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        اتجاهات الإنتاج والمبيعات
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-2 pb-4">
+                      <ResponsiveContainer width="100%" height={250}>
+                        <ComposedChart data={reportData.trends.daily}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Bar yAxisId="left" dataKey="production" name="الإنتاج" fill="#f59e0b" />
+                          <Bar yAxisId="left" dataKey="target" name="الهدف" fill="#3b82f6" />
+                          <Line yAxisId="right" type="monotone" dataKey="sales" name="المبيعات" stroke="#10b981" strokeWidth={2} />
+                          <Area yAxisId="left" type="monotone" dataKey="waste" name="الهدر" fill="#ef4444" fillOpacity={0.3} stroke="#ef4444" />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Card>
@@ -551,14 +669,39 @@ export default function ProductionReportsPage() {
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
                       {Object.entries(reportData?.dailySummary.byDestination || {}).length > 0 ? (
-                        <div className="space-y-2">
-                          {Object.entries(reportData?.dailySummary.byDestination || {}).map(([dest, qty]) => (
-                            <div key={dest} className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">{dest}</span>
-                              <Badge variant="outline">{qty}</Badge>
-                            </div>
-                          ))}
-                        </div>
+                        <>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <RechartsPie>
+                              <Pie
+                                data={Object.entries(reportData?.dailySummary.byDestination || {}).map(([name, value]) => ({ name, value }))}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={40}
+                                outerRadius={70}
+                                paddingAngle={2}
+                                dataKey="value"
+                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                labelLine={false}
+                              >
+                                {Object.entries(reportData?.dailySummary.byDestination || {}).map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                            </RechartsPie>
+                          </ResponsiveContainer>
+                          <div className="space-y-1 mt-2">
+                            {Object.entries(reportData?.dailySummary.byDestination || {}).map(([dest, qty], i) => (
+                              <div key={dest} className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                                  <span className="text-gray-600">{dest}</span>
+                                </div>
+                                <Badge variant="outline" className="text-xs">{qty}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </>
                       ) : (
                         <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات</p>
                       )}
@@ -570,14 +713,32 @@ export default function ProductionReportsPage() {
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
                       {Object.entries(reportData?.dailySummary.byCategory || {}).length > 0 ? (
-                        <div className="space-y-2">
-                          {Object.entries(reportData?.dailySummary.byCategory || {}).map(([cat, qty]) => (
-                            <div key={cat} className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">{cat}</span>
-                              <Badge variant="outline">{qty}</Badge>
-                            </div>
-                          ))}
-                        </div>
+                        <>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <BarChart data={Object.entries(reportData?.dailySummary.byCategory || {}).map(([name, value]) => ({ name, value }))}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                              <YAxis tick={{ fontSize: 10 }} />
+                              <Tooltip />
+                              <Bar dataKey="value" fill="#f59e0b">
+                                {Object.entries(reportData?.dailySummary.byCategory || {}).map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                          <div className="space-y-1 mt-2">
+                            {Object.entries(reportData?.dailySummary.byCategory || {}).map(([cat, qty], i) => (
+                              <div key={cat} className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                                  <span className="text-gray-600">{cat}</span>
+                                </div>
+                                <Badge variant="outline" className="text-xs">{qty}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </>
                       ) : (
                         <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات</p>
                       )}
