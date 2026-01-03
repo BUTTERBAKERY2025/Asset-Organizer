@@ -138,6 +138,10 @@ export default function RBACManagementPage() {
   const [activeTab, setActiveTab] = useState("users");
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleSlug, setNewRoleSlug] = useState("");
+  const [newRoleDescription, setNewRoleDescription] = useState("");
+  const [newRoleLevel, setNewRoleLevel] = useState("4");
   const [isPermissionMatrixOpen, setIsPermissionMatrixOpen] = useState(false);
   const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -244,6 +248,30 @@ export default function RBACManagementPage() {
       return data.permissions || [];
     },
     enabled: !!selectedRole && isAdmin,
+  });
+
+  const createRoleMutation = useMutation({
+    mutationFn: async (data: { name: string; slug: string; description: string; hierarchyLevel: number }) => {
+      const res = await fetch("/api/rbac/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create role");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rbac/roles"] });
+      toast({ title: "تم إنشاء الدور بنجاح" });
+      setIsRoleDialogOpen(false);
+      setNewRoleName("");
+      setNewRoleSlug("");
+      setNewRoleDescription("");
+      setNewRoleLevel("4");
+    },
+    onError: () => {
+      toast({ title: "فشل إنشاء الدور", variant: "destructive" });
+    },
   });
 
   const addRolePermMutation = useMutation({
@@ -543,9 +571,19 @@ export default function RBACManagementPage() {
 
           <TabsContent value="roles" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle>الأدوار الوظيفية</CardTitle>
-                <CardDescription>إدارة أدوار المستخدمين وصلاحياتهم في النظام</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>الأدوار الوظيفية</CardTitle>
+                  <CardDescription>إدارة أدوار المستخدمين وصلاحياتهم في النظام</CardDescription>
+                </div>
+                <Button
+                  onClick={() => setIsRoleDialogOpen(true)}
+                  disabled={!isAdmin}
+                  data-testid="button-add-role"
+                >
+                  <Shield className="h-4 w-4 ml-2" />
+                  إضافة دور جديد
+                </Button>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -968,6 +1006,86 @@ export default function RBACManagementPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsUserAssignmentDialogOpen(false)}>
                 إغلاق
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>إضافة دور جديد</DialogTitle>
+              <DialogDescription>أنشئ دور جديد وحدد مستوى صلاحياته</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="role-name">اسم الدور</Label>
+                <Input
+                  id="role-name"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="مثال: محاسب المبيعات"
+                  data-testid="input-role-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role-slug">الرمز (بالإنجليزية)</Label>
+                <Input
+                  id="role-slug"
+                  value={newRoleSlug}
+                  onChange={(e) => setNewRoleSlug(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
+                  placeholder="مثال: sales_accountant"
+                  dir="ltr"
+                  data-testid="input-role-slug"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role-level">مستوى الصلاحية</Label>
+                <Select value={newRoleLevel} onValueChange={setNewRoleLevel}>
+                  <SelectTrigger data-testid="select-role-level">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0 - مدير عام (أعلى صلاحية)</SelectItem>
+                    <SelectItem value="1">1 - إدارة عليا</SelectItem>
+                    <SelectItem value="2">2 - مدير / محاسب</SelectItem>
+                    <SelectItem value="3">3 - مشرف</SelectItem>
+                    <SelectItem value="4">4 - موظف / كاشير</SelectItem>
+                    <SelectItem value="5">5 - مشاهد فقط</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role-description">الوصف (اختياري)</Label>
+                <Input
+                  id="role-description"
+                  value={newRoleDescription}
+                  onChange={(e) => setNewRoleDescription(e.target.value)}
+                  placeholder="وصف مختصر للدور"
+                  data-testid="input-role-description"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button
+                onClick={() => {
+                  if (newRoleName && newRoleSlug) {
+                    createRoleMutation.mutate({
+                      name: newRoleName,
+                      slug: newRoleSlug,
+                      description: newRoleDescription,
+                      hierarchyLevel: parseInt(newRoleLevel),
+                    });
+                  }
+                }}
+                disabled={!newRoleName || !newRoleSlug || createRoleMutation.isPending}
+                data-testid="button-save-role"
+              >
+                {createRoleMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                حفظ الدور
               </Button>
             </DialogFooter>
           </DialogContent>
