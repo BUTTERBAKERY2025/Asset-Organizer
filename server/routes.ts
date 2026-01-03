@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -248,9 +248,27 @@ export async function registerRoutes(
   });
 
   // Inventory Items
-  app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+  app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      // Get branch filter - prioritize query param, then use active branch from session
+      const queryBranchId = req.query.branchId as string | undefined;
+      const activeBranch = getActiveBranchFilter(req);
+      const branchId = queryBranchId || activeBranch;
+      
+      // For non-admin users, always filter by their active branch
+      const user = req.currentUser;
+      if (user?.role !== "admin" && !branchId) {
+        return res.json([]); // No branch = no data for regular users
+      }
+      
+      // If branch specified, verify access
+      if (branchId && user?.role !== "admin") {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
+        }
+      }
+      
       const items = branchId 
         ? await storage.getInventoryItemsByBranch(branchId)
         : await storage.getAllInventoryItems();
@@ -261,9 +279,20 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/needs-inspection", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+  app.get("/api/inventory/needs-inspection", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
     try {
-      const items = await storage.getItemsNeedingInspection();
+      const branchId = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      let items = await storage.getItemsNeedingInspection();
+      
+      // Filter by branch for non-admin users
+      if (user?.role !== "admin" && branchId) {
+        items = items.filter(item => item.branchId === branchId);
+      } else if (user?.role !== "admin" && !branchId) {
+        return res.json([]);
+      }
+      
       res.json(items);
     } catch (error) {
       console.error("Error fetching items needing inspection:", error);
@@ -271,9 +300,20 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+  app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
     try {
-      const items = await storage.getAllInventoryItems();
+      const branchId = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      let items = branchId 
+        ? await storage.getInventoryItemsByBranch(branchId)
+        : await storage.getAllInventoryItems();
+      
+      // For non-admin users without branch, return empty
+      if (user?.role !== "admin" && !branchId) {
+        return res.json([]);
+      }
+      
       const lowQuantityItems = items.filter(item => item.quantity <= 5);
       res.json(lowQuantityItems);
     } catch (error) {
@@ -282,9 +322,20 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+  app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
     try {
-      const items = await storage.getAllInventoryItems();
+      const branchId = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      let items = branchId 
+        ? await storage.getInventoryItemsByBranch(branchId)
+        : await storage.getAllInventoryItems();
+      
+      // For non-admin users without branch, return empty
+      if (user?.role !== "admin" && !branchId) {
+        return res.json([]);
+      }
+      
       const maintenanceItems = items.filter(item => 
         item.status === 'maintenance' || item.status === 'damaged'
       );
@@ -295,12 +346,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+  app.get("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
     try {
       const item = await storage.getInventoryItem(req.params.id);
       if (!item) {
         return res.status(404).json({ error: "Item not found" });
       }
+      
+      // Verify branch access for non-admin users
+      const user = req.currentUser;
+      if (user?.role !== "admin" && item.branchId) {
+        const hasAccess = await canAccessBranch(req, item.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا العنصر" });
+        }
+      }
+      
       res.json(item);
     } catch (error) {
       console.error("Error fetching inventory item:", error);
@@ -318,10 +379,20 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/inventory", isAuthenticated, requirePermission("inventory", "create"), async (req: any, res) => {
+  app.post("/api/inventory", isAuthenticated, requirePermission("inventory", "create"), requireBranchAccess, async (req: any, res) => {
     try {
       const validatedData = insertInventoryItemSchema.parse(req.body);
       const normalizedData = normalizeInventoryData(validatedData);
+      
+      // Verify user has access to the target branch
+      const user = req.currentUser;
+      if (user?.role !== "admin" && normalizedData.branchId) {
+        const hasAccess = await canAccessBranch(req, normalizedData.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لإضافة عناصر لهذا الفرع" });
+        }
+      }
+      
       const userId = req.currentUser.id;
       const item = await storage.createInventoryItem(normalizedData, userId);
       res.status(201).json(item);
@@ -336,13 +407,33 @@ export async function registerRoutes(
 
   app.patch("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "edit"), async (req: any, res) => {
     try {
+      // First check if user can access the existing item's branch
+      const existingItem = await storage.getInventoryItem(req.params.id);
+      if (!existingItem) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      const user = req.currentUser;
+      if (user?.role !== "admin" && existingItem.branchId) {
+        const hasAccess = await canAccessBranch(req, existingItem.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لتعديل عناصر هذا الفرع" });
+        }
+      }
+      
       const partialData = insertInventoryItemSchema.partial().parse(req.body);
+      
+      // If changing branch, verify access to new branch too
+      if (partialData.branchId && partialData.branchId !== existingItem.branchId && user?.role !== "admin") {
+        const hasNewBranchAccess = await canAccessBranch(req, partialData.branchId);
+        if (!hasNewBranchAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لنقل العنصر لهذا الفرع" });
+        }
+      }
+      
       const normalizedData = normalizeInventoryData(partialData);
       const userId = req.currentUser.id;
       const item = await storage.updateInventoryItem(req.params.id, normalizedData, userId);
-      if (!item) {
-        return res.status(404).json({ error: "Item not found" });
-      }
       res.json(item);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -355,6 +446,20 @@ export async function registerRoutes(
 
   app.delete("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "delete"), async (req: any, res) => {
     try {
+      // Check if user can access the item's branch
+      const existingItem = await storage.getInventoryItem(req.params.id);
+      if (!existingItem) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      const user = req.currentUser;
+      if (user?.role !== "admin" && existingItem.branchId) {
+        const hasAccess = await canAccessBranch(req, existingItem.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لحذف عناصر هذا الفرع" });
+        }
+      }
+      
       const userId = req.currentUser.id;
       const success = await storage.deleteInventoryItem(req.params.id, userId);
       if (!success) {
@@ -1925,12 +2030,34 @@ export async function registerRoutes(
   });
 
   // Production Orders Routes
-  app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+  app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
       const { branchId, date } = req.query;
+      const activeBranch = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      // Determine branch to filter by
+      const filterBranchId = branchId as string || activeBranch;
+      
+      // For non-admin users, must have a branch filter
+      if (user?.role !== "admin" && !filterBranchId) {
+        return res.json([]);
+      }
+      
+      // Verify branch access for non-admin users
+      if (user?.role !== "admin" && filterBranchId) {
+        const hasAccess = await canAccessBranch(req, filterBranchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
+        }
+      }
+      
       let orders;
-      if (branchId) {
-        orders = await storage.getProductionOrdersByBranch(branchId as string);
+      if (filterBranchId) {
+        orders = await storage.getProductionOrdersByBranch(filterBranchId);
+        if (date) {
+          orders = orders.filter((o: any) => o.productionDate === date);
+        }
       } else if (date) {
         orders = await storage.getProductionOrdersByDate(date as string);
       } else {
@@ -1957,8 +2084,17 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/production-orders", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
+  app.post("/api/production-orders", isAuthenticated, requirePermission("production", "create"), requireBranchAccess, async (req: any, res) => {
     try {
+      // Verify user has access to the target branch
+      const user = req.currentUser;
+      if (user?.role !== "admin" && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء أمر إنتاج لهذا الفرع" });
+        }
+      }
+      
       const validatedData = insertProductionOrderSchema.parse({
         ...req.body,
         createdBy: req.user?.id,
@@ -2240,17 +2376,29 @@ export async function registerRoutes(
   // ==================== Cashier Sales Journal Routes ====================
 
   // Get all cashier journals with filters (supports combined filters)
-  app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+  app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
     try {
       const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus } = req.query;
+      
+      // Get branch filter from session for non-admin users
+      const activeBranch = getActiveBranchFilter(req);
+      const user = req.currentUser;
       
       // Get all journals first, then apply filters
       let journals = await storage.getAllCashierJournals();
       
-      // Apply filters in combination
-      if (branchId) {
+      // For non-admin users, always filter by their active branch
+      if (user?.role !== "admin") {
+        if (!activeBranch) {
+          return res.json([]); // No branch = no data
+        }
+        journals = journals.filter(j => j.branchId === activeBranch);
+      } else if (branchId) {
+        // Admin can filter by specific branch if provided
         journals = journals.filter(j => j.branchId === branchId);
       }
+      
+      // Apply remaining filters
       if (date) {
         journals = journals.filter(j => j.journalDate === date);
       }
@@ -2300,9 +2448,18 @@ export async function registerRoutes(
   });
 
   // Create new cashier journal
-  app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+  app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), requireBranchAccess, async (req: any, res) => {
     try {
       const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
+      
+      // Verify user has access to the target branch
+      const user = req.currentUser;
+      if (user?.role !== "admin" && journalData.branchId) {
+        const hasAccess = await canAccessBranch(req, journalData.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء يومية لهذا الفرع" });
+        }
+      }
       
       // Server-side validation: payment breakdown totals must match total sales
       if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
@@ -4040,10 +4197,21 @@ export async function registerRoutes(
   // ===== Display Bar Routes =====
 
   // Get Display Bar Receipts
-  app.get("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      const queryBranchId = req.query.branchId as string | undefined;
       const date = req.query.date as string | undefined;
+      
+      // Apply branch filter for non-admin users
+      const activeBranch = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      let branchId = queryBranchId;
+      if (user?.role !== "admin") {
+        if (!activeBranch) return res.json([]);
+        branchId = activeBranch;
+      }
+      
       const receipts = await storage.getDisplayBarReceipts(branchId, date);
       res.json(receipts);
     } catch (error) {
@@ -4053,8 +4221,17 @@ export async function registerRoutes(
   });
 
   // Create Display Bar Receipt
-  app.post("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req: any, res) => {
     try {
+      // Verify branch access
+      const user = req.currentUser;
+      if (user?.role !== "admin" && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لهذا الفرع" });
+        }
+      }
+      
       const validatedData = insertDisplayBarReceiptSchema.parse(req.body);
       const receipt = await storage.createDisplayBarReceipt(validatedData);
       res.status(201).json(receipt);
@@ -4068,10 +4245,21 @@ export async function registerRoutes(
   });
 
   // Get Display Bar Daily Summary
-  app.get("/api/display-bar/summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/display-bar/summary", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      const queryBranchId = req.query.branchId as string | undefined;
       const date = req.query.date as string | undefined;
+      
+      // Apply branch filter for non-admin users
+      const activeBranch = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      let branchId = queryBranchId;
+      if (user?.role !== "admin") {
+        if (!activeBranch) return res.json([]);
+        branchId = activeBranch;
+      }
+      
       const summaries = await storage.getDisplayBarDailySummary(branchId, date);
       res.json(summaries);
     } catch (error) {
@@ -4105,10 +4293,20 @@ export async function registerRoutes(
   // ===== Waste Reports Routes =====
 
   // Get Waste Analytics - waste vs sales comparison (must be before /:id route)
-  app.get("/api/waste-reports/analytics", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/waste-reports/analytics", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      const queryBranchId = req.query.branchId as string | undefined;
       const date = req.query.date as string || new Date().toISOString().split('T')[0];
+      
+      // Apply branch filter for non-admin users
+      const activeBranch = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      let branchId = queryBranchId;
+      if (user?.role !== "admin") {
+        if (!activeBranch) return res.json({ error: "يجب تحديد الفرع" });
+        branchId = activeBranch;
+      }
       
       // Get current month date range
       const currentMonth = date.substring(0, 7);
@@ -4183,10 +4381,20 @@ export async function registerRoutes(
   });
 
   // Get Waste Stats - today's summary by branch (must be before /:id route)
-  app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const branchId = req.query.branchId as string | undefined;
+      const queryBranchId = req.query.branchId as string | undefined;
+      
+      // Apply branch filter for non-admin users
+      const activeBranch = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      let branchId = queryBranchId;
+      if (user?.role !== "admin") {
+        if (!activeBranch) return res.json([]);
+        branchId = activeBranch;
+      }
       
       const reports = await storage.getWasteReports(branchId, today, today);
       
@@ -4215,11 +4423,25 @@ export async function registerRoutes(
   });
 
   // Get All Waste Reports
-  app.get("/api/waste-reports", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/waste-reports", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      const queryBranchId = req.query.branchId as string | undefined;
       const dateFrom = req.query.dateFrom as string | undefined;
       const dateTo = req.query.dateTo as string | undefined;
+      
+      // Get branch filter from session for non-admin users
+      const activeBranch = getActiveBranchFilter(req);
+      const user = req.currentUser;
+      
+      // For non-admin users, filter by their active branch
+      let branchId = queryBranchId;
+      if (user?.role !== "admin") {
+        if (!activeBranch) {
+          return res.json([]); // No branch = no data
+        }
+        branchId = activeBranch;
+      }
+      
       const reports = await storage.getWasteReports(branchId, dateFrom, dateTo);
       res.json(reports);
     } catch (error) {
@@ -4229,7 +4451,7 @@ export async function registerRoutes(
   });
 
   // Get Single Waste Report
-  app.get("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -4239,6 +4461,16 @@ export async function registerRoutes(
       if (!report) {
         return res.status(404).json({ error: "Report not found" });
       }
+      
+      // Verify branch access for non-admin users
+      const user = req.currentUser;
+      if (user?.role !== "admin" && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا التقرير" });
+        }
+      }
+      
       res.json(report);
     } catch (error) {
       console.error("Error fetching waste report:", error);
@@ -4247,9 +4479,18 @@ export async function registerRoutes(
   });
 
   // Create Waste Report
-  app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req: any, res) => {
     try {
       const currentUser = req.currentUser;
+      
+      // Verify user has access to the target branch
+      if (currentUser?.role !== "admin" && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء تقرير هدر لهذا الفرع" });
+        }
+      }
+      
       const validatedData = insertWasteReportSchema.parse({
         ...req.body,
         reportedBy: currentUser?.id,
@@ -4274,18 +4515,28 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid report ID" });
       }
       
+      // Check existing report's branch access
+      const existingReport = await storage.getWasteReport(id);
+      if (!existingReport) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      const user = req.currentUser;
+      if (user?.role !== "admin" && existingReport.branchId) {
+        const hasAccess = await canAccessBranch(req, existingReport.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لتعديل تقارير هذا الفرع" });
+        }
+      }
+      
       const partialData = insertWasteReportSchema.partial().parse(req.body);
       
       if (req.body.status === 'approved') {
-        const currentUser = req.currentUser;
-        (partialData as any).approvedBy = currentUser?.id;
+        (partialData as any).approvedBy = user?.id;
         (partialData as any).approvedAt = new Date();
       }
       
       const report = await storage.updateWasteReport(id, partialData);
-      if (!report) {
-        return res.status(404).json({ error: "Report not found" });
-      }
       res.json(report);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -4297,12 +4548,27 @@ export async function registerRoutes(
   });
 
   // Delete Waste Report
-  app.delete("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+  app.delete("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid report ID" });
       }
+      
+      // Check existing report's branch access
+      const existingReport = await storage.getWasteReport(id);
+      if (!existingReport) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      const user = req.currentUser;
+      if (user?.role !== "admin" && existingReport.branchId) {
+        const hasAccess = await canAccessBranch(req, existingReport.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لحذف تقارير هذا الفرع" });
+        }
+      }
+      
       const success = await storage.deleteWasteReport(id);
       if (!success) {
         return res.status(404).json({ error: "Report not found" });
@@ -4317,12 +4583,27 @@ export async function registerRoutes(
   // ===== Waste Items Routes =====
 
   // Get Waste Items for a Report
-  app.get("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const reportId = parseInt(req.params.reportId, 10);
       if (isNaN(reportId)) {
         return res.status(400).json({ error: "Invalid report ID" });
       }
+      
+      // Verify branch access for the parent report
+      const report = await storage.getWasteReport(reportId);
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      const user = req.currentUser;
+      if (user?.role !== "admin" && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا التقرير" });
+        }
+      }
+      
       const items = await storage.getWasteItems(reportId);
       res.json(items);
     } catch (error) {
@@ -4332,7 +4613,7 @@ export async function registerRoutes(
   });
 
   // Create Waste Item
-  app.post("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
     try {
       const reportId = parseInt(req.params.reportId, 10);
       if (isNaN(reportId)) {
@@ -4342,6 +4623,15 @@ export async function registerRoutes(
       const report = await storage.getWasteReport(reportId);
       if (!report) {
         return res.status(404).json({ error: "Report not found" });
+      }
+      
+      // Verify branch access for the parent report
+      const user = req.currentUser;
+      if (user?.role !== "admin" && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لإضافة عناصر لتقارير هذا الفرع" });
+        }
       }
       
       const validatedData = insertWasteItemSchema.parse({

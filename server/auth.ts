@@ -285,3 +285,68 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     next();
   };
 };
+
+// Get active branch ID from request - returns null for admins (can see all) or the active branch for regular users
+export function getActiveBranchFilter(req: any): string | null {
+  const user = req.currentUser;
+  // Admin can see all branches - return null means no filter
+  if (user?.role === "admin") {
+    // But if admin has selected a specific branch, filter by it
+    return req.session?.activeBranchId || null;
+  }
+  // Regular users must have an active branch to see data
+  return req.session?.activeBranchId || null;
+}
+
+// Check if user can access/write to a specific branch
+export async function canAccessBranch(req: any, branchId: string): Promise<boolean> {
+  const user = req.currentUser;
+  if (!user) return false;
+  
+  // Admin can access all branches
+  if (user.role === "admin") return true;
+  
+  // Check user's branch access
+  const userBranches = await storage.getUserBranchAccess(user.id);
+  
+  // If no branch restrictions defined, allow access
+  if (userBranches.length === 0) return true;
+  
+  return userBranches.some(b => b.branchId === branchId);
+}
+
+// Middleware to ensure user has branch access before write operations
+export const requireBranchAccess: RequestHandler = async (req, res, next) => {
+  const user = (req as any).currentUser;
+  if (!user) {
+    return res.status(401).json({ message: "غير مصرح" });
+  }
+  
+  // Admin can access all branches
+  if (user.role === "admin") {
+    return next();
+  }
+  
+  // Get the branch from request body or query
+  const branchId = req.body?.branchId || req.query?.branchId;
+  
+  if (!branchId) {
+    // If no branch specified, check if user has an active branch
+    if (!req.session?.activeBranchId) {
+      return res.status(400).json({ message: "يجب تحديد الفرع" });
+    }
+    // Inject active branch into request body
+    if (req.body) {
+      req.body.branchId = req.session.activeBranchId;
+    }
+    return next();
+  }
+  
+  // Verify user has access to the specified branch
+  const hasAccess = await canAccessBranch(req as any, branchId);
+  if (!hasAccess) {
+    return res.status(403).json({ message: "ليس لديك صلاحية للوصول لهذا الفرع" });
+  }
+  
+  next();
+};
