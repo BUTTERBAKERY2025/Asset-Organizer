@@ -4269,17 +4269,36 @@ export async function registerRoutes(
   });
 
   // Update Display Bar Daily Summary
-  app.patch("/api/display-bar/summary/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.patch("/api/display-bar/summary/:id", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid summary ID" });
       }
-      const partialData = insertDisplayBarDailySummarySchema.partial().parse(req.body);
-      const summary = await storage.updateDisplayBarDailySummary(id, partialData);
-      if (!summary) {
+      
+      // Get existing summary to check branch access
+      const existingSummaries = await storage.getDisplayBarDailySummary(undefined, undefined);
+      const existingSummary = existingSummaries.find((s: any) => s.id === id);
+      if (!existingSummary) {
         return res.status(404).json({ error: "Summary not found" });
       }
+      
+      const user = req.currentUser;
+      if (user?.role !== "admin" && existingSummary.branchId) {
+        const hasAccess = await canAccessBranch(req, existingSummary.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لتعديل بيانات هذا الفرع" });
+        }
+      }
+      
+      const partialData = insertDisplayBarDailySummarySchema.partial().parse(req.body);
+      
+      // Prevent branchId changes for non-admin users
+      if (user?.role !== "admin" && partialData.branchId && partialData.branchId !== existingSummary.branchId) {
+        return res.status(403).json({ error: "لا يمكن تغيير الفرع" });
+      }
+      
+      const summary = await storage.updateDisplayBarDailySummary(id, partialData);
       res.json(summary);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -4656,22 +4675,43 @@ export async function registerRoutes(
   });
 
   // Update Waste Item
-  app.patch("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.patch("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid item ID" });
       }
-      const partialData = insertWasteItemSchema.partial().parse(req.body);
-      const item = await storage.updateWasteItem(id, partialData);
-      if (!item) {
+      
+      // First get the existing item to check branch access BEFORE updating
+      const existingItem = await storage.getWasteItemById(id);
+      if (!existingItem) {
         return res.status(404).json({ error: "Item not found" });
       }
       
-      const allItems = await storage.getWasteItems(item.wasteReportId);
+      // Check branch access via parent report BEFORE updating
+      const report = await storage.getWasteReport(existingItem.wasteReportId);
+      const user = req.currentUser;
+      if (user?.role !== "admin" && report?.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لتعديل عناصر هذا الفرع" });
+        }
+      }
+      
+      // Now proceed with the update
+      const partialData = insertWasteItemSchema.partial().parse(req.body);
+      
+      // Prevent wasteReportId changes for non-admin users (would bypass branch access)
+      if (user?.role !== "admin" && partialData.wasteReportId && partialData.wasteReportId !== existingItem.wasteReportId) {
+        return res.status(403).json({ error: "لا يمكن نقل العنصر لتقرير آخر" });
+      }
+      
+      const item = await storage.updateWasteItem(id, partialData);
+      
+      const allItems = await storage.getWasteItems(existingItem.wasteReportId);
       const totalItems = allItems.reduce((sum, i) => sum + i.quantity, 0);
       const totalValue = allItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
-      await storage.updateWasteReport(item.wasteReportId, { totalItems, totalValue });
+      await storage.updateWasteReport(existingItem.wasteReportId, { totalItems, totalValue });
       
       res.json(item);
     } catch (error) {
@@ -4684,27 +4724,43 @@ export async function registerRoutes(
   });
 
   // Delete Waste Item
-  app.delete("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+  app.delete("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid item ID" });
       }
       
-      const items = await storage.getWasteItems(id);
-      const targetItem = items.find(i => i.id === id);
+      // Get the item directly using getWasteItemById
+      const targetItem = await storage.getWasteItemById(id);
+      if (!targetItem) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      // Get parent report to check branch access
+      const parentReport = await storage.getWasteReport(targetItem.wasteReportId);
+      if (!parentReport) {
+        return res.status(404).json({ error: "Parent report not found" });
+      }
+      
+      // Check branch access via parent report BEFORE deleting
+      const user = req.currentUser;
+      if (user?.role !== "admin" && parentReport.branchId) {
+        const hasAccess = await canAccessBranch(req, parentReport.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لحذف عناصر هذا الفرع" });
+        }
+      }
       
       const success = await storage.deleteWasteItem(id);
       if (!success) {
         return res.status(404).json({ error: "Item not found" });
       }
       
-      if (targetItem) {
-        const remainingItems = await storage.getWasteItems(targetItem.wasteReportId);
-        const totalItems = remainingItems.reduce((sum, i) => sum + i.quantity, 0);
-        const totalValue = remainingItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
-        await storage.updateWasteReport(targetItem.wasteReportId, { totalItems, totalValue });
-      }
+      const remainingItems = await storage.getWasteItems(targetItem.wasteReportId);
+      const totalItems = remainingItems.reduce((sum, i) => sum + i.quantity, 0);
+      const totalValue = remainingItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
+      await storage.updateWasteReport(targetItem.wasteReportId, { totalItems, totalValue });
       
       res.status(204).send();
     } catch (error) {

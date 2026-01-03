@@ -477,6 +477,7 @@ export interface IStorage {
   
   // Waste Items
   getWasteItems(wasteReportId: number): Promise<WasteItem[]>;
+  getWasteItemById(id: number): Promise<WasteItem | undefined>;
   createWasteItem(data: InsertWasteItem): Promise<WasteItem>;
   updateWasteItem(id: number, data: Partial<InsertWasteItem>): Promise<WasteItem | undefined>;
   deleteWasteItem(id: number): Promise<boolean>;
@@ -3975,6 +3976,11 @@ export class DatabaseStorage implements IStorage {
   // Waste Items
   async getWasteItems(wasteReportId: number): Promise<WasteItem[]> {
     return await db.select().from(wasteItems).where(eq(wasteItems.wasteReportId, wasteReportId));
+  }
+
+  async getWasteItemById(id: number): Promise<WasteItem | undefined> {
+    const [item] = await db.select().from(wasteItems).where(eq(wasteItems.id, id));
+    return item || undefined;
   }
 
   async createWasteItem(data: InsertWasteItem): Promise<WasteItem> {
