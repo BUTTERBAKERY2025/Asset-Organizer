@@ -727,6 +727,44 @@ export default function OperationsReportsDashboardPage() {
     queryKey: [`/api/cashier-journals?${cashierQueryString}`],
   });
 
+  // Get current month for targets
+  const currentYearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
+  // Query for targets progress summary
+  const { data: targetsProgress } = useQuery<{
+    branchId: string;
+    branchName: string;
+    targetAmount: number;
+    achievedAmount: number;
+    achievementPercent: number;
+    remainingAmount: number;
+    daysWithSales: number;
+    averageDailySales: number;
+    projectedTotal: number;
+    projectedPercent: number;
+    trend: 'up' | 'down' | 'stable';
+  }[]>({
+    queryKey: [`/api/targets/progress-summary?yearMonth=${currentYearMonth}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/targets/progress-summary?yearMonth=${currentYearMonth}`);
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  // Query for targets leaderboard
+  const { data: targetsLeaderboard } = useQuery<{
+    branches: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[];
+    cashiers: { cashierId: string; cashierName: string; branchId: string; target: number; achieved: number; percent: number; rank: number }[];
+  }>({
+    queryKey: [`/api/targets/leaderboard?yearMonth=${currentYearMonth}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/targets/leaderboard?yearMonth=${currentYearMonth}`);
+      if (!res.ok) return { branches: [], cashiers: [] };
+      return res.json();
+    }
+  });
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-SA", {
       style: "currency",
@@ -1337,7 +1375,7 @@ export default function OperationsReportsDashboardPage() {
       case "cashier":
         return ["cashier"];
       case "sales":
-        return ["sales"];
+        return ["sales", "targets"];
       case "shifts":
         return ["shifts"];
       case "production":
@@ -1345,7 +1383,7 @@ export default function OperationsReportsDashboardPage() {
       case "quality":
         return ["production"];
       default:
-        return ["overview", "sales", "production", "shifts", "cashier", "branches"];
+        return ["overview", "sales", "targets", "production", "shifts", "cashier", "branches"];
     }
   };
 
@@ -1709,6 +1747,12 @@ export default function OperationsReportsDashboardPage() {
                 <TabsTrigger value="sales" data-testid="tab-sales" className="gap-1">
                   <DollarSign className="w-4 h-4" />
                   المبيعات
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("targets") && (
+                <TabsTrigger value="targets" data-testid="tab-targets" className="gap-1">
+                  <Target className="w-4 h-4" />
+                  الأهداف
                 </TabsTrigger>
               )}
               {visibleTabs.includes("production") && (
@@ -2417,6 +2461,272 @@ export default function OperationsReportsDashboardPage() {
                           <tr>
                             <td colSpan={8} className="py-8 text-center text-muted-foreground">
                               لا توجد يوميات كاشير في الفترة المحددة
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="targets" className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Target className="w-5 h-5 text-amber-600" />
+                  تقرير المبيعات مقابل الأهداف - {currentYearMonth}
+                </h2>
+                <div className="flex gap-2">
+                  <Link href="/targets-dashboard">
+                    <Button variant="outline" className="gap-2" data-testid="link-targets-full">
+                      <ExternalLink className="w-4 h-4" />
+                      لوحة الأهداف الكاملة
+                    </Button>
+                  </Link>
+                  <Link href="/targets-planning">
+                    <Button className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="link-targets-planning">
+                      <Target className="w-4 h-4" />
+                      تخطيط الأهداف
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Summary KPIs */}
+              {(() => {
+                const totalTarget = targetsProgress?.reduce((sum, b) => sum + (b.targetAmount || 0), 0) || 0;
+                const totalAchieved = targetsProgress?.reduce((sum, b) => sum + (b.achievedAmount || 0), 0) || 0;
+                const overallPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
+                const totalRemaining = totalTarget - totalAchieved;
+                const now = new Date();
+                const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                const daysRemaining = daysInMonth - now.getDate();
+                const requiredDaily = daysRemaining > 0 ? totalRemaining / daysRemaining : 0;
+                const branchesAboveTarget = targetsProgress?.filter(b => b.achievementPercent >= 100).length || 0;
+                const branchesBelowTarget = targetsProgress?.filter(b => b.achievementPercent < 80).length || 0;
+                
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                    <KPICard title="الهدف الإجمالي" value={formatCurrency(totalTarget)} icon={Target} color="text-blue-600" bgColor="bg-blue-100" />
+                    <KPICard title="المتحقق" value={formatCurrency(totalAchieved)} icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
+                    <KPICard title="نسبة التحقيق" value={formatPercent(overallPercent)} icon={TrendingUp} 
+                      color={overallPercent >= 100 ? "text-green-600" : overallPercent >= 80 ? "text-amber-600" : "text-red-600"} 
+                      bgColor={overallPercent >= 100 ? "bg-green-100" : overallPercent >= 80 ? "bg-amber-100" : "bg-red-100"} />
+                    <KPICard title="المتبقي" value={formatCurrency(Math.max(0, totalRemaining))} icon={Target} color="text-orange-600" bgColor="bg-orange-100" />
+                    <KPICard title="الأيام المتبقية" value={formatNumber(daysRemaining)} icon={Clock} color="text-purple-600" bgColor="bg-purple-100" />
+                    <KPICard title="المطلوب يومياً" value={formatCurrency(Math.max(0, requiredDaily))} icon={TrendingUp} color="text-indigo-600" bgColor="bg-indigo-100" />
+                    <KPICard title="فروع فوق الهدف" value={formatNumber(branchesAboveTarget)} icon={Trophy} color="text-green-600" bgColor="bg-green-100" />
+                    <KPICard title="فروع تحت 80%" value={formatNumber(branchesBelowTarget)} icon={AlertTriangle} color="text-red-600" bgColor="bg-red-100" />
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Branch Performance Comparison Chart */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      أداء الفروع مقابل الأهداف
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={targetsProgress?.map(b => ({
+                          name: b.branchName,
+                          target: b.targetAmount,
+                          achieved: b.achievedAmount,
+                          percent: b.achievementPercent
+                        })) || []} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" fontSize={10} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                          <YAxis type="category" dataKey="name" fontSize={10} width={80} />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Legend />
+                          <Bar dataKey="target" name="الهدف" fill="#94A3B8" />
+                          <Bar dataKey="achieved" name="المتحقق" fill="#10B981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Achievement Percentage Chart */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-green-600" />
+                      نسبة تحقيق الأهداف
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={targetsProgress?.map(b => ({
+                          name: b.branchName,
+                          percent: b.achievementPercent,
+                          fill: b.achievementPercent >= 100 ? '#10B981' : b.achievementPercent >= 80 ? '#F59E0B' : '#EF4444'
+                        })).sort((a, b) => b.percent - a.percent) || []}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" fontSize={10} />
+                          <YAxis fontSize={10} domain={[0, 120]} tickFormatter={(v) => `${v}%`} />
+                          <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
+                          <Bar dataKey="percent" name="نسبة التحقيق">
+                            {targetsProgress?.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.achievementPercent >= 100 ? '#10B981' : entry.achievementPercent >= 80 ? '#F59E0B' : '#EF4444'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Leaderboard */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-amber-500" />
+                      ترتيب الفروع
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {targetsLeaderboard?.branches?.slice(0, 5).map((branch, i) => (
+                        <div key={branch.branchId} className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-l from-amber-50 to-white border">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                              i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {i + 1}
+                            </span>
+                            <div>
+                              <p className="font-medium text-sm">{branch.branchName}</p>
+                              <p className="text-xs text-muted-foreground">الهدف: {formatCurrency(branch.target)}</p>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <p className={`font-bold ${branch.percent >= 100 ? 'text-green-600' : branch.percent >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                              {branch.percent.toFixed(1)}%
+                            </p>
+                            <p className="text-xs text-muted-foreground">{formatCurrency(branch.achieved)}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {(!targetsLeaderboard?.branches || targetsLeaderboard.branches.length === 0) && (
+                        <p className="text-center text-muted-foreground py-4">لا توجد بيانات أهداف للشهر الحالي</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Projection & Forecast */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-purple-600" />
+                      التوقعات لنهاية الشهر
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {targetsProgress?.filter(b => b.targetAmount > 0).sort((a, b) => b.projectedPercent - a.projectedPercent).slice(0, 5).map((branch) => (
+                        <div key={branch.branchId} className="p-3 rounded-lg border">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-sm">{branch.branchName}</span>
+                            <div className="flex items-center gap-2">
+                              {branch.trend === 'up' ? (
+                                <TrendingUp className="w-4 h-4 text-green-500" />
+                              ) : branch.trend === 'down' ? (
+                                <TrendingDown className="w-4 h-4 text-red-500" />
+                              ) : null}
+                              <span className={`font-bold text-sm ${branch.projectedPercent >= 100 ? 'text-green-600' : branch.projectedPercent >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                                {branch.projectedPercent.toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full transition-all ${branch.projectedPercent >= 100 ? 'bg-green-500' : branch.projectedPercent >= 80 ? 'bg-amber-500' : 'bg-red-500'}`}
+                              style={{ width: `${Math.min(100, branch.projectedPercent)}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                            <span>المتحقق: {formatCurrency(branch.achievedAmount)}</span>
+                            <span>المتوقع: {formatCurrency(branch.projectedTotal)}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {(!targetsProgress || targetsProgress.length === 0) && (
+                        <p className="text-center text-muted-foreground py-4">لا توجد بيانات أهداف</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Details Table */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">تفاصيل أداء الفروع</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-right py-3 px-4">الفرع</th>
+                          <th className="text-right py-3 px-4">الهدف</th>
+                          <th className="text-right py-3 px-4">المتحقق</th>
+                          <th className="text-right py-3 px-4">النسبة</th>
+                          <th className="text-right py-3 px-4">المتبقي</th>
+                          <th className="text-right py-3 px-4">متوسط يومي</th>
+                          <th className="text-right py-3 px-4">المتوقع</th>
+                          <th className="text-right py-3 px-4">الاتجاه</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {targetsProgress?.map((branch) => (
+                          <tr key={branch.branchId} className="border-b hover:bg-muted/50">
+                            <td className="py-3 px-4 font-medium">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-amber-600" />
+                                {branch.branchName}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">{formatCurrency(branch.targetAmount)}</td>
+                            <td className="py-3 px-4 font-semibold text-green-600">{formatCurrency(branch.achievedAmount)}</td>
+                            <td className="py-3 px-4">
+                              <Badge variant={branch.achievementPercent >= 100 ? "default" : branch.achievementPercent >= 80 ? "secondary" : "destructive"}>
+                                {branch.achievementPercent.toFixed(1)}%
+                              </Badge>
+                            </td>
+                            <td className="py-3 px-4">{formatCurrency(Math.max(0, branch.remainingAmount))}</td>
+                            <td className="py-3 px-4">{formatCurrency(branch.averageDailySales)}</td>
+                            <td className="py-3 px-4">{formatCurrency(branch.projectedTotal)}</td>
+                            <td className="py-3 px-4">
+                              {branch.trend === 'up' ? (
+                                <Badge variant="default" className="bg-green-100 text-green-700">
+                                  <TrendingUp className="w-3 h-3 ml-1" /> صاعد
+                                </Badge>
+                              ) : branch.trend === 'down' ? (
+                                <Badge variant="destructive" className="bg-red-100 text-red-700">
+                                  <TrendingDown className="w-3 h-3 ml-1" /> هابط
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">مستقر</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                        {(!targetsProgress || targetsProgress.length === 0) && (
+                          <tr>
+                            <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                              لا توجد أهداف محددة للشهر الحالي
                             </td>
                           </tr>
                         )}
