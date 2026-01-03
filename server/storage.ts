@@ -134,6 +134,32 @@ import {
   type InsertPerformanceAlert,
   type ShiftPerformanceTracking,
   type InsertShiftPerformanceTracking,
+  type MarketingCampaign,
+  type InsertMarketingCampaign,
+  type CampaignBudgetAllocation,
+  type InsertCampaignBudgetAllocation,
+  type CampaignGoal,
+  type InsertCampaignGoal,
+  type MarketingCalendarEvent,
+  type InsertMarketingCalendarEvent,
+  type MarketingInfluencer,
+  type InsertMarketingInfluencer,
+  type InfluencerCampaignLink,
+  type InsertInfluencerCampaignLink,
+  type InfluencerContact,
+  type InsertInfluencerContact,
+  type MarketingTask,
+  type InsertMarketingTask,
+  type MarketingTaskActivity,
+  type InsertMarketingTaskActivity,
+  type MarketingPerformanceReport,
+  type InsertMarketingPerformanceReport,
+  type MarketingAsset,
+  type InsertMarketingAsset,
+  type MarketingTeamMember,
+  type InsertMarketingTeamMember,
+  type MarketingAlert,
+  type InsertMarketingAlert,
   branches,
   inventoryItems,
   auditLogs,
@@ -205,6 +231,19 @@ import {
   averageTicketTargets,
   performanceAlerts,
   shiftPerformanceTracking,
+  marketingCampaigns,
+  campaignBudgetAllocations,
+  campaignGoals,
+  marketingCalendarEvents,
+  marketingInfluencers,
+  influencerCampaignLinks,
+  influencerContacts,
+  marketingTasks,
+  marketingTaskActivities,
+  marketingPerformanceReports,
+  marketingAssets,
+  marketingTeamMembers,
+  marketingAlerts,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -597,6 +636,98 @@ export interface IStorage {
   createShiftPerformanceTracking(tracking: InsertShiftPerformanceTracking): Promise<ShiftPerformanceTracking>;
   updateShiftPerformanceTracking(id: number, tracking: Partial<InsertShiftPerformanceTracking>): Promise<ShiftPerformanceTracking | undefined>;
   upsertShiftPerformanceTracking(tracking: InsertShiftPerformanceTracking): Promise<ShiftPerformanceTracking>;
+
+  // ==========================================
+  // Marketing Module - إدارة التسويق
+  // ==========================================
+
+  // Marketing Campaigns - الحملات التسويقية
+  getAllMarketingCampaigns(filters?: { status?: string; season?: string; objective?: string }): Promise<MarketingCampaign[]>;
+  getMarketingCampaign(id: number): Promise<MarketingCampaign | undefined>;
+  createMarketingCampaign(campaign: InsertMarketingCampaign): Promise<MarketingCampaign>;
+  updateMarketingCampaign(id: number, campaign: Partial<InsertMarketingCampaign>): Promise<MarketingCampaign | undefined>;
+  deleteMarketingCampaign(id: number): Promise<boolean>;
+
+  // Campaign Budget Allocations - توزيع الميزانية
+  getCampaignBudgetAllocations(campaignId: number): Promise<CampaignBudgetAllocation[]>;
+  getCampaignBudgetAllocation(id: number): Promise<CampaignBudgetAllocation | undefined>;
+  createCampaignBudgetAllocation(allocation: InsertCampaignBudgetAllocation): Promise<CampaignBudgetAllocation>;
+  updateCampaignBudgetAllocation(id: number, allocation: Partial<InsertCampaignBudgetAllocation>): Promise<CampaignBudgetAllocation | undefined>;
+  deleteCampaignBudgetAllocation(id: number): Promise<boolean>;
+
+  // Campaign Goals - أهداف الحملة
+  getCampaignGoals(campaignId: number): Promise<CampaignGoal[]>;
+  getCampaignGoal(id: number): Promise<CampaignGoal | undefined>;
+  createCampaignGoal(goal: InsertCampaignGoal): Promise<CampaignGoal>;
+  updateCampaignGoal(id: number, goal: Partial<InsertCampaignGoal>): Promise<CampaignGoal | undefined>;
+  deleteCampaignGoal(id: number): Promise<boolean>;
+
+  // Marketing Calendar Events - تقويم التسويق
+  getAllMarketingCalendarEvents(filters?: { campaignId?: number; startDate?: string; endDate?: string }): Promise<MarketingCalendarEvent[]>;
+  getMarketingCalendarEvent(id: number): Promise<MarketingCalendarEvent | undefined>;
+  createMarketingCalendarEvent(event: InsertMarketingCalendarEvent): Promise<MarketingCalendarEvent>;
+  updateMarketingCalendarEvent(id: number, event: Partial<InsertMarketingCalendarEvent>): Promise<MarketingCalendarEvent | undefined>;
+  deleteMarketingCalendarEvent(id: number): Promise<boolean>;
+
+  // Marketing Influencers - المؤثرين
+  getAllMarketingInfluencers(filters?: { specialty?: string; isActive?: boolean }): Promise<MarketingInfluencer[]>;
+  getMarketingInfluencer(id: number): Promise<MarketingInfluencer | undefined>;
+  createMarketingInfluencer(influencer: InsertMarketingInfluencer): Promise<MarketingInfluencer>;
+  updateMarketingInfluencer(id: number, influencer: Partial<InsertMarketingInfluencer>): Promise<MarketingInfluencer | undefined>;
+  deleteMarketingInfluencer(id: number): Promise<boolean>;
+
+  // Influencer Campaign Links - ربط المؤثرين بالحملات
+  getInfluencerCampaignLinks(filters?: { influencerId?: number; campaignId?: number }): Promise<InfluencerCampaignLink[]>;
+  getInfluencerCampaignLink(id: number): Promise<InfluencerCampaignLink | undefined>;
+  createInfluencerCampaignLink(link: InsertInfluencerCampaignLink): Promise<InfluencerCampaignLink>;
+  updateInfluencerCampaignLink(id: number, link: Partial<InsertInfluencerCampaignLink>): Promise<InfluencerCampaignLink | undefined>;
+  deleteInfluencerCampaignLink(id: number): Promise<boolean>;
+
+  // Influencer Contacts - سجل التواصل
+  getInfluencerContacts(influencerId: number): Promise<InfluencerContact[]>;
+  getInfluencerContact(id: number): Promise<InfluencerContact | undefined>;
+  createInfluencerContact(contact: InsertInfluencerContact): Promise<InfluencerContact>;
+  deleteInfluencerContact(id: number): Promise<boolean>;
+
+  // Marketing Tasks - المهام
+  getAllMarketingTasks(filters?: { campaignId?: number; assignedTo?: string; status?: string }): Promise<MarketingTask[]>;
+  getMarketingTask(id: number): Promise<MarketingTask | undefined>;
+  createMarketingTask(task: InsertMarketingTask): Promise<MarketingTask>;
+  updateMarketingTask(id: number, task: Partial<InsertMarketingTask>): Promise<MarketingTask | undefined>;
+  deleteMarketingTask(id: number): Promise<boolean>;
+
+  // Marketing Task Activities - نشاط المهام
+  getMarketingTaskActivities(taskId: number): Promise<MarketingTaskActivity[]>;
+  createMarketingTaskActivity(activity: InsertMarketingTaskActivity): Promise<MarketingTaskActivity>;
+
+  // Marketing Performance Reports - تقارير الأداء
+  getAllMarketingPerformanceReports(filters?: { reportType?: string; campaignId?: number }): Promise<MarketingPerformanceReport[]>;
+  getMarketingPerformanceReport(id: number): Promise<MarketingPerformanceReport | undefined>;
+  createMarketingPerformanceReport(report: InsertMarketingPerformanceReport): Promise<MarketingPerformanceReport>;
+  deleteMarketingPerformanceReport(id: number): Promise<boolean>;
+
+  // Marketing Assets - الأصول التسويقية
+  getAllMarketingAssets(filters?: { campaignId?: number; assetType?: string }): Promise<MarketingAsset[]>;
+  getMarketingAsset(id: number): Promise<MarketingAsset | undefined>;
+  createMarketingAsset(asset: InsertMarketingAsset): Promise<MarketingAsset>;
+  updateMarketingAsset(id: number, asset: Partial<InsertMarketingAsset>): Promise<MarketingAsset | undefined>;
+  deleteMarketingAsset(id: number): Promise<boolean>;
+
+  // Marketing Team Members - فريق التسويق
+  getAllMarketingTeamMembers(filters?: { isActive?: boolean }): Promise<MarketingTeamMember[]>;
+  getMarketingTeamMember(id: number): Promise<MarketingTeamMember | undefined>;
+  getMarketingTeamMemberByUserId(userId: string): Promise<MarketingTeamMember | undefined>;
+  createMarketingTeamMember(member: InsertMarketingTeamMember): Promise<MarketingTeamMember>;
+  updateMarketingTeamMember(id: number, member: Partial<InsertMarketingTeamMember>): Promise<MarketingTeamMember | undefined>;
+  deleteMarketingTeamMember(id: number): Promise<boolean>;
+
+  // Marketing Alerts - تنبيهات التسويق
+  getAllMarketingAlerts(filters?: { targetUserId?: string; isRead?: boolean }): Promise<MarketingAlert[]>;
+  getMarketingAlert(id: number): Promise<MarketingAlert | undefined>;
+  createMarketingAlert(alert: InsertMarketingAlert): Promise<MarketingAlert>;
+  markMarketingAlertAsRead(id: number): Promise<MarketingAlert | undefined>;
+  acknowledgeMarketingAlert(id: number, acknowledgedBy: string): Promise<MarketingAlert | undefined>;
+  deleteMarketingAlert(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5006,6 +5137,386 @@ export class DatabaseStorage implements IStorage {
       return updated!;
     }
     return await this.createShiftPerformanceTracking(tracking);
+  }
+
+  // ==========================================
+  // Marketing Module - إدارة التسويق
+  // ==========================================
+
+  // Marketing Campaigns - الحملات التسويقية
+  async getAllMarketingCampaigns(filters?: { status?: string; season?: string; objective?: string }): Promise<MarketingCampaign[]> {
+    const conditions = [];
+    if (filters?.status) conditions.push(eq(marketingCampaigns.status, filters.status));
+    if (filters?.season) conditions.push(eq(marketingCampaigns.season, filters.season));
+    if (filters?.objective) conditions.push(eq(marketingCampaigns.objective, filters.objective));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(marketingCampaigns).where(and(...conditions)).orderBy(desc(marketingCampaigns.createdAt));
+    }
+    return await db.select().from(marketingCampaigns).orderBy(desc(marketingCampaigns.createdAt));
+  }
+
+  async getMarketingCampaign(id: number): Promise<MarketingCampaign | undefined> {
+    const [campaign] = await db.select().from(marketingCampaigns).where(eq(marketingCampaigns.id, id));
+    return campaign;
+  }
+
+  async createMarketingCampaign(campaign: InsertMarketingCampaign): Promise<MarketingCampaign> {
+    const [created] = await db.insert(marketingCampaigns).values(campaign).returning();
+    return created;
+  }
+
+  async updateMarketingCampaign(id: number, campaign: Partial<InsertMarketingCampaign>): Promise<MarketingCampaign | undefined> {
+    const [updated] = await db.update(marketingCampaigns).set({ ...campaign, updatedAt: new Date() }).where(eq(marketingCampaigns.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingCampaign(id: number): Promise<boolean> {
+    await db.delete(marketingCampaigns).where(eq(marketingCampaigns.id, id));
+    return true;
+  }
+
+  // Campaign Budget Allocations - توزيع الميزانية
+  async getCampaignBudgetAllocations(campaignId: number): Promise<CampaignBudgetAllocation[]> {
+    return await db.select().from(campaignBudgetAllocations).where(eq(campaignBudgetAllocations.campaignId, campaignId));
+  }
+
+  async getCampaignBudgetAllocation(id: number): Promise<CampaignBudgetAllocation | undefined> {
+    const [allocation] = await db.select().from(campaignBudgetAllocations).where(eq(campaignBudgetAllocations.id, id));
+    return allocation;
+  }
+
+  async createCampaignBudgetAllocation(allocation: InsertCampaignBudgetAllocation): Promise<CampaignBudgetAllocation> {
+    const [created] = await db.insert(campaignBudgetAllocations).values(allocation).returning();
+    return created;
+  }
+
+  async updateCampaignBudgetAllocation(id: number, allocation: Partial<InsertCampaignBudgetAllocation>): Promise<CampaignBudgetAllocation | undefined> {
+    const [updated] = await db.update(campaignBudgetAllocations).set({ ...allocation, updatedAt: new Date() }).where(eq(campaignBudgetAllocations.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCampaignBudgetAllocation(id: number): Promise<boolean> {
+    await db.delete(campaignBudgetAllocations).where(eq(campaignBudgetAllocations.id, id));
+    return true;
+  }
+
+  // Campaign Goals - أهداف الحملة
+  async getCampaignGoals(campaignId: number): Promise<CampaignGoal[]> {
+    return await db.select().from(campaignGoals).where(eq(campaignGoals.campaignId, campaignId));
+  }
+
+  async getCampaignGoal(id: number): Promise<CampaignGoal | undefined> {
+    const [goal] = await db.select().from(campaignGoals).where(eq(campaignGoals.id, id));
+    return goal;
+  }
+
+  async createCampaignGoal(goal: InsertCampaignGoal): Promise<CampaignGoal> {
+    const [created] = await db.insert(campaignGoals).values(goal).returning();
+    return created;
+  }
+
+  async updateCampaignGoal(id: number, goal: Partial<InsertCampaignGoal>): Promise<CampaignGoal | undefined> {
+    const [updated] = await db.update(campaignGoals).set({ ...goal, updatedAt: new Date() }).where(eq(campaignGoals.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCampaignGoal(id: number): Promise<boolean> {
+    await db.delete(campaignGoals).where(eq(campaignGoals.id, id));
+    return true;
+  }
+
+  // Marketing Calendar Events - تقويم التسويق
+  async getAllMarketingCalendarEvents(filters?: { campaignId?: number; startDate?: string; endDate?: string }): Promise<MarketingCalendarEvent[]> {
+    const conditions = [];
+    if (filters?.campaignId) conditions.push(eq(marketingCalendarEvents.campaignId, filters.campaignId));
+    if (filters?.startDate) conditions.push(gte(marketingCalendarEvents.startDate, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(marketingCalendarEvents.startDate, filters.endDate));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(marketingCalendarEvents).where(and(...conditions)).orderBy(marketingCalendarEvents.startDate);
+    }
+    return await db.select().from(marketingCalendarEvents).orderBy(marketingCalendarEvents.startDate);
+  }
+
+  async getMarketingCalendarEvent(id: number): Promise<MarketingCalendarEvent | undefined> {
+    const [event] = await db.select().from(marketingCalendarEvents).where(eq(marketingCalendarEvents.id, id));
+    return event;
+  }
+
+  async createMarketingCalendarEvent(event: InsertMarketingCalendarEvent): Promise<MarketingCalendarEvent> {
+    const [created] = await db.insert(marketingCalendarEvents).values(event).returning();
+    return created;
+  }
+
+  async updateMarketingCalendarEvent(id: number, event: Partial<InsertMarketingCalendarEvent>): Promise<MarketingCalendarEvent | undefined> {
+    const [updated] = await db.update(marketingCalendarEvents).set({ ...event, updatedAt: new Date() }).where(eq(marketingCalendarEvents.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingCalendarEvent(id: number): Promise<boolean> {
+    await db.delete(marketingCalendarEvents).where(eq(marketingCalendarEvents.id, id));
+    return true;
+  }
+
+  // Marketing Influencers - المؤثرين
+  async getAllMarketingInfluencers(filters?: { specialty?: string; isActive?: boolean }): Promise<MarketingInfluencer[]> {
+    const conditions = [];
+    if (filters?.specialty) conditions.push(eq(marketingInfluencers.specialty, filters.specialty));
+    if (filters?.isActive !== undefined) conditions.push(eq(marketingInfluencers.isActive, filters.isActive));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(marketingInfluencers).where(and(...conditions)).orderBy(desc(marketingInfluencers.createdAt));
+    }
+    return await db.select().from(marketingInfluencers).orderBy(desc(marketingInfluencers.createdAt));
+  }
+
+  async getMarketingInfluencer(id: number): Promise<MarketingInfluencer | undefined> {
+    const [influencer] = await db.select().from(marketingInfluencers).where(eq(marketingInfluencers.id, id));
+    return influencer;
+  }
+
+  async createMarketingInfluencer(influencer: InsertMarketingInfluencer): Promise<MarketingInfluencer> {
+    const [created] = await db.insert(marketingInfluencers).values(influencer).returning();
+    return created;
+  }
+
+  async updateMarketingInfluencer(id: number, influencer: Partial<InsertMarketingInfluencer>): Promise<MarketingInfluencer | undefined> {
+    const [updated] = await db.update(marketingInfluencers).set({ ...influencer, updatedAt: new Date() }).where(eq(marketingInfluencers.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingInfluencer(id: number): Promise<boolean> {
+    await db.delete(marketingInfluencers).where(eq(marketingInfluencers.id, id));
+    return true;
+  }
+
+  // Influencer Campaign Links - ربط المؤثرين بالحملات
+  async getInfluencerCampaignLinks(filters?: { influencerId?: number; campaignId?: number }): Promise<InfluencerCampaignLink[]> {
+    const conditions = [];
+    if (filters?.influencerId) conditions.push(eq(influencerCampaignLinks.influencerId, filters.influencerId));
+    if (filters?.campaignId) conditions.push(eq(influencerCampaignLinks.campaignId, filters.campaignId));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(influencerCampaignLinks).where(and(...conditions)).orderBy(desc(influencerCampaignLinks.createdAt));
+    }
+    return await db.select().from(influencerCampaignLinks).orderBy(desc(influencerCampaignLinks.createdAt));
+  }
+
+  async getInfluencerCampaignLink(id: number): Promise<InfluencerCampaignLink | undefined> {
+    const [link] = await db.select().from(influencerCampaignLinks).where(eq(influencerCampaignLinks.id, id));
+    return link;
+  }
+
+  async createInfluencerCampaignLink(link: InsertInfluencerCampaignLink): Promise<InfluencerCampaignLink> {
+    const [created] = await db.insert(influencerCampaignLinks).values(link).returning();
+    return created;
+  }
+
+  async updateInfluencerCampaignLink(id: number, link: Partial<InsertInfluencerCampaignLink>): Promise<InfluencerCampaignLink | undefined> {
+    const [updated] = await db.update(influencerCampaignLinks).set({ ...link, updatedAt: new Date() }).where(eq(influencerCampaignLinks.id, id)).returning();
+    return updated;
+  }
+
+  async deleteInfluencerCampaignLink(id: number): Promise<boolean> {
+    await db.delete(influencerCampaignLinks).where(eq(influencerCampaignLinks.id, id));
+    return true;
+  }
+
+  // Influencer Contacts - سجل التواصل
+  async getInfluencerContacts(influencerId: number): Promise<InfluencerContact[]> {
+    return await db.select().from(influencerContacts).where(eq(influencerContacts.influencerId, influencerId)).orderBy(desc(influencerContacts.createdAt));
+  }
+
+  async getInfluencerContact(id: number): Promise<InfluencerContact | undefined> {
+    const [contact] = await db.select().from(influencerContacts).where(eq(influencerContacts.id, id));
+    return contact;
+  }
+
+  async createInfluencerContact(contact: InsertInfluencerContact): Promise<InfluencerContact> {
+    const [created] = await db.insert(influencerContacts).values(contact).returning();
+    return created;
+  }
+
+  async deleteInfluencerContact(id: number): Promise<boolean> {
+    await db.delete(influencerContacts).where(eq(influencerContacts.id, id));
+    return true;
+  }
+
+  // Marketing Tasks - المهام
+  async getAllMarketingTasks(filters?: { campaignId?: number; assignedTo?: string; status?: string }): Promise<MarketingTask[]> {
+    const conditions = [];
+    if (filters?.campaignId) conditions.push(eq(marketingTasks.campaignId, filters.campaignId));
+    if (filters?.assignedTo) conditions.push(eq(marketingTasks.assignedTo, filters.assignedTo));
+    if (filters?.status) conditions.push(eq(marketingTasks.status, filters.status));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(marketingTasks).where(and(...conditions)).orderBy(desc(marketingTasks.createdAt));
+    }
+    return await db.select().from(marketingTasks).orderBy(desc(marketingTasks.createdAt));
+  }
+
+  async getMarketingTask(id: number): Promise<MarketingTask | undefined> {
+    const [task] = await db.select().from(marketingTasks).where(eq(marketingTasks.id, id));
+    return task;
+  }
+
+  async createMarketingTask(task: InsertMarketingTask): Promise<MarketingTask> {
+    const [created] = await db.insert(marketingTasks).values(task).returning();
+    return created;
+  }
+
+  async updateMarketingTask(id: number, task: Partial<InsertMarketingTask>): Promise<MarketingTask | undefined> {
+    const [updated] = await db.update(marketingTasks).set({ ...task, updatedAt: new Date() }).where(eq(marketingTasks.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingTask(id: number): Promise<boolean> {
+    await db.delete(marketingTasks).where(eq(marketingTasks.id, id));
+    return true;
+  }
+
+  // Marketing Task Activities - نشاط المهام
+  async getMarketingTaskActivities(taskId: number): Promise<MarketingTaskActivity[]> {
+    return await db.select().from(marketingTaskActivities).where(eq(marketingTaskActivities.taskId, taskId)).orderBy(desc(marketingTaskActivities.createdAt));
+  }
+
+  async createMarketingTaskActivity(activity: InsertMarketingTaskActivity): Promise<MarketingTaskActivity> {
+    const [created] = await db.insert(marketingTaskActivities).values(activity).returning();
+    return created;
+  }
+
+  // Marketing Performance Reports - تقارير الأداء
+  async getAllMarketingPerformanceReports(filters?: { reportType?: string; campaignId?: number }): Promise<MarketingPerformanceReport[]> {
+    const conditions = [];
+    if (filters?.reportType) conditions.push(eq(marketingPerformanceReports.reportType, filters.reportType));
+    if (filters?.campaignId) conditions.push(eq(marketingPerformanceReports.campaignId, filters.campaignId));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(marketingPerformanceReports).where(and(...conditions)).orderBy(desc(marketingPerformanceReports.createdAt));
+    }
+    return await db.select().from(marketingPerformanceReports).orderBy(desc(marketingPerformanceReports.createdAt));
+  }
+
+  async getMarketingPerformanceReport(id: number): Promise<MarketingPerformanceReport | undefined> {
+    const [report] = await db.select().from(marketingPerformanceReports).where(eq(marketingPerformanceReports.id, id));
+    return report;
+  }
+
+  async createMarketingPerformanceReport(report: InsertMarketingPerformanceReport): Promise<MarketingPerformanceReport> {
+    const [created] = await db.insert(marketingPerformanceReports).values(report).returning();
+    return created;
+  }
+
+  async deleteMarketingPerformanceReport(id: number): Promise<boolean> {
+    await db.delete(marketingPerformanceReports).where(eq(marketingPerformanceReports.id, id));
+    return true;
+  }
+
+  // Marketing Assets - الأصول التسويقية
+  async getAllMarketingAssets(filters?: { campaignId?: number; assetType?: string }): Promise<MarketingAsset[]> {
+    const conditions = [];
+    if (filters?.campaignId) conditions.push(eq(marketingAssets.campaignId, filters.campaignId));
+    if (filters?.assetType) conditions.push(eq(marketingAssets.assetType, filters.assetType));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(marketingAssets).where(and(...conditions)).orderBy(desc(marketingAssets.createdAt));
+    }
+    return await db.select().from(marketingAssets).orderBy(desc(marketingAssets.createdAt));
+  }
+
+  async getMarketingAsset(id: number): Promise<MarketingAsset | undefined> {
+    const [asset] = await db.select().from(marketingAssets).where(eq(marketingAssets.id, id));
+    return asset;
+  }
+
+  async createMarketingAsset(asset: InsertMarketingAsset): Promise<MarketingAsset> {
+    const [created] = await db.insert(marketingAssets).values(asset).returning();
+    return created;
+  }
+
+  async updateMarketingAsset(id: number, asset: Partial<InsertMarketingAsset>): Promise<MarketingAsset | undefined> {
+    const [updated] = await db.update(marketingAssets).set({ ...asset, updatedAt: new Date() }).where(eq(marketingAssets.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingAsset(id: number): Promise<boolean> {
+    await db.delete(marketingAssets).where(eq(marketingAssets.id, id));
+    return true;
+  }
+
+  // Marketing Team Members - فريق التسويق
+  async getAllMarketingTeamMembers(filters?: { isActive?: boolean }): Promise<MarketingTeamMember[]> {
+    if (filters?.isActive !== undefined) {
+      return await db.select().from(marketingTeamMembers).where(eq(marketingTeamMembers.isActive, filters.isActive)).orderBy(desc(marketingTeamMembers.createdAt));
+    }
+    return await db.select().from(marketingTeamMembers).orderBy(desc(marketingTeamMembers.createdAt));
+  }
+
+  async getMarketingTeamMember(id: number): Promise<MarketingTeamMember | undefined> {
+    const [member] = await db.select().from(marketingTeamMembers).where(eq(marketingTeamMembers.id, id));
+    return member;
+  }
+
+  async getMarketingTeamMemberByUserId(userId: string): Promise<MarketingTeamMember | undefined> {
+    const [member] = await db.select().from(marketingTeamMembers).where(eq(marketingTeamMembers.userId, userId));
+    return member;
+  }
+
+  async createMarketingTeamMember(member: InsertMarketingTeamMember): Promise<MarketingTeamMember> {
+    const [created] = await db.insert(marketingTeamMembers).values(member).returning();
+    return created;
+  }
+
+  async updateMarketingTeamMember(id: number, member: Partial<InsertMarketingTeamMember>): Promise<MarketingTeamMember | undefined> {
+    const [updated] = await db.update(marketingTeamMembers).set({ ...member, updatedAt: new Date() }).where(eq(marketingTeamMembers.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingTeamMember(id: number): Promise<boolean> {
+    await db.delete(marketingTeamMembers).where(eq(marketingTeamMembers.id, id));
+    return true;
+  }
+
+  // Marketing Alerts - تنبيهات التسويق
+  async getAllMarketingAlerts(filters?: { targetUserId?: string; isRead?: boolean }): Promise<MarketingAlert[]> {
+    const conditions = [];
+    if (filters?.targetUserId) conditions.push(eq(marketingAlerts.targetUserId, filters.targetUserId));
+    if (filters?.isRead !== undefined) conditions.push(eq(marketingAlerts.isRead, filters.isRead));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(marketingAlerts).where(and(...conditions)).orderBy(desc(marketingAlerts.createdAt));
+    }
+    return await db.select().from(marketingAlerts).orderBy(desc(marketingAlerts.createdAt));
+  }
+
+  async getMarketingAlert(id: number): Promise<MarketingAlert | undefined> {
+    const [alert] = await db.select().from(marketingAlerts).where(eq(marketingAlerts.id, id));
+    return alert;
+  }
+
+  async createMarketingAlert(alert: InsertMarketingAlert): Promise<MarketingAlert> {
+    const [created] = await db.insert(marketingAlerts).values(alert).returning();
+    return created;
+  }
+
+  async markMarketingAlertAsRead(id: number): Promise<MarketingAlert | undefined> {
+    const [updated] = await db.update(marketingAlerts).set({ isRead: true }).where(eq(marketingAlerts.id, id)).returning();
+    return updated;
+  }
+
+  async acknowledgeMarketingAlert(id: number, acknowledgedBy: string): Promise<MarketingAlert | undefined> {
+    const [updated] = await db.update(marketingAlerts).set({ 
+      isAcknowledged: true, 
+      acknowledgedBy, 
+      acknowledgedAt: new Date() 
+    }).where(eq(marketingAlerts.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingAlert(id: number): Promise<boolean> {
+    await db.delete(marketingAlerts).where(eq(marketingAlerts.id, id));
+    return true;
   }
 }
 
