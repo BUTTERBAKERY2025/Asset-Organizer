@@ -91,7 +91,6 @@ function Router() {
       <Route path="/operations-employees" component={OperationsEmployeesPage} />
       <Route path="/targets-planning" component={TargetsPlanningPage} />
       <Route path="/targets-dashboard" component={TargetsDashboardPage} />
-      <Route path="/assets-dashboard" component={TargetsDashboardPage} />
       <Route path="/incentives-management" component={IncentivesManagementPage} />
       <Route path="/sales-analytics" component={SalesAnalyticsPage} />
       <Route path="/display-bar-waste" component={DisplayBarWastePage} />
