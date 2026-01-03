@@ -6791,5 +6791,385 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // Cashier Shift Targets API - أهداف الكاشير للشفت
+  // ==========================================
+
+  app.get("/api/cashier-shift-targets", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, date, shiftType } = req.query;
+      const filters: any = {};
+      if (branchId) filters.branchId = branchId;
+      if (date) filters.date = date;
+      if (shiftType) filters.shiftType = shiftType;
+      
+      const targets = await storage.getAllCashierShiftTargets(filters);
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching cashier shift targets:", error);
+      res.status(500).json({ error: "فشل في جلب أهداف الكاشير" });
+    }
+  });
+
+  app.get("/api/cashier-shift-targets/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const target = await storage.getCashierShiftTarget(id);
+      if (!target) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+      res.json(target);
+    } catch (error) {
+      console.error("Error fetching cashier shift target:", error);
+      res.status(500).json({ error: "فشل في جلب الهدف" });
+    }
+  });
+
+  app.get("/api/cashier-shift-targets/branch/:branchId/date/:date", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, date } = req.params;
+      const targets = await storage.getCashierShiftTargetsByBranch(branchId, date);
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching branch cashier targets:", error);
+      res.status(500).json({ error: "فشل في جلب أهداف الفرع" });
+    }
+  });
+
+  app.get("/api/cashier-shift-targets/cashier/:cashierId", isAuthenticated, async (req, res) => {
+    try {
+      const { cashierId } = req.params;
+      const { startDate, endDate } = req.query;
+      const targets = await storage.getCashierShiftTargetsByCashier(
+        cashierId, 
+        startDate as string | undefined, 
+        endDate as string | undefined
+      );
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching cashier targets:", error);
+      res.status(500).json({ error: "فشل في جلب أهداف الكاشير" });
+    }
+  });
+
+  app.post("/api/cashier-shift-targets", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const targetData = { ...req.body, createdBy: currentUser.id };
+      const target = await storage.createCashierShiftTarget(targetData);
+      res.status(201).json(target);
+    } catch (error) {
+      console.error("Error creating cashier shift target:", error);
+      res.status(500).json({ error: "فشل في إنشاء هدف الكاشير" });
+    }
+  });
+
+  app.post("/api/cashier-shift-targets/bulk", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const targets = req.body.targets?.map((t: any) => ({ ...t, createdBy: currentUser.id })) || [];
+      const created = await storage.bulkCreateCashierShiftTargets(targets);
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error bulk creating cashier shift targets:", error);
+      res.status(500).json({ error: "فشل في إنشاء الأهداف" });
+    }
+  });
+
+  app.patch("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getCashierShiftTarget(id);
+      if (!existing) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+
+      const currentUser = req.currentUser;
+      if (currentUser.role !== 'admin' && req.body.branchId && req.body.branchId !== existing.branchId) {
+        return res.status(403).json({ error: "لا يمكنك تغيير الفرع" });
+      }
+
+      const updated = await storage.updateCashierShiftTarget(id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating cashier shift target:", error);
+      res.status(500).json({ error: "فشل في تحديث الهدف" });
+    }
+  });
+
+  app.delete("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteCashierShiftTarget(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting cashier shift target:", error);
+      res.status(500).json({ error: "فشل في حذف الهدف" });
+    }
+  });
+
+  // ==========================================
+  // Average Ticket Targets API - أهداف متوسط الفاتورة
+  // ==========================================
+
+  app.get("/api/average-ticket-targets", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, isActive } = req.query;
+      const filters: any = {};
+      if (branchId) filters.branchId = branchId;
+      if (isActive !== undefined) filters.isActive = isActive === 'true';
+      
+      const targets = await storage.getAllAverageTicketTargets(filters);
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching average ticket targets:", error);
+      res.status(500).json({ error: "فشل في جلب أهداف متوسط الفاتورة" });
+    }
+  });
+
+  app.get("/api/average-ticket-targets/active", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, cashierId } = req.query;
+      const targets = await storage.getActiveAverageTicketTargets(
+        branchId as string | undefined,
+        cashierId as string | undefined
+      );
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching active average ticket targets:", error);
+      res.status(500).json({ error: "فشل في جلب الأهداف النشطة" });
+    }
+  });
+
+  app.get("/api/average-ticket-targets/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const target = await storage.getAverageTicketTarget(id);
+      if (!target) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+      res.json(target);
+    } catch (error) {
+      console.error("Error fetching average ticket target:", error);
+      res.status(500).json({ error: "فشل في جلب الهدف" });
+    }
+  });
+
+  app.post("/api/average-ticket-targets", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const targetData = { ...req.body, createdBy: currentUser.id };
+      const target = await storage.createAverageTicketTarget(targetData);
+      res.status(201).json(target);
+    } catch (error) {
+      console.error("Error creating average ticket target:", error);
+      res.status(500).json({ error: "فشل في إنشاء هدف متوسط الفاتورة" });
+    }
+  });
+
+  app.patch("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateAverageTicketTarget(id, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating average ticket target:", error);
+      res.status(500).json({ error: "فشل في تحديث الهدف" });
+    }
+  });
+
+  app.delete("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteAverageTicketTarget(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting average ticket target:", error);
+      res.status(500).json({ error: "فشل في حذف الهدف" });
+    }
+  });
+
+  // ==========================================
+  // Performance Alerts API - تنبيهات الأداء
+  // ==========================================
+
+  app.get("/api/performance-alerts", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, date, isRead } = req.query;
+      const filters: any = {};
+      if (branchId) filters.branchId = branchId;
+      if (date) filters.date = date;
+      if (isRead !== undefined) filters.isRead = isRead === 'true';
+      
+      const alerts = await storage.getAllPerformanceAlerts(filters);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching performance alerts:", error);
+      res.status(500).json({ error: "فشل في جلب التنبيهات" });
+    }
+  });
+
+  app.get("/api/performance-alerts/unread/:branchId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId } = req.params;
+      const alerts = await storage.getUnreadAlerts(branchId);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching unread alerts:", error);
+      res.status(500).json({ error: "فشل في جلب التنبيهات غير المقروءة" });
+    }
+  });
+
+  app.get("/api/performance-alerts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const alert = await storage.getPerformanceAlert(id);
+      if (!alert) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      res.json(alert);
+    } catch (error) {
+      console.error("Error fetching performance alert:", error);
+      res.status(500).json({ error: "فشل في جلب التنبيه" });
+    }
+  });
+
+  app.post("/api/performance-alerts", isAuthenticated, async (req: any, res) => {
+    try {
+      const alert = await storage.createPerformanceAlert(req.body);
+      res.status(201).json(alert);
+    } catch (error) {
+      console.error("Error creating performance alert:", error);
+      res.status(500).json({ error: "فشل في إنشاء التنبيه" });
+    }
+  });
+
+  app.patch("/api/performance-alerts/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.markAlertAsRead(id);
+      if (!updated) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error marking alert as read:", error);
+      res.status(500).json({ error: "فشل في تحديث التنبيه" });
+    }
+  });
+
+  app.patch("/api/performance-alerts/:id/acknowledge", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const currentUser = req.currentUser;
+      const updated = await storage.acknowledgeAlert(id, currentUser.id);
+      if (!updated) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error acknowledging alert:", error);
+      res.status(500).json({ error: "فشل في تأكيد التنبيه" });
+    }
+  });
+
+  app.post("/api/performance-alerts/bulk-read", isAuthenticated, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: "قائمة المعرفات مطلوبة" });
+      }
+      await storage.bulkMarkAlertsAsRead(ids);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error bulk marking alerts as read:", error);
+      res.status(500).json({ error: "فشل في تحديث التنبيهات" });
+    }
+  });
+
+  // ==========================================
+  // Shift Performance Tracking API - تتبع أداء الشفت
+  // ==========================================
+
+  app.get("/api/shift-performance-tracking", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, date } = req.query;
+      const filters: any = {};
+      if (branchId) filters.branchId = branchId;
+      if (date) filters.date = date;
+      
+      const tracking = await storage.getAllShiftPerformanceTracking(filters);
+      res.json(tracking);
+    } catch (error) {
+      console.error("Error fetching shift performance tracking:", error);
+      res.status(500).json({ error: "فشل في جلب تتبع الأداء" });
+    }
+  });
+
+  app.get("/api/shift-performance-tracking/active/:branchId/:date/:shiftType", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, date, shiftType } = req.params;
+      const tracking = await storage.getActiveShiftPerformance(branchId, date, shiftType);
+      if (!tracking) {
+        return res.status(404).json({ error: "لا يوجد تتبع للشفت" });
+      }
+      res.json(tracking);
+    } catch (error) {
+      console.error("Error fetching active shift performance:", error);
+      res.status(500).json({ error: "فشل في جلب تتبع الشفت" });
+    }
+  });
+
+  app.get("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tracking = await storage.getShiftPerformanceTracking(id);
+      if (!tracking) {
+        return res.status(404).json({ error: "التتبع غير موجود" });
+      }
+      res.json(tracking);
+    } catch (error) {
+      console.error("Error fetching shift performance tracking:", error);
+      res.status(500).json({ error: "فشل في جلب التتبع" });
+    }
+  });
+
+  app.post("/api/shift-performance-tracking", isAuthenticated, async (req: any, res) => {
+    try {
+      const tracking = await storage.createShiftPerformanceTracking(req.body);
+      res.status(201).json(tracking);
+    } catch (error) {
+      console.error("Error creating shift performance tracking:", error);
+      res.status(500).json({ error: "فشل في إنشاء التتبع" });
+    }
+  });
+
+  app.patch("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateShiftPerformanceTracking(id, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "التتبع غير موجود" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating shift performance tracking:", error);
+      res.status(500).json({ error: "فشل في تحديث التتبع" });
+    }
+  });
+
+  app.put("/api/shift-performance-tracking/upsert", isAuthenticated, async (req: any, res) => {
+    try {
+      const tracking = await storage.upsertShiftPerformanceTracking(req.body);
+      res.json(tracking);
+    } catch (error) {
+      console.error("Error upserting shift performance tracking:", error);
+      res.status(500).json({ error: "فشل في تحديث/إنشاء التتبع" });
+    }
+  });
+
   return httpServer;
 }
