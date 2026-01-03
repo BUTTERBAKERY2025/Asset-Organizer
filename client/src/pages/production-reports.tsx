@@ -815,7 +815,7 @@ export default function ProductionReportsPage() {
               </TabsContent>
 
               <TabsContent value="waste" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Card className="bg-red-50 border-red-200">
                     <CardContent className="p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">تقارير الهدر</p>
@@ -834,26 +834,108 @@ export default function ProductionReportsPage() {
                       <p className="text-xl font-bold text-red-600">{formatCurrency(reportData?.wasteAnalysis.totalValue || 0)}</p>
                     </CardContent>
                   </Card>
+                  <Card className={`bg-gradient-to-br ${(reportData?.wasteAnalysis.wastePercentage || 0) > 5 ? 'from-red-100 border-red-300' : (reportData?.wasteAnalysis.wastePercentage || 0) > 2 ? 'from-amber-100 border-amber-300' : 'from-green-100 border-green-300'} to-white`}>
+                    <CardContent className="p-3 text-center">
+                      <p className="text-xs text-gray-500 mb-1">نسبة الهدر من المبيعات</p>
+                      <p className={`text-xl font-bold ${(reportData?.wasteAnalysis.wastePercentage || 0) > 5 ? 'text-red-600' : (reportData?.wasteAnalysis.wastePercentage || 0) > 2 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {(reportData?.wasteAnalysis.wastePercentage || 0).toFixed(2)}%
+                      </p>
+                    </CardContent>
+                  </Card>
                 </div>
-                <Card>
-                  <CardHeader className="py-3 px-4">
-                    <CardTitle className="text-sm">التوزيع حسب السبب</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    {Object.entries(reportData?.wasteAnalysis.byReason || {}).length > 0 ? (
-                      <div className="space-y-2">
-                        {Object.entries(reportData?.wasteAnalysis.byReason || {}).map(([reason, qty]) => (
-                          <div key={reason} className="flex justify-between items-center p-2 bg-red-50 rounded">
-                            <span className="text-sm">{reason}</span>
-                            <Badge variant="destructive">{qty}</Badge>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="text-sm">التوزيع حسب السبب</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      {Object.entries(reportData?.wasteAnalysis.byReason || {}).length > 0 ? (
+                        <>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <RechartsPie>
+                              <Pie
+                                data={Object.entries(reportData?.wasteAnalysis.byReason || {}).map(([name, value]) => ({ name, value }))}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={40}
+                                outerRadius={70}
+                                paddingAngle={2}
+                                dataKey="value"
+                                label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                                labelLine={false}
+                              >
+                                {Object.entries(reportData?.wasteAnalysis.byReason || {}).map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16'][index % 5]} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                              <Legend />
+                            </RechartsPie>
+                          </ResponsiveContainer>
+                          <div className="space-y-2 mt-2">
+                            {Object.entries(reportData?.wasteAnalysis.byReason || {}).map(([reason, qty], i) => (
+                              <div key={reason} className="flex justify-between items-center p-2 bg-red-50 rounded text-sm">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded" style={{ backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16'][i % 5] }} />
+                                  <span>{reason}</span>
+                                </div>
+                                <Badge variant="destructive">{qty}</Badge>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات هدر</p>
-                    )}
-                  </CardContent>
-                </Card>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات هدر</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="text-sm">أكثر المنتجات هدرًا (Top 10)</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      {reportData?.wasteAnalysis.byProduct && reportData.wasteAnalysis.byProduct.length > 0 ? (
+                        <>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <BarChart data={reportData.wasteAnalysis.byProduct.slice(0, 10)} layout="vertical">
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" tick={{ fontSize: 10 }} />
+                              <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 9 }} />
+                              <Tooltip formatter={(value, name) => name === 'value' ? formatCurrency(value as number) : value} />
+                              <Bar dataKey="quantity" name="الكمية" fill="#ef4444" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                          <div className="space-y-1 mt-2 max-h-32 overflow-y-auto">
+                            {reportData.wasteAnalysis.byProduct.slice(0, 10).map((product, i) => (
+                              <div key={i} className="flex justify-between items-center text-xs p-1 hover:bg-red-50 rounded">
+                                <span className="text-gray-600 truncate">{product.name}</span>
+                                <div className="flex gap-2">
+                                  <Badge variant="outline" className="text-xs">{product.quantity}</Badge>
+                                  <Badge variant="destructive" className="text-xs">{formatCurrency(product.value)}</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات منتجات</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Link to Waste Management Page */}
+                <div className="flex justify-center">
+                  <Link href="/display-bar-waste">
+                    <Button variant="outline" className="gap-2">
+                      <Trash2 className="h-4 w-4" />
+                      عرض صفحة إدارة الهالك الكاملة
+                      <ArrowRight className="h-4 w-4 rotate-180" />
+                    </Button>
+                  </Link>
+                </div>
               </TabsContent>
 
               <TabsContent value="quality" className="space-y-4">
