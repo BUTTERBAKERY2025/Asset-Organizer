@@ -488,6 +488,7 @@ export const SYSTEM_MODULES = [
   "shifts",
   "quality_control",
   "cashier_journal",
+  "marketing",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -545,6 +546,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   shifts: "الورديات",
   quality_control: "مراقبة الجودة",
   cashier_journal: "يومية الكاشير",
+  marketing: "التسويق",
 };
 
 // Action labels for UI display (Arabic)
@@ -585,6 +587,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
     label: "المالية والعقود",
     modules: ["contracts", "budget_planning", "payment_requests"],
   },
+  { label: "التسويق", modules: ["marketing"] },
   { label: "إدارة النظام", modules: ["users"] },
 ];
 

@@ -53,6 +53,9 @@ import DailyProductionPage from "@/pages/daily-production";
 import ProductionReportsPage from "@/pages/production-reports";
 import RBACManagementPage from "@/pages/rbac-management";
 import CashierShiftPerformancePage from "@/pages/cashier-shift-performance";
+import MarketingCampaignsPage from "@/pages/marketing-campaigns";
+import MarketingInfluencersPage from "@/pages/marketing-influencers";
+import MarketingDashboardPage from "@/pages/marketing-dashboard";
 
 function Router() {
   return (
@@ -105,6 +108,9 @@ function Router() {
       <Route path="/production-reports" component={ProductionReportsPage} />
       <Route path="/rbac-management" component={RBACManagementPage} />
       <Route path="/cashier-shift-performance" component={CashierShiftPerformancePage} />
+      <Route path="/marketing" component={MarketingDashboardPage} />
+      <Route path="/marketing-campaigns" component={MarketingCampaignsPage} />
+      <Route path="/marketing-influencers" component={MarketingInfluencersPage} />
       <Route component={NotFound} />
     </Switch>
   );

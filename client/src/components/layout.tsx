@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, Shield, MapPin } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, Shield, MapPin, Megaphone, UserCheck, Calendar } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import type { Branch } from "@shared/schema";
@@ -159,6 +159,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/payment-requests", label: "طلبات الدفع", icon: Wallet, module: "payment_requests" },
           { href: "/budget-planning", label: "تخطيط الميزانية", icon: Calculator, module: "budget_planning" },
           { href: "/construction-reports", label: "تقارير المشاريع", icon: FileBarChart, module: "reports" },
+        ],
+      },
+    },
+    {
+      key: "marketing",
+      group: {
+        label: "التسويق",
+        icon: Megaphone,
+        items: [
+          { href: "/marketing", label: "لوحة تحكم التسويق", icon: LayoutDashboard, module: "marketing" },
+          { href: "/marketing-campaigns", label: "الحملات التسويقية", icon: Target, module: "marketing" },
+          { href: "/marketing-influencers", label: "المؤثرين والبلوجرز", icon: UserCheck, module: "marketing" },
         ],
       },
     },

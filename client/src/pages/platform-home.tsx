@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Link, useLocation } from "wouter";
-import { Package, Hammer, FileBarChart, Settings, Users, ArrowLeftRight, Building2, FileSignature, Wallet, Calculator, Boxes, AlertTriangle, CalendarCheck, ClipboardEdit, HardHat, FileSearch, HardDrive, Link2, LayoutDashboard, ChevronLeft, Factory, Clock, CheckCircle } from "lucide-react";
+import { Package, Hammer, FileBarChart, Settings, Users, ArrowLeftRight, Building2, FileSignature, Wallet, Calculator, Boxes, AlertTriangle, CalendarCheck, ClipboardEdit, HardHat, FileSearch, HardDrive, Link2, LayoutDashboard, ChevronLeft, Factory, Clock, CheckCircle, Megaphone, UserCheck, Calendar, Target } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
 interface ModuleCardProps {
@@ -115,6 +115,19 @@ export default function PlatformHomePage() {
         { label: "العقود", href: "/contracts", icon: FileSignature },
         { label: "طلبات الدفع", href: "/payment-requests", icon: Wallet },
         { label: "تخطيط الميزانية", href: "/budget-planning", icon: Calculator },
+      ],
+    },
+    {
+      title: "التسويق",
+      description: "إدارة الحملات التسويقية والتنسيق مع المؤثرين وتحليل الأداء",
+      icon: Megaphone,
+      href: "/marketing",
+      color: "bg-pink-500",
+      module: "marketing",
+      items: [
+        { label: "لوحة تحكم التسويق", href: "/marketing", icon: LayoutDashboard },
+        { label: "الحملات التسويقية", href: "/marketing-campaigns", icon: Target },
+        { label: "المؤثرين والبلوجرز", href: "/marketing-influencers", icon: UserCheck },
       ],
     },
     {
