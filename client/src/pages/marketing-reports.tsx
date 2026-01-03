@@ -10,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   TrendingUp, TrendingDown, BarChart3, PieChart, 
   Users, Megaphone, DollarSign, Target, Eye, 
-  Heart, MessageCircle, Share2, Download
+  Heart, MessageCircle, Share2, Download, ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 
 interface CampaignStats {
   totalCampaigns: number;
@@ -128,9 +129,16 @@ export default function MarketingReportsPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="page-title">تقارير أداء التسويق</h1>
-            <p className="text-sm text-muted-foreground">تحليلات وتقارير أداء الحملات والمؤثرين</p>
+          <div className="flex items-center gap-3">
+            <Link href="/marketing">
+              <Button variant="outline" size="icon" data-testid="button-back">
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold" data-testid="page-title">تقارير أداء التسويق</h1>
+              <p className="text-sm text-muted-foreground">تحليلات وتقارير أداء الحملات والمؤثرين</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Select value={period} onValueChange={setPeriod}>

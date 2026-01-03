@@ -13,8 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Plus, CheckCircle2, Clock, AlertCircle, Circle, 
-  Calendar, User, Filter, MoreVertical 
+  Calendar, User, Filter, MoreVertical, ArrowRight 
 } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -156,9 +157,16 @@ export default function MarketingTasksPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="page-title">مهام التسويق</h1>
-            <p className="text-sm text-muted-foreground">متابعة المهام والأنشطة التسويقية</p>
+          <div className="flex items-center gap-3">
+            <Link href="/marketing">
+              <Button variant="outline" size="icon" data-testid="button-back">
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold" data-testid="page-title">مهام التسويق</h1>
+              <p className="text-sm text-muted-foreground">متابعة المهام والأنشطة التسويقية</p>
+            </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

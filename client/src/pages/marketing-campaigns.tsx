@@ -44,7 +44,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Loader2, Megaphone, Calendar, DollarSign } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, Megaphone, Calendar, DollarSign, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import type { MarketingCampaign } from "@shared/schema";
 import {
   CAMPAIGN_STATUS_LABELS,
@@ -270,9 +271,16 @@ export default function MarketingCampaignsPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">الحملات التسويقية</h1>
-            <p className="text-muted-foreground">إدارة ومتابعة الحملات التسويقية</p>
+          <div className="flex items-center gap-3">
+            <Link href="/marketing">
+              <Button variant="outline" size="icon" data-testid="button-back">
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">الحملات التسويقية</h1>
+              <p className="text-muted-foreground">إدارة ومتابعة الحملات التسويقية</p>
+            </div>
           </div>
           {canEdit && (
             <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-campaign">

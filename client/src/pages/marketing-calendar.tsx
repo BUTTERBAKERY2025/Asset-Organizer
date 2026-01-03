@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star } from "lucide-react";
+import { Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
 interface CalendarEvent {
@@ -163,9 +164,16 @@ export default function MarketingCalendarPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="page-title">تقويم التسويق</h1>
-            <p className="text-sm text-muted-foreground">جدولة الحملات والفعاليات التسويقية</p>
+          <div className="flex items-center gap-3">
+            <Link href="/marketing">
+              <Button variant="outline" size="icon" data-testid="button-back">
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold" data-testid="page-title">تقويم التسويق</h1>
+              <p className="text-sm text-muted-foreground">جدولة الحملات والفعاليات التسويقية</p>
+            </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

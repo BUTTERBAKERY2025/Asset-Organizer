@@ -12,8 +12,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
   Plus, Users, Mail, Phone, Briefcase, 
-  MoreVertical, Edit, Trash2, CheckCircle, Clock
+  MoreVertical, Edit, Trash2, CheckCircle, Clock, ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -169,9 +170,16 @@ export default function MarketingTeamPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="page-title">فريق التسويق</h1>
-            <p className="text-sm text-muted-foreground">إدارة أعضاء فريق التسويق ومهامهم</p>
+          <div className="flex items-center gap-3">
+            <Link href="/marketing">
+              <Button variant="outline" size="icon" data-testid="button-back">
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold" data-testid="page-title">فريق التسويق</h1>
+              <p className="text-sm text-muted-foreground">إدارة أعضاء فريق التسويق ومهامهم</p>
+            </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

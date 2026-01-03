@@ -60,7 +60,9 @@ import {
   DollarSign,
   Calendar,
   MessageSquare,
+  ArrowRight,
 } from "lucide-react";
+import { Link } from "wouter";
 import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact } from "@shared/schema";
 import {
   INFLUENCER_SPECIALTY_LABELS,
@@ -609,11 +611,18 @@ export default function MarketingInfluencersPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">
-              المؤثرين والبلوجرز
-            </h1>
-            <p className="text-muted-foreground">إدارة ومتابعة المؤثرين والبلوجرز</p>
+          <div className="flex items-center gap-3">
+            <Link href="/marketing">
+              <Button variant="outline" size="icon" data-testid="button-back">
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">
+                المؤثرين والبلوجرز
+              </h1>
+              <p className="text-muted-foreground">إدارة ومتابعة المؤثرين والبلوجرز</p>
+            </div>
           </div>
           {canEdit && (
             <Button
