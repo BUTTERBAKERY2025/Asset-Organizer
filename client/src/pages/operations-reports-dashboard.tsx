@@ -252,17 +252,24 @@ function QuickStatsRow({ report, cashierJournals }: { report: OperationsReport; 
 function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJournal; branches?: Branch[] }) {
   const branchName = branches?.find(b => b.id === journal.branchId)?.name || journal.branchId;
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
   
   const { data: attachments } = useQuery<JournalAttachment[]>({
     queryKey: [`/api/cashier-journals/${journal.id}/attachments`],
+    enabled: isOpen,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: paymentBreakdowns } = useQuery<{ paymentMethod: string; amount: number; transactionCount: number }[]>({
     queryKey: [`/api/cashier-journals/${journal.id}/payment-breakdowns`],
+    enabled: isOpen,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: journalDetails } = useQuery<{ signatures?: { signatureType: string; signerName: string; signatureData: string }[] }>({
     queryKey: [`/api/cashier-journals/${journal.id}`],
+    enabled: isOpen,
+    staleTime: 5 * 60 * 1000,
   });
 
   const handleExportJournalPDF = () => {
@@ -437,7 +444,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
 
   return (
     <>
-      <Dialog>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
           <Button variant="ghost" size="sm" className="gap-1" data-testid={`view-journal-${journal.id}`}>
             <Eye className="w-4 h-4" />
@@ -697,6 +704,8 @@ export default function OperationsReportsDashboardPage() {
   };
 
   const [activeTab, setActiveTab] = useState("overview");
+  const [cashierPage, setCashierPage] = useState(1);
+  const cashierPageSize = 15;
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -765,8 +774,8 @@ export default function OperationsReportsDashboardPage() {
     }
   });
 
-  // Query for branch overview report
-  const { data: branchOverview } = useQuery<{
+  // Query for branch overview report - lazy load when tab is active
+  const { data: branchOverview, isLoading: branchOverviewLoading } = useQuery<{
     summary: {
       totalBranches: number;
       totalAssets: number;
@@ -814,11 +823,13 @@ export default function OperationsReportsDashboardPage() {
       const res = await fetch(url);
       if (!res.ok) return { summary: {}, branches: [] };
       return res.json();
-    }
+    },
+    enabled: activeTab === 'branch-overview',
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Query for executive summary
-  const { data: executiveSummary } = useQuery<{
+  // Query for executive summary - lazy load when tab is active
+  const { data: executiveSummary, isLoading: executiveSummaryLoading } = useQuery<{
     reportDate: string;
     period: { startDate: string; endDate: string };
     salesOverview: {
@@ -861,7 +872,9 @@ export default function OperationsReportsDashboardPage() {
       const res = await fetch(`/api/reports/executive-summary?${queryString}`);
       if (!res.ok) return null;
       return res.json();
-    }
+    },
+    enabled: activeTab === 'executive',
+    staleTime: 5 * 60 * 1000,
   });
 
   const formatCurrency = (value: number) => {
@@ -2518,8 +2531,15 @@ export default function OperationsReportsDashboardPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">قائمة يوميات الكاشير</CardTitle>
-                  <CardDescription>عرض وإدارة يوميات الكاشير مع إمكانية الاطلاع على التفاصيل والمرفقات</CardDescription>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <CardTitle className="text-lg">قائمة يوميات الكاشير</CardTitle>
+                      <CardDescription>عرض وإدارة يوميات الكاشير مع إمكانية الاطلاع على التفاصيل والمرفقات</CardDescription>
+                    </div>
+                    <Badge variant="secondary" className="text-sm">
+                      {filteredCashierJournals.length} يومية
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -2538,7 +2558,9 @@ export default function OperationsReportsDashboardPage() {
                       </thead>
                       <tbody>
                         {filteredCashierJournals.length > 0 ? (
-                          filteredCashierJournals.slice(0, 20).map((journal) => (
+                          filteredCashierJournals
+                            .slice((cashierPage - 1) * cashierPageSize, cashierPage * cashierPageSize)
+                            .map((journal) => (
                             <tr key={journal.id} className="border-b hover:bg-muted/50">
                               <td className="py-3 px-4">{journal.journalDate}</td>
                               <td className="py-3 px-4">
@@ -2578,6 +2600,55 @@ export default function OperationsReportsDashboardPage() {
                       </tbody>
                     </table>
                   </div>
+                  
+                  {filteredCashierJournals.length > cashierPageSize && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                      <div className="text-sm text-muted-foreground">
+                        عرض {((cashierPage - 1) * cashierPageSize) + 1} - {Math.min(cashierPage * cashierPageSize, filteredCashierJournals.length)} من {filteredCashierJournals.length}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCashierPage(1)}
+                          disabled={cashierPage === 1}
+                          data-testid="cashier-page-first"
+                        >
+                          الأولى
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCashierPage(p => Math.max(1, p - 1))}
+                          disabled={cashierPage === 1}
+                          data-testid="cashier-page-prev"
+                        >
+                          السابق
+                        </Button>
+                        <span className="px-3 py-1 bg-muted rounded-md text-sm font-medium">
+                          {cashierPage} / {Math.ceil(filteredCashierJournals.length / cashierPageSize)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCashierPage(p => Math.min(Math.ceil(filteredCashierJournals.length / cashierPageSize), p + 1))}
+                          disabled={cashierPage >= Math.ceil(filteredCashierJournals.length / cashierPageSize)}
+                          data-testid="cashier-page-next"
+                        >
+                          التالي
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCashierPage(Math.ceil(filteredCashierJournals.length / cashierPageSize))}
+                          disabled={cashierPage >= Math.ceil(filteredCashierJournals.length / cashierPageSize)}
+                          data-testid="cashier-page-last"
+                        >
+                          الأخيرة
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -2915,7 +2986,16 @@ export default function OperationsReportsDashboardPage() {
                 </h2>
               </div>
 
-              {branchOverview?.summary && (
+              {branchOverviewLoading && (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                    <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+                    <p className="text-muted-foreground">جاري تحميل بيانات الفروع...</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!branchOverviewLoading && branchOverview?.summary && (
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                     <KPICard title="إجمالي الفروع" value={formatNumber(branchOverview.summary.totalBranches || 0)} icon={Building2} color="text-blue-600" bgColor="bg-blue-100" />
@@ -3213,7 +3293,16 @@ export default function OperationsReportsDashboardPage() {
                 </div>
               </div>
 
-              {executiveSummary && (
+              {executiveSummaryLoading && (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                    <RefreshCw className="w-8 h-8 text-purple-600 animate-spin" />
+                    <p className="text-muted-foreground">جاري تحميل التقرير التنفيذي...</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!executiveSummaryLoading && executiveSummary && (
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
@@ -3401,11 +3490,11 @@ export default function OperationsReportsDashboardPage() {
                 </>
               )}
 
-              {!executiveSummary && (
+              {!executiveSummaryLoading && !executiveSummary && (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                     <FileText className="w-12 h-12 text-muted-foreground" />
-                    <p className="text-muted-foreground">جاري تحميل التقرير التنفيذي...</p>
+                    <p className="text-muted-foreground">لا توجد بيانات تنفيذية متاحة</p>
                   </CardContent>
                 </Card>
               )}
