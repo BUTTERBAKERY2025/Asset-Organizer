@@ -17,7 +17,7 @@ import {
   CheckCircle, XCircle, Clock, AlertTriangle, Download, Wallet, CreditCard, Truck,
   Building2, Activity, Target, Package, FileText, Eye, Image, FileDown, Filter,
   Calendar, RefreshCw, Printer, ExternalLink, Receipt, ClipboardList, PieChart as PieChartIcon,
-  Gift, Trophy
+  Gift, Trophy, User
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -662,6 +662,7 @@ export default function OperationsReportsDashboardPage() {
     discrepancyFilter: "all" as "all" | "balanced" | "shortage" | "surplus",
     shiftType: "all" as "all" | "morning" | "evening" | "night",
     paymentCategory: "all" as "all" | "cash" | "cards" | "delivery",
+    cashierId: "" as string,
   });
 
   const formatLocalDate = (date: Date) => {
@@ -699,6 +700,11 @@ export default function OperationsReportsDashboardPage() {
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
+  });
+
+  // Query for users (cashiers)
+  const { data: users } = useQuery<{ id: string; username: string; firstName: string | null; lastName: string | null }[]>({
+    queryKey: ["/api/users"],
   });
 
   const queryString = new URLSearchParams({
@@ -977,8 +983,252 @@ export default function OperationsReportsDashboardPage() {
     printHtmlContent(htmlContent);
   };
 
+  // Export Cashier Account Statement PDF
+  const handleExportCashierPDF = () => {
+    if (filteredCashierJournals.length === 0) return;
+
+    const selectedCashier = filters.cashierId 
+      ? users?.find(u => u.id === filters.cashierId)
+      : null;
+    const cashierName = selectedCashier 
+      ? `${selectedCashier.firstName || selectedCashier.username} ${selectedCashier.lastName || ''}`.trim()
+      : 'جميع الكاشير';
+    const selectedBranch = filters.branchId 
+      ? branches?.find(b => b.id === filters.branchId)?.name 
+      : 'جميع الفروع';
+
+    // Calculate totals for cashier report
+    const totalSales = filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+    const totalCash = filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0);
+    const totalNetwork = filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0);
+    const totalDelivery = filteredCashierJournals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
+    const totalTransactions = filteredCashierJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0);
+    const shortages = filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage');
+    const surpluses = filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus');
+    const totalShortageAmount = shortages.reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0);
+    const totalSurplusAmount = surpluses.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+    const netDiscrepancy = totalSurplusAmount - totalShortageAmount;
+    const avgTicket = totalTransactions > 0 ? totalSales / totalTransactions : 0;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>كشف حساب الكاشير - ${cashierName}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4; margin: 10mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #d4a853; padding-bottom: 10px; margin-bottom: 15px; }
+    .header .title { font-size: 18px; font-weight: bold; color: #333; }
+    .header .subtitle { font-size: 11px; color: #666; margin-top: 3px; }
+    .header .logo { font-size: 14px; font-weight: bold; color: #d4a853; }
+    .info-bar { display: flex; justify-content: space-between; background: #f8f9fa; padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e9ecef; }
+    .info-item { text-align: center; }
+    .info-item .label { font-size: 9px; color: #666; }
+    .info-item .value { font-size: 12px; font-weight: bold; color: #333; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
+    .summary-card { background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .summary-card .value { font-size: 16px; font-weight: bold; color: #d4a853; }
+    .summary-card .label { color: #666; font-size: 9px; margin-top: 3px; }
+    .summary-card.negative .value { color: #dc3545; }
+    .summary-card.positive .value { color: #28a745; }
+    .section { margin-bottom: 15px; }
+    .section-title { font-size: 12px; font-weight: bold; color: white; padding: 6px 12px; background: linear-gradient(90deg, #d4a853 0%, #c49a48 100%); border-radius: 6px; margin-bottom: 8px; }
+    .breakdown-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+    .breakdown-item { background: #f8f9fa; padding: 10px; border-radius: 6px; text-align: center; border-right: 3px solid #d4a853; }
+    .breakdown-item .value { font-size: 14px; font-weight: bold; }
+    .breakdown-item .label { font-size: 8px; color: #666; }
+    table { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 8px; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: right; }
+    th { background: linear-gradient(180deg, #f0f0f0 0%, #e5e5e5 100%); font-weight: 600; color: #333; }
+    tr:nth-child(even) { background: #fafafa; }
+    tr:hover { background: #f5f5f5; }
+    .status-badge { padding: 2px 8px; border-radius: 10px; font-size: 8px; font-weight: 600; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .discrepancy-shortage { color: #dc3545; font-weight: bold; }
+    .discrepancy-surplus { color: #28a745; font-weight: bold; }
+    .discrepancy-balanced { color: #6c757d; }
+    .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #e9ecef; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .signature-area { margin-top: 20px; display: flex; justify-content: space-between; }
+    .signature-box { width: 45%; border-top: 1px solid #333; padding-top: 5px; text-align: center; font-size: 9px; }
+    .print-btn { position: fixed; top: 10px; left: 10px; background: #d4a853; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 11px; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+    .print-btn:hover { background: #c49a48; }
+    .loading-msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px; z-index: 200; }
+    @media print { .print-btn, .loading-msg { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة كشف الحساب</button>
+  <script>
+    document.fonts.ready.then(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    });
+    setTimeout(function() {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('printBtn').style.display = 'block';
+    }, 1500);
+  </script>
+  
+  <div class="header">
+    <div>
+      <div class="title">كشف حساب الكاشير</div>
+      <div class="subtitle">${cashierName}</div>
+    </div>
+    <div class="logo">بتر بيكري</div>
+  </div>
+
+  <div class="info-bar">
+    <div class="info-item">
+      <div class="label">الفرع</div>
+      <div class="value">${selectedBranch}</div>
+    </div>
+    <div class="info-item">
+      <div class="label">الفترة</div>
+      <div class="value">${filters.startDate} إلى ${filters.endDate}</div>
+    </div>
+    <div class="info-item">
+      <div class="label">عدد اليوميات</div>
+      <div class="value">${filteredCashierJournals.length}</div>
+    </div>
+    <div class="info-item">
+      <div class="label">تاريخ الطباعة</div>
+      <div class="value">${new Date().toLocaleDateString('ar-SA')}</div>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="value">${formatCurrency(totalSales)}</div>
+      <div class="label">إجمالي المبيعات</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">${formatNumber(totalTransactions)}</div>
+      <div class="label">عدد الفواتير</div>
+    </div>
+    <div class="summary-card">
+      <div class="value">${formatCurrency(avgTicket)}</div>
+      <div class="label">متوسط الفاتورة</div>
+    </div>
+    <div class="summary-card ${netDiscrepancy < 0 ? 'negative' : netDiscrepancy > 0 ? 'positive' : ''}">
+      <div class="value">${formatCurrency(netDiscrepancy)}</div>
+      <div class="label">صافي الفرق</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">تفاصيل طرق الدفع</div>
+    <div class="breakdown-grid">
+      <div class="breakdown-item">
+        <div class="value">${formatCurrency(totalCash)}</div>
+        <div class="label">نقداً</div>
+      </div>
+      <div class="breakdown-item">
+        <div class="value">${formatCurrency(totalNetwork)}</div>
+        <div class="label">شبكة وبطاقات</div>
+      </div>
+      <div class="breakdown-item">
+        <div class="value">${formatCurrency(totalDelivery)}</div>
+        <div class="label">تطبيقات التوصيل</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">ملخص العجز والفائض</div>
+    <div class="breakdown-grid">
+      <div class="breakdown-item">
+        <div class="value" style="color:#dc3545;">${shortages.length} حالة</div>
+        <div class="label">عدد حالات العجز</div>
+      </div>
+      <div class="breakdown-item">
+        <div class="value" style="color:#dc3545;">${formatCurrency(totalShortageAmount)}</div>
+        <div class="label">إجمالي العجز</div>
+      </div>
+      <div class="breakdown-item">
+        <div class="value" style="color:#28a745;">${formatCurrency(totalSurplusAmount)}</div>
+        <div class="label">إجمالي الفائض (${surpluses.length})</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">تفاصيل اليوميات (${filteredCashierJournals.length})</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>التاريخ</th>
+          <th>الوردية</th>
+          <th>المبيعات</th>
+          <th>نقداً</th>
+          <th>شبكة</th>
+          <th>توصيل</th>
+          <th>الفواتير</th>
+          <th>الفرق</th>
+          <th>الحالة</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filteredCashierJournals.map((j, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${j.journalDate}</td>
+            <td>${j.shiftType === 'morning' ? 'صباحي' : j.shiftType === 'evening' ? 'مسائي' : j.shiftType === 'night' ? 'ليلي' : j.shiftType || '-'}</td>
+            <td>${formatCurrency(j.totalSales || 0)}</td>
+            <td>${formatCurrency(j.cashTotal || 0)}</td>
+            <td>${formatCurrency(j.networkTotal || 0)}</td>
+            <td>${formatCurrency(j.deliveryTotal || 0)}</td>
+            <td>${j.transactionCount || 0}</td>
+            <td class="${(j.discrepancyAmount || 0) < 0 ? 'discrepancy-shortage' : (j.discrepancyAmount || 0) > 0 ? 'discrepancy-surplus' : 'discrepancy-balanced'}">${formatCurrency(j.discrepancyAmount || 0)}</td>
+            <td><span class="status-badge status-${j.status === 'approved' || j.status === 'posted' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${STATUS_LABELS[j.status] || j.status}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f0f0f0;font-weight:bold;">
+          <td colspan="3">الإجمالي</td>
+          <td>${formatCurrency(totalSales)}</td>
+          <td>${formatCurrency(totalCash)}</td>
+          <td>${formatCurrency(totalNetwork)}</td>
+          <td>${formatCurrency(totalDelivery)}</td>
+          <td>${totalTransactions}</td>
+          <td class="${netDiscrepancy < 0 ? 'discrepancy-shortage' : netDiscrepancy > 0 ? 'discrepancy-surplus' : 'discrepancy-balanced'}">${formatCurrency(netDiscrepancy)}</td>
+          <td>-</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="signature-area">
+    <div class="signature-box">توقيع الكاشير</div>
+    <div class="signature-box">توقيع المدير</div>
+  </div>
+
+  <div class="footer">
+    <span>بتر بيكري - Butter Bakery</span>
+    <span>تم الإنشاء: ${new Date().toLocaleString('ar-SA')}</span>
+  </div>
+</body>
+</html>`;
+
+    printHtmlContent(htmlContent);
+  };
+
   // Apply additional client-side filters on cashier journals
   const filteredCashierJournals = (cashierJournals || []).filter(journal => {
+    // Filter by cashier
+    if (filters.cashierId && journal.cashierId !== filters.cashierId) {
+      return false;
+    }
     // Filter by journal status
     if (filters.journalStatus !== "all" && journal.status !== filters.journalStatus) {
       return false;
@@ -1293,7 +1543,26 @@ export default function OperationsReportsDashboardPage() {
             </div>
 
             {/* Advanced Cashier Filters Row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-3 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-3 border-t">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <User className="w-4 h-4" />
+                  الكاشير
+                </Label>
+                <Select value={filters.cashierId || "all"} onValueChange={(v) => setFilters({ ...filters, cashierId: v === "all" ? "" : v })}>
+                  <SelectTrigger data-testid="select-cashier">
+                    <SelectValue placeholder="جميع الكاشير" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الكاشير</SelectItem>
+                    {users?.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.firstName || user.username} {user.lastName || ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <Receipt className="w-4 h-4" />
@@ -1360,6 +1629,7 @@ export default function OperationsReportsDashboardPage() {
                     discrepancyFilter: "all",
                     shiftType: "all",
                     paymentCategory: "all",
+                    cashierId: "",
                   })}
                   className="w-full"
                   data-testid="button-reset-filters"
@@ -1370,9 +1640,14 @@ export default function OperationsReportsDashboardPage() {
             </div>
 
             {/* Active Filters Summary */}
-            {(filters.journalStatus !== "all" || filters.discrepancyFilter !== "all" || filters.shiftType !== "all" || filters.paymentCategory !== "all") && (
+            {(filters.cashierId || filters.journalStatus !== "all" || filters.discrepancyFilter !== "all" || filters.shiftType !== "all" || filters.paymentCategory !== "all") && (
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <span className="text-xs text-muted-foreground">الفلاتر النشطة:</span>
+                {filters.cashierId && (
+                  <Badge variant="default" className="text-xs bg-amber-600">
+                    الكاشير: {users?.find(u => u.id === filters.cashierId)?.firstName || users?.find(u => u.id === filters.cashierId)?.username || filters.cashierId}
+                  </Badge>
+                )}
                 {filters.journalStatus !== "all" && (
                   <Badge variant="secondary" className="text-xs">
                     الحالة: {filters.journalStatus === "draft" ? "مسودة" : filters.journalStatus === "submitted" ? "مقدمة" : filters.journalStatus === "approved" ? "معتمدة" : filters.journalStatus === "posted" ? "مرحّلة" : "مرفوضة"}
@@ -1791,12 +2066,27 @@ export default function OperationsReportsDashboardPage() {
             </TabsContent>
 
             <TabsContent value="cashier" className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Wallet className="w-5 h-5 text-amber-600" />
                   يوميات الكاشير والصندوق
+                  {filters.cashierId && (
+                    <Badge variant="default" className="bg-amber-600 text-sm">
+                      {users?.find(u => u.id === filters.cashierId)?.firstName || users?.find(u => u.id === filters.cashierId)?.username}
+                    </Badge>
+                  )}
                 </h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleExportCashierPDF} 
+                    disabled={filteredCashierJournals.length === 0}
+                    className="gap-2" 
+                    data-testid="button-export-cashier-pdf"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    كشف حساب PDF
+                  </Button>
                   <Button variant="outline" onClick={() => setLocation("/cashier-journals")} className="gap-2" data-testid="link-cashier-journals">
                     <ExternalLink className="w-4 h-4" />
                     عرض الكل
