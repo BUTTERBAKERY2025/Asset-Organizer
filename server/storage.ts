@@ -126,6 +126,14 @@ import {
   type InsertProductSalesAnalytics,
   type DailyProductionBatch,
   type InsertDailyProductionBatch,
+  type CashierShiftTarget,
+  type InsertCashierShiftTarget,
+  type AverageTicketTarget,
+  type InsertAverageTicketTarget,
+  type PerformanceAlert,
+  type InsertPerformanceAlert,
+  type ShiftPerformanceTracking,
+  type InsertShiftPerformanceTracking,
   branches,
   inventoryItems,
   auditLogs,
@@ -193,6 +201,10 @@ import {
   userAssignments,
   userPermissionOverrides,
   userBranchAccess,
+  cashierShiftTargets,
+  averageTicketTargets,
+  performanceAlerts,
+  shiftPerformanceTracking,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -550,6 +562,41 @@ export interface IStorage {
     byCategory: Record<string, number>;
     byHour: Record<string, number>;
   }>;
+
+  // Cashier Shift Targets - أهداف الكاشير للشفت
+  getAllCashierShiftTargets(filters?: { branchId?: string; date?: string; shiftType?: string }): Promise<CashierShiftTarget[]>;
+  getCashierShiftTarget(id: number): Promise<CashierShiftTarget | undefined>;
+  getCashierShiftTargetsByBranch(branchId: string, date: string): Promise<CashierShiftTarget[]>;
+  getCashierShiftTargetsByCashier(cashierId: string, startDate?: string, endDate?: string): Promise<CashierShiftTarget[]>;
+  createCashierShiftTarget(target: InsertCashierShiftTarget): Promise<CashierShiftTarget>;
+  updateCashierShiftTarget(id: number, target: Partial<InsertCashierShiftTarget>): Promise<CashierShiftTarget | undefined>;
+  deleteCashierShiftTarget(id: number): Promise<boolean>;
+  bulkCreateCashierShiftTargets(targets: InsertCashierShiftTarget[]): Promise<CashierShiftTarget[]>;
+
+  // Average Ticket Targets - أهداف متوسط الفاتورة
+  getAllAverageTicketTargets(filters?: { branchId?: string; isActive?: boolean }): Promise<AverageTicketTarget[]>;
+  getAverageTicketTarget(id: number): Promise<AverageTicketTarget | undefined>;
+  getActiveAverageTicketTargets(branchId?: string, cashierId?: string): Promise<AverageTicketTarget[]>;
+  createAverageTicketTarget(target: InsertAverageTicketTarget): Promise<AverageTicketTarget>;
+  updateAverageTicketTarget(id: number, target: Partial<InsertAverageTicketTarget>): Promise<AverageTicketTarget | undefined>;
+  deleteAverageTicketTarget(id: number): Promise<boolean>;
+
+  // Performance Alerts - تنبيهات الأداء
+  getAllPerformanceAlerts(filters?: { branchId?: string; date?: string; isRead?: boolean }): Promise<PerformanceAlert[]>;
+  getPerformanceAlert(id: number): Promise<PerformanceAlert | undefined>;
+  getUnreadAlerts(branchId: string): Promise<PerformanceAlert[]>;
+  createPerformanceAlert(alert: InsertPerformanceAlert): Promise<PerformanceAlert>;
+  markAlertAsRead(id: number): Promise<PerformanceAlert | undefined>;
+  acknowledgeAlert(id: number, acknowledgedBy: string): Promise<PerformanceAlert | undefined>;
+  bulkMarkAlertsAsRead(ids: number[]): Promise<boolean>;
+
+  // Shift Performance Tracking - تتبع أداء الشفت
+  getAllShiftPerformanceTracking(filters?: { branchId?: string; date?: string }): Promise<ShiftPerformanceTracking[]>;
+  getShiftPerformanceTracking(id: number): Promise<ShiftPerformanceTracking | undefined>;
+  getActiveShiftPerformance(branchId: string, date: string, shiftType: string): Promise<ShiftPerformanceTracking | undefined>;
+  createShiftPerformanceTracking(tracking: InsertShiftPerformanceTracking): Promise<ShiftPerformanceTracking>;
+  updateShiftPerformanceTracking(id: number, tracking: Partial<InsertShiftPerformanceTracking>): Promise<ShiftPerformanceTracking | undefined>;
+  upsertShiftPerformanceTracking(tracking: InsertShiftPerformanceTracking): Promise<ShiftPerformanceTracking>;
 }
 
 export class DatabaseStorage implements IStorage {
