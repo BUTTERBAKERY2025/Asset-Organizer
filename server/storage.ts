@@ -14,6 +14,20 @@ import {
   type User,
   type UpsertUser,
   type InsertUser,
+  type Department,
+  type InsertDepartment,
+  type Role,
+  type InsertRole,
+  type Permission,
+  type InsertPermission,
+  type RolePermission,
+  type InsertRolePermission,
+  type UserAssignment,
+  type InsertUserAssignment,
+  type UserPermissionOverride,
+  type InsertUserPermissionOverride,
+  type UserBranchAccess,
+  type InsertUserBranchAccess,
   type ConstructionCategory,
   type InsertConstructionCategory,
   type Contractor,
@@ -172,6 +186,13 @@ import {
   salesDataUploads,
   productSalesAnalytics,
   dailyProductionBatches,
+  departments,
+  roles,
+  permissions,
+  rolePermissions,
+  userAssignments,
+  userPermissionOverrides,
+  userBranchAccess,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -4497,6 +4518,243 @@ export class DatabaseStorage implements IStorage {
         salesVsYesterday,
       },
     };
+  }
+
+  // ==================== RBAC System Methods ====================
+  
+  // Departments
+  async getAllDepartments(): Promise<Department[]> {
+    return await db.select().from(departments).orderBy(departments.name);
+  }
+
+  async getDepartment(id: number): Promise<Department | undefined> {
+    const [dept] = await db.select().from(departments).where(eq(departments.id, id));
+    return dept;
+  }
+
+  async createDepartment(dept: InsertDepartment): Promise<Department> {
+    const [created] = await db.insert(departments).values(dept).returning();
+    return created;
+  }
+
+  async updateDepartment(id: number, dept: Partial<InsertDepartment>): Promise<Department | undefined> {
+    const [updated] = await db.update(departments).set({ ...dept, updatedAt: new Date() }).where(eq(departments.id, id)).returning();
+    return updated;
+  }
+
+  // Roles
+  async getAllRoles(): Promise<Role[]> {
+    return await db.select().from(roles).orderBy(roles.hierarchyLevel);
+  }
+
+  async getRole(id: number): Promise<Role | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.id, id));
+    return role;
+  }
+
+  async getRoleBySlug(slug: string): Promise<Role | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.slug, slug));
+    return role;
+  }
+
+  async createRole(role: InsertRole): Promise<Role> {
+    const [created] = await db.insert(roles).values(role).returning();
+    return created;
+  }
+
+  async updateRole(id: number, role: Partial<InsertRole>): Promise<Role | undefined> {
+    const [updated] = await db.update(roles).set({ ...role, updatedAt: new Date() }).where(eq(roles.id, id)).returning();
+    return updated;
+  }
+
+  // Permissions
+  async getAllPermissions(): Promise<Permission[]> {
+    return await db.select().from(permissions).orderBy(permissions.module, permissions.action);
+  }
+
+  async getPermission(id: number): Promise<Permission | undefined> {
+    const [perm] = await db.select().from(permissions).where(eq(permissions.id, id));
+    return perm;
+  }
+
+  async getPermissionsByModule(module: string): Promise<Permission[]> {
+    return await db.select().from(permissions).where(eq(permissions.module, module));
+  }
+
+  async createPermission(perm: InsertPermission): Promise<Permission> {
+    const [created] = await db.insert(permissions).values(perm).returning();
+    return created;
+  }
+
+  // Role Permissions
+  async getRolePermissions(roleId: number): Promise<RolePermission[]> {
+    return await db.select().from(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+  }
+
+  async addRolePermission(rp: InsertRolePermission): Promise<RolePermission> {
+    const [created] = await db.insert(rolePermissions).values(rp).returning();
+    return created;
+  }
+
+  async removeRolePermission(roleId: number, permissionId: number): Promise<boolean> {
+    const result = await db.delete(rolePermissions).where(
+      and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId))
+    );
+    return true;
+  }
+
+  // User Assignments
+  async getUserAssignments(userId: string): Promise<UserAssignment[]> {
+    return await db.select().from(userAssignments).where(eq(userAssignments.userId, userId));
+  }
+
+  async getUserPrimaryAssignment(userId: string): Promise<UserAssignment | undefined> {
+    const [assignment] = await db.select().from(userAssignments).where(
+      and(eq(userAssignments.userId, userId), eq(userAssignments.isPrimary, true), eq(userAssignments.isActive, true))
+    );
+    return assignment;
+  }
+
+  async createUserAssignment(assignment: InsertUserAssignment): Promise<UserAssignment> {
+    const [created] = await db.insert(userAssignments).values(assignment).returning();
+    return created;
+  }
+
+  async updateUserAssignment(id: number, assignment: Partial<InsertUserAssignment>): Promise<UserAssignment | undefined> {
+    const [updated] = await db.update(userAssignments).set({ ...assignment, updatedAt: new Date() }).where(eq(userAssignments.id, id)).returning();
+    return updated;
+  }
+
+  async deleteUserAssignment(id: number): Promise<boolean> {
+    await db.delete(userAssignments).where(eq(userAssignments.id, id));
+    return true;
+  }
+
+  // User Permission Overrides
+  async getUserPermissionOverrides(userId: string): Promise<UserPermissionOverride[]> {
+    return await db.select().from(userPermissionOverrides).where(eq(userPermissionOverrides.userId, userId));
+  }
+
+  async createUserPermissionOverride(override: InsertUserPermissionOverride): Promise<UserPermissionOverride> {
+    const [created] = await db.insert(userPermissionOverrides).values(override).returning();
+    return created;
+  }
+
+  async deleteUserPermissionOverride(id: number): Promise<boolean> {
+    await db.delete(userPermissionOverrides).where(eq(userPermissionOverrides.id, id));
+    return true;
+  }
+
+  // User Branch Access
+  async getUserBranchAccess(userId: string): Promise<UserBranchAccess[]> {
+    return await db.select().from(userBranchAccess).where(eq(userBranchAccess.userId, userId));
+  }
+
+  async addUserBranchAccess(access: InsertUserBranchAccess): Promise<UserBranchAccess> {
+    const [created] = await db.insert(userBranchAccess).values(access).returning();
+    return created;
+  }
+
+  async removeUserBranchAccess(userId: string, branchId: string): Promise<boolean> {
+    await db.delete(userBranchAccess).where(
+      and(eq(userBranchAccess.userId, userId), eq(userBranchAccess.branchId, branchId))
+    );
+    return true;
+  }
+
+  async setUserDefaultBranch(userId: string, branchId: string): Promise<void> {
+    await db.update(userBranchAccess).set({ isDefault: false }).where(eq(userBranchAccess.userId, userId));
+    await db.update(userBranchAccess).set({ isDefault: true }).where(
+      and(eq(userBranchAccess.userId, userId), eq(userBranchAccess.branchId, branchId))
+    );
+  }
+
+  // Get User Effective Permissions (combining role permissions + overrides)
+  async getUserEffectivePermissions(userId: string): Promise<{
+    permissions: Array<{ module: string; action: string; allowed: boolean }>;
+    allowedBranches: string[];
+    allowedDepartments: number[];
+    primaryRole: Role | null;
+  }> {
+    const assignments = await this.getUserAssignments(userId);
+    const overrides = await this.getUserPermissionOverrides(userId);
+    const branchAccess = await this.getUserBranchAccess(userId);
+    
+    const allPermissions = await this.getAllPermissions();
+    const effectivePermissions: Map<string, { module: string; action: string; allowed: boolean }> = new Map();
+    
+    let primaryRole: Role | null = null;
+    
+    // Get permissions from all assigned roles
+    for (const assignment of assignments) {
+      if (!assignment.isActive) continue;
+      
+      const role = await this.getRole(assignment.roleId);
+      if (role && assignment.isPrimary) {
+        primaryRole = role;
+      }
+      
+      const rolePerms = await this.getRolePermissions(assignment.roleId);
+      for (const rp of rolePerms) {
+        const perm = allPermissions.find(p => p.id === rp.permissionId);
+        if (perm) {
+          const key = `${perm.module}:${perm.action}`;
+          effectivePermissions.set(key, { module: perm.module, action: perm.action, allowed: true });
+        }
+      }
+    }
+    
+    // Apply overrides (grant or revoke specific permissions)
+    for (const override of overrides) {
+      if (override.expiresAt && new Date(override.expiresAt) < new Date()) continue;
+      
+      const perm = allPermissions.find(p => p.id === override.permissionId);
+      if (perm) {
+        const key = `${perm.module}:${perm.action}`;
+        effectivePermissions.set(key, { module: perm.module, action: perm.action, allowed: override.allow });
+      }
+    }
+    
+    // Determine allowed branches
+    let allowedBranches: string[] = [];
+    if (branchAccess.length > 0) {
+      allowedBranches = branchAccess.map(ba => ba.branchId);
+    } else {
+      // Check if any assignment has global scope
+      const hasGlobalScope = assignments.some(a => a.scopeType === 'global' && a.isActive);
+      if (hasGlobalScope) {
+        const allBranches = await this.getAllBranches();
+        allowedBranches = allBranches.map(b => b.id);
+      } else {
+        allowedBranches = assignments.filter(a => a.branchId && a.isActive).map(a => a.branchId!);
+      }
+    }
+    
+    // Determine allowed departments
+    const allowedDepartments: number[] = assignments
+      .filter(a => a.departmentId && a.isActive)
+      .map(a => a.departmentId!);
+    
+    return {
+      permissions: Array.from(effectivePermissions.values()),
+      allowedBranches: Array.from(new Set(allowedBranches)),
+      allowedDepartments: Array.from(new Set(allowedDepartments)),
+      primaryRole,
+    };
+  }
+
+  // Check if user has specific permission
+  async userHasPermission(userId: string, module: string, action: string, branchId?: string): Promise<boolean> {
+    const { permissions, allowedBranches } = await this.getUserEffectivePermissions(userId);
+    
+    const hasPerm = permissions.some(p => p.module === module && p.action === action && p.allowed);
+    if (!hasPerm) return false;
+    
+    if (branchId && allowedBranches.length > 0) {
+      return allowedBranches.includes(branchId);
+    }
+    
+    return true;
   }
 }
 

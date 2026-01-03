@@ -6037,5 +6037,413 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== RBAC System API ====================
+
+  // Departments
+  app.get("/api/rbac/departments", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const departments = await storage.getAllDepartments();
+      res.json(departments);
+    } catch (error) {
+      console.error("Error fetching departments:", error);
+      res.status(500).json({ error: "فشل في جلب الأقسام" });
+    }
+  });
+
+  app.post("/api/rbac/departments", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
+    try {
+      const { name, code, description, isActive } = req.body;
+      if (!name || !code) {
+        return res.status(400).json({ error: "الاسم والرمز مطلوبان" });
+      }
+      const department = await storage.createDepartment({ name, code, description, isActive: isActive ?? true });
+      res.status(201).json(department);
+    } catch (error) {
+      console.error("Error creating department:", error);
+      res.status(500).json({ error: "فشل في إنشاء القسم" });
+    }
+  });
+
+  app.patch("/api/rbac/departments/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const department = await storage.updateDepartment(id, req.body);
+      if (!department) {
+        return res.status(404).json({ error: "القسم غير موجود" });
+      }
+      res.json(department);
+    } catch (error) {
+      console.error("Error updating department:", error);
+      res.status(500).json({ error: "فشل في تحديث القسم" });
+    }
+  });
+
+  // Roles
+  app.get("/api/rbac/roles", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const roles = await storage.getAllRoles();
+      res.json(roles);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+      res.status(500).json({ error: "فشل في جلب الأدوار" });
+    }
+  });
+
+  app.get("/api/rbac/roles/:id", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const role = await storage.getRole(id);
+      if (!role) {
+        return res.status(404).json({ error: "الدور غير موجود" });
+      }
+      const rolePermissions = await storage.getRolePermissions(id);
+      res.json({ ...role, permissions: rolePermissions });
+    } catch (error) {
+      console.error("Error fetching role:", error);
+      res.status(500).json({ error: "فشل في جلب الدور" });
+    }
+  });
+
+  app.post("/api/rbac/roles", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
+    try {
+      const { name, slug, description, hierarchyLevel, inheritsFromRoleId, isSystemDefault } = req.body;
+      if (!name || !slug) {
+        return res.status(400).json({ error: "الاسم والمعرف مطلوبان" });
+      }
+      const role = await storage.createRole({ 
+        name, 
+        slug, 
+        description, 
+        hierarchyLevel: hierarchyLevel ?? 5, 
+        inheritsFromRoleId,
+        isSystemDefault: isSystemDefault ?? false 
+      });
+      res.status(201).json(role);
+    } catch (error) {
+      console.error("Error creating role:", error);
+      res.status(500).json({ error: "فشل في إنشاء الدور" });
+    }
+  });
+
+  app.patch("/api/rbac/roles/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const role = await storage.updateRole(id, req.body);
+      if (!role) {
+        return res.status(404).json({ error: "الدور غير موجود" });
+      }
+      res.json(role);
+    } catch (error) {
+      console.error("Error updating role:", error);
+      res.status(500).json({ error: "فشل في تحديث الدور" });
+    }
+  });
+
+  // Role Permissions
+  app.post("/api/rbac/roles/:roleId/permissions", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const roleId = parseInt(req.params.roleId);
+      const { permissionId, scope } = req.body;
+      if (!permissionId) {
+        return res.status(400).json({ error: "معرف الصلاحية مطلوب" });
+      }
+      const rp = await storage.addRolePermission({ roleId, permissionId, scope: scope || 'all' });
+      res.status(201).json(rp);
+    } catch (error) {
+      console.error("Error adding role permission:", error);
+      res.status(500).json({ error: "فشل في إضافة الصلاحية للدور" });
+    }
+  });
+
+  app.delete("/api/rbac/roles/:roleId/permissions/:permissionId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const roleId = parseInt(req.params.roleId);
+      const permissionId = parseInt(req.params.permissionId);
+      await storage.removeRolePermission(roleId, permissionId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing role permission:", error);
+      res.status(500).json({ error: "فشل في إزالة الصلاحية من الدور" });
+    }
+  });
+
+  // Permissions
+  app.get("/api/rbac/permissions", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const permissions = await storage.getAllPermissions();
+      res.json(permissions);
+    } catch (error) {
+      console.error("Error fetching permissions:", error);
+      res.status(500).json({ error: "فشل في جلب الصلاحيات" });
+    }
+  });
+
+  app.get("/api/rbac/permissions/by-module/:module", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const permissions = await storage.getPermissionsByModule(req.params.module);
+      res.json(permissions);
+    } catch (error) {
+      console.error("Error fetching permissions by module:", error);
+      res.status(500).json({ error: "فشل في جلب صلاحيات الوحدة" });
+    }
+  });
+
+  // User Assignments
+  app.get("/api/rbac/users/:userId/assignments", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const targetUserId = req.params.userId;
+      
+      // Users can view their own assignments, or need users:view permission for others
+      if (currentUser.id !== targetUserId) {
+        const hasPermission = currentUser.role === 'admin' || await storage.userHasPermission(currentUser.id, 'users', 'view');
+        if (!hasPermission) {
+          return res.status(403).json({ error: "غير مصرح لك بعرض هذه البيانات" });
+        }
+      }
+      
+      const assignments = await storage.getUserAssignments(targetUserId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching user assignments:", error);
+      res.status(500).json({ error: "فشل في جلب تعيينات المستخدم" });
+    }
+  });
+
+  app.post("/api/rbac/users/:userId/assignments", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      const { roleId, branchId, departmentId, scopeType, isPrimary, startDate, endDate } = req.body;
+      
+      if (!roleId) {
+        return res.status(400).json({ error: "معرف الدور مطلوب" });
+      }
+      
+      const assignment = await storage.createUserAssignment({
+        userId,
+        roleId,
+        branchId,
+        departmentId,
+        scopeType: scopeType || 'branch',
+        isPrimary: isPrimary ?? true,
+        isActive: true,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+      });
+      
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error("Error creating user assignment:", error);
+      res.status(500).json({ error: "فشل في إنشاء تعيين المستخدم" });
+    }
+  });
+
+  app.patch("/api/rbac/users/:userId/assignments/:assignmentId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      const assignment = await storage.updateUserAssignment(assignmentId, req.body);
+      if (!assignment) {
+        return res.status(404).json({ error: "التعيين غير موجود" });
+      }
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error updating user assignment:", error);
+      res.status(500).json({ error: "فشل في تحديث تعيين المستخدم" });
+    }
+  });
+
+  app.delete("/api/rbac/users/:userId/assignments/:assignmentId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const assignmentId = parseInt(req.params.assignmentId);
+      await storage.deleteUserAssignment(assignmentId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting user assignment:", error);
+      res.status(500).json({ error: "فشل في حذف تعيين المستخدم" });
+    }
+  });
+
+  // User Permission Overrides
+  app.get("/api/rbac/users/:userId/overrides", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const targetUserId = req.params.userId;
+      
+      // Users can view their own overrides, or need users:view permission for others
+      if (currentUser.id !== targetUserId) {
+        const hasPermission = currentUser.role === 'admin' || await storage.userHasPermission(currentUser.id, 'users', 'view');
+        if (!hasPermission) {
+          return res.status(403).json({ error: "غير مصرح لك بعرض هذه البيانات" });
+        }
+      }
+      
+      const overrides = await storage.getUserPermissionOverrides(targetUserId);
+      res.json(overrides);
+    } catch (error) {
+      console.error("Error fetching user permission overrides:", error);
+      res.status(500).json({ error: "فشل في جلب استثناءات الصلاحيات" });
+    }
+  });
+
+  app.post("/api/rbac/users/:userId/overrides", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+    try {
+      const userId = req.params.userId;
+      const { permissionId, allow, reason, expiresAt } = req.body;
+      const grantedBy = req.currentUser.id;
+      
+      if (permissionId === undefined || allow === undefined) {
+        return res.status(400).json({ error: "معرف الصلاحية وحالة السماح مطلوبان" });
+      }
+      
+      const override = await storage.createUserPermissionOverride({
+        userId,
+        permissionId,
+        allow,
+        reason,
+        grantedBy,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      });
+      
+      res.status(201).json(override);
+    } catch (error) {
+      console.error("Error creating user permission override:", error);
+      res.status(500).json({ error: "فشل في إنشاء استثناء الصلاحية" });
+    }
+  });
+
+  app.delete("/api/rbac/users/:userId/overrides/:overrideId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const overrideId = parseInt(req.params.overrideId);
+      await storage.deleteUserPermissionOverride(overrideId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting user permission override:", error);
+      res.status(500).json({ error: "فشل في حذف استثناء الصلاحية" });
+    }
+  });
+
+  // User Branch Access
+  app.get("/api/rbac/users/:userId/branches", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const targetUserId = req.params.userId;
+      
+      // Users can view their own branch access, or need users:view permission for others
+      if (currentUser.id !== targetUserId) {
+        const hasPermission = currentUser.role === 'admin' || await storage.userHasPermission(currentUser.id, 'users', 'view');
+        if (!hasPermission) {
+          return res.status(403).json({ error: "غير مصرح لك بعرض هذه البيانات" });
+        }
+      }
+      
+      const branchAccess = await storage.getUserBranchAccess(targetUserId);
+      res.json(branchAccess);
+    } catch (error) {
+      console.error("Error fetching user branch access:", error);
+      res.status(500).json({ error: "فشل في جلب صلاحيات الفروع" });
+    }
+  });
+
+  app.post("/api/rbac/users/:userId/branches", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+    try {
+      const userId = req.params.userId;
+      const { branchId, isDefault, accessLevel } = req.body;
+      
+      if (!branchId) {
+        return res.status(400).json({ error: "معرف الفرع مطلوب" });
+      }
+      
+      const access = await storage.addUserBranchAccess({
+        userId,
+        branchId,
+        isDefault: isDefault ?? false,
+        accessLevel: accessLevel || 'full',
+      });
+      
+      res.status(201).json(access);
+    } catch (error) {
+      console.error("Error adding user branch access:", error);
+      res.status(500).json({ error: "فشل في إضافة صلاحية الفرع" });
+    }
+  });
+
+  app.delete("/api/rbac/users/:userId/branches/:branchId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      const branchId = req.params.branchId;
+      await storage.removeUserBranchAccess(userId, branchId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing user branch access:", error);
+      res.status(500).json({ error: "فشل في إزالة صلاحية الفرع" });
+    }
+  });
+
+  app.patch("/api/rbac/users/:userId/branches/:branchId/default", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      const branchId = req.params.branchId;
+      await storage.setUserDefaultBranch(userId, branchId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error setting default branch:", error);
+      res.status(500).json({ error: "فشل في تعيين الفرع الافتراضي" });
+    }
+  });
+
+  // User Effective Permissions
+  app.get("/api/rbac/users/:userId/effective-permissions", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const targetUserId = req.params.userId;
+      
+      // Users can view their own effective permissions, or need users:view permission for others
+      if (currentUser.id !== targetUserId) {
+        const hasPermission = currentUser.role === 'admin' || await storage.userHasPermission(currentUser.id, 'users', 'view');
+        if (!hasPermission) {
+          return res.status(403).json({ error: "غير مصرح لك بعرض هذه البيانات" });
+        }
+      }
+      
+      const effectivePermissions = await storage.getUserEffectivePermissions(targetUserId);
+      res.json(effectivePermissions);
+    } catch (error) {
+      console.error("Error fetching user effective permissions:", error);
+      res.status(500).json({ error: "فشل في جلب الصلاحيات الفعلية" });
+    }
+  });
+
+  // Current User Permissions (for frontend)
+  app.get("/api/rbac/my-permissions", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const effectivePermissions = await storage.getUserEffectivePermissions(currentUser.id);
+      res.json(effectivePermissions);
+    } catch (error) {
+      console.error("Error fetching current user permissions:", error);
+      res.status(500).json({ error: "فشل في جلب صلاحياتك" });
+    }
+  });
+
+  // Check Permission (utility endpoint)
+  app.get("/api/rbac/check-permission", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const module = req.query.module as string;
+      const action = req.query.action as string;
+      const branchId = req.query.branchId as string | undefined;
+      
+      if (!module || !action) {
+        return res.status(400).json({ error: "الوحدة والإجراء مطلوبان" });
+      }
+      
+      const hasPermission = await storage.userHasPermission(currentUser.id, module, action, branchId);
+      res.json({ hasPermission, module, action, branchId });
+    } catch (error) {
+      console.error("Error checking permission:", error);
+      res.status(500).json({ error: "فشل في التحقق من الصلاحية" });
+    }
+  });
+
   return httpServer;
 }

@@ -51,6 +51,7 @@ import SalesDataUploadsPage from "@/pages/sales-data-uploads";
 import ProductionDashboardPage from "@/pages/production-dashboard";
 import DailyProductionPage from "@/pages/daily-production";
 import ProductionReportsPage from "@/pages/production-reports";
+import RBACManagementPage from "@/pages/rbac-management";
 
 function Router() {
   return (
@@ -101,6 +102,7 @@ function Router() {
       <Route path="/sales-data-uploads" component={SalesDataUploadsPage} />
       <Route path="/daily-production" component={DailyProductionPage} />
       <Route path="/production-reports" component={ProductionReportsPage} />
+      <Route path="/rbac-management" component={RBACManagementPage} />
       <Route component={NotFound} />
     </Switch>
   );

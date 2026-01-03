@@ -34,6 +34,15 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **Pagination System**: Comprehensive pagination implemented across data-heavy pages for efficient data handling.
 - **Sales Analytics**: Advanced filters, CSV/Excel export, seasonal factors, and auto-refresh for sales reports.
 - **Unified Command Center**: A dashboard aggregating KPIs from production, inventory, cashier, and waste modules, with comparison metrics and auto-refresh.
+- **RBAC System (Role-Based Access Control)**: Comprehensive permission system with:
+  - 7 departments (Production, Operations, Finance, Sales, HR, Maintenance, Administration)
+  - 6 hierarchical roles (Super Admin level 0 to Viewer level 5)
+  - 47+ granular permissions organized by module and action
+  - User assignments with branch and department scope
+  - Permission overrides for temporary grants/revokes
+  - Branch-level access control
+  - API endpoints: `/api/rbac/*` for managing departments, roles, permissions, and user assignments
+  - Management UI at `/rbac-management`
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema ensures type consistency between frontend and backend.

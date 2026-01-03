@@ -2348,3 +2348,166 @@ export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;
 export type InsertDailyProductionBatch = z.infer<
   typeof insertDailyProductionBatchSchema
 >;
+
+// ==================== نظام الصلاحيات والمستخدمين الشامل ====================
+
+// Departments - الأقسام (مثل: الإنتاج، المخزون، الكاشير، الصيانة، المشاريع)
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم القسم بالعربي
+  code: varchar("code", { length: 50 }).unique().notNull(), // كود فريد: production, inventory, cashier, maintenance, projects
+  description: text("description"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDepartmentSchema = createInsertSchema(departments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+
+// Roles - الأدوار (مثل: مدير عام، مدير فرع، مشرف قسم، موظف)
+export const roles = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // اسم الدور بالعربي
+  slug: varchar("slug", { length: 50 }).unique().notNull(), // super_admin, branch_manager, dept_head, employee, viewer
+  hierarchyLevel: integer("hierarchy_level").notNull().default(0), // 0 = أعلى مستوى
+  description: text("description"),
+  isSystemDefault: boolean("is_system_default").default(false).notNull(), // أدوار النظام الأساسية
+  inheritsFromRoleId: integer("inherits_from_role_id"), // يرث صلاحيات من دور آخر
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRoleSchema = createInsertSchema(roles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Role = typeof roles.$inferSelect;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+
+// Permissions - الصلاحيات (تعريف كل صلاحية ممكنة في النظام)
+export const permissions = pgTable("permissions", {
+  id: serial("id").primaryKey(),
+  module: varchar("module", { length: 100 }).notNull(), // inventory, production, cashier, assets, projects, etc.
+  action: varchar("action", { length: 50 }).notNull(), // view, create, edit, delete, export, approve
+  name: text("name").notNull(), // اسم الصلاحية بالعربي
+  description: text("description"),
+  isDefault: boolean("is_default").default(false).notNull(), // صلاحيات افتراضية
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPermissionSchema = createInsertSchema(permissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Permission = typeof permissions.$inferSelect;
+export type InsertPermission = z.infer<typeof insertPermissionSchema>;
+
+// Role Permissions - صلاحيات كل دور
+export const rolePermissions = pgTable("role_permissions", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  permissionId: integer("permission_id")
+    .notNull()
+    .references(() => permissions.id, { onDelete: "cascade" }),
+  scope: jsonb("scope"), // للتوسع المستقبلي: {"branches": ["all"], "departments": ["all"]}
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRolePermissionSchema = createInsertSchema(rolePermissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type RolePermission = typeof rolePermissions.$inferSelect;
+export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
+
+// User Assignments - تعيينات المستخدمين (ربط المستخدم بدور وفرع وقسم)
+export const userAssignments = pgTable("user_assignments", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }), // null = جميع الفروع
+  departmentId: integer("department_id").references(() => departments.id, { onDelete: "set null" }), // null = جميع الأقسام
+  scopeType: varchar("scope_type", { length: 20 }).notNull().default("branch"), // global, branch, department
+  isPrimary: boolean("is_primary").default(true).notNull(), // التعيين الأساسي للمستخدم
+  isActive: boolean("is_active").default(true).notNull(),
+  startDate: timestamp("start_date").defaultNow(),
+  endDate: timestamp("end_date"), // للتعيينات المؤقتة
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserAssignmentSchema = createInsertSchema(userAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserAssignment = typeof userAssignments.$inferSelect;
+export type InsertUserAssignment = z.infer<typeof insertUserAssignmentSchema>;
+
+// User Permission Overrides - تجاوزات صلاحيات المستخدم (منح أو منع صلاحية خاصة)
+export const userPermissionOverrides = pgTable("user_permission_overrides", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  permissionId: integer("permission_id")
+    .notNull()
+    .references(() => permissions.id, { onDelete: "cascade" }),
+  allow: boolean("allow").notNull(), // true = منح، false = منع
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }), // صلاحية لفرع معين فقط
+  departmentId: integer("department_id").references(() => departments.id, { onDelete: "set null" }),
+  reason: text("reason"), // سبب التجاوز
+  grantedBy: varchar("granted_by").references(() => users.id),
+  expiresAt: timestamp("expires_at"), // صلاحية مؤقتة
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserPermissionOverrideSchema = createInsertSchema(userPermissionOverrides).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserPermissionOverride = typeof userPermissionOverrides.$inferSelect;
+export type InsertUserPermissionOverride = z.infer<typeof insertUserPermissionOverrideSchema>;
+
+// User Branch Access - وصول المستخدم للفروع (للمستخدمين متعددي الفروع)
+export const userBranchAccess = pgTable("user_branch_access", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  accessLevel: varchar("access_level", { length: 20 }).notNull().default("full"), // full, view_only, limited
+  isDefault: boolean("is_default").default(false).notNull(), // الفرع الافتراضي
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserBranchAccessSchema = createInsertSchema(userBranchAccess).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type UserBranchAccess = typeof userBranchAccess.$inferSelect;
+export type InsertUserBranchAccess = z.infer<typeof insertUserBranchAccessSchema>;
