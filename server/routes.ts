@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
 
@@ -7429,6 +7429,868 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error upserting shift performance tracking:", error);
       res.status(500).json({ error: "فشل في تحديث/إنشاء التتبع" });
+    }
+  });
+
+  // ==========================================
+  // Marketing API Routes - إدارة التسويق
+  // ==========================================
+
+  // Marketing Campaigns - الحملات التسويقية
+  app.get("/api/marketing/campaigns", isAuthenticated, async (req: any, res) => {
+    try {
+      const { status, season, objective } = req.query;
+      const filters: { status?: string; season?: string; objective?: string } = {};
+      if (status) filters.status = status as string;
+      if (season) filters.season = season as string;
+      if (objective) filters.objective = objective as string;
+      
+      const campaigns = await storage.getAllMarketingCampaigns(filters);
+      res.json(campaigns);
+    } catch (error) {
+      console.error("Error fetching marketing campaigns:", error);
+      res.status(500).json({ error: "فشل في جلب الحملات التسويقية" });
+    }
+  });
+
+  app.get("/api/marketing/campaigns/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const campaign = await storage.getMarketingCampaign(id);
+      if (!campaign) {
+        return res.status(404).json({ error: "الحملة غير موجودة" });
+      }
+      res.json(campaign);
+    } catch (error) {
+      console.error("Error fetching marketing campaign:", error);
+      res.status(500).json({ error: "فشل في جلب الحملة" });
+    }
+  });
+
+  app.post("/api/marketing/campaigns", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingCampaignSchema.parse(req.body);
+      const campaign = await storage.createMarketingCampaign(validatedData);
+      res.status(201).json(campaign);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating marketing campaign:", error);
+      res.status(500).json({ error: "فشل في إنشاء الحملة" });
+    }
+  });
+
+  app.patch("/api/marketing/campaigns/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertMarketingCampaignSchema.partial().parse(req.body);
+      const campaign = await storage.updateMarketingCampaign(id, partialData);
+      if (!campaign) {
+        return res.status(404).json({ error: "الحملة غير موجودة" });
+      }
+      res.json(campaign);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating marketing campaign:", error);
+      res.status(500).json({ error: "فشل في تحديث الحملة" });
+    }
+  });
+
+  app.delete("/api/marketing/campaigns/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteMarketingCampaign(id);
+      if (!success) {
+        return res.status(404).json({ error: "الحملة غير موجودة" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting marketing campaign:", error);
+      res.status(500).json({ error: "فشل في حذف الحملة" });
+    }
+  });
+
+  // Campaign Budget Allocations - تخصيصات ميزانية الحملة
+  app.get("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const allocations = await storage.getCampaignBudgetAllocations(campaignId);
+      res.json(allocations);
+    } catch (error) {
+      console.error("Error fetching budget allocations:", error);
+      res.status(500).json({ error: "فشل في جلب تخصيصات الميزانية" });
+    }
+  });
+
+  app.post("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, async (req: any, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const validatedData = insertCampaignBudgetAllocationSchema.parse({ ...req.body, campaignId });
+      const allocation = await storage.createCampaignBudgetAllocation(validatedData);
+      res.status(201).json(allocation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating budget allocation:", error);
+      res.status(500).json({ error: "فشل في إنشاء تخصيص الميزانية" });
+    }
+  });
+
+  app.patch("/api/marketing/budget-allocations/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertCampaignBudgetAllocationSchema.partial().parse(req.body);
+      const allocation = await storage.updateCampaignBudgetAllocation(id, partialData);
+      if (!allocation) {
+        return res.status(404).json({ error: "التخصيص غير موجود" });
+      }
+      res.json(allocation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating budget allocation:", error);
+      res.status(500).json({ error: "فشل في تحديث تخصيص الميزانية" });
+    }
+  });
+
+  app.delete("/api/marketing/budget-allocations/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteCampaignBudgetAllocation(id);
+      if (!success) {
+        return res.status(404).json({ error: "التخصيص غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting budget allocation:", error);
+      res.status(500).json({ error: "فشل في حذف تخصيص الميزانية" });
+    }
+  });
+
+  // Campaign Goals - أهداف الحملة
+  app.get("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const goals = await storage.getCampaignGoals(campaignId);
+      res.json(goals);
+    } catch (error) {
+      console.error("Error fetching campaign goals:", error);
+      res.status(500).json({ error: "فشل في جلب أهداف الحملة" });
+    }
+  });
+
+  app.post("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, async (req: any, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const validatedData = insertCampaignGoalSchema.parse({ ...req.body, campaignId });
+      const goal = await storage.createCampaignGoal(validatedData);
+      res.status(201).json(goal);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating campaign goal:", error);
+      res.status(500).json({ error: "فشل في إنشاء هدف الحملة" });
+    }
+  });
+
+  app.patch("/api/marketing/goals/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertCampaignGoalSchema.partial().parse(req.body);
+      const goal = await storage.updateCampaignGoal(id, partialData);
+      if (!goal) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+      res.json(goal);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating campaign goal:", error);
+      res.status(500).json({ error: "فشل في تحديث هدف الحملة" });
+    }
+  });
+
+  app.delete("/api/marketing/goals/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteCampaignGoal(id);
+      if (!success) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting campaign goal:", error);
+      res.status(500).json({ error: "فشل في حذف هدف الحملة" });
+    }
+  });
+
+  // Marketing Calendar Events - تقويم التسويق
+  app.get("/api/marketing/calendar-events", isAuthenticated, async (req: any, res) => {
+    try {
+      const { campaignId, startDate, endDate } = req.query;
+      const filters: { campaignId?: number; startDate?: string; endDate?: string } = {};
+      if (campaignId) filters.campaignId = parseInt(campaignId as string);
+      if (startDate) filters.startDate = startDate as string;
+      if (endDate) filters.endDate = endDate as string;
+      
+      const events = await storage.getAllMarketingCalendarEvents(filters);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching calendar events:", error);
+      res.status(500).json({ error: "فشل في جلب أحداث التقويم" });
+    }
+  });
+
+  app.post("/api/marketing/calendar-events", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingCalendarEventSchema.parse(req.body);
+      const event = await storage.createMarketingCalendarEvent(validatedData);
+      res.status(201).json(event);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating calendar event:", error);
+      res.status(500).json({ error: "فشل في إنشاء الحدث" });
+    }
+  });
+
+  app.patch("/api/marketing/calendar-events/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertMarketingCalendarEventSchema.partial().parse(req.body);
+      const event = await storage.updateMarketingCalendarEvent(id, partialData);
+      if (!event) {
+        return res.status(404).json({ error: "الحدث غير موجود" });
+      }
+      res.json(event);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating calendar event:", error);
+      res.status(500).json({ error: "فشل في تحديث الحدث" });
+    }
+  });
+
+  app.delete("/api/marketing/calendar-events/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteMarketingCalendarEvent(id);
+      if (!success) {
+        return res.status(404).json({ error: "الحدث غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting calendar event:", error);
+      res.status(500).json({ error: "فشل في حذف الحدث" });
+    }
+  });
+
+  // Marketing Influencers - المؤثرين
+  app.get("/api/marketing/influencers", isAuthenticated, async (req: any, res) => {
+    try {
+      const { specialty, isActive } = req.query;
+      const filters: { specialty?: string; isActive?: boolean } = {};
+      if (specialty) filters.specialty = specialty as string;
+      if (isActive !== undefined) filters.isActive = isActive === 'true';
+      
+      const influencers = await storage.getAllMarketingInfluencers(filters);
+      res.json(influencers);
+    } catch (error) {
+      console.error("Error fetching influencers:", error);
+      res.status(500).json({ error: "فشل في جلب المؤثرين" });
+    }
+  });
+
+  app.get("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const influencer = await storage.getMarketingInfluencer(id);
+      if (!influencer) {
+        return res.status(404).json({ error: "المؤثر غير موجود" });
+      }
+      res.json(influencer);
+    } catch (error) {
+      console.error("Error fetching influencer:", error);
+      res.status(500).json({ error: "فشل في جلب المؤثر" });
+    }
+  });
+
+  app.post("/api/marketing/influencers", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingInfluencerSchema.parse(req.body);
+      const influencer = await storage.createMarketingInfluencer(validatedData);
+      res.status(201).json(influencer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating influencer:", error);
+      res.status(500).json({ error: "فشل في إنشاء المؤثر" });
+    }
+  });
+
+  app.patch("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertMarketingInfluencerSchema.partial().parse(req.body);
+      const influencer = await storage.updateMarketingInfluencer(id, partialData);
+      if (!influencer) {
+        return res.status(404).json({ error: "المؤثر غير موجود" });
+      }
+      res.json(influencer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating influencer:", error);
+      res.status(500).json({ error: "فشل في تحديث المؤثر" });
+    }
+  });
+
+  app.delete("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteMarketingInfluencer(id);
+      if (!success) {
+        return res.status(404).json({ error: "المؤثر غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting influencer:", error);
+      res.status(500).json({ error: "فشل في حذف المؤثر" });
+    }
+  });
+
+  // Influencer Campaign Links - روابط المؤثرين بالحملات
+  app.get("/api/marketing/influencer-links", isAuthenticated, async (req: any, res) => {
+    try {
+      const { campaignId, influencerId } = req.query;
+      const filters: { campaignId?: number; influencerId?: number } = {};
+      if (campaignId) filters.campaignId = parseInt(campaignId as string);
+      if (influencerId) filters.influencerId = parseInt(influencerId as string);
+      
+      const links = await storage.getInfluencerCampaignLinks(filters);
+      res.json(links);
+    } catch (error) {
+      console.error("Error fetching influencer links:", error);
+      res.status(500).json({ error: "فشل في جلب روابط المؤثرين" });
+    }
+  });
+
+  app.post("/api/marketing/influencer-links", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertInfluencerCampaignLinkSchema.parse(req.body);
+      const link = await storage.createInfluencerCampaignLink(validatedData);
+      res.status(201).json(link);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating influencer link:", error);
+      res.status(500).json({ error: "فشل في إنشاء رابط المؤثر" });
+    }
+  });
+
+  app.patch("/api/marketing/influencer-links/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertInfluencerCampaignLinkSchema.partial().parse(req.body);
+      const link = await storage.updateInfluencerCampaignLink(id, partialData);
+      if (!link) {
+        return res.status(404).json({ error: "الرابط غير موجود" });
+      }
+      res.json(link);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating influencer link:", error);
+      res.status(500).json({ error: "فشل في تحديث رابط المؤثر" });
+    }
+  });
+
+  app.delete("/api/marketing/influencer-links/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteInfluencerCampaignLink(id);
+      if (!success) {
+        return res.status(404).json({ error: "الرابط غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting influencer link:", error);
+      res.status(500).json({ error: "فشل في حذف رابط المؤثر" });
+    }
+  });
+
+  // Influencer Contacts - جهات اتصال المؤثرين
+  app.get("/api/marketing/influencers/:influencerId/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const influencerId = parseInt(req.params.influencerId);
+      if (isNaN(influencerId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const contacts = await storage.getInfluencerContacts(influencerId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching influencer contacts:", error);
+      res.status(500).json({ error: "فشل في جلب جهات الاتصال" });
+    }
+  });
+
+  app.post("/api/marketing/influencer-contacts", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertInfluencerContactSchema.parse(req.body);
+      const contact = await storage.createInfluencerContact(validatedData);
+      res.status(201).json(contact);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating influencer contact:", error);
+      res.status(500).json({ error: "فشل في إنشاء جهة الاتصال" });
+    }
+  });
+
+  app.delete("/api/marketing/influencer-contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteInfluencerContact(id);
+      if (!success) {
+        return res.status(404).json({ error: "جهة الاتصال غير موجودة" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting influencer contact:", error);
+      res.status(500).json({ error: "فشل في حذف جهة الاتصال" });
+    }
+  });
+
+  // Marketing Tasks - مهام التسويق
+  app.get("/api/marketing/tasks", isAuthenticated, async (req: any, res) => {
+    try {
+      const { campaignId, assignedTo, status } = req.query;
+      const filters: { campaignId?: number; assignedTo?: string; status?: string } = {};
+      if (campaignId) filters.campaignId = parseInt(campaignId as string);
+      if (assignedTo) filters.assignedTo = assignedTo as string;
+      if (status) filters.status = status as string;
+      
+      const tasks = await storage.getAllMarketingTasks(filters);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching marketing tasks:", error);
+      res.status(500).json({ error: "فشل في جلب المهام" });
+    }
+  });
+
+  app.get("/api/marketing/tasks/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const task = await storage.getMarketingTask(id);
+      if (!task) {
+        return res.status(404).json({ error: "المهمة غير موجودة" });
+      }
+      res.json(task);
+    } catch (error) {
+      console.error("Error fetching marketing task:", error);
+      res.status(500).json({ error: "فشل في جلب المهمة" });
+    }
+  });
+
+  app.post("/api/marketing/tasks", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingTaskSchema.parse(req.body);
+      const task = await storage.createMarketingTask(validatedData);
+      res.status(201).json(task);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating marketing task:", error);
+      res.status(500).json({ error: "فشل في إنشاء المهمة" });
+    }
+  });
+
+  app.patch("/api/marketing/tasks/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertMarketingTaskSchema.partial().parse(req.body);
+      const task = await storage.updateMarketingTask(id, partialData);
+      if (!task) {
+        return res.status(404).json({ error: "المهمة غير موجودة" });
+      }
+      res.json(task);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating marketing task:", error);
+      res.status(500).json({ error: "فشل في تحديث المهمة" });
+    }
+  });
+
+  app.delete("/api/marketing/tasks/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteMarketingTask(id);
+      if (!success) {
+        return res.status(404).json({ error: "المهمة غير موجودة" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting marketing task:", error);
+      res.status(500).json({ error: "فشل في حذف المهمة" });
+    }
+  });
+
+  // Marketing Task Activities - نشاطات مهام التسويق
+  app.get("/api/marketing/tasks/:taskId/activities", isAuthenticated, async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      if (isNaN(taskId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const activities = await storage.getMarketingTaskActivities(taskId);
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching task activities:", error);
+      res.status(500).json({ error: "فشل في جلب نشاطات المهمة" });
+    }
+  });
+
+  app.post("/api/marketing/task-activities", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingTaskActivitySchema.parse(req.body);
+      const activity = await storage.createMarketingTaskActivity(validatedData);
+      res.status(201).json(activity);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating task activity:", error);
+      res.status(500).json({ error: "فشل في إنشاء نشاط المهمة" });
+    }
+  });
+
+  // Marketing Performance Reports - تقارير أداء التسويق
+  app.get("/api/marketing/reports", isAuthenticated, async (req: any, res) => {
+    try {
+      const { reportType, campaignId } = req.query;
+      const filters: { reportType?: string; campaignId?: number } = {};
+      if (reportType) filters.reportType = reportType as string;
+      if (campaignId) filters.campaignId = parseInt(campaignId as string);
+      
+      const reports = await storage.getAllMarketingPerformanceReports(filters);
+      res.json(reports);
+    } catch (error) {
+      console.error("Error fetching performance reports:", error);
+      res.status(500).json({ error: "فشل في جلب تقارير الأداء" });
+    }
+  });
+
+  app.get("/api/marketing/reports/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const report = await storage.getMarketingPerformanceReport(id);
+      if (!report) {
+        return res.status(404).json({ error: "التقرير غير موجود" });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching performance report:", error);
+      res.status(500).json({ error: "فشل في جلب التقرير" });
+    }
+  });
+
+  app.post("/api/marketing/reports", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingPerformanceReportSchema.parse(req.body);
+      const report = await storage.createMarketingPerformanceReport(validatedData);
+      res.status(201).json(report);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating performance report:", error);
+      res.status(500).json({ error: "فشل في إنشاء التقرير" });
+    }
+  });
+
+  // Marketing Assets - أصول التسويق
+  app.get("/api/marketing/assets", isAuthenticated, async (req: any, res) => {
+    try {
+      const { campaignId, assetType } = req.query;
+      const filters: { campaignId?: number; assetType?: string } = {};
+      if (campaignId) filters.campaignId = parseInt(campaignId as string);
+      if (assetType) filters.assetType = assetType as string;
+      
+      const assets = await storage.getAllMarketingAssets(filters);
+      res.json(assets);
+    } catch (error) {
+      console.error("Error fetching marketing assets:", error);
+      res.status(500).json({ error: "فشل في جلب الأصول التسويقية" });
+    }
+  });
+
+  app.post("/api/marketing/assets", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingAssetSchema.parse(req.body);
+      const asset = await storage.createMarketingAsset(validatedData);
+      res.status(201).json(asset);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating marketing asset:", error);
+      res.status(500).json({ error: "فشل في إنشاء الأصل التسويقي" });
+    }
+  });
+
+  app.patch("/api/marketing/assets/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertMarketingAssetSchema.partial().parse(req.body);
+      const asset = await storage.updateMarketingAsset(id, partialData);
+      if (!asset) {
+        return res.status(404).json({ error: "الأصل غير موجود" });
+      }
+      res.json(asset);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating marketing asset:", error);
+      res.status(500).json({ error: "فشل في تحديث الأصل التسويقي" });
+    }
+  });
+
+  app.delete("/api/marketing/assets/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteMarketingAsset(id);
+      if (!success) {
+        return res.status(404).json({ error: "الأصل غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting marketing asset:", error);
+      res.status(500).json({ error: "فشل في حذف الأصل التسويقي" });
+    }
+  });
+
+  // Marketing Team Members - فريق التسويق
+  app.get("/api/marketing/team", isAuthenticated, async (req: any, res) => {
+    try {
+      const { isActive } = req.query;
+      const filters: { isActive?: boolean } = {};
+      if (isActive !== undefined) filters.isActive = isActive === 'true';
+      
+      const members = await storage.getAllMarketingTeamMembers(filters);
+      res.json(members);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      res.status(500).json({ error: "فشل في جلب أعضاء الفريق" });
+    }
+  });
+
+  app.post("/api/marketing/team", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingTeamMemberSchema.parse(req.body);
+      const member = await storage.createMarketingTeamMember(validatedData);
+      res.status(201).json(member);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating team member:", error);
+      res.status(500).json({ error: "فشل في إضافة عضو الفريق" });
+    }
+  });
+
+  app.patch("/api/marketing/team/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertMarketingTeamMemberSchema.partial().parse(req.body);
+      const member = await storage.updateMarketingTeamMember(id, partialData);
+      if (!member) {
+        return res.status(404).json({ error: "العضو غير موجود" });
+      }
+      res.json(member);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating team member:", error);
+      res.status(500).json({ error: "فشل في تحديث عضو الفريق" });
+    }
+  });
+
+  app.delete("/api/marketing/team/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteMarketingTeamMember(id);
+      if (!success) {
+        return res.status(404).json({ error: "العضو غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting team member:", error);
+      res.status(500).json({ error: "فشل في حذف عضو الفريق" });
+    }
+  });
+
+  // Marketing Alerts - تنبيهات التسويق
+  app.get("/api/marketing/alerts", isAuthenticated, async (req: any, res) => {
+    try {
+      const { targetUserId, isRead } = req.query;
+      const filters: { targetUserId?: string; isRead?: boolean } = {};
+      if (targetUserId) filters.targetUserId = targetUserId as string;
+      if (isRead !== undefined) filters.isRead = isRead === 'true';
+      
+      const alerts = await storage.getAllMarketingAlerts(filters);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching marketing alerts:", error);
+      res.status(500).json({ error: "فشل في جلب التنبيهات" });
+    }
+  });
+
+  app.post("/api/marketing/alerts", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingAlertSchema.parse(req.body);
+      const alert = await storage.createMarketingAlert(validatedData);
+      res.status(201).json(alert);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating marketing alert:", error);
+      res.status(500).json({ error: "فشل في إنشاء التنبيه" });
+    }
+  });
+
+  app.patch("/api/marketing/alerts/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const alert = await storage.markMarketingAlertAsRead(id);
+      if (!alert) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      res.json(alert);
+    } catch (error) {
+      console.error("Error marking alert as read:", error);
+      res.status(500).json({ error: "فشل في تحديث التنبيه" });
+    }
+  });
+
+  app.patch("/api/marketing/alerts/:id/acknowledge", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const currentUser = req.currentUser;
+      const alert = await storage.acknowledgeMarketingAlert(id, currentUser.id);
+      if (!alert) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      res.json(alert);
+    } catch (error) {
+      console.error("Error acknowledging alert:", error);
+      res.status(500).json({ error: "فشل في تأكيد التنبيه" });
     }
   });
 
