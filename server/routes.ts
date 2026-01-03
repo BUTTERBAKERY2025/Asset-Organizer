@@ -5761,11 +5761,14 @@ export async function registerRoutes(
       const prodStats = await storage.getDailyProductionStats(branchId, startDate);
       const targetData = await storage.getProductionTargetsByDate(branchId, startDate);
       
-      // Get waste reports
+      // Get waste reports with date filtering
       const allWasteReports = await storage.getWasteReports();
-      const wasteReports = branchId === 'all' 
-        ? allWasteReports 
-        : allWasteReports.filter(w => w.branchId === branchId);
+      const wasteReports = allWasteReports.filter(w => {
+        const reportDate = w.reportDate || '';
+        const matchesBranch = branchId === 'all' || w.branchId === branchId;
+        const matchesDate = reportDate >= startDate && reportDate <= endDate;
+        return matchesBranch && matchesDate;
+      });
       
       // Get quality checks
       const allQualityChecks = await storage.getAllQualityChecks();
@@ -5780,33 +5783,73 @@ export async function registerRoutes(
       // Get branches for comparison
       const branches = await storage.getAllBranches();
       
-      // Calculate waste analysis
+      // Get cashier journals for sales comparison
+      const allJournals = await storage.getCashierJournals();
+      const journalsInRange = allJournals.filter(j => {
+        const jDate = j.journalDate || '';
+        const matchesBranch = branchId === 'all' || j.branchId === branchId;
+        const matchesDate = jDate >= startDate && jDate <= endDate;
+        return matchesBranch && matchesDate;
+      });
+      const totalSales = journalsInRange.reduce((sum, j) => sum + (parseFloat(j.totalSales?.toString() || '0') || 0), 0);
+      
+      // Calculate waste analysis with product breakdown
       const wasteByReason: Record<string, number> = {};
+      const wasteByProduct: Record<string, { quantity: number; value: number }> = {};
       let totalWastedQuantity = 0;
       let totalWastedValue = 0;
       
       for (const report of wasteReports) {
         const items = await storage.getWasteItems(report.id);
         for (const item of items) {
-          totalWastedQuantity += item.quantity || 0;
-          totalWastedValue += (item.quantity || 0) * (item.unitCost || 0);
+          const qty = item.quantity || 0;
+          const value = qty * (item.unitCost || 0);
+          totalWastedQuantity += qty;
+          totalWastedValue += value;
+          
           const reason = item.wasteReason || 'غير محدد';
-          wasteByReason[reason] = (wasteByReason[reason] || 0) + (item.quantity || 0);
+          wasteByReason[reason] = (wasteByReason[reason] || 0) + qty;
+          
+          const productName = item.productName || 'غير محدد';
+          if (!wasteByProduct[productName]) {
+            wasteByProduct[productName] = { quantity: 0, value: 0 };
+          }
+          wasteByProduct[productName].quantity += qty;
+          wasteByProduct[productName].value += value;
         }
       }
+      
+      // Calculate waste percentage of sales
+      const wastePercentage = totalSales > 0 ? (totalWastedValue / totalSales) * 100 : 0;
       
       // Calculate quality stats
       const passed = qualityChecks.filter(q => q.result === 'passed').length;
       const failed = qualityChecks.filter(q => q.result === 'failed').length;
       const passRate = qualityChecks.length > 0 ? (passed / qualityChecks.length) * 100 : 100;
       
-      // Build product performance
-      const productPerformance = products.slice(0, 10).map(p => ({
-        productName: p.name,
-        quantity: Math.floor(Math.random() * 100) + 10,
-        percentage: Math.random() * 30,
-        trend: (Math.random() - 0.5) * 20,
-      }));
+      // Build real product performance from production entries
+      const allProductionEntries = await storage.getDailyProductionEntries(branchId === 'all' ? undefined : branchId);
+      const entriesInRange = allProductionEntries.filter(e => {
+        const entryDate = e.productionDate || '';
+        return entryDate >= startDate && entryDate <= endDate;
+      });
+      
+      const productQuantities: Record<string, number> = {};
+      for (const entry of entriesInRange) {
+        const productName = entry.productName || 'غير محدد';
+        productQuantities[productName] = (productQuantities[productName] || 0) + (entry.quantity || 0);
+      }
+      
+      const totalProductionQty = Object.values(productQuantities).reduce((a, b) => a + b, 0);
+      const productPerformance = Object.entries(productQuantities)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([name, qty]) => ({
+          productName: name,
+          quantity: qty,
+          percentage: totalProductionQty > 0 ? (qty / totalProductionQty) * 100 : 0,
+          trend: 0,
+        }));
       
       // Build branch comparison
       const branchComparison = await Promise.all(branches.map(async (b) => {
@@ -5820,12 +5863,65 @@ export async function registerRoutes(
         };
       }));
       
-      // Shift performance placeholder
-      const shiftPerformance = [
-        { shift: 'الوردية الصباحية', production: Math.floor(prodStats.totalQuantity * 0.4), target: Math.floor(targetData.totalTarget * 0.4), efficiency: 95 },
-        { shift: 'الوردية المسائية', production: Math.floor(prodStats.totalQuantity * 0.35), target: Math.floor(targetData.totalTarget * 0.35), efficiency: 88 },
-        { shift: 'الوردية الليلية', production: Math.floor(prodStats.totalQuantity * 0.25), target: Math.floor(targetData.totalTarget * 0.25), efficiency: 80 },
-      ];
+      // Get shift-based production data
+      const shiftData: Record<string, { production: number; entries: number }> = {
+        'الوردية الصباحية': { production: 0, entries: 0 },
+        'الوردية المسائية': { production: 0, entries: 0 },
+        'الوردية الليلية': { production: 0, entries: 0 },
+      };
+      
+      for (const entry of entriesInRange) {
+        const shift = entry.shiftName || 'الوردية الصباحية';
+        if (shiftData[shift]) {
+          shiftData[shift].production += entry.quantity || 0;
+          shiftData[shift].entries += 1;
+        }
+      }
+      
+      const totalShiftProduction = Object.values(shiftData).reduce((a, b) => a + b.production, 0);
+      const shiftPerformance = Object.entries(shiftData).map(([shift, data]) => ({
+        shift,
+        production: data.production,
+        target: Math.floor(targetData.totalTarget / 3),
+        efficiency: targetData.totalTarget > 0 ? (data.production / (targetData.totalTarget / 3)) * 100 : 0,
+      }));
+      
+      // Build daily trends for the date range
+      const dailyTrends: Array<{ date: string; production: number; target: number; sales: number; waste: number }> = [];
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        const dayStats = await storage.getDailyProductionStats(branchId, dateStr);
+        const dayTarget = await storage.getProductionTargetsByDate(branchId, dateStr);
+        
+        const daySales = journalsInRange
+          .filter(j => j.journalDate === dateStr)
+          .reduce((sum, j) => sum + (parseFloat(j.totalSales?.toString() || '0') || 0), 0);
+        
+        const dayWaste = wasteReports
+          .filter(w => w.reportDate === dateStr)
+          .reduce((sum, w) => sum + (parseFloat(w.totalValue?.toString() || '0') || 0), 0);
+        
+        dailyTrends.push({
+          date: dateStr,
+          production: dayStats.totalQuantity,
+          target: dayTarget.totalTarget,
+          sales: daySales,
+          waste: dayWaste,
+        });
+      }
+      
+      // Build top wasted products list
+      const topWastedProducts = Object.entries(wasteByProduct)
+        .sort((a, b) => b[1].value - a[1].value)
+        .slice(0, 10)
+        .map(([name, data]) => ({
+          name,
+          quantity: data.quantity,
+          value: data.value,
+        }));
       
       res.json({
         dailySummary: {
@@ -5843,12 +5939,17 @@ export async function registerRoutes(
           gap: targetData.totalProduced - targetData.totalTarget,
           status: targetData.totalProduced >= targetData.totalTarget ? 'تحقق الهدف' : 'لم يتحقق',
         },
+        salesData: {
+          totalSales,
+          journalCount: journalsInRange.length,
+        },
         wasteAnalysis: {
           totalReports: wasteReports.length,
           totalQuantity: totalWastedQuantity,
           totalValue: totalWastedValue,
+          wastePercentage,
           byReason: wasteByReason,
-          byProduct: [],
+          byProduct: topWastedProducts,
         },
         qualityControl: {
           totalChecks: qualityChecks.length,
@@ -5865,7 +5966,7 @@ export async function registerRoutes(
         productPerformance,
         branchComparison,
         trends: {
-          daily: [],
+          daily: dailyTrends,
           weekly: [],
         },
         filters: { branchId, startDate, endDate },
