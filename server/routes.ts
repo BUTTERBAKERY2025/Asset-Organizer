@@ -5936,6 +5936,32 @@ export async function registerRoutes(
           value: data.value,
         }));
       
+      // Build raw production entries list for table display
+      const rawProductionEntries = await Promise.all(
+        entriesInRange.slice(0, 500).map(async (entry) => {
+          let branchName = 'غير محدد';
+          if (entry.branchId) {
+            const branch = branches.find(b => b.id === entry.branchId);
+            if (branch) branchName = branch.name;
+          }
+          let shiftName = 'غير محدد';
+          if (entry.shiftId) {
+            const shift = await storage.getShift(entry.shiftId);
+            if (shift) shiftName = shift.name;
+          }
+          return {
+            id: entry.id,
+            productName: entry.productName || 'غير محدد',
+            quantity: entry.quantity || 0,
+            branchName,
+            shiftName,
+            destination: entry.destination || 'غير محدد',
+            producedAt: entry.producedAt ? new Date(entry.producedAt).toISOString() : '',
+            notes: entry.notes || '',
+          };
+        })
+      );
+      
       res.json({
         dailySummary: {
           totalBatches: prodStats.totalBatches,
@@ -5956,6 +5982,7 @@ export async function registerRoutes(
           totalSales,
           journalCount: journalsInRange.length,
         },
+        rawProductionEntries,
         wasteAnalysis: {
           totalReports: wasteReports.length,
           totalQuantity: totalWastedQuantity,

@@ -119,6 +119,16 @@ interface ReportData {
     daily: Array<{ date: string; production: number; target: number; sales?: number; waste?: number }>;
     weekly: Array<{ week: string; production: number }>;
   };
+  rawProductionEntries?: Array<{
+    id: number;
+    productName: string;
+    quantity: number;
+    branchName: string;
+    shiftName: string;
+    destination: string;
+    producedAt: string;
+    notes: string;
+  }>;
 }
 
 const CHART_COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
@@ -136,7 +146,7 @@ export default function ProductionReportsPage() {
   const { selectedBranch, setSelectedBranch, selectedDate, setSelectedDate } = useProductionContext();
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [activeTab, setActiveTab] = useState("summary");
+  const [activeTab, setActiveTab] = useState("data");
   const [isExporting, setIsExporting] = useState<string | null>(null);
 
   const { data: branches } = useQuery<Branch[]>({
@@ -235,6 +245,26 @@ export default function ProductionReportsPage() {
         XLSX.utils.book_append_sheet(wb, ws, "أداء المنتجات");
       }
 
+      if (reportType === "all" || reportType === "data") {
+        if (reportData.rawProductionEntries && reportData.rawProductionEntries.length > 0) {
+          const rawData = [
+            ["#", "المنتج", "الكمية", "الفرع", "الوردية", "الوجهة", "التاريخ والوقت", "ملاحظات"],
+            ...reportData.rawProductionEntries.map((entry, idx) => [
+              idx + 1,
+              entry.productName,
+              entry.quantity,
+              entry.branchName,
+              entry.shiftName,
+              entry.destination,
+              entry.producedAt ? format(new Date(entry.producedAt), "yyyy/MM/dd HH:mm") : '',
+              entry.notes || ''
+            ]),
+          ];
+          const ws = XLSX.utils.aoa_to_sheet(rawData);
+          XLSX.utils.book_append_sheet(wb, ws, "بيانات الإنتاج");
+        }
+      }
+
       XLSX.writeFile(wb, `تقارير_الإنتاج_${startDate}_${endDate}.xlsx`);
     } catch (error) {
       console.error("Export error:", error);
@@ -259,6 +289,11 @@ export default function ProductionReportsPage() {
         csvContent = "المنتج,الكمية,النسبة,الاتجاه\n";
         reportData.productPerformance.forEach(p => {
           csvContent += `${p.productName},${p.quantity},${p.percentage.toFixed(1)}%,${p.trend >= 0 ? '+' : ''}${p.trend.toFixed(1)}%\n`;
+        });
+      } else if (reportType === "data" && reportData.rawProductionEntries) {
+        csvContent = "الرقم,المنتج,الكمية,الفرع,الوردية,الوجهة,التاريخ,ملاحظات\n";
+        reportData.rawProductionEntries.forEach((entry, idx) => {
+          csvContent += `${idx + 1},${entry.productName},${entry.quantity},${entry.branchName},${entry.shiftName},${entry.destination},"${entry.producedAt ? format(new Date(entry.producedAt), 'yyyy/MM/dd HH:mm') : ''}",${entry.notes || ''}\n`;
         });
       }
       
@@ -495,7 +530,11 @@ export default function ProductionReportsPage() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid grid-cols-4 md:grid-cols-8 gap-1 h-auto p-1">
+          <TabsList className="grid grid-cols-5 md:grid-cols-9 gap-1 h-auto p-1">
+            <TabsTrigger value="data" className="text-xs py-1.5 bg-amber-100" data-testid="tab-data">
+              <FileSpreadsheet className="h-3 w-3 ml-1" />
+              البيانات
+            </TabsTrigger>
             <TabsTrigger value="summary" className="text-xs py-1.5" data-testid="tab-summary">
               <BarChart3 className="h-3 w-3 ml-1" />
               الملخص
@@ -561,6 +600,98 @@ export default function ProductionReportsPage() {
             </Card>
           ) : (
             <>
+              <TabsContent value="data" className="space-y-4">
+                <Card className="border-amber-200">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="h-5 w-5 text-amber-600" />
+                        <CardTitle className="text-lg">بيانات الإنتاج الحقيقية</CardTitle>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+                          {reportData?.rawProductionEntries?.length || 0} سجل
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs bg-green-50 hover:bg-green-100 border-green-300"
+                          onClick={() => exportToExcel("data")}
+                          disabled={isExporting !== null || !reportData?.rawProductionEntries?.length}
+                          data-testid="btn-export-data-excel"
+                        >
+                          {isExporting === "excel" ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <FileSpreadsheet className="h-3 w-3 ml-1" />}
+                          Excel
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs bg-blue-50 hover:bg-blue-100 border-blue-300"
+                          onClick={() => exportToCSV("data")}
+                          disabled={isExporting !== null || !reportData?.rawProductionEntries?.length}
+                          data-testid="btn-export-data-csv"
+                        >
+                          {isExporting === "csv" ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <Download className="h-3 w-3 ml-1" />}
+                          CSV
+                        </Button>
+                      </div>
+                    </div>
+                    <CardDescription>
+                      جميع دفعات الإنتاج المسجلة في الفترة المحددة - يمكنك تصدير البيانات إلى Excel أو CSV
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {reportData?.rawProductionEntries && reportData.rawProductionEntries.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse" data-testid="table-production-data">
+                          <thead>
+                            <tr className="bg-amber-50 border-b border-amber-200">
+                              <th className="p-2 text-right font-medium text-amber-800">#</th>
+                              <th className="p-2 text-right font-medium text-amber-800">المنتج</th>
+                              <th className="p-2 text-right font-medium text-amber-800">الكمية</th>
+                              <th className="p-2 text-right font-medium text-amber-800">الفرع</th>
+                              <th className="p-2 text-right font-medium text-amber-800">الوردية</th>
+                              <th className="p-2 text-right font-medium text-amber-800">الوجهة</th>
+                              <th className="p-2 text-right font-medium text-amber-800">التاريخ والوقت</th>
+                              <th className="p-2 text-right font-medium text-amber-800">ملاحظات</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reportData.rawProductionEntries.map((entry, idx) => (
+                              <tr key={entry.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} data-testid={`row-production-${entry.id}`}>
+                                <td className="p-2 border-b text-gray-600">{idx + 1}</td>
+                                <td className="p-2 border-b font-medium">{entry.productName}</td>
+                                <td className="p-2 border-b text-green-700 font-bold">{entry.quantity}</td>
+                                <td className="p-2 border-b">{entry.branchName}</td>
+                                <td className="p-2 border-b">{entry.shiftName}</td>
+                                <td className="p-2 border-b">{entry.destination}</td>
+                                <td className="p-2 border-b text-gray-600 text-xs">
+                                  {entry.producedAt ? format(new Date(entry.producedAt), "yyyy/MM/dd HH:mm", { locale: ar }) : '-'}
+                                </td>
+                                <td className="p-2 border-b text-gray-500 text-xs max-w-[150px] truncate">{entry.notes || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-amber-100 font-bold">
+                              <td colSpan={2} className="p-2 text-amber-800">المجموع</td>
+                              <td className="p-2 text-green-700">{reportData.rawProductionEntries.reduce((sum, e) => sum + e.quantity, 0)}</td>
+                              <td colSpan={5}></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                        <p>لا توجد بيانات إنتاج في الفترة المحددة</p>
+                        <p className="text-xs mt-2">جرّب تغيير الفترة الزمنية أو الفرع</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="summary" className="space-y-4">
                 {/* KPI Cards Row */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
