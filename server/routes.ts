@@ -5784,14 +5784,11 @@ export async function registerRoutes(
       const branches = await storage.getAllBranches();
       
       // Get cashier journals for sales comparison
-      const allJournals = await storage.getCashierJournals();
-      const journalsInRange = allJournals.filter(j => {
-        const jDate = j.journalDate || '';
-        const matchesBranch = branchId === 'all' || j.branchId === branchId;
-        const matchesDate = jDate >= startDate && jDate <= endDate;
-        return matchesBranch && matchesDate;
-      });
-      const totalSales = journalsInRange.reduce((sum, j) => sum + (parseFloat(j.totalSales?.toString() || '0') || 0), 0);
+      const allJournals = await storage.getCashierJournalsByDateRange(startDate, endDate);
+      const journalsInRange = branchId === 'all' 
+        ? allJournals 
+        : allJournals.filter(j => j.branchId === branchId);
+      const totalSales = journalsInRange.reduce((sum: number, j) => sum + (parseFloat(j.totalSales?.toString() || '0') || 0), 0);
       
       // Calculate waste analysis with product breakdown
       const wasteByReason: Record<string, number> = {};
@@ -5803,14 +5800,21 @@ export async function registerRoutes(
         const items = await storage.getWasteItems(report.id);
         for (const item of items) {
           const qty = item.quantity || 0;
-          const value = qty * (item.unitCost || 0);
+          const value = item.totalValue || (qty * (item.unitPrice || 0));
           totalWastedQuantity += qty;
           totalWastedValue += value;
           
           const reason = item.wasteReason || 'غير محدد';
           wasteByReason[reason] = (wasteByReason[reason] || 0) + qty;
           
-          const productName = item.productName || 'غير محدد';
+          // Get product name from products table
+          let productName = 'غير محدد';
+          if (item.productId) {
+            const product = await storage.getProduct(item.productId);
+            if (product) {
+              productName = product.name;
+            }
+          }
           if (!wasteByProduct[productName]) {
             wasteByProduct[productName] = { quantity: 0, value: 0 };
           }
@@ -5827,10 +5831,12 @@ export async function registerRoutes(
       const failed = qualityChecks.filter(q => q.result === 'failed').length;
       const passRate = qualityChecks.length > 0 ? (passed / qualityChecks.length) * 100 : 100;
       
-      // Build real product performance from production entries
-      const allProductionEntries = await storage.getDailyProductionEntries(branchId === 'all' ? undefined : branchId);
-      const entriesInRange = allProductionEntries.filter(e => {
-        const entryDate = e.productionDate || '';
+      // Build real product performance from production batches
+      const allProductionBatches = await storage.getAllDailyProductionBatches(
+        branchId === 'all' ? {} : { branchId }
+      );
+      const entriesInRange = allProductionBatches.filter(e => {
+        const entryDate = e.producedAt ? new Date(e.producedAt).toISOString().split('T')[0] : '';
         return entryDate >= startDate && entryDate <= endDate;
       });
       
@@ -5870,11 +5876,18 @@ export async function registerRoutes(
         'الوردية الليلية': { production: 0, entries: 0 },
       };
       
+      // Get shift names from the shift table for each entry
       for (const entry of entriesInRange) {
-        const shift = entry.shiftName || 'الوردية الصباحية';
-        if (shiftData[shift]) {
-          shiftData[shift].production += entry.quantity || 0;
-          shiftData[shift].entries += 1;
+        let shiftName = 'الوردية الصباحية'; // default
+        if (entry.shiftId) {
+          const shift = await storage.getShift(entry.shiftId);
+          if (shift) {
+            shiftName = shift.name;
+          }
+        }
+        if (shiftData[shiftName]) {
+          shiftData[shiftName].production += entry.quantity || 0;
+          shiftData[shiftName].entries += 1;
         }
       }
       
