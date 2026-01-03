@@ -118,18 +118,6 @@ export default function PlatformHomePage() {
       ],
     },
     {
-      title: "التقارير",
-      description: "تقارير شاملة وتحليلات للأصول والمشاريع والأداء",
-      icon: FileBarChart,
-      href: "/reports",
-      color: "bg-green-500",
-      module: "reports",
-      items: [
-        { label: "التقارير الشاملة", href: "/reports", icon: FileBarChart },
-        { label: "تقارير المشاريع", href: "/construction-reports", icon: FileBarChart },
-      ],
-    },
-    {
       title: "الإعدادات والنظام",
       description: "إدارة المستخدمين والصلاحيات والتكاملات والنسخ الاحتياطية",
       icon: Settings,
