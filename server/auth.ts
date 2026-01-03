@@ -6,6 +6,7 @@ import { storage } from "./storage";
 declare module "express-session" {
   interface SessionData {
     userId?: string;
+    activeBranchId?: string;
   }
 }
 
@@ -56,13 +57,31 @@ export async function setupAuth(app: Express) {
       }
 
       req.session.userId = user.id;
-      req.session.save((err) => {
+      
+      // Get user's default branch
+      const userBranches = await storage.getUserBranchAccess(user.id);
+      const defaultBranch = userBranches.find(b => b.isDefault) || userBranches[0];
+      req.session.activeBranchId = defaultBranch?.branchId || undefined;
+      
+      req.session.save(async (err) => {
         if (err) {
           console.error("Session save error:", err);
           return res.status(500).json({ error: "فشل تسجيل الدخول" });
         }
         const { password: _, ...safeUser } = user;
-        res.json(safeUser);
+        
+        // Get branch details if available
+        let activeBranch = null;
+        if (req.session.activeBranchId) {
+          activeBranch = await storage.getBranch(req.session.activeBranchId);
+        }
+        
+        res.json({
+          ...safeUser,
+          activeBranchId: req.session.activeBranchId,
+          activeBranch,
+          allowedBranches: userBranches,
+        });
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -84,10 +103,71 @@ export async function setupAuth(app: Express) {
       }
 
       const { password: _, ...safeUser } = user;
-      res.json(safeUser);
+      
+      // Get user's branches
+      const userBranches = await storage.getUserBranchAccess(user.id);
+      
+      // Get active branch details
+      let activeBranch = null;
+      if (req.session.activeBranchId) {
+        activeBranch = await storage.getBranch(req.session.activeBranchId);
+      }
+      
+      res.json({
+        ...safeUser,
+        activeBranchId: req.session.activeBranchId || null,
+        activeBranch,
+        allowedBranches: userBranches,
+      });
     } catch (error) {
       console.error("Get user error:", error);
       res.status(500).json({ error: "Failed to get user" });
+    }
+  });
+
+  // Switch active branch
+  app.patch("/api/auth/active-branch", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "غير مصرح" });
+      }
+
+      const { branchId } = req.body;
+      if (!branchId) {
+        return res.status(400).json({ error: "معرف الفرع مطلوب" });
+      }
+
+      // Verify user has access to this branch
+      const userBranches = await storage.getUserBranchAccess(req.session.userId);
+      const hasAccess = userBranches.some(b => b.branchId === branchId);
+      
+      // If no branch access defined, user has access to all branches (for admins)
+      const user = await storage.getUser(req.session.userId);
+      if (!hasAccess && userBranches.length > 0 && user?.role !== "admin") {
+        return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
+      }
+
+      // Verify branch exists
+      const branch = await storage.getBranch(branchId);
+      if (!branch) {
+        return res.status(404).json({ error: "الفرع غير موجود" });
+      }
+
+      req.session.activeBranchId = branchId;
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "فشل تغيير الفرع" });
+        }
+        res.json({ 
+          success: true, 
+          activeBranchId: branchId,
+          activeBranch: branch 
+        });
+      });
+    } catch (error) {
+      console.error("Switch branch error:", error);
+      res.status(500).json({ error: "حدث خطأ أثناء تغيير الفرع" });
     }
   });
 

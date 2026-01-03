@@ -2,7 +2,10 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
-import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, Shield } from "lucide-react";
+import { LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, Package, FileBarChart, FileSignature, Wallet, Calculator, Menu, X, ArrowLeftRight, FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, Shield, MapPin } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import type { Branch } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -36,7 +39,7 @@ interface NavGroup {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
-  const { user, isLoading, isAuthenticated, isAdmin, logout, isLoggingOut } = useAuth();
+  const { user, isLoading, isAuthenticated, isAdmin, logout, isLoggingOut, activeBranch, allowedBranches, switchBranch, isSwitchingBranch } = useAuth();
   const { canView } = usePermissions();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     assets: true,
@@ -59,6 +62,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const toggleGroup = (group: string) => {
     setOpenGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
+
+  // Fetch all branches for the selector
+  const { data: allBranches = [] } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+    queryFn: async () => {
+      const res = await fetch("/api/branches");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isAuthenticated,
+  });
+
+  // Determine which branches to show (user's allowed branches or all for admin)
+  const availableBranches = isAdmin ? allBranches : allBranches.filter(b => 
+    allowedBranches.some(ub => ub.branchId === b.id)
+  );
+
+  const handleBranchChange = async (branchId: string) => {
+    try {
+      await switchBranch(branchId);
+    } catch (error) {
+      console.error("Failed to switch branch:", error);
+    }
   };
 
   const allStandaloneItems: NavItem[] = [
@@ -216,6 +243,39 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {isAuthenticated && (
             <div className="mt-2 w-full">
               <GlobalSearch />
+            </div>
+          )}
+          {isAuthenticated && availableBranches.length > 0 && (
+            <div className="mt-3 w-full">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <MapPin className="h-3 w-3" />
+                <span>الفرع الحالي</span>
+              </div>
+              <Select
+                value={activeBranch?.id || ""}
+                onValueChange={handleBranchChange}
+                disabled={isSwitchingBranch}
+              >
+                <SelectTrigger className="w-full text-xs h-8" data-testid="select-active-branch">
+                  <SelectValue placeholder="اختر الفرع">
+                    {isSwitchingBranch ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span>جاري التبديل...</span>
+                      </div>
+                    ) : (
+                      activeBranch?.name || "اختر الفرع"
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {availableBranches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id} data-testid={`branch-option-${branch.id}`}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
         </div>
