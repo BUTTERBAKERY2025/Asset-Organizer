@@ -106,6 +106,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/branches", label: "إدارة الفروع", icon: Building2, requiresAuth: true, module: "inventory" },
           { href: "/inspections", label: "الفحص الدوري", icon: CalendarCheck, module: "inventory" },
           { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle, module: "inventory" },
+          { href: "/reports", label: "تقارير الأصول والمعدات", icon: FileText, module: "reports" },
         ],
       },
     },
@@ -157,21 +158,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/contracts", label: "العقود", icon: FileSignature, module: "contracts" },
           { href: "/payment-requests", label: "طلبات الدفع", icon: Wallet, module: "payment_requests" },
           { href: "/budget-planning", label: "تخطيط الميزانية", icon: Calculator, module: "budget_planning" },
-        ],
-      },
-    },
-    {
-      key: "reports",
-      group: {
-        label: "التقارير",
-        icon: FileBarChart,
-        items: [
-          { href: "/reports", label: "التقارير الشاملة", icon: FileText, module: "reports" },
           { href: "/construction-reports", label: "تقارير المشاريع", icon: FileBarChart, module: "reports" },
         ],
       },
     },
-    {
+        {
       key: "settings",
       group: {
         label: "الإعدادات والنظام",
