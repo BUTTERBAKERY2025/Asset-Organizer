@@ -657,7 +657,43 @@ export default function OperationsReportsDashboardPage() {
     startDate: thirtyDaysAgo,
     endDate: today,
     reportType: "all",
+    periodType: "custom" as "daily" | "weekly" | "monthly" | "custom",
+    journalStatus: "all" as "all" | "draft" | "submitted" | "approved" | "posted" | "rejected",
+    discrepancyFilter: "all" as "all" | "balanced" | "shortage" | "surplus",
+    shiftType: "all" as "all" | "morning" | "evening" | "night",
+    paymentCategory: "all" as "all" | "cash" | "cards" | "delivery",
   });
+
+  const formatLocalDate = (date: Date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const setPeriodDates = (periodType: "daily" | "weekly" | "monthly" | "custom") => {
+    const now = new Date();
+    let start = new Date(now);
+    let end = new Date(now);
+    
+    switch (periodType) {
+      case "daily":
+        break;
+      case "weekly":
+        const dayOfWeek = now.getDay();
+        start.setDate(now.getDate() - dayOfWeek);
+        break;
+      case "monthly":
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      default:
+        return;
+    }
+    
+    setFilters({
+      ...filters,
+      periodType,
+      startDate: formatLocalDate(start),
+      endDate: formatLocalDate(end),
+    });
+  };
 
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -941,8 +977,110 @@ export default function OperationsReportsDashboardPage() {
     printHtmlContent(htmlContent);
   };
 
-  // Use the filtered journals directly from API (filtering now done server-side)
-  const filteredCashierJournals = cashierJournals || [];
+  // Apply additional client-side filters on cashier journals
+  const filteredCashierJournals = (cashierJournals || []).filter(journal => {
+    // Filter by journal status
+    if (filters.journalStatus !== "all" && journal.status !== filters.journalStatus) {
+      return false;
+    }
+    // Filter by discrepancy status
+    if (filters.discrepancyFilter !== "all" && journal.discrepancyStatus !== filters.discrepancyFilter) {
+      return false;
+    }
+    // Filter by shift type
+    if (filters.shiftType !== "all" && journal.shiftType !== filters.shiftType) {
+      return false;
+    }
+    // Filter by payment category - show journals that have transactions in selected category
+    if (filters.paymentCategory !== "all") {
+      const cashAmount = journal.cashTotal || 0;
+      const cardsAmount = journal.networkTotal || 0;
+      const deliveryAmount = journal.deliveryTotal || 0;
+      
+      if (filters.paymentCategory === "cash" && cashAmount <= 0) {
+        return false;
+      }
+      if (filters.paymentCategory === "cards" && cardsAmount <= 0) {
+        return false;
+      }
+      if (filters.paymentCategory === "delivery" && deliveryAmount <= 0) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Calculate payment category totals for filtered journals
+  const paymentCategoryStats = {
+    cash: filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0),
+    cards: filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0),
+    delivery: filteredCashierJournals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0),
+  };
+
+  // Calculate weekly comparison data with proper date handling
+  const getWeeklyComparison = () => {
+    const weeks: { week: string; sales: number; transactions: number; journals: number }[] = [];
+    const journalsByWeek = new Map<string, typeof filteredCashierJournals>();
+    
+    filteredCashierJournals.forEach(journal => {
+      if (!journal.journalDate) return;
+      
+      try {
+        const dateParts = journal.journalDate.split('-');
+        if (dateParts.length !== 3) return;
+        
+        const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+        if (isNaN(date.getTime())) return;
+        
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        const weekKey = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+        
+        if (!journalsByWeek.has(weekKey)) {
+          journalsByWeek.set(weekKey, []);
+        }
+        journalsByWeek.get(weekKey)!.push(journal);
+      } catch {
+        return;
+      }
+    });
+    
+    journalsByWeek.forEach((journals, weekKey) => {
+      weeks.push({
+        week: weekKey,
+        sales: journals.reduce((sum, j) => sum + (j.totalSales || 0), 0),
+        transactions: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
+        journals: journals.length,
+      });
+    });
+    
+    return weeks.sort((a, b) => a.week.localeCompare(b.week));
+  };
+
+  // Calculate shift performance comparison
+  const getShiftPerformance = () => {
+    const shiftData = filteredCashierJournals.reduce((acc, j) => {
+      const shift = j.shiftType || 'غير محدد';
+      if (!acc[shift]) {
+        acc[shift] = { shift, sales: 0, count: 0, avgTicket: 0, shortages: 0 };
+      }
+      acc[shift].sales += (j.totalSales || 0);
+      acc[shift].count += 1;
+      if (j.discrepancyStatus === 'shortage') {
+        acc[shift].shortages += 1;
+      }
+      return acc;
+    }, {} as Record<string, { shift: string; sales: number; count: number; avgTicket: number; shortages: number }>);
+    
+    return Object.values(shiftData).map(s => ({
+      ...s,
+      avgTicket: s.count > 0 ? s.sales / s.count : 0,
+      shiftLabel: s.shift === 'morning' ? 'صباحي' : s.shift === 'evening' ? 'مسائي' : s.shift === 'night' ? 'ليلي' : s.shift,
+    }));
+  };
+
+  const weeklyData = getWeeklyComparison();
+  const shiftPerformance = getShiftPerformance();
 
   const getVisibleTabs = () => {
     switch (filters.reportType) {
@@ -1012,11 +1150,57 @@ export default function OperationsReportsDashboardPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <Filter className="w-5 h-5 text-amber-600" />
-              فلاتر التقارير
+              فلاتر التقارير المتقدمة
             </CardTitle>
-            <CardDescription>حدد نوع التقرير والفرع والفترة الزمنية</CardDescription>
+            <CardDescription>فلاتر ديناميكية شاملة للتحكم في البيانات المعروضة</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {/* Quick Period Selection */}
+            <div className="flex flex-wrap gap-2 pb-3 border-b">
+              <span className="text-sm text-muted-foreground ml-2">الفترة السريعة:</span>
+              <Button
+                variant={filters.periodType === "daily" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPeriodDates("daily")}
+                className="gap-1"
+                data-testid="period-daily"
+              >
+                <Calendar className="w-3 h-3" />
+                اليوم
+              </Button>
+              <Button
+                variant={filters.periodType === "weekly" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPeriodDates("weekly")}
+                className="gap-1"
+                data-testid="period-weekly"
+              >
+                <Calendar className="w-3 h-3" />
+                هذا الأسبوع
+              </Button>
+              <Button
+                variant={filters.periodType === "monthly" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPeriodDates("monthly")}
+                className="gap-1"
+                data-testid="period-monthly"
+              >
+                <Calendar className="w-3 h-3" />
+                هذا الشهر
+              </Button>
+              <Button
+                variant={filters.periodType === "custom" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilters({ ...filters, periodType: "custom" })}
+                className="gap-1"
+                data-testid="period-custom"
+              >
+                <Calendar className="w-3 h-3" />
+                مخصص
+              </Button>
+            </div>
+
+            {/* Main Filters Row */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
@@ -1073,7 +1257,7 @@ export default function OperationsReportsDashboardPage() {
                 <Input
                   type="date"
                   value={filters.startDate}
-                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value, periodType: "custom" })}
                   data-testid="input-start-date"
                 />
               </div>
@@ -1085,21 +1269,135 @@ export default function OperationsReportsDashboardPage() {
                 <Input
                   type="date"
                   value={filters.endDate}
-                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value, periodType: "custom" })}
                   data-testid="input-end-date"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  الوردية
+                </Label>
+                <Select value={filters.shiftType} onValueChange={(v: any) => setFilters({ ...filters, shiftType: v })}>
+                  <SelectTrigger data-testid="select-shift-type">
+                    <SelectValue placeholder="جميع الورديات" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الورديات</SelectItem>
+                    <SelectItem value="morning">صباحي</SelectItem>
+                    <SelectItem value="evening">مسائي</SelectItem>
+                    <SelectItem value="night">ليلي</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Advanced Cashier Filters Row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-3 border-t">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Receipt className="w-4 h-4" />
+                  حالة اليومية
+                </Label>
+                <Select value={filters.journalStatus} onValueChange={(v: any) => setFilters({ ...filters, journalStatus: v })}>
+                  <SelectTrigger data-testid="select-journal-status">
+                    <SelectValue placeholder="جميع الحالات" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الحالات</SelectItem>
+                    <SelectItem value="draft">مسودة</SelectItem>
+                    <SelectItem value="submitted">مقدمة للمراجعة</SelectItem>
+                    <SelectItem value="approved">معتمدة</SelectItem>
+                    <SelectItem value="posted">مرحّلة</SelectItem>
+                    <SelectItem value="rejected">مرفوضة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  حالة المطابقة
+                </Label>
+                <Select value={filters.discrepancyFilter} onValueChange={(v: any) => setFilters({ ...filters, discrepancyFilter: v })}>
+                  <SelectTrigger data-testid="select-discrepancy">
+                    <SelectValue placeholder="الكل" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="balanced">متوازن (بدون عجز)</SelectItem>
+                    <SelectItem value="shortage">عجز</SelectItem>
+                    <SelectItem value="surplus">فائض</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <CreditCard className="w-4 h-4" />
+                  فئة الدفع
+                </Label>
+                <Select value={filters.paymentCategory} onValueChange={(v: any) => setFilters({ ...filters, paymentCategory: v })}>
+                  <SelectTrigger data-testid="select-payment-category">
+                    <SelectValue placeholder="جميع الفئات" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع فئات الدفع</SelectItem>
+                    <SelectItem value="cash">نقدي فقط</SelectItem>
+                    <SelectItem value="cards">شبكة وبطاقات</SelectItem>
+                    <SelectItem value="delivery">تطبيقات التوصيل</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex items-end">
                 <Button
                   variant="outline"
-                  onClick={() => setFilters({ branchId: "", startDate: thirtyDaysAgo, endDate: today, reportType: "all" })}
+                  onClick={() => setFilters({ 
+                    branchId: "", 
+                    startDate: thirtyDaysAgo, 
+                    endDate: today, 
+                    reportType: "all",
+                    periodType: "custom",
+                    journalStatus: "all",
+                    discrepancyFilter: "all",
+                    shiftType: "all",
+                    paymentCategory: "all",
+                  })}
                   className="w-full"
                   data-testid="button-reset-filters"
                 >
-                  إعادة تعيين
+                  إعادة تعيين الكل
                 </Button>
               </div>
             </div>
+
+            {/* Active Filters Summary */}
+            {(filters.journalStatus !== "all" || filters.discrepancyFilter !== "all" || filters.shiftType !== "all" || filters.paymentCategory !== "all") && (
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
+                <span className="text-xs text-muted-foreground">الفلاتر النشطة:</span>
+                {filters.journalStatus !== "all" && (
+                  <Badge variant="secondary" className="text-xs">
+                    الحالة: {filters.journalStatus === "draft" ? "مسودة" : filters.journalStatus === "submitted" ? "مقدمة" : filters.journalStatus === "approved" ? "معتمدة" : filters.journalStatus === "posted" ? "مرحّلة" : "مرفوضة"}
+                  </Badge>
+                )}
+                {filters.discrepancyFilter !== "all" && (
+                  <Badge variant="secondary" className="text-xs">
+                    المطابقة: {filters.discrepancyFilter === "balanced" ? "متوازن" : filters.discrepancyFilter === "shortage" ? "عجز" : "فائض"}
+                  </Badge>
+                )}
+                {filters.shiftType !== "all" && (
+                  <Badge variant="secondary" className="text-xs">
+                    الوردية: {filters.shiftType === "morning" ? "صباحي" : filters.shiftType === "evening" ? "مسائي" : "ليلي"}
+                  </Badge>
+                )}
+                {filters.paymentCategory !== "all" && (
+                  <Badge variant="secondary" className="text-xs">
+                    الدفع: {filters.paymentCategory === "cash" ? "نقدي" : filters.paymentCategory === "cards" ? "شبكة" : "توصيل"}
+                  </Badge>
+                )}
+                <span className="text-xs text-muted-foreground mr-2">
+                  ({filteredCashierJournals.length} يومية)
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1652,6 +1950,126 @@ export default function OperationsReportsDashboardPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Enhanced Analytics Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Weekly Sales Trend */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-blue-600" />
+                      تحليل المبيعات الأسبوعي
+                    </CardTitle>
+                    <CardDescription>مقارنة المبيعات على مدار الأسابيع</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[250px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={weeklyData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="week" fontSize={10} />
+                          <YAxis fontSize={10} />
+                          <Tooltip formatter={(value: number, name: string) => [
+                            name === 'sales' ? formatCurrency(value) : value,
+                            name === 'sales' ? 'المبيعات' : name === 'transactions' ? 'العمليات' : 'اليوميات'
+                          ]} />
+                          <Legend />
+                          <Bar dataKey="sales" name="المبيعات" fill="#10B981" />
+                          <Bar dataKey="journals" name="اليوميات" fill="#3B82F6" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Payment Category Breakdown */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-indigo-600" />
+                      توزيع طرق الدفع
+                    </CardTitle>
+                    <CardDescription>تحليل المبيعات حسب فئة الدفع</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[250px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'نقدي', value: paymentCategoryStats.cash, color: '#10B981' },
+                              { name: 'شبكة وبطاقات', value: paymentCategoryStats.cards, color: '#3B82F6' },
+                              { name: 'تطبيقات التوصيل', value: paymentCategoryStats.delivery, color: '#F59E0B' },
+                            ].filter(d => d.value > 0)}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {[
+                              { name: 'نقدي', value: paymentCategoryStats.cash, color: '#10B981' },
+                              { name: 'شبكة وبطاقات', value: paymentCategoryStats.cards, color: '#3B82F6' },
+                              { name: 'تطبيقات التوصيل', value: paymentCategoryStats.delivery, color: '#F59E0B' },
+                            ].filter(d => d.value > 0).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex justify-around mt-2 text-sm">
+                      <div className="text-center">
+                        <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 ml-1"></span>
+                        <span className="text-muted-foreground">نقدي: </span>
+                        <span className="font-semibold">{formatCurrency(paymentCategoryStats.cash)}</span>
+                      </div>
+                      <div className="text-center">
+                        <span className="inline-block w-3 h-3 rounded-full bg-blue-500 ml-1"></span>
+                        <span className="text-muted-foreground">شبكة: </span>
+                        <span className="font-semibold">{formatCurrency(paymentCategoryStats.cards)}</span>
+                      </div>
+                      <div className="text-center">
+                        <span className="inline-block w-3 h-3 rounded-full bg-amber-500 ml-1"></span>
+                        <span className="text-muted-foreground">توصيل: </span>
+                        <span className="font-semibold">{formatCurrency(paymentCategoryStats.delivery)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Shift Performance Chart */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    مقارنة أداء الورديات
+                  </CardTitle>
+                  <CardDescription>تحليل شامل للمبيعات والعجز حسب الوردية</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={shiftPerformance} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" fontSize={10} />
+                        <YAxis type="category" dataKey="shiftLabel" fontSize={12} width={60} />
+                        <Tooltip formatter={(value: number, name: string) => [
+                          name === 'المبيعات' ? formatCurrency(value) : value,
+                          name
+                        ]} />
+                        <Legend />
+                        <Bar dataKey="sales" name="المبيعات" fill="#10B981" />
+                        <Bar dataKey="count" name="عدد اليوميات" fill="#3B82F6" />
+                        <Bar dataKey="shortages" name="حالات العجز" fill="#EF4444" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
 
               <Card>
                 <CardHeader>

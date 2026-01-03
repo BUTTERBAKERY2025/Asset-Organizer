@@ -2486,12 +2486,10 @@ export async function registerRoutes(
           .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
       }
       
-      // Calculate average ticket from transaction count
+      // Calculate average ticket from transaction count (with explicit zero guard)
       const transactionCount = parseInt(journalData.transactionCount) || 0;
       const totalSalesAmount = parseFloat(journalData.totalSales) || 0;
-      if (transactionCount > 0) {
-        journalData.averageTicket = totalSalesAmount / transactionCount;
-      }
+      journalData.averageTicket = transactionCount > 0 ? totalSalesAmount / transactionCount : 0;
       
       // Add creator info
       journalData.createdBy = req.currentUser?.id;
@@ -2569,11 +2567,22 @@ export async function registerRoutes(
       }
       
       // Calculate average ticket from transaction count
-      const transactionCount = parseInt(journalData.transactionCount) || 0;
-      const totalSalesAmount = parseFloat(journalData.totalSales) || 0;
-      if (transactionCount > 0) {
-        journalData.averageTicket = totalSalesAmount / transactionCount;
+      // Recalculate only when values are provided, otherwise preserve existing
+      const hasTransactionCount = journalData.transactionCount !== undefined;
+      const hasTotalSales = journalData.totalSales !== undefined;
+      
+      if (hasTransactionCount || hasTotalSales) {
+        // Use provided values or fall back to existing values
+        const transactionCount = hasTransactionCount 
+          ? (parseInt(journalData.transactionCount) || 0)
+          : (existing.transactionCount || 0);
+        const totalSalesAmount = hasTotalSales 
+          ? (parseFloat(journalData.totalSales) || 0)
+          : (existing.totalSales || 0);
+        journalData.averageTicket = transactionCount > 0 ? totalSalesAmount / transactionCount : 0;
       }
+      // If neither is provided, journalData.averageTicket remains undefined
+      // and will not overwrite the existing value in the database
       
       const journal = await storage.updateCashierJournal(id, journalData);
       
