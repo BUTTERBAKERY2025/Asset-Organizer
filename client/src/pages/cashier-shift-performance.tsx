@@ -15,11 +15,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { 
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Plus, Settings, 
-  Sun, Moon, DollarSign, Receipt, User, RefreshCw, BarChart3
+  Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart3
 } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
-import type { Branch, CashierShiftTarget, PerformanceAlert, ShiftPerformanceTracking } from "@shared/schema";
+import type { Branch, CashierShiftTarget, PerformanceAlert, ShiftPerformanceTracking, User } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
 const SHIFT_TYPES = [
@@ -71,6 +71,16 @@ export default function CashierShiftPerformance() {
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
   });
+
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  // Filter cashiers by selected branch in the dialog
+  const branchCashiers = useMemo(() => {
+    if (!newTarget.branchId) return [];
+    return allUsers.filter(u => u.branchId === newTarget.branchId && u.isActive === 'active');
+  }, [allUsers, newTarget.branchId]);
 
   const { data: shiftTargets = [], isLoading: targetsLoading, refetch: refetchTargets } = useQuery<CashierShiftTarget[]>({
     queryKey: ["/api/cashier-shift-targets", selectedBranch, selectedDate, selectedShift],
@@ -169,6 +179,14 @@ export default function CashierShiftPerformance() {
     return "critical";
   };
 
+  const getCashierName = (cashierId: string) => {
+    const user = allUsers.find(u => u.id === cashierId);
+    if (user) {
+      return `${user.firstName || user.username || ''} ${user.lastName || ''}`.trim() || cashierId;
+    }
+    return cashierId;
+  };
+
   const summaryStats = useMemo(() => {
     if (!shiftTargets.length) return { totalTarget: 0, totalAchieved: 0, avgPercent: 0, alertCount: 0 };
     
@@ -243,7 +261,7 @@ export default function CashierShiftPerformance() {
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label>الفرع</Label>
-                    <Select value={newTarget.branchId} onValueChange={(v) => setNewTarget({...newTarget, branchId: v})}>
+                    <Select value={newTarget.branchId} onValueChange={(v) => setNewTarget({...newTarget, branchId: v, cashierId: ""})}>
                       <SelectTrigger data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
@@ -255,14 +273,27 @@ export default function CashierShiftPerformance() {
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label>رقم/معرّف الكاشير</Label>
-                    <Input 
-                      type="text" 
+                    <Label>الكاشير</Label>
+                    <Select 
                       value={newTarget.cashierId} 
-                      onChange={(e) => setNewTarget({...newTarget, cashierId: e.target.value})}
-                      placeholder="أدخل معرّف الكاشير"
-                      data-testid="input-cashier-id"
-                    />
+                      onValueChange={(v) => setNewTarget({...newTarget, cashierId: v})}
+                      disabled={!newTarget.branchId}
+                    >
+                      <SelectTrigger data-testid="select-cashier-id">
+                        <SelectValue placeholder={newTarget.branchId ? "اختر الكاشير" : "اختر الفرع أولاً"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branchCashiers.length > 0 ? (
+                          branchCashiers.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.firstName || user.username} {user.lastName || ""}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="_empty" disabled>لا يوجد كاشير في هذا الفرع</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="grid gap-2">
                     <Label>نوع الشفت</Label>
@@ -479,8 +510,8 @@ export default function CashierShiftPerformance() {
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-morning-${target.id}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <User className="h-4 w-4" />
-                                <span className="font-medium">{target.cashierId}</span>
+                                <UserIcon className="h-4 w-4" />
+                                <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
                               </div>
                               <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
@@ -525,8 +556,8 @@ export default function CashierShiftPerformance() {
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-evening-${target.id}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <User className="h-4 w-4" />
-                                <span className="font-medium">{target.cashierId}</span>
+                                <UserIcon className="h-4 w-4" />
+                                <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
                               </div>
                               <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
