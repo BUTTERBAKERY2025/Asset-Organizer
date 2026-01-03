@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,6 +128,11 @@ export default function CashierShiftPerformance() {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-shift-targets"] });
       setShowTargetDialog(false);
       resetNewTarget();
+      toast.success("تم حفظ الهدف بنجاح");
+    },
+    onError: (error: any) => {
+      console.error("Error creating target:", error);
+      toast.error(error?.message || "فشل في حفظ الهدف. تحقق من الصلاحيات أو البيانات.");
     }
   });
 
@@ -353,11 +359,15 @@ export default function CashierShiftPerformance() {
                   <Button variant="outline" onClick={() => setShowTargetDialog(false)} data-testid="button-cancel">
                     إلغاء
                   </Button>
-                  <Button onClick={() => createTargetMutation.mutate({
-                    ...newTarget,
-                    targetDate: selectedDate,
-                  })} data-testid="button-save-target">
-                    حفظ الهدف
+                  <Button 
+                    onClick={() => createTargetMutation.mutate({
+                      ...newTarget,
+                      targetDate: selectedDate,
+                    })} 
+                    disabled={createTargetMutation.isPending || !newTarget.branchId || !newTarget.cashierId || !newTarget.targetAmount}
+                    data-testid="button-save-target"
+                  >
+                    {createTargetMutation.isPending ? "جاري الحفظ..." : "حفظ الهدف"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
