@@ -71,14 +71,6 @@ export default function PlatformHomePage() {
 
   const modules: (ModuleCardProps & { module?: SystemModule })[] = [
     {
-      title: "لوحة التحكم",
-      description: "نظرة عامة على جميع الأقسام والإحصائيات الرئيسية للمنصة",
-      icon: LayoutDashboard,
-      href: "/dashboard",
-      color: "bg-blue-500",
-      module: "dashboard",
-    },
-    {
       title: "الأصول والجرد",
       description: "إدارة ومتابعة جميع أصول الشركة والمعدات والمخزون",
       icon: Package,
