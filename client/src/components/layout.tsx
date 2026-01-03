@@ -90,7 +90,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const allStandaloneItems: NavItem[] = [
     { href: "/", label: "الصفحة الرئيسية", icon: Home, module: "dashboard" },
-    { href: "/dashboard", label: "لوحة تحكم المعدات والأصول", icon: LayoutDashboard, module: "dashboard" },
   ];
 
   const allNavGroups: { key: string; group: NavGroup }[] = [
@@ -100,6 +99,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: "الأصول والجرد",
         icon: Package,
         items: [
+          { href: "/dashboard", label: "لوحة تحكم المعدات والأصول", icon: LayoutDashboard, module: "inventory" },
           { href: "/inventory", label: "جرد الأصول", icon: Boxes, module: "inventory" },
           { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit, requiresAuth: true, module: "inventory" },
           { href: "/asset-transfers", label: "تحويلات الأصول", icon: ArrowLeftRight, module: "asset_transfers" },
