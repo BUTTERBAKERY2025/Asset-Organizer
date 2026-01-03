@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation, Link } from "wouter";
 import { 
@@ -17,7 +18,7 @@ import {
   CheckCircle, XCircle, Clock, AlertTriangle, Download, Wallet, CreditCard, Truck,
   Building2, Activity, Target, Package, FileText, Eye, Image, FileDown, Filter,
   Calendar, RefreshCw, Printer, ExternalLink, Receipt, ClipboardList, PieChart as PieChartIcon,
-  Gift, Trophy, User
+  Gift, Trophy, User, ChevronDown
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -705,6 +706,7 @@ export default function OperationsReportsDashboardPage() {
 
   const [activeTab, setActiveTab] = useState("overview");
   const [cashierPage, setCashierPage] = useState(1);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const cashierPageSize = 15;
 
   const { data: branches } = useQuery<Branch[]>({
@@ -1546,15 +1548,27 @@ export default function OperationsReportsDashboardPage() {
           </div>
         </div>
 
-        <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="w-5 h-5 text-amber-600" />
-              فلاتر التقارير المتقدمة
-            </CardTitle>
-            <CardDescription>فلاتر ديناميكية شاملة للتحكم في البيانات المعروضة</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Filter className="w-5 h-5 text-amber-600" />
+                    فلاتر التقارير المتقدمة
+                  </CardTitle>
+                  <CardDescription>فلاتر ديناميكية شاملة للتحكم في البيانات المعروضة</CardDescription>
+                </div>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1" data-testid="toggle-filters">
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`} />
+                    {filtersOpen ? 'إخفاء' : 'إظهار'}
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="space-y-4 pt-0">
             {/* Quick Period Selection */}
             <div className="flex flex-wrap gap-2 pb-3 border-b">
               <span className="text-sm text-muted-foreground ml-2">الفترة السريعة:</span>
@@ -1823,8 +1837,10 @@ export default function OperationsReportsDashboardPage() {
                 </span>
               </div>
             )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
