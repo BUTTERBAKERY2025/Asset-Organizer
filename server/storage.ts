@@ -4809,6 +4809,204 @@ export class DatabaseStorage implements IStorage {
     
     return true;
   }
+
+  // ==========================================
+  // Cashier Shift Targets - أهداف الكاشير للشفت
+  // ==========================================
+  
+  async getAllCashierShiftTargets(filters?: { branchId?: string; date?: string; shiftType?: string }): Promise<CashierShiftTarget[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(cashierShiftTargets.branchId, filters.branchId));
+    if (filters?.date) conditions.push(eq(cashierShiftTargets.targetDate, filters.date));
+    if (filters?.shiftType) conditions.push(eq(cashierShiftTargets.shiftType, filters.shiftType));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(cashierShiftTargets).where(and(...conditions)).orderBy(desc(cashierShiftTargets.targetDate));
+    }
+    return await db.select().from(cashierShiftTargets).orderBy(desc(cashierShiftTargets.targetDate));
+  }
+
+  async getCashierShiftTarget(id: number): Promise<CashierShiftTarget | undefined> {
+    const [target] = await db.select().from(cashierShiftTargets).where(eq(cashierShiftTargets.id, id));
+    return target;
+  }
+
+  async getCashierShiftTargetsByBranch(branchId: string, date: string): Promise<CashierShiftTarget[]> {
+    return await db.select().from(cashierShiftTargets).where(
+      and(eq(cashierShiftTargets.branchId, branchId), eq(cashierShiftTargets.targetDate, date))
+    );
+  }
+
+  async getCashierShiftTargetsByCashier(cashierId: string, startDate?: string, endDate?: string): Promise<CashierShiftTarget[]> {
+    const conditions = [eq(cashierShiftTargets.cashierId, cashierId)];
+    if (startDate) conditions.push(gte(cashierShiftTargets.targetDate, startDate));
+    if (endDate) conditions.push(lte(cashierShiftTargets.targetDate, endDate));
+    return await db.select().from(cashierShiftTargets).where(and(...conditions)).orderBy(desc(cashierShiftTargets.targetDate));
+  }
+
+  async createCashierShiftTarget(target: InsertCashierShiftTarget): Promise<CashierShiftTarget> {
+    const [created] = await db.insert(cashierShiftTargets).values(target).returning();
+    return created;
+  }
+
+  async updateCashierShiftTarget(id: number, target: Partial<InsertCashierShiftTarget>): Promise<CashierShiftTarget | undefined> {
+    const [updated] = await db.update(cashierShiftTargets).set({ ...target, updatedAt: new Date() }).where(eq(cashierShiftTargets.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCashierShiftTarget(id: number): Promise<boolean> {
+    await db.delete(cashierShiftTargets).where(eq(cashierShiftTargets.id, id));
+    return true;
+  }
+
+  async bulkCreateCashierShiftTargets(targets: InsertCashierShiftTarget[]): Promise<CashierShiftTarget[]> {
+    if (targets.length === 0) return [];
+    return await db.insert(cashierShiftTargets).values(targets).returning();
+  }
+
+  // ==========================================
+  // Average Ticket Targets - أهداف متوسط الفاتورة
+  // ==========================================
+
+  async getAllAverageTicketTargets(filters?: { branchId?: string; isActive?: boolean }): Promise<AverageTicketTarget[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(averageTicketTargets.branchId, filters.branchId));
+    if (filters?.isActive !== undefined) conditions.push(eq(averageTicketTargets.isActive, filters.isActive));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(averageTicketTargets).where(and(...conditions));
+    }
+    return await db.select().from(averageTicketTargets);
+  }
+
+  async getAverageTicketTarget(id: number): Promise<AverageTicketTarget | undefined> {
+    const [target] = await db.select().from(averageTicketTargets).where(eq(averageTicketTargets.id, id));
+    return target;
+  }
+
+  async getActiveAverageTicketTargets(branchId?: string, cashierId?: string): Promise<AverageTicketTarget[]> {
+    const conditions = [eq(averageTicketTargets.isActive, true)];
+    if (branchId) conditions.push(eq(averageTicketTargets.branchId, branchId));
+    if (cashierId) conditions.push(eq(averageTicketTargets.cashierId, cashierId));
+    return await db.select().from(averageTicketTargets).where(and(...conditions));
+  }
+
+  async createAverageTicketTarget(target: InsertAverageTicketTarget): Promise<AverageTicketTarget> {
+    const [created] = await db.insert(averageTicketTargets).values(target).returning();
+    return created;
+  }
+
+  async updateAverageTicketTarget(id: number, target: Partial<InsertAverageTicketTarget>): Promise<AverageTicketTarget | undefined> {
+    const [updated] = await db.update(averageTicketTargets).set({ ...target, updatedAt: new Date() }).where(eq(averageTicketTargets.id, id)).returning();
+    return updated;
+  }
+
+  async deleteAverageTicketTarget(id: number): Promise<boolean> {
+    await db.delete(averageTicketTargets).where(eq(averageTicketTargets.id, id));
+    return true;
+  }
+
+  // ==========================================
+  // Performance Alerts - تنبيهات الأداء
+  // ==========================================
+
+  async getAllPerformanceAlerts(filters?: { branchId?: string; date?: string; isRead?: boolean }): Promise<PerformanceAlert[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(performanceAlerts.branchId, filters.branchId));
+    if (filters?.date) conditions.push(eq(performanceAlerts.alertDate, filters.date));
+    if (filters?.isRead !== undefined) conditions.push(eq(performanceAlerts.isRead, filters.isRead));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(performanceAlerts).where(and(...conditions)).orderBy(desc(performanceAlerts.createdAt));
+    }
+    return await db.select().from(performanceAlerts).orderBy(desc(performanceAlerts.createdAt));
+  }
+
+  async getPerformanceAlert(id: number): Promise<PerformanceAlert | undefined> {
+    const [alert] = await db.select().from(performanceAlerts).where(eq(performanceAlerts.id, id));
+    return alert;
+  }
+
+  async getUnreadAlerts(branchId: string): Promise<PerformanceAlert[]> {
+    return await db.select().from(performanceAlerts).where(
+      and(eq(performanceAlerts.branchId, branchId), eq(performanceAlerts.isRead, false))
+    ).orderBy(desc(performanceAlerts.createdAt));
+  }
+
+  async createPerformanceAlert(alert: InsertPerformanceAlert): Promise<PerformanceAlert> {
+    const [created] = await db.insert(performanceAlerts).values(alert).returning();
+    return created;
+  }
+
+  async markAlertAsRead(id: number): Promise<PerformanceAlert | undefined> {
+    const [updated] = await db.update(performanceAlerts).set({ isRead: true }).where(eq(performanceAlerts.id, id)).returning();
+    return updated;
+  }
+
+  async acknowledgeAlert(id: number, acknowledgedBy: string): Promise<PerformanceAlert | undefined> {
+    const [updated] = await db.update(performanceAlerts).set({ 
+      isAcknowledged: true, 
+      acknowledgedBy, 
+      acknowledgedAt: new Date() 
+    }).where(eq(performanceAlerts.id, id)).returning();
+    return updated;
+  }
+
+  async bulkMarkAlertsAsRead(ids: number[]): Promise<boolean> {
+    if (ids.length === 0) return true;
+    await db.update(performanceAlerts).set({ isRead: true }).where(inArray(performanceAlerts.id, ids));
+    return true;
+  }
+
+  // ==========================================
+  // Shift Performance Tracking - تتبع أداء الشفت
+  // ==========================================
+
+  async getAllShiftPerformanceTracking(filters?: { branchId?: string; date?: string }): Promise<ShiftPerformanceTracking[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(shiftPerformanceTracking.branchId, filters.branchId));
+    if (filters?.date) conditions.push(eq(shiftPerformanceTracking.trackingDate, filters.date));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(shiftPerformanceTracking).where(and(...conditions)).orderBy(desc(shiftPerformanceTracking.trackingDate));
+    }
+    return await db.select().from(shiftPerformanceTracking).orderBy(desc(shiftPerformanceTracking.trackingDate));
+  }
+
+  async getShiftPerformanceTracking(id: number): Promise<ShiftPerformanceTracking | undefined> {
+    const [tracking] = await db.select().from(shiftPerformanceTracking).where(eq(shiftPerformanceTracking.id, id));
+    return tracking;
+  }
+
+  async getActiveShiftPerformance(branchId: string, date: string, shiftType: string): Promise<ShiftPerformanceTracking | undefined> {
+    const [tracking] = await db.select().from(shiftPerformanceTracking).where(
+      and(
+        eq(shiftPerformanceTracking.branchId, branchId),
+        eq(shiftPerformanceTracking.trackingDate, date),
+        eq(shiftPerformanceTracking.shiftType, shiftType)
+      )
+    );
+    return tracking;
+  }
+
+  async createShiftPerformanceTracking(tracking: InsertShiftPerformanceTracking): Promise<ShiftPerformanceTracking> {
+    const [created] = await db.insert(shiftPerformanceTracking).values(tracking).returning();
+    return created;
+  }
+
+  async updateShiftPerformanceTracking(id: number, tracking: Partial<InsertShiftPerformanceTracking>): Promise<ShiftPerformanceTracking | undefined> {
+    const [updated] = await db.update(shiftPerformanceTracking).set({ ...tracking, lastUpdatedAt: new Date() }).where(eq(shiftPerformanceTracking.id, id)).returning();
+    return updated;
+  }
+
+  async upsertShiftPerformanceTracking(tracking: InsertShiftPerformanceTracking): Promise<ShiftPerformanceTracking> {
+    const existing = await this.getActiveShiftPerformance(tracking.branchId, tracking.trackingDate, tracking.shiftType);
+    if (existing) {
+      const updated = await this.updateShiftPerformanceTracking(existing.id, tracking);
+      return updated!;
+    }
+    return await this.createShiftPerformanceTracking(tracking);
+  }
 }
 
 export const storage = new DatabaseStorage();
