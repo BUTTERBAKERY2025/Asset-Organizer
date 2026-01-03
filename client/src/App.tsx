@@ -56,6 +56,10 @@ import CashierShiftPerformancePage from "@/pages/cashier-shift-performance";
 import MarketingCampaignsPage from "@/pages/marketing-campaigns";
 import MarketingInfluencersPage from "@/pages/marketing-influencers";
 import MarketingDashboardPage from "@/pages/marketing-dashboard";
+import MarketingCalendarPage from "@/pages/marketing-calendar";
+import MarketingTasksPage from "@/pages/marketing-tasks";
+import MarketingReportsPage from "@/pages/marketing-reports";
+import MarketingTeamPage from "@/pages/marketing-team";
 
 function Router() {
   return (
@@ -111,6 +115,10 @@ function Router() {
       <Route path="/marketing" component={MarketingDashboardPage} />
       <Route path="/marketing-campaigns" component={MarketingCampaignsPage} />
       <Route path="/marketing-influencers" component={MarketingInfluencersPage} />
+      <Route path="/marketing-calendar" component={MarketingCalendarPage} />
+      <Route path="/marketing-tasks" component={MarketingTasksPage} />
+      <Route path="/marketing-reports" component={MarketingReportsPage} />
+      <Route path="/marketing-team" component={MarketingTeamPage} />
       <Route component={NotFound} />
     </Switch>
   );
