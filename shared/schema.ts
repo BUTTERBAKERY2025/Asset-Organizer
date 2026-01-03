@@ -2705,3 +2705,483 @@ export const CASHIER_ROLE_LABELS: Record<CashierRole, string> = {
   assistant: "كاشير مساعد",
   trainee: "متدرب",
 };
+
+// ============================================
+// إدارة التسويق - Marketing Management
+// ============================================
+
+// Campaign Status Types
+export const CAMPAIGN_STATUSES = ["draft", "planned", "active", "paused", "completed", "cancelled"] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  draft: "مسودة",
+  planned: "مخطط",
+  active: "نشط",
+  paused: "متوقف",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+};
+
+// Campaign Objective Types
+export const CAMPAIGN_OBJECTIVES = ["brand_awareness", "engagement", "sales_increase", "new_product", "seasonal", "event", "loyalty"] as const;
+export type CampaignObjective = (typeof CAMPAIGN_OBJECTIVES)[number];
+
+export const CAMPAIGN_OBJECTIVE_LABELS: Record<CampaignObjective, string> = {
+  brand_awareness: "رفع الوعي بالعلامة التجارية",
+  engagement: "زيادة التفاعل",
+  sales_increase: "زيادة المبيعات",
+  new_product: "إطلاق منتج جديد",
+  seasonal: "حملة موسمية",
+  event: "حدث أو مناسبة",
+  loyalty: "برنامج ولاء",
+};
+
+// Season Types for Campaigns
+export const CAMPAIGN_SEASONS = ["summer", "winter", "spring", "autumn", "ramadan", "eid", "national_day", "other"] as const;
+export type CampaignSeason = (typeof CAMPAIGN_SEASONS)[number];
+
+export const CAMPAIGN_SEASON_LABELS: Record<CampaignSeason, string> = {
+  summer: "موسم الصيف",
+  winter: "موسم الشتاء",
+  spring: "موسم الربيع",
+  autumn: "موسم الخريف",
+  ramadan: "شهر رمضان",
+  eid: "عيد الفطر/الأضحى",
+  national_day: "اليوم الوطني",
+  other: "أخرى",
+};
+
+// Marketing Campaigns - الحملات التسويقية
+export const marketingCampaigns = pgTable("marketing_campaigns", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  description: text("description"),
+  objective: text("objective").notNull(), // from CAMPAIGN_OBJECTIVES
+  season: text("season"), // from CAMPAIGN_SEASONS
+  status: text("status").default("draft").notNull(), // from CAMPAIGN_STATUSES
+  totalBudget: real("total_budget").default(0).notNull(),
+  spentBudget: real("spent_budget").default(0).notNull(),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  targetAudience: text("target_audience"),
+  channels: text("channels").array(), // social, print, influencer, email, etc.
+  kpis: jsonb("kpis"), // Key Performance Indicators
+  ownerId: varchar("owner_id").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  notes: text("notes"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingCampaignSchema = createInsertSchema(marketingCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingCampaign = typeof marketingCampaigns.$inferSelect;
+export type InsertMarketingCampaign = z.infer<typeof insertMarketingCampaignSchema>;
+
+// Campaign Budget Allocations - توزيع ميزانية الحملة على الفروع
+export const campaignBudgetAllocations = pgTable("campaign_budget_allocations", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  allocatedBudget: real("allocated_budget").notNull(),
+  spentAmount: real("spent_amount").default(0).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCampaignBudgetAllocationSchema = createInsertSchema(campaignBudgetAllocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CampaignBudgetAllocation = typeof campaignBudgetAllocations.$inferSelect;
+export type InsertCampaignBudgetAllocation = z.infer<typeof insertCampaignBudgetAllocationSchema>;
+
+// Campaign Goals - أهداف الحملة
+export const campaignGoals = pgTable("campaign_goals", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  goalType: text("goal_type").notNull(), // sales_target, engagement_rate, impressions, reach, conversions
+  targetValue: real("target_value").notNull(),
+  currentValue: real("current_value").default(0).notNull(),
+  unit: text("unit"), // SAR, %, count
+  description: text("description"),
+  deadline: text("deadline"), // YYYY-MM-DD
+  isAchieved: boolean("is_achieved").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCampaignGoalSchema = createInsertSchema(campaignGoals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CampaignGoal = typeof campaignGoals.$inferSelect;
+export type InsertCampaignGoal = z.infer<typeof insertCampaignGoalSchema>;
+
+// Marketing Calendar Events - تقويم التسويق
+export const marketingCalendarEvents = pgTable("marketing_calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  eventType: text("event_type").notNull(), // campaign_start, campaign_end, content_deadline, meeting, reminder, milestone
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date"), // YYYY-MM-DD (optional for single-day events)
+  startTime: text("start_time"), // HH:MM
+  endTime: text("end_time"), // HH:MM
+  isAllDay: boolean("is_all_day").default(false).notNull(),
+  color: text("color"), // hex color for calendar display
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  reminderMinutes: integer("reminder_minutes"), // minutes before event
+  isRecurring: boolean("is_recurring").default(false).notNull(),
+  recurringPattern: text("recurring_pattern"), // daily, weekly, monthly
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingCalendarEventSchema = createInsertSchema(marketingCalendarEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingCalendarEvent = typeof marketingCalendarEvents.$inferSelect;
+export type InsertMarketingCalendarEvent = z.infer<typeof insertMarketingCalendarEventSchema>;
+
+// Influencer Platform Types
+export const INFLUENCER_PLATFORMS = ["instagram", "tiktok", "twitter", "youtube", "snapchat", "facebook", "other"] as const;
+export type InfluencerPlatform = (typeof INFLUENCER_PLATFORMS)[number];
+
+export const INFLUENCER_PLATFORM_LABELS: Record<InfluencerPlatform, string> = {
+  instagram: "انستغرام",
+  tiktok: "تيك توك",
+  twitter: "تويتر/إكس",
+  youtube: "يوتيوب",
+  snapchat: "سناب شات",
+  facebook: "فيسبوك",
+  other: "أخرى",
+};
+
+// Influencer Content Types
+export const INFLUENCER_CONTENT_TYPES = ["photo", "video", "story", "reel", "live", "blog", "podcast", "review"] as const;
+export type InfluencerContentType = (typeof INFLUENCER_CONTENT_TYPES)[number];
+
+export const INFLUENCER_CONTENT_TYPE_LABELS: Record<InfluencerContentType, string> = {
+  photo: "صور",
+  video: "فيديو",
+  story: "ستوري",
+  reel: "ريلز",
+  live: "بث مباشر",
+  blog: "مدونة",
+  podcast: "بودكاست",
+  review: "مراجعة",
+};
+
+// Influencer Specialty Types
+export const INFLUENCER_SPECIALTIES = ["food", "lifestyle", "family", "beauty", "fashion", "fitness", "travel", "entertainment", "tech", "general"] as const;
+export type InfluencerSpecialty = (typeof INFLUENCER_SPECIALTIES)[number];
+
+export const INFLUENCER_SPECIALTY_LABELS: Record<InfluencerSpecialty, string> = {
+  food: "طعام ومطاعم",
+  lifestyle: "نمط حياة",
+  family: "عائلة وأطفال",
+  beauty: "جمال ومكياج",
+  fashion: "موضة وأزياء",
+  fitness: "لياقة ورياضة",
+  travel: "سفر ورحلات",
+  entertainment: "ترفيه",
+  tech: "تقنية",
+  general: "عام",
+};
+
+// Marketing Influencers - المؤثرين والبلوجرز
+export const marketingInfluencers = pgTable("marketing_influencers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  email: text("email"),
+  phone: text("phone"),
+  profileImageUrl: text("profile_image_url"),
+  specialty: text("specialty").notNull(), // from INFLUENCER_SPECIALTIES
+  platforms: text("platforms").array(), // from INFLUENCER_PLATFORMS
+  contentTypes: text("content_types").array(), // from INFLUENCER_CONTENT_TYPES
+  followerCount: integer("follower_count").default(0),
+  engagementRate: real("engagement_rate"), // percentage
+  avgViews: integer("avg_views").default(0),
+  pricePerPost: real("price_per_post"),
+  pricePerStory: real("price_per_story"),
+  pricePerVideo: real("price_per_video"),
+  city: text("city"),
+  region: text("region"),
+  socialHandles: jsonb("social_handles"), // { instagram: "@handle", tiktok: "@handle", ... }
+  bestCollaborationTimes: text("best_collaboration_times"), // description of best times
+  notes: text("notes"),
+  rating: real("rating"), // 1-5 rating based on past collaborations
+  totalCollaborations: integer("total_collaborations").default(0),
+  isActive: boolean("is_active").default(true).notNull(),
+  aiInsights: jsonb("ai_insights"), // AI-generated insights about performance
+  lastContactDate: text("last_contact_date"), // YYYY-MM-DD
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingInfluencerSchema = createInsertSchema(marketingInfluencers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingInfluencer = typeof marketingInfluencers.$inferSelect;
+export type InsertMarketingInfluencer = z.infer<typeof insertMarketingInfluencerSchema>;
+
+// Influencer Campaign Links - ربط المؤثرين بالحملات
+export const influencerCampaignLinks = pgTable("influencer_campaign_links", {
+  id: serial("id").primaryKey(),
+  influencerId: integer("influencer_id")
+    .notNull()
+    .references(() => marketingInfluencers.id, { onDelete: "cascade" }),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  status: text("status").default("pending").notNull(), // pending, contacted, confirmed, in_progress, completed, cancelled
+  contractAmount: real("contract_amount"),
+  deliverables: jsonb("deliverables"), // array of expected deliverables
+  deliverablesDone: jsonb("deliverables_done"), // array of completed deliverables
+  startDate: text("start_date"), // YYYY-MM-DD
+  endDate: text("end_date"), // YYYY-MM-DD
+  performanceScore: real("performance_score"), // 1-100 score after campaign
+  salesImpact: real("sales_impact"), // estimated sales impact in SAR
+  engagementGenerated: integer("engagement_generated"),
+  impressionsGenerated: integer("impressions_generated"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertInfluencerCampaignLinkSchema = createInsertSchema(influencerCampaignLinks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InfluencerCampaignLink = typeof influencerCampaignLinks.$inferSelect;
+export type InsertInfluencerCampaignLink = z.infer<typeof insertInfluencerCampaignLinkSchema>;
+
+// Influencer Contacts Log - سجل التواصل مع المؤثرين
+export const influencerContacts = pgTable("influencer_contacts", {
+  id: serial("id").primaryKey(),
+  influencerId: integer("influencer_id")
+    .notNull()
+    .references(() => marketingInfluencers.id, { onDelete: "cascade" }),
+  contactType: text("contact_type").notNull(), // call, email, whatsapp, meeting, social_dm
+  contactDate: text("contact_date").notNull(), // YYYY-MM-DD
+  contactTime: text("contact_time"), // HH:MM
+  subject: text("subject"),
+  notes: text("notes"),
+  outcome: text("outcome"), // positive, negative, neutral, follow_up_needed
+  nextFollowUp: text("next_follow_up"), // YYYY-MM-DD
+  contactedBy: varchar("contacted_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertInfluencerContactSchema = createInsertSchema(influencerContacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InfluencerContact = typeof influencerContacts.$inferSelect;
+export type InsertInfluencerContact = z.infer<typeof insertInfluencerContactSchema>;
+
+// Marketing Tasks - مهام فريق التسويق
+export const marketingTasks = pgTable("marketing_tasks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  assignedBy: varchar("assigned_by").references(() => users.id),
+  priority: text("priority").default("medium").notNull(), // low, medium, high, urgent
+  status: text("status").default("pending").notNull(), // pending, in_progress, completed, cancelled, blocked
+  dueDate: text("due_date"), // YYYY-MM-DD
+  completedAt: timestamp("completed_at"),
+  estimatedHours: real("estimated_hours"),
+  actualHours: real("actual_hours"),
+  category: text("category"), // content, design, coordination, analysis, other
+  attachments: jsonb("attachments"), // array of attachment URLs
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingTaskSchema = createInsertSchema(marketingTasks).omit({
+  id: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingTask = typeof marketingTasks.$inferSelect;
+export type InsertMarketingTask = z.infer<typeof insertMarketingTaskSchema>;
+
+// Marketing Task Activities - نشاط المهام
+export const marketingTaskActivities = pgTable("marketing_task_activities", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id")
+    .notNull()
+    .references(() => marketingTasks.id, { onDelete: "cascade" }),
+  activityType: text("activity_type").notNull(), // comment, status_change, assignment, attachment, update
+  description: text("description"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  userId: varchar("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMarketingTaskActivitySchema = createInsertSchema(marketingTaskActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketingTaskActivity = typeof marketingTaskActivities.$inferSelect;
+export type InsertMarketingTaskActivity = z.infer<typeof insertMarketingTaskActivitySchema>;
+
+// Marketing Performance Reports - تقارير أداء التسويق
+export const marketingPerformanceReports = pgTable("marketing_performance_reports", {
+  id: serial("id").primaryKey(),
+  reportType: text("report_type").notNull(), // campaign, influencer, monthly, quarterly, yearly
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(), // YYYY-MM-DD
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // Metrics
+  totalSpend: real("total_spend").default(0),
+  totalReach: integer("total_reach").default(0),
+  totalImpressions: integer("total_impressions").default(0),
+  totalEngagement: integer("total_engagement").default(0),
+  engagementRate: real("engagement_rate").default(0),
+  estimatedSalesImpact: real("estimated_sales_impact").default(0),
+  actualSalesImpact: real("actual_sales_impact").default(0),
+  roi: real("roi").default(0), // Return on Investment percentage
+  costPerEngagement: real("cost_per_engagement").default(0),
+  costPerImpression: real("cost_per_impression").default(0),
+  // Comparison with previous period
+  previousPeriodSales: real("previous_period_sales"),
+  salesGrowth: real("sales_growth"), // percentage
+  // Additional data
+  topPerformingContent: jsonb("top_performing_content"),
+  topInfluencers: jsonb("top_influencers"),
+  recommendations: jsonb("recommendations"), // AI-generated recommendations
+  generatedBy: varchar("generated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMarketingPerformanceReportSchema = createInsertSchema(marketingPerformanceReports).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketingPerformanceReport = typeof marketingPerformanceReports.$inferSelect;
+export type InsertMarketingPerformanceReport = z.infer<typeof insertMarketingPerformanceReportSchema>;
+
+// Marketing Assets - الأصول التسويقية (صور، فيديوهات، تصاميم)
+export const marketingAssets = pgTable("marketing_assets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  assetType: text("asset_type").notNull(), // image, video, document, design, template
+  fileUrl: text("file_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  category: text("category"), // social, print, email, website
+  tags: text("tags").array(),
+  fileSize: integer("file_size"), // in bytes
+  dimensions: text("dimensions"), // e.g., "1080x1080"
+  duration: integer("duration"), // for videos, in seconds
+  usageCount: integer("usage_count").default(0),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingAssetSchema = createInsertSchema(marketingAssets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingAsset = typeof marketingAssets.$inferSelect;
+export type InsertMarketingAsset = z.infer<typeof insertMarketingAssetSchema>;
+
+// Marketing Team Members - أعضاء فريق التسويق
+export const marketingTeamMembers = pgTable("marketing_team_members", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  role: text("role").notNull(), // manager, coordinator, designer, content_creator, analyst
+  specialization: text("specialization"), // social_media, influencer_relations, content, analytics
+  isTeamLead: boolean("is_team_lead").default(false).notNull(),
+  assignedBranches: text("assigned_branches").array(), // branch IDs this member focuses on
+  weeklyHoursCapacity: real("weekly_hours_capacity").default(40),
+  currentWorkload: real("current_workload").default(0), // calculated from active tasks
+  joinDate: text("join_date"), // YYYY-MM-DD
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMarketingTeamMemberSchema = createInsertSchema(marketingTeamMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingTeamMember = typeof marketingTeamMembers.$inferSelect;
+export type InsertMarketingTeamMember = z.infer<typeof insertMarketingTeamMemberSchema>;
+
+// Marketing Alerts - تنبيهات التسويق
+export const marketingAlerts = pgTable("marketing_alerts", {
+  id: serial("id").primaryKey(),
+  alertType: text("alert_type").notNull(), // campaign_start, campaign_end, budget_warning, task_overdue, influencer_deadline
+  severity: text("severity").notNull(), // info, warning, critical
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  taskId: integer("task_id").references(() => marketingTasks.id, { onDelete: "cascade" }),
+  targetUserId: varchar("target_user_id").references(() => users.id),
+  isRead: boolean("is_read").default(false).notNull(),
+  isAcknowledged: boolean("is_acknowledged").default(false).notNull(),
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  scheduledFor: timestamp("scheduled_for"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMarketingAlertSchema = createInsertSchema(marketingAlerts).omit({
+  id: true,
+  acknowledgedAt: true,
+  sentAt: true,
+  createdAt: true,
+});
+
+export type MarketingAlert = typeof marketingAlerts.$inferSelect;
+export type InsertMarketingAlert = z.infer<typeof insertMarketingAlertSchema>;
