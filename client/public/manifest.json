@@ -1,7 +1,7 @@
 {
-  "name": "باتر - نظام إدارة الأصول والمشاريع",
-  "short_name": "باتر",
-  "description": "نظام شامل لإدارة المشروعات الإنشائية والأصول والصيانة لفروع مخبز باتر",
+  "name": "منصة BUTTER BAKERY الشامله",
+  "short_name": "BUTTER BAKERY",
+  "description": "منصة شاملة لإدارة العمليات والمبيعات والإنتاج والأصول لفروع BUTTER BAKERY",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
