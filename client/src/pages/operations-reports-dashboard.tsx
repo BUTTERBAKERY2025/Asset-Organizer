@@ -765,6 +765,105 @@ export default function OperationsReportsDashboardPage() {
     }
   });
 
+  // Query for branch overview report
+  const { data: branchOverview } = useQuery<{
+    summary: {
+      totalBranches: number;
+      totalAssets: number;
+      totalGoodAssets: number;
+      totalMaintenanceNeeded: number;
+      totalOverdueInspection: number;
+      totalInventoryValue: number;
+      overallReadinessPercent: number;
+      branchesExcellent: number;
+      branchesGood: number;
+      branchesNeedAttention: number;
+      branchesCritical: number;
+    };
+    branches: {
+      branchId: string;
+      branchName: string;
+      assetReadiness: {
+        total: number;
+        good: number;
+        maintenance: number;
+        damaged: number;
+        missing: number;
+        readinessPercent: number;
+      };
+      inventory: {
+        totalItems: number;
+        totalQuantity: number;
+        totalValue: number;
+        lowQuantityItems: number;
+        categoryBreakdown: { category: string; count: number; value: number }[];
+      };
+      maintenance: {
+        itemsNeedingMaintenance: number;
+        overdueInspection: number;
+        upcomingInspection: number;
+      };
+      operationalStatus: 'excellent' | 'good' | 'needs_attention' | 'critical';
+    }[];
+  }>({
+    queryKey: [`/api/reports/branch-overview?${filters.branchId ? `branchId=${filters.branchId}` : ''}`],
+    queryFn: async () => {
+      const url = filters.branchId 
+        ? `/api/reports/branch-overview?branchId=${filters.branchId}` 
+        : '/api/reports/branch-overview';
+      const res = await fetch(url);
+      if (!res.ok) return { summary: {}, branches: [] };
+      return res.json();
+    }
+  });
+
+  // Query for executive summary
+  const { data: executiveSummary } = useQuery<{
+    reportDate: string;
+    period: { startDate: string; endDate: string };
+    salesOverview: {
+      totalSales: number;
+      cashSales: number;
+      networkSales: number;
+      deliverySales: number;
+      totalTransactions: number;
+      averageTicket: number;
+      discrepancies: { shortages: number; shortageAmount: number; surpluses: number; surplusAmount: number };
+    };
+    productionOverview: {
+      totalOrders: number;
+      completedOrders: number;
+      pendingOrders: number;
+      inProgressOrders: number;
+      totalQuantityProduced: number;
+      qualityPassRate: number;
+    };
+    assetsOverview: {
+      totalAssets: number;
+      goodAssets: number;
+      maintenanceNeeded: number;
+      assetReadinessPercent: number;
+      totalInventoryValue: number;
+    };
+    targetsOverview: {
+      totalTarget: number;
+      totalAchieved: number;
+      achievementPercent: number;
+      branchesAboveTarget: number;
+      branchesBelowTarget: number;
+    };
+    branchPerformance: { branchId: string; branchName: string; totalSales: number; totalOrders: number; qualityPassRate: number; averageTicket: number }[];
+    shiftsOverview: { totalShifts: number; totalEmployeeAssignments: number };
+    keyMetrics: { totalBranches: number; activeCashiers: number; averageDailySales: number };
+  }>({
+    queryKey: [`/api/reports/executive-summary?${queryString}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/executive-summary?${queryString}`);
+      if (!res.ok) return null;
+      return res.json();
+    }
+  });
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-SA", {
       style: "currency",
@@ -1383,7 +1482,7 @@ export default function OperationsReportsDashboardPage() {
       case "quality":
         return ["production"];
       default:
-        return ["overview", "sales", "targets", "production", "shifts", "cashier", "branches"];
+        return ["overview", "sales", "targets", "production", "shifts", "cashier", "branches", "branch-overview", "executive"];
     }
   };
 
@@ -1777,6 +1876,18 @@ export default function OperationsReportsDashboardPage() {
                 <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1">
                   <Building2 className="w-4 h-4" />
                   الفروع
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("branch-overview") && (
+                <TabsTrigger value="branch-overview" data-testid="tab-branch-overview" className="gap-1">
+                  <Package className="w-4 h-4" />
+                  نظرة عامة
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("executive") && (
+                <TabsTrigger value="executive" data-testid="tab-executive" className="gap-1">
+                  <FileText className="w-4 h-4" />
+                  تنفيذي
                 </TabsTrigger>
               )}
             </TabsList>
@@ -2794,6 +2905,510 @@ export default function OperationsReportsDashboardPage() {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="branch-overview" className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Package className="w-5 h-5 text-blue-600" />
+                  تقرير نظرة عامة على الفروع
+                </h2>
+              </div>
+
+              {branchOverview?.summary && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    <KPICard title="إجمالي الفروع" value={formatNumber(branchOverview.summary.totalBranches || 0)} icon={Building2} color="text-blue-600" bgColor="bg-blue-100" />
+                    <KPICard title="إجمالي الأصول" value={formatNumber(branchOverview.summary.totalAssets || 0)} icon={Package} color="text-purple-600" bgColor="bg-purple-100" />
+                    <KPICard title="أصول جاهزة" value={formatNumber(branchOverview.summary.totalGoodAssets || 0)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
+                    <KPICard title="تحتاج صيانة" value={formatNumber(branchOverview.summary.totalMaintenanceNeeded || 0)} icon={AlertTriangle} color="text-orange-600" bgColor="bg-orange-100" />
+                    <KPICard title="فحص متأخر" value={formatNumber(branchOverview.summary.totalOverdueInspection || 0)} icon={Clock} color="text-red-600" bgColor="bg-red-100" />
+                    <KPICard title="نسبة الجاهزية" value={formatPercent(branchOverview.summary.overallReadinessPercent || 0)} icon={Target} 
+                      color={branchOverview.summary.overallReadinessPercent >= 90 ? "text-green-600" : branchOverview.summary.overallReadinessPercent >= 75 ? "text-amber-600" : "text-red-600"} 
+                      bgColor={branchOverview.summary.overallReadinessPercent >= 90 ? "bg-green-100" : branchOverview.summary.overallReadinessPercent >= 75 ? "bg-amber-100" : "bg-red-100"} />
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <PieChartIcon className="w-4 h-4 text-blue-600" />
+                          حالة التشغيل بالفروع
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-[250px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={[
+                                  { name: 'ممتاز', value: branchOverview.summary.branchesExcellent || 0, fill: '#10B981' },
+                                  { name: 'جيد', value: branchOverview.summary.branchesGood || 0, fill: '#3B82F6' },
+                                  { name: 'يحتاج اهتمام', value: branchOverview.summary.branchesNeedAttention || 0, fill: '#F59E0B' },
+                                  { name: 'حرج', value: branchOverview.summary.branchesCritical || 0, fill: '#EF4444' },
+                                ]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                                label={({ name, value }) => value > 0 ? `${name}: ${value}` : ''}
+                              >
+                              </Pie>
+                              <Tooltip />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-green-600" />
+                          جاهزية الأصول بالفروع
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-[250px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={branchOverview.branches?.map(b => ({
+                              name: b.branchName,
+                              جاهز: b.assetReadiness.good,
+                              صيانة: b.assetReadiness.maintenance,
+                              تالف: b.assetReadiness.damaged,
+                            })) || []} layout="vertical">
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" fontSize={10} />
+                              <YAxis type="category" dataKey="name" fontSize={10} width={80} />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="جاهز" stackId="a" fill="#10B981" />
+                              <Bar dataKey="صيانة" stackId="a" fill="#F59E0B" />
+                              <Bar dataKey="تالف" stackId="a" fill="#EF4444" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">تفاصيل حالة الفروع</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/50">
+                              <th className="text-right py-3 px-4">الفرع</th>
+                              <th className="text-right py-3 px-4">الحالة</th>
+                              <th className="text-right py-3 px-4">الأصول</th>
+                              <th className="text-right py-3 px-4">جاهز</th>
+                              <th className="text-right py-3 px-4">صيانة</th>
+                              <th className="text-right py-3 px-4">نسبة الجاهزية</th>
+                              <th className="text-right py-3 px-4">فحص متأخر</th>
+                              <th className="text-right py-3 px-4">قيمة المخزون</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {branchOverview.branches?.map((branch) => (
+                              <tr key={branch.branchId} className="border-b hover:bg-muted/50">
+                                <td className="py-3 px-4 font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="w-4 h-4 text-amber-600" />
+                                    {branch.branchName}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <Badge variant={
+                                    branch.operationalStatus === 'excellent' ? 'default' :
+                                    branch.operationalStatus === 'good' ? 'secondary' :
+                                    branch.operationalStatus === 'needs_attention' ? 'outline' : 'destructive'
+                                  } className={
+                                    branch.operationalStatus === 'excellent' ? 'bg-green-100 text-green-700' :
+                                    branch.operationalStatus === 'good' ? 'bg-blue-100 text-blue-700' :
+                                    branch.operationalStatus === 'needs_attention' ? 'bg-amber-100 text-amber-700' : ''
+                                  }>
+                                    {branch.operationalStatus === 'excellent' ? 'ممتاز' :
+                                     branch.operationalStatus === 'good' ? 'جيد' :
+                                     branch.operationalStatus === 'needs_attention' ? 'يحتاج اهتمام' : 'حرج'}
+                                  </Badge>
+                                </td>
+                                <td className="py-3 px-4">{formatNumber(branch.assetReadiness.total)}</td>
+                                <td className="py-3 px-4 text-green-600 font-semibold">{formatNumber(branch.assetReadiness.good)}</td>
+                                <td className="py-3 px-4 text-orange-600">{formatNumber(branch.assetReadiness.maintenance + branch.assetReadiness.damaged)}</td>
+                                <td className="py-3 px-4">
+                                  <span className={branch.assetReadiness.readinessPercent >= 90 ? 'text-green-600 font-semibold' : branch.assetReadiness.readinessPercent >= 75 ? 'text-amber-600' : 'text-red-600'}>
+                                    {formatPercent(branch.assetReadiness.readinessPercent)}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  {branch.maintenance.overdueInspection > 0 ? (
+                                    <Badge variant="destructive">{branch.maintenance.overdueInspection}</Badge>
+                                  ) : (
+                                    <span className="text-green-600">0</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">{formatCurrency(branch.inventory.totalValue)}</td>
+                              </tr>
+                            ))}
+                            {(!branchOverview.branches || branchOverview.branches.length === 0) && (
+                              <tr>
+                                <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                                  لا توجد بيانات فروع
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="executive" className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-purple-600" />
+                  التقرير التنفيذي الشامل
+                </h2>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="gap-2" data-testid="button-export-executive-excel" onClick={() => {
+                    if (!executiveSummary) return;
+                    const wb = XLSX.utils.book_new();
+                    
+                    const summaryData = [
+                      ['التقرير التنفيذي الشامل'],
+                      ['تاريخ التقرير:', new Date(executiveSummary.reportDate).toLocaleDateString('ar-SA')],
+                      ['الفترة:', `${executiveSummary.period.startDate} إلى ${executiveSummary.period.endDate}`],
+                      [],
+                      ['ملخص المبيعات'],
+                      ['إجمالي المبيعات', executiveSummary.salesOverview.totalSales],
+                      ['المبيعات النقدية', executiveSummary.salesOverview.cashSales],
+                      ['مبيعات الشبكة', executiveSummary.salesOverview.networkSales],
+                      ['مبيعات التوصيل', executiveSummary.salesOverview.deliverySales],
+                      ['عدد العمليات', executiveSummary.salesOverview.totalTransactions],
+                      ['متوسط الفاتورة', executiveSummary.salesOverview.averageTicket],
+                      [],
+                      ['ملخص الإنتاج'],
+                      ['إجمالي الأوامر', executiveSummary.productionOverview.totalOrders],
+                      ['أوامر مكتملة', executiveSummary.productionOverview.completedOrders],
+                      ['نسبة الجودة', executiveSummary.productionOverview.qualityPassRate],
+                      [],
+                      ['ملخص الأصول'],
+                      ['إجمالي الأصول', executiveSummary.assetsOverview.totalAssets],
+                      ['أصول جاهزة', executiveSummary.assetsOverview.goodAssets],
+                      ['تحتاج صيانة', executiveSummary.assetsOverview.maintenanceNeeded],
+                      ['نسبة الجاهزية', executiveSummary.assetsOverview.assetReadinessPercent],
+                      ['قيمة المخزون', executiveSummary.assetsOverview.totalInventoryValue],
+                      [],
+                      ['ملخص الأهداف'],
+                      ['الهدف الإجمالي', executiveSummary.targetsOverview.totalTarget],
+                      ['المتحقق', executiveSummary.targetsOverview.totalAchieved],
+                      ['نسبة التحقيق', executiveSummary.targetsOverview.achievementPercent],
+                    ];
+                    
+                    const ws = XLSX.utils.aoa_to_sheet(summaryData);
+                    XLSX.utils.book_append_sheet(wb, ws, 'ملخص تنفيذي');
+                    
+                    const branchData = [
+                      ['أداء الفروع'],
+                      ['الفرع', 'المبيعات', 'الأوامر', 'نسبة الجودة', 'متوسط الفاتورة'],
+                      ...executiveSummary.branchPerformance.map(b => [b.branchName, b.totalSales, b.totalOrders, b.qualityPassRate, b.averageTicket])
+                    ];
+                    const ws2 = XLSX.utils.aoa_to_sheet(branchData);
+                    XLSX.utils.book_append_sheet(wb, ws2, 'أداء الفروع');
+                    
+                    XLSX.writeFile(wb, `التقرير_التنفيذي_${filters.startDate}_${filters.endDate}.xlsx`);
+                  }}>
+                    <Download className="w-4 h-4" />
+                    تصدير Excel
+                  </Button>
+                  <Button className="gap-2 bg-red-600 hover:bg-red-700" data-testid="button-export-executive-pdf" onClick={() => {
+                    if (!executiveSummary) return;
+                    const htmlContent = `
+                      <html dir="rtl">
+                      <head>
+                        <title>التقرير التنفيذي الشامل</title>
+                        <style>
+                          body { font-family: 'Cairo', Arial, sans-serif; padding: 20px; }
+                          h1 { color: #b45309; border-bottom: 2px solid #b45309; padding-bottom: 10px; }
+                          h2 { color: #1f2937; margin-top: 20px; }
+                          .section { margin: 15px 0; padding: 15px; background: #f9fafb; border-radius: 8px; }
+                          .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+                          .metric { padding: 10px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                          .metric-title { font-size: 12px; color: #6b7280; }
+                          .metric-value { font-size: 18px; font-weight: bold; color: #1f2937; }
+                          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                          th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: right; }
+                          th { background: #f3f4f6; }
+                        </style>
+                      </head>
+                      <body>
+                        <h1>التقرير التنفيذي الشامل - باتر بيكري</h1>
+                        <p>تاريخ التقرير: ${new Date(executiveSummary.reportDate).toLocaleDateString('ar-SA')}</p>
+                        <p>الفترة: ${executiveSummary.period.startDate} إلى ${executiveSummary.period.endDate}</p>
+                        
+                        <div class="section">
+                          <h2>ملخص المبيعات</h2>
+                          <div class="grid">
+                            <div class="metric"><div class="metric-title">إجمالي المبيعات</div><div class="metric-value">${formatCurrency(executiveSummary.salesOverview.totalSales)}</div></div>
+                            <div class="metric"><div class="metric-title">عدد العمليات</div><div class="metric-value">${formatNumber(executiveSummary.salesOverview.totalTransactions)}</div></div>
+                            <div class="metric"><div class="metric-title">متوسط الفاتورة</div><div class="metric-value">${formatCurrency(executiveSummary.salesOverview.averageTicket)}</div></div>
+                          </div>
+                        </div>
+                        
+                        <div class="section">
+                          <h2>ملخص الإنتاج</h2>
+                          <div class="grid">
+                            <div class="metric"><div class="metric-title">إجمالي الأوامر</div><div class="metric-value">${formatNumber(executiveSummary.productionOverview.totalOrders)}</div></div>
+                            <div class="metric"><div class="metric-title">أوامر مكتملة</div><div class="metric-value">${formatNumber(executiveSummary.productionOverview.completedOrders)}</div></div>
+                            <div class="metric"><div class="metric-title">نسبة الجودة</div><div class="metric-value">${formatPercent(executiveSummary.productionOverview.qualityPassRate)}</div></div>
+                          </div>
+                        </div>
+                        
+                        <div class="section">
+                          <h2>ملخص الأصول والمخزون</h2>
+                          <div class="grid">
+                            <div class="metric"><div class="metric-title">إجمالي الأصول</div><div class="metric-value">${formatNumber(executiveSummary.assetsOverview.totalAssets)}</div></div>
+                            <div class="metric"><div class="metric-title">نسبة الجاهزية</div><div class="metric-value">${formatPercent(executiveSummary.assetsOverview.assetReadinessPercent)}</div></div>
+                            <div class="metric"><div class="metric-title">قيمة المخزون</div><div class="metric-value">${formatCurrency(executiveSummary.assetsOverview.totalInventoryValue)}</div></div>
+                          </div>
+                        </div>
+                        
+                        <div class="section">
+                          <h2>تحقيق الأهداف</h2>
+                          <div class="grid">
+                            <div class="metric"><div class="metric-title">الهدف الإجمالي</div><div class="metric-value">${formatCurrency(executiveSummary.targetsOverview.totalTarget)}</div></div>
+                            <div class="metric"><div class="metric-title">المتحقق</div><div class="metric-value">${formatCurrency(executiveSummary.targetsOverview.totalAchieved)}</div></div>
+                            <div class="metric"><div class="metric-title">نسبة التحقيق</div><div class="metric-value">${formatPercent(executiveSummary.targetsOverview.achievementPercent)}</div></div>
+                          </div>
+                        </div>
+                        
+                        <div class="section">
+                          <h2>أداء الفروع</h2>
+                          <table>
+                            <thead>
+                              <tr><th>الفرع</th><th>المبيعات</th><th>الأوامر</th><th>نسبة الجودة</th><th>متوسط الفاتورة</th></tr>
+                            </thead>
+                            <tbody>
+                              ${executiveSummary.branchPerformance.map(b => `<tr><td>${b.branchName}</td><td>${formatCurrency(b.totalSales)}</td><td>${formatNumber(b.totalOrders)}</td><td>${formatPercent(b.qualityPassRate)}</td><td>${formatCurrency(b.averageTicket)}</td></tr>`).join('')}
+                            </tbody>
+                          </table>
+                        </div>
+                      </body>
+                      </html>
+                    `;
+                    printHtmlContent(htmlContent);
+                  }}>
+                    <FileDown className="w-4 h-4" />
+                    تصدير PDF
+                  </Button>
+                </div>
+              </div>
+
+              {executiveSummary && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-green-500 rounded-lg">
+                            <DollarSign className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-green-700">إجمالي المبيعات</p>
+                            <p className="text-xl font-bold text-green-800">{formatCurrency(executiveSummary.salesOverview.totalSales)}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-500 rounded-lg">
+                            <Factory className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-blue-700">أوامر الإنتاج</p>
+                            <p className="text-xl font-bold text-blue-800">{formatNumber(executiveSummary.productionOverview.totalOrders)}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-500 rounded-lg">
+                            <Package className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-purple-700">قيمة المخزون</p>
+                            <p className="text-xl font-bold text-purple-800">{formatCurrency(executiveSummary.assetsOverview.totalInventoryValue)}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-amber-500 rounded-lg">
+                            <Target className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-amber-700">تحقيق الأهداف</p>
+                            <p className="text-xl font-bold text-amber-800">{formatPercent(executiveSummary.targetsOverview.achievementPercent)}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">توزيع المبيعات</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-[200px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={[
+                                  { name: 'نقداً', value: executiveSummary.salesOverview.cashSales },
+                                  { name: 'شبكة', value: executiveSummary.salesOverview.networkSales },
+                                  { name: 'توصيل', value: executiveSummary.salesOverview.deliverySales },
+                                ]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={50}
+                                outerRadius={70}
+                                paddingAngle={5}
+                                dataKey="value"
+                              >
+                                <Cell fill="#10B981" />
+                                <Cell fill="#3B82F6" />
+                                <Cell fill="#F59E0B" />
+                              </Pie>
+                              <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">ملخص الأداء</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">نسبة الجودة</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${Math.min(100, executiveSummary.productionOverview.qualityPassRate)}%` }} />
+                              </div>
+                              <span className="font-semibold">{formatPercent(executiveSummary.productionOverview.qualityPassRate)}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">جاهزية الأصول</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                                <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min(100, executiveSummary.assetsOverview.assetReadinessPercent)}%` }} />
+                              </div>
+                              <span className="font-semibold">{formatPercent(executiveSummary.assetsOverview.assetReadinessPercent)}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">تحقيق الأهداف</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                                <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${Math.min(100, executiveSummary.targetsOverview.achievementPercent)}%` }} />
+                              </div>
+                              <span className="font-semibold">{formatPercent(executiveSummary.targetsOverview.achievementPercent)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">أداء الفروع</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/50">
+                              <th className="text-right py-3 px-4">الفرع</th>
+                              <th className="text-right py-3 px-4">المبيعات</th>
+                              <th className="text-right py-3 px-4">الأوامر</th>
+                              <th className="text-right py-3 px-4">نسبة الجودة</th>
+                              <th className="text-right py-3 px-4">متوسط الفاتورة</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {executiveSummary.branchPerformance.map((branch) => (
+                              <tr key={branch.branchId} className="border-b hover:bg-muted/50">
+                                <td className="py-3 px-4 font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="w-4 h-4 text-amber-600" />
+                                    {branch.branchName}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 font-semibold text-green-600">{formatCurrency(branch.totalSales)}</td>
+                                <td className="py-3 px-4">{formatNumber(branch.totalOrders)}</td>
+                                <td className="py-3 px-4">
+                                  <span className={branch.qualityPassRate >= 90 ? 'text-green-600 font-semibold' : 'text-amber-600'}>
+                                    {formatPercent(branch.qualityPassRate)}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4">{formatCurrency(branch.averageTicket)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-amber-200 bg-amber-50">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <Trophy className="w-6 h-6 text-amber-600" />
+                        <div>
+                          <p className="font-semibold text-amber-800">مؤشرات رئيسية</p>
+                          <p className="text-sm text-amber-700">
+                            عدد الفروع النشطة: {executiveSummary.keyMetrics.totalBranches} | 
+                            الكاشيرين النشطين: {executiveSummary.keyMetrics.activeCashiers} | 
+                            متوسط المبيعات اليومية: {formatCurrency(executiveSummary.keyMetrics.averageDailySales)}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+
+              {!executiveSummary && (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                    <FileText className="w-12 h-12 text-muted-foreground" />
+                    <p className="text-muted-foreground">جاري تحميل التقرير التنفيذي...</p>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
           </>

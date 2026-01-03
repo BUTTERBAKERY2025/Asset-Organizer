@@ -2887,6 +2887,220 @@ export async function registerRoutes(
     }
   });
 
+  // Branch Overview Report - Asset Readiness, Inventory, Maintenance
+  app.get("/api/reports/branch-overview", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.query;
+      const branches = await storage.getAllBranches();
+      const allItems = branchId 
+        ? await storage.getInventoryItemsByBranch(branchId as string)
+        : await storage.getAllInventoryItems();
+      
+      const branchOverviews = [];
+      const branchList = branchId 
+        ? branches.filter(b => b.id === branchId)
+        : branches;
+
+      for (const branch of branchList) {
+        const branchItems = allItems.filter(item => item.branchId === branch.id);
+        
+        const goodItems = branchItems.filter(i => i.status === 'good').length;
+        const maintenanceItems = branchItems.filter(i => i.status === 'maintenance').length;
+        const damagedItems = branchItems.filter(i => i.status === 'damaged').length;
+        const missingItems = branchItems.filter(i => i.status === 'missing').length;
+        const totalItems = branchItems.length;
+        
+        const assetReadinessPercent = totalItems > 0 ? (goodItems / totalItems) * 100 : 100;
+        
+        const now = new Date();
+        const overdueInspection = branchItems.filter(i => {
+          if (!i.nextInspectionDate) return false;
+          return new Date(i.nextInspectionDate) < now;
+        }).length;
+        
+        const upcomingInspection = branchItems.filter(i => {
+          if (!i.nextInspectionDate) return false;
+          const inspDate = new Date(i.nextInspectionDate);
+          const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+          return inspDate >= now && inspDate <= weekFromNow;
+        }).length;
+        
+        const lowQuantityItems = branchItems.filter(i => i.quantity <= 5).length;
+        const totalQuantity = branchItems.reduce((sum, i) => sum + i.quantity, 0);
+        const totalValue = branchItems.reduce((sum, i) => sum + ((i.price || 0) * i.quantity), 0);
+        
+        const categoryBreakdown: Record<string, { count: number; value: number }> = {};
+        for (const item of branchItems) {
+          const cat = item.category || 'غير مصنف';
+          if (!categoryBreakdown[cat]) {
+            categoryBreakdown[cat] = { count: 0, value: 0 };
+          }
+          categoryBreakdown[cat].count += item.quantity;
+          categoryBreakdown[cat].value += (item.price || 0) * item.quantity;
+        }
+
+        branchOverviews.push({
+          branchId: branch.id,
+          branchName: branch.name,
+          assetReadiness: {
+            total: totalItems,
+            good: goodItems,
+            maintenance: maintenanceItems,
+            damaged: damagedItems,
+            missing: missingItems,
+            readinessPercent: assetReadinessPercent,
+          },
+          inventory: {
+            totalItems,
+            totalQuantity,
+            totalValue,
+            lowQuantityItems,
+            categoryBreakdown: Object.entries(categoryBreakdown).map(([category, data]) => ({
+              category,
+              count: data.count,
+              value: data.value,
+            })),
+          },
+          maintenance: {
+            itemsNeedingMaintenance: maintenanceItems + damagedItems,
+            overdueInspection,
+            upcomingInspection,
+          },
+          operationalStatus: assetReadinessPercent >= 90 ? 'excellent' : assetReadinessPercent >= 75 ? 'good' : assetReadinessPercent >= 50 ? 'needs_attention' : 'critical',
+        });
+      }
+
+      const summary = {
+        totalBranches: branchOverviews.length,
+        totalAssets: branchOverviews.reduce((sum, b) => sum + b.assetReadiness.total, 0),
+        totalGoodAssets: branchOverviews.reduce((sum, b) => sum + b.assetReadiness.good, 0),
+        totalMaintenanceNeeded: branchOverviews.reduce((sum, b) => sum + b.maintenance.itemsNeedingMaintenance, 0),
+        totalOverdueInspection: branchOverviews.reduce((sum, b) => sum + b.maintenance.overdueInspection, 0),
+        totalInventoryValue: branchOverviews.reduce((sum, b) => sum + b.inventory.totalValue, 0),
+        overallReadinessPercent: branchOverviews.length > 0 
+          ? branchOverviews.reduce((sum, b) => sum + b.assetReadiness.readinessPercent, 0) / branchOverviews.length 
+          : 100,
+        branchesExcellent: branchOverviews.filter(b => b.operationalStatus === 'excellent').length,
+        branchesGood: branchOverviews.filter(b => b.operationalStatus === 'good').length,
+        branchesNeedAttention: branchOverviews.filter(b => b.operationalStatus === 'needs_attention').length,
+        branchesCritical: branchOverviews.filter(b => b.operationalStatus === 'critical').length,
+      };
+
+      res.json({ summary, branches: branchOverviews });
+    } catch (error) {
+      console.error("Error fetching branch overview report:", error);
+      res.status(500).json({ error: "Failed to fetch branch overview report" });
+    }
+  });
+
+  // Executive Summary Report - Comprehensive data for PDF/Excel export
+  app.get("/api/reports/executive-summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const branches = await storage.getAllBranches();
+      
+      const operationsReport = await storage.getOperationsReport({
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+      });
+      
+      const allItems = await storage.getAllInventoryItems();
+      const allJournals = await storage.getAllCashierJournals();
+      
+      let filteredJournals = allJournals;
+      if (startDate) {
+        filteredJournals = filteredJournals.filter(j => j.journalDate >= (startDate as string));
+      }
+      if (endDate) {
+        filteredJournals = filteredJournals.filter(j => j.journalDate <= (endDate as string));
+      }
+
+      const goodItems = allItems.filter(i => i.status === 'good').length;
+      const maintenanceItems = allItems.filter(i => i.status === 'maintenance' || i.status === 'damaged').length;
+      const totalInventoryValue = allItems.reduce((sum, i) => sum + ((i.price || 0) * i.quantity), 0);
+      const assetReadinessPercent = allItems.length > 0 ? (goodItems / allItems.length) * 100 : 100;
+
+      const now = new Date();
+      const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const targetsProgress = await storage.getAllBranchesSalesProgress(currentYearMonth);
+      const totalTarget = targetsProgress.reduce((sum, b) => sum + (b.targetAmount || 0), 0);
+      const totalAchieved = targetsProgress.reduce((sum, b) => sum + (b.achievedAmount || 0), 0);
+      const targetAchievementPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
+
+      const executiveSummary = {
+        reportDate: new Date().toISOString(),
+        period: { startDate: startDate || 'N/A', endDate: endDate || 'N/A' },
+        
+        salesOverview: {
+          totalSales: operationsReport.salesReport.totalSales,
+          cashSales: operationsReport.salesReport.cashSales,
+          networkSales: operationsReport.salesReport.networkSales,
+          deliverySales: operationsReport.salesReport.deliverySales,
+          totalTransactions: operationsReport.salesReport.totalTransactions,
+          averageTicket: operationsReport.salesReport.averageTicket,
+          discrepancies: {
+            shortages: operationsReport.salesReport.totalShortages,
+            shortageAmount: operationsReport.salesReport.shortageAmount,
+            surpluses: operationsReport.salesReport.totalSurpluses,
+            surplusAmount: operationsReport.salesReport.surplusAmount,
+          },
+        },
+
+        productionOverview: {
+          totalOrders: operationsReport.productionReport.totalOrders,
+          completedOrders: operationsReport.productionReport.completedOrders,
+          pendingOrders: operationsReport.productionReport.pendingOrders,
+          inProgressOrders: operationsReport.productionReport.inProgressOrders,
+          totalQuantityProduced: operationsReport.productionReport.totalQuantityProduced,
+          qualityPassRate: operationsReport.productionReport.qualityPassRate,
+        },
+
+        assetsOverview: {
+          totalAssets: allItems.length,
+          goodAssets: goodItems,
+          maintenanceNeeded: maintenanceItems,
+          assetReadinessPercent,
+          totalInventoryValue,
+        },
+
+        targetsOverview: {
+          totalTarget,
+          totalAchieved,
+          achievementPercent: targetAchievementPercent,
+          branchesAboveTarget: targetsProgress.filter(b => b.achievementPercent >= 100).length,
+          branchesBelowTarget: targetsProgress.filter(b => b.achievementPercent < 80).length,
+        },
+
+        branchPerformance: operationsReport.branchComparison.map(b => ({
+          branchId: b.branchId,
+          branchName: b.branchName,
+          totalSales: b.totalSales,
+          totalOrders: b.totalOrders,
+          qualityPassRate: b.qualityPassRate,
+          averageTicket: b.averageTicket,
+        })),
+
+        shiftsOverview: {
+          totalShifts: operationsReport.shiftsReport.totalShifts,
+          totalEmployeeAssignments: operationsReport.shiftsReport.totalEmployeeAssignments,
+        },
+
+        keyMetrics: {
+          totalBranches: branches.length,
+          activeCashiers: new Set(filteredJournals.map(j => j.cashierId)).size,
+          averageDailySales: operationsReport.salesReport.dailySales.length > 0 
+            ? operationsReport.salesReport.totalSales / operationsReport.salesReport.dailySales.length 
+            : 0,
+        },
+      };
+
+      res.json(executiveSummary);
+    } catch (error) {
+      console.error("Error fetching executive summary:", error);
+      res.status(500).json({ error: "Failed to fetch executive summary" });
+    }
+  });
+
   // ==========================================
   // Targets & Incentives API Routes
   // ==========================================
