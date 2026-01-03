@@ -526,6 +526,13 @@ export default function TargetsDashboard() {
                 تخطيط الأهداف
               </Button>
             </Link>
+            
+            <Link href="/cashier-shift-performance">
+              <Button variant="default" className="bg-amber-600 hover:bg-amber-700" data-testid="button-goto-shift-performance">
+                <Users className="h-4 w-4 ml-2" />
+                أداء الشفتات
+              </Button>
+            </Link>
           </div>
         </div>
 
