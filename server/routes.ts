@@ -8107,6 +8107,34 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/marketing/influencers/:influencerId/expenses", isAuthenticated, async (req, res) => {
+    try {
+      const influencerId = parseInt(req.params.influencerId);
+      if (isNaN(influencerId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const expenses = await storage.getExpensesByInfluencerId(influencerId);
+      res.json(expenses);
+    } catch (error) {
+      console.error("Error fetching influencer expenses:", error);
+      res.status(500).json({ error: "فشل في جلب مصروفات المؤثر" });
+    }
+  });
+
+  app.get("/api/marketing/influencers/:influencerId/total-expenses", isAuthenticated, async (req, res) => {
+    try {
+      const influencerId = parseInt(req.params.influencerId);
+      if (isNaN(influencerId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const total = await storage.getTotalExpensesByInfluencerId(influencerId);
+      res.json({ influencerId, total });
+    } catch (error) {
+      console.error("Error fetching influencer total expenses:", error);
+      res.status(500).json({ error: "فشل في جلب إجمالي مصروفات المؤثر" });
+    }
+  });
+
   app.get("/api/marketing/influencer-payments/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
