@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import logo from "@assets/logo_-5_1765206843638.png";
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const { login, isLoggingIn, isAuthenticated } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
 
   if (isAuthenticated) {
@@ -25,7 +27,7 @@ export default function LoginPage() {
     setError("");
     
     try {
-      await login({ username, password });
+      await login({ username, password, rememberMe });
       setLocation("/");
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول");
@@ -74,6 +76,18 @@ export default function LoginPage() {
                 data-testid="input-password"
                 required
               />
+            </div>
+
+            <div className="flex items-center space-x-2 space-x-reverse">
+              <Checkbox
+                id="rememberMe"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked === true)}
+                data-testid="checkbox-remember-me"
+              />
+              <Label htmlFor="rememberMe" className="text-sm cursor-pointer">
+                تذكرني
+              </Label>
             </div>
 
             {error && (

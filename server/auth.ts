@@ -45,7 +45,7 @@ export async function setupAuth(app: Express) {
   // Login endpoint
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username, password } = req.body;
+      const { username, password, rememberMe } = req.body;
       
       if (!username || !password) {
         return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
@@ -57,6 +57,16 @@ export async function setupAuth(app: Express) {
       }
 
       req.session.userId = user.id;
+      
+      // Set session/cookie duration based on rememberMe
+      if (rememberMe) {
+        // Keep session for 7 days if "remember me" is checked
+        req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000;
+      } else {
+        // Session expires when browser closes (session cookie)
+        req.session.cookie.maxAge = undefined;
+        req.session.cookie.expires = undefined;
+      }
       
       // Get user's default branch
       const userBranches = await storage.getUserBranchAccess(user.id);
