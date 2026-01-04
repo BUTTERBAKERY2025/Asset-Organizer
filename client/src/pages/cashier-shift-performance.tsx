@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,18 @@ export default function CashierShiftPerformance() {
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
   });
+
+  const { user } = useAuth();
+  const filteredBranches = useMemo(() => {
+    if (user?.role === "admin") return branches;
+    return branches.filter(b => b.id === user?.branchId);
+  }, [branches, user]);
+
+  useEffect(() => {
+    if (user?.role !== "admin" && user?.branchId && selectedBranch === "all") {
+      setSelectedBranch(user.branchId);
+    }
+  }, [user, selectedBranch]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -272,7 +285,7 @@ export default function CashierShiftPerformance() {
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
-                        {branches.map((branch) => (
+                        {filteredBranches.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -393,8 +406,8 @@ export default function CashierShiftPerformance() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع الفروع</SelectItem>
-                {branches.map((branch) => (
+                {user?.role === "admin" && <SelectItem value="all">جميع الفروع</SelectItem>}
+                {filteredBranches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                 ))}
               </SelectContent>

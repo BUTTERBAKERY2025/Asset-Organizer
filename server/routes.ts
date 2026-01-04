@@ -2387,12 +2387,24 @@ export async function registerRoutes(
       // Get all journals first, then apply filters
       let journals = await storage.getAllCashierJournals();
       
-      // For non-admin users, always filter by their active branch
+      // Strict branch and user filtering
       if (user?.role !== "admin") {
         if (!activeBranch) {
           return res.json([]); // No branch = no data
         }
-        journals = journals.filter(j => j.branchId === activeBranch);
+        
+        // Get user permissions to see if they are a supervisor/manager
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve');
+        
+        if (isManager) {
+          // Manager sees all journals in their branch
+          journals = journals.filter(j => j.branchId === activeBranch);
+        } else {
+          // Cashier sees only their own journals in their branch
+          journals = journals.filter(j => j.branchId === activeBranch && j.cashierId === user.id);
+        }
       } else if (branchId) {
         // Admin can filter by specific branch if provided
         journals = journals.filter(j => j.branchId === branchId);
@@ -7064,7 +7076,28 @@ export async function registerRoutes(
       if (date) filters.date = date;
       if (shiftType) filters.shiftType = shiftType;
       
-      const targets = await storage.getAllCashierShiftTargets(filters);
+      let targets = await storage.getAllCashierShiftTargets(filters);
+      const user = req.currentUser;
+      const activeBranch = getActiveBranchFilter(req);
+
+      // Enforce branch and user filtering
+      if (user?.role !== "admin") {
+        if (!activeBranch) return res.json([]);
+        
+        // Filter by branch
+        targets = targets.filter(t => t.branchId === activeBranch);
+        
+        // Check if user is a manager (can view all in branch)
+        const permissions = await storage.getUserPermissions(user.id);
+        const salesPerms = permissions.find(p => p.module === 'sales' || p.module === 'cashier_journal');
+        const isManager = salesPerms?.actions.includes('approve') || salesPerms?.actions.includes('create');
+        
+        if (!isManager) {
+          // Cashier only sees their own targets
+          targets = targets.filter(t => t.cashierId === user.id);
+        }
+      }
+
       res.json(targets);
     } catch (error) {
       console.error("Error fetching cashier shift targets:", error);
@@ -7265,7 +7298,15 @@ export async function registerRoutes(
       if (date) filters.date = date;
       if (isRead !== undefined) filters.isRead = isRead === 'true';
       
-      const alerts = await storage.getAllPerformanceAlerts(filters);
+      let alerts = await storage.getAllPerformanceAlerts(filters);
+      const user = req.currentUser;
+      const activeBranch = getActiveBranchFilter(req);
+
+      if (user?.role !== "admin") {
+        if (!activeBranch) return res.json([]);
+        alerts = alerts.filter(a => a.branchId === activeBranch);
+      }
+
       res.json(alerts);
     } catch (error) {
       console.error("Error fetching performance alerts:", error);
@@ -7362,7 +7403,15 @@ export async function registerRoutes(
       if (branchId) filters.branchId = branchId;
       if (date) filters.date = date;
       
-      const tracking = await storage.getAllShiftPerformanceTracking(filters);
+      let tracking = await storage.getAllShiftPerformanceTracking(filters);
+      const user = req.currentUser;
+      const activeBranch = getActiveBranchFilter(req);
+
+      if (user?.role !== "admin") {
+        if (!activeBranch) return res.json([]);
+        tracking = tracking.filter(t => t.branchId === activeBranch);
+      }
+
       res.json(tracking);
     } catch (error) {
       console.error("Error fetching shift performance tracking:", error);

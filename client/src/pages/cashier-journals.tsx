@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -55,6 +56,7 @@ export default function CashierJournalsPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: journals, isLoading } = useQuery<CashierSalesJournal[]>({
     queryKey: ["/api/cashier-journals"],
@@ -63,6 +65,17 @@ export default function CashierJournalsPage() {
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
   });
+
+  const filteredBranches = branches?.filter(branch => {
+    if (user?.role === "admin") return true;
+    return user?.branchId === branch.id;
+  });
+
+  useEffect(() => {
+    if (user?.role !== "admin" && user?.branchId && branchFilter === "all") {
+      setBranchFilter(user.branchId);
+    }
+  }, [user, branchFilter]);
 
   const { data: stats } = useQuery<{
     totalJournals: number;
@@ -112,7 +125,11 @@ export default function CashierJournalsPage() {
     const matchesStatus = statusFilter === "all" || journal.status === statusFilter;
     const matchesBranch = branchFilter === "all" || journal.branchId === branchFilter;
     const matchesDiscrepancy = discrepancyFilter === "all" || journal.discrepancyStatus === discrepancyFilter;
-    return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy;
+    
+    // Additional restriction for cashiers: only see their own journals
+    const matchesUser = user?.role === "admin" || journal.cashierId === user?.id;
+    
+    return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy && matchesUser;
   });
 
   useEffect(() => {
@@ -360,8 +377,8 @@ export default function CashierJournalsPage() {
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الفروع</SelectItem>
-                    {branches?.map((branch) => (
+                    {user?.role === "admin" && <SelectItem value="all">جميع الفروع</SelectItem>}
+                    {filteredBranches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
                       </SelectItem>

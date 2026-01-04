@@ -120,6 +120,11 @@ export default function CashierJournalFormPage() {
     queryKey: ["/api/branches"],
   });
 
+  const filteredBranches = branches?.filter(branch => {
+    if (user?.role === "admin") return true;
+    return user?.branchId === branch.id;
+  });
+
   const { data: existingJournal, isLoading: loadingJournal } = useQuery<CashierSalesJournal & { 
     paymentBreakdowns: CashierPaymentBreakdown[];
     signatures?: { signatureType: string; signerName: string; signatureData: string; signedAt: string }[];
@@ -841,7 +846,7 @@ export default function CashierJournalFormPage() {
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
-                        {branches?.map((branch) => (
+                        {filteredBranches?.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
                             {branch.name}
                           </SelectItem>
