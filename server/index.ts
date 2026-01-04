@@ -4,6 +4,8 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
 import helmet from "helmet";
+import { db, pool } from "./db";
+import { sql } from "drizzle-orm";
 
 const app = express();
 const httpServer = createServer(app);
@@ -83,15 +85,78 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint
+app.get("/api/health", async (_req, res) => {
+  try {
+    await db.execute(sql`SELECT 1`);
+    res.json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      database: "connected",
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: "unhealthy",
+      timestamp: new Date().toISOString(),
+      database: "disconnected",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+// Graceful shutdown handling
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
+  log(`${signal} received, starting graceful shutdown...`, "shutdown");
+  
+  // Close HTTP server first (stop accepting new requests)
+  httpServer.close(async (err) => {
+    if (err) {
+      log(`Error during server close: ${err.message}`, "shutdown");
+    } else {
+      log("HTTP server closed successfully", "shutdown");
+    }
+    
+    // Close database pool
+    try {
+      await pool.end();
+      log("Database pool closed successfully", "shutdown");
+    } catch (dbErr) {
+      log(`Error closing database pool: ${dbErr}`, "shutdown");
+    }
+    
+    process.exit(err ? 1 : 0);
+  });
+
+  // Force close after 30 seconds
+  setTimeout(() => {
+    log("Forced shutdown after timeout", "shutdown");
+    process.exit(1);
+  }, 30000);
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
 (async () => {
   await registerRoutes(httpServer, app);
 
+  // Improved error handling - log but don't rethrow
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    log(`Error: ${message} (${status})`, "error");
+    
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
   });
 
   // importantly only setup vite in development and after
