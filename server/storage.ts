@@ -866,14 +866,25 @@ export class DatabaseStorage implements IStorage {
       changedBy: userId || 'system'
     });
     
+    // Get user name for audit log
+    let userName = null;
+    if (userId) {
+      const user = await this.getUser(userId);
+      if (user) {
+        userName = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.username;
+      }
+    }
+    
     await this.createSystemAuditLog({
       module: 'inventory',
       entityId: newItem.id,
       entityName: newItem.name,
       action: 'create',
-      details: JSON.stringify({ category: newItem.category, branchId: newItem.branchId }),
+      details: `إضافة صنف جديد: ${newItem.name}`,
       userId: userId || null,
-      userName: null,
+      userName: userName,
     });
     
     return newItem;
@@ -888,10 +899,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(inventoryItems.id, id))
       .returning();
     
+    const changedFields: string[] = [];
     if (updatedItem && existingItem) {
       for (const [key, newValue] of Object.entries(item)) {
         const oldValue = existingItem[key as keyof InventoryItem];
         if (String(oldValue) !== String(newValue)) {
+          changedFields.push(key);
           await this.createAuditLog({
             itemId: id,
             action: 'update',
@@ -901,6 +914,29 @@ export class DatabaseStorage implements IStorage {
             changedBy: userId || 'system'
           });
         }
+      }
+      
+      // Add system audit log for update if there were changes
+      if (changedFields.length > 0) {
+        let userName = null;
+        if (userId) {
+          const user = await this.getUser(userId);
+          if (user) {
+            userName = user.firstName && user.lastName 
+              ? `${user.firstName} ${user.lastName}` 
+              : user.username;
+          }
+        }
+        
+        await this.createSystemAuditLog({
+          module: 'inventory',
+          entityId: id,
+          entityName: existingItem.name,
+          action: 'update',
+          details: `تعديل: ${changedFields.join(', ')}`,
+          userId: userId || null,
+          userName: userName,
+        });
       }
     }
     
@@ -920,14 +956,25 @@ export class DatabaseStorage implements IStorage {
         changedBy: userId || 'system'
       });
       
+      // Get user name for audit log
+      let userName = null;
+      if (userId) {
+        const user = await this.getUser(userId);
+        if (user) {
+          userName = user.firstName && user.lastName 
+            ? `${user.firstName} ${user.lastName}` 
+            : user.username;
+        }
+      }
+      
       await this.createSystemAuditLog({
         module: 'inventory',
         entityId: id,
         entityName: existingItem.name,
         action: 'delete',
-        details: JSON.stringify({ category: existingItem.category }),
+        details: `حذف صنف: ${existingItem.name}`,
         userId: userId || null,
-        userName: null,
+        userName: userName,
       });
     }
     
@@ -1601,14 +1648,23 @@ export class DatabaseStorage implements IStorage {
       note: 'تم إنشاء طلب التحويل',
     });
 
+    // Get user name for audit log
+    let userName = null;
+    const user = await this.getUser(userId);
+    if (user) {
+      userName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}` 
+        : user.username;
+    }
+
     await this.createSystemAuditLog({
       module: 'transfers',
       entityId: String(created.id),
       entityName: created.transferNumber,
       action: 'create',
-      details: JSON.stringify({ itemId: transfer.itemId, from: transfer.fromBranchId, to: transfer.toBranchId }),
+      details: `طلب تحويل جديد: ${created.transferNumber}`,
       userId: userId,
-      userName: null,
+      userName: userName,
     });
 
     return created;
@@ -1633,6 +1689,15 @@ export class DatabaseStorage implements IStorage {
         note: 'تمت الموافقة على التحويل',
       });
 
+      // Get user name for audit log
+      let userName = null;
+      const user = await this.getUser(userId);
+      if (user) {
+        userName = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.username;
+      }
+
       await this.createSystemAuditLog({
         module: 'transfers',
         entityId: String(id),
@@ -1640,7 +1705,7 @@ export class DatabaseStorage implements IStorage {
         action: 'approve',
         details: 'تمت الموافقة على التحويل',
         userId: userId,
-        userName: null,
+        userName: userName,
       });
     }
 
