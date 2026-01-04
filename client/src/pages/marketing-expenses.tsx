@@ -428,14 +428,14 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>المؤثر (اختياري)</Label>
           <Select
-            value={formData.influencerId?.toString() || ""}
-            onValueChange={(value) => setFormData({ ...formData, influencerId: value ? parseInt(value) : null })}
+            value={formData.influencerId?.toString() || "none"}
+            onValueChange={(value) => setFormData({ ...formData, influencerId: value === "none" ? null : parseInt(value) })}
           >
             <SelectTrigger data-testid="select-expense-influencer">
               <SelectValue placeholder="اختر المؤثر" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">بدون مؤثر</SelectItem>
+              <SelectItem value="none">بدون مؤثر</SelectItem>
               {influencers.map((influencer) => (
                 <SelectItem key={influencer.id} value={influencer.id.toString()}>
                   {influencer.nameAr || influencer.name}
@@ -447,7 +447,7 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>طريقة الدفع</Label>
           <Select
-            value={formData.paymentMethod || ""}
+            value={formData.paymentMethod || undefined}
             onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
           >
             <SelectTrigger data-testid="select-expense-payment-method">
