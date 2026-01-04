@@ -1259,7 +1259,11 @@ export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_journals_branch_date").on(table.branchId, table.journalDate),
+  index("idx_journals_cashier").on(table.cashierId),
+  index("idx_journals_status").on(table.status),
+]);
 
 export const insertCashierSalesJournalSchema = createInsertSchema(
   cashierSalesJournals,
