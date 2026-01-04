@@ -63,7 +63,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Link } from "wouter";
-import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact, InfluencerPayment } from "@shared/schema";
+import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact, InfluencerPayment, CampaignExpense, MarketingCampaign } from "@shared/schema";
 import {
   INFLUENCER_SPECIALTY_LABELS,
   INFLUENCER_SPECIALTIES,
@@ -74,6 +74,8 @@ import {
   INFLUENCER_PAYMENT_TYPE_LABELS,
   INFLUENCER_PAYMENT_METHOD_LABELS,
   INFLUENCER_PAYMENT_STATUS_LABELS,
+  CAMPAIGN_EXPENSE_CATEGORY_LABELS,
+  CAMPAIGN_EXPENSE_STATUS_LABELS,
 } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -209,6 +211,45 @@ export default function MarketingInfluencersPage() {
     },
     enabled: !!selectedInfluencer && isDetailSheetOpen,
   });
+
+  const { data: campaignExpenses = [] } = useQuery<CampaignExpense[]>({
+    queryKey: ["/api/marketing/influencers", selectedInfluencer?.id, "expenses"],
+    queryFn: async () => {
+      if (!selectedInfluencer) return [];
+      const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/expenses`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedInfluencer && isDetailSheetOpen,
+  });
+
+  const { data: totalCampaignExpenses = 0 } = useQuery<number>({
+    queryKey: ["/api/marketing/influencers", selectedInfluencer?.id, "total-expenses"],
+    queryFn: async () => {
+      if (!selectedInfluencer) return 0;
+      const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/total-expenses`);
+      if (!res.ok) return 0;
+      const data = await res.json();
+      return data.total || 0;
+    },
+    enabled: !!selectedInfluencer && isDetailSheetOpen,
+  });
+
+  const { data: allCampaigns = [] } = useQuery<MarketingCampaign[]>({
+    queryKey: ["/api/marketing/campaigns"],
+    queryFn: async () => {
+      const res = await fetch("/api/marketing/campaigns");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedInfluencer && isDetailSheetOpen,
+  });
+
+  const getCampaignName = (campaignId: number | null) => {
+    if (!campaignId) return "-";
+    const campaign = allCampaigns.find(c => c.id === campaignId);
+    return campaign ? (campaign.nameAr || campaign.name) : "-";
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: InfluencerFormData) => {
@@ -1098,60 +1139,123 @@ export default function MarketingInfluencersPage() {
                 </TabsContent>
 
                 <TabsContent value="payments" className="mt-4">
-                  <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">إجمالي المدفوعات</p>
-                        <p className="text-2xl font-bold text-green-700">
-                          {new Intl.NumberFormat("en-US").format(totalPayments)} ر.س
-                        </p>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">مدفوعات مباشرة</p>
+                          <p className="text-xl font-bold text-green-700">
+                            {new Intl.NumberFormat("en-US").format(totalPayments)} ر.س
+                          </p>
+                        </div>
+                        <DollarSign className="w-6 h-6 text-green-600" />
                       </div>
-                      <DollarSign className="w-8 h-8 text-green-600" />
+                    </div>
+                    <div className="p-4 bg-pink-50 rounded-lg border border-pink-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">مصروفات الحملات</p>
+                          <p className="text-xl font-bold text-pink-700">
+                            {new Intl.NumberFormat("en-US").format(totalCampaignExpenses)} ر.س
+                          </p>
+                        </div>
+                        <Activity className="w-6 h-6 text-pink-600" />
+                      </div>
                     </div>
                   </div>
+                  <div className="mb-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <p className="text-sm font-bold text-amber-800">
+                      الإجمالي الكلي: {new Intl.NumberFormat("en-US").format(totalPayments + totalCampaignExpenses)} ر.س
+                    </p>
+                  </div>
                   
-                  <ScrollArea className="h-[350px]">
-                    {payments.length === 0 ? (
+                  <ScrollArea className="h-[300px]">
+                    {payments.length === 0 && campaignExpenses.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <DollarSign className="w-8 h-8 mx-auto mb-2" />
                         <p>لا توجد مدفوعات مسجلة</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {payments.map((payment) => (
-                          <Card key={payment.id} data-testid={`card-payment-${payment.id}`}>
-                            <CardContent className="p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant={payment.status === "completed" ? "default" : payment.status === "pending" ? "secondary" : "destructive"}>
-                                    {INFLUENCER_PAYMENT_STATUS_LABELS[payment.status] || payment.status}
-                                  </Badge>
-                                  <Badge variant="outline">
-                                    {INFLUENCER_PAYMENT_TYPE_LABELS[payment.paymentType] || payment.paymentType}
-                                  </Badge>
-                                </div>
-                                <p className="font-bold text-green-600">
-                                  {new Intl.NumberFormat("en-US").format(payment.amount)} ر.س
-                                </p>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                <p className="flex items-center gap-1">
-                                  <Calendar className="w-3 h-3" />
-                                  {payment.paymentDate}
-                                </p>
-                                {payment.paymentMethod && (
-                                  <p>{INFLUENCER_PAYMENT_METHOD_LABELS[payment.paymentMethod] || payment.paymentMethod}</p>
-                                )}
-                                {payment.description && (
-                                  <p className="mt-1">{payment.description}</p>
-                                )}
-                                {payment.referenceNumber && (
-                                  <p className="text-xs">رقم المرجع: {payment.referenceNumber}</p>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                        {campaignExpenses.length > 0 && (
+                          <>
+                            <h4 className="font-semibold text-pink-600 flex items-center gap-2">
+                              <Activity className="w-4 h-4" />
+                              مصروفات من الحملات
+                            </h4>
+                            {campaignExpenses.map((expense) => (
+                              <Card key={`expense-${expense.id}`} className="border-pink-200" data-testid={`card-expense-${expense.id}`}>
+                                <CardContent className="p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Badge className="bg-pink-500">
+                                        {CAMPAIGN_EXPENSE_STATUS_LABELS[expense.status] || expense.status}
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        {CAMPAIGN_EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}
+                                      </Badge>
+                                    </div>
+                                    <p className="font-bold text-pink-600">
+                                      {new Intl.NumberFormat("en-US").format(expense.amount)} ر.س
+                                    </p>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    <p className="font-medium">{expense.description}</p>
+                                    <p className="flex items-center gap-1 mt-1">
+                                      <Calendar className="w-3 h-3" />
+                                      {expense.expenseDate}
+                                    </p>
+                                    <p className="text-xs text-pink-600 mt-1">
+                                      الحملة: {getCampaignName(expense.campaignId)}
+                                    </p>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </>
+                        )}
+                        {payments.length > 0 && (
+                          <>
+                            <h4 className="font-semibold text-green-600 flex items-center gap-2 mt-4">
+                              <DollarSign className="w-4 h-4" />
+                              مدفوعات مباشرة
+                            </h4>
+                            {payments.map((payment) => (
+                              <Card key={`payment-${payment.id}`} className="border-green-200" data-testid={`card-payment-${payment.id}`}>
+                                <CardContent className="p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant={payment.status === "completed" ? "default" : payment.status === "pending" ? "secondary" : "destructive"}>
+                                        {INFLUENCER_PAYMENT_STATUS_LABELS[payment.status] || payment.status}
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        {INFLUENCER_PAYMENT_TYPE_LABELS[payment.paymentType] || payment.paymentType}
+                                      </Badge>
+                                    </div>
+                                    <p className="font-bold text-green-600">
+                                      {new Intl.NumberFormat("en-US").format(payment.amount)} ر.س
+                                    </p>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    <p className="flex items-center gap-1">
+                                      <Calendar className="w-3 h-3" />
+                                      {payment.paymentDate}
+                                    </p>
+                                    {payment.paymentMethod && (
+                                      <p>{INFLUENCER_PAYMENT_METHOD_LABELS[payment.paymentMethod] || payment.paymentMethod}</p>
+                                    )}
+                                    {payment.description && (
+                                      <p className="mt-1">{payment.description}</p>
+                                    )}
+                                    {payment.referenceNumber && (
+                                      <p className="text-xs">رقم المرجع: {payment.referenceNumber}</p>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </>
+                        )}
                       </div>
                     )}
                   </ScrollArea>
