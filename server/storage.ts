@@ -140,6 +140,8 @@ import {
   type InsertCampaignBudgetAllocation,
   type CampaignGoal,
   type InsertCampaignGoal,
+  type CampaignExpense,
+  type InsertCampaignExpense,
   type MarketingCalendarEvent,
   type InsertMarketingCalendarEvent,
   type MarketingInfluencer,
@@ -236,6 +238,7 @@ import {
   marketingCampaigns,
   campaignBudgetAllocations,
   campaignGoals,
+  campaignExpenses,
   marketingCalendarEvents,
   marketingInfluencers,
   influencerCampaignLinks,
@@ -664,6 +667,16 @@ export interface IStorage {
   createCampaignGoal(goal: InsertCampaignGoal): Promise<CampaignGoal>;
   updateCampaignGoal(id: number, goal: Partial<InsertCampaignGoal>): Promise<CampaignGoal | undefined>;
   deleteCampaignGoal(id: number): Promise<boolean>;
+
+  // Campaign Expenses - مصروفات الحملات
+  getCampaignExpenses(campaignId: number): Promise<CampaignExpense[]>;
+  getAllCampaignExpenses(filters?: { campaignId?: number; category?: string; status?: string; startDate?: string; endDate?: string }): Promise<CampaignExpense[]>;
+  getCampaignExpense(id: number): Promise<CampaignExpense | undefined>;
+  createCampaignExpense(expense: InsertCampaignExpense): Promise<CampaignExpense>;
+  updateCampaignExpense(id: number, expense: Partial<InsertCampaignExpense>): Promise<CampaignExpense | undefined>;
+  deleteCampaignExpense(id: number): Promise<boolean>;
+  getCampaignTotalExpenses(campaignId: number): Promise<number>;
+  getExpensesByCategory(campaignId: number): Promise<{ category: string; total: number }[]>;
 
   // Marketing Calendar Events - تقويم التسويق
   getAllMarketingCalendarEvents(filters?: { campaignId?: number; startDate?: string; endDate?: string }): Promise<MarketingCalendarEvent[]>;
@@ -5236,6 +5249,107 @@ export class DatabaseStorage implements IStorage {
   async deleteCampaignGoal(id: number): Promise<boolean> {
     await db.delete(campaignGoals).where(eq(campaignGoals.id, id));
     return true;
+  }
+
+  // Campaign Expenses - مصروفات الحملات
+  async getCampaignExpenses(campaignId: number): Promise<CampaignExpense[]> {
+    return await db.select().from(campaignExpenses)
+      .where(eq(campaignExpenses.campaignId, campaignId))
+      .orderBy(desc(campaignExpenses.expenseDate));
+  }
+
+  async getAllCampaignExpenses(filters?: { campaignId?: number; category?: string; status?: string; startDate?: string; endDate?: string }): Promise<CampaignExpense[]> {
+    const conditions = [];
+    if (filters?.campaignId) conditions.push(eq(campaignExpenses.campaignId, filters.campaignId));
+    if (filters?.category) conditions.push(eq(campaignExpenses.category, filters.category));
+    if (filters?.status) conditions.push(eq(campaignExpenses.status, filters.status));
+    if (filters?.startDate) conditions.push(gte(campaignExpenses.expenseDate, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(campaignExpenses.expenseDate, filters.endDate));
+    
+    return await db.select().from(campaignExpenses)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(campaignExpenses.expenseDate));
+  }
+
+  async getCampaignExpense(id: number): Promise<CampaignExpense | undefined> {
+    const [expense] = await db.select().from(campaignExpenses).where(eq(campaignExpenses.id, id));
+    return expense;
+  }
+
+  async createCampaignExpense(expense: InsertCampaignExpense): Promise<CampaignExpense> {
+    const [created] = await db.insert(campaignExpenses).values(expense).returning();
+    // Update campaign spent budget
+    if (expense.status === 'paid' || expense.status === 'approved') {
+      const campaign = await this.getMarketingCampaign(expense.campaignId);
+      if (campaign) {
+        await this.updateMarketingCampaign(expense.campaignId, {
+          spentBudget: (campaign.spentBudget || 0) + expense.amount
+        });
+      }
+    }
+    return created;
+  }
+
+  async updateCampaignExpense(id: number, expense: Partial<InsertCampaignExpense>): Promise<CampaignExpense | undefined> {
+    const existing = await this.getCampaignExpense(id);
+    if (!existing) return undefined;
+    
+    const [updated] = await db.update(campaignExpenses)
+      .set({ ...expense, updatedAt: new Date() })
+      .where(eq(campaignExpenses.id, id))
+      .returning();
+    
+    // Update campaign spent budget if status changed to paid/approved
+    if (expense.status && (expense.status === 'paid' || expense.status === 'approved') && 
+        existing.status !== 'paid' && existing.status !== 'approved') {
+      const campaign = await this.getMarketingCampaign(existing.campaignId);
+      if (campaign) {
+        await this.updateMarketingCampaign(existing.campaignId, {
+          spentBudget: (campaign.spentBudget || 0) + existing.amount
+        });
+      }
+    }
+    
+    return updated;
+  }
+
+  async deleteCampaignExpense(id: number): Promise<boolean> {
+    const expense = await this.getCampaignExpense(id);
+    if (expense && (expense.status === 'paid' || expense.status === 'approved')) {
+      // Reduce campaign spent budget
+      const campaign = await this.getMarketingCampaign(expense.campaignId);
+      if (campaign) {
+        await this.updateMarketingCampaign(expense.campaignId, {
+          spentBudget: Math.max(0, (campaign.spentBudget || 0) - expense.amount)
+        });
+      }
+    }
+    await db.delete(campaignExpenses).where(eq(campaignExpenses.id, id));
+    return true;
+  }
+
+  async getCampaignTotalExpenses(campaignId: number): Promise<number> {
+    const expenses = await db.select().from(campaignExpenses).where(
+      and(
+        eq(campaignExpenses.campaignId, campaignId),
+        or(eq(campaignExpenses.status, 'paid'), eq(campaignExpenses.status, 'approved'))
+      )
+    );
+    return expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  }
+
+  async getExpensesByCategory(campaignId: number): Promise<{ category: string; total: number }[]> {
+    const expenses = await db.select().from(campaignExpenses).where(
+      eq(campaignExpenses.campaignId, campaignId)
+    );
+    
+    const categoryTotals: Record<string, number> = {};
+    for (const expense of expenses) {
+      const cat = expense.category;
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + (expense.amount || 0);
+    }
+    
+    return Object.entries(categoryTotals).map(([category, total]) => ({ category, total }));
   }
 
   // Marketing Calendar Events - تقويم التسويق

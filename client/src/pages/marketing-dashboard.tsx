@@ -276,6 +276,14 @@ export default function MarketingDashboardPage() {
       color: "bg-red-500",
       count: null,
     },
+    {
+      title: "مصروفات الحملات",
+      description: "تتبع مصروفات الحملات التسويقية",
+      href: "/marketing-expenses",
+      icon: DollarSign,
+      color: "bg-emerald-500",
+      count: null,
+    },
   ];
 
   return (

@@ -2839,6 +2839,84 @@ export const insertCampaignGoalSchema = createInsertSchema(campaignGoals).omit({
 export type CampaignGoal = typeof campaignGoals.$inferSelect;
 export type InsertCampaignGoal = z.infer<typeof insertCampaignGoalSchema>;
 
+// Campaign Expense Categories - فئات المصروفات
+export const CAMPAIGN_EXPENSE_CATEGORIES = [
+  "influencer", // مؤثرين
+  "advertising", // إعلانات
+  "content_production", // إنتاج محتوى
+  "design", // تصميم
+  "printing", // طباعة
+  "events", // فعاليات
+  "gifts", // هدايا
+  "travel", // سفر
+  "equipment", // معدات
+  "software", // برمجيات
+  "other", // أخرى
+] as const;
+
+export const CAMPAIGN_EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  influencer: "مؤثرين",
+  advertising: "إعلانات",
+  content_production: "إنتاج محتوى",
+  design: "تصميم",
+  printing: "طباعة",
+  events: "فعاليات",
+  gifts: "هدايا",
+  travel: "سفر",
+  equipment: "معدات",
+  software: "برمجيات",
+  other: "أخرى",
+};
+
+// Campaign Expenses - مصروفات الحملات
+export const campaignExpenses = pgTable("campaign_expenses", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id")
+    .notNull()
+    .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  influencerId: integer("influencer_id").references(() => marketingInfluencers.id, { onDelete: "set null" }),
+  category: text("category").notNull(), // from CAMPAIGN_EXPENSE_CATEGORIES
+  description: text("description").notNull(),
+  amount: real("amount").notNull(),
+  currency: text("currency").default("SAR").notNull(),
+  expenseDate: text("expense_date").notNull(), // YYYY-MM-DD
+  paymentMethod: text("payment_method"), // bank_transfer, cash, check, credit_card
+  referenceNumber: text("reference_number"),
+  invoiceNumber: text("invoice_number"),
+  vendor: text("vendor"), // المورد أو الجهة المستفيدة
+  attachmentUrl: text("attachment_url"),
+  status: text("status").default("pending").notNull(), // pending, approved, paid, rejected
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCampaignExpenseSchema = createInsertSchema(campaignExpenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CampaignExpense = typeof campaignExpenses.$inferSelect;
+export type InsertCampaignExpense = z.infer<typeof insertCampaignExpenseSchema>;
+
+export const CAMPAIGN_EXPENSE_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد الانتظار",
+  approved: "معتمد",
+  paid: "مدفوع",
+  rejected: "مرفوض",
+};
+
+export const CAMPAIGN_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "تحويل بنكي",
+  cash: "نقدي",
+  check: "شيك",
+  credit_card: "بطاقة ائتمان",
+};
+
 // Marketing Calendar Events - تقويم التسويق
 export const marketingCalendarEvents = pgTable("marketing_calendar_events", {
   id: serial("id").primaryKey(),

@@ -63,6 +63,7 @@ import MarketingTeamPage from "@/pages/marketing-team";
 import MarketingGoalsPage from "@/pages/marketing-goals";
 import MarketingAssetsPage from "@/pages/marketing-assets";
 import MarketingAlertsPage from "@/pages/marketing-alerts";
+import MarketingExpensesPage from "@/pages/marketing-expenses";
 
 function Router() {
   return (
@@ -125,6 +126,7 @@ function Router() {
       <Route path="/marketing-goals" component={MarketingGoalsPage} />
       <Route path="/marketing-assets" component={MarketingAssetsPage} />
       <Route path="/marketing-alerts" component={MarketingAlertsPage} />
+      <Route path="/marketing-expenses" component={MarketingExpensesPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
 
@@ -7661,6 +7661,135 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting campaign goal:", error);
       res.status(500).json({ error: "فشل في حذف هدف الحملة" });
+    }
+  });
+
+  // Campaign Expenses - مصروفات الحملات
+  app.get("/api/marketing/expenses", isAuthenticated, async (req: any, res) => {
+    try {
+      const { campaignId, category, status, startDate, endDate } = req.query;
+      const expenses = await storage.getAllCampaignExpenses({
+        campaignId: campaignId ? parseInt(campaignId) : undefined,
+        category: category as string,
+        status: status as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+      });
+      res.json(expenses);
+    } catch (error) {
+      console.error("Error fetching all campaign expenses:", error);
+      res.status(500).json({ error: "فشل في جلب المصروفات" });
+    }
+  });
+
+  app.get("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const expenses = await storage.getCampaignExpenses(campaignId);
+      res.json(expenses);
+    } catch (error) {
+      console.error("Error fetching campaign expenses:", error);
+      res.status(500).json({ error: "فشل في جلب مصروفات الحملة" });
+    }
+  });
+
+  app.get("/api/marketing/campaigns/:campaignId/expenses/total", isAuthenticated, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const total = await storage.getCampaignTotalExpenses(campaignId);
+      res.json({ campaignId, total });
+    } catch (error) {
+      console.error("Error fetching campaign total expenses:", error);
+      res.status(500).json({ error: "فشل في جلب إجمالي المصروفات" });
+    }
+  });
+
+  app.get("/api/marketing/campaigns/:campaignId/expenses/by-category", isAuthenticated, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const byCategory = await storage.getExpensesByCategory(campaignId);
+      res.json(byCategory);
+    } catch (error) {
+      console.error("Error fetching expenses by category:", error);
+      res.status(500).json({ error: "فشل في جلب المصروفات حسب الفئة" });
+    }
+  });
+
+  app.post("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, async (req: any, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      if (isNaN(campaignId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const currentUser = req.currentUser;
+      const validatedData = insertCampaignExpenseSchema.parse({ 
+        ...req.body, 
+        campaignId,
+        createdBy: currentUser?.id
+      });
+      const expense = await storage.createCampaignExpense(validatedData);
+      res.status(201).json(expense);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating campaign expense:", error);
+      res.status(500).json({ error: "فشل في إنشاء المصروف" });
+    }
+  });
+
+  app.patch("/api/marketing/expenses/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const currentUser = req.currentUser;
+      const partialData = insertCampaignExpenseSchema.partial().parse(req.body);
+      
+      // If status is being changed to approved, set approvedBy and approvedAt
+      if (partialData.status === 'approved') {
+        (partialData as any).approvedBy = currentUser?.id;
+        (partialData as any).approvedAt = new Date();
+      }
+      
+      const expense = await storage.updateCampaignExpense(id, partialData);
+      if (!expense) {
+        return res.status(404).json({ error: "المصروف غير موجود" });
+      }
+      res.json(expense);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating campaign expense:", error);
+      res.status(500).json({ error: "فشل في تحديث المصروف" });
+    }
+  });
+
+  app.delete("/api/marketing/expenses/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteCampaignExpense(id);
+      if (!success) {
+        return res.status(404).json({ error: "المصروف غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting campaign expense:", error);
+      res.status(500).json({ error: "فشل في حذف المصروف" });
     }
   });
 
