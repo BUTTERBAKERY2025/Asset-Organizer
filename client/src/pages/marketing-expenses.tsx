@@ -331,7 +331,7 @@ export default function MarketingExpensesPage() {
     }
   };
 
-  const expenseFormContent = (
+  const renderExpenseForm = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -544,7 +544,10 @@ export default function MarketingExpensesPage() {
             </Button>
             {canEdit && (
               <Button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   setFormData(getDefaultFormData());
                   setSelectedExpense(null);
                   setIsAddDialogOpen(true);
@@ -906,7 +909,7 @@ export default function MarketingExpensesPage() {
                   : "أدخل بيانات المصروف الجديد"}
               </DialogDescription>
             </DialogHeader>
-            {expenseFormContent}
+            {renderExpenseForm()}
           </DialogContent>
         </Dialog>
 
