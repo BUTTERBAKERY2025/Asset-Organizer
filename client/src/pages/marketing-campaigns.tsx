@@ -247,7 +247,7 @@ export default function MarketingCampaignsPage() {
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return "-";
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
+    return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount) + " ر.س";
   };
 
   const formatDateRange = (startDate: string, endDate: string) => {

@@ -125,7 +125,7 @@ function formatFollowerCount(count: number | null): string {
 
 function formatCurrency(amount: number | null | undefined): string {
   if (amount === null || amount === undefined || amount === 0) return "-";
-  return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount) + " ر.س";
 }
 
 export default function MarketingInfluencersPage() {

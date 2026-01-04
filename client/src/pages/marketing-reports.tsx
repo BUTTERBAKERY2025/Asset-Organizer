@@ -70,10 +70,10 @@ export default function MarketingReportsPage() {
   };
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount) + " ر.س";
 
   const formatNumber = (num: number) =>
-    new Intl.NumberFormat("ar-SA").format(num);
+    new Intl.NumberFormat("en-US").format(num);
 
   const budgetUtilization = campaignStats.totalBudget > 0 
     ? Math.round((campaignStats.spentBudget / campaignStats.totalBudget) * 100) 
