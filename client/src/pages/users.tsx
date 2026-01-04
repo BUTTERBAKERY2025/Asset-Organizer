@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
 import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil } from "lucide-react";
-import type { User, UserPermission } from "@shared/schema";
+import type { User, UserPermission, Branch } from "@shared/schema";
 import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
 import React, { useEffect, useState } from "react";
 
@@ -55,12 +55,14 @@ export default function UsersPage() {
     firstName: "",
     lastName: "",
     role: "viewer",
+    branchId: "",
   });
   const [editUser, setEditUser] = useState({
     firstName: "",
     lastName: "",
     role: "viewer",
     password: "",
+    branchId: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -88,6 +90,11 @@ export default function UsersPage() {
     enabled: isAdmin,
   });
 
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+    enabled: isAdmin,
+  });
+
   const createUserMutation = useMutation({
     mutationFn: async (userData: typeof newUser) => {
       const res = await fetch("/api/users", {
@@ -105,7 +112,7 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "تم إضافة المستخدم بنجاح" });
       setIsAddDialogOpen(false);
-      setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer" });
+      setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer", branchId: "" });
     },
     onError: (error: Error) => {
       toast({ title: error.message || "فشل إضافة المستخدم", variant: "destructive" });
@@ -149,12 +156,13 @@ export default function UsersPage() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; role?: string; password?: string } }) => {
+    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; role?: string; password?: string; branchId?: string } }) => {
       const updateData: any = {};
       if (data.firstName !== undefined) updateData.firstName = data.firstName;
       if (data.lastName !== undefined) updateData.lastName = data.lastName;
       if (data.role !== undefined) updateData.role = data.role;
       if (data.password && data.password.trim() !== "") updateData.password = data.password;
+      if (data.branchId !== undefined) updateData.branchId = data.branchId || null;
       
       const res = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
@@ -232,6 +240,7 @@ export default function UsersPage() {
       lastName: user.lastName || "",
       role: user.role,
       password: "",
+      branchId: user.branchId || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -428,6 +437,22 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch">الفرع</Label>
+                  <Select value={newUser.branchId} onValueChange={(branchId) => setNewUser({ ...newUser, branchId })}>
+                    <SelectTrigger data-testid="select-branch">
+                      <SelectValue placeholder="اختر الفرع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">بدون فرع</SelectItem>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button type="submit" className="w-full" disabled={createUserMutation.isPending} data-testid="button-submit-user">
                   {createUserMutation.isPending ? (
                     <>
@@ -491,6 +516,7 @@ export default function UsersPage() {
                   <TableRow>
                     <TableHead className="text-right">المستخدم</TableHead>
                     <TableHead className="text-right">اسم المستخدم</TableHead>
+                    <TableHead className="text-right">الفرع</TableHead>
                     <TableHead className="text-right">تاريخ التسجيل</TableHead>
                     <TableHead className="text-right">الصلاحية</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
@@ -499,7 +525,7 @@ export default function UsersPage() {
                 <TableBody>
                   {users.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         لا يوجد مستخدمين
                       </TableCell>
                     </TableRow>
@@ -528,6 +554,9 @@ export default function UsersPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground font-mono" dir="ltr">{user.username || "-"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {user.branchId ? branches.find(b => b.id === user.branchId)?.name || user.branchId : "-"}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
                           <Select
@@ -825,6 +854,22 @@ export default function UsersPage() {
                 data-testid="input-edit-password"
               />
               <p className="text-xs text-muted-foreground">اتركها فارغة إذا لم ترد تغيير كلمة المرور</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editBranch">الفرع</Label>
+              <Select value={editUser.branchId} onValueChange={(branchId) => setEditUser({ ...editUser, branchId })}>
+                <SelectTrigger data-testid="select-edit-branch">
+                  <SelectValue placeholder="اختر الفرع" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">بدون فرع</SelectItem>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button
