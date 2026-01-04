@@ -107,11 +107,19 @@ function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
-        <Route path="/" component={PlatformHomePage} />
+        <Route path="/">
+          {() => (
+            <Suspense fallback={<PageLoader />}>
+              <PlatformHomePage />
+            </Suspense>
+          )}
+        </Route>
         <Route path="/login">
           {() => (
             <PublicOnlyRoute>
-              <LoginPage />
+              <Suspense fallback={<PageLoader />}>
+                <LoginPage />
+              </Suspense>
             </PublicOnlyRoute>
           )}
         </Route>
@@ -172,7 +180,13 @@ function Router() {
         <Route path="/marketing-assets">{() => <ProtectedPage component={MarketingAssetsPage} />}</Route>
         <Route path="/marketing-alerts">{() => <ProtectedPage component={MarketingAlertsPage} />}</Route>
         <Route path="/marketing-expenses">{() => <ProtectedPage component={MarketingExpensesPage} />}</Route>
-        <Route component={NotFound} />
+        <Route>
+          {() => (
+            <Suspense fallback={<PageLoader />}>
+              <NotFound />
+            </Suspense>
+          )}
+        </Route>
       </Switch>
     </Suspense>
   );
