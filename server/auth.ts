@@ -1,14 +1,35 @@
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 
 declare module "express-session" {
   interface SessionData {
     userId?: string;
     activeBranchId?: string;
+    lastActivity?: number;
   }
 }
+
+const isProduction = process.env.NODE_ENV === "production";
+
+export const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "تم تجاوز عدد محاولات تسجيل الدخول. يرجى المحاولة بعد 15 دقيقة." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
+
+export const apiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: "تم تجاوز عدد الطلبات المسموح. يرجى المحاولة لاحقاً." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export function getSession() {
   const sessionSecret = process.env.SESSION_SECRET;
@@ -16,34 +37,70 @@ export function getSession() {
     throw new Error("SESSION_SECRET environment variable is required");
   }
   
-  const sessionTtl = 24 * 60 * 60 * 1000; // 1 day (24 hours)
+  const sessionTtl = 8 * 60 * 60 * 1000;
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
     createTableIfMissing: false,
-    ttl: sessionTtl,
+    ttl: sessionTtl / 1000,
     tableName: "sessions",
+    pruneSessionInterval: 60,
   });
   return session({
     secret: sessionSecret,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    name: "__btr_sid",
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
       maxAge: sessionTtl,
-      sameSite: "none",
+      sameSite: isProduction ? "strict" : "lax",
+      path: "/",
     },
+    rolling: true,
   });
 }
+
+export const validateOrigin: RequestHandler = (req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    return next();
+  }
+  
+  const origin = req.get("origin");
+  const host = req.get("host");
+  
+  if (origin) {
+    try {
+      const originUrl = new URL(origin);
+      const expectedHosts = [
+        host,
+        "localhost:5000",
+        "0.0.0.0:5000",
+      ];
+      
+      if (host && !expectedHosts.some(h => originUrl.host === h || originUrl.host.endsWith(`.${h}`))) {
+        console.warn(`Origin validation failed: ${origin} vs ${host}`);
+        return res.status(403).json({ error: "طلب غير مصرح من مصدر خارجي" });
+      }
+    } catch (e) {
+      console.warn(`Invalid origin header: ${origin}`);
+      return res.status(403).json({ error: "طلب غير مصرح" });
+    }
+  }
+  
+  next();
+};
 
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
+  
+  app.use("/api", apiRateLimiter);
+  app.use("/api", validateOrigin);
 
-  // Login endpoint
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
     try {
       const { username, password, rememberMe } = req.body;
       
@@ -56,62 +113,77 @@ export async function setupAuth(app: Express) {
         return res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" });
       }
 
-      req.session.userId = user.id;
-      
-      // Set session/cookie duration based on rememberMe
-      if (rememberMe) {
-        // Keep session for 1 day if "remember me" is checked
-        req.session.cookie.maxAge = 24 * 60 * 60 * 1000;
-      } else {
-        // Session expires when browser closes (session cookie)
-        req.session.cookie.maxAge = undefined;
-        req.session.cookie.expires = undefined;
-      }
-      
-      // Get user's default branch
-      const userBranches = await storage.getUserBranchAccess(user.id);
-      const defaultBranch = userBranches.find(b => b.isDefault) || userBranches[0];
-      req.session.activeBranchId = defaultBranch?.branchId || undefined;
-      
-      req.session.save(async (err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ error: "فشل تسجيل الدخول" });
-        }
-        const { password: _, ...safeUser } = user;
-        
-        // Get branch details if available
-        let activeBranch = null;
-        if (req.session.activeBranchId) {
-          activeBranch = await storage.getBranch(req.session.activeBranchId);
-        }
-        
-        // Log successful login to audit log
-        const displayName = user.firstName && user.lastName 
-          ? `${user.firstName} ${user.lastName}` 
-          : user.username || 'غير معروف';
+      req.session.regenerate(async (regenerateErr) => {
         try {
-          await storage.createSystemAuditLog({
-            module: "users",
-            entityId: user.id,
-            entityName: displayName,
-            action: "login",
-            details: `تسجيل دخول ناجح${rememberMe ? ' (تذكرني)' : ''}`,
-            userId: user.id,
-            userName: displayName,
-            ipAddress: req.ip || req.socket?.remoteAddress,
-            userAgent: req.headers['user-agent'],
-          });
-        } catch (logError) {
-          console.error("Failed to create audit log for login:", logError);
-        }
+          if (regenerateErr) {
+            console.error("Session regenerate error:", regenerateErr);
+            return res.status(500).json({ error: "فشل تسجيل الدخول" });
+          }
+          
+          req.session.userId = user.id;
+          req.session.lastActivity = Date.now();
+          
+          if (rememberMe) {
+            req.session.cookie.maxAge = 24 * 60 * 60 * 1000;
+          } else {
+            req.session.cookie.maxAge = 8 * 60 * 60 * 1000;
+          }
         
-        res.json({
-          ...safeUser,
-          activeBranchId: req.session.activeBranchId,
-          activeBranch,
-          allowedBranches: userBranches,
-        });
+          const userBranches = await storage.getUserBranchAccess(user.id);
+          const defaultBranch = userBranches.find(b => b.isDefault) || userBranches[0];
+          req.session.activeBranchId = defaultBranch?.branchId || undefined;
+          
+          req.session.save(async (saveErr) => {
+            try {
+              if (saveErr) {
+                console.error("Session save error:", saveErr);
+                return res.status(500).json({ error: "فشل تسجيل الدخول" });
+              }
+              const { password: _, ...safeUser } = user;
+              
+              let activeBranch = null;
+              if (req.session.activeBranchId) {
+                activeBranch = await storage.getBranch(req.session.activeBranchId);
+              }
+              
+              const displayName = user.firstName && user.lastName 
+                ? `${user.firstName} ${user.lastName}` 
+                : user.username || 'غير معروف';
+              try {
+                await storage.createSystemAuditLog({
+                  module: "users",
+                  entityId: user.id,
+                  entityName: displayName,
+                  action: "login",
+                  details: `تسجيل دخول ناجح${rememberMe ? ' (تذكرني)' : ''}`,
+                  userId: user.id,
+                  userName: displayName,
+                  ipAddress: req.ip || req.socket?.remoteAddress,
+                  userAgent: req.headers['user-agent'],
+                });
+              } catch (logError) {
+                console.error("Failed to create audit log for login:", logError);
+              }
+              
+              res.json({
+                ...safeUser,
+                activeBranchId: req.session.activeBranchId,
+                activeBranch,
+                allowedBranches: userBranches,
+              });
+            } catch (saveCallbackError) {
+              console.error("Session save callback error:", saveCallbackError);
+              if (!res.headersSent) {
+                res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
+              }
+            }
+          });
+        } catch (regenerateCallbackError) {
+          console.error("Session regenerate callback error:", regenerateCallbackError);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
+          }
+        }
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -238,7 +310,7 @@ export async function setupAuth(app: Express) {
         console.error("Logout error:", err);
         return res.status(500).json({ error: "فشل تسجيل الخروج" });
       }
-      res.clearCookie("connect.sid");
+      res.clearCookie("__btr_sid", { path: "/" });
       res.json({ success: true });
     });
   });

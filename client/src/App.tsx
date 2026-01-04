@@ -7,6 +7,7 @@ import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
+import { ProtectedRoute, PublicOnlyRoute } from "@/components/protected-route";
 import NotFound from "@/pages/not-found";
 import PlatformHomePage from "@/pages/platform-home";
 import DashboardPage from "@/pages/dashboard";
@@ -66,68 +67,90 @@ import MarketingAssetsPage from "@/pages/marketing-assets";
 import MarketingAlertsPage from "@/pages/marketing-alerts";
 import MarketingExpensesPage from "@/pages/marketing-expenses";
 
+function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <ProtectedRoute>
+      <Component />
+    </ProtectedRoute>
+  );
+}
+
+function AdminPage({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <ProtectedRoute requiredRole="admin">
+      <Component />
+    </ProtectedRoute>
+  );
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={PlatformHomePage} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/dashboard" component={DashboardPage} />
-      <Route path="/inventory" component={InventoryPage} />
-      <Route path="/manage" component={ManagePage} />
-      <Route path="/branches" component={BranchesPage} />
-      <Route path="/maintenance" component={MaintenancePage} />
-      <Route path="/inspections" component={InspectionsPage} />
-      <Route path="/users" component={UsersPage} />
-      <Route path="/construction-projects" component={ConstructionProjectsPage} />
-      <Route path="/construction-projects/:id" component={ConstructionProjectDetailPage} />
-      <Route path="/contractors" component={ContractorsPage} />
-      <Route path="/construction-dashboard" component={ConstructionDashboardPage} />
-      <Route path="/construction-reports" component={ConstructionReportsPage} />
-      <Route path="/contracts" component={ContractsPage} />
-      <Route path="/payment-requests" component={PaymentRequestsPage} />
-      <Route path="/budget-planning" component={BudgetPlanningPage} />
-      <Route path="/asset-transfers" component={AssetTransfersPage} />
-      <Route path="/reports" component={ReportsPage} />
-      <Route path="/audit-logs" component={AuditLogsPage} />
-      <Route path="/backups" component={BackupsPage} />
-      <Route path="/integrations" component={IntegrationsPage} />
-      <Route path="/operations" component={OperationsDashboardPage} />
-      <Route path="/operations-reports" component={OperationsReportsDashboardPage} />
-      <Route path="/products" component={ProductsPage} />
-      <Route path="/shifts" component={ShiftsPage} />
-      <Route path="/production" component={ProductionPage} />
-      <Route path="/quality-control" component={QualityControlPage} />
-      <Route path="/cashier-journals" component={CashierJournalsPage} />
-      <Route path="/cashier-journals/new" component={CashierJournalFormPage} />
-      <Route path="/cashier-journals/:id" component={CashierJournalFormPage} />
-      <Route path="/operations-employees" component={OperationsEmployeesPage} />
-      <Route path="/targets-planning" component={TargetsPlanningPage} />
-      <Route path="/targets-dashboard" component={TargetsDashboardPage} />
-      <Route path="/incentives-management" component={IncentivesManagementPage} />
-      <Route path="/sales-analytics" component={SalesAnalyticsPage} />
-      <Route path="/display-bar-waste" component={DisplayBarWastePage} />
-      <Route path="/production-dashboard" component={ProductionDashboardPage} />
-      <Route path="/advanced-production-orders" component={AdvancedProductionOrdersPage} />
-      <Route path="/advanced-production-orders/new" component={AdvancedProductionOrderFormPage} />
-      <Route path="/advanced-production-orders/:id" component={AdvancedProductionOrderDetailsPage} />
-      <Route path="/advanced-production-orders/:id/edit" component={AdvancedProductionOrderFormPage} />
-      <Route path="/ai-production-planner" component={AdvancedProductionPlannerPage} />
-      <Route path="/sales-data-uploads" component={SalesDataUploadsPage} />
-      <Route path="/daily-production" component={DailyProductionPage} />
-      <Route path="/production-reports" component={ProductionReportsPage} />
-      <Route path="/rbac-management" component={RBACManagementPage} />
-      <Route path="/cashier-shift-performance" component={CashierShiftPerformancePage} />
-      <Route path="/marketing" component={MarketingDashboardPage} />
-      <Route path="/marketing-campaigns" component={MarketingCampaignsPage} />
-      <Route path="/marketing-influencers" component={MarketingInfluencersPage} />
-      <Route path="/marketing-calendar" component={MarketingCalendarPage} />
-      <Route path="/marketing-tasks" component={MarketingTasksPage} />
-      <Route path="/marketing-reports" component={MarketingReportsPage} />
-      <Route path="/marketing-team" component={MarketingTeamPage} />
-      <Route path="/marketing-goals" component={MarketingGoalsPage} />
-      <Route path="/marketing-assets" component={MarketingAssetsPage} />
-      <Route path="/marketing-alerts" component={MarketingAlertsPage} />
-      <Route path="/marketing-expenses" component={MarketingExpensesPage} />
+      <Route path="/login">
+        {() => (
+          <PublicOnlyRoute>
+            <LoginPage />
+          </PublicOnlyRoute>
+        )}
+      </Route>
+      <Route path="/dashboard">{() => <ProtectedPage component={DashboardPage} />}</Route>
+      <Route path="/inventory">{() => <ProtectedPage component={InventoryPage} />}</Route>
+      <Route path="/manage">{() => <ProtectedPage component={ManagePage} />}</Route>
+      <Route path="/branches">{() => <ProtectedPage component={BranchesPage} />}</Route>
+      <Route path="/maintenance">{() => <ProtectedPage component={MaintenancePage} />}</Route>
+      <Route path="/inspections">{() => <ProtectedPage component={InspectionsPage} />}</Route>
+      <Route path="/users">{() => <AdminPage component={UsersPage} />}</Route>
+      <Route path="/construction-projects">{() => <ProtectedPage component={ConstructionProjectsPage} />}</Route>
+      <Route path="/construction-projects/:id">{() => <ProtectedPage component={ConstructionProjectDetailPage} />}</Route>
+      <Route path="/contractors">{() => <ProtectedPage component={ContractorsPage} />}</Route>
+      <Route path="/construction-dashboard">{() => <ProtectedPage component={ConstructionDashboardPage} />}</Route>
+      <Route path="/construction-reports">{() => <ProtectedPage component={ConstructionReportsPage} />}</Route>
+      <Route path="/contracts">{() => <ProtectedPage component={ContractsPage} />}</Route>
+      <Route path="/payment-requests">{() => <ProtectedPage component={PaymentRequestsPage} />}</Route>
+      <Route path="/budget-planning">{() => <ProtectedPage component={BudgetPlanningPage} />}</Route>
+      <Route path="/asset-transfers">{() => <ProtectedPage component={AssetTransfersPage} />}</Route>
+      <Route path="/reports">{() => <ProtectedPage component={ReportsPage} />}</Route>
+      <Route path="/audit-logs">{() => <AdminPage component={AuditLogsPage} />}</Route>
+      <Route path="/backups">{() => <AdminPage component={BackupsPage} />}</Route>
+      <Route path="/integrations">{() => <AdminPage component={IntegrationsPage} />}</Route>
+      <Route path="/operations">{() => <ProtectedPage component={OperationsDashboardPage} />}</Route>
+      <Route path="/operations-reports">{() => <ProtectedPage component={OperationsReportsDashboardPage} />}</Route>
+      <Route path="/products">{() => <ProtectedPage component={ProductsPage} />}</Route>
+      <Route path="/shifts">{() => <ProtectedPage component={ShiftsPage} />}</Route>
+      <Route path="/production">{() => <ProtectedPage component={ProductionPage} />}</Route>
+      <Route path="/quality-control">{() => <ProtectedPage component={QualityControlPage} />}</Route>
+      <Route path="/cashier-journals">{() => <ProtectedPage component={CashierJournalsPage} />}</Route>
+      <Route path="/cashier-journals/new">{() => <ProtectedPage component={CashierJournalFormPage} />}</Route>
+      <Route path="/cashier-journals/:id">{() => <ProtectedPage component={CashierJournalFormPage} />}</Route>
+      <Route path="/operations-employees">{() => <ProtectedPage component={OperationsEmployeesPage} />}</Route>
+      <Route path="/targets-planning">{() => <ProtectedPage component={TargetsPlanningPage} />}</Route>
+      <Route path="/targets-dashboard">{() => <ProtectedPage component={TargetsDashboardPage} />}</Route>
+      <Route path="/incentives-management">{() => <ProtectedPage component={IncentivesManagementPage} />}</Route>
+      <Route path="/sales-analytics">{() => <ProtectedPage component={SalesAnalyticsPage} />}</Route>
+      <Route path="/display-bar-waste">{() => <ProtectedPage component={DisplayBarWastePage} />}</Route>
+      <Route path="/production-dashboard">{() => <ProtectedPage component={ProductionDashboardPage} />}</Route>
+      <Route path="/advanced-production-orders">{() => <ProtectedPage component={AdvancedProductionOrdersPage} />}</Route>
+      <Route path="/advanced-production-orders/new">{() => <ProtectedPage component={AdvancedProductionOrderFormPage} />}</Route>
+      <Route path="/advanced-production-orders/:id">{() => <ProtectedPage component={AdvancedProductionOrderDetailsPage} />}</Route>
+      <Route path="/advanced-production-orders/:id/edit">{() => <ProtectedPage component={AdvancedProductionOrderFormPage} />}</Route>
+      <Route path="/ai-production-planner">{() => <ProtectedPage component={AdvancedProductionPlannerPage} />}</Route>
+      <Route path="/sales-data-uploads">{() => <ProtectedPage component={SalesDataUploadsPage} />}</Route>
+      <Route path="/daily-production">{() => <ProtectedPage component={DailyProductionPage} />}</Route>
+      <Route path="/production-reports">{() => <ProtectedPage component={ProductionReportsPage} />}</Route>
+      <Route path="/rbac-management">{() => <AdminPage component={RBACManagementPage} />}</Route>
+      <Route path="/cashier-shift-performance">{() => <ProtectedPage component={CashierShiftPerformancePage} />}</Route>
+      <Route path="/marketing">{() => <ProtectedPage component={MarketingDashboardPage} />}</Route>
+      <Route path="/marketing-campaigns">{() => <ProtectedPage component={MarketingCampaignsPage} />}</Route>
+      <Route path="/marketing-influencers">{() => <ProtectedPage component={MarketingInfluencersPage} />}</Route>
+      <Route path="/marketing-calendar">{() => <ProtectedPage component={MarketingCalendarPage} />}</Route>
+      <Route path="/marketing-tasks">{() => <ProtectedPage component={MarketingTasksPage} />}</Route>
+      <Route path="/marketing-reports">{() => <ProtectedPage component={MarketingReportsPage} />}</Route>
+      <Route path="/marketing-team">{() => <ProtectedPage component={MarketingTeamPage} />}</Route>
+      <Route path="/marketing-goals">{() => <ProtectedPage component={MarketingGoalsPage} />}</Route>
+      <Route path="/marketing-assets">{() => <ProtectedPage component={MarketingAssetsPage} />}</Route>
+      <Route path="/marketing-alerts">{() => <ProtectedPage component={MarketingAlertsPage} />}</Route>
+      <Route path="/marketing-expenses">{() => <ProtectedPage component={MarketingExpensesPage} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );
