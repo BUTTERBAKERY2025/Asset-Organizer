@@ -351,31 +351,29 @@ export default function MarketingDashboardPage() {
 
         {/* Quick Access */}
         <div>
-          <h2 className="text-lg font-semibold mb-4">الوصول السريع</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <h2 className="text-lg font-semibold mb-3">الوصول السريع</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {quickAccessCards.map((card, index) => (
               <Link key={index} href={card.href}>
                 <Card 
-                  className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-2 hover:border-primary/30 h-full"
+                  className="group hover:shadow-md transition-all duration-200 cursor-pointer border hover:border-primary/30 h-full"
                   data-testid={`quick-access-${card.href.replace('/marketing-', '')}`}
                 >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${card.color} transition-transform group-hover:scale-110`}>
-                        <card.icon className="w-6 h-6 text-white" />
+                  <CardContent className="p-3">
+                    <div className="flex flex-col items-center text-center gap-2">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${card.color} transition-transform group-hover:scale-105`}>
+                        <card.icon className="w-5 h-5 text-white" />
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div>
+                        <p className="text-sm font-medium leading-tight">{card.title}</p>
                         {card.count !== null && (
-                          <Badge variant="secondary" className="text-sm font-bold">
+                          <Badge variant="secondary" className="text-xs mt-1">
                             {formatNumber(card.count)}
                           </Badge>
                         )}
-                        <ChevronLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
                     </div>
-                    <CardTitle className="text-base mt-3">{card.title}</CardTitle>
-                    <CardDescription className="text-sm">{card.description}</CardDescription>
-                  </CardHeader>
+                  </CardContent>
                 </Card>
               </Link>
             ))}
