@@ -86,6 +86,26 @@ export async function setupAuth(app: Express) {
           activeBranch = await storage.getBranch(req.session.activeBranchId);
         }
         
+        // Log successful login to audit log
+        const displayName = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.username || 'غير معروف';
+        try {
+          await storage.createSystemAuditLog({
+            module: "users",
+            entityId: user.id,
+            entityName: displayName,
+            action: "login",
+            details: `تسجيل دخول ناجح${rememberMe ? ' (تذكرني)' : ''}`,
+            userId: user.id,
+            userName: displayName,
+            ipAddress: req.ip || req.socket?.remoteAddress,
+            userAgent: req.headers['user-agent'],
+          });
+        } catch (logError) {
+          console.error("Failed to create audit log for login:", logError);
+        }
+        
         res.json({
           ...safeUser,
           activeBranchId: req.session.activeBranchId,
@@ -182,7 +202,37 @@ export async function setupAuth(app: Express) {
   });
 
   // Logout endpoint
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
+    const userId = req.session.userId;
+    let userName = "غير معروف";
+    
+    // Get user info before destroying session
+    if (userId) {
+      try {
+        const user = await storage.getUser(userId);
+        if (user) {
+          userName = user.firstName && user.lastName 
+            ? `${user.firstName} ${user.lastName}` 
+            : user.username || 'غير معروف';
+        }
+        
+        // Log logout to audit log
+        await storage.createSystemAuditLog({
+          module: "users",
+          entityId: userId,
+          entityName: userName,
+          action: "logout",
+          details: "تسجيل خروج",
+          userId: userId,
+          userName: userName,
+          ipAddress: req.ip || req.socket?.remoteAddress,
+          userAgent: req.headers['user-agent'],
+        });
+      } catch (logError) {
+        console.error("Failed to create audit log for logout:", logError);
+      }
+    }
+    
     req.session.destroy((err) => {
       if (err) {
         console.error("Logout error:", err);

@@ -49,6 +49,8 @@ const ACTIONS = [
   { value: "transfer", label: "تحويل", color: "bg-orange-500" },
   { value: "approve", label: "موافقة", color: "bg-emerald-500" },
   { value: "reject", label: "رفض", color: "bg-rose-500" },
+  { value: "login", label: "تسجيل دخول", color: "bg-cyan-500" },
+  { value: "logout", label: "تسجيل خروج", color: "bg-slate-500" },
 ];
 
 export default function AuditLogsPage() {
