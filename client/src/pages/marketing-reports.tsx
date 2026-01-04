@@ -329,7 +329,7 @@ export default function MarketingReportsPage() {
       <div className="space-y-6" dir="rtl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/marketing-dashboard">
+            <Link href="/marketing">
               <Button variant="outline" size="icon" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
