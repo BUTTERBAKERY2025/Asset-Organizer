@@ -3015,6 +3015,64 @@ export const insertInfluencerContactSchema = createInsertSchema(influencerContac
 export type InfluencerContact = typeof influencerContacts.$inferSelect;
 export type InsertInfluencerContact = z.infer<typeof insertInfluencerContactSchema>;
 
+// Influencer Payments/Ledger - كشف حساب المؤثرين
+export const influencerPayments = pgTable("influencer_payments", {
+  id: serial("id").primaryKey(),
+  influencerId: integer("influencer_id")
+    .notNull()
+    .references(() => marketingInfluencers.id, { onDelete: "cascade" }),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  paymentType: text("payment_type").notNull(), // advance, milestone, final, bonus, refund
+  amount: real("amount").notNull(),
+  currency: text("currency").default("SAR").notNull(),
+  paymentDate: text("payment_date").notNull(), // YYYY-MM-DD
+  paymentMethod: text("payment_method"), // bank_transfer, cash, check, online
+  referenceNumber: text("reference_number"), // رقم الحوالة أو الشيك
+  description: text("description"),
+  status: text("status").default("completed").notNull(), // pending, completed, cancelled, refunded
+  invoiceNumber: text("invoice_number"),
+  attachmentUrl: text("attachment_url"), // رابط الفاتورة أو الإيصال
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertInfluencerPaymentSchema = createInsertSchema(influencerPayments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InfluencerPayment = typeof influencerPayments.$inferSelect;
+export type InsertInfluencerPayment = z.infer<typeof insertInfluencerPaymentSchema>;
+
+// Influencer Payment Type Labels
+export const INFLUENCER_PAYMENT_TYPE_LABELS: Record<string, string> = {
+  advance: "دفعة مقدمة",
+  milestone: "دفعة مرحلية",
+  final: "دفعة نهائية",
+  bonus: "مكافأة",
+  refund: "استرداد",
+};
+
+// Influencer Payment Method Labels
+export const INFLUENCER_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "تحويل بنكي",
+  cash: "نقدي",
+  check: "شيك",
+  online: "دفع إلكتروني",
+};
+
+// Influencer Payment Status Labels
+export const INFLUENCER_PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد الانتظار",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+  refunded: "مسترد",
+};
+
 // Marketing Tasks - مهام فريق التسويق
 export const marketingTasks = pgTable("marketing_tasks", {
   id: serial("id").primaryKey(),

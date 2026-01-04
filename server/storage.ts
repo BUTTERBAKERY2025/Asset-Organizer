@@ -148,6 +148,8 @@ import {
   type InsertInfluencerCampaignLink,
   type InfluencerContact,
   type InsertInfluencerContact,
+  type InfluencerPayment,
+  type InsertInfluencerPayment,
   type MarketingTask,
   type InsertMarketingTask,
   type MarketingTaskActivity,
@@ -238,6 +240,7 @@ import {
   marketingInfluencers,
   influencerCampaignLinks,
   influencerContacts,
+  influencerPayments,
   marketingTasks,
   marketingTaskActivities,
   marketingPerformanceReports,
@@ -688,6 +691,15 @@ export interface IStorage {
   getInfluencerContact(id: number): Promise<InfluencerContact | undefined>;
   createInfluencerContact(contact: InsertInfluencerContact): Promise<InfluencerContact>;
   deleteInfluencerContact(id: number): Promise<boolean>;
+
+  // Influencer Payments - كشف حساب المؤثرين
+  getInfluencerPayments(influencerId: number): Promise<InfluencerPayment[]>;
+  getAllInfluencerPayments(filters?: { influencerId?: number; campaignId?: number; status?: string; startDate?: string; endDate?: string }): Promise<InfluencerPayment[]>;
+  getInfluencerPayment(id: number): Promise<InfluencerPayment | undefined>;
+  createInfluencerPayment(payment: InsertInfluencerPayment): Promise<InfluencerPayment>;
+  updateInfluencerPayment(id: number, payment: Partial<InsertInfluencerPayment>): Promise<InfluencerPayment | undefined>;
+  deleteInfluencerPayment(id: number): Promise<boolean>;
+  getInfluencerTotalPayments(influencerId: number): Promise<number>;
 
   // Marketing Tasks - المهام
   getAllMarketingTasks(filters?: { campaignId?: number; assignedTo?: string; status?: string }): Promise<MarketingTask[]>;
@@ -5341,6 +5353,55 @@ export class DatabaseStorage implements IStorage {
   async deleteInfluencerContact(id: number): Promise<boolean> {
     await db.delete(influencerContacts).where(eq(influencerContacts.id, id));
     return true;
+  }
+
+  // Influencer Payments - كشف حساب المؤثرين
+  async getInfluencerPayments(influencerId: number): Promise<InfluencerPayment[]> {
+    return await db.select().from(influencerPayments).where(eq(influencerPayments.influencerId, influencerId)).orderBy(desc(influencerPayments.paymentDate));
+  }
+
+  async getAllInfluencerPayments(filters?: { influencerId?: number; campaignId?: number; status?: string; startDate?: string; endDate?: string }): Promise<InfluencerPayment[]> {
+    const conditions = [];
+    if (filters?.influencerId) conditions.push(eq(influencerPayments.influencerId, filters.influencerId));
+    if (filters?.campaignId) conditions.push(eq(influencerPayments.campaignId, filters.campaignId));
+    if (filters?.status) conditions.push(eq(influencerPayments.status, filters.status));
+    if (filters?.startDate) conditions.push(gte(influencerPayments.paymentDate, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(influencerPayments.paymentDate, filters.endDate));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(influencerPayments).where(and(...conditions)).orderBy(desc(influencerPayments.paymentDate));
+    }
+    return await db.select().from(influencerPayments).orderBy(desc(influencerPayments.paymentDate));
+  }
+
+  async getInfluencerPayment(id: number): Promise<InfluencerPayment | undefined> {
+    const [payment] = await db.select().from(influencerPayments).where(eq(influencerPayments.id, id));
+    return payment;
+  }
+
+  async createInfluencerPayment(payment: InsertInfluencerPayment): Promise<InfluencerPayment> {
+    const [created] = await db.insert(influencerPayments).values(payment).returning();
+    return created;
+  }
+
+  async updateInfluencerPayment(id: number, payment: Partial<InsertInfluencerPayment>): Promise<InfluencerPayment | undefined> {
+    const [updated] = await db.update(influencerPayments).set({ ...payment, updatedAt: new Date() }).where(eq(influencerPayments.id, id)).returning();
+    return updated;
+  }
+
+  async deleteInfluencerPayment(id: number): Promise<boolean> {
+    await db.delete(influencerPayments).where(eq(influencerPayments.id, id));
+    return true;
+  }
+
+  async getInfluencerTotalPayments(influencerId: number): Promise<number> {
+    const payments = await db.select().from(influencerPayments).where(
+      and(
+        eq(influencerPayments.influencerId, influencerId),
+        eq(influencerPayments.status, 'completed')
+      )
+    );
+    return payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   }
 
   // Marketing Tasks - المهام

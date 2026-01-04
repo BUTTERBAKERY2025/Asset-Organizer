@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
 
@@ -7932,6 +7932,119 @@ export async function registerRoutes(
     }
   });
 
+  // Influencer Payments - كشف حساب المؤثرين
+  app.get("/api/marketing/influencer-payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const { influencerId, campaignId, status, startDate, endDate } = req.query;
+      const filters: any = {};
+      if (influencerId) filters.influencerId = parseInt(influencerId);
+      if (campaignId) filters.campaignId = parseInt(campaignId);
+      if (status) filters.status = status;
+      if (startDate) filters.startDate = startDate;
+      if (endDate) filters.endDate = endDate;
+      const payments = await storage.getAllInfluencerPayments(filters);
+      res.json(payments);
+    } catch (error) {
+      console.error("Error fetching influencer payments:", error);
+      res.status(500).json({ error: "فشل في جلب المدفوعات" });
+    }
+  });
+
+  app.get("/api/marketing/influencers/:influencerId/payments", isAuthenticated, async (req, res) => {
+    try {
+      const influencerId = parseInt(req.params.influencerId);
+      if (isNaN(influencerId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const payments = await storage.getInfluencerPayments(influencerId);
+      res.json(payments);
+    } catch (error) {
+      console.error("Error fetching influencer payments:", error);
+      res.status(500).json({ error: "فشل في جلب المدفوعات" });
+    }
+  });
+
+  app.get("/api/marketing/influencers/:influencerId/total-payments", isAuthenticated, async (req, res) => {
+    try {
+      const influencerId = parseInt(req.params.influencerId);
+      if (isNaN(influencerId)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const total = await storage.getInfluencerTotalPayments(influencerId);
+      res.json({ influencerId, total });
+    } catch (error) {
+      console.error("Error fetching influencer total payments:", error);
+      res.status(500).json({ error: "فشل في جلب إجمالي المدفوعات" });
+    }
+  });
+
+  app.get("/api/marketing/influencer-payments/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const payment = await storage.getInfluencerPayment(id);
+      if (!payment) {
+        return res.status(404).json({ error: "المدفوعة غير موجودة" });
+      }
+      res.json(payment);
+    } catch (error) {
+      console.error("Error fetching influencer payment:", error);
+      res.status(500).json({ error: "فشل في جلب المدفوعة" });
+    }
+  });
+
+  app.post("/api/marketing/influencer-payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const data = { ...req.body, createdBy: currentUser?.id };
+      const validatedData = insertInfluencerPaymentSchema.parse(data);
+      const payment = await storage.createInfluencerPayment(validatedData);
+      res.status(201).json(payment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating influencer payment:", error);
+      res.status(500).json({ error: "فشل في إنشاء المدفوعة" });
+    }
+  });
+
+  app.patch("/api/marketing/influencer-payments/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const payment = await storage.updateInfluencerPayment(id, req.body);
+      if (!payment) {
+        return res.status(404).json({ error: "المدفوعة غير موجودة" });
+      }
+      res.json(payment);
+    } catch (error) {
+      console.error("Error updating influencer payment:", error);
+      res.status(500).json({ error: "فشل في تحديث المدفوعة" });
+    }
+  });
+
+  app.delete("/api/marketing/influencer-payments/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteInfluencerPayment(id);
+      if (!success) {
+        return res.status(404).json({ error: "المدفوعة غير موجودة" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting influencer payment:", error);
+      res.status(500).json({ error: "فشل في حذف المدفوعة" });
+    }
+  });
+
   // Marketing Tasks - مهام التسويق
   app.get("/api/marketing/tasks", isAuthenticated, async (req: any, res) => {
     try {
@@ -8297,13 +8410,13 @@ export async function registerRoutes(
   // Marketing Statistics API endpoint
   app.get("/api/marketing/statistics", isAuthenticated, async (req: any, res) => {
     try {
-      const campaigns = await storage.getMarketingCampaigns({});
-      const influencers = await storage.getMarketingInfluencers({});
-      const tasks = await storage.getMarketingTasks({});
-      const team = await storage.getMarketingTeamMembers({});
-      const calendarEvents = await storage.getMarketingCalendarEvents({});
-      const assets = await storage.getMarketingAssets({});
-      const alerts = await storage.getMarketingAlerts({});
+      const campaigns = await storage.getAllMarketingCampaigns({});
+      const influencers = await storage.getAllMarketingInfluencers({});
+      const tasks = await storage.getAllMarketingTasks({});
+      const team = await storage.getAllMarketingTeamMembers({});
+      const calendarEvents = await storage.getAllMarketingCalendarEvents({});
+      const assets = await storage.getAllMarketingAssets({});
+      const alerts = await storage.getAllMarketingAlerts({});
 
       // Calculate campaign statistics
       const activeCampaigns = campaigns.filter(c => c.status === 'active').length;

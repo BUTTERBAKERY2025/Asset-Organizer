@@ -63,7 +63,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Link } from "wouter";
-import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact } from "@shared/schema";
+import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact, InfluencerPayment } from "@shared/schema";
 import {
   INFLUENCER_SPECIALTY_LABELS,
   INFLUENCER_SPECIALTIES,
@@ -71,6 +71,9 @@ import {
   INFLUENCER_PLATFORMS,
   INFLUENCER_CONTENT_TYPE_LABELS,
   INFLUENCER_CONTENT_TYPES,
+  INFLUENCER_PAYMENT_TYPE_LABELS,
+  INFLUENCER_PAYMENT_METHOD_LABELS,
+  INFLUENCER_PAYMENT_STATUS_LABELS,
 } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -180,6 +183,29 @@ export default function MarketingInfluencersPage() {
       const res = await fetch(`/api/marketing/influencer-contacts?influencerId=${selectedInfluencer.id}`);
       if (!res.ok) throw new Error("Failed to fetch contacts");
       return res.json();
+    },
+    enabled: !!selectedInfluencer && isDetailSheetOpen,
+  });
+
+  const { data: payments = [] } = useQuery<InfluencerPayment[]>({
+    queryKey: ["/api/marketing/influencers", selectedInfluencer?.id, "payments"],
+    queryFn: async () => {
+      if (!selectedInfluencer) return [];
+      const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/payments`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedInfluencer && isDetailSheetOpen,
+  });
+
+  const { data: totalPayments = 0 } = useQuery<number>({
+    queryKey: ["/api/marketing/influencers", selectedInfluencer?.id, "total-payments"],
+    queryFn: async () => {
+      if (!selectedInfluencer) return 0;
+      const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/total-payments`);
+      if (!res.ok) return 0;
+      const data = await res.json();
+      return data.total || 0;
     },
     enabled: !!selectedInfluencer && isDetailSheetOpen,
   });
@@ -883,10 +909,11 @@ export default function MarketingInfluencersPage() {
 
             {selectedInfluencer && (
               <Tabs defaultValue="info" className="mt-6">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="info" data-testid="tab-info">معلومات</TabsTrigger>
                   <TabsTrigger value="campaigns" data-testid="tab-campaigns">الحملات</TabsTrigger>
                   <TabsTrigger value="contacts" data-testid="tab-contacts">التواصل</TabsTrigger>
+                  <TabsTrigger value="payments" data-testid="tab-payments">كشف الحساب</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="info" className="space-y-4 mt-4">
@@ -1062,6 +1089,66 @@ export default function MarketingInfluencersPage() {
                               {contact.notes && (
                                 <p className="text-sm text-muted-foreground mt-2">{contact.notes}</p>
                               )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="payments" className="mt-4">
+                  <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">إجمالي المدفوعات</p>
+                        <p className="text-2xl font-bold text-green-700">
+                          {new Intl.NumberFormat("en-US").format(totalPayments)} ر.س
+                        </p>
+                      </div>
+                      <DollarSign className="w-8 h-8 text-green-600" />
+                    </div>
+                  </div>
+                  
+                  <ScrollArea className="h-[350px]">
+                    {payments.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <DollarSign className="w-8 h-8 mx-auto mb-2" />
+                        <p>لا توجد مدفوعات مسجلة</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {payments.map((payment) => (
+                          <Card key={payment.id} data-testid={`card-payment-${payment.id}`}>
+                            <CardContent className="p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={payment.status === "completed" ? "default" : payment.status === "pending" ? "secondary" : "destructive"}>
+                                    {INFLUENCER_PAYMENT_STATUS_LABELS[payment.status] || payment.status}
+                                  </Badge>
+                                  <Badge variant="outline">
+                                    {INFLUENCER_PAYMENT_TYPE_LABELS[payment.paymentType] || payment.paymentType}
+                                  </Badge>
+                                </div>
+                                <p className="font-bold text-green-600">
+                                  {new Intl.NumberFormat("en-US").format(payment.amount)} ر.س
+                                </p>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                <p className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {payment.paymentDate}
+                                </p>
+                                {payment.paymentMethod && (
+                                  <p>{INFLUENCER_PAYMENT_METHOD_LABELS[payment.paymentMethod] || payment.paymentMethod}</p>
+                                )}
+                                {payment.description && (
+                                  <p className="mt-1">{payment.description}</p>
+                                )}
+                                {payment.referenceNumber && (
+                                  <p className="text-xs">رقم المرجع: {payment.referenceNumber}</p>
+                                )}
+                              </div>
                             </CardContent>
                           </Card>
                         ))}
