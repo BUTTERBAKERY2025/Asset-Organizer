@@ -96,7 +96,7 @@ interface ExpenseFormData {
   notes?: string;
 }
 
-const defaultFormData: ExpenseFormData = {
+const getDefaultFormData = (): ExpenseFormData => ({
   campaignId: 0,
   influencerId: null,
   category: "",
@@ -109,7 +109,7 @@ const defaultFormData: ExpenseFormData = {
   vendor: "",
   status: "pending",
   notes: "",
-};
+});
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-500",
@@ -131,7 +131,7 @@ export default function MarketingExpensesPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<CampaignExpense | null>(null);
-  const [formData, setFormData] = useState<ExpenseFormData>(defaultFormData);
+  const [formData, setFormData] = useState<ExpenseFormData>(getDefaultFormData());
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -191,7 +191,7 @@ export default function MarketingExpensesPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/marketing/expenses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/marketing/campaigns"] });
       setIsAddDialogOpen(false);
-      setFormData(defaultFormData);
+      setFormData(getDefaultFormData());
       toast({ title: "تم إضافة المصروف بنجاح" });
     },
     onError: () => {
@@ -214,7 +214,7 @@ export default function MarketingExpensesPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/marketing/campaigns"] });
       setIsEditDialogOpen(false);
       setSelectedExpense(null);
-      setFormData(defaultFormData);
+      setFormData(getDefaultFormData());
       toast({ title: "تم تحديث المصروف بنجاح" });
     },
     onError: () => {
@@ -337,7 +337,7 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>الحملة *</Label>
           <Select
-            value={formData.campaignId.toString()}
+            value={formData.campaignId > 0 ? formData.campaignId.toString() : ""}
             onValueChange={(value) => setFormData({ ...formData, campaignId: parseInt(value) })}
           >
             <SelectTrigger data-testid="select-expense-campaign">
@@ -545,7 +545,7 @@ export default function MarketingExpensesPage() {
             {canEdit && (
               <Button
                 onClick={() => {
-                  setFormData(defaultFormData);
+                  setFormData(getDefaultFormData());
                   setSelectedExpense(null);
                   setIsAddDialogOpen(true);
                 }}
@@ -891,7 +891,7 @@ export default function MarketingExpensesPage() {
               setIsAddDialogOpen(false);
               setIsEditDialogOpen(false);
               setSelectedExpense(null);
-              setFormData(defaultFormData);
+              setFormData(getDefaultFormData());
             }
           }}
         >
