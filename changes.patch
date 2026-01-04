@@ -1,0 +1,240 @@
+diff --git a/client/public/opengraph.jpg b/client/public/opengraph.jpg
+index 326b923..61d2214 100644
+Binary files a/client/public/opengraph.jpg and b/client/public/opengraph.jpg differ
+diff --git a/client/src/pages/audit-logs.tsx b/client/src/pages/audit-logs.tsx
+index ecee836..3673ccf 100644
+--- a/client/src/pages/audit-logs.tsx
++++ b/client/src/pages/audit-logs.tsx
+@@ -49,6 +49,8 @@ const ACTIONS = [
+   { value: "transfer", label: "تحويل", color: "bg-orange-500" },
+   { value: "approve", label: "موافقة", color: "bg-emerald-500" },
+   { value: "reject", label: "رفض", color: "bg-rose-500" },
++  { value: "login", label: "تسجيل دخول", color: "bg-cyan-500" },
++  { value: "logout", label: "تسجيل خروج", color: "bg-slate-500" },
+ ];
+ 
+ export default function AuditLogsPage() {
+diff --git a/server/auth.ts b/server/auth.ts
+index 827b3ca..7121f79 100644
+--- a/server/auth.ts
++++ b/server/auth.ts
+@@ -86,6 +86,26 @@ export async function setupAuth(app: Express) {
+           activeBranch = await storage.getBranch(req.session.activeBranchId);
+         }
+         
++        // Log successful login to audit log
++        const displayName = user.firstName && user.lastName 
++          ? `${user.firstName} ${user.lastName}` 
++          : user.username || 'غير معروف';
++        try {
++          await storage.createSystemAuditLog({
++            module: "users",
++            entityId: user.id,
++            entityName: displayName,
++            action: "login",
++            details: `تسجيل دخول ناجح${rememberMe ? ' (تذكرني)' : ''}`,
++            userId: user.id,
++            userName: displayName,
++            ipAddress: req.ip || req.socket?.remoteAddress,
++            userAgent: req.headers['user-agent'],
++          });
++        } catch (logError) {
++          console.error("Failed to create audit log for login:", logError);
++        }
++        
+         res.json({
+           ...safeUser,
+           activeBranchId: req.session.activeBranchId,
+@@ -182,7 +202,37 @@ export async function setupAuth(app: Express) {
+   });
+ 
+   // Logout endpoint
+-  app.post("/api/auth/logout", (req, res) => {
++  app.post("/api/auth/logout", async (req, res) => {
++    const userId = req.session.userId;
++    let userName = "غير معروف";
++    
++    // Get user info before destroying session
++    if (userId) {
++      try {
++        const user = await storage.getUser(userId);
++        if (user) {
++          userName = user.firstName && user.lastName 
++            ? `${user.firstName} ${user.lastName}` 
++            : user.username || 'غير معروف';
++        }
++        
++        // Log logout to audit log
++        await storage.createSystemAuditLog({
++          module: "users",
++          entityId: userId,
++          entityName: userName,
++          action: "logout",
++          details: "تسجيل خروج",
++          userId: userId,
++          userName: userName,
++          ipAddress: req.ip || req.socket?.remoteAddress,
++          userAgent: req.headers['user-agent'],
++        });
++      } catch (logError) {
++        console.error("Failed to create audit log for logout:", logError);
++      }
++    }
++    
+     req.session.destroy((err) => {
+       if (err) {
+         console.error("Logout error:", err);
+diff --git a/server/storage.ts b/server/storage.ts
+index 0652c2f..9d6c22c 100644
+--- a/server/storage.ts
++++ b/server/storage.ts
+@@ -866,14 +866,25 @@ export class DatabaseStorage implements IStorage {
+       changedBy: userId || 'system'
+     });
+     
++    // Get user name for audit log
++    let userName = null;
++    if (userId) {
++      const user = await this.getUser(userId);
++      if (user) {
++        userName = user.firstName && user.lastName 
++          ? `${user.firstName} ${user.lastName}` 
++          : user.username;
++      }
++    }
++    
+     await this.createSystemAuditLog({
+       module: 'inventory',
+       entityId: newItem.id,
+       entityName: newItem.name,
+       action: 'create',
+-      details: JSON.stringify({ category: newItem.category, branchId: newItem.branchId }),
++      details: `إضافة صنف جديد: ${newItem.name}`,
+       userId: userId || null,
+-      userName: null,
++      userName: userName,
+     });
+     
+     return newItem;
+@@ -888,10 +899,12 @@ export class DatabaseStorage implements IStorage {
+       .where(eq(inventoryItems.id, id))
+       .returning();
+     
++    const changedFields: string[] = [];
+     if (updatedItem && existingItem) {
+       for (const [key, newValue] of Object.entries(item)) {
+         const oldValue = existingItem[key as keyof InventoryItem];
+         if (String(oldValue) !== String(newValue)) {
++          changedFields.push(key);
+           await this.createAuditLog({
+             itemId: id,
+             action: 'update',
+@@ -902,6 +915,29 @@ export class DatabaseStorage implements IStorage {
+           });
+         }
+       }
++      
++      // Add system audit log for update if there were changes
++      if (changedFields.length > 0) {
++        let userName = null;
++        if (userId) {
++          const user = await this.getUser(userId);
++          if (user) {
++            userName = user.firstName && user.lastName 
++              ? `${user.firstName} ${user.lastName}` 
++              : user.username;
++          }
++        }
++        
++        await this.createSystemAuditLog({
++          module: 'inventory',
++          entityId: id,
++          entityName: existingItem.name,
++          action: 'update',
++          details: `تعديل: ${changedFields.join(', ')}`,
++          userId: userId || null,
++          userName: userName,
++        });
++      }
+     }
+     
+     return updatedItem || undefined;
+@@ -920,14 +956,25 @@ export class DatabaseStorage implements IStorage {
+         changedBy: userId || 'system'
+       });
+       
++      // Get user name for audit log
++      let userName = null;
++      if (userId) {
++        const user = await this.getUser(userId);
++        if (user) {
++          userName = user.firstName && user.lastName 
++            ? `${user.firstName} ${user.lastName}` 
++            : user.username;
++        }
++      }
++      
+       await this.createSystemAuditLog({
+         module: 'inventory',
+         entityId: id,
+         entityName: existingItem.name,
+         action: 'delete',
+-        details: JSON.stringify({ category: existingItem.category }),
++        details: `حذف صنف: ${existingItem.name}`,
+         userId: userId || null,
+-        userName: null,
++        userName: userName,
+       });
+     }
+     
+@@ -1601,14 +1648,23 @@ export class DatabaseStorage implements IStorage {
+       note: 'تم إنشاء طلب التحويل',
+     });
+ 
++    // Get user name for audit log
++    let userName = null;
++    const user = await this.getUser(userId);
++    if (user) {
++      userName = user.firstName && user.lastName 
++        ? `${user.firstName} ${user.lastName}` 
++        : user.username;
++    }
++
+     await this.createSystemAuditLog({
+       module: 'transfers',
+       entityId: String(created.id),
+       entityName: created.transferNumber,
+       action: 'create',
+-      details: JSON.stringify({ itemId: transfer.itemId, from: transfer.fromBranchId, to: transfer.toBranchId }),
++      details: `طلب تحويل جديد: ${created.transferNumber}`,
+       userId: userId,
+-      userName: null,
++      userName: userName,
+     });
+ 
+     return created;
+@@ -1633,6 +1689,15 @@ export class DatabaseStorage implements IStorage {
+         note: 'تمت الموافقة على التحويل',
+       });
+ 
++      // Get user name for audit log
++      let userName = null;
++      const user = await this.getUser(userId);
++      if (user) {
++        userName = user.firstName && user.lastName 
++          ? `${user.firstName} ${user.lastName}` 
++          : user.username;
++      }
++
+       await this.createSystemAuditLog({
+         module: 'transfers',
+         entityId: String(id),
+@@ -1640,7 +1705,7 @@ export class DatabaseStorage implements IStorage {
+         action: 'approve',
+         details: 'تمت الموافقة على التحويل',
+         userId: userId,
+-        userName: null,
++        userName: userName,
+       });
+     }
+ 
