@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
@@ -752,124 +753,155 @@ export default function MarketingInfluencersPage() {
             <p className="text-muted-foreground">لا يوجد مؤثرين</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredInfluencers.map((influencer) => (
-              <Card key={influencer.id} data-testid={`card-influencer-${influencer.id}`}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      {influencer.profileImageUrl ? (
-                        <img
-                          src={influencer.profileImageUrl}
-                          alt={influencer.name}
-                          className="w-12 h-12 rounded-full object-cover"
-                          data-testid={`img-influencer-${influencer.id}`}
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                          <User className="w-6 h-6 text-muted-foreground" />
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">المؤثر</TableHead>
+                    <TableHead className="text-right">التخصص</TableHead>
+                    <TableHead className="text-right">المنصات</TableHead>
+                    <TableHead className="text-right">المتابعين</TableHead>
+                    <TableHead className="text-right">التفاعل</TableHead>
+                    <TableHead className="text-right">التقييم</TableHead>
+                    <TableHead className="text-right">التواصل</TableHead>
+                    <TableHead className="text-right">الحالة</TableHead>
+                    <TableHead className="text-right">الإجراءات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInfluencers.map((influencer) => (
+                    <TableRow key={influencer.id} data-testid={`row-influencer-${influencer.id}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          {influencer.profileImageUrl ? (
+                            <img
+                              src={influencer.profileImageUrl}
+                              alt={influencer.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                              data-testid={`img-influencer-${influencer.id}`}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-medium">{influencer.name}</p>
+                            {influencer.nameAr && (
+                              <p className="text-sm text-muted-foreground">{influencer.nameAr}</p>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div>
-                        <CardTitle className="text-base">{influencer.name}</CardTitle>
-                        {influencer.nameAr && (
-                          <p className="text-sm text-muted-foreground">{influencer.nameAr}</p>
-                        )}
-                      </div>
-                    </div>
-                    <Badge variant={influencer.isActive ? "default" : "secondary"}>
-                      {influencer.isActive ? "نشط" : "غير نشط"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <Badge variant="outline">
-                      {INFLUENCER_SPECIALTY_LABELS[influencer.specialty as keyof typeof INFLUENCER_SPECIALTY_LABELS] ||
-                        influencer.specialty}
-                    </Badge>
-                  </div>
-
-                  {influencer.platforms && influencer.platforms.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {influencer.platforms.map((platform) => (
-                        <Badge key={platform} variant="secondary" className="text-xs">
-                          {INFLUENCER_PLATFORM_LABELS[platform as keyof typeof INFLUENCER_PLATFORM_LABELS] || platform}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {INFLUENCER_SPECIALTY_LABELS[influencer.specialty as keyof typeof INFLUENCER_SPECIALTY_LABELS] ||
+                            influencer.specialty}
                         </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Users className="w-4 h-4" />
-                      <span>{formatFollowerCount(influencer.followerCount)}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Activity className="w-4 h-4" />
-                      <span>{influencer.engagementRate ? `${influencer.engagementRate}%` : "-"}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {renderStars(influencer.rating)}
-                    {influencer.rating && <span className="text-sm text-muted-foreground">({influencer.rating.toFixed(1)})</span>}
-                  </div>
-
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    {influencer.email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4" />
-                        <span dir="ltr">{influencer.email}</span>
-                      </div>
-                    )}
-                    {influencer.phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        <span dir="ltr">{influencer.phone}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openDetailSheet(influencer)}
-                      data-testid={`button-view-influencer-${influencer.id}`}
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                    {canEdit && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(influencer)}
-                          data-testid={`button-edit-influencer-${influencer.id}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        {isAdmin && (
+                      </TableCell>
+                      <TableCell>
+                        {influencer.platforms && influencer.platforms.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {influencer.platforms.slice(0, 2).map((platform) => (
+                              <Badge key={platform} variant="secondary" className="text-xs">
+                                {INFLUENCER_PLATFORM_LABELS[platform as keyof typeof INFLUENCER_PLATFORM_LABELS] || platform}
+                              </Badge>
+                            ))}
+                            {influencer.platforms.length > 2 && (
+                              <Badge variant="secondary" className="text-xs">+{influencer.platforms.length - 2}</Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Users className="w-4 h-4 text-muted-foreground" />
+                          <span>{formatFollowerCount(influencer.followerCount)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Activity className="w-4 h-4 text-muted-foreground" />
+                          <span>{influencer.engagementRate ? `${influencer.engagementRate}%` : "-"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {renderStars(influencer.rating)}
+                          {influencer.rating && <span className="text-sm text-muted-foreground">({influencer.rating.toFixed(1)})</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          {influencer.email && (
+                            <div className="flex items-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              <span dir="ltr" className="text-xs truncate max-w-[120px]">{influencer.email}</span>
+                            </div>
+                          )}
+                          {influencer.phone && (
+                            <div className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              <span dir="ltr" className="text-xs">{influencer.phone}</span>
+                            </div>
+                          )}
+                          {!influencer.email && !influencer.phone && <span>-</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={influencer.isActive ? "default" : "secondary"}>
+                          {influencer.isActive ? "نشط" : "غير نشط"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedInfluencer(influencer);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                            data-testid={`button-delete-influencer-${influencer.id}`}
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openDetailSheet(influencer)}
+                            data-testid={`button-view-influencer-${influencer.id}`}
                           >
-                            <Trash2 className="w-4 h-4 text-destructive" />
+                            <Eye className="w-4 h-4" />
                           </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                          {canEdit && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openEditDialog(influencer)}
+                                data-testid={`button-edit-influencer-${influencer.id}`}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setSelectedInfluencer(influencer);
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                  data-testid={`button-delete-influencer-${influencer.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         )}
 
         <Dialog
