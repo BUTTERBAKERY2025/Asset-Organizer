@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,14 +11,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   TrendingUp, TrendingDown, BarChart3, PieChart, 
   Users, Megaphone, DollarSign, Target, Eye, 
   Heart, MessageCircle, Share2, Download, ArrowRight,
   Filter, ChevronDown, Calendar, User,
-  Receipt, Activity, RefreshCw
+  Receipt, Activity, RefreshCw, FileText, Printer
 } from "lucide-react";
 import { Link } from "wouter";
+import { useReactToPrint } from "react-to-print";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart as RePieChart, Pie, Cell, LineChart, Line, AreaChart, Area
@@ -48,6 +51,8 @@ const COLORS = ['#f472b6', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c'
 
 export default function MarketingReportsPage() {
   const [filtersOpen, setFiltersOpen] = useState(true);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<ReportFilters>({
     dateFrom: "",
     dateTo: "",
@@ -324,6 +329,136 @@ export default function MarketingReportsPage() {
     });
   };
 
+  const exportReportToPdf = async () => {
+    const pdfMake = (await import("pdfmake/build/pdfmake")).default;
+    const pdfFonts = (await import("pdfmake/build/vfs_fonts")).default;
+    pdfMake.vfs = pdfFonts.vfs;
+
+    const activeFiltersText = getActiveFiltersDescription();
+    const today = new Date().toLocaleDateString('ar-SA');
+
+    const docDefinition: any = {
+      pageOrientation: 'landscape',
+      content: [
+        { text: 'تقرير أداء التسويق الشامل', style: 'header', alignment: 'center' },
+        { text: `تاريخ التقرير: ${today}`, style: 'subheader', alignment: 'center', margin: [0, 5, 0, 10] },
+        activeFiltersText ? { text: `الفلاتر المطبقة: ${activeFiltersText}`, style: 'filters', margin: [0, 0, 0, 15] } : {},
+        { text: 'ملخص الأداء', style: 'sectionHeader', margin: [0, 10, 0, 5] },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', '*', '*', '*'],
+            body: [
+              ['إجمالي الحملات', 'إجمالي الميزانية', 'المصروف', 'نسبة الاستخدام'],
+              [
+                stats.totalCampaigns.toString(),
+                formatCurrency(stats.totalBudget),
+                formatCurrency(stats.spentBudget),
+                stats.budgetUtilization + '%'
+              ]
+            ]
+          },
+          layout: 'lightHorizontalLines'
+        },
+        { text: 'الحملات', style: 'sectionHeader', margin: [0, 20, 0, 5] },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', '*', '*', '*', '*'],
+            body: [
+              ['اسم الحملة', 'الحالة', 'الميزانية', 'المصروف', 'المتبقي'],
+              ...filteredCampaigns.slice(0, 20).map(c => [
+                c.nameAr || c.name,
+                CAMPAIGN_STATUS_LABELS[c.status as keyof typeof CAMPAIGN_STATUS_LABELS] || c.status,
+                formatCurrency(c.totalBudget || 0),
+                formatCurrency(c.spentBudget || 0),
+                formatCurrency((c.totalBudget || 0) - (c.spentBudget || 0))
+              ])
+            ]
+          },
+          layout: 'lightHorizontalLines'
+        },
+        { text: 'المصروفات', style: 'sectionHeader', margin: [0, 20, 0, 5] },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', '*', '*', '*', '*'],
+            body: [
+              ['الوصف', 'الفئة', 'المبلغ', 'الحالة', 'التاريخ'],
+              ...filteredExpenses.slice(0, 30).map(e => [
+                e.description,
+                CAMPAIGN_EXPENSE_CATEGORY_LABELS[e.category] || e.category,
+                formatCurrency(e.amount),
+                CAMPAIGN_EXPENSE_STATUS_LABELS[e.status] || e.status,
+                e.expenseDate
+              ])
+            ]
+          },
+          layout: 'lightHorizontalLines'
+        },
+        { text: 'المؤثرين', style: 'sectionHeader', margin: [0, 20, 0, 5] },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', '*', '*', '*'],
+            body: [
+              ['اسم المؤثر', 'التخصص', 'عدد المتابعين', 'الحالة'],
+              ...filteredInfluencers.slice(0, 20).map(i => [
+                i.nameAr || i.name,
+                INFLUENCER_SPECIALTY_LABELS[i.specialty as keyof typeof INFLUENCER_SPECIALTY_LABELS] || i.specialty,
+                formatNumber(i.followerCount || 0),
+                i.isActive ? 'نشط' : 'غير نشط'
+              ])
+            ]
+          },
+          layout: 'lightHorizontalLines'
+        }
+      ],
+      styles: {
+        header: { fontSize: 18, bold: true },
+        subheader: { fontSize: 12, color: '#666' },
+        filters: { fontSize: 10, color: '#888', italics: true },
+        sectionHeader: { fontSize: 14, bold: true, color: '#d946ef' }
+      },
+      defaultStyle: { font: 'Roboto' }
+    };
+
+    pdfMake.createPdf(docDefinition).download(`تقرير_التسويق_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const getActiveFiltersDescription = () => {
+    const parts: string[] = [];
+    if (filters.dateFrom) parts.push(`من: ${filters.dateFrom}`);
+    if (filters.dateTo) parts.push(`إلى: ${filters.dateTo}`);
+    if (filters.campaignId !== 'all') {
+      const camp = campaigns.find(c => c.id === parseInt(filters.campaignId));
+      if (camp) parts.push(`الحملة: ${camp.nameAr || camp.name}`);
+    }
+    if (filters.influencerId !== 'all') {
+      const inf = influencers.find(i => i.id === parseInt(filters.influencerId));
+      if (inf) parts.push(`المؤثر: ${inf.nameAr || inf.name}`);
+    }
+    if (filters.status !== 'all') parts.push(`الحالة: ${CAMPAIGN_STATUS_LABELS[filters.status as keyof typeof CAMPAIGN_STATUS_LABELS] || filters.status}`);
+    if (filters.expenseCategory !== 'all') parts.push(`الفئة: ${CAMPAIGN_EXPENSE_CATEGORY_LABELS[filters.expenseCategory] || filters.expenseCategory}`);
+    if (filters.minAmount) parts.push(`الحد الأدنى للمبلغ: ${formatCurrency(parseFloat(filters.minAmount))}`);
+    if (filters.maxAmount) parts.push(`الحد الأقصى للمبلغ: ${formatCurrency(parseFloat(filters.maxAmount))}`);
+    if (filters.minBudget) parts.push(`الحد الأدنى للميزانية: ${formatCurrency(parseFloat(filters.minBudget))}`);
+    if (filters.maxBudget) parts.push(`الحد الأقصى للميزانية: ${formatCurrency(parseFloat(filters.maxBudget))}`);
+    return parts.join(' | ');
+  };
+
+  const hasActiveFilters = () => {
+    return filters.dateFrom || filters.dateTo || 
+           filters.campaignId !== 'all' || filters.influencerId !== 'all' ||
+           filters.status !== 'all' || filters.expenseCategory !== 'all' ||
+           filters.minAmount || filters.maxAmount || filters.minBudget || filters.maxBudget;
+  };
+
+  const handlePrint = useReactToPrint({
+    contentRef: reportRef,
+    documentTitle: `تقرير_التسويق_${new Date().toISOString().split('T')[0]}`,
+  });
+
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
@@ -523,6 +658,16 @@ export default function MarketingReportsPage() {
                       data-testid="filter-max-budget"
                     />
                   </div>
+                </div>
+                <div className="flex justify-end mt-4 pt-4 border-t gap-2">
+                  <Button 
+                    className="bg-pink-500 hover:bg-pink-600" 
+                    onClick={() => setReportDialogOpen(true)}
+                    data-testid="button-view-report"
+                  >
+                    <FileText className="w-4 h-4 ml-2" />
+                    عرض التقرير
+                  </Button>
                 </div>
               </CardContent>
             </CollapsibleContent>
@@ -987,6 +1132,181 @@ export default function MarketingReportsPage() {
           </>
         )}
       </div>
+
+      <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-pink-600">
+              <FileText className="w-5 h-5" />
+              تقرير أداء التسويق
+            </DialogTitle>
+            <DialogDescription>
+              {hasActiveFilters() ? (
+                <span>الفلاتر المطبقة: {getActiveFiltersDescription()}</span>
+              ) : (
+                <span>جميع البيانات (بدون فلاتر)</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex items-center justify-end gap-2 border-b pb-4">
+            <Button variant="outline" onClick={() => handlePrint()} data-testid="button-print-report">
+              <Printer className="w-4 h-4 ml-2" />
+              طباعة
+            </Button>
+            <Button variant="outline" onClick={exportReportToPdf} data-testid="button-export-pdf">
+              <FileText className="w-4 h-4 ml-2" />
+              تصدير PDF
+            </Button>
+            <Button className="bg-green-500 hover:bg-green-600" onClick={exportToExcel} data-testid="button-export-excel-dialog">
+              <Download className="w-4 h-4 ml-2" />
+              تصدير Excel
+            </Button>
+          </div>
+
+          <ScrollArea className="h-[60vh]">
+            <div ref={reportRef} className="p-4 space-y-6 bg-white" dir="rtl">
+              <div className="text-center border-b pb-4">
+                <h2 className="text-2xl font-bold text-pink-600">تقرير أداء التسويق الشامل</h2>
+                <p className="text-sm text-muted-foreground">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
+                {hasActiveFilters() && (
+                  <p className="text-xs text-muted-foreground mt-1">الفلاتر: {getActiveFiltersDescription()}</p>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">ملخص الأداء</h3>
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div className="p-4 border rounded-lg">
+                    <p className="text-2xl font-bold">{stats.totalCampaigns}</p>
+                    <p className="text-sm text-muted-foreground">إجمالي الحملات</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <p className="text-2xl font-bold">{formatCurrency(stats.totalBudget)}</p>
+                    <p className="text-sm text-muted-foreground">إجمالي الميزانية</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.spentBudget)}</p>
+                    <p className="text-sm text-muted-foreground">المصروف</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <p className="text-2xl font-bold text-pink-600">{stats.budgetUtilization}%</p>
+                    <p className="text-sm text-muted-foreground">نسبة الاستخدام</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">الحملات ({filteredCampaigns.length})</h3>
+                {filteredCampaigns.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">لا توجد حملات مطابقة للفلاتر</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">اسم الحملة</TableHead>
+                        <TableHead className="text-right">الحالة</TableHead>
+                        <TableHead className="text-right">الميزانية</TableHead>
+                        <TableHead className="text-right">المصروف</TableHead>
+                        <TableHead className="text-right">المتبقي</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCampaigns.map((c) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-medium">{c.nameAr || c.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {CAMPAIGN_STATUS_LABELS[c.status as keyof typeof CAMPAIGN_STATUS_LABELS] || c.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{formatCurrency(c.totalBudget || 0)}</TableCell>
+                          <TableCell className="text-green-600">{formatCurrency(c.spentBudget || 0)}</TableCell>
+                          <TableCell>{formatCurrency((c.totalBudget || 0) - (c.spentBudget || 0))}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">المصروفات ({filteredExpenses.length})</h3>
+                {filteredExpenses.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">لا توجد مصروفات مطابقة للفلاتر</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">الوصف</TableHead>
+                        <TableHead className="text-right">الفئة</TableHead>
+                        <TableHead className="text-right">المبلغ</TableHead>
+                        <TableHead className="text-right">الحالة</TableHead>
+                        <TableHead className="text-right">التاريخ</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredExpenses.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="font-medium">{e.description}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {CAMPAIGN_EXPENSE_CATEGORY_LABELS[e.category] || e.category}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-green-600">{formatCurrency(e.amount)}</TableCell>
+                          <TableCell>
+                            <Badge variant={e.status === 'paid' ? 'default' : 'secondary'}>
+                              {CAMPAIGN_EXPENSE_STATUS_LABELS[e.status] || e.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{e.expenseDate}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">المؤثرين ({filteredInfluencers.length})</h3>
+                {filteredInfluencers.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">لا يوجد مؤثرين مطابقين للفلاتر</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">اسم المؤثر</TableHead>
+                        <TableHead className="text-right">التخصص</TableHead>
+                        <TableHead className="text-right">عدد المتابعين</TableHead>
+                        <TableHead className="text-right">معدل التفاعل</TableHead>
+                        <TableHead className="text-right">الحالة</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredInfluencers.map((i) => (
+                        <TableRow key={i.id}>
+                          <TableCell className="font-medium">{i.nameAr || i.name}</TableCell>
+                          <TableCell>
+                            {INFLUENCER_SPECIALTY_LABELS[i.specialty as keyof typeof INFLUENCER_SPECIALTY_LABELS] || i.specialty}
+                          </TableCell>
+                          <TableCell>{formatNumber(i.followerCount || 0)}</TableCell>
+                          <TableCell>{(i.engagementRate || 0).toFixed(1)}%</TableCell>
+                          <TableCell>
+                            <Badge variant={i.isActive ? 'default' : 'secondary'}>
+                              {i.isActive ? 'نشط' : 'غير نشط'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
