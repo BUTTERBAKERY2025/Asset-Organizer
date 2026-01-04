@@ -677,6 +677,8 @@ export interface IStorage {
   deleteCampaignExpense(id: number): Promise<boolean>;
   getCampaignTotalExpenses(campaignId: number): Promise<number>;
   getExpensesByCategory(campaignId: number): Promise<{ category: string; total: number }[]>;
+  getExpensesByInfluencerId(influencerId: number): Promise<CampaignExpense[]>;
+  getTotalExpensesByInfluencerId(influencerId: number): Promise<number>;
 
   // Marketing Calendar Events - تقويم التسويق
   getAllMarketingCalendarEvents(filters?: { campaignId?: number; startDate?: string; endDate?: string }): Promise<MarketingCalendarEvent[]>;
@@ -5350,6 +5352,22 @@ export class DatabaseStorage implements IStorage {
     }
     
     return Object.entries(categoryTotals).map(([category, total]) => ({ category, total }));
+  }
+
+  async getExpensesByInfluencerId(influencerId: number): Promise<CampaignExpense[]> {
+    return await db.select().from(campaignExpenses)
+      .where(eq(campaignExpenses.influencerId, influencerId))
+      .orderBy(desc(campaignExpenses.expenseDate));
+  }
+
+  async getTotalExpensesByInfluencerId(influencerId: number): Promise<number> {
+    const expenses = await db.select().from(campaignExpenses).where(
+      and(
+        eq(campaignExpenses.influencerId, influencerId),
+        or(eq(campaignExpenses.status, 'paid'), eq(campaignExpenses.status, 'approved'))
+      )
+    );
+    return expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   }
 
   // Marketing Calendar Events - تقويم التسويق
