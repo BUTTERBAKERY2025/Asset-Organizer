@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { 
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Plus, Settings, 
-  Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart3
+  Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon
 } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
@@ -467,7 +467,7 @@ export default function CashierShiftPerformance() {
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-full bg-amber-100">
-                  <BarChart3 className="h-6 w-6 text-amber-600" />
+                  <BarChartIcon className="h-6 w-6 text-amber-600" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">نسبة الإنجاز</p>
@@ -501,7 +501,7 @@ export default function CashierShiftPerformance() {
               الأهداف
             </TabsTrigger>
             <TabsTrigger value="performance" data-testid="tab-performance">
-              <BarChart3 className="h-4 w-4 ml-2" />
+              <TrendingUp className="h-4 w-4 ml-2" />
               الأداء
             </TabsTrigger>
             <TabsTrigger value="alerts" data-testid="tab-alerts">
@@ -738,7 +738,7 @@ export default function CashierShiftPerformance() {
                                   <span>•</span>
                                   <span>{alert.shiftType === 'morning' ? 'صباحي' : 'مسائي'}</span>
                                   <span>•</span>
-                                  <span>{new Date(alert.createdAt!).toLocaleTimeString('ar-SA')}</span>
+                                  <span>{alert.createdAt ? new Date(alert.createdAt).toLocaleTimeString('ar-SA') : '-'}</span>
                                 </div>
                               </div>
                             </div>
