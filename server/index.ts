@@ -17,10 +17,12 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       connectSrc: ["'self'", "https:", "wss:"],
+      frameAncestors: ["'self'", "https://*.replit.dev", "https://*.replit.app", "https://*.repl.co"],
     },
   },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  frameguard: false,
 }));
 
 app.use("/attached_assets", express.static(path.resolve(process.cwd(), "attached_assets")));
