@@ -60,6 +60,9 @@ import MarketingCalendarPage from "@/pages/marketing-calendar";
 import MarketingTasksPage from "@/pages/marketing-tasks";
 import MarketingReportsPage from "@/pages/marketing-reports";
 import MarketingTeamPage from "@/pages/marketing-team";
+import MarketingGoalsPage from "@/pages/marketing-goals";
+import MarketingAssetsPage from "@/pages/marketing-assets";
+import MarketingAlertsPage from "@/pages/marketing-alerts";
 
 function Router() {
   return (
@@ -119,6 +122,9 @@ function Router() {
       <Route path="/marketing-tasks" component={MarketingTasksPage} />
       <Route path="/marketing-reports" component={MarketingReportsPage} />
       <Route path="/marketing-team" component={MarketingTeamPage} />
+      <Route path="/marketing-goals" component={MarketingGoalsPage} />
+      <Route path="/marketing-assets" component={MarketingAssetsPage} />
+      <Route path="/marketing-alerts" component={MarketingAlertsPage} />
       <Route component={NotFound} />
     </Switch>
   );

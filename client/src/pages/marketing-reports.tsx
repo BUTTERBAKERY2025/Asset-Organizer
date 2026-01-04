@@ -56,17 +56,47 @@ export default function MarketingReportsPage() {
     totalCampaigns: campaigns.length,
     activeCampaigns: campaigns.filter((c: any) => c.status === "active").length,
     completedCampaigns: campaigns.filter((c: any) => c.status === "completed").length,
-    totalBudget: campaigns.reduce((sum: number, c: any) => sum + (c.budget || 0), 0),
-    spentBudget: campaigns.reduce((sum: number, c: any) => sum + (c.spentAmount || 0), 0),
+    totalBudget: campaigns.reduce((sum: number, c: any) => sum + (c.totalBudget || 0), 0),
+    spentBudget: campaigns.reduce((sum: number, c: any) => sum + (c.spentBudget || 0), 0),
   };
 
   const influencerStats: InfluencerStats = {
     totalInfluencers: influencers.length,
     activeInfluencers: influencers.filter((i: any) => i.isActive).length,
-    totalReach: influencers.reduce((sum: number, i: any) => sum + (i.followersCount || 0), 0),
+    totalReach: influencers.reduce((sum: number, i: any) => sum + (i.followerCount || 0), 0),
     avgEngagement: influencers.length > 0 
       ? influencers.reduce((sum: number, i: any) => sum + (i.engagementRate || 0), 0) / influencers.length 
       : 0,
+  };
+
+  const exportToExcel = () => {
+    import('xlsx').then(XLSX => {
+      const campaignData = campaigns.map((c: any) => ({
+        'اسم الحملة': c.name,
+        'الحالة': c.status === 'active' ? 'نشطة' : c.status === 'completed' ? 'مكتملة' : c.status,
+        'الميزانية الإجمالية': c.totalBudget || 0,
+        'المصروف': c.spentBudget || 0,
+        'تاريخ البدء': c.startDate || '-',
+        'تاريخ الانتهاء': c.endDate || '-',
+      }));
+      
+      const influencerData = influencers.map((i: any) => ({
+        'اسم المؤثر': i.name,
+        'التخصص': i.specialty,
+        'عدد المتابعين': i.followerCount || 0,
+        'معدل التفاعل': i.engagementRate || 0,
+        'الحالة': i.isActive ? 'نشط' : 'غير نشط',
+      }));
+
+      const wb = XLSX.utils.book_new();
+      const campaignsSheet = XLSX.utils.json_to_sheet(campaignData);
+      const influencersSheet = XLSX.utils.json_to_sheet(influencerData);
+      
+      XLSX.utils.book_append_sheet(wb, campaignsSheet, 'الحملات');
+      XLSX.utils.book_append_sheet(wb, influencersSheet, 'المؤثرين');
+      
+      XLSX.writeFile(wb, `تقرير_التسويق_${new Date().toISOString().split('T')[0]}.xlsx`);
+    });
   };
 
   const formatCurrency = (amount: number) =>
@@ -152,9 +182,9 @@ export default function MarketingReportsPage() {
                 <SelectItem value="year">سنة</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" data-testid="button-export">
+            <Button variant="outline" onClick={exportToExcel} data-testid="button-export">
               <Download className="w-4 h-4 ml-2" />
-              تصدير
+              تصدير Excel
             </Button>
           </div>
         </div>

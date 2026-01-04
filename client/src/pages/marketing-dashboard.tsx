@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { 
   Megaphone, Users, Target, Calendar, TrendingUp, FileBarChart, Clock, DollarSign,
-  ChevronLeft, CheckCircle2, AlertCircle, BarChart3
+  ChevronLeft, CheckCircle2, AlertCircle, BarChart3, Award, FolderOpen, Bell
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -81,9 +81,9 @@ export default function MarketingDashboardPage() {
 
   // Fetch calendar events
   const { data: calendarEvents = [], isLoading: calendarLoading } = useQuery<CalendarEvent[]>({
-    queryKey: ["/api/marketing/calendar"],
+    queryKey: ["/api/marketing/calendar-events"],
     queryFn: async () => {
-      const res = await fetch("/api/marketing/calendar");
+      const res = await fetch("/api/marketing/calendar-events");
       if (!res.ok) return [];
       return res.json();
     },
@@ -251,6 +251,30 @@ export default function MarketingDashboardPage() {
       icon: TrendingUp,
       color: "bg-indigo-500",
       count: teamMembers.length,
+    },
+    {
+      title: "أهداف الحملات",
+      description: "تتبع وإدارة أهداف الحملات",
+      href: "/marketing-goals",
+      icon: Award,
+      color: "bg-rose-500",
+      count: null,
+    },
+    {
+      title: "الأصول التسويقية",
+      description: "إدارة الصور والفيديوهات والملفات",
+      href: "/marketing-assets",
+      icon: FolderOpen,
+      color: "bg-cyan-500",
+      count: null,
+    },
+    {
+      title: "التنبيهات",
+      description: "إشعارات وتنبيهات التسويق",
+      href: "/marketing-alerts",
+      icon: Bell,
+      color: "bg-red-500",
+      count: null,
     },
   ];
 

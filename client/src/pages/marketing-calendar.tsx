@@ -63,9 +63,9 @@ export default function MarketingCalendarPage() {
   });
 
   const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
-    queryKey: ["/api/marketing/calendar"],
+    queryKey: ["/api/marketing/calendar-events"],
     queryFn: async () => {
-      const res = await fetch("/api/marketing/calendar");
+      const res = await fetch("/api/marketing/calendar-events");
       if (!res.ok) return [];
       return res.json();
     },
@@ -73,7 +73,7 @@ export default function MarketingCalendarPage() {
 
   const createEventMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const res = await fetch("/api/marketing/calendar", {
+      const res = await fetch("/api/marketing/calendar-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -82,7 +82,7 @@ export default function MarketingCalendarPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/marketing/calendar"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/marketing/calendar-events"] });
       setIsAddDialogOpen(false);
       resetForm();
       toast({ title: "تم إنشاء الحدث بنجاح" });

@@ -8294,5 +8294,91 @@ export async function registerRoutes(
     }
   });
 
+  // Marketing Statistics API endpoint
+  app.get("/api/marketing/statistics", isAuthenticated, async (req: any, res) => {
+    try {
+      const campaigns = await storage.getMarketingCampaigns({});
+      const influencers = await storage.getMarketingInfluencers({});
+      const tasks = await storage.getMarketingTasks({});
+      const team = await storage.getMarketingTeamMembers({});
+      const calendarEvents = await storage.getMarketingCalendarEvents({});
+      const assets = await storage.getMarketingAssets({});
+      const alerts = await storage.getMarketingAlerts({});
+
+      // Calculate campaign statistics
+      const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
+      const totalBudget = campaigns.reduce((sum, c) => sum + Number(c.totalBudget || 0), 0);
+      const spentBudget = campaigns.reduce((sum, c) => sum + Number(c.spentBudget || 0), 0);
+      const budgetUtilization = totalBudget > 0 ? Math.round((spentBudget / totalBudget) * 100) : 0;
+
+      // Calculate influencer statistics
+      const activeInfluencers = influencers.filter(i => i.isActive).length;
+      const totalFollowers = influencers.reduce((sum, i) => sum + Number(i.followerCount || 0), 0);
+
+      // Calculate task statistics
+      const pendingTasks = tasks.filter(t => t.status === 'pending').length;
+      const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+      const completedTasks = tasks.filter(t => t.status === 'completed').length;
+      const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
+
+      // Calculate team statistics
+      const activeTeamMembers = team.filter(m => m.isActive).length;
+
+      // Calculate upcoming events (next 30 days)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+      thirtyDaysFromNow.setHours(23, 59, 59, 999);
+      const upcomingEvents = calendarEvents.filter(e => {
+        const eventDate = new Date(e.startDate);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate >= today && eventDate <= thirtyDaysFromNow;
+      }).length;
+
+      // Unread alerts
+      const unreadAlerts = alerts.filter(a => !a.isRead).length;
+
+      res.json({
+        campaigns: {
+          total: campaigns.length,
+          active: activeCampaigns,
+          totalBudget,
+          spentBudget,
+          budgetUtilization
+        },
+        influencers: {
+          total: influencers.length,
+          active: activeInfluencers,
+          totalFollowers
+        },
+        tasks: {
+          total: tasks.length,
+          pending: pendingTasks,
+          inProgress: inProgressTasks,
+          completed: completedTasks,
+          completionRate: taskCompletionRate
+        },
+        team: {
+          total: team.length,
+          active: activeTeamMembers
+        },
+        calendar: {
+          total: calendarEvents.length,
+          upcoming: upcomingEvents
+        },
+        assets: {
+          total: assets.length
+        },
+        alerts: {
+          total: alerts.length,
+          unread: unreadAlerts
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching marketing statistics:", error);
+      res.status(500).json({ error: "فشل في جلب الإحصائيات" });
+    }
+  });
+
   return httpServer;
 }
