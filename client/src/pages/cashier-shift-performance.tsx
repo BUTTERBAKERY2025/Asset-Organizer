@@ -70,15 +70,20 @@ export default function CashierShiftPerformance() {
     targetTicketValue: 0,
   });
 
+  const { user } = useAuth();
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
   });
 
-  const { user } = useAuth();
   const filteredBranches = useMemo(() => {
     if (user?.role === "admin") return branches;
     return branches.filter(b => b.id === user?.branchId);
   }, [branches, user]);
+
+  const selectedBranchData = useMemo(() => {
+    if (selectedBranch === "all") return null;
+    return filteredBranches.find(b => b.id === selectedBranch);
+  }, [selectedBranch, filteredBranches]);
 
   useEffect(() => {
     if (user?.role !== "admin" && user?.branchId && selectedBranch === "all") {

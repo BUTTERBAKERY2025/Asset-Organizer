@@ -1,3 +1,4 @@
+import memoize from "memoizee";
 import { 
   type Branch, 
   type InsertBranch,
@@ -826,8 +827,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Branches
-  async getAllBranches(): Promise<Branch[]> {
+  // Branches
+  private getCachedBranches = memoize(async () => {
     return await db.select().from(branches);
+  }, { promise: true, maxAge: 60000 });
+
+  async getAllBranches(): Promise<Branch[]> {
+    return await this.getCachedBranches();
   }
 
   async getBranch(id: string): Promise<Branch | undefined> {

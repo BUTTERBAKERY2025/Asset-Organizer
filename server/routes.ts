@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import memoize from "memoizee";
 import { storage } from "./storage";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema } from "@shared/schema";
 import { z } from "zod";
@@ -36,11 +37,20 @@ export async function registerRoutes(
   // Setup authentication
   await setupAuth(app);
 
+  // Cached data fetchers
+  const getCachedBranches = memoize(async () => {
+    return await storage.getAllBranches();
+  }, { promise: true, maxAge: 60000 }); // Cache for 1 minute
+
+  const getCachedUsers = memoize(async () => {
+    const users = await storage.getAllUsers();
+    return users.map(({ password, ...user }) => user);
+  }, { promise: true, maxAge: 30000 }); // Cache for 30 seconds
+
   // Admin routes for user management
   app.get("/api/users", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
-      const users = await storage.getAllUsers();
-      const safeUsers = users.map(({ password, ...user }) => user);
+      const safeUsers = await getCachedUsers();
       res.json(safeUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -212,7 +222,7 @@ export async function registerRoutes(
   // Branches
   app.get("/api/branches", async (req, res) => {
     try {
-      const branches = await storage.getAllBranches();
+      const branches = await getCachedBranches();
       res.json(branches);
     } catch (error) {
       console.error("Error fetching branches:", error);

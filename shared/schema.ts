@@ -44,7 +44,10 @@ export const users = pgTable("users", {
   isActive: text("is_active").default("active"), // active, inactive
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_users_branch_id").on(table.branchId),
+  index("idx_users_role").on(table.role),
+]);
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -90,7 +93,11 @@ export const inventoryItems = pgTable("inventory_items", {
   inspectionIntervalDays: integer("inspection_interval_days"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_inventory_branch").on(table.branchId),
+  index("idx_inventory_category").on(table.category),
+  index("idx_inventory_status").on(table.status),
+]);
 
 export const insertInventoryItemSchema = createInsertSchema(
   inventoryItems,
@@ -248,7 +255,10 @@ export const constructionProjects = pgTable("construction_projects", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_projects_branch").on(table.branchId),
+  index("idx_projects_status").on(table.status),
+]);
 
 export const insertConstructionProjectSchema = createInsertSchema(
   constructionProjects,
@@ -284,7 +294,10 @@ export const projectWorkItems = pgTable("project_work_items", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_work_items_project").on(table.projectId),
+  index("idx_work_items_status").on(table.status),
+]);
 
 export const insertProjectWorkItemSchema = createInsertSchema(
   projectWorkItems,
