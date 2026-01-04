@@ -16,7 +16,7 @@ export function getSession() {
     throw new Error("SESSION_SECRET environment variable is required");
   }
   
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const sessionTtl = 24 * 60 * 60 * 1000; // 1 day (24 hours)
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -60,8 +60,8 @@ export async function setupAuth(app: Express) {
       
       // Set session/cookie duration based on rememberMe
       if (rememberMe) {
-        // Keep session for 7 days if "remember me" is checked
-        req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000;
+        // Keep session for 1 day if "remember me" is checked
+        req.session.cookie.maxAge = 24 * 60 * 60 * 1000;
       } else {
         // Session expires when browser closes (session cookie)
         req.session.cookie.maxAge = undefined;

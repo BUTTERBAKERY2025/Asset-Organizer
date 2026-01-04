@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
+import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
 import NotFound from "@/pages/not-found";
 import PlatformHomePage from "@/pages/platform-home";
@@ -138,6 +139,7 @@ function App() {
       <ProductionProvider>
         <TooltipProvider>
           <Toaster />
+          <InactivityLogout />
           <Router />
           <PWAInstallPrompt />
           <OfflineIndicator />
