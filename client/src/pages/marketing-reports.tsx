@@ -15,15 +15,15 @@ import {
   TrendingUp, TrendingDown, BarChart3, PieChart, 
   Users, Megaphone, DollarSign, Target, Eye, 
   Heart, MessageCircle, Share2, Download, ArrowRight,
-  Filter, ChevronDown, Calendar, Building2, User,
-  Receipt, Activity, FileText, RefreshCw, X
+  Filter, ChevronDown, Calendar, User,
+  Receipt, Activity, RefreshCw
 } from "lucide-react";
 import { Link } from "wouter";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart as RePieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from "recharts";
-import type { MarketingCampaign, CampaignExpense, MarketingInfluencer, Branch, InfluencerPayment } from "@shared/schema";
+import type { MarketingCampaign, CampaignExpense, MarketingInfluencer, InfluencerPayment } from "@shared/schema";
 import {
   CAMPAIGN_STATUS_LABELS,
   CAMPAIGN_EXPENSE_CATEGORY_LABELS,
@@ -35,7 +35,6 @@ interface ReportFilters {
   dateFrom: string;
   dateTo: string;
   campaignId: string;
-  branchId: string;
   influencerId: string;
   status: string;
   expenseCategory: string;
@@ -53,7 +52,6 @@ export default function MarketingReportsPage() {
     dateFrom: "",
     dateTo: "",
     campaignId: "all",
-    branchId: "all",
     influencerId: "all",
     status: "all",
     expenseCategory: "all",
@@ -99,15 +97,6 @@ export default function MarketingReportsPage() {
     },
   });
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) return [];
-      return res.json();
-    },
-  });
-
   const isLoading = campaignsLoading || expensesLoading || influencersLoading;
 
   const filteredCampaigns = useMemo(() => {
@@ -142,6 +131,16 @@ export default function MarketingReportsPage() {
     });
   }, [influencers, filters]);
 
+  const filteredInfluencerPayments = useMemo(() => {
+    return influencerPayments.filter((p) => {
+      if (filters.influencerId !== "all" && p.influencerId !== parseInt(filters.influencerId)) return false;
+      if (filters.campaignId !== "all" && p.campaignId !== parseInt(filters.campaignId)) return false;
+      if (filters.dateFrom && p.paymentDate < filters.dateFrom) return false;
+      if (filters.dateTo && p.paymentDate > filters.dateTo) return false;
+      return true;
+    });
+  }, [influencerPayments, filters]);
+
   const stats = useMemo(() => {
     const totalBudget = filteredCampaigns.reduce((sum, c) => sum + (c.totalBudget || 0), 0);
     const spentBudget = filteredCampaigns.reduce((sum, c) => sum + (c.spentBudget || 0), 0);
@@ -149,7 +148,7 @@ export default function MarketingReportsPage() {
     const paidExpenses = filteredExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
     const pendingExpenses = filteredExpenses.filter(e => e.status === 'pending').reduce((sum, e) => sum + e.amount, 0);
     const approvedExpenses = filteredExpenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0);
-    const totalInfluencerPayments = influencerPayments.reduce((sum, p) => sum + p.amount, 0);
+    const totalInfluencerPayments = filteredInfluencerPayments.reduce((sum, p) => sum + p.amount, 0);
     
     return {
       totalCampaigns: filteredCampaigns.length,
@@ -172,7 +171,7 @@ export default function MarketingReportsPage() {
         : 0,
       totalInfluencerPayments,
     };
-  }, [filteredCampaigns, filteredExpenses, filteredInfluencers, influencerPayments]);
+  }, [filteredCampaigns, filteredExpenses, filteredInfluencers, filteredInfluencerPayments]);
 
   const expensesByCategory = useMemo(() => {
     const categoryTotals: Record<string, number> = {};
@@ -209,8 +208,8 @@ export default function MarketingReportsPage() {
 
   const influencerPerformance = useMemo(() => {
     return filteredInfluencers.slice(0, 10).map(i => {
-      const payments = influencerPayments.filter(p => p.influencerId === i.id);
-      const expensesForInfluencer = expenses.filter(e => e.influencerId === i.id);
+      const payments = filteredInfluencerPayments.filter(p => p.influencerId === i.id);
+      const expensesForInfluencer = filteredExpenses.filter(e => e.influencerId === i.id);
       const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0) + 
                         expensesForInfluencer.reduce((sum, e) => sum + e.amount, 0);
       return {
@@ -220,7 +219,7 @@ export default function MarketingReportsPage() {
         totalPaid,
       };
     });
-  }, [filteredInfluencers, influencerPayments, expenses]);
+  }, [filteredInfluencers, filteredInfluencerPayments, filteredExpenses]);
 
   const monthlyExpenses = useMemo(() => {
     const monthlyTotals: Record<string, number> = {};
@@ -241,7 +240,6 @@ export default function MarketingReportsPage() {
       dateFrom: "",
       dateTo: "",
       campaignId: "all",
-      branchId: "all",
       influencerId: "all",
       status: "all",
       expenseCategory: "all",
@@ -407,25 +405,6 @@ export default function MarketingReportsPage() {
                         {campaigns.map(c => (
                           <SelectItem key={c.id} value={c.id.toString()}>
                             {c.nameAr || c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1">
-                      <Building2 className="w-4 h-4" />
-                      الفرع
-                    </Label>
-                    <Select value={filters.branchId} onValueChange={(v) => setFilters({...filters, branchId: v})}>
-                      <SelectTrigger data-testid="filter-branch">
-                        <SelectValue placeholder="جميع الفروع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الفروع</SelectItem>
-                        {branches.map(b => (
-                          <SelectItem key={b.id} value={b.id.toString()}>
-                            {b.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -870,8 +849,8 @@ export default function MarketingReportsPage() {
                         <ScrollArea className="h-[300px] mt-4">
                           <div className="space-y-2">
                             {filteredInfluencers.map((influencer) => {
-                              const payments = influencerPayments.filter(p => p.influencerId === influencer.id);
-                              const expensesForInfluencer = expenses.filter(e => e.influencerId === influencer.id);
+                              const payments = filteredInfluencerPayments.filter(p => p.influencerId === influencer.id);
+                              const expensesForInfluencer = filteredExpenses.filter(e => e.influencerId === influencer.id);
                               const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0) + 
                                                 expensesForInfluencer.reduce((sum, e) => sum + e.amount, 0);
                               return (
