@@ -3349,3 +3349,239 @@ export const insertMarketingAlertSchema = createInsertSchema(marketingAlerts).om
 
 export type MarketingAlert = typeof marketingAlerts.$inferSelect;
 export type InsertMarketingAlert = z.infer<typeof insertMarketingAlertSchema>;
+
+// ==========================================
+// نظام إدارة الورديات المتقدم - Advanced Shift Management System
+// ==========================================
+
+// Schedule Templates - قوالب جداول الورديات
+export const scheduleTemplates = pgTable("schedule_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  isDefault: boolean("is_default").default(false),
+  weeklyPattern: jsonb("weekly_pattern"), // JSON: {sat: {start, end, isOff}, sun: {...}, ...}
+  createdBy: varchar("created_by").references(() => users.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertScheduleTemplateSchema = createInsertSchema(scheduleTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ScheduleTemplate = typeof scheduleTemplates.$inferSelect;
+export type InsertScheduleTemplate = z.infer<typeof insertScheduleTemplateSchema>;
+
+// Schedule Periods - فترات الجدول (أسبوعي/شهري)
+export const schedulePeriods = pgTable("schedule_periods", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull(), // weekly, monthly
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  status: text("status").default("draft").notNull(), // draft, published, archived
+  templateId: integer("template_id").references(() => scheduleTemplates.id),
+  requiredStaffPerDay: jsonb("required_staff_per_day"), // {sat: 5, sun: 3, ...}
+  notes: text("notes"),
+  publishedBy: varchar("published_by").references(() => users.id),
+  publishedAt: timestamp("published_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_schedule_periods_branch").on(table.branchId),
+  index("idx_schedule_periods_dates").on(table.startDate, table.endDate),
+]);
+
+export const insertSchedulePeriodSchema = createInsertSchema(schedulePeriods).omit({
+  id: true,
+  publishedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SchedulePeriod = typeof schedulePeriods.$inferSelect;
+export type InsertSchedulePeriod = z.infer<typeof insertSchedulePeriodSchema>;
+
+// Employee Schedules - جداول الموظفين اليومية
+export const employeeSchedules = pgTable("employee_schedules", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").references(() => schedulePeriods.id, { onDelete: "cascade" }),
+  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeName: text("employee_name").notNull(),
+  scheduleDate: text("schedule_date").notNull(), // YYYY-MM-DD
+  dayOfWeek: text("day_of_week").notNull(), // sat, sun, mon, tue, wed, thu, fri
+  shiftType: text("shift_type"), // morning, evening, night
+  startTime: text("start_time"), // HH:MM
+  endTime: text("end_time"), // HH:MM
+  isOff: boolean("is_off").default(false).notNull(), // يوم إجازة
+  breakDuration: integer("break_duration").default(60), // بالدقائق
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_schedules_period").on(table.periodId),
+  index("idx_employee_schedules_employee").on(table.employeeId),
+  index("idx_employee_schedules_date").on(table.scheduleDate),
+]);
+
+export const insertEmployeeScheduleSchema = createInsertSchema(employeeSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type EmployeeSchedule = typeof employeeSchedules.$inferSelect;
+export type InsertEmployeeSchedule = z.infer<typeof insertEmployeeScheduleSchema>;
+
+// Attendance Records - سجلات الحضور والانصراف
+export const attendanceRecords = pgTable("attendance_records", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  scheduleId: integer("schedule_id").references(() => employeeSchedules.id),
+  attendanceDate: text("attendance_date").notNull(), // YYYY-MM-DD
+  scheduledStartTime: text("scheduled_start_time"), // الوقت المجدول للحضور
+  scheduledEndTime: text("scheduled_end_time"), // الوقت المجدول للانصراف
+  actualCheckIn: text("actual_check_in"), // وقت الحضور الفعلي HH:MM:SS
+  actualCheckOut: text("actual_check_out"), // وقت الانصراف الفعلي
+  checkInSignature: text("check_in_signature"), // base64 encoded signature
+  checkOutSignature: text("check_out_signature"), // base64 encoded signature
+  status: text("status").default("pending").notNull(), // pending, present, absent, late, early_leave, on_leave
+  lateMinutes: integer("late_minutes").default(0), // دقائق التأخير
+  earlyLeaveMinutes: integer("early_leave_minutes").default(0), // دقائق الخروج المبكر
+  overtimeMinutes: integer("overtime_minutes").default(0), // دقائق العمل الإضافي
+  workingHours: real("working_hours").default(0), // ساعات العمل الفعلية
+  deviceInfo: text("device_info"), // معلومات الجهاز (iPad, etc.)
+  locationInfo: text("location_info"), // معلومات الموقع
+  notes: text("notes"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_attendance_employee").on(table.employeeId),
+  index("idx_attendance_branch").on(table.branchId),
+  index("idx_attendance_date").on(table.attendanceDate),
+  index("idx_attendance_status").on(table.status),
+]);
+
+export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
+  id: true,
+  approvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
+
+// Time Entries - إدخالات الوقت (التوقيعات)
+export const timeEntries = pgTable("time_entries", {
+  id: serial("id").primaryKey(),
+  attendanceId: integer("attendance_id").references(() => attendanceRecords.id, { onDelete: "cascade" }),
+  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  entryType: text("entry_type").notNull(), // check_in, check_out, break_start, break_end
+  entryTime: timestamp("entry_time").defaultNow().notNull(),
+  signature: text("signature"), // base64 encoded signature image
+  signatureType: text("signature_type"), // digital, biometric
+  deviceId: text("device_id"), // iPad ID or device identifier
+  ipAddress: text("ip_address"),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  isVerified: boolean("is_verified").default(false),
+  verifiedBy: varchar("verified_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_time_entries_attendance").on(table.attendanceId),
+  index("idx_time_entries_employee").on(table.employeeId),
+  index("idx_time_entries_branch").on(table.branchId),
+]);
+
+export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TimeEntry = typeof timeEntries.$inferSelect;
+export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
+
+// Attendance Summary - ملخص الحضور الشهري
+export const attendanceSummary = pgTable("attendance_summary", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodMonth: text("period_month").notNull(), // YYYY-MM
+  totalScheduledDays: integer("total_scheduled_days").default(0),
+  totalPresentDays: integer("total_present_days").default(0),
+  totalAbsentDays: integer("total_absent_days").default(0),
+  totalLateDays: integer("total_late_days").default(0),
+  totalEarlyLeaveDays: integer("total_early_leave_days").default(0),
+  totalLeaveDays: integer("total_leave_days").default(0),
+  totalWorkingHours: real("total_working_hours").default(0),
+  totalOvertimeHours: real("total_overtime_hours").default(0),
+  totalLateMinutes: integer("total_late_minutes").default(0),
+  totalEarlyLeaveMinutes: integer("total_early_leave_minutes").default(0),
+  attendanceRate: real("attendance_rate").default(0), // نسبة الحضور %
+  punctualityRate: real("punctuality_rate").default(0), // نسبة الالتزام بالوقت %
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_attendance_summary_employee").on(table.employeeId),
+  index("idx_attendance_summary_branch").on(table.branchId),
+  index("idx_attendance_summary_month").on(table.periodMonth),
+]);
+
+export const insertAttendanceSummarySchema = createInsertSchema(attendanceSummary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AttendanceSummary = typeof attendanceSummary.$inferSelect;
+export type InsertAttendanceSummary = z.infer<typeof insertAttendanceSummarySchema>;
+
+// Attendance Status Labels
+export const ATTENDANCE_STATUS = ["pending", "present", "absent", "late", "early_leave", "on_leave"] as const;
+export type AttendanceStatus = (typeof ATTENDANCE_STATUS)[number];
+
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
+  pending: "في انتظار",
+  present: "حاضر",
+  absent: "غائب",
+  late: "متأخر",
+  early_leave: "خروج مبكر",
+  on_leave: "في إجازة",
+};
+
+export const ATTENDANCE_STATUS_ICONS: Record<AttendanceStatus, string> = {
+  pending: "🔘",
+  present: "✅",
+  absent: "❌",
+  late: "🟡",
+  early_leave: "🔵",
+  on_leave: "🟠",
+};
+
+// Days of Week (Arabic)
+export const DAYS_OF_WEEK = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"] as const;
+export type DayOfWeek = (typeof DAYS_OF_WEEK)[number];
+
+export const DAYS_OF_WEEK_LABELS: Record<DayOfWeek, string> = {
+  sat: "السبت",
+  sun: "الأحد",
+  mon: "الاثنين",
+  tue: "الثلاثاء",
+  wed: "الأربعاء",
+  thu: "الخميس",
+  fri: "الجمعة",
+};

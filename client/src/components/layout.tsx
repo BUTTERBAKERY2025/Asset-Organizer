@@ -128,6 +128,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/daily-production", label: "الإنتاج الفعلي اليومي", icon: ClipboardCheck, module: "production" },
           { href: "/production-reports", label: "تقارير الإنتاج", icon: FileBarChart, module: "production" },
           { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
+          { href: "/shift-management", label: "إدارة الورديات والحضور", icon: Clock, module: "shifts" },
+          { href: "/attendance-check", label: "تسجيل الحضور", icon: Clock, module: "shifts" },
         ],
       },
     },

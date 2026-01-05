@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
 
@@ -8712,6 +8712,512 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching marketing statistics:", error);
       res.status(500).json({ error: "فشل في جلب الإحصائيات" });
+    }
+  });
+
+  // ==========================================
+  // نظام إدارة الورديات والحضور - Shift Management & Attendance APIs
+  // ==========================================
+
+  // Schedule Templates - قوالب الجداول
+  app.get("/api/schedule-templates", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId } = req.query;
+      const templates = await storage.getAllScheduleTemplates(branchId as string);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching schedule templates:", error);
+      res.status(500).json({ error: "فشل في جلب قوالب الجداول" });
+    }
+  });
+
+  app.get("/api/schedule-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const template = await storage.getScheduleTemplate(id);
+      if (!template) return res.status(404).json({ error: "القالب غير موجود" });
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching schedule template:", error);
+      res.status(500).json({ error: "فشل في جلب القالب" });
+    }
+  });
+
+  app.post("/api/schedule-templates", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const validatedData = insertScheduleTemplateSchema.parse({
+        ...req.body,
+        createdBy: currentUser?.id
+      });
+      const template = await storage.createScheduleTemplate(validatedData);
+      res.status(201).json(template);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating schedule template:", error);
+      res.status(500).json({ error: "فشل في إنشاء القالب" });
+    }
+  });
+
+  app.patch("/api/schedule-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const partialData = insertScheduleTemplateSchema.partial().parse(req.body);
+      const template = await storage.updateScheduleTemplate(id, partialData);
+      if (!template) return res.status(404).json({ error: "القالب غير موجود" });
+      res.json(template);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating schedule template:", error);
+      res.status(500).json({ error: "فشل في تحديث القالب" });
+    }
+  });
+
+  app.delete("/api/schedule-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      await storage.deleteScheduleTemplate(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting schedule template:", error);
+      res.status(500).json({ error: "فشل في حذف القالب" });
+    }
+  });
+
+  // Schedule Periods - فترات الجدول
+  app.get("/api/schedule-periods", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId } = req.query;
+      const periods = await storage.getAllSchedulePeriods(branchId as string);
+      res.json(periods);
+    } catch (error) {
+      console.error("Error fetching schedule periods:", error);
+      res.status(500).json({ error: "فشل في جلب فترات الجدول" });
+    }
+  });
+
+  app.get("/api/schedule-periods/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const period = await storage.getSchedulePeriod(id);
+      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
+      res.json(period);
+    } catch (error) {
+      console.error("Error fetching schedule period:", error);
+      res.status(500).json({ error: "فشل في جلب الفترة" });
+    }
+  });
+
+  app.post("/api/schedule-periods", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const validatedData = insertSchedulePeriodSchema.parse({
+        ...req.body,
+        createdBy: currentUser?.id
+      });
+      const period = await storage.createSchedulePeriod(validatedData);
+      res.status(201).json(period);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating schedule period:", error);
+      res.status(500).json({ error: "فشل في إنشاء الفترة" });
+    }
+  });
+
+  app.patch("/api/schedule-periods/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const partialData = insertSchedulePeriodSchema.partial().parse(req.body);
+      const period = await storage.updateSchedulePeriod(id, partialData);
+      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
+      res.json(period);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating schedule period:", error);
+      res.status(500).json({ error: "فشل في تحديث الفترة" });
+    }
+  });
+
+  app.post("/api/schedule-periods/:id/publish", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const currentUser = req.currentUser;
+      const period = await storage.publishSchedulePeriod(id, currentUser?.id);
+      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
+      res.json(period);
+    } catch (error) {
+      console.error("Error publishing schedule period:", error);
+      res.status(500).json({ error: "فشل في نشر الفترة" });
+    }
+  });
+
+  app.delete("/api/schedule-periods/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      await storage.deleteSchedulePeriod(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting schedule period:", error);
+      res.status(500).json({ error: "فشل في حذف الفترة" });
+    }
+  });
+
+  // Employee Schedules - جداول الموظفين
+  app.get("/api/employee-schedules", isAuthenticated, async (req: any, res) => {
+    try {
+      const { periodId, employeeId, date, branchId, startDate, endDate } = req.query;
+      
+      if (periodId) {
+        const schedules = await storage.getEmployeeSchedulesByPeriod(parseInt(periodId as string));
+        return res.json(schedules);
+      }
+      if (employeeId) {
+        const schedules = await storage.getEmployeeSchedulesByEmployee(
+          employeeId as string,
+          startDate as string,
+          endDate as string
+        );
+        return res.json(schedules);
+      }
+      if (date) {
+        const schedules = await storage.getEmployeeSchedulesByDate(date as string, branchId as string);
+        return res.json(schedules);
+      }
+      
+      res.json([]);
+    } catch (error) {
+      console.error("Error fetching employee schedules:", error);
+      res.status(500).json({ error: "فشل في جلب جداول الموظفين" });
+    }
+  });
+
+  app.post("/api/employee-schedules", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertEmployeeScheduleSchema.parse(req.body);
+      const schedule = await storage.createEmployeeSchedule(validatedData);
+      res.status(201).json(schedule);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating employee schedule:", error);
+      res.status(500).json({ error: "فشل في إنشاء الجدول" });
+    }
+  });
+
+  app.post("/api/employee-schedules/bulk", isAuthenticated, async (req, res) => {
+    try {
+      const { schedules } = req.body;
+      if (!Array.isArray(schedules)) {
+        return res.status(400).json({ error: "يجب أن تكون البيانات مصفوفة" });
+      }
+      const validatedSchedules = schedules.map(s => insertEmployeeScheduleSchema.parse(s));
+      const created = await storage.createBulkEmployeeSchedules(validatedSchedules);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating bulk employee schedules:", error);
+      res.status(500).json({ error: "فشل في إنشاء الجداول" });
+    }
+  });
+
+  app.patch("/api/employee-schedules/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const partialData = insertEmployeeScheduleSchema.partial().parse(req.body);
+      const schedule = await storage.updateEmployeeSchedule(id, partialData);
+      if (!schedule) return res.status(404).json({ error: "الجدول غير موجود" });
+      res.json(schedule);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating employee schedule:", error);
+      res.status(500).json({ error: "فشل في تحديث الجدول" });
+    }
+  });
+
+  app.delete("/api/employee-schedules/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      await storage.deleteEmployeeSchedule(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting employee schedule:", error);
+      res.status(500).json({ error: "فشل في حذف الجدول" });
+    }
+  });
+
+  // Attendance Records - سجلات الحضور
+  app.get("/api/attendance", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, employeeId, startDate, endDate, status } = req.query;
+      const filters: any = {};
+      if (branchId) filters.branchId = branchId;
+      if (employeeId) filters.employeeId = employeeId;
+      if (startDate) filters.startDate = startDate;
+      if (endDate) filters.endDate = endDate;
+      if (status) filters.status = status;
+      
+      const records = await storage.getAllAttendanceRecords(filters);
+      res.json(records);
+    } catch (error) {
+      console.error("Error fetching attendance records:", error);
+      res.status(500).json({ error: "فشل في جلب سجلات الحضور" });
+    }
+  });
+
+  app.get("/api/attendance/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const record = await storage.getAttendanceRecord(id);
+      if (!record) return res.status(404).json({ error: "السجل غير موجود" });
+      res.json(record);
+    } catch (error) {
+      console.error("Error fetching attendance record:", error);
+      res.status(500).json({ error: "فشل في جلب السجل" });
+    }
+  });
+
+  app.post("/api/attendance", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertAttendanceRecordSchema.parse(req.body);
+      const record = await storage.createAttendanceRecord(validatedData);
+      res.status(201).json(record);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating attendance record:", error);
+      res.status(500).json({ error: "فشل في إنشاء السجل" });
+    }
+  });
+
+  app.patch("/api/attendance/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const partialData = insertAttendanceRecordSchema.partial().parse(req.body);
+      const record = await storage.updateAttendanceRecord(id, partialData);
+      if (!record) return res.status(404).json({ error: "السجل غير موجود" });
+      res.json(record);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating attendance record:", error);
+      res.status(500).json({ error: "فشل في تحديث السجل" });
+    }
+  });
+
+  // Check-in / Check-out with signature
+  app.post("/api/attendance/check-in", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, signature, deviceInfo } = req.body;
+      const currentUser = req.currentUser;
+      
+      if (!branchId) {
+        return res.status(400).json({ error: "الفرع مطلوب" });
+      }
+
+      const effectiveBranchId = currentUser?.branchId || branchId;
+      
+      if (currentUser?.role !== "admin") {
+        if (!currentUser?.branchId) {
+          return res.status(403).json({ error: "لم يتم تحديد فرع لحسابك. يرجى التواصل مع الإدارة" });
+        }
+        if (currentUser.branchId !== branchId) {
+          return res.status(403).json({ error: "لا يمكنك تسجيل الحضور في فرع آخر" });
+        }
+      }
+
+      if (signature && signature.length > 500000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const existingRecord = await storage.getAttendanceByEmployeeAndDate(currentUser?.id, today);
+      if (existingRecord && !existingRecord.actualCheckOut) {
+        return res.status(400).json({ error: "لقد سجلت حضورك مسبقاً اليوم" });
+      }
+      
+      const record = await storage.checkIn(currentUser?.id, effectiveBranchId, signature, deviceInfo);
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Error checking in:", error);
+      res.status(500).json({ error: "فشل في تسجيل الحضور" });
+    }
+  });
+
+  app.post("/api/attendance/check-out", isAuthenticated, async (req: any, res) => {
+    try {
+      const { signature } = req.body;
+      const currentUser = req.currentUser;
+
+      if (signature && signature.length > 500000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+      
+      const record = await storage.checkOut(currentUser?.id, signature);
+      if (!record) {
+        return res.status(404).json({ error: "لم يتم تسجيل الحضور اليوم" });
+      }
+      res.json(record);
+    } catch (error) {
+      console.error("Error checking out:", error);
+      res.status(500).json({ error: "فشل في تسجيل الانصراف" });
+    }
+  });
+
+  app.post("/api/attendance/:id/approve", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const currentUser = req.currentUser;
+      const record = await storage.approveAttendance(id, currentUser?.id);
+      if (!record) return res.status(404).json({ error: "السجل غير موجود" });
+      res.json(record);
+    } catch (error) {
+      console.error("Error approving attendance:", error);
+      res.status(500).json({ error: "فشل في اعتماد السجل" });
+    }
+  });
+
+  app.get("/api/attendance/my-today", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const today = new Date().toISOString().split('T')[0];
+      const records = await storage.getAllAttendanceRecords({
+        employeeId: currentUser?.id,
+        startDate: today,
+        endDate: today
+      });
+      res.json(records[0] || null);
+    } catch (error) {
+      console.error("Error fetching my today attendance:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الحضور" });
+    }
+  });
+
+  // Time Entries - التوقيعات
+  app.get("/api/time-entries/:attendanceId", isAuthenticated, async (req, res) => {
+    try {
+      const attendanceId = parseInt(req.params.attendanceId);
+      if (isNaN(attendanceId)) return res.status(400).json({ error: "معرف غير صالح" });
+      const entries = await storage.getTimeEntriesByAttendance(attendanceId);
+      res.json(entries);
+    } catch (error) {
+      console.error("Error fetching time entries:", error);
+      res.status(500).json({ error: "فشل في جلب التوقيعات" });
+    }
+  });
+
+  app.post("/api/time-entries", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertTimeEntrySchema.parse(req.body);
+      const entry = await storage.createTimeEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating time entry:", error);
+      res.status(500).json({ error: "فشل في إنشاء التوقيع" });
+    }
+  });
+
+  // Attendance Summary - ملخص الحضور
+  app.get("/api/attendance-summary", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, month } = req.query;
+      const filters: any = {};
+      if (branchId) filters.branchId = branchId;
+      if (month) filters.month = month;
+      
+      const summaries = await storage.getAllAttendanceSummaries(filters);
+      res.json(summaries);
+    } catch (error) {
+      console.error("Error fetching attendance summaries:", error);
+      res.status(500).json({ error: "فشل في جلب ملخصات الحضور" });
+    }
+  });
+
+  app.get("/api/attendance-summary/:employeeId/:month", isAuthenticated, async (req, res) => {
+    try {
+      const { employeeId, month } = req.params;
+      const summary = await storage.getAttendanceSummary(employeeId, month);
+      if (!summary) {
+        return res.status(404).json({ error: "الملخص غير موجود" });
+      }
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching attendance summary:", error);
+      res.status(500).json({ error: "فشل في جلب الملخص" });
+    }
+  });
+
+  app.post("/api/attendance-summary/calculate/:employeeId/:month", isAuthenticated, async (req, res) => {
+    try {
+      const { employeeId, month } = req.params;
+      const summary = await storage.calculateAndUpdateMonthlySummary(employeeId, month);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error calculating attendance summary:", error);
+      res.status(500).json({ error: "فشل في حساب الملخص" });
+    }
+  });
+
+  // Attendance Statistics
+  app.get("/api/attendance/stats/today", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId } = req.query;
+      const today = new Date().toISOString().split('T')[0];
+      
+      const records = await storage.getAllAttendanceRecords({ 
+        branchId: branchId as string, 
+        startDate: today, 
+        endDate: today 
+      });
+      
+      const present = records.filter(r => r.status === 'present').length;
+      const late = records.filter(r => r.status === 'late').length;
+      const absent = records.filter(r => r.status === 'absent').length;
+      const earlyLeave = records.filter(r => r.status === 'early_leave').length;
+      const onLeave = records.filter(r => r.status === 'on_leave').length;
+      
+      res.json({
+        date: today,
+        total: records.length,
+        present,
+        late,
+        absent,
+        earlyLeave,
+        onLeave,
+        attendanceRate: records.length > 0 ? Math.round((present / records.length) * 100) : 0
+      });
+    } catch (error) {
+      console.error("Error fetching today's attendance stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات اليوم" });
     }
   });
 

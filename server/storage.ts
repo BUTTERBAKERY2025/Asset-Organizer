@@ -251,6 +251,24 @@ import {
   marketingAssets,
   marketingTeamMembers,
   marketingAlerts,
+  scheduleTemplates,
+  schedulePeriods,
+  employeeSchedules,
+  attendanceRecords,
+  timeEntries,
+  attendanceSummary,
+  type ScheduleTemplate,
+  type InsertScheduleTemplate,
+  type SchedulePeriod,
+  type InsertSchedulePeriod,
+  type EmployeeSchedule,
+  type InsertEmployeeSchedule,
+  type AttendanceRecord,
+  type InsertAttendanceRecord,
+  type TimeEntry,
+  type InsertTimeEntry,
+  type AttendanceSummary,
+  type InsertAttendanceSummary,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -5781,6 +5799,329 @@ export class DatabaseStorage implements IStorage {
   async deleteMarketingAlert(id: number): Promise<boolean> {
     await db.delete(marketingAlerts).where(eq(marketingAlerts.id, id));
     return true;
+  }
+
+  // ==========================================
+  // نظام إدارة الورديات والحضور - Shift Management & Attendance
+  // ==========================================
+
+  // Schedule Templates - قوالب الجداول
+  async getAllScheduleTemplates(branchId?: string): Promise<ScheduleTemplate[]> {
+    if (branchId) {
+      return await db.select().from(scheduleTemplates)
+        .where(and(eq(scheduleTemplates.branchId, branchId), eq(scheduleTemplates.isActive, true)))
+        .orderBy(desc(scheduleTemplates.createdAt));
+    }
+    return await db.select().from(scheduleTemplates)
+      .where(eq(scheduleTemplates.isActive, true))
+      .orderBy(desc(scheduleTemplates.createdAt));
+  }
+
+  async getScheduleTemplate(id: number): Promise<ScheduleTemplate | undefined> {
+    const [template] = await db.select().from(scheduleTemplates).where(eq(scheduleTemplates.id, id));
+    return template;
+  }
+
+  async createScheduleTemplate(template: InsertScheduleTemplate): Promise<ScheduleTemplate> {
+    const [created] = await db.insert(scheduleTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateScheduleTemplate(id: number, template: Partial<InsertScheduleTemplate>): Promise<ScheduleTemplate | undefined> {
+    const [updated] = await db.update(scheduleTemplates).set({ ...template, updatedAt: new Date() }).where(eq(scheduleTemplates.id, id)).returning();
+    return updated;
+  }
+
+  async deleteScheduleTemplate(id: number): Promise<boolean> {
+    await db.update(scheduleTemplates).set({ isActive: false, updatedAt: new Date() }).where(eq(scheduleTemplates.id, id));
+    return true;
+  }
+
+  // Schedule Periods - فترات الجدول
+  async getAllSchedulePeriods(branchId?: string): Promise<SchedulePeriod[]> {
+    if (branchId) {
+      return await db.select().from(schedulePeriods)
+        .where(eq(schedulePeriods.branchId, branchId))
+        .orderBy(desc(schedulePeriods.startDate));
+    }
+    return await db.select().from(schedulePeriods).orderBy(desc(schedulePeriods.startDate));
+  }
+
+  async getSchedulePeriod(id: number): Promise<SchedulePeriod | undefined> {
+    const [period] = await db.select().from(schedulePeriods).where(eq(schedulePeriods.id, id));
+    return period;
+  }
+
+  async createSchedulePeriod(period: InsertSchedulePeriod): Promise<SchedulePeriod> {
+    const [created] = await db.insert(schedulePeriods).values(period).returning();
+    return created;
+  }
+
+  async updateSchedulePeriod(id: number, period: Partial<InsertSchedulePeriod>): Promise<SchedulePeriod | undefined> {
+    const [updated] = await db.update(schedulePeriods).set({ ...period, updatedAt: new Date() }).where(eq(schedulePeriods.id, id)).returning();
+    return updated;
+  }
+
+  async publishSchedulePeriod(id: number, publishedBy: string): Promise<SchedulePeriod | undefined> {
+    const [updated] = await db.update(schedulePeriods).set({ 
+      status: 'published', 
+      publishedBy, 
+      publishedAt: new Date(),
+      updatedAt: new Date() 
+    }).where(eq(schedulePeriods.id, id)).returning();
+    return updated;
+  }
+
+  async deleteSchedulePeriod(id: number): Promise<boolean> {
+    await db.delete(schedulePeriods).where(eq(schedulePeriods.id, id));
+    return true;
+  }
+
+  // Employee Schedules - جداول الموظفين
+  async getEmployeeSchedulesByPeriod(periodId: number): Promise<EmployeeSchedule[]> {
+    return await db.select().from(employeeSchedules)
+      .where(eq(employeeSchedules.periodId, periodId))
+      .orderBy(employeeSchedules.scheduleDate, employeeSchedules.employeeName);
+  }
+
+  async getEmployeeSchedulesByEmployee(employeeId: string, startDate?: string, endDate?: string): Promise<EmployeeSchedule[]> {
+    const conditions = [eq(employeeSchedules.employeeId, employeeId)];
+    if (startDate) conditions.push(gte(employeeSchedules.scheduleDate, startDate));
+    if (endDate) conditions.push(lte(employeeSchedules.scheduleDate, endDate));
+    return await db.select().from(employeeSchedules).where(and(...conditions)).orderBy(employeeSchedules.scheduleDate);
+  }
+
+  async getEmployeeSchedulesByDate(date: string, branchId?: string): Promise<EmployeeSchedule[]> {
+    if (branchId) {
+      const periods = await db.select().from(schedulePeriods).where(eq(schedulePeriods.branchId, branchId));
+      const periodIds = periods.map(p => p.id);
+      if (periodIds.length === 0) return [];
+      return await db.select().from(employeeSchedules)
+        .where(and(eq(employeeSchedules.scheduleDate, date), inArray(employeeSchedules.periodId, periodIds)));
+    }
+    return await db.select().from(employeeSchedules).where(eq(employeeSchedules.scheduleDate, date));
+  }
+
+  async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
+    const [created] = await db.insert(employeeSchedules).values(schedule).returning();
+    return created;
+  }
+
+  async createBulkEmployeeSchedules(schedules: InsertEmployeeSchedule[]): Promise<EmployeeSchedule[]> {
+    if (schedules.length === 0) return [];
+    const created = await db.insert(employeeSchedules).values(schedules).returning();
+    return created;
+  }
+
+  async updateEmployeeSchedule(id: number, schedule: Partial<InsertEmployeeSchedule>): Promise<EmployeeSchedule | undefined> {
+    const [updated] = await db.update(employeeSchedules).set({ ...schedule, updatedAt: new Date() }).where(eq(employeeSchedules.id, id)).returning();
+    return updated;
+  }
+
+  async deleteEmployeeSchedule(id: number): Promise<boolean> {
+    await db.delete(employeeSchedules).where(eq(employeeSchedules.id, id));
+    return true;
+  }
+
+  async deleteEmployeeSchedulesByPeriod(periodId: number): Promise<boolean> {
+    await db.delete(employeeSchedules).where(eq(employeeSchedules.periodId, periodId));
+    return true;
+  }
+
+  // Attendance Records - سجلات الحضور
+  async getAllAttendanceRecords(filters?: { branchId?: string; employeeId?: string; startDate?: string; endDate?: string; status?: string }): Promise<AttendanceRecord[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(attendanceRecords.branchId, filters.branchId));
+    if (filters?.employeeId) conditions.push(eq(attendanceRecords.employeeId, filters.employeeId));
+    if (filters?.startDate) conditions.push(gte(attendanceRecords.attendanceDate, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(attendanceRecords.attendanceDate, filters.endDate));
+    if (filters?.status) conditions.push(eq(attendanceRecords.status, filters.status));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(attendanceRecords).where(and(...conditions)).orderBy(desc(attendanceRecords.attendanceDate));
+    }
+    return await db.select().from(attendanceRecords).orderBy(desc(attendanceRecords.attendanceDate));
+  }
+
+  async getAttendanceRecord(id: number): Promise<AttendanceRecord | undefined> {
+    const [record] = await db.select().from(attendanceRecords).where(eq(attendanceRecords.id, id));
+    return record;
+  }
+
+  async getAttendanceByEmployeeAndDate(employeeId: string, date: string): Promise<AttendanceRecord | undefined> {
+    const [record] = await db.select().from(attendanceRecords)
+      .where(and(eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.attendanceDate, date)));
+    return record;
+  }
+
+  async createAttendanceRecord(record: InsertAttendanceRecord): Promise<AttendanceRecord> {
+    const [created] = await db.insert(attendanceRecords).values(record).returning();
+    return created;
+  }
+
+  async updateAttendanceRecord(id: number, record: Partial<InsertAttendanceRecord>): Promise<AttendanceRecord | undefined> {
+    const [updated] = await db.update(attendanceRecords).set({ ...record, updatedAt: new Date() }).where(eq(attendanceRecords.id, id)).returning();
+    return updated;
+  }
+
+  async checkIn(employeeId: string, branchId: string, signature?: string, deviceInfo?: string): Promise<AttendanceRecord> {
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toTimeString().split(' ')[0];
+    
+    const employee = await this.getUser(employeeId);
+    if (!employee) {
+      throw new Error("الموظف غير موجود");
+    }
+    
+    if (employee.branchId && employee.branchId !== branchId && employee.role !== "admin") {
+      throw new Error("لا يمكن التسجيل في فرع مختلف عن فرع الموظف");
+    }
+    
+    const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'Unknown';
+    
+    let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    
+    if (existing && !existing.actualCheckOut) {
+      throw new Error("يوجد سجل حضور مفتوح بالفعل لهذا اليوم");
+    }
+    
+    if (existing) {
+      const [updated] = await db.update(attendanceRecords).set({
+        actualCheckIn: now,
+        checkInSignature: signature,
+        deviceInfo,
+        status: 'present',
+        updatedAt: new Date()
+      }).where(eq(attendanceRecords.id, existing.id)).returning();
+      return updated;
+    }
+    
+    const [created] = await db.insert(attendanceRecords).values({
+      employeeId,
+      employeeName,
+      branchId,
+      attendanceDate: today,
+      actualCheckIn: now,
+      checkInSignature: signature,
+      deviceInfo,
+      status: 'present'
+    }).returning();
+    return created;
+  }
+
+  async checkOut(employeeId: string, signature?: string): Promise<AttendanceRecord | undefined> {
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toTimeString().split(' ')[0];
+    
+    const existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    if (!existing) return undefined;
+    if (existing.actualCheckOut) return undefined;
+    
+    const checkInTime = existing.actualCheckIn ? new Date(`1970-01-01T${existing.actualCheckIn}`) : null;
+    const checkOutTime = new Date(`1970-01-01T${now}`);
+    let workingHours = 0;
+    if (checkInTime) {
+      workingHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+    }
+    
+    const [updated] = await db.update(attendanceRecords).set({
+      actualCheckOut: now,
+      checkOutSignature: signature,
+      workingHours: Math.round(workingHours * 100) / 100,
+      updatedAt: new Date()
+    }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
+    return updated;
+  }
+
+  async approveAttendance(id: number, approvedBy: string): Promise<AttendanceRecord | undefined> {
+    const [updated] = await db.update(attendanceRecords).set({
+      approvedBy,
+      approvedAt: new Date(),
+      updatedAt: new Date()
+    }).where(eq(attendanceRecords.id, id)).returning();
+    return updated;
+  }
+
+  // Time Entries - التوقيعات
+  async getTimeEntriesByAttendance(attendanceId: number): Promise<TimeEntry[]> {
+    return await db.select().from(timeEntries)
+      .where(eq(timeEntries.attendanceId, attendanceId))
+      .orderBy(timeEntries.entryTime);
+  }
+
+  async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
+    const [created] = await db.insert(timeEntries).values(entry).returning();
+    return created;
+  }
+
+  // Attendance Summary - ملخص الحضور
+  async getAttendanceSummary(employeeId: string, month: string): Promise<AttendanceSummary | undefined> {
+    const [summary] = await db.select().from(attendanceSummary)
+      .where(and(eq(attendanceSummary.employeeId, employeeId), eq(attendanceSummary.periodMonth, month)));
+    return summary;
+  }
+
+  async getAllAttendanceSummaries(filters?: { branchId?: string; month?: string }): Promise<AttendanceSummary[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(attendanceSummary.branchId, filters.branchId));
+    if (filters?.month) conditions.push(eq(attendanceSummary.periodMonth, filters.month));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(attendanceSummary).where(and(...conditions)).orderBy(desc(attendanceSummary.periodMonth));
+    }
+    return await db.select().from(attendanceSummary).orderBy(desc(attendanceSummary.periodMonth));
+  }
+
+  async createOrUpdateAttendanceSummary(summary: InsertAttendanceSummary): Promise<AttendanceSummary> {
+    const existing = await this.getAttendanceSummary(summary.employeeId, summary.periodMonth);
+    if (existing) {
+      const [updated] = await db.update(attendanceSummary).set({ ...summary, updatedAt: new Date() }).where(eq(attendanceSummary.id, existing.id)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(attendanceSummary).values(summary).returning();
+    return created;
+  }
+
+  async calculateAndUpdateMonthlySummary(employeeId: string, month: string): Promise<AttendanceSummary> {
+    const startDate = `${month}-01`;
+    const endDate = `${month}-31`;
+    
+    const records = await this.getAllAttendanceRecords({ employeeId, startDate, endDate });
+    const employee = await this.getUser(employeeId);
+    const employeeName = employee ? `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'Unknown' : 'Unknown';
+    const branchId = employee?.branchId || '';
+    
+    const totalScheduledDays = records.length;
+    const totalPresentDays = records.filter(r => r.status === 'present').length;
+    const totalAbsentDays = records.filter(r => r.status === 'absent').length;
+    const totalLateDays = records.filter(r => r.status === 'late').length;
+    const totalEarlyLeaveDays = records.filter(r => r.status === 'early_leave').length;
+    const totalLeaveDays = records.filter(r => r.status === 'on_leave').length;
+    const totalWorkingHours = records.reduce((sum, r) => sum + (r.workingHours || 0), 0);
+    const totalOvertimeHours = records.reduce((sum, r) => sum + ((r.overtimeMinutes || 0) / 60), 0);
+    const totalLateMinutes = records.reduce((sum, r) => sum + (r.lateMinutes || 0), 0);
+    const totalEarlyLeaveMinutes = records.reduce((sum, r) => sum + (r.earlyLeaveMinutes || 0), 0);
+    const attendanceRate = totalScheduledDays > 0 ? (totalPresentDays / totalScheduledDays) * 100 : 0;
+    const punctualityRate = totalPresentDays > 0 ? ((totalPresentDays - totalLateDays) / totalPresentDays) * 100 : 0;
+    
+    return await this.createOrUpdateAttendanceSummary({
+      employeeId,
+      employeeName,
+      branchId,
+      periodMonth: month,
+      totalScheduledDays,
+      totalPresentDays,
+      totalAbsentDays,
+      totalLateDays,
+      totalEarlyLeaveDays,
+      totalLeaveDays,
+      totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
+      totalOvertimeHours: Math.round(totalOvertimeHours * 100) / 100,
+      totalLateMinutes,
+      totalEarlyLeaveMinutes,
+      attendanceRate: Math.round(attendanceRate * 100) / 100,
+      punctualityRate: Math.round(punctualityRate * 100) / 100
+    });
   }
 }
 

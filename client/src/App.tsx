@@ -67,6 +67,8 @@ import MarketingAssetsPage from "@/pages/marketing-assets";
 import MarketingAlertsPage from "@/pages/marketing-alerts";
 import MarketingExpensesPage from "@/pages/marketing-expenses";
 import SettingsDashboardPage from "@/pages/settings-dashboard";
+import ShiftManagementPage from "@/pages/shift-management";
+import AttendanceCheckPage from "@/pages/attendance-check";
 
 function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
   return (
@@ -153,6 +155,8 @@ function Router() {
       <Route path="/marketing-alerts">{() => <ProtectedPage component={MarketingAlertsPage} />}</Route>
       <Route path="/marketing-expenses">{() => <ProtectedPage component={MarketingExpensesPage} />}</Route>
       <Route path="/settings">{() => <ProtectedPage component={SettingsDashboardPage} />}</Route>
+      <Route path="/shift-management">{() => <ProtectedPage component={ShiftManagementPage} />}</Route>
+      <Route path="/attendance-check">{() => <ProtectedPage component={AttendanceCheckPage} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );
