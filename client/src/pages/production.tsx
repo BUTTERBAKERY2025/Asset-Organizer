@@ -73,7 +73,7 @@ export default function ProductionPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => apiRequest("/api/production-orders", "POST", data),
+    mutationFn: async (data: any) => apiRequest("POST", "/api/production-orders", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/production-orders"] });
       toast({ title: "تم إنشاء أمر الإنتاج بنجاح" });
@@ -85,7 +85,7 @@ export default function ProductionPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => apiRequest(`/api/production-orders/${id}`, "PATCH", data),
+    mutationFn: async ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/production-orders/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/production-orders"] });
       toast({ title: "تم تحديث أمر الإنتاج بنجاح" });
@@ -97,7 +97,7 @@ export default function ProductionPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/production-orders/${id}`, "DELETE"),
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/production-orders/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/production-orders"] });
       toast({ title: "تم حذف أمر الإنتاج بنجاح" });

@@ -58,7 +58,7 @@ export default function AttendanceCheckPage() {
 
   const checkInMutation = useMutation({
     mutationFn: async (data: { branchId: string; signature: string }) => {
-      return apiRequest("/api/attendance/check-in", "POST", {
+      return apiRequest("POST", "/api/attendance/check-in", {
         branchId: data.branchId,
         signature: data.signature,
         deviceInfo: navigator.userAgent,
@@ -76,7 +76,7 @@ export default function AttendanceCheckPage() {
 
   const checkOutMutation = useMutation({
     mutationFn: async (signature: string) => {
-      return apiRequest("/api/attendance/check-out", "POST", { signature });
+      return apiRequest("POST", "/api/attendance/check-out", { signature });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });

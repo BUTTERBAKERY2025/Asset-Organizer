@@ -59,7 +59,7 @@ export default function QualityControlPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => apiRequest("/api/quality-checks", "POST", data),
+    mutationFn: async (data: any) => apiRequest("POST", "/api/quality-checks", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/quality-checks"] });
       toast({ title: "تم تسجيل فحص الجودة بنجاح" });
