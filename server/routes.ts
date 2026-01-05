@@ -9315,11 +9315,18 @@ export async function registerRoutes(
     try {
       const today = new Date().toISOString().split('T')[0];
       
+      // Get total branch employees (active only)
+      const branchEmployees = await storage.getBranchEmployees({});
+      const activeEmployees = branchEmployees.filter(e => e.status === 'active');
+      const totalEmployees = activeEmployees.length;
+      
       // Get today's attendance
       const todayRecords = await storage.getAllAttendanceRecords({ startDate: today, endDate: today });
       const presentToday = todayRecords.filter(r => r.status === 'present' || r.status === 'late').length;
       const lateToday = todayRecords.filter(r => r.status === 'late').length;
-      const absentToday = todayRecords.filter(r => r.status === 'absent').length;
+      
+      // Calculate absent as total employees minus those who checked in
+      const absentToday = Math.max(0, totalEmployees - presentToday);
       
       // Get templates count
       const templates = await storage.getScheduleTemplates();
@@ -9346,13 +9353,9 @@ export async function registerRoutes(
       const reports = await storage.getTimesheetReports({});
       const reportsCount = reports.length;
       
-      // Get total employees
-      const users = await storage.getUsers();
-      const totalEmployees = users.filter(u => u.role !== 'admin').length;
-      
-      // Calculate attendance rate
-      const attendanceRate = todayRecords.length > 0 
-        ? Math.round((presentToday / todayRecords.length) * 100) 
+      // Calculate attendance rate based on total employees
+      const attendanceRate = totalEmployees > 0 
+        ? Math.round((presentToday / totalEmployees) * 100) 
         : 0;
       
       res.json({
