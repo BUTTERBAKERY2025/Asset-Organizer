@@ -119,7 +119,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/operations", label: "لوحة التشغيل", icon: Factory, module: "operations" },
           { href: "/production-dashboard", label: "لوحة الإنتاج", icon: ClipboardList, module: "production" },
           { href: "/products", label: "المنتجات", icon: Package, module: "operations" },
-          { href: "/shifts", label: "الورديات", icon: Clock, module: "shifts" },
           { href: "/advanced-production-orders", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
           { href: "/ai-production-planner", label: "مخطط الإنتاج الذكي", icon: Brain, module: "production" },
           { href: "/sales-data-uploads", label: "رفع بيانات المبيعات", icon: Upload, module: "production" },

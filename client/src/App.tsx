@@ -34,7 +34,6 @@ import IntegrationsPage from "@/pages/integrations";
 import OperationsDashboardPage from "@/pages/operations-dashboard";
 import OperationsReportsDashboardPage from "@/pages/operations-reports-dashboard";
 import ProductsPage from "@/pages/products";
-import ShiftsPage from "@/pages/shifts";
 import ProductionPage from "@/pages/production";
 import QualityControlPage from "@/pages/quality-control";
 import CashierJournalsPage from "@/pages/cashier-journals";
@@ -120,7 +119,6 @@ function Router() {
       <Route path="/operations">{() => <ProtectedPage component={OperationsDashboardPage} />}</Route>
       <Route path="/operations-reports">{() => <ProtectedPage component={OperationsReportsDashboardPage} />}</Route>
       <Route path="/products">{() => <ProtectedPage component={ProductsPage} />}</Route>
-      <Route path="/shifts">{() => <ProtectedPage component={ShiftsPage} />}</Route>
       <Route path="/production">{() => <ProtectedPage component={ProductionPage} />}</Route>
       <Route path="/quality-control">{() => <ProtectedPage component={QualityControlPage} />}</Route>
       <Route path="/cashier-journals">{() => <ProtectedPage component={CashierJournalsPage} />}</Route>
