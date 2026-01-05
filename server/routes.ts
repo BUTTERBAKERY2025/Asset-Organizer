@@ -9699,7 +9699,12 @@ export async function registerRoutes(
   // Create branch employee
   app.post("/api/branch-employees", isAuthenticated, async (req, res) => {
     try {
-      const employee = await storage.createBranchEmployee(req.body);
+      const { insertBranchEmployeeSchema } = await import("@shared/schema");
+      const parsed = insertBranchEmployeeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "بيانات الموظف غير صحيحة", details: parsed.error.errors });
+      }
+      const employee = await storage.createBranchEmployee(parsed.data);
       res.status(201).json(employee);
     } catch (error) {
       console.error("Error creating branch employee:", error);
@@ -9713,7 +9718,13 @@ export async function registerRoutes(
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       
-      const employee = await storage.updateBranchEmployee(id, req.body);
+      const { insertBranchEmployeeSchema } = await import("@shared/schema");
+      const parsed = insertBranchEmployeeSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "بيانات الموظف غير صحيحة", details: parsed.error.errors });
+      }
+      
+      const employee = await storage.updateBranchEmployee(id, parsed.data);
       if (!employee) {
         return res.status(404).json({ error: "الموظف غير موجود" });
       }
