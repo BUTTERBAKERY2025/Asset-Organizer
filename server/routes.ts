@@ -9316,7 +9316,7 @@ export async function registerRoutes(
       const today = new Date().toISOString().split('T')[0];
       
       // Get total branch employees (active only)
-      const branchEmployees = await storage.getBranchEmployees({});
+      const branchEmployees = await storage.getAllBranchEmployees();
       const activeEmployees = branchEmployees.filter(e => e.status === 'active');
       const totalEmployees = activeEmployees.length;
       
