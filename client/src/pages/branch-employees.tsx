@@ -10,10 +10,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useReactToPrint } from "react-to-print";
+import * as XLSX from "xlsx";
+import pdfMake from "pdfmake/build/pdfmake";
 import {
   Users,
   ChevronLeft,
@@ -31,6 +34,9 @@ import {
   Calendar,
   Search,
   Filter,
+  Download,
+  Printer,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { BranchEmployee } from "@shared/schema";
 
@@ -123,8 +129,33 @@ function getHealthBadge(status: string) {
 
 function formatCurrency(value: number | null | undefined): string {
   if (value == null) return "--";
-  return new Intl.NumberFormat('ar-SA', { style: 'currency', currency: 'SAR' }).format(value);
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value) + " ريال";
 }
+
+function formatNumber(value: number | null | undefined): string {
+  if (value == null) return "--";
+  return new Intl.NumberFormat('en-US').format(value);
+}
+
+const getHealthLabel = (status: string): string => {
+  const labels: Record<string, string> = {
+    valid: "ساري",
+    expired: "منتهي",
+    pending: "قيد التجديد",
+    none: "لا يوجد",
+  };
+  return labels[status] || status;
+};
+
+const getStatusLabel = (status: string): string => {
+  const labels: Record<string, string> = {
+    active: "نشط",
+    inactive: "غير نشط",
+    terminated: "منتهي",
+    on_leave: "في إجازة",
+  };
+  return labels[status] || status;
+};
 
 export default function BranchEmployeesPage() {
   const [, navigate] = useLocation();
@@ -135,6 +166,7 @@ export default function BranchEmployeesPage() {
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const { data: branches } = useQuery({
     queryKey: ["/api/branches"],
@@ -283,6 +315,84 @@ export default function BranchEmployeesPage() {
     return branch?.name || branchId;
   };
 
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: "موظفي الفروع - باتر بيكري",
+  });
+
+  const exportToExcel = () => {
+    const data = filteredEmployees.map((emp: BranchEmployee, index: number) => ({
+      "م": index + 1,
+      "الاسم": emp.employeeName,
+      "الفرع": getBranchName(emp.branchId),
+      "الوظيفة": emp.jobTitle,
+      "القسم": emp.department || "--",
+      "الجنسية": emp.nationality,
+      "الراتب": emp.salary,
+      "بدل السكن": emp.housingAllowance || 0,
+      "بدل المواصلات": emp.transportAllowance || 0,
+      "بدل الطعام": emp.foodAllowance || 0,
+      "إجمالي الراتب": emp.totalSalary || emp.salary,
+      "الشهادة الصحية": getHealthLabel(emp.healthCertificate || "none"),
+      "الحالة": getStatusLabel(emp.status),
+      "تاريخ التعيين": emp.hireDate || "--",
+      "رقم الجوال": emp.phoneNumber || "--",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "موظفي الفروع");
+    XLSX.writeFile(wb, `موظفي_الفروع_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    const tableBody = [
+      [
+        { text: "م", style: "tableHeader" },
+        { text: "الاسم", style: "tableHeader" },
+        { text: "الفرع", style: "tableHeader" },
+        { text: "الوظيفة", style: "tableHeader" },
+        { text: "الجنسية", style: "tableHeader" },
+        { text: "الراتب", style: "tableHeader" },
+        { text: "الشهادة الصحية", style: "tableHeader" },
+        { text: "الحالة", style: "tableHeader" },
+      ],
+      ...filteredEmployees.map((emp: BranchEmployee, index: number) => [
+        { text: String(index + 1), alignment: "center" as const },
+        { text: emp.employeeName, alignment: "right" as const },
+        { text: getBranchName(emp.branchId), alignment: "right" as const },
+        { text: emp.jobTitle, alignment: "right" as const },
+        { text: emp.nationality, alignment: "right" as const },
+        { text: formatNumber(emp.totalSalary || emp.salary), alignment: "center" as const },
+        { text: getHealthLabel(emp.healthCertificate || "none"), alignment: "center" as const },
+        { text: getStatusLabel(emp.status), alignment: "center" as const },
+      ]),
+    ];
+
+    const docDefinition: any = {
+      pageOrientation: "landscape",
+      content: [
+        { text: "تقرير موظفي الفروع", style: "header", alignment: "center" },
+        { text: `التاريخ: ${new Date().toLocaleDateString('en-US')}`, alignment: "center", margin: [0, 0, 0, 10] },
+        { text: `إجمالي الموظفين: ${filteredEmployees.length} | إجمالي الرواتب: ${formatCurrency(stats?.totalSalaries)}`, alignment: "center", margin: [0, 0, 0, 20] },
+        {
+          table: {
+            headerRows: 1,
+            widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto", "auto"],
+            body: tableBody,
+          },
+          layout: "lightHorizontalLines",
+        },
+      ],
+      styles: {
+        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+        tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" },
+      },
+      defaultStyle: { font: "Roboto", fontSize: 9 },
+    };
+
+    pdfMake.createPdf(docDefinition).download(`موظفي_الفروع_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <Layout>
       <div className="p-6 space-y-6" dir="rtl">
@@ -296,19 +406,32 @@ export default function BranchEmployeesPage() {
               <p className="text-gray-500">إدارة بيانات الموظفين والرواتب والمستندات</p>
             </div>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) {
-              setEditingEmployee(null);
-              form.reset();
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button className="bg-amber-600 hover:bg-amber-700" data-testid="button-add-employee">
-                <Plus className="w-4 h-4 ml-2" />
-                إضافة موظف
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="button-export-excel">
+              <FileSpreadsheet className="w-4 h-4 ml-2" />
+              Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportToPDF} data-testid="button-export-pdf">
+              <Download className="w-4 h-4 ml-2" />
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="button-print">
+              <Printer className="w-4 h-4 ml-2" />
+              طباعة
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setEditingEmployee(null);
+                form.reset();
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button className="bg-amber-600 hover:bg-amber-700" data-testid="button-add-employee">
+                  <Plus className="w-4 h-4 ml-2" />
+                  إضافة موظف
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" dir="rtl">
               <DialogHeader>
                 <DialogTitle>{editingEmployee ? "تعديل بيانات الموظف" : "إضافة موظف جديد"}</DialogTitle>
@@ -529,6 +652,7 @@ export default function BranchEmployeesPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-4">
@@ -540,7 +664,7 @@ export default function BranchEmployeesPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">إجمالي الموظفين</p>
-                  <p className="text-2xl font-bold" data-testid="text-total-employees">{stats?.totalEmployees || 0}</p>
+                  <p className="text-2xl font-bold" data-testid="text-total-employees">{formatNumber(stats?.totalEmployees || 0)}</p>
                 </div>
               </div>
             </CardContent>
@@ -566,7 +690,7 @@ export default function BranchEmployeesPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">عدد الجنسيات</p>
-                  <p className="text-2xl font-bold" data-testid="text-nationalities-count">{stats?.byNationality?.length || 0}</p>
+                  <p className="text-2xl font-bold" data-testid="text-nationalities-count">{formatNumber(stats?.byNationality?.length || 0)}</p>
                 </div>
               </div>
             </CardContent>
@@ -579,7 +703,7 @@ export default function BranchEmployeesPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">عدد الوظائف</p>
-                  <p className="text-2xl font-bold" data-testid="text-jobs-count">{stats?.byJobTitle?.length || 0}</p>
+                  <p className="text-2xl font-bold" data-testid="text-jobs-count">{formatNumber(stats?.byJobTitle?.length || 0)}</p>
                 </div>
               </div>
             </CardContent>
@@ -641,10 +765,11 @@ export default function BranchEmployeesPage() {
           </div>
         </div>
 
+        <div ref={printRef}>
         <Card>
           <CardHeader>
             <CardTitle>قائمة الموظفين</CardTitle>
-            <CardDescription>عرض {filteredEmployees.length} موظف</CardDescription>
+            <CardDescription>عرض {formatNumber(filteredEmployees.length)} موظف</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -712,6 +837,7 @@ export default function BranchEmployeesPage() {
             )}
           </CardContent>
         </Card>
+        </div>
 
         {stats && (stats.byNationality?.length > 0 || stats.byJobTitle?.length > 0) && (
           <div className="grid grid-cols-2 gap-6">
