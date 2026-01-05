@@ -29,6 +29,8 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   requiresAuth?: boolean;
   module?: SystemModule;
+  isHeader?: boolean;
+  indent?: boolean;
 }
 
 interface NavGroup {
@@ -116,21 +118,39 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: "التشغيل والإنتاج",
         icon: Factory,
         items: [
-          { href: "/operations", label: "لوحة التشغيل", icon: Factory, module: "operations" },
-          { href: "/production-dashboard", label: "لوحة الإنتاج", icon: ClipboardList, module: "production" },
-          { href: "/products", label: "المنتجات", icon: Package, module: "operations" },
-          { href: "/advanced-production-orders", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production" },
-          { href: "/ai-production-planner", label: "مخطط الإنتاج الذكي", icon: Brain, module: "production" },
-          { href: "/sales-data-uploads", label: "رفع بيانات المبيعات", icon: Upload, module: "production" },
-          { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control" },
-          { href: "/display-bar-waste", label: "بار العرض والهالك", icon: Package, module: "operations" },
-          { href: "/daily-production", label: "الإنتاج الفعلي اليومي", icon: ClipboardCheck, module: "production" },
-          { href: "/production-reports", label: "تقارير الإنتاج", icon: FileBarChart, module: "production" },
-          { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
-          { href: "/attendance-dashboard", label: "لوحة الورديات والحضور", icon: Clock, module: "shifts" },
-          { href: "/shift-management", label: "إدارة الورديات", icon: Clock, module: "shifts" },
-          { href: "/attendance-check", label: "تسجيل الحضور", icon: Clock, module: "shifts" },
-          { href: "/timesheet", label: "تقارير التايم شيت", icon: FileText, module: "shifts" },
+          { href: "/operations", label: "لوحة التشغيل", icon: Factory, module: "operations", isHeader: true },
+          { href: "/products", label: "المنتجات", icon: Package, module: "operations", indent: true },
+          { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control", indent: true },
+          { href: "/display-bar-waste", label: "بار العرض والهالك", icon: Package, module: "operations", indent: true },
+          { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations", indent: true },
+        ],
+      },
+    },
+    {
+      key: "production",
+      group: {
+        label: "الإنتاج",
+        icon: ClipboardList,
+        items: [
+          { href: "/production-dashboard", label: "لوحة الإنتاج", icon: ClipboardList, module: "production", isHeader: true },
+          { href: "/advanced-production-orders", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production", indent: true },
+          { href: "/daily-production", label: "الإنتاج الفعلي اليومي", icon: ClipboardCheck, module: "production", indent: true },
+          { href: "/ai-production-planner", label: "مخطط الإنتاج الذكي", icon: Brain, module: "production", indent: true },
+          { href: "/sales-data-uploads", label: "رفع بيانات المبيعات", icon: Upload, module: "production", indent: true },
+          { href: "/production-reports", label: "تقارير الإنتاج", icon: FileBarChart, module: "production", indent: true },
+        ],
+      },
+    },
+    {
+      key: "attendance",
+      group: {
+        label: "الورديات والحضور",
+        icon: Clock,
+        items: [
+          { href: "/attendance-dashboard", label: "لوحة الورديات والحضور", icon: Clock, module: "shifts", isHeader: true },
+          { href: "/shift-management", label: "إدارة الورديات", icon: Calendar, module: "shifts", indent: true },
+          { href: "/attendance-check", label: "تسجيل الحضور", icon: UserCheck, module: "shifts", indent: true },
+          { href: "/timesheet", label: "تقارير التايم شيت", icon: FileText, module: "shifts", indent: true },
         ],
       },
     },
@@ -223,19 +243,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const isGroupActive = (items: NavItem[]) => items.some(item => location === item.href);
 
-  const renderNavItem = (item: NavItem, indented = false) => (
+  const renderNavItem = (item: NavItem, inGroup = false) => (
     <Link key={item.href} href={item.href}>
       <div
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors cursor-pointer text-[13px]",
-          indented && "mr-3",
+          inGroup && !item.isHeader && "mr-6 text-[12px]",
+          inGroup && item.isHeader && "mr-3 font-semibold",
+          item.indent && "mr-8 text-[12px] border-r-2 border-muted pr-2",
           location === item.href
             ? "bg-primary/10 text-primary font-medium"
             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
         )}
         data-testid={`nav-link-${item.href.replace('/', '')}`}
       >
-        <item.icon className="w-4 h-4 flex-shrink-0" />
+        <item.icon className={cn("flex-shrink-0", item.indent ? "w-3.5 h-3.5" : "w-4 h-4")} />
         <span>{item.label}</span>
       </div>
     </Link>
@@ -422,13 +444,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <Link key={item.href} href={item.href}>
                           <div
                             className={cn(
-                              "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer text-sm mr-3",
+                              "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer text-sm",
+                              !item.isHeader && "mr-6 text-[13px]",
+                              item.isHeader && "mr-3 font-semibold",
+                              item.indent && "mr-8 text-[12px] border-r-2 border-muted pr-2",
                               location === item.href
                                 ? "bg-primary/10 text-primary font-medium"
                                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                             )}
                           >
-                            <item.icon className="w-4 h-4 flex-shrink-0" />
+                            <item.icon className={cn("flex-shrink-0", item.indent ? "w-3.5 h-3.5" : "w-4 h-4")} />
                             <span>{item.label}</span>
                           </div>
                         </Link>
