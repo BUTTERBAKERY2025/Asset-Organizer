@@ -9493,7 +9493,7 @@ export async function registerRoutes(
         const dayOfWeek = dayNames[d.getDay()];
         
         const schedule = employeeSchedules.find(s => s.scheduleDate === dateStr);
-        const attendanceRecord = attendance.find(a => a.scheduleDate === dateStr);
+        const attendanceRecord = attendance.find(a => a.attendanceDate === dateStr);
         
         const isOff = schedule?.isOff || dayOfWeek === 'fri';
         const scheduledStartTime = schedule?.startTime || null;
