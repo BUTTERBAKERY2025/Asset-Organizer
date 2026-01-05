@@ -9240,5 +9240,277 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Timesheet Reports - تقارير التايم شيت ====================
+  
+  // Get all timesheet reports with filters
+  app.get("/api/timesheet-reports", isAuthenticated, async (req: any, res) => {
+    try {
+      const { employeeId, branchId, status } = req.query;
+      const filters: { employeeId?: string; branchId?: string; status?: string } = {};
+      if (employeeId) filters.employeeId = employeeId as string;
+      if (branchId) filters.branchId = branchId as string;
+      if (status) filters.status = status as string;
+      
+      const reports = await storage.getTimesheetReports(filters);
+      res.json(reports);
+    } catch (error) {
+      console.error("Error fetching timesheet reports:", error);
+      res.status(500).json({ error: "فشل في جلب تقارير التايم شيت" });
+    }
+  });
+
+  // Get single timesheet report by ID
+  app.get("/api/timesheet-reports/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const report = await storage.getTimesheetReport(id);
+      if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching timesheet report:", error);
+      res.status(500).json({ error: "فشل في جلب التقرير" });
+    }
+  });
+
+  // Get timesheet report entries
+  app.get("/api/timesheet-reports/:id/entries", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const entries = await storage.getTimesheetReportEntries(id);
+      res.json(entries);
+    } catch (error) {
+      console.error("Error fetching timesheet entries:", error);
+      res.status(500).json({ error: "فشل في جلب سجلات التقرير" });
+    }
+  });
+
+  // Generate timesheet report for an employee
+  app.post("/api/timesheet-reports/generate", isAuthenticated, async (req: any, res) => {
+    try {
+      const { employeeId, branchId, startDate, endDate } = req.body;
+      
+      if (!employeeId || !branchId || !startDate || !endDate) {
+        return res.status(400).json({ error: "جميع الحقول مطلوبة: employeeId, branchId, startDate, endDate" });
+      }
+
+      // Check if report already exists
+      const existing = await storage.getTimesheetReportByEmployeeAndDates(employeeId, startDate, endDate);
+      if (existing) {
+        return res.status(400).json({ error: "يوجد تقرير مسبق لهذه الفترة", existingReportId: existing.id });
+      }
+
+      // Get employee info
+      const employee = await storage.getUser(employeeId);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+
+      // Get schedules and attendance for the date range
+      const schedules = await storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate);
+      const employeeSchedules = schedules.filter(s => s.employeeId === employeeId);
+      
+      const attendance = await storage.getAllAttendanceRecords({
+        employeeId,
+        branchId,
+        startDate,
+        endDate
+      });
+
+      // Calculate totals
+      let totalScheduledDays = 0;
+      let totalPresentDays = 0;
+      let totalAbsentDays = 0;
+      let totalLateDays = 0;
+      let totalScheduledHours = 0;
+      let totalActualHours = 0;
+      let totalOvertimeMinutes = 0;
+      let totalLateMinutes = 0;
+
+      // Create report first
+      const report = await storage.createTimesheetReport({
+        employeeId,
+        branchId,
+        startDate,
+        endDate,
+        generatedBy: req.currentUser?.id,
+        status: "pending_employee_signature",
+        totalScheduledDays: 0,
+        totalPresentDays: 0,
+        totalAbsentDays: 0,
+        totalLateDays: 0,
+        totalScheduledHours: 0,
+        totalActualHours: 0,
+        totalOvertimeMinutes: 0,
+        totalLateMinutes: 0,
+      });
+
+      // Generate daily entries
+      const entries: any[] = [];
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        const dayOfWeek = dayNames[d.getDay()];
+        
+        const schedule = employeeSchedules.find(s => s.scheduleDate === dateStr);
+        const attendanceRecord = attendance.find(a => a.scheduleDate === dateStr);
+        
+        const isOff = schedule?.isOff || dayOfWeek === 'fri';
+        const scheduledStartTime = schedule?.startTime || null;
+        const scheduledEndTime = schedule?.endTime || null;
+        const actualStartTime = attendanceRecord?.actualCheckIn || null;
+        const actualEndTime = attendanceRecord?.actualCheckOut || null;
+        
+        // Calculate hours
+        let scheduledHours = 0;
+        if (scheduledStartTime && scheduledEndTime && !isOff) {
+          const startParts = scheduledStartTime.split(':').map(Number);
+          const endParts = scheduledEndTime.split(':').map(Number);
+          scheduledHours = (endParts[0] + endParts[1]/60) - (startParts[0] + startParts[1]/60);
+        }
+        
+        let actualHours = attendanceRecord?.workingHours || 0;
+        let overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
+        let lateMinutes = attendanceRecord?.lateMinutes || 0;
+        
+        // Determine status
+        let status = "pending";
+        if (isOff) {
+          status = "day_off";
+        } else if (attendanceRecord) {
+          if (attendanceRecord.status === "present") status = "present";
+          else if (attendanceRecord.status === "late") status = "late";
+          else if (attendanceRecord.status === "absent") status = "absent";
+          else status = attendanceRecord.status || "pending";
+        } else if (!isOff && scheduledStartTime) {
+          status = "absent";
+        }
+
+        // Update totals
+        if (!isOff && scheduledStartTime) {
+          totalScheduledDays++;
+          totalScheduledHours += scheduledHours;
+          
+          if (status === "present" || status === "late") {
+            totalPresentDays++;
+            totalActualHours += actualHours;
+            totalOvertimeMinutes += overtimeMinutes;
+          }
+          if (status === "late") {
+            totalLateDays++;
+            totalLateMinutes += lateMinutes;
+          }
+          if (status === "absent") {
+            totalAbsentDays++;
+          }
+        }
+
+        entries.push({
+          reportId: report.id,
+          date: dateStr,
+          dayOfWeek,
+          scheduledStartTime,
+          scheduledEndTime,
+          actualStartTime,
+          actualEndTime,
+          isOff,
+          status,
+          scheduledHours,
+          actualHours,
+          overtimeMinutes,
+          lateMinutes,
+        });
+      }
+
+      // Save entries
+      await storage.createBulkTimesheetReportEntries(entries);
+
+      // Update report with totals
+      const updatedReport = await storage.updateTimesheetReport(report.id, {
+        totalScheduledDays,
+        totalPresentDays,
+        totalAbsentDays,
+        totalLateDays,
+        totalScheduledHours: Math.round(totalScheduledHours * 100) / 100,
+        totalActualHours: Math.round(totalActualHours * 100) / 100,
+        totalOvertimeMinutes,
+        totalLateMinutes,
+      });
+
+      res.status(201).json({ report: updatedReport, entriesCount: entries.length });
+    } catch (error) {
+      console.error("Error generating timesheet report:", error);
+      res.status(500).json({ error: "فشل في إنشاء التقرير" });
+    }
+  });
+
+  // Sign timesheet report (employee or manager)
+  app.post("/api/timesheet-reports/:id/sign", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const { signatureType, signature, acknowledgment } = req.body;
+      
+      if (!signatureType || !signature) {
+        return res.status(400).json({ error: "نوع التوقيع والتوقيع مطلوبان" });
+      }
+      
+      if (signatureType !== 'employee' && signatureType !== 'manager') {
+        return res.status(400).json({ error: "نوع التوقيع غير صالح" });
+      }
+      
+      const signerId = req.currentUser?.id;
+      if (!signerId) {
+        return res.status(401).json({ error: "المستخدم غير موجود" });
+      }
+
+      // Validate signature size (max 500KB base64)
+      if (signature.length > 500000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+      
+      const report = await storage.signTimesheetReport(id, signatureType, signature, signerId, acknowledgment);
+      if (!report) {
+        return res.status(404).json({ error: "التقرير غير موجود" });
+      }
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error signing timesheet report:", error);
+      res.status(500).json({ error: "فشل في توقيع التقرير" });
+    }
+  });
+
+  // Delete timesheet report
+  app.delete("/api/timesheet-reports/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const report = await storage.getTimesheetReport(id);
+      if (!report) {
+        return res.status(404).json({ error: "التقرير غير موجود" });
+      }
+      
+      if (report.status === 'finalized') {
+        return res.status(400).json({ error: "لا يمكن حذف تقرير مكتمل" });
+      }
+      
+      await storage.deleteTimesheetReport(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting timesheet report:", error);
+      res.status(500).json({ error: "فشل في حذف التقرير" });
+    }
+  });
+
   return httpServer;
 }
