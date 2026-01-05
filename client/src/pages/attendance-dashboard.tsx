@@ -35,15 +35,14 @@ interface QuickAction {
 export default function AttendanceDashboardPage() {
   const [, navigate] = useLocation();
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading } = useQuery<{
+    totalEmployees: number;
+    presentToday: number;
+    lateToday: number;
+    absentToday: number;
+    templatesCount: number;
+  }>({
     queryKey: ["/api/attendance-dashboard-stats"],
-    queryFn: async () => {
-      const response = await fetch("/api/attendance-dashboard-stats", {
-        credentials: 'include'
-      });
-      if (!response.ok) return null;
-      return response.json();
-    },
   });
 
   const quickActions: QuickAction[] = [
