@@ -9,7 +9,6 @@ packages = ["freetype", "gumbo", "harfbuzz", "jbig2dec", "lcms2", "libimagequant
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-publicDir = "dist/public"
 run = ["npm", "run", "start"]
 
 [[ports]]

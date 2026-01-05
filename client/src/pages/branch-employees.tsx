@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useState, useRef } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -164,6 +165,7 @@ const getStatusLabel = (status: string): string => {
 export default function BranchEmployeesPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
@@ -887,20 +889,22 @@ export default function BranchEmployeesPage() {
                           <Button size="sm" variant="ghost" onClick={() => handleEdit(emp)} data-testid={`button-edit-${emp.id}`} title="تعديل">
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => {
-                              if (confirm("هل أنت متأكد من حذف هذا الموظف؟")) {
-                                deleteMutation.mutate(emp.id);
-                              }
-                            }}
-                            data-testid={`button-delete-${emp.id}`}
-                            title="حذف"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {user?.role === "admin" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => {
+                                if (confirm("هل أنت متأكد من حذف هذا الموظف نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.")) {
+                                  deleteMutation.mutate(emp.id);
+                                }
+                              }}
+                              data-testid={`button-delete-${emp.id}`}
+                              title="حذف (مدير النظام فقط)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -9735,9 +9735,14 @@ export async function registerRoutes(
     }
   });
 
-  // Delete branch employee
-  app.delete("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+  // Delete branch employee - مدير النظام فقط
+  app.delete("/api/branch-employees/:id", isAuthenticated, async (req: any, res) => {
     try {
+      // التحقق من صلاحية مدير النظام فقط
+      if (req.user?.role !== "admin") {
+        return res.status(403).json({ error: "غير مصرح - يمكن لمدير النظام فقط حذف الموظفين" });
+      }
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       
