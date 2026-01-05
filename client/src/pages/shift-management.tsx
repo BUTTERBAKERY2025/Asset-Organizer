@@ -416,8 +416,8 @@ export default function ShiftManagementPage() {
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-primary" data-testid="page-title">جدولة الدوام</h1>
-              <p className="text-muted-foreground mt-1">إنشاء وإدارة جداول دوام الموظفين للفروع</p>
+              <h1 className="text-3xl font-bold text-primary" data-testid="page-title">إدارة موظفي الفروع الشاملة</h1>
+              <p className="text-muted-foreground mt-1">إدارة شاملة لجداول الدوام والحضور والتقارير لموظفي الفروع</p>
             </div>
           </div>
           <div className="flex gap-2 items-center">

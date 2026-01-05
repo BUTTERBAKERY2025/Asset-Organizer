@@ -148,7 +148,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Clock,
         items: [
           { href: "/attendance-dashboard", label: "لوحة الورديات والحضور", icon: Clock, module: "shifts", isHeader: true },
-          { href: "/shift-management", label: "إدارة الورديات", icon: Calendar, module: "shifts", indent: true },
+          { href: "/shift-management", label: "إدارة موظفي الفروع الشاملة", icon: Calendar, module: "shifts", indent: true },
           { href: "/attendance-check", label: "تسجيل الحضور", icon: UserCheck, module: "shifts", indent: true },
           { href: "/timesheet", label: "تقارير التايم شيت", icon: FileText, module: "shifts", indent: true },
         ],
