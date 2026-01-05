@@ -803,9 +803,11 @@ export interface IStorage {
   getAllBranchEmployees(): Promise<BranchEmployee[]>;
   getBranchEmployeesByBranch(branchId: string): Promise<BranchEmployee[]>;
   getBranchEmployee(id: number): Promise<BranchEmployee | undefined>;
+  getBranchEmployeeByLinkedUserId(userId: string): Promise<BranchEmployee | undefined>;
   createBranchEmployee(employee: InsertBranchEmployee): Promise<BranchEmployee>;
   updateBranchEmployee(id: number, employee: Partial<InsertBranchEmployee>): Promise<BranchEmployee | undefined>;
   deleteBranchEmployee(id: number): Promise<boolean>;
+  linkBranchEmployeeToUser(branchEmployeeId: number, userId: string): Promise<BranchEmployee | undefined>;
   getBranchEmployeeStats(branchId?: string): Promise<{
     totalEmployees: number;
     totalSalaries: number;
@@ -813,6 +815,11 @@ export interface IStorage {
     byJobTitle: { jobTitle: string; count: number }[];
     byStatus: { status: string; count: number }[];
   }>;
+
+  // Branch Employee Integration - ربط موظفي الفروع بالحضور والدوام
+  getAttendanceByBranchEmployeeId(branchEmployeeId: number): Promise<AttendanceRecord[]>;
+  getTimesheetsByBranchEmployeeId(branchEmployeeId: number): Promise<TimesheetReport[]>;
+  getSchedulesByBranchEmployeeId(branchEmployeeId: number): Promise<EmployeeSchedule[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6515,6 +6522,39 @@ export class DatabaseStorage implements IStorage {
       byJobTitle: Array.from(jobTitleMap.entries()).map(([jobTitle, count]) => ({ jobTitle, count })),
       byStatus: Array.from(statusMap.entries()).map(([status, count]) => ({ status, count })),
     };
+  }
+
+  async getBranchEmployeeByLinkedUserId(userId: string): Promise<BranchEmployee | undefined> {
+    const [employee] = await db.select().from(branchEmployees)
+      .where(eq(branchEmployees.linkedUserId, userId));
+    return employee || undefined;
+  }
+
+  async linkBranchEmployeeToUser(branchEmployeeId: number, userId: string): Promise<BranchEmployee | undefined> {
+    const [updated] = await db.update(branchEmployees)
+      .set({ linkedUserId: userId, updatedAt: new Date() })
+      .where(eq(branchEmployees.id, branchEmployeeId))
+      .returning();
+    return updated;
+  }
+
+  // Branch Employee Integration - ربط موظفي الفروع بالحضور والدوام
+  async getAttendanceByBranchEmployeeId(branchEmployeeId: number): Promise<AttendanceRecord[]> {
+    return await db.select().from(attendanceRecords)
+      .where(eq(attendanceRecords.branchEmployeeId, branchEmployeeId))
+      .orderBy(attendanceRecords.attendanceDate);
+  }
+
+  async getTimesheetsByBranchEmployeeId(branchEmployeeId: number): Promise<TimesheetReport[]> {
+    return await db.select().from(timesheetReports)
+      .where(eq(timesheetReports.branchEmployeeId, branchEmployeeId))
+      .orderBy(timesheetReports.startDate);
+  }
+
+  async getSchedulesByBranchEmployeeId(branchEmployeeId: number): Promise<EmployeeSchedule[]> {
+    return await db.select().from(employeeSchedules)
+      .where(eq(employeeSchedules.branchEmployeeId, branchEmployeeId))
+      .orderBy(employeeSchedules.scheduleDate);
   }
 }
 
