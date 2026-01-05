@@ -4,31 +4,63 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import type { Branch, AttendanceRecord } from "@shared/schema";
+import type { Branch, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
+
+interface ScheduledEmployee {
+  id: number;
+  employeeId: string;
+  employeeName: string;
+  startTime?: string;
+  endTime?: string;
+  shiftType?: string;
+  scheduleDate: string;
+  attendance?: AttendanceRecord;
+}
+
+const SHIFT_TYPES = [
+  { value: "morning", label: "الوردية الصباحية", icon: Sunrise, color: "text-amber-500" },
+  { value: "evening", label: "الوردية المسائية", icon: Sun, color: "text-orange-500" },
+  { value: "night", label: "الوردية الليلية", icon: Moon, color: "text-indigo-500" },
+];
 
 export default function AttendanceCheckPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [selectedShift, setSelectedShift] = useState<string>("");
+  const [selectedEmployee, setSelectedEmployee] = useState<ScheduledEmployee | null>(null);
+  const [signatureMode, setSignatureMode] = useState<"check_in" | "check_out" | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
+
+  const today = format(new Date(), "yyyy-MM-dd");
 
   const { data: branches } = useQuery<Branch[]>({ queryKey: ["/api/branches"] });
-  const { data: myAttendance } = useQuery<AttendanceRecord>({
-    queryKey: ["/api/attendance/my-today"],
-    enabled: !!user,
+
+  const { data: scheduledEmployees, isLoading: loadingEmployees } = useQuery<ScheduledEmployee[]>({
+    queryKey: ["/api/scheduled-employees-for-attendance", selectedBranch, selectedShift, today],
+    queryFn: async () => {
+      if (!selectedBranch || !selectedShift) return [];
+      const res = await fetch(`/api/scheduled-employees-for-attendance?branchId=${selectedBranch}&shiftType=${selectedShift}&date=${today}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedBranch && !!selectedShift,
   });
 
   useEffect(() => {
@@ -55,20 +87,16 @@ export default function AttendanceCheckPage() {
         ctx.lineJoin = "round";
       }
     }
-  }, []);
+  }, [selectedEmployee, signatureMode]);
 
   const checkInMutation = useMutation({
-    mutationFn: async (data: { branchId: string; signature: string }) => {
-      return apiRequest("POST", "/api/attendance/check-in", {
-        branchId: data.branchId,
-        signature: data.signature,
-        deviceInfo: navigator.userAgent,
-      });
+    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduledStartTime?: string; scheduledEndTime?: string }) => {
+      return apiRequest("POST", "/api/attendance/check-in-employee", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-employees-for-attendance"] });
       toast({ title: "تم تسجيل الحضور بنجاح", description: `الوقت: ${format(new Date(), "hh:mm a", { locale: ar })}` });
-      clearCanvas();
+      closeSignatureDialog();
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message || "فشل في تسجيل الحضور", variant: "destructive" });
@@ -76,13 +104,13 @@ export default function AttendanceCheckPage() {
   });
 
   const checkOutMutation = useMutation({
-    mutationFn: async (signature: string) => {
-      return apiRequest("POST", "/api/attendance/check-out", { signature });
+    mutationFn: async (data: { employeeId: string; signature: string }) => {
+      return apiRequest("POST", "/api/attendance/check-out-employee", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-employees-for-attendance"] });
       toast({ title: "تم تسجيل الانصراف بنجاح", description: `الوقت: ${format(new Date(), "hh:mm a", { locale: ar })}` });
-      clearCanvas();
+      closeSignatureDialog();
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message || "فشل في تسجيل الانصراف", variant: "destructive" });
@@ -140,190 +168,332 @@ export default function AttendanceCheckPage() {
     return canvasRef.current?.toDataURL("image/png") || "";
   };
 
-  const handleCheckIn = () => {
-    if (!hasSignature) {
+  const openSignatureDialog = (employee: ScheduledEmployee, mode: "check_in" | "check_out") => {
+    setSelectedEmployee(employee);
+    setSignatureMode(mode);
+    setHasSignature(false);
+  };
+
+  const closeSignatureDialog = () => {
+    setSelectedEmployee(null);
+    setSignatureMode(null);
+    setHasSignature(false);
+  };
+
+  const handleSubmitSignature = () => {
+    if (!hasSignature || !selectedEmployee) {
       toast({ title: "يرجى التوقيع أولاً", variant: "destructive" });
       return;
     }
-    if (!selectedBranch) {
-      toast({ title: "يرجى اختيار الفرع", variant: "destructive" });
-      return;
+
+    if (signatureMode === "check_in") {
+      checkInMutation.mutate({
+        employeeId: selectedEmployee.employeeId,
+        branchId: selectedBranch,
+        signature: getSignatureData(),
+        scheduledStartTime: selectedEmployee.startTime,
+        scheduledEndTime: selectedEmployee.endTime,
+      });
+    } else {
+      checkOutMutation.mutate({
+        employeeId: selectedEmployee.employeeId,
+        signature: getSignatureData(),
+      });
     }
-    checkInMutation.mutate({ branchId: selectedBranch, signature: getSignatureData() });
   };
 
-  const handleCheckOut = () => {
-    if (!hasSignature) {
-      toast({ title: "يرجى التوقيع أولاً", variant: "destructive" });
-      return;
-    }
-    checkOutMutation.mutate(getSignatureData());
+  const getEmployeeStatus = (emp: ScheduledEmployee) => {
+    if (!emp.attendance) return { label: "لم يحضر", color: "bg-gray-100 text-gray-700", canCheckIn: true, canCheckOut: false };
+    if (emp.attendance.actualCheckIn && !emp.attendance.actualCheckOut) return { label: "حاضر", color: "bg-green-100 text-green-700", canCheckIn: false, canCheckOut: true };
+    if (emp.attendance.actualCheckOut) return { label: "انصرف", color: "bg-blue-100 text-blue-700", canCheckIn: false, canCheckOut: false };
+    return { label: "في انتظار", color: "bg-amber-100 text-amber-700", canCheckIn: true, canCheckOut: false };
   };
 
-  const isCheckedIn = myAttendance && !myAttendance.actualCheckOut;
-  const isCheckedOut = myAttendance && myAttendance.actualCheckOut;
-
-  const [, navigate] = useLocation();
+  const selectedShiftInfo = SHIFT_TYPES.find(s => s.value === selectedShift);
 
   return (
     <Layout>
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <div className="absolute top-20 right-4 z-10">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate("/attendance-dashboard")}
-            className="gap-2 bg-white/90 hover:bg-white"
-            data-testid="btn-back"
-          >
-            <ArrowRight className="w-4 h-4" />
-            لوحة الحضور
-          </Button>
-        </div>
-        <Card className="w-full max-w-lg shadow-xl">
-          <CardHeader className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
-            <div className="flex justify-center mb-2">
-              <div className="p-3 bg-white/20 rounded-full">
-                <Clock className="w-8 h-8" />
-              </div>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/attendance-dashboard")}
+              data-testid="btn-back"
+            >
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold" data-testid="page-title">تسجيل الحضور والانصراف</h1>
+              <p className="text-muted-foreground">تسجيل حضور وانصراف موظفي الوردية</p>
             </div>
-            <CardTitle className="text-2xl">تسجيل الحضور والانصراف</CardTitle>
-            <CardDescription className="text-blue-100">
+          </div>
+          <div className="text-left">
+            <div className="text-3xl font-mono font-bold text-primary" data-testid="current-time">
+              {format(currentTime, "hh:mm:ss", { locale: ar })}
+            </div>
+            <div className="text-sm text-muted-foreground">
               {format(currentTime, "EEEE, dd MMMM yyyy", { locale: ar })}
+            </div>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              اختيار الفرع والوردية
+            </CardTitle>
+            <CardDescription>
+              حدد الفرع والوردية لعرض الموظفين المجدولين لهذا اليوم
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            <div className="text-center">
-              <div className="text-5xl font-mono font-bold text-primary" data-testid="current-time">
-                {format(currentTime, "hh:mm:ss", { locale: ar })}
-              </div>
-              <div className="text-lg text-muted-foreground mt-1">
-                {format(currentTime, "a", { locale: ar })}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-              <div className="p-2 bg-primary/10 rounded-full">
-                <User className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-medium">{user?.firstName} {user?.lastName}</p>
-                <p className="text-sm text-muted-foreground">{user?.jobTitle || "موظف"}</p>
-              </div>
-              {myAttendance && (
-                <Badge className={`mr-auto ${isCheckedOut ? "bg-gray-100 text-gray-700" : isCheckedIn ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                  {isCheckedOut ? "تم الانصراف" : isCheckedIn ? "حاضر" : "لم يتم التسجيل"}
-                </Badge>
-              )}
-            </div>
-
-            {myAttendance && (
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div className="p-3 bg-green-50 rounded-lg">
-                  <LogIn className="w-5 h-5 text-green-600 mx-auto mb-1" />
-                  <p className="text-xs text-muted-foreground">وقت الحضور</p>
-                  <p className="font-mono font-bold text-green-700">{myAttendance.actualCheckIn || "-"}</p>
-                </div>
-                <div className="p-3 bg-red-50 rounded-lg">
-                  <LogOut className="w-5 h-5 text-red-600 mx-auto mb-1" />
-                  <p className="text-xs text-muted-foreground">وقت الانصراف</p>
-                  <p className="font-mono font-bold text-red-700">{myAttendance.actualCheckOut || "-"}</p>
-                </div>
-              </div>
-            )}
-
-            {!isCheckedIn && (
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <Building2 className="w-4 h-4" />
                   الفرع
                 </label>
-                {user?.branchId ? (
-                  <div className="p-3 bg-muted rounded-lg text-sm">
-                    {branches?.find(b => b.id === user.branchId)?.name || user.branchId}
-                  </div>
-                ) : (
-                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                    <SelectTrigger data-testid="select-branch">
-                      <SelectValue placeholder="اختر الفرع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches?.map(branch => (
-                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                <Select value={selectedBranch} onValueChange={(v) => { setSelectedBranch(v); setSelectedShift(""); }}>
+                  <SelectTrigger data-testid="select-branch">
+                    <SelectValue placeholder="اختر الفرع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches?.map(branch => (
+                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Pencil className="w-4 h-4" />
-                التوقيع الإلكتروني
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
-                <canvas
-                  ref={canvasRef}
-                  width={400}
-                  height={150}
-                  className="w-full touch-none cursor-crosshair"
-                  onMouseDown={(e) => startDrawing(getMousePos(e))}
-                  onMouseMove={(e) => draw(getMousePos(e))}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  onTouchStart={(e) => { e.preventDefault(); startDrawing(getTouchPos(e)); }}
-                  onTouchMove={(e) => { e.preventDefault(); draw(getTouchPos(e)); }}
-                  onTouchEnd={stopDrawing}
-                  data-testid="signature-canvas"
-                />
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  الوردية
+                </label>
+                <Select value={selectedShift} onValueChange={setSelectedShift} disabled={!selectedBranch}>
+                  <SelectTrigger data-testid="select-shift">
+                    <SelectValue placeholder="اختر الوردية" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SHIFT_TYPES.map(shift => (
+                      <SelectItem key={shift.value} value={shift.value}>
+                        <div className="flex items-center gap-2">
+                          <shift.icon className={`w-4 h-4 ${shift.color}`} />
+                          {shift.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Button variant="outline" size="sm" onClick={clearCanvas} className="gap-2" data-testid="btn-clear-signature">
-                <RotateCcw className="w-4 h-4" />
-                مسح التوقيع
-              </Button>
-            </div>
 
-            <div className="flex gap-3">
-              {!isCheckedIn && !isCheckedOut && (
-                <Button
-                  onClick={handleCheckIn}
-                  disabled={checkInMutation.isPending || !hasSignature || !selectedBranch}
-                  className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
-                  size="lg"
-                  data-testid="btn-check-in"
-                >
-                  <LogIn className="w-5 h-5" />
-                  {checkInMutation.isPending ? "جاري التسجيل..." : "تسجيل الحضور"}
-                </Button>
-              )}
-              {isCheckedIn && !isCheckedOut && (
-                <Button
-                  onClick={handleCheckOut}
-                  disabled={checkOutMutation.isPending || !hasSignature}
-                  className="flex-1 gap-2 bg-red-600 hover:bg-red-700"
-                  size="lg"
-                  data-testid="btn-check-out"
-                >
-                  <LogOut className="w-5 h-5" />
-                  {checkOutMutation.isPending ? "جاري التسجيل..." : "تسجيل الانصراف"}
-                </Button>
-              )}
-              {isCheckedOut && (
-                <div className="flex-1 p-4 bg-gray-100 rounded-lg text-center">
-                  <Check className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                  <p className="font-medium">تم تسجيل الحضور والانصراف لهذا اليوم</p>
-                  {myAttendance.workingHours && (
-                    <p className="text-sm text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                      <Timer className="w-4 h-4" />
-                      ساعات العمل: {myAttendance.workingHours.toFixed(1)} ساعة
-                    </p>
-                  )}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  التاريخ
+                </label>
+                <div className="p-3 bg-muted rounded-lg text-sm font-medium">
+                  {format(new Date(), "EEEE, dd MMMM yyyy", { locale: ar })}
                 </div>
-              )}
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {selectedBranch && selectedShift && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                موظفو {selectedShiftInfo?.label || "الوردية"}
+                {scheduledEmployees && scheduledEmployees.length > 0 && (
+                  <Badge variant="secondary">{scheduledEmployees.length} موظف</Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                الموظفون المجدولون للعمل في هذه الوردية اليوم
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingEmployees ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : !scheduledEmployees || scheduledEmployees.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>لا يوجد موظفون مجدولون لهذه الوردية اليوم</p>
+                  <p className="text-sm mt-2">تأكد من إنشاء جداول الدوام في صفحة إدارة الورديات</p>
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">الموظف</TableHead>
+                        <TableHead className="text-center">وقت البدء</TableHead>
+                        <TableHead className="text-center">وقت الانتهاء</TableHead>
+                        <TableHead className="text-center">الحضور</TableHead>
+                        <TableHead className="text-center">الانصراف</TableHead>
+                        <TableHead className="text-center">الحالة</TableHead>
+                        <TableHead className="text-center">الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {scheduledEmployees.map(emp => {
+                        const status = getEmployeeStatus(emp);
+                        return (
+                          <TableRow key={emp.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <User className="w-4 h-4 text-primary" />
+                                </div>
+                                {emp.employeeName}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center font-mono">{emp.startTime || "-"}</TableCell>
+                            <TableCell className="text-center font-mono">{emp.endTime || "-"}</TableCell>
+                            <TableCell className="text-center">
+                              {emp.attendance?.actualCheckIn ? (
+                                <span className="font-mono text-green-600">{emp.attendance.actualCheckIn}</span>
+                              ) : "-"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {emp.attendance?.actualCheckOut ? (
+                                <span className="font-mono text-red-600">{emp.attendance.actualCheckOut}</span>
+                              ) : "-"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={status.color}>{status.label}</Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                {status.canCheckIn && (
+                                  <Button
+                                    size="sm"
+                                    className="gap-1 bg-green-600 hover:bg-green-700"
+                                    onClick={() => openSignatureDialog(emp, "check_in")}
+                                    data-testid={`btn-checkin-${emp.employeeId}`}
+                                  >
+                                    <LogIn className="w-4 h-4" />
+                                    حضور
+                                  </Button>
+                                )}
+                                {status.canCheckOut && (
+                                  <Button
+                                    size="sm"
+                                    className="gap-1 bg-red-600 hover:bg-red-700"
+                                    onClick={() => openSignatureDialog(emp, "check_out")}
+                                    data-testid={`btn-checkout-${emp.employeeId}`}
+                                  >
+                                    <LogOut className="w-4 h-4" />
+                                    انصراف
+                                  </Button>
+                                )}
+                                {!status.canCheckIn && !status.canCheckOut && (
+                                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                    <Check className="w-4 h-4 text-green-600" />
+                                    مكتمل
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <Dialog open={!!selectedEmployee && !!signatureMode} onOpenChange={() => closeSignatureDialog()}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {signatureMode === "check_in" ? (
+                  <>
+                    <LogIn className="w-5 h-5 text-green-600" />
+                    تسجيل حضور - {selectedEmployee?.employeeName}
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-5 h-5 text-red-600" />
+                    تسجيل انصراف - {selectedEmployee?.employeeName}
+                  </>
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                يرجى توقيع الموظف للتأكيد
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <div className="text-3xl font-mono font-bold text-primary">
+                  {format(currentTime, "hh:mm:ss", { locale: ar })}
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  {format(currentTime, "a", { locale: ar })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Pencil className="w-4 h-4" />
+                  توقيع الموظف
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
+                  <canvas
+                    ref={canvasRef}
+                    width={400}
+                    height={150}
+                    className="w-full touch-none cursor-crosshair"
+                    onMouseDown={(e) => startDrawing(getMousePos(e))}
+                    onMouseMove={(e) => draw(getMousePos(e))}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    onTouchStart={(e) => { e.preventDefault(); startDrawing(getTouchPos(e)); }}
+                    onTouchMove={(e) => { e.preventDefault(); draw(getTouchPos(e)); }}
+                    onTouchEnd={stopDrawing}
+                    data-testid="signature-canvas"
+                  />
+                </div>
+                <Button variant="outline" size="sm" onClick={clearCanvas} className="gap-2" data-testid="btn-clear-signature">
+                  <RotateCcw className="w-4 h-4" />
+                  مسح التوقيع
+                </Button>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={closeSignatureDialog}
+                  className="flex-1"
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={handleSubmitSignature}
+                  disabled={(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) || !hasSignature}
+                  className={`flex-1 gap-2 ${signatureMode === "check_in" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+                  data-testid="btn-submit-signature"
+                >
+                  {signatureMode === "check_in" ? <LogIn className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
+                  {(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) 
+                    ? "جاري التسجيل..." 
+                    : signatureMode === "check_in" ? "تأكيد الحضور" : "تأكيد الانصراف"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
