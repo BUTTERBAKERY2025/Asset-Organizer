@@ -717,50 +717,82 @@ export default function RBACManagementPage() {
           <TabsContent value="permissions" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>الصلاحيات حسب الوحدة</CardTitle>
-                <CardDescription>عرض جميع الصلاحيات المتاحة في النظام</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Key className="h-5 w-5" />
+                  الصلاحيات حسب الوحدة والفئة
+                </CardTitle>
+                <CardDescription>
+                  عرض جميع الصلاحيات المتاحة في النظام - إجمالي {allPermissions.length} صلاحية في {Object.keys(permissionsByModule).length} وحدة
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {Object.entries(permissionsByModule).map(([module, modulePerms]) => (
-                  <Collapsible
-                    key={module}
-                    open={expandedModules.includes(module)}
-                    onOpenChange={() => toggleModule(module)}
-                  >
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" className="w-full justify-between" data-testid={`button-module-${module}`}>
-                        <span className="font-medium">{MODULE_LABELS[module] || module}</span>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary">{modulePerms.length} صلاحية</Badge>
-                          {expandedModules.includes(module) ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="px-4 py-2">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {modulePerms.map((perm) => (
-                          <div
-                            key={perm.id}
-                            className="flex items-center gap-2 p-2 border rounded-lg"
-                            data-testid={`permission-${perm.id}`}
-                          >
-                            <Key className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                              <div className="text-sm font-medium">{perm.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {ACTION_LABELS[perm.action] || perm.action}
+                <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
+                  <span className="text-sm text-muted-foreground ml-2">تصنيف الإجراءات:</span>
+                  {Object.entries(ACTION_CATEGORIES).map(([key, cat]) => (
+                    <Badge key={key} className={cat.color}>
+                      {cat.label} ({cat.actions.length})
+                    </Badge>
+                  ))}
+                </div>
+                {Object.entries(permissionsByModule).map(([module, modulePerms]) => {
+                  const permsByCategory = Object.entries(ACTION_CATEGORIES).map(([catKey, cat]) => ({
+                    key: catKey,
+                    ...cat,
+                    perms: modulePerms.filter(p => cat.actions.includes(p.action)),
+                  })).filter(c => c.perms.length > 0);
+
+                  return (
+                    <Collapsible
+                      key={module}
+                      open={expandedModules.includes(module)}
+                      onOpenChange={() => toggleModule(module)}
+                      className="border rounded-lg"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" className="w-full justify-between p-4 h-auto" data-testid={`button-module-${module}`}>
+                          <div className="flex items-center gap-3">
+                            <Key className="h-4 w-4 text-primary" />
+                            <span className="font-semibold">{MODULE_LABELS[module] || module}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">{modulePerms.length} صلاحية</Badge>
+                            {expandedModules.includes(module) ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </div>
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="px-4 pb-4">
+                        <div className="space-y-4">
+                          {permsByCategory.map((category) => (
+                            <div key={category.key} className="space-y-2">
+                              <Badge className={category.color}>{category.label}</Badge>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {category.perms.map((perm) => (
+                                  <div
+                                    key={perm.id}
+                                    className="flex items-center gap-2 p-3 border rounded-lg bg-gray-50/50"
+                                    data-testid={`permission-${perm.id}`}
+                                  >
+                                    <Key className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium truncate">{perm.name}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {ACTION_LABELS[perm.action] || perm.action}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ))}
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
               </CardContent>
             </Card>
           </TabsContent>
