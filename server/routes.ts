@@ -94,7 +94,7 @@ export async function registerRoutes(
 
   app.patch("/api/users/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
-      const { firstName, lastName, role, password } = req.body;
+      const { firstName, lastName, role, password, branchId } = req.body;
       const updateData: any = {};
       
       if (firstName !== undefined) updateData.firstName = firstName;
@@ -106,6 +106,7 @@ export async function registerRoutes(
         updateData.role = role;
       }
       if (password) updateData.password = password;
+      if (branchId !== undefined) updateData.branchId = branchId || null;
       
       const user = await storage.updateUser(req.params.id, updateData);
       if (!user) {
