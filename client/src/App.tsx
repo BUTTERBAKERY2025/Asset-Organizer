@@ -66,6 +66,7 @@ import MarketingGoalsPage from "@/pages/marketing-goals";
 import MarketingAssetsPage from "@/pages/marketing-assets";
 import MarketingAlertsPage from "@/pages/marketing-alerts";
 import MarketingExpensesPage from "@/pages/marketing-expenses";
+import SettingsDashboardPage from "@/pages/settings-dashboard";
 
 function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
   return (
@@ -151,6 +152,7 @@ function Router() {
       <Route path="/marketing-assets">{() => <ProtectedPage component={MarketingAssetsPage} />}</Route>
       <Route path="/marketing-alerts">{() => <ProtectedPage component={MarketingAlertsPage} />}</Route>
       <Route path="/marketing-expenses">{() => <ProtectedPage component={MarketingExpensesPage} />}</Route>
+      <Route path="/settings">{() => <ProtectedPage component={SettingsDashboardPage} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );

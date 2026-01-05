@@ -184,6 +184,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: "الإعدادات والنظام",
         icon: Settings,
         items: [
+          { href: "/settings", label: "لوحة الإعدادات", icon: Settings, module: "dashboard" },
           { href: "/users", label: "إدارة المستخدمين", icon: Users, module: "users" },
           { href: "/rbac-management", label: "الأدوار والصلاحيات", icon: Shield, module: "users" },
           { href: "/integrations", label: "التكاملات", icon: Link2, module: "users" },
