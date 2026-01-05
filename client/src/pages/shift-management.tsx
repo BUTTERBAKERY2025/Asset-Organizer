@@ -18,7 +18,7 @@ import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft
 import { useLocation } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
 import { ar } from "date-fns/locale";
-import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
+import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord, BranchEmployee } from "@shared/schema";
 import * as XLSX from "xlsx";
 
 const DAYS_AR = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
@@ -50,6 +50,16 @@ export default function ShiftManagementPage() {
 
   const { data: branches } = useQuery<Branch[]>({ queryKey: ["/api/branches"] });
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
+  const { data: branchEmployees } = useQuery<BranchEmployee[]>({
+    queryKey: ["/api/branch-employees", selectedBranch],
+    queryFn: async () => {
+      const url = selectedBranch !== "all" 
+        ? `/api/branch-employees?branchId=${selectedBranch}` 
+        : "/api/branch-employees";
+      const res = await apiRequest("GET", url);
+      return res.json();
+    },
+  });
   const { data: periods } = useQuery<SchedulePeriod[]>({
     queryKey: ["/api/schedule-periods", selectedBranch],
   });
@@ -73,11 +83,12 @@ export default function ShiftManagementPage() {
     enabled: selectedBranch !== "all",
   });
 
-  const filteredUsers = useMemo(() => {
-    if (!users) return [];
-    if (selectedBranch === "all") return users.filter(u => u.isActive === "active");
-    return users.filter(u => u.branchId === selectedBranch && u.isActive === "active");
-  }, [users, selectedBranch]);
+  const filteredEmployees = useMemo(() => {
+    if (!branchEmployees) return [];
+    const activeEmployees = branchEmployees.filter(e => e.status === "active");
+    if (selectedBranch === "all") return activeEmployees;
+    return activeEmployees.filter(e => e.branchId === selectedBranch);
+  }, [branchEmployees, selectedBranch]);
 
   useEffect(() => {
     if (user?.role !== "admin" && user?.branchId && selectedBranch === "all") {
@@ -89,10 +100,11 @@ export default function ShiftManagementPage() {
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     if (employeeSchedules && Array.isArray(employeeSchedules) && employeeSchedules.length > 0) {
       employeeSchedules.forEach((schedule: EmployeeSchedule) => {
-        if (!newScheduleData[schedule.employeeId]) {
-          newScheduleData[schedule.employeeId] = {};
+        const keyId = schedule.branchEmployeeId ? String(schedule.branchEmployeeId) : schedule.employeeId;
+        if (!newScheduleData[keyId]) {
+          newScheduleData[keyId] = {};
         }
-        newScheduleData[schedule.employeeId][schedule.scheduleDate] = {
+        newScheduleData[keyId][schedule.scheduleDate] = {
           startTime: schedule.startTime || "08:00",
           endTime: schedule.endTime || "16:00",
           isOff: schedule.isOff,
@@ -127,11 +139,12 @@ export default function ShiftManagementPage() {
     mutationFn: async () => {
       const schedules: any[] = [];
       Object.entries(scheduleData).forEach(([employeeId, dates]) => {
-        const employee = filteredUsers.find(u => u.id === employeeId);
+        const employee = filteredEmployees.find(u => String(u.id) === employeeId);
         Object.entries(dates).forEach(([dateStr, data]) => {
           schedules.push({
-            employeeId,
-            employeeName: employee ? `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username : "Unknown",
+            employeeId: employee?.linkedUserId || employeeId,
+            employeeName: employee?.employeeName || "غير معروف",
+            branchEmployeeId: employee?.id,
             scheduleDate: dateStr,
             startTime: data.isOff ? null : data.startTime,
             endTime: data.isOff ? null : data.endTime,
@@ -174,12 +187,12 @@ export default function ShiftManagementPage() {
 
   const applyDefaultSchedule = () => {
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
-    filteredUsers.forEach(emp => {
-      newScheduleData[emp.id] = {};
+    filteredEmployees.forEach(emp => {
+      newScheduleData[String(emp.id)] = {};
       weekDates.forEach((date, index) => {
         const dateStr = format(date, "yyyy-MM-dd");
         const isFriday = index === 6;
-        newScheduleData[emp.id][dateStr] = {
+        newScheduleData[String(emp.id)][dateStr] = {
           startTime: "08:00",
           endTime: "16:00",
           isOff: isFriday,
@@ -200,16 +213,18 @@ export default function ShiftManagementPage() {
     try {
       const reportData: any[] = [];
       
-      filteredUsers.forEach(employee => {
+      filteredEmployees.forEach(employee => {
         const row: any = {
-          "اسم الموظف": `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username,
+          "اسم الموظف": employee.employeeName,
           "المسمى الوظيفي": employee.jobTitle || "موظف",
         };
+        const empIdStr = String(employee.id);
+        const linkedUserId = employee.linkedUserId || empIdStr;
         
         weekDates.forEach((date, index) => {
           const dateStr = format(date, "yyyy-MM-dd");
-          const cellData = scheduleData[employee.id]?.[dateStr];
-          const attendance = getAttendanceForEmployee(employee.id, dateStr);
+          const cellData = scheduleData[empIdStr]?.[dateStr];
+          const attendance = getAttendanceForEmployee(linkedUserId, dateStr);
           
           if (cellData?.isOff) {
             row[DAYS_AR[index]] = "إجازة";
@@ -222,9 +237,9 @@ export default function ShiftManagementPage() {
           }
         });
         
-        const empSchedule = scheduleData[employee.id] || {};
+        const empSchedule = scheduleData[empIdStr] || {};
         const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
-        const attendedDays = attendanceRecords?.filter(r => r.employeeId === employee.id && r.actualCheckIn).length || 0;
+        const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
         const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
         
         row["أيام العمل"] = workDays;
@@ -266,8 +281,9 @@ export default function ShiftManagementPage() {
       
       const reportData: any[] = [];
       
-      filteredUsers.forEach(employee => {
-        const empAttendance = monthlyAttendance.filter(a => a.employeeId === employee.id);
+      filteredEmployees.forEach(employee => {
+        const linkedUserId = employee.linkedUserId || String(employee.id);
+        const empAttendance = monthlyAttendance.filter(a => a.employeeId === linkedUserId);
         const presentDays = empAttendance.filter(a => a.actualCheckIn).length;
         const lateDays = empAttendance.filter(a => a.status === "late").length;
         const totalWorkHours = empAttendance.reduce((sum, a) => sum + (a.workingHours || 0), 0);
@@ -275,7 +291,7 @@ export default function ShiftManagementPage() {
         const totalLateMinutes = empAttendance.reduce((sum, a) => sum + (a.lateMinutes || 0), 0);
         
         reportData.push({
-          "اسم الموظف": `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username,
+          "اسم الموظف": employee.employeeName,
           "المسمى الوظيفي": employee.jobTitle || "موظف",
           "أيام العمل المتوقعة": Math.max(daysInMonth - 4, 1),
           "أيام الحضور": presentDays,
@@ -308,7 +324,7 @@ export default function ShiftManagementPage() {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
       return;
     }
-    if (filteredUsers.length === 0) {
+    if (filteredEmployees.length === 0) {
       toast({ title: "تنبيه", description: "لا يوجد موظفين لعرض التقرير", variant: "destructive" });
       return;
     }
@@ -351,18 +367,20 @@ export default function ShiftManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  ${filteredUsers.map(employee => {
-                    const empSchedule = scheduleData[employee.id] || {};
+                  ${filteredEmployees.map(employee => {
+                    const empIdStr = String(employee.id);
+                    const linkedUserId = employee.linkedUserId || empIdStr;
+                    const empSchedule = scheduleData[empIdStr] || {};
                     const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
                     const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-                    const attendedDays = attendanceRecords?.filter(r => r.employeeId === employee.id && r.actualCheckIn).length || 0;
+                    const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
                     const absentDays = workDays - attendedDays;
                     const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
                     const badgeClass = rate >= 80 ? "badge-green" : rate >= 50 ? "badge-amber" : "badge-red";
                     
                     return `
                       <tr>
-                        <td>${employee.firstName || ""} ${employee.lastName || ""}</td>
+                        <td>${employee.employeeName}</td>
                         <td>${workDays}</td>
                         <td>${offDays}</td>
                         <td style="color: green;">${attendedDays}</td>
@@ -480,7 +498,7 @@ export default function ShiftManagementPage() {
                     )}
                   </div>
 
-                  {filteredUsers.length === 0 ? (
+                  {filteredEmployees.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
                       <p>لا يوجد موظفين في هذا الفرع</p>
@@ -504,16 +522,19 @@ export default function ShiftManagementPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredUsers.map(employee => (
+                          {filteredEmployees.map(employee => {
+                            const empIdStr = String(employee.id);
+                            const linkedUserId = employee.linkedUserId || empIdStr;
+                            return (
                             <TableRow key={employee.id} data-testid={`row-employee-${employee.id}`}>
                               <TableCell className="font-medium sticky right-0 bg-background z-10 border-l">
-                                <div className="font-semibold">{employee.firstName} {employee.lastName}</div>
+                                <div className="font-semibold">{employee.employeeName}</div>
                                 <div className="text-xs text-muted-foreground">{employee.jobTitle || "موظف"}</div>
                               </TableCell>
                               {weekDates.map((date, index) => {
                                 const dateStr = format(date, "yyyy-MM-dd");
-                                const cellData = scheduleData[employee.id]?.[dateStr] || { startTime: "08:00", endTime: "16:00", isOff: false };
-                                const attendance = getAttendanceStatus(employee.id, dateStr, cellData.startTime);
+                                const cellData = scheduleData[empIdStr]?.[dateStr] || { startTime: "08:00", endTime: "16:00", isOff: false };
+                                const attendance = getAttendanceStatus(linkedUserId, dateStr, cellData.startTime);
                                 
                                 return (
                                   <TableCell key={index} className={`p-2 ${isToday(date) ? "bg-primary/5" : ""} ${cellData.isOff ? "bg-gray-100" : ""}`}>
@@ -521,7 +542,7 @@ export default function ShiftManagementPage() {
                                       <div className="flex items-center justify-center gap-2">
                                         <Checkbox
                                           checked={cellData.isOff}
-                                          onCheckedChange={(checked) => handleScheduleChange(employee.id, dateStr, "isOff", checked as boolean)}
+                                          onCheckedChange={(checked) => handleScheduleChange(empIdStr, dateStr, "isOff", checked as boolean)}
                                           data-testid={`checkbox-off-${employee.id}-${dateStr}`}
                                         />
                                         <span className="text-xs">إجازة</span>
@@ -533,7 +554,7 @@ export default function ShiftManagementPage() {
                                             <Input
                                               type="time"
                                               value={cellData.startTime}
-                                              onChange={(e) => handleScheduleChange(employee.id, dateStr, "startTime", e.target.value)}
+                                              onChange={(e) => handleScheduleChange(empIdStr, dateStr, "startTime", e.target.value)}
                                               className="h-7 text-xs"
                                               data-testid={`input-start-${employee.id}-${dateStr}`}
                                             />
@@ -543,7 +564,7 @@ export default function ShiftManagementPage() {
                                             <Input
                                               type="time"
                                               value={cellData.endTime}
-                                              onChange={(e) => handleScheduleChange(employee.id, dateStr, "endTime", e.target.value)}
+                                              onChange={(e) => handleScheduleChange(empIdStr, dateStr, "endTime", e.target.value)}
                                               className="h-7 text-xs"
                                               data-testid={`input-end-${employee.id}-${dateStr}`}
                                             />
@@ -563,7 +584,7 @@ export default function ShiftManagementPage() {
                                 );
                               })}
                             </TableRow>
-                          ))}
+                          );})}
                         </TableBody>
                       </Table>
                     </div>
@@ -596,7 +617,7 @@ export default function ShiftManagementPage() {
                     </Button>
                   </div>
 
-                  {filteredUsers.length === 0 ? (
+                  {filteredEmployees.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
                       <p>لا يوجد موظفين</p>
@@ -616,16 +637,19 @@ export default function ShiftManagementPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredUsers.map(employee => (
+                          {filteredEmployees.map(employee => {
+                            const empIdStr = String(employee.id);
+                            const linkedUserId = employee.linkedUserId || empIdStr;
+                            return (
                             <TableRow key={employee.id}>
                               <TableCell className="font-medium border-l">
-                                <div className="font-semibold">{employee.firstName} {employee.lastName}</div>
+                                <div className="font-semibold">{employee.employeeName}</div>
                                 <div className="text-xs text-muted-foreground">{employee.jobTitle || "موظف"}</div>
                               </TableCell>
                               {weekDates.map((date, index) => {
                                 const dateStr = format(date, "yyyy-MM-dd");
-                                const cellData = scheduleData[employee.id]?.[dateStr];
-                                const attendance = getAttendanceForEmployee(employee.id, dateStr);
+                                const cellData = scheduleData[empIdStr]?.[dateStr];
+                                const attendance = getAttendanceForEmployee(linkedUserId, dateStr);
                                 
                                 return (
                                   <TableCell key={index} className={`p-2 text-center ${isToday(date) ? "bg-primary/5" : ""}`}>
@@ -666,7 +690,8 @@ export default function ShiftManagementPage() {
                                 );
                               })}
                             </TableRow>
-                          ))}
+                          );
+                          })}
                         </TableBody>
                       </Table>
                     </div>
@@ -691,7 +716,7 @@ export default function ShiftManagementPage() {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between text-sm">
                         <span>عدد الموظفين:</span>
-                        <span className="font-bold">{filteredUsers.length}</span>
+                        <span className="font-bold">{filteredEmployees.length}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span>إجمالي أيام العمل المخططة:</span>
@@ -777,18 +802,20 @@ export default function ShiftManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredUsers.map(employee => {
-                          const empSchedule = scheduleData[employee.id] || {};
+                        {filteredEmployees.map(employee => {
+                          const empIdStr = String(employee.id);
+                          const linkedUserId = employee.linkedUserId || empIdStr;
+                          const empSchedule = scheduleData[empIdStr] || {};
                           const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
                           const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-                          const attendedDays = attendanceRecords?.filter(r => r.employeeId === employee.id && r.actualCheckIn).length || 0;
+                          const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
                           const absentDays = workDays - attendedDays;
                           const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
                           
                           return (
                             <TableRow key={employee.id}>
                               <TableCell className="font-medium">
-                                {employee.firstName} {employee.lastName}
+                                {employee.employeeName}
                               </TableCell>
                               <TableCell className="text-center">{workDays}</TableCell>
                               <TableCell className="text-center">{offDays}</TableCell>
