@@ -191,6 +191,10 @@ export default function ShiftManagementPage() {
   };
 
   const exportWeeklyReport = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
     setIsExporting(true);
     try {
       const reportData: any[] = [];
@@ -245,6 +249,10 @@ export default function ShiftManagementPage() {
   };
 
   const generateMonthlyReport = async () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
     setIsGeneratingMonthly(true);
     try {
       const [year, month] = selectedMonth.split("-").map(Number);
@@ -268,14 +276,14 @@ export default function ShiftManagementPage() {
         reportData.push({
           "اسم الموظف": `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username,
           "المسمى الوظيفي": employee.jobTitle || "موظف",
-          "أيام العمل المتوقعة": daysInMonth - 4,
+          "أيام العمل المتوقعة": Math.max(daysInMonth - 4, 1),
           "أيام الحضور": presentDays,
-          "أيام الغياب": (daysInMonth - 4) - presentDays,
+          "أيام الغياب": Math.max((daysInMonth - 4) - presentDays, 0),
           "أيام التأخير": lateDays,
           "إجمالي ساعات العمل": totalWorkHours.toFixed(1),
           "دقائق العمل الإضافي": totalOvertimeMinutes,
           "دقائق التأخير": totalLateMinutes,
-          "نسبة الحضور": `${Math.round((presentDays / (daysInMonth - 4)) * 100)}%`,
+          "نسبة الحضور": `${daysInMonth > 4 ? Math.round((presentDays / (daysInMonth - 4)) * 100) : 0}%`,
         });
       });
       
@@ -295,6 +303,14 @@ export default function ShiftManagementPage() {
   };
 
   const printReport = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredUsers.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لعرض التقرير", variant: "destructive" });
+      return;
+    }
     const printContent = document.getElementById("printable-report");
     if (printContent) {
       const printWindow = window.open("", "_blank");
