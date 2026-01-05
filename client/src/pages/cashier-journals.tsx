@@ -10,8 +10,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer } from "lucide-react";
+import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { CashierSalesJournal, Branch } from "@shared/schema";
@@ -52,6 +53,9 @@ export default function CashierJournalsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [discrepancyFilter, setDiscrepancyFilter] = useState<string>("all");
+  const [cashierFilter, setCashierFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
@@ -118,6 +122,8 @@ export default function CashierJournalsPage() {
     return branch?.name || branchId;
   };
 
+  const uniqueCashiers = journals ? [...new Set(journals.map(j => j.cashierName))].filter(Boolean).sort() : [];
+
   const filteredJournals = journals?.filter((journal) => {
     const matchesSearch =
       journal.cashierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -125,16 +131,20 @@ export default function CashierJournalsPage() {
     const matchesStatus = statusFilter === "all" || journal.status === statusFilter;
     const matchesBranch = branchFilter === "all" || journal.branchId === branchFilter;
     const matchesDiscrepancy = discrepancyFilter === "all" || journal.discrepancyStatus === discrepancyFilter;
+    const matchesCashier = cashierFilter === "all" || journal.cashierName === cashierFilter;
     
-    // Additional restriction for cashiers: only see their own journals
+    const journalDate = new Date(journal.journalDate);
+    const matchesDateFrom = !dateFrom || journalDate >= new Date(dateFrom);
+    const matchesDateTo = !dateTo || journalDate <= new Date(dateTo);
+    
     const matchesUser = user?.role === "admin" || journal.cashierId === user?.id;
     
-    return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy && matchesUser;
+    return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy && matchesCashier && matchesDateFrom && matchesDateTo && matchesUser;
   });
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [branchFilter, statusFilter, discrepancyFilter, searchTerm]);
+  }, [branchFilter, statusFilter, discrepancyFilter, cashierFilter, dateFrom, dateTo, searchTerm]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount);
@@ -362,18 +372,37 @@ export default function CashierJournalsPage() {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2 items-center">
-                <div className="relative">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="بحث..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pr-10 w-48"
-                    data-testid="input-search"
-                  />
-                </div>
+                <Select value={cashierFilter} onValueChange={setCashierFilter}>
+                  <SelectTrigger className="w-36" data-testid="select-cashier">
+                    <SelectValue placeholder="الكاشير" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الكاشيرين</SelectItem>
+                    {uniqueCashiers.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-36"
+                  placeholder="من تاريخ"
+                  data-testid="input-date-from"
+                />
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-36"
+                  placeholder="إلى تاريخ"
+                  data-testid="input-date-to"
+                />
                 <Select value={branchFilter} onValueChange={setBranchFilter}>
-                  <SelectTrigger className="w-40" data-testid="select-branch">
+                  <SelectTrigger className="w-36" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -386,7 +415,7 @@ export default function CashierJournalsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-36" data-testid="select-status">
+                  <SelectTrigger className="w-32" data-testid="select-status">
                     <SelectValue placeholder="الحالة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -395,17 +424,6 @@ export default function CashierJournalsPage() {
                     <SelectItem value="submitted">مُقدم</SelectItem>
                     <SelectItem value="approved">معتمد</SelectItem>
                     <SelectItem value="rejected">مرفوض</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={discrepancyFilter} onValueChange={setDiscrepancyFilter}>
-                  <SelectTrigger className="w-32" data-testid="select-discrepancy">
-                    <SelectValue placeholder="الفارق" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="balanced">متوازن</SelectItem>
-                    <SelectItem value="shortage">عجز</SelectItem>
-                    <SelectItem value="surplus">زيادة</SelectItem>
                   </SelectContent>
                 </Select>
                 <ExportButtons
@@ -433,90 +451,103 @@ export default function CashierJournalsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredJournals?.slice((currentPage - 1) * 10, currentPage * 10).map((journal) => {
-                  const discrepancy = DISCREPANCY_LABELS[journal.discrepancyStatus];
-                  const status = STATUS_LABELS[journal.status];
-                  const DiscrepancyIcon = discrepancy?.icon || Minus;
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="text-right w-28">التاريخ</TableHead>
+                        <TableHead className="text-right">الكاشير</TableHead>
+                        <TableHead className="text-right">الفرع</TableHead>
+                        <TableHead className="text-center w-20">الوردية</TableHead>
+                        <TableHead className="text-left w-28">المبيعات</TableHead>
+                        <TableHead className="text-left w-24">العملاء</TableHead>
+                        <TableHead className="text-center w-28">الفرق</TableHead>
+                        <TableHead className="text-center w-24">الحالة</TableHead>
+                        <TableHead className="text-center w-24">الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredJournals?.slice((currentPage - 1) * 20, currentPage * 20).map((journal) => {
+                        const discrepancy = DISCREPANCY_LABELS[journal.discrepancyStatus];
+                        const status = STATUS_LABELS[journal.status];
+                        const DiscrepancyIcon = discrepancy?.icon || Minus;
 
-                  return (
-                    <div
-                      key={journal.id}
-                      className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
-                      data-testid={`journal-row-${journal.id}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className="font-medium text-lg">{journal.cashierName}</span>
-                            <Badge variant={status?.variant || "secondary"}>{status?.label}</Badge>
-                            <div className={`flex items-center gap-1 text-sm ${discrepancy?.color}`}>
-                              <DiscrepancyIcon className="w-4 h-4" />
-                              <span>{discrepancy?.label}</span>
-                              {journal.discrepancyAmount > 0 && (
-                                <span className="font-medium">({formatCurrency(journal.discrepancyAmount)})</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {formatDate(journal.journalDate)}
-                            </span>
-                            <span>{getBranchName(journal.branchId)}</span>
-                            <span>{journal.shiftType === "morning" ? "صباحي" : journal.shiftType === "evening" ? "مسائي" : "ليلي"}</span>
-                          </div>
-                          <div className="flex items-center gap-6 text-sm">
-                            <span>
-                              <span className="text-muted-foreground">المبيعات: </span>
-                              <span className="font-medium">{formatCurrency(journal.totalSales)}</span>
-                            </span>
-                            <span>
-                              <span className="text-muted-foreground">العملاء: </span>
-                              <span className="font-medium">{journal.customerCount || 0}</span>
-                            </span>
-                            <span>
-                              <span className="text-muted-foreground">متوسط الفاتورة: </span>
-                              <span className="font-medium">{formatCurrency(journal.averageTicket || 0)}</span>
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Link href={`/cashier-journals/${journal.id}`}>
-                            <Button variant="ghost" size="sm" data-testid={`button-view-${journal.id}`}>
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </Link>
-                          {journal.status === "submitted" && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => approveMutation.mutate(journal.id)}
-                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                data-testid={`button-approve-${journal.id}`}
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => rejectMutation.mutate({ id: journal.id })}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                data-testid={`button-reject-${journal.id}`}
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                        return (
+                          <TableRow 
+                            key={journal.id} 
+                            className="hover:bg-muted/30 cursor-pointer"
+                            data-testid={`journal-row-${journal.id}`}
+                          >
+                            <TableCell className="text-sm font-medium">
+                              {journal.journalDate}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {journal.cashierName}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {getBranchName(journal.branchId)}
+                            </TableCell>
+                            <TableCell className="text-center text-sm">
+                              {journal.shiftType === "morning" ? "صباحي" : journal.shiftType === "evening" ? "مسائي" : "ليلي"}
+                            </TableCell>
+                            <TableCell className="text-left font-medium">
+                              {formatCurrency(journal.totalSales)}
+                            </TableCell>
+                            <TableCell className="text-left text-sm">
+                              {journal.customerCount || 0}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className={`flex items-center justify-center gap-1 text-xs ${discrepancy?.color}`}>
+                                <DiscrepancyIcon className="w-3 h-3" />
+                                <span>{formatCurrency(Math.abs(journal.discrepancyAmount || 0))}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant={status?.variant || "secondary"} className="text-xs">
+                                {status?.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center gap-1">
+                                <Link href={`/cashier-journals/${journal.id}`}>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-view-${journal.id}`}>
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </Button>
+                                </Link>
+                                {journal.status === "submitted" && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      onClick={() => approveMutation.mutate(journal.id)}
+                                      data-testid={`button-approve-${journal.id}`}
+                                    >
+                                      <CheckCircle className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      onClick={() => rejectMutation.mutate({ id: journal.id })}
+                                      data-testid={`button-reject-${journal.id}`}
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
                 <TablePagination
                   currentPage={currentPage}
                   totalItems={filteredJournals?.length || 0}
-                  itemsPerPage={10}
+                  itemsPerPage={20}
                   onPageChange={setCurrentPage}
                 />
               </div>
