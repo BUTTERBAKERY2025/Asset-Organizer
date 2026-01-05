@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth } from "date-fns";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2 } from "lucide-react";
+import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
+import * as XLSX from "xlsx";
 
 const DAYS_AR = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
 const DAYS_ORDER = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
@@ -37,6 +38,10 @@ export default function ShiftManagementPage() {
   const [isCreateScheduleOpen, setIsCreateScheduleOpen] = useState(false);
   const [scheduleData, setScheduleData] = useState<Record<string, Record<string, ScheduleCell>>>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [isExporting, setIsExporting] = useState(false);
+  const [isGeneratingMonthly, setIsGeneratingMonthly] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -183,6 +188,181 @@ export default function ShiftManagementPage() {
     setScheduleData(newScheduleData);
     setHasUnsavedChanges(true);
     toast({ title: "تم تطبيق الجدول الافتراضي", description: "الجمعة إجازة لجميع الموظفين" });
+  };
+
+  const exportWeeklyReport = () => {
+    setIsExporting(true);
+    try {
+      const reportData: any[] = [];
+      
+      filteredUsers.forEach(employee => {
+        const row: any = {
+          "اسم الموظف": `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username,
+          "المسمى الوظيفي": employee.jobTitle || "موظف",
+        };
+        
+        weekDates.forEach((date, index) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const cellData = scheduleData[employee.id]?.[dateStr];
+          const attendance = getAttendanceForEmployee(employee.id, dateStr);
+          
+          if (cellData?.isOff) {
+            row[DAYS_AR[index]] = "إجازة";
+          } else if (cellData) {
+            const scheduled = `${cellData.startTime} - ${cellData.endTime}`;
+            const actual = attendance?.actualCheckIn ? `${attendance.actualCheckIn} - ${attendance.actualCheckOut || "-"}` : "لم يحضر";
+            row[DAYS_AR[index]] = `المطلوب: ${scheduled} | الفعلي: ${actual}`;
+          } else {
+            row[DAYS_AR[index]] = "-";
+          }
+        });
+        
+        const empSchedule = scheduleData[employee.id] || {};
+        const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
+        const attendedDays = attendanceRecords?.filter(r => r.employeeId === employee.id && r.actualCheckIn).length || 0;
+        const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
+        
+        row["أيام العمل"] = workDays;
+        row["أيام الحضور"] = attendedDays;
+        row["نسبة الحضور"] = `${rate}%`;
+        
+        reportData.push(row);
+      });
+      
+      const ws = XLSX.utils.json_to_sheet(reportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "تقرير الدوام");
+      
+      const fileName = `تقرير_الدوام_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast({ title: "تم تصدير التقرير بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const generateMonthlyReport = async () => {
+    setIsGeneratingMonthly(true);
+    try {
+      const [year, month] = selectedMonth.split("-").map(Number);
+      const monthStart = new Date(year, month - 1, 1);
+      const monthEnd = new Date(year, month, 0);
+      const daysInMonth = getDaysInMonth(monthStart);
+      
+      const res = await apiRequest("GET", `/api/attendance?branchId=${selectedBranch}&startDate=${format(monthStart, "yyyy-MM-dd")}&endDate=${format(monthEnd, "yyyy-MM-dd")}`);
+      const monthlyAttendance: AttendanceRecord[] = await res.json();
+      
+      const reportData: any[] = [];
+      
+      filteredUsers.forEach(employee => {
+        const empAttendance = monthlyAttendance.filter(a => a.employeeId === employee.id);
+        const presentDays = empAttendance.filter(a => a.actualCheckIn).length;
+        const lateDays = empAttendance.filter(a => a.status === "late").length;
+        const totalWorkHours = empAttendance.reduce((sum, a) => sum + (a.workingHours || 0), 0);
+        const totalOvertimeMinutes = empAttendance.reduce((sum, a) => sum + (a.overtimeMinutes || 0), 0);
+        const totalLateMinutes = empAttendance.reduce((sum, a) => sum + (a.lateMinutes || 0), 0);
+        
+        reportData.push({
+          "اسم الموظف": `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username,
+          "المسمى الوظيفي": employee.jobTitle || "موظف",
+          "أيام العمل المتوقعة": daysInMonth - 4,
+          "أيام الحضور": presentDays,
+          "أيام الغياب": (daysInMonth - 4) - presentDays,
+          "أيام التأخير": lateDays,
+          "إجمالي ساعات العمل": totalWorkHours.toFixed(1),
+          "دقائق العمل الإضافي": totalOvertimeMinutes,
+          "دقائق التأخير": totalLateMinutes,
+          "نسبة الحضور": `${Math.round((presentDays / (daysInMonth - 4)) * 100)}%`,
+        });
+      });
+      
+      const ws = XLSX.utils.json_to_sheet(reportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "التقرير الشهري");
+      
+      const fileName = `التقرير_الشهري_${selectedMonth}_${getBranchName(selectedBranch)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast({ title: "تم إنشاء التقرير الشهري بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في إنشاء التقرير", variant: "destructive" });
+    } finally {
+      setIsGeneratingMonthly(false);
+    }
+  };
+
+  const printReport = () => {
+    const printContent = document.getElementById("printable-report");
+    if (printContent) {
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <html dir="rtl">
+            <head>
+              <title>تقرير الدوام - ${getBranchName(selectedBranch)}</title>
+              <style>
+                body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+                th { background-color: #f4f4f4; }
+                h1 { text-align: center; color: #333; }
+                h2 { color: #666; margin-top: 30px; }
+                .header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+                .badge-green { background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 4px; }
+                .badge-red { background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 4px; }
+                .badge-amber { background: #fff3cd; color: #856404; padding: 2px 8px; border-radius: 4px; }
+              </style>
+            </head>
+            <body>
+              <h1>تقرير الدوام - ${getBranchName(selectedBranch)}</h1>
+              <div class="header">
+                <div>الفترة: ${format(currentWeekStart, "dd/MM/yyyy")} - ${format(addDays(currentWeekStart, 6), "dd/MM/yyyy")}</div>
+                <div>تاريخ الطباعة: ${format(new Date(), "dd/MM/yyyy HH:mm")}</div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>الموظف</th>
+                    <th>أيام العمل</th>
+                    <th>أيام الإجازة</th>
+                    <th>أيام الحضور</th>
+                    <th>أيام الغياب</th>
+                    <th>نسبة الحضور</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filteredUsers.map(employee => {
+                    const empSchedule = scheduleData[employee.id] || {};
+                    const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
+                    const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
+                    const attendedDays = attendanceRecords?.filter(r => r.employeeId === employee.id && r.actualCheckIn).length || 0;
+                    const absentDays = workDays - attendedDays;
+                    const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
+                    const badgeClass = rate >= 80 ? "badge-green" : rate >= 50 ? "badge-amber" : "badge-red";
+                    
+                    return `
+                      <tr>
+                        <td>${employee.firstName || ""} ${employee.lastName || ""}</td>
+                        <td>${workDays}</td>
+                        <td>${offDays}</td>
+                        <td style="color: green;">${attendedDays}</td>
+                        <td style="color: red;">${absentDays > 0 ? absentDays : 0}</td>
+                        <td><span class="${badgeClass}">${rate}%</span></td>
+                      </tr>
+                    `;
+                  }).join("")}
+                </tbody>
+              </table>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
   };
 
   return (
@@ -500,9 +680,9 @@ export default function ShiftManagementPage() {
                           }, 0)}
                         </span>
                       </div>
-                      <Button variant="outline" className="w-full gap-2" data-testid="btn-export-weekly">
-                        <Download className="w-4 h-4" />
-                        تصدير التقرير
+                      <Button variant="outline" className="w-full gap-2" onClick={exportWeeklyReport} disabled={isExporting} data-testid="btn-export-weekly">
+                        {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        {isExporting ? "جاري التصدير..." : "تصدير التقرير"}
                       </Button>
                     </div>
                   </CardContent>
@@ -520,7 +700,7 @@ export default function ShiftManagementPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      <Select defaultValue={format(new Date(), "yyyy-MM")}>
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                         <SelectTrigger>
                           <SelectValue placeholder="اختر الشهر" />
                         </SelectTrigger>
@@ -536,11 +716,11 @@ export default function ShiftManagementPage() {
                           </SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button variant="outline" className="w-full gap-2" data-testid="btn-generate-monthly">
-                        <FileText className="w-4 h-4" />
-                        إنشاء التقرير
+                      <Button variant="outline" className="w-full gap-2" onClick={generateMonthlyReport} disabled={isGeneratingMonthly} data-testid="btn-generate-monthly">
+                        {isGeneratingMonthly ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                        {isGeneratingMonthly ? "جاري الإنشاء..." : "إنشاء التقرير"}
                       </Button>
-                      <Button variant="outline" className="w-full gap-2" data-testid="btn-print-report">
+                      <Button variant="outline" className="w-full gap-2" onClick={printReport} data-testid="btn-print-report">
                         <Printer className="w-4 h-4" />
                         طباعة التقرير
                       </Button>
@@ -549,7 +729,7 @@ export default function ShiftManagementPage() {
                 </Card>
               </div>
 
-              <Card>
+              <Card id="printable-report">
                 <CardHeader>
                   <CardTitle>تقرير تفصيلي للموظفين</CardTitle>
                   <CardDescription>عرض دوام كل موظف بالتفصيل</CardDescription>
