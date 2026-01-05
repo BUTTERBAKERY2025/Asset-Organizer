@@ -9647,5 +9647,99 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // Branch Employees API - موظفي الفروع
+  // =====================================================
+  
+  // Get all branch employees or filter by branch
+  app.get("/api/branch-employees", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId } = req.query;
+      if (branchId && typeof branchId === 'string') {
+        const employees = await storage.getBranchEmployeesByBranch(branchId);
+        return res.json(employees);
+      }
+      const employees = await storage.getAllBranchEmployees();
+      res.json(employees);
+    } catch (error) {
+      console.error("Error fetching branch employees:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الموظفين" });
+    }
+  });
+
+  // Get branch employees statistics
+  app.get("/api/branch-employees/stats", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId } = req.query;
+      const stats = await storage.getBranchEmployeeStats(branchId as string | undefined);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching branch employee stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات الموظفين" });
+    }
+  });
+
+  // Get single branch employee
+  app.get("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      res.json(employee);
+    } catch (error) {
+      console.error("Error fetching branch employee:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الموظف" });
+    }
+  });
+
+  // Create branch employee
+  app.post("/api/branch-employees", isAuthenticated, async (req, res) => {
+    try {
+      const employee = await storage.createBranchEmployee(req.body);
+      res.status(201).json(employee);
+    } catch (error) {
+      console.error("Error creating branch employee:", error);
+      res.status(500).json({ error: "فشل في إضافة الموظف" });
+    }
+  });
+
+  // Update branch employee
+  app.put("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const employee = await storage.updateBranchEmployee(id, req.body);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      res.json(employee);
+    } catch (error) {
+      console.error("Error updating branch employee:", error);
+      res.status(500).json({ error: "فشل في تحديث بيانات الموظف" });
+    }
+  });
+
+  // Delete branch employee
+  app.delete("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const success = await storage.deleteBranchEmployee(id);
+      if (!success) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting branch employee:", error);
+      res.status(500).json({ error: "فشل في حذف الموظف" });
+    }
+  });
+
   return httpServer;
 }

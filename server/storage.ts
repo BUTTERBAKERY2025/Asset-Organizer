@@ -275,6 +275,9 @@ import {
   type InsertTimesheetReport,
   type TimesheetReportEntry,
   type InsertTimesheetReportEntry,
+  branchEmployees,
+  type BranchEmployee,
+  type InsertBranchEmployee,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -795,6 +798,21 @@ export interface IStorage {
   createTimesheetReportEntry(entry: InsertTimesheetReportEntry): Promise<TimesheetReportEntry>;
   createBulkTimesheetReportEntries(entries: InsertTimesheetReportEntry[]): Promise<TimesheetReportEntry[]>;
   updateTimesheetReportEntry(id: number, entry: Partial<InsertTimesheetReportEntry>): Promise<TimesheetReportEntry | undefined>;
+
+  // Branch Employees - موظفي الفروع
+  getAllBranchEmployees(): Promise<BranchEmployee[]>;
+  getBranchEmployeesByBranch(branchId: string): Promise<BranchEmployee[]>;
+  getBranchEmployee(id: number): Promise<BranchEmployee | undefined>;
+  createBranchEmployee(employee: InsertBranchEmployee): Promise<BranchEmployee>;
+  updateBranchEmployee(id: number, employee: Partial<InsertBranchEmployee>): Promise<BranchEmployee | undefined>;
+  deleteBranchEmployee(id: number): Promise<boolean>;
+  getBranchEmployeeStats(branchId?: string): Promise<{
+    totalEmployees: number;
+    totalSalaries: number;
+    byNationality: { nationality: string; count: number }[];
+    byJobTitle: { jobTitle: string; count: number }[];
+    byStatus: { status: string; count: number }[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6408,6 +6426,95 @@ export class DatabaseStorage implements IStorage {
       .where(eq(timesheetReportEntries.id, id))
       .returning();
     return updated;
+  }
+
+  // Branch Employees - موظفي الفروع
+  async getAllBranchEmployees(): Promise<BranchEmployee[]> {
+    return await db.select().from(branchEmployees).orderBy(branchEmployees.employeeName);
+  }
+
+  async getBranchEmployeesByBranch(branchId: string): Promise<BranchEmployee[]> {
+    return await db.select().from(branchEmployees)
+      .where(eq(branchEmployees.branchId, branchId))
+      .orderBy(branchEmployees.employeeName);
+  }
+
+  async getBranchEmployee(id: number): Promise<BranchEmployee | undefined> {
+    const [employee] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, id));
+    return employee || undefined;
+  }
+
+  async createBranchEmployee(employee: InsertBranchEmployee): Promise<BranchEmployee> {
+    const totalSalary = (employee.salary || 0) + 
+      (employee.housingAllowance || 0) + 
+      (employee.transportAllowance || 0) + 
+      (employee.foodAllowance || 0) + 
+      (employee.otherAllowances || 0);
+    
+    const [created] = await db.insert(branchEmployees).values({
+      ...employee,
+      totalSalary,
+    }).returning();
+    return created;
+  }
+
+  async updateBranchEmployee(id: number, employee: Partial<InsertBranchEmployee>): Promise<BranchEmployee | undefined> {
+    const current = await this.getBranchEmployee(id);
+    if (!current) return undefined;
+
+    const salary = employee.salary ?? current.salary;
+    const housingAllowance = employee.housingAllowance ?? current.housingAllowance ?? 0;
+    const transportAllowance = employee.transportAllowance ?? current.transportAllowance ?? 0;
+    const foodAllowance = employee.foodAllowance ?? current.foodAllowance ?? 0;
+    const otherAllowances = employee.otherAllowances ?? current.otherAllowances ?? 0;
+    const totalSalary = salary + housingAllowance + transportAllowance + foodAllowance + otherAllowances;
+
+    const [updated] = await db.update(branchEmployees)
+      .set({ ...employee, totalSalary, updatedAt: new Date() })
+      .where(eq(branchEmployees.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteBranchEmployee(id: number): Promise<boolean> {
+    const result = await db.delete(branchEmployees).where(eq(branchEmployees.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getBranchEmployeeStats(branchId?: string): Promise<{
+    totalEmployees: number;
+    totalSalaries: number;
+    byNationality: { nationality: string; count: number }[];
+    byJobTitle: { jobTitle: string; count: number }[];
+    byStatus: { status: string; count: number }[];
+  }> {
+    let employees: BranchEmployee[];
+    if (branchId) {
+      employees = await this.getBranchEmployeesByBranch(branchId);
+    } else {
+      employees = await this.getAllBranchEmployees();
+    }
+
+    const totalEmployees = employees.length;
+    const totalSalaries = employees.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
+
+    const nationalityMap = new Map<string, number>();
+    const jobTitleMap = new Map<string, number>();
+    const statusMap = new Map<string, number>();
+
+    employees.forEach(emp => {
+      nationalityMap.set(emp.nationality, (nationalityMap.get(emp.nationality) || 0) + 1);
+      jobTitleMap.set(emp.jobTitle, (jobTitleMap.get(emp.jobTitle) || 0) + 1);
+      statusMap.set(emp.status, (statusMap.get(emp.status) || 0) + 1);
+    });
+
+    return {
+      totalEmployees,
+      totalSalaries,
+      byNationality: Array.from(nationalityMap.entries()).map(([nationality, count]) => ({ nationality, count })),
+      byJobTitle: Array.from(jobTitleMap.entries()).map(([jobTitle, count]) => ({ jobTitle, count })),
+      byStatus: Array.from(statusMap.entries()).map(([status, count]) => ({ status, count })),
+    };
   }
 }
 
