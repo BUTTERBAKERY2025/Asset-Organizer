@@ -165,10 +165,10 @@ export default function AttendanceDashboardPage() {
             </Button>
             <div>
               <h1 className="text-3xl font-bold" data-testid="text-page-title">
-                لوحة إدارة الورديات والحضور
+                إدارة موظفي الفروع الشاملة
               </h1>
               <p className="text-muted-foreground">
-                إدارة شاملة للورديات وتسجيل الحضور وتقارير التايم شيت
+                إدارة شاملة لموظفي الفروع والورديات والحضور وتقارير التايم شيت
               </p>
             </div>
           </div>
