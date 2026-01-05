@@ -3414,6 +3414,7 @@ export const employeeSchedules = pgTable("employee_schedules", {
   periodId: integer("period_id").references(() => schedulePeriods.id, { onDelete: "cascade" }),
   employeeId: varchar("employee_id").notNull().references(() => users.id),
   employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id), // الفرع
   scheduleDate: text("schedule_date").notNull(), // YYYY-MM-DD
   dayOfWeek: text("day_of_week").notNull(), // sat, sun, mon, tue, wed, thu, fri
   shiftType: text("shift_type"), // morning, evening, night
@@ -3421,6 +3422,7 @@ export const employeeSchedules = pgTable("employee_schedules", {
   endTime: text("end_time"), // HH:MM
   isOff: boolean("is_off").default(false).notNull(), // يوم إجازة
   breakDuration: integer("break_duration").default(60), // بالدقائق
+  status: text("status").default("scheduled").notNull(), // scheduled, completed, cancelled
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -3428,6 +3430,7 @@ export const employeeSchedules = pgTable("employee_schedules", {
   index("idx_employee_schedules_period").on(table.periodId),
   index("idx_employee_schedules_employee").on(table.employeeId),
   index("idx_employee_schedules_date").on(table.scheduleDate),
+  index("idx_employee_schedules_branch").on(table.branchId),
 ]);
 
 export const insertEmployeeScheduleSchema = createInsertSchema(employeeSchedules).omit({

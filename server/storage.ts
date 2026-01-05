@@ -6159,8 +6159,8 @@ export class DatabaseStorage implements IStorage {
       const [updated] = await db.update(attendanceRecords).set({
         actualCheckIn: now,
         checkInSignature: signature,
-        scheduledCheckIn: scheduledStartTime,
-        scheduledCheckOut: scheduledEndTime,
+        scheduledStartTime: scheduledStartTime,
+        scheduledEndTime: scheduledEndTime,
         lateMinutes,
         status,
         updatedAt: new Date()
@@ -6175,8 +6175,8 @@ export class DatabaseStorage implements IStorage {
       attendanceDate: today,
       actualCheckIn: now,
       checkInSignature: signature,
-      scheduledCheckIn: scheduledStartTime,
-      scheduledCheckOut: scheduledEndTime,
+      scheduledStartTime: scheduledStartTime,
+      scheduledEndTime: scheduledEndTime,
       lateMinutes,
       status
     }).returning();
@@ -6200,8 +6200,8 @@ export class DatabaseStorage implements IStorage {
     
     // Calculate early leave minutes if scheduled end time is provided
     let earlyLeaveMinutes = 0;
-    if (existing.scheduledCheckOut) {
-      const scheduled = new Date(`1970-01-01T${existing.scheduledCheckOut}`);
+    if (existing.scheduledEndTime) {
+      const scheduled = new Date(`1970-01-01T${existing.scheduledEndTime}`);
       if (checkOutTime < scheduled) {
         earlyLeaveMinutes = Math.round((scheduled.getTime() - checkOutTime.getTime()) / (1000 * 60));
       }
