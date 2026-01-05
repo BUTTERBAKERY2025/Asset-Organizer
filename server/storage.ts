@@ -6093,6 +6093,130 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async getScheduledEmployeesForAttendance(branchId: string, shiftType: string, date: string): Promise<any[]> {
+    // Get employees scheduled for this branch, shift type, and date
+    const schedules = await db.select({
+      id: employeeSchedules.id,
+      employeeId: employeeSchedules.employeeId,
+      employeeName: employeeSchedules.employeeName,
+      startTime: employeeSchedules.startTime,
+      endTime: employeeSchedules.endTime,
+      shiftType: employeeSchedules.shiftType,
+      scheduleDate: employeeSchedules.scheduleDate,
+    })
+    .from(employeeSchedules)
+    .where(and(
+      eq(employeeSchedules.branchId, branchId),
+      eq(employeeSchedules.shiftType, shiftType),
+      eq(employeeSchedules.scheduleDate, date),
+      eq(employeeSchedules.status, 'scheduled')
+    ));
+
+    // Get attendance for these employees today
+    const employeesWithAttendance = await Promise.all(
+      schedules.map(async (schedule) => {
+        const attendance = await this.getAttendanceByEmployeeAndDate(schedule.employeeId, date);
+        return {
+          ...schedule,
+          attendance: attendance || null
+        };
+      })
+    );
+
+    return employeesWithAttendance;
+  }
+
+  async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduledStartTime?: string, scheduledEndTime?: string): Promise<AttendanceRecord> {
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toTimeString().split(' ')[0].substring(0, 5);
+    
+    const employee = await this.getUser(employeeId);
+    if (!employee) {
+      throw new Error("الموظف غير موجود");
+    }
+    
+    const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'Unknown';
+    
+    let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    
+    if (existing && existing.actualCheckIn) {
+      throw new Error("تم تسجيل حضور هذا الموظف مسبقاً");
+    }
+    
+    // Calculate late minutes if scheduled time is provided
+    let lateMinutes = 0;
+    if (scheduledStartTime) {
+      const scheduled = new Date(`1970-01-01T${scheduledStartTime}`);
+      const actual = new Date(`1970-01-01T${now}`);
+      if (actual > scheduled) {
+        lateMinutes = Math.round((actual.getTime() - scheduled.getTime()) / (1000 * 60));
+      }
+    }
+    
+    const status = lateMinutes > 0 ? 'late' : 'present';
+    
+    if (existing) {
+      const [updated] = await db.update(attendanceRecords).set({
+        actualCheckIn: now,
+        checkInSignature: signature,
+        scheduledCheckIn: scheduledStartTime,
+        scheduledCheckOut: scheduledEndTime,
+        lateMinutes,
+        status,
+        updatedAt: new Date()
+      }).where(eq(attendanceRecords.id, existing.id)).returning();
+      return updated;
+    }
+    
+    const [created] = await db.insert(attendanceRecords).values({
+      employeeId,
+      employeeName,
+      branchId,
+      attendanceDate: today,
+      actualCheckIn: now,
+      checkInSignature: signature,
+      scheduledCheckIn: scheduledStartTime,
+      scheduledCheckOut: scheduledEndTime,
+      lateMinutes,
+      status
+    }).returning();
+    return created;
+  }
+
+  async checkOutEmployee(employeeId: string, signature?: string): Promise<AttendanceRecord | undefined> {
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toTimeString().split(' ')[0].substring(0, 5);
+    
+    const existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    if (!existing) return undefined;
+    if (existing.actualCheckOut) return undefined;
+    
+    const checkInTime = existing.actualCheckIn ? new Date(`1970-01-01T${existing.actualCheckIn}`) : null;
+    const checkOutTime = new Date(`1970-01-01T${now}`);
+    let workingHours = 0;
+    if (checkInTime) {
+      workingHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+    }
+    
+    // Calculate early leave minutes if scheduled end time is provided
+    let earlyLeaveMinutes = 0;
+    if (existing.scheduledCheckOut) {
+      const scheduled = new Date(`1970-01-01T${existing.scheduledCheckOut}`);
+      if (checkOutTime < scheduled) {
+        earlyLeaveMinutes = Math.round((scheduled.getTime() - checkOutTime.getTime()) / (1000 * 60));
+      }
+    }
+    
+    const [updated] = await db.update(attendanceRecords).set({
+      actualCheckOut: now,
+      checkOutSignature: signature,
+      workingHours: Math.round(workingHours * 100) / 100,
+      earlyLeaveMinutes,
+      updatedAt: new Date()
+    }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
+    return updated;
+  }
+
   async approveAttendance(id: number, approvedBy: string): Promise<AttendanceRecord | undefined> {
     const [updated] = await db.update(attendanceRecords).set({
       approvedBy,

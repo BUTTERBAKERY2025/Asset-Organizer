@@ -9108,6 +9108,75 @@ export async function registerRoutes(
     }
   });
 
+  // Get scheduled employees for attendance (branch manager tool)
+  app.get("/api/scheduled-employees-for-attendance", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, shiftType, date } = req.query;
+      
+      if (!branchId || !shiftType || !date) {
+        return res.status(400).json({ error: "الفرع والوردية والتاريخ مطلوبين" });
+      }
+
+      // Get employees scheduled for this branch, shift, and date
+      const scheduledEmployees = await storage.getScheduledEmployeesForAttendance(branchId, shiftType, date);
+      res.json(scheduledEmployees);
+    } catch (error) {
+      console.error("Error fetching scheduled employees:", error);
+      res.status(500).json({ error: "فشل في جلب الموظفين المجدولين" });
+    }
+  });
+
+  // Check-in employee by manager
+  app.post("/api/attendance/check-in-employee", isAuthenticated, async (req: any, res) => {
+    try {
+      const { employeeId, branchId, signature, scheduledStartTime, scheduledEndTime } = req.body;
+      
+      if (!employeeId || !branchId) {
+        return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
+      }
+
+      if (signature && signature.length > 500000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, today);
+      if (existingRecord && existingRecord.actualCheckIn) {
+        return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
+      }
+      
+      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduledStartTime, scheduledEndTime);
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Error checking in employee:", error);
+      res.status(500).json({ error: "فشل في تسجيل الحضور" });
+    }
+  });
+
+  // Check-out employee by manager
+  app.post("/api/attendance/check-out-employee", isAuthenticated, async (req: any, res) => {
+    try {
+      const { employeeId, signature } = req.body;
+      
+      if (!employeeId) {
+        return res.status(400).json({ error: "معرف الموظف مطلوب" });
+      }
+
+      if (signature && signature.length > 500000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+      
+      const record = await storage.checkOutEmployee(employeeId, signature);
+      if (!record) {
+        return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
+      }
+      res.json(record);
+    } catch (error) {
+      console.error("Error checking out employee:", error);
+      res.status(500).json({ error: "فشل في تسجيل الانصراف" });
+    }
+  });
+
   app.post("/api/attendance/:id/approve", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
