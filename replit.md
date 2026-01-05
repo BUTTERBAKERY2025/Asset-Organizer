@@ -70,3 +70,24 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **Accounting Integration**: API endpoints for exporting inventory valuation, asset movements, and project cost reports in JSON format.
 - **SMS/WhatsApp Notifications**: Notification queue system ready for Twilio integration (requires manual setup of `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`).
 - **Data Import**: Excel import functionality available via an API endpoint (`/api/import-jobs`).
+
+## Database Schema Documentation
+
+### Schema Files
+- **`shared/schema.ts`**: Primary source of truth for database schema (TypeScript/Drizzle ORM)
+- **`database_schema.sql`**: Complete SQL reference file generated from schema.ts (94 tables)
+
+### Recent Schema Changes (2026-01-05)
+- **Branch Employee Integration**: Added `linkedUserId` and `defaultScheduleTemplateId` to `branch_employees` table
+- **Attendance Integration**: Added `branchEmployeeId` foreign key to `attendance_records`, `employee_schedules`, and `timesheet_reports`
+- **API Endpoints**: 
+  - `PUT /api/branch-employees/:id/link-user` - Link employee to user account
+  - `GET /api/branch-employees/:id/attendance` - Get employee attendance records
+  - `GET /api/branch-employees/:id/timesheets` - Get employee timesheet reports
+  - `GET /api/branch-employees/:id/schedules` - Get employee work schedules
+  - `GET /api/branch-employees/by-user/:userId` - Find employee by linked user
+
+### Number Formatting
+- All numbers display in English numerals (en-US locale)
+- Currency format: `formatCurrency` uses comma separators with "ريال" suffix
+- Number format: `formatNumber` uses comma separators for thousands
