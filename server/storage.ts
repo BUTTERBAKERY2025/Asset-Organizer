@@ -269,6 +269,12 @@ import {
   type InsertTimeEntry,
   type AttendanceSummary,
   type InsertAttendanceSummary,
+  timesheetReports,
+  timesheetReportEntries,
+  type TimesheetReport,
+  type InsertTimesheetReport,
+  type TimesheetReportEntry,
+  type InsertTimesheetReportEntry,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -774,6 +780,21 @@ export interface IStorage {
   markMarketingAlertAsRead(id: number): Promise<MarketingAlert | undefined>;
   acknowledgeMarketingAlert(id: number, acknowledgedBy: string): Promise<MarketingAlert | undefined>;
   deleteMarketingAlert(id: number): Promise<boolean>;
+
+  // Timesheet Reports - تقارير التايم شيت
+  getTimesheetReports(filters?: { employeeId?: string; branchId?: string; status?: string }): Promise<TimesheetReport[]>;
+  getTimesheetReport(id: number): Promise<TimesheetReport | undefined>;
+  getTimesheetReportByEmployeeAndDates(employeeId: string, startDate: string, endDate: string): Promise<TimesheetReport | undefined>;
+  createTimesheetReport(report: InsertTimesheetReport): Promise<TimesheetReport>;
+  updateTimesheetReport(id: number, report: Partial<InsertTimesheetReport>): Promise<TimesheetReport | undefined>;
+  deleteTimesheetReport(id: number): Promise<boolean>;
+  signTimesheetReport(id: number, signatureType: 'employee' | 'manager', signature: string, signerId: string, acknowledgment?: string): Promise<TimesheetReport | undefined>;
+
+  // Timesheet Report Entries - سجلات التقرير اليومية
+  getTimesheetReportEntries(reportId: number): Promise<TimesheetReportEntry[]>;
+  createTimesheetReportEntry(entry: InsertTimesheetReportEntry): Promise<TimesheetReportEntry>;
+  createBulkTimesheetReportEntries(entries: InsertTimesheetReportEntry[]): Promise<TimesheetReportEntry[]>;
+  updateTimesheetReportEntry(id: number, entry: Partial<InsertTimesheetReportEntry>): Promise<TimesheetReportEntry | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6161,6 +6182,106 @@ export class DatabaseStorage implements IStorage {
       attendanceRate: Math.round(attendanceRate * 100) / 100,
       punctualityRate: Math.round(punctualityRate * 100) / 100
     });
+  }
+
+  // Timesheet Reports - تقارير التايم شيت
+  async getTimesheetReports(filters?: { employeeId?: string; branchId?: string; status?: string }): Promise<TimesheetReport[]> {
+    const conditions = [];
+    if (filters?.employeeId) conditions.push(eq(timesheetReports.employeeId, filters.employeeId));
+    if (filters?.branchId) conditions.push(eq(timesheetReports.branchId, filters.branchId));
+    if (filters?.status) conditions.push(eq(timesheetReports.status, filters.status));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(timesheetReports).where(and(...conditions)).orderBy(desc(timesheetReports.createdAt));
+    }
+    return await db.select().from(timesheetReports).orderBy(desc(timesheetReports.createdAt));
+  }
+
+  async getTimesheetReport(id: number): Promise<TimesheetReport | undefined> {
+    const [report] = await db.select().from(timesheetReports).where(eq(timesheetReports.id, id));
+    return report;
+  }
+
+  async getTimesheetReportByEmployeeAndDates(employeeId: string, startDate: string, endDate: string): Promise<TimesheetReport | undefined> {
+    const [report] = await db.select().from(timesheetReports)
+      .where(and(
+        eq(timesheetReports.employeeId, employeeId),
+        eq(timesheetReports.startDate, startDate),
+        eq(timesheetReports.endDate, endDate)
+      ));
+    return report;
+  }
+
+  async createTimesheetReport(report: InsertTimesheetReport): Promise<TimesheetReport> {
+    const [created] = await db.insert(timesheetReports).values(report).returning();
+    return created;
+  }
+
+  async updateTimesheetReport(id: number, report: Partial<InsertTimesheetReport>): Promise<TimesheetReport | undefined> {
+    const [updated] = await db.update(timesheetReports)
+      .set({ ...report, updatedAt: new Date() })
+      .where(eq(timesheetReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTimesheetReport(id: number): Promise<boolean> {
+    const result = await db.delete(timesheetReports).where(eq(timesheetReports.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async signTimesheetReport(id: number, signatureType: 'employee' | 'manager', signature: string, signerId: string, acknowledgment?: string): Promise<TimesheetReport | undefined> {
+    const report = await this.getTimesheetReport(id);
+    if (!report) return undefined;
+
+    const updates: Partial<InsertTimesheetReport> = {};
+    
+    if (signatureType === 'employee') {
+      updates.employeeSignature = signature;
+      updates.employeeSignedAt = new Date();
+      updates.employeeAcknowledgment = acknowledgment || 'أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه';
+      if (report.status === 'pending' || report.status === 'pending_employee_signature') {
+        updates.status = 'pending_manager_signature';
+      }
+    } else if (signatureType === 'manager') {
+      updates.managerSignature = signature;
+      updates.managerId = signerId;
+      updates.managerSignedAt = new Date();
+      updates.managerAcknowledgment = acknowledgment || 'أصادق على صحة بيانات حضور وانصراف الموظف';
+      if (report.employeeSignature) {
+        updates.status = 'finalized';
+      } else {
+        updates.status = 'pending_employee_signature';
+      }
+    }
+
+    return await this.updateTimesheetReport(id, updates);
+  }
+
+  // Timesheet Report Entries - سجلات التقرير اليومية
+  async getTimesheetReportEntries(reportId: number): Promise<TimesheetReportEntry[]> {
+    return await db.select().from(timesheetReportEntries)
+      .where(eq(timesheetReportEntries.reportId, reportId))
+      .orderBy(timesheetReportEntries.date);
+  }
+
+  async createTimesheetReportEntry(entry: InsertTimesheetReportEntry): Promise<TimesheetReportEntry> {
+    const [created] = await db.insert(timesheetReportEntries).values(entry).returning();
+    return created;
+  }
+
+  async createBulkTimesheetReportEntries(entries: InsertTimesheetReportEntry[]): Promise<TimesheetReportEntry[]> {
+    if (entries.length === 0) return [];
+    const created = await db.insert(timesheetReportEntries).values(entries).returning();
+    return created;
+  }
+
+  async updateTimesheetReportEntry(id: number, entry: Partial<InsertTimesheetReportEntry>): Promise<TimesheetReportEntry | undefined> {
+    const [updated] = await db.update(timesheetReportEntries)
+      .set(entry)
+      .where(eq(timesheetReportEntries.id, id))
+      .returning();
+    return updated;
   }
 }
 

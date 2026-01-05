@@ -3585,3 +3585,86 @@ export const DAYS_OF_WEEK_LABELS: Record<DayOfWeek, string> = {
   thu: "الخميس",
   fri: "الجمعة",
 };
+
+// Timesheet Reports - تقارير الدوام الشهرية
+export const timesheetReports = pgTable("timesheet_reports", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  generatedBy: varchar("generated_by").references(() => users.id),
+  status: text("status").default("pending").notNull(), // pending, pending_employee_signature, pending_manager_signature, finalized
+  totalScheduledDays: integer("total_scheduled_days").default(0),
+  totalPresentDays: integer("total_present_days").default(0),
+  totalAbsentDays: integer("total_absent_days").default(0),
+  totalLateDays: integer("total_late_days").default(0),
+  totalScheduledHours: real("total_scheduled_hours").default(0),
+  totalActualHours: real("total_actual_hours").default(0),
+  totalOvertimeMinutes: integer("total_overtime_minutes").default(0),
+  totalLateMinutes: integer("total_late_minutes").default(0),
+  employeeSignature: text("employee_signature"), // base64 encoded signature
+  employeeSignedAt: timestamp("employee_signed_at"),
+  employeeAcknowledgment: text("employee_acknowledgment"),
+  managerSignature: text("manager_signature"), // base64 encoded signature
+  managerId: varchar("manager_id").references(() => users.id),
+  managerSignedAt: timestamp("manager_signed_at"),
+  managerAcknowledgment: text("manager_acknowledgment"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_timesheet_reports_employee").on(table.employeeId),
+  index("idx_timesheet_reports_branch").on(table.branchId),
+  index("idx_timesheet_reports_status").on(table.status),
+  index("idx_timesheet_reports_dates").on(table.startDate, table.endDate),
+]);
+
+export const insertTimesheetReportSchema = createInsertSchema(timesheetReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TimesheetReport = typeof timesheetReports.$inferSelect;
+export type InsertTimesheetReport = z.infer<typeof insertTimesheetReportSchema>;
+
+// Timesheet Report Entries - سجلات التقرير اليومية
+export const timesheetReportEntries = pgTable("timesheet_report_entries", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").notNull().references(() => timesheetReports.id, { onDelete: "cascade" }),
+  date: text("date").notNull(), // YYYY-MM-DD
+  dayOfWeek: text("day_of_week").notNull(), // sat, sun, mon, etc.
+  scheduledStartTime: text("scheduled_start_time"), // HH:MM
+  scheduledEndTime: text("scheduled_end_time"), // HH:MM
+  actualStartTime: text("actual_start_time"), // HH:MM
+  actualEndTime: text("actual_end_time"), // HH:MM
+  isOff: boolean("is_off").default(false),
+  status: text("status").default("pending"), // pending, present, absent, late, day_off
+  scheduledHours: real("scheduled_hours").default(0),
+  actualHours: real("actual_hours").default(0),
+  overtimeMinutes: integer("overtime_minutes").default(0),
+  lateMinutes: integer("late_minutes").default(0),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_timesheet_entries_report").on(table.reportId),
+  index("idx_timesheet_entries_date").on(table.date),
+]);
+
+export const insertTimesheetReportEntrySchema = createInsertSchema(timesheetReportEntries).omit({
+  id: true,
+});
+
+export type TimesheetReportEntry = typeof timesheetReportEntries.$inferSelect;
+export type InsertTimesheetReportEntry = z.infer<typeof insertTimesheetReportEntrySchema>;
+
+// Timesheet Status Labels
+export const TIMESHEET_STATUS = ["pending", "pending_employee_signature", "pending_manager_signature", "finalized"] as const;
+export type TimesheetStatus = (typeof TIMESHEET_STATUS)[number];
+
+export const TIMESHEET_STATUS_LABELS: Record<TimesheetStatus, string> = {
+  pending: "قيد الإنشاء",
+  pending_employee_signature: "بانتظار توقيع الموظف",
+  pending_manager_signature: "بانتظار توقيع المدير",
+  finalized: "مكتمل",
+};
