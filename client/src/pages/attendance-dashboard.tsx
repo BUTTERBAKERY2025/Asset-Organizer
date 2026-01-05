@@ -38,7 +38,9 @@ export default function AttendanceDashboardPage() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["/api/attendance-dashboard-stats"],
     queryFn: async () => {
-      const response = await fetch("/api/attendance-dashboard-stats");
+      const response = await fetch("/api/attendance-dashboard-stats", {
+        credentials: 'include'
+      });
       if (!response.ok) return null;
       return response.json();
     },
