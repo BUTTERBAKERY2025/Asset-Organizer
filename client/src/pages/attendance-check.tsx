@@ -8,7 +8,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight } from "lucide-react";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { Branch, AttendanceRecord } from "@shared/schema";
@@ -162,9 +163,23 @@ export default function AttendanceCheckPage() {
   const isCheckedIn = myAttendance && !myAttendance.actualCheckOut;
   const isCheckedOut = myAttendance && myAttendance.actualCheckOut;
 
+  const [, navigate] = useLocation();
+
   return (
     <Layout>
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="absolute top-20 right-4 z-10">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/attendance-dashboard")}
+            className="gap-2 bg-white/90 hover:bg-white"
+            data-testid="btn-back"
+          >
+            <ArrowRight className="w-4 h-4" />
+            لوحة الحضور
+          </Button>
+        </div>
         <Card className="w-full max-w-lg shadow-xl">
           <CardHeader className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
             <div className="flex justify-center mb-2">

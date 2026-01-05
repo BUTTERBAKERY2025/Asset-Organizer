@@ -14,7 +14,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2 } from "lucide-react";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight } from "lucide-react";
+import { useLocation } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
@@ -381,13 +382,25 @@ export default function ShiftManagementPage() {
     }
   };
 
+  const [, navigate] = useLocation();
+
   return (
     <Layout>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-primary" data-testid="page-title">جدولة الدوام</h1>
-            <p className="text-muted-foreground mt-1">إنشاء وإدارة جداول دوام الموظفين للفروع</p>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/attendance-dashboard")}
+              data-testid="btn-back"
+            >
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-primary" data-testid="page-title">جدولة الدوام</h1>
+              <p className="text-muted-foreground mt-1">إنشاء وإدارة جداول دوام الموظفين للفروع</p>
+            </div>
           </div>
           <div className="flex gap-2 items-center">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
