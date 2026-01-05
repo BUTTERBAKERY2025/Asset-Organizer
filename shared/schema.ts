@@ -514,6 +514,10 @@ export const MODULE_ACTIONS = [
   "delete",
   "approve",
   "export",
+  "print",
+  "sign",
+  "notify",
+  "change_status",
 ] as const;
 
 export type ModuleAction = (typeof MODULE_ACTIONS)[number];
@@ -570,6 +574,10 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   delete: "حذف",
   approve: "اعتماد",
   export: "تصدير",
+  print: "طباعة",
+  sign: "توقيع",
+  notify: "إشعارات",
+  change_status: "تغيير الحالة",
 };
 
 // Module groups for UI organization
