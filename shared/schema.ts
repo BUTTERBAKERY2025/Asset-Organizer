@@ -3673,3 +3673,111 @@ export const TIMESHEET_STATUS_LABELS: Record<TimesheetStatus, string> = {
   pending_manager_signature: "بانتظار توقيع المدير",
   finalized: "مكتمل",
 };
+
+// =====================================================
+// Branch Employees - موظفي الفروع مع بيانات الرواتب
+// =====================================================
+export const branchEmployees = pgTable("branch_employees", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  employeeName: text("employee_name").notNull(),
+  employeeNameEn: text("employee_name_en"), // الاسم بالإنجليزية
+  jobTitle: text("job_title").notNull(), // الوظيفة
+  department: text("department"), // القسم (مطبخ، صالة، إلخ)
+  nationality: text("nationality").notNull(), // الجنسية
+  salary: real("salary").notNull(), // الراتب الأساسي
+  housingAllowance: real("housing_allowance").default(0), // بدل السكن
+  transportAllowance: real("transport_allowance").default(0), // بدل المواصلات
+  foodAllowance: real("food_allowance").default(0), // بدل الطعام
+  otherAllowances: real("other_allowances").default(0), // بدلات أخرى
+  totalSalary: real("total_salary"), // إجمالي الراتب
+  hireDate: text("hire_date"), // تاريخ التعيين
+  healthCertificate: text("health_certificate").default("none"), // شهادة صحية: none, valid, expired
+  healthCertificateExpiry: text("health_certificate_expiry"), // تاريخ انتهاء الشهادة الصحية
+  iqamaNumber: text("iqama_number"), // رقم الإقامة
+  iqamaExpiry: text("iqama_expiry"), // تاريخ انتهاء الإقامة
+  passportNumber: text("passport_number"), // رقم الجواز
+  passportExpiry: text("passport_expiry"), // تاريخ انتهاء الجواز
+  phoneNumber: text("phone_number"), // رقم الجوال
+  emergencyContact: text("emergency_contact"), // رقم الطوارئ
+  bankName: text("bank_name"), // اسم البنك
+  bankAccountNumber: text("bank_account_number"), // رقم الحساب البنكي
+  status: text("status").default("active").notNull(), // active, inactive, terminated, on_leave
+  contractType: text("contract_type").default("full_time"), // full_time, part_time, contract
+  workPermitNumber: text("work_permit_number"), // رقم رخصة العمل
+  notes: text("notes"), // ملاحظات
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_employees_branch").on(table.branchId),
+  index("idx_branch_employees_nationality").on(table.nationality),
+  index("idx_branch_employees_status").on(table.status),
+  index("idx_branch_employees_job").on(table.jobTitle),
+]);
+
+export const insertBranchEmployeeSchema = createInsertSchema(branchEmployees).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchEmployee = typeof branchEmployees.$inferSelect;
+export type InsertBranchEmployee = z.infer<typeof insertBranchEmployeeSchema>;
+
+// Branch Job Titles - وظائف موظفي الفروع
+export const BRANCH_JOB_TITLES = [
+  "كاشير",
+  "مشرف",
+  "مدير صالة",
+  "معبأ طلبات",
+  "بيكري",
+  "بستري",
+  "ساندويتشات",
+  "بيتزا",
+  "باريستا",
+  "واتر",
+  "عامل",
+  "أمين مستودع",
+  "سائق",
+  "حارس أمن",
+] as const;
+
+// Nationalities - الجنسيات
+export const NATIONALITIES = [
+  "سعودي",
+  "مصري",
+  "سوري",
+  "نيبالي",
+  "بنجلاديشي",
+  "فلبيني",
+  "بورمي",
+  "هندي",
+  "باكستاني",
+  "يمني",
+  "سوداني",
+  "إندونيسي",
+  "إثيوبي",
+  "أخرى",
+] as const;
+
+// Health Certificate Status
+export const HEALTH_CERT_STATUS = ["none", "valid", "expired", "pending"] as const;
+export type HealthCertStatus = (typeof HEALTH_CERT_STATUS)[number];
+
+export const HEALTH_CERT_LABELS: Record<HealthCertStatus, string> = {
+  none: "لا يوجد",
+  valid: "سارية",
+  expired: "منتهية",
+  pending: "قيد التجديد",
+};
+
+// Employee Status
+export const EMPLOYEE_STATUS = ["active", "inactive", "terminated", "on_leave"] as const;
+export type EmployeeStatus = (typeof EMPLOYEE_STATUS)[number];
+
+export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
+  active: "نشط",
+  inactive: "غير نشط",
+  terminated: "منتهي",
+  on_leave: "إجازة",
+};
