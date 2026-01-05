@@ -67,6 +67,13 @@ export default function AttendanceDashboardPage() {
       href: "/timesheet",
       color: "bg-purple-500",
     },
+    {
+      title: "موظفي الفروع",
+      description: "إدارة بيانات الموظفين والرواتب والمستندات",
+      icon: <Users className="w-8 h-8" />,
+      href: "/branch-employees",
+      color: "bg-amber-500",
+    },
   ];
 
   const managementCards = [
