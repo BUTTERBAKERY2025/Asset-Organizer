@@ -38,6 +38,16 @@ export default function ShiftManagementPage() {
   const [isCreatePeriodOpen, setIsCreatePeriodOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<SchedulePeriod | null>(null);
   const [scheduleData, setScheduleData] = useState<Record<string, Record<string, { startTime: string; endTime: string; isOff: boolean; shiftType: string }>>>({});
+  const [isBulkShiftOpen, setIsBulkShiftOpen] = useState(false);
+  const [bulkShiftForm, setBulkShiftForm] = useState({
+    name: "",
+    date: format(new Date(), "yyyy-MM-dd"),
+    startTime: "08:00",
+    endTime: "16:00",
+    supervisorName: "",
+    notes: "",
+  });
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -99,7 +109,10 @@ export default function ShiftManagementPage() {
   }, [employeeSchedules]);
 
   const createPeriodMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/schedule-periods", "POST", data),
+    mutationFn: async (data: any) => {
+      const result = await apiRequest("/api/schedule-periods", "POST", data);
+      return result as unknown as SchedulePeriod;
+    },
     onSuccess: (period) => {
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-periods"] });
       setSelectedPeriod(period);
@@ -132,6 +145,53 @@ export default function ShiftManagementPage() {
     },
     onError: () => {
       toast({ title: "خطأ", description: "فشل في نشر الجدول", variant: "destructive" });
+    },
+  });
+
+  const createBulkShiftMutation = useMutation({
+    mutationFn: async (data: { shift: typeof bulkShiftForm; employees: string[]; branchId: string }) => {
+      const shiftData = {
+        branchId: data.branchId,
+        name: data.shift.name,
+        date: data.shift.date,
+        startTime: data.shift.startTime,
+        endTime: data.shift.endTime,
+        supervisorName: data.shift.supervisorName || null,
+        notes: data.shift.notes || null,
+        status: "active",
+        employeeCount: data.employees.length,
+      };
+      const shift = await apiRequest("/api/shifts", "POST", shiftData) as unknown as { id: number };
+      if (data.employees.length > 0 && shift?.id) {
+        const employeePromises = data.employees.map(empId => {
+          const emp = users?.find(u => u.id === empId);
+          const empName = emp ? `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || emp.username || "Unknown" : "Unknown";
+          return apiRequest(`/api/shifts/${shift.id}/employees`, "POST", {
+            employeeName: empName,
+            role: emp?.jobTitle || "موظف",
+            status: "expected",
+          });
+        });
+        await Promise.all(employeePromises);
+      }
+      return shift;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
+      setIsBulkShiftOpen(false);
+      setBulkShiftForm({
+        name: "",
+        date: format(new Date(), "yyyy-MM-dd"),
+        startTime: "08:00",
+        endTime: "16:00",
+        supervisorName: "",
+        notes: "",
+      });
+      setSelectedEmployees([]);
+      toast({ title: "تم إنشاء الوردية بنجاح", description: "تمت إضافة جميع الموظفين المحددين" });
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في إنشاء الوردية", variant: "destructive" });
     },
   });
 
@@ -356,6 +416,159 @@ export default function ShiftManagementPage() {
                             </Button>
                           </DialogFooter>
                         </form>
+                      </DialogContent>
+                    </Dialog>
+                    <Dialog open={isBulkShiftOpen} onOpenChange={setIsBulkShiftOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="gap-2" data-testid="btn-bulk-shift"><Users className="w-4 h-4" />وردية جماعية للفرع</Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>إنشاء وردية جماعية للفرع</DialogTitle>
+                          <DialogDescription>أنشئ وردية واحدة وأضف جميع موظفي الفرع أو اختر موظفين محددين</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>اسم الوردية</Label>
+                              <Input
+                                value={bulkShiftForm.name}
+                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, name: e.target.value }))}
+                                placeholder="مثال: وردية صباحية - الأحد"
+                                data-testid="input-shift-name"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>التاريخ</Label>
+                              <Input
+                                type="date"
+                                value={bulkShiftForm.date}
+                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, date: e.target.value }))}
+                                data-testid="input-shift-date"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>وقت البداية</Label>
+                              <Input
+                                type="time"
+                                value={bulkShiftForm.startTime}
+                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, startTime: e.target.value }))}
+                                data-testid="input-shift-start"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>وقت النهاية</Label>
+                              <Input
+                                type="time"
+                                value={bulkShiftForm.endTime}
+                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, endTime: e.target.value }))}
+                                data-testid="input-shift-end"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>المشرف</Label>
+                              <Input
+                                value={bulkShiftForm.supervisorName}
+                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, supervisorName: e.target.value }))}
+                                placeholder="اسم المشرف"
+                                data-testid="input-shift-supervisor"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>ملاحظات</Label>
+                              <Input
+                                value={bulkShiftForm.notes}
+                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, notes: e.target.value }))}
+                                placeholder="ملاحظات إضافية (اختياري)"
+                                data-testid="input-shift-notes"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label>اختيار الموظفين ({selectedEmployees.length} من {filteredUsers.length})</Label>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedEmployees(filteredUsers.map(u => u.id))}
+                                  data-testid="btn-select-all"
+                                >
+                                  تحديد الكل
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedEmployees([])}
+                                  data-testid="btn-deselect-all"
+                                >
+                                  إلغاء الكل
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="border rounded-lg p-3 max-h-48 overflow-y-auto">
+                              {filteredUsers.length === 0 ? (
+                                <p className="text-center text-muted-foreground py-4">يرجى اختيار فرع أولاً لعرض الموظفين</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {filteredUsers.map(emp => (
+                                    <div key={emp.id} className="flex items-center gap-2">
+                                      <Checkbox
+                                        id={`emp-${emp.id}`}
+                                        checked={selectedEmployees.includes(emp.id)}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            setSelectedEmployees(prev => [...prev, emp.id]);
+                                          } else {
+                                            setSelectedEmployees(prev => prev.filter(id => id !== emp.id));
+                                          }
+                                        }}
+                                        data-testid={`checkbox-emp-${emp.id}`}
+                                      />
+                                      <label htmlFor={`emp-${emp.id}`} className="text-sm cursor-pointer flex-1">
+                                        {emp.firstName} {emp.lastName}
+                                        <span className="text-muted-foreground mr-2">({emp.jobTitle || "موظف"})</span>
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={() => {
+                              if (!bulkShiftForm.name) {
+                                toast({ title: "يرجى إدخال اسم الوردية", variant: "destructive" });
+                                return;
+                              }
+                              if (selectedBranch === "all") {
+                                toast({ title: "يرجى اختيار فرع محدد", variant: "destructive" });
+                                return;
+                              }
+                              if (selectedEmployees.length === 0) {
+                                toast({ title: "يرجى اختيار موظف واحد على الأقل", variant: "destructive" });
+                                return;
+                              }
+                              createBulkShiftMutation.mutate({
+                                shift: bulkShiftForm,
+                                employees: selectedEmployees,
+                                branchId: selectedBranch,
+                              });
+                            }}
+                            disabled={createBulkShiftMutation.isPending || !bulkShiftForm.name || selectedBranch === "all" || selectedEmployees.length === 0}
+                            data-testid="btn-create-bulk-shift"
+                          >
+                            {createBulkShiftMutation.isPending ? "جاري الإنشاء..." : `إنشاء الوردية (${selectedEmployees.length} موظف)`}
+                          </Button>
+                        </DialogFooter>
                       </DialogContent>
                     </Dialog>
                   </div>
