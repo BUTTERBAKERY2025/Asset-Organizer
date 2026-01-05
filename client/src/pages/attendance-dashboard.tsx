@@ -41,6 +41,9 @@ export default function AttendanceDashboardPage() {
     lateToday: number;
     absentToday: number;
     templatesCount: number;
+    schedulesCount: number;
+    reportsCount: number;
+    attendanceRate: number;
   }>({
     queryKey: ["/api/attendance-dashboard-stats"],
   });
@@ -80,47 +83,31 @@ export default function AttendanceDashboardPage() {
   const managementCards = [
     {
       title: "قوالب الورديات",
-      description: "إنشاء قوالب أسبوعية لجداول العمل",
+      description: "قوالب أسبوعية لجداول العمل",
       icon: <Calendar className="w-4 h-4" />,
       href: "/shift-management?tab=templates",
       stats: stats?.templatesCount || 0,
       statsLabel: "قالب",
     },
     {
-      title: "فترات الجدولة",
-      description: "إدارة فترات العمل الأسبوعية والشهرية",
-      icon: <CalendarDays className="w-4 h-4" />,
-      href: "/shift-management?tab=periods",
-      stats: stats?.periodsCount || 0,
-      statsLabel: "فترة",
-    },
-    {
       title: "جداول الموظفين",
-      description: "عرض وتعديل جداول الموظفين اليومية",
-      icon: <Users className="w-4 h-4" />,
+      description: "جداول الدوام المعينة للموظفين",
+      icon: <CalendarDays className="w-4 h-4" />,
       href: "/shift-management?tab=schedules",
       stats: stats?.schedulesCount || 0,
       statsLabel: "جدول",
     },
     {
-      title: "سجلات الحضور",
-      description: "عرض سجلات الحضور والانصراف",
-      icon: <ClipboardCheck className="w-4 h-4" />,
-      href: "/attendance-check",
-      stats: stats?.todayAttendance || 0,
-      statsLabel: "حضور اليوم",
-    },
-    {
-      title: "التقارير الشهرية",
-      description: "تقارير التايم شيت مع التوقيعات",
+      title: "تقارير التايم شيت",
+      description: "التقارير الشهرية مع التوقيعات",
       icon: <FileText className="w-4 h-4" />,
       href: "/timesheet",
       stats: stats?.reportsCount || 0,
       statsLabel: "تقرير",
     },
     {
-      title: "ملخص الحضور",
-      description: "إحصائيات الحضور الشهرية",
+      title: "نسبة الحضور الشهري",
+      description: "متوسط نسبة الحضور للشهر الحالي",
       icon: <BarChart3 className="w-4 h-4" />,
       href: "/timesheet?tab=history",
       stats: stats?.attendanceRate ? `${stats.attendanceRate}%` : "-",
@@ -230,7 +217,7 @@ export default function AttendanceDashboardPage() {
 
             <div>
               <h2 className="text-lg font-semibold mb-3">الإدارة والتقارير</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {managementCards.map((card, index) => (
                   <Card
                     key={index}
