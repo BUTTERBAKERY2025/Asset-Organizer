@@ -275,14 +275,15 @@ export default function TimesheetPage() {
       "التاريخ": entry.date,
       "اليوم": DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek,
       "الحالة": STATUS_LABELS[entry.status]?.label || entry.status,
-      "وقت البداية المقرر": entry.scheduledStartTime || "-",
-      "وقت النهاية المقرر": entry.scheduledEndTime || "-",
-      "وقت الحضور الفعلي": entry.actualStartTime || "-",
-      "وقت الانصراف الفعلي": entry.actualEndTime || "-",
-      "ساعات العمل المقررة": entry.scheduledHours || 0,
-      "ساعات العمل الفعلية": entry.actualHours || 0,
-      "دقائق التأخير": entry.lateMinutes || 0,
-      "دقائق العمل الإضافي": entry.overtimeMinutes || 0,
+      "وقت البداية المقرر": entry.scheduledStartTime ?? "--",
+      "وقت النهاية المقرر": entry.scheduledEndTime ?? "--",
+      "وقت الحضور الفعلي": entry.actualStartTime ?? "--",
+      "وقت الانصراف الفعلي": entry.actualEndTime ?? "--",
+      "ساعات العمل المقررة": entry.scheduledHours ?? "--",
+      "ساعات العمل الفعلية": entry.actualHours ?? "--",
+      "دقائق التأخير": entry.lateMinutes ?? "--",
+      "دقائق العمل الإضافي": entry.overtimeMinutes ?? "--",
+      "التوقيع": entry.checkInSignature ? "موقع" : "--",
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -306,13 +307,13 @@ export default function TimesheetPage() {
         <td>${entry.date}</td>
         <td>${DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek}</td>
         <td>${STATUS_LABELS[entry.status]?.label || entry.status}</td>
-        <td>${entry.scheduledStartTime || "-"}</td>
-        <td>${entry.scheduledEndTime || "-"}</td>
-        <td>${entry.actualStartTime || "-"}</td>
-        <td>${entry.actualEndTime || "-"}</td>
-        <td>${entry.actualHours?.toFixed(1) || "0"}</td>
-        <td>${entry.lateMinutes || 0}</td>
-        <td>${entry.checkInSignature ? `<img src="${entry.checkInSignature}" alt="توقيع" style="max-height: 25px; max-width: 60px;" />` : "-"}</td>
+        <td>${entry.scheduledStartTime ?? "--"}</td>
+        <td>${entry.scheduledEndTime ?? "--"}</td>
+        <td>${entry.actualStartTime ?? "--"}</td>
+        <td>${entry.actualEndTime ?? "--"}</td>
+        <td>${entry.actualHours != null ? entry.actualHours.toFixed(1) : "--"}</td>
+        <td>${entry.lateMinutes ?? "--"}</td>
+        <td>${entry.checkInSignature ? `<img src="${entry.checkInSignature}" alt="توقيع" style="max-height: 25px; max-width: 60px;" />` : "--"}</td>
       </tr>
     `).join("");
 
@@ -656,20 +657,20 @@ export default function TimesheetPage() {
                                   {STATUS_LABELS[entry.status]?.label || entry.status}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-center">{entry.scheduledStartTime || "-"}</TableCell>
-                              <TableCell className="text-center">{entry.scheduledEndTime || "-"}</TableCell>
-                              <TableCell className="text-center">{entry.actualStartTime || "-"}</TableCell>
-                              <TableCell className="text-center">{entry.actualEndTime || "-"}</TableCell>
-                              <TableCell className="text-center">{entry.actualHours?.toFixed(1) || "-"}</TableCell>
+                              <TableCell className="text-center">{entry.scheduledStartTime ?? "--"}</TableCell>
+                              <TableCell className="text-center">{entry.scheduledEndTime ?? "--"}</TableCell>
+                              <TableCell className="text-center">{entry.actualStartTime ?? "--"}</TableCell>
+                              <TableCell className="text-center">{entry.actualEndTime ?? "--"}</TableCell>
+                              <TableCell className="text-center">{entry.actualHours != null ? entry.actualHours.toFixed(1) : "--"}</TableCell>
                               <TableCell className="text-center">
-                                {entry.lateMinutes > 0 ? (
+                                {entry.lateMinutes != null && entry.lateMinutes > 0 ? (
                                   <span className="text-amber-600 font-medium">{entry.lateMinutes}</span>
-                                ) : "-"}
+                                ) : entry.lateMinutes === 0 ? "0" : "--"}
                               </TableCell>
                               <TableCell className="text-center">
                                 {entry.checkInSignature ? (
                                   <img src={entry.checkInSignature} alt="توقيع" className="h-8 max-w-16 mx-auto object-contain" />
-                                ) : "-"}
+                                ) : "--"}
                               </TableCell>
                             </TableRow>
                           ))}
