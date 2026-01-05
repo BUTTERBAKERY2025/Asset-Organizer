@@ -48,7 +48,7 @@ export default function AttendanceDashboardPage() {
     {
       title: "تسجيل الحضور والانصراف",
       description: "تسجيل حضور وانصراف الموظفين مع التوقيع الإلكتروني",
-      icon: <Fingerprint className="w-8 h-8" />,
+      icon: <Fingerprint className="w-6 h-6" />,
       href: "/attendance-check",
       color: "bg-green-500",
       badge: "الأكثر استخداماً",
@@ -56,21 +56,21 @@ export default function AttendanceDashboardPage() {
     {
       title: "إدارة الورديات",
       description: "إنشاء وإدارة قوالب الورديات وجداول العمل",
-      icon: <CalendarClock className="w-8 h-8" />,
+      icon: <CalendarClock className="w-6 h-6" />,
       href: "/shift-management",
       color: "bg-blue-500",
     },
     {
       title: "تقارير التايم شيت",
       description: "إنشاء تقارير الدوام الشهرية مع التوقيعات",
-      icon: <FileSignature className="w-8 h-8" />,
+      icon: <FileSignature className="w-6 h-6" />,
       href: "/timesheet",
       color: "bg-purple-500",
     },
     {
       title: "موظفي الفروع",
       description: "إدارة بيانات الموظفين والرواتب والمستندات",
-      icon: <Users className="w-8 h-8" />,
+      icon: <Users className="w-6 h-6" />,
       href: "/branch-employees",
       color: "bg-amber-500",
     },
@@ -80,7 +80,7 @@ export default function AttendanceDashboardPage() {
     {
       title: "قوالب الورديات",
       description: "إنشاء قوالب أسبوعية لجداول العمل",
-      icon: <Calendar className="w-6 h-6" />,
+      icon: <Calendar className="w-4 h-4" />,
       href: "/shift-management?tab=templates",
       stats: stats?.templatesCount || 0,
       statsLabel: "قالب",
@@ -88,7 +88,7 @@ export default function AttendanceDashboardPage() {
     {
       title: "فترات الجدولة",
       description: "إدارة فترات العمل الأسبوعية والشهرية",
-      icon: <CalendarDays className="w-6 h-6" />,
+      icon: <CalendarDays className="w-4 h-4" />,
       href: "/shift-management?tab=periods",
       stats: stats?.periodsCount || 0,
       statsLabel: "فترة",
@@ -96,7 +96,7 @@ export default function AttendanceDashboardPage() {
     {
       title: "جداول الموظفين",
       description: "عرض وتعديل جداول الموظفين اليومية",
-      icon: <Users className="w-6 h-6" />,
+      icon: <Users className="w-4 h-4" />,
       href: "/shift-management?tab=schedules",
       stats: stats?.schedulesCount || 0,
       statsLabel: "جدول",
@@ -104,7 +104,7 @@ export default function AttendanceDashboardPage() {
     {
       title: "سجلات الحضور",
       description: "عرض سجلات الحضور والانصراف",
-      icon: <ClipboardCheck className="w-6 h-6" />,
+      icon: <ClipboardCheck className="w-4 h-4" />,
       href: "/attendance-check",
       stats: stats?.todayAttendance || 0,
       statsLabel: "حضور اليوم",
@@ -112,7 +112,7 @@ export default function AttendanceDashboardPage() {
     {
       title: "التقارير الشهرية",
       description: "تقارير التايم شيت مع التوقيعات",
-      icon: <FileText className="w-6 h-6" />,
+      icon: <FileText className="w-4 h-4" />,
       href: "/timesheet",
       stats: stats?.reportsCount || 0,
       statsLabel: "تقرير",
@@ -120,7 +120,7 @@ export default function AttendanceDashboardPage() {
     {
       title: "ملخص الحضور",
       description: "إحصائيات الحضور الشهرية",
-      icon: <BarChart3 className="w-6 h-6" />,
+      icon: <BarChart3 className="w-4 h-4" />,
       href: "/timesheet?tab=history",
       stats: stats?.attendanceRate ? `${stats.attendanceRate}%` : "-",
       statsLabel: "نسبة الحضور",
@@ -193,30 +193,30 @@ export default function AttendanceDashboardPage() {
             </div>
 
             <div>
-              <h2 className="text-xl font-semibold mb-4">الإجراءات السريعة</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <h2 className="text-lg font-semibold mb-3">الإجراءات السريعة</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {quickActions.map((action, index) => (
                   <Card
                     key={index}
-                    className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-primary"
+                    className="cursor-pointer hover:shadow-lg transition-all border-2 hover:border-primary"
                     onClick={() => navigate(action.href)}
                     data-testid={`card-action-${index}`}
                   >
-                    <CardContent className="pt-6">
-                      <div className="flex items-start gap-4">
-                        <div className={`p-3 rounded-lg ${action.color} text-white`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${action.color} text-white shrink-0`}>
                           {action.icon}
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-lg">{action.title}</h3>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <h3 className="font-semibold text-sm">{action.title}</h3>
                             {action.badge && (
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge variant="secondary" className="text-[10px] px-1">
                                 {action.badge}
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground mt-1">
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                             {action.description}
                           </p>
                         </div>
@@ -228,29 +228,22 @@ export default function AttendanceDashboardPage() {
             </div>
 
             <div>
-              <h2 className="text-xl font-semibold mb-4">الإدارة والتقارير</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <h2 className="text-lg font-semibold mb-3">الإدارة والتقارير</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {managementCards.map((card, index) => (
                   <Card
                     key={index}
-                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    className="cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
                     onClick={() => navigate(card.href)}
                     data-testid={`card-management-${index}`}
                   >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-muted">{card.icon}</div>
-                          <CardTitle className="text-base">{card.title}</CardTitle>
-                        </div>
-                        <div className="text-left">
-                          <p className="text-xl font-bold">{card.stats}</p>
-                          <p className="text-xs text-muted-foreground">{card.statsLabel}</p>
-                        </div>
+                    <CardContent className="p-3 text-center">
+                      <div className="flex justify-center mb-2">
+                        <div className="p-2 rounded-lg bg-muted">{card.icon}</div>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription>{card.description}</CardDescription>
+                      <p className="text-xl font-bold text-primary">{card.stats}</p>
+                      <p className="text-xs text-muted-foreground mb-1">{card.statsLabel}</p>
+                      <p className="text-sm font-medium">{card.title}</p>
                     </CardContent>
                   </Card>
                 ))}
