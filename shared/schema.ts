@@ -3646,6 +3646,8 @@ export const timesheetReportEntries = pgTable("timesheet_report_entries", {
   overtimeMinutes: integer("overtime_minutes").default(0),
   lateMinutes: integer("late_minutes").default(0),
   notes: text("notes"),
+  checkInSignature: text("check_in_signature"), // base64 signature from daily attendance
+  checkOutSignature: text("check_out_signature"), // base64 signature from daily attendance
 }, (table) => [
   index("idx_timesheet_entries_report").on(table.reportId),
   index("idx_timesheet_entries_date").on(table.date),
