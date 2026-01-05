@@ -68,6 +68,7 @@ import MarketingExpensesPage from "@/pages/marketing-expenses";
 import SettingsDashboardPage from "@/pages/settings-dashboard";
 import ShiftManagementPage from "@/pages/shift-management";
 import AttendanceCheckPage from "@/pages/attendance-check";
+import TimesheetPage from "@/pages/timesheet";
 
 function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
   return (
@@ -155,6 +156,7 @@ function Router() {
       <Route path="/settings">{() => <ProtectedPage component={SettingsDashboardPage} />}</Route>
       <Route path="/shift-management">{() => <ProtectedPage component={ShiftManagementPage} />}</Route>
       <Route path="/attendance-check">{() => <ProtectedPage component={AttendanceCheckPage} />}</Route>
+      <Route path="/timesheet">{() => <ProtectedPage component={TimesheetPage} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );

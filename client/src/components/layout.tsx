@@ -129,6 +129,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations" },
           { href: "/shift-management", label: "إدارة الورديات والحضور", icon: Clock, module: "shifts" },
           { href: "/attendance-check", label: "تسجيل الحضور", icon: Clock, module: "shifts" },
+          { href: "/timesheet", label: "تقارير التايم شيت", icon: FileText, module: "shifts" },
         ],
       },
     },
