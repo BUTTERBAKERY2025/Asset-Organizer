@@ -111,6 +111,7 @@ const MODULE_LABELS: Record<string, string> = {
   settings: "الإعدادات",
   assets: "الأصول",
   projects: "المشاريع",
+  marketing: "التسويق",
 };
 
 const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
