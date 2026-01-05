@@ -101,6 +101,7 @@ const MODULE_LABELS: Record<string, string> = {
   inventory: "المخزون",
   production: "الإنتاج",
   cashier: "الكاشير",
+  cashier_journal: "يومية الكاشير",
   waste: "الهدر",
   quality: "الجودة",
   targets: "الأهداف",
@@ -112,6 +113,9 @@ const MODULE_LABELS: Record<string, string> = {
   assets: "الأصول",
   projects: "المشاريع",
   marketing: "التسويق",
+  operations: "العمليات",
+  shifts: "الورديات",
+  contractors: "المقاولين",
 };
 
 const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
