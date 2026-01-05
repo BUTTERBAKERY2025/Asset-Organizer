@@ -37,6 +37,10 @@ import {
   Download,
   Printer,
   FileSpreadsheet,
+  Eye,
+  ClipboardList,
+  Clock,
+  Link,
 } from "lucide-react";
 import type { BranchEmployee } from "@shared/schema";
 
@@ -166,6 +170,9 @@ export default function BranchEmployeesPage() {
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
+  const [viewingEmployee, setViewingEmployee] = useState<BranchEmployee | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [selectedUserToLink, setSelectedUserToLink] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
 
   const { data: branches } = useQuery({
@@ -191,6 +198,68 @@ export default function BranchEmployeesPage() {
       const url = selectedBranch === "all" ? "/api/branch-employees/stats" : `/api/branch-employees/stats?branchId=${selectedBranch}`;
       const res = await fetch(url);
       return res.json();
+    },
+  });
+
+  const { data: employeeAttendance, isLoading: isLoadingAttendance } = useQuery({
+    queryKey: ["/api/branch-employees/attendance", viewingEmployee?.id],
+    queryFn: async () => {
+      if (!viewingEmployee?.id) return [];
+      const res = await fetch(`/api/branch-employees/${viewingEmployee.id}/attendance`);
+      return res.json();
+    },
+    enabled: !!viewingEmployee?.id,
+  });
+
+  const { data: employeeSchedules, isLoading: isLoadingSchedules } = useQuery({
+    queryKey: ["/api/branch-employees/schedules", viewingEmployee?.id],
+    queryFn: async () => {
+      if (!viewingEmployee?.id) return [];
+      const res = await fetch(`/api/branch-employees/${viewingEmployee.id}/schedules`);
+      return res.json();
+    },
+    enabled: !!viewingEmployee?.id,
+  });
+
+  const { data: employeeTimesheets, isLoading: isLoadingTimesheets } = useQuery({
+    queryKey: ["/api/branch-employees/timesheets", viewingEmployee?.id],
+    queryFn: async () => {
+      if (!viewingEmployee?.id) return [];
+      const res = await fetch(`/api/branch-employees/${viewingEmployee.id}/timesheets`);
+      return res.json();
+    },
+    enabled: !!viewingEmployee?.id,
+  });
+
+  const handleViewDetails = (employee: BranchEmployee) => {
+    setViewingEmployee(employee);
+    setSelectedUserToLink("");
+    setIsDetailsDialogOpen(true);
+  };
+
+  const { data: systemUsers } = useQuery({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const linkUserMutation = useMutation({
+    mutationFn: async ({ employeeId, userId }: { employeeId: number; userId: string }) => {
+      const res = await fetch(`/api/branch-employees/${employeeId}/link-user`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error("فشل في ربط الموظف");
+      return res.json();
+    },
+    onSuccess: (updatedEmployee) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      setViewingEmployee(updatedEmployee);
+      setSelectedUserToLink("");
     },
   });
 
@@ -812,7 +881,10 @@ export default function BranchEmployeesPage() {
                       <TableCell>{getStatusBadge(emp.status)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="ghost" onClick={() => handleEdit(emp)} data-testid={`button-edit-${emp.id}`}>
+                          <Button size="sm" variant="ghost" onClick={() => handleViewDetails(emp)} data-testid={`button-view-${emp.id}`} title="عرض التفاصيل">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleEdit(emp)} data-testid={`button-edit-${emp.id}`} title="تعديل">
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button
@@ -825,6 +897,7 @@ export default function BranchEmployeesPage() {
                               }
                             }}
                             data-testid={`button-delete-${emp.id}`}
+                            title="حذف"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -879,6 +952,254 @@ export default function BranchEmployeesPage() {
             </Card>
           </div>
         )}
+
+        {/* Employee Details Dialog */}
+        <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                تفاصيل الموظف: {viewingEmployee?.employeeName}
+              </DialogTitle>
+              <DialogDescription>
+                عرض سجلات الحضور والجداول والدوام المرتبطة بالموظف
+              </DialogDescription>
+            </DialogHeader>
+            
+            {viewingEmployee && (
+              <Tabs defaultValue="info" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="info">معلومات الموظف</TabsTrigger>
+                  <TabsTrigger value="attendance">سجلات الحضور</TabsTrigger>
+                  <TabsTrigger value="schedules">جداول الدوام</TabsTrigger>
+                  <TabsTrigger value="timesheets">تقارير كشوف الدوام</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="info" className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <UserCheck className="w-4 h-4" />
+                          البيانات الأساسية
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="flex justify-between"><span className="text-gray-500">الاسم:</span><span>{viewingEmployee.employeeName}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">الفرع:</span><span>{getBranchName(viewingEmployee.branchId)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">الوظيفة:</span><span>{viewingEmployee.jobTitle}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">الجنسية:</span><span>{viewingEmployee.nationality}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">الحالة:</span>{getStatusBadge(viewingEmployee.status)}</div>
+                        {viewingEmployee.linkedUserId && (
+                          <div className="flex justify-between"><span className="text-gray-500">مرتبط بالنظام:</span><Badge className="bg-blue-100 text-blue-800">نعم</Badge></div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <DollarSign className="w-4 h-4" />
+                          بيانات الراتب
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="flex justify-between"><span className="text-gray-500">الراتب الأساسي:</span><span>{formatCurrency(viewingEmployee.salary)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">بدل السكن:</span><span>{formatCurrency(viewingEmployee.housingAllowance)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">بدل المواصلات:</span><span>{formatCurrency(viewingEmployee.transportAllowance)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">بدل الطعام:</span><span>{formatCurrency(viewingEmployee.foodAllowance)}</span></div>
+                        <div className="flex justify-between font-bold border-t pt-2"><span>الإجمالي:</span><span>{formatCurrency(viewingEmployee.totalSalary)}</span></div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  {!viewingEmployee.linkedUserId && (
+                    <Card className="bg-amber-50 border-amber-200">
+                      <CardContent className="py-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-amber-800">
+                            <Link className="w-4 h-4" />
+                            <span className="text-sm">هذا الموظف غير مرتبط بحساب مستخدم في النظام. لتفعيل سجلات الحضور التلقائية، يجب ربطه بحساب مستخدم.</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Select value={selectedUserToLink} onValueChange={setSelectedUserToLink}>
+                              <SelectTrigger className="w-64 bg-white">
+                                <SelectValue placeholder="اختر مستخدم للربط" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {systemUsers?.map((user: any) => (
+                                  <SelectItem key={user.id} value={user.id}>
+                                    {user.displayName || user.username || user.id}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              disabled={!selectedUserToLink || linkUserMutation.isPending}
+                              onClick={() => {
+                                if (viewingEmployee && selectedUserToLink) {
+                                  linkUserMutation.mutate({ employeeId: viewingEmployee.id, userId: selectedUserToLink });
+                                }
+                              }}
+                              data-testid="button-link-user"
+                            >
+                              {linkUserMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "ربط المستخدم"}
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {viewingEmployee.linkedUserId && (
+                    <Card className="bg-green-50 border-green-200">
+                      <CardContent className="py-4">
+                        <div className="flex items-center gap-2 text-green-800">
+                          <UserCheck className="w-4 h-4" />
+                          <span className="text-sm">هذا الموظف مرتبط بحساب مستخدم في النظام. سجلات الحضور والدوام ستظهر تلقائياً.</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="attendance" className="space-y-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <ClipboardList className="w-4 h-4" />
+                        سجلات الحضور ({formatNumber(employeeAttendance?.length || 0)})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingAttendance ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin" /></div>
+                      ) : employeeAttendance?.length > 0 ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">التاريخ</TableHead>
+                              <TableHead className="text-right">الحضور</TableHead>
+                              <TableHead className="text-right">الانصراف</TableHead>
+                              <TableHead className="text-right">الحالة</TableHead>
+                              <TableHead className="text-right">ساعات العمل</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {employeeAttendance.slice(0, 10).map((att: any) => (
+                              <TableRow key={att.id}>
+                                <TableCell>{att.attendanceDate}</TableCell>
+                                <TableCell>{att.actualCheckIn || "--"}</TableCell>
+                                <TableCell>{att.actualCheckOut || "--"}</TableCell>
+                                <TableCell>{getStatusBadge(att.status)}</TableCell>
+                                <TableCell>{att.workingHours ? `${att.workingHours} ساعة` : "--"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <p className="text-center text-gray-500 py-4">لا توجد سجلات حضور مرتبطة بهذا الموظف</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="schedules" className="space-y-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        جداول الدوام ({formatNumber(employeeSchedules?.length || 0)})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingSchedules ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin" /></div>
+                      ) : employeeSchedules?.length > 0 ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">التاريخ</TableHead>
+                              <TableHead className="text-right">اليوم</TableHead>
+                              <TableHead className="text-right">الفترة</TableHead>
+                              <TableHead className="text-right">من</TableHead>
+                              <TableHead className="text-right">إلى</TableHead>
+                              <TableHead className="text-right">الحالة</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {employeeSchedules.slice(0, 10).map((sch: any) => (
+                              <TableRow key={sch.id}>
+                                <TableCell>{sch.scheduleDate}</TableCell>
+                                <TableCell>{sch.dayOfWeek}</TableCell>
+                                <TableCell>{sch.shiftType || "--"}</TableCell>
+                                <TableCell>{sch.startTime || "--"}</TableCell>
+                                <TableCell>{sch.endTime || "--"}</TableCell>
+                                <TableCell>{sch.isOff ? <Badge className="bg-gray-100 text-gray-800">إجازة</Badge> : getStatusBadge(sch.status)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <p className="text-center text-gray-500 py-4">لا توجد جداول دوام مرتبطة بهذا الموظف</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="timesheets" className="space-y-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        تقارير كشوف الدوام ({formatNumber(employeeTimesheets?.length || 0)})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingTimesheets ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin" /></div>
+                      ) : employeeTimesheets?.length > 0 ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">الفترة</TableHead>
+                              <TableHead className="text-right">أيام الحضور</TableHead>
+                              <TableHead className="text-right">أيام الغياب</TableHead>
+                              <TableHead className="text-right">الساعات</TableHead>
+                              <TableHead className="text-right">الحالة</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {employeeTimesheets.map((ts: any) => (
+                              <TableRow key={ts.id}>
+                                <TableCell>{ts.startDate} - {ts.endDate}</TableCell>
+                                <TableCell>{formatNumber(ts.totalPresentDays)}</TableCell>
+                                <TableCell>{formatNumber(ts.totalAbsentDays)}</TableCell>
+                                <TableCell>{ts.totalActualHours ? `${ts.totalActualHours} ساعة` : "--"}</TableCell>
+                                <TableCell>
+                                  <Badge className={
+                                    ts.status === 'finalized' ? 'bg-green-100 text-green-800' :
+                                    ts.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-blue-100 text-blue-800'
+                                  }>
+                                    {ts.status === 'finalized' ? 'مكتمل' : 
+                                     ts.status === 'pending' ? 'قيد الإنشاء' : 
+                                     ts.status === 'pending_employee_signature' ? 'بانتظار توقيع الموظف' :
+                                     ts.status === 'pending_manager_signature' ? 'بانتظار توقيع المدير' : ts.status}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <p className="text-center text-gray-500 py-4">لا توجد تقارير دوام مرتبطة بهذا الموظف</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
