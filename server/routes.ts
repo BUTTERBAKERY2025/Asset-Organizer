@@ -9129,7 +9129,7 @@ export async function registerRoutes(
   // Check-in employee by manager
   app.post("/api/attendance/check-in-employee", isAuthenticated, async (req: any, res) => {
     try {
-      const { employeeId, branchId, signature, scheduledStartTime, scheduledEndTime } = req.body;
+      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime } = req.body;
       
       if (!employeeId || !branchId) {
         return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
@@ -9145,7 +9145,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
       }
       
-      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduledStartTime, scheduledEndTime);
+      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime);
       res.status(201).json(record);
     } catch (error) {
       console.error("Error checking in employee:", error);
@@ -9156,7 +9156,7 @@ export async function registerRoutes(
   // Check-out employee by manager
   app.post("/api/attendance/check-out-employee", isAuthenticated, async (req: any, res) => {
     try {
-      const { employeeId, signature } = req.body;
+      const { employeeId, scheduleId, signature } = req.body;
       
       if (!employeeId) {
         return res.status(400).json({ error: "معرف الموظف مطلوب" });
@@ -9166,7 +9166,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
       
-      const record = await storage.checkOutEmployee(employeeId, signature);
+      const record = await storage.checkOutEmployee(employeeId, signature, scheduleId);
       if (!record) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
       }

@@ -6126,7 +6126,7 @@ export class DatabaseStorage implements IStorage {
     return employeesWithAttendance;
   }
 
-  async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduledStartTime?: string, scheduledEndTime?: string): Promise<AttendanceRecord> {
+  async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
     const now = new Date().toTimeString().split(' ')[0].substring(0, 5);
     
@@ -6159,6 +6159,7 @@ export class DatabaseStorage implements IStorage {
       const [updated] = await db.update(attendanceRecords).set({
         actualCheckIn: now,
         checkInSignature: signature,
+        scheduleId: scheduleId,
         scheduledStartTime: scheduledStartTime,
         scheduledEndTime: scheduledEndTime,
         lateMinutes,
@@ -6172,6 +6173,7 @@ export class DatabaseStorage implements IStorage {
       employeeId,
       employeeName,
       branchId,
+      scheduleId: scheduleId,
       attendanceDate: today,
       actualCheckIn: now,
       checkInSignature: signature,
@@ -6183,7 +6185,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async checkOutEmployee(employeeId: string, signature?: string): Promise<AttendanceRecord | undefined> {
+  async checkOutEmployee(employeeId: string, signature?: string, scheduleId?: number): Promise<AttendanceRecord | undefined> {
     const today = new Date().toISOString().split('T')[0];
     const now = new Date().toTimeString().split(' ')[0].substring(0, 5);
     

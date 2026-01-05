@@ -90,7 +90,7 @@ export default function AttendanceCheckPage() {
   }, [selectedEmployee, signatureMode]);
 
   const checkInMutation = useMutation({
-    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduledStartTime?: string; scheduledEndTime?: string }) => {
+    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduleId: number; scheduledStartTime?: string; scheduledEndTime?: string }) => {
       return apiRequest("POST", "/api/attendance/check-in-employee", data);
     },
     onSuccess: () => {
@@ -104,7 +104,7 @@ export default function AttendanceCheckPage() {
   });
 
   const checkOutMutation = useMutation({
-    mutationFn: async (data: { employeeId: string; signature: string }) => {
+    mutationFn: async (data: { employeeId: string; scheduleId: number; signature: string }) => {
       return apiRequest("POST", "/api/attendance/check-out-employee", data);
     },
     onSuccess: () => {
@@ -191,12 +191,14 @@ export default function AttendanceCheckPage() {
         employeeId: selectedEmployee.employeeId,
         branchId: selectedBranch,
         signature: getSignatureData(),
+        scheduleId: selectedEmployee.id,
         scheduledStartTime: selectedEmployee.startTime,
         scheduledEndTime: selectedEmployee.endTime,
       });
     } else {
       checkOutMutation.mutate({
         employeeId: selectedEmployee.employeeId,
+        scheduleId: selectedEmployee.id,
         signature: getSignatureData(),
       });
     }
