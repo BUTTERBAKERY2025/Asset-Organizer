@@ -9240,6 +9240,70 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Attendance Dashboard Stats - إحصائيات لوحة الحضور ====================
+  
+  app.get("/api/attendance-dashboard-stats", isAuthenticated, async (req: any, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get today's attendance
+      const todayRecords = await storage.getAllAttendanceRecords({ startDate: today, endDate: today });
+      const presentToday = todayRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+      const lateToday = todayRecords.filter(r => r.status === 'late').length;
+      const absentToday = todayRecords.filter(r => r.status === 'absent').length;
+      
+      // Get templates count
+      const templates = await storage.getScheduleTemplates();
+      const templatesCount = templates.length;
+      
+      // Get periods count
+      const periods = await storage.getSchedulePeriods({});
+      const periodsCount = periods.length;
+      
+      // Get schedules count (this month)
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      const endOfMonth = new Date(startOfMonth);
+      endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+      endOfMonth.setDate(0);
+      
+      const schedules = await storage.getEmployeeSchedules({
+        startDate: startOfMonth.toISOString().split('T')[0],
+        endDate: endOfMonth.toISOString().split('T')[0]
+      });
+      const schedulesCount = schedules.length;
+      
+      // Get reports count
+      const reports = await storage.getTimesheetReports({});
+      const reportsCount = reports.length;
+      
+      // Get total employees
+      const users = await storage.getUsers();
+      const totalEmployees = users.filter(u => u.role !== 'admin').length;
+      
+      // Calculate attendance rate
+      const attendanceRate = todayRecords.length > 0 
+        ? Math.round((presentToday / todayRecords.length) * 100) 
+        : 0;
+      
+      res.json({
+        todayAttendance: todayRecords.length,
+        presentToday,
+        lateToday,
+        absentToday,
+        templatesCount,
+        periodsCount,
+        schedulesCount,
+        reportsCount,
+        totalEmployees,
+        attendanceRate
+      });
+    } catch (error) {
+      console.error("Error fetching attendance dashboard stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات لوحة الحضور" });
+    }
+  });
+
   // ==================== Timesheet Reports - تقارير التايم شيت ====================
   
   // Get all timesheet reports with filters
