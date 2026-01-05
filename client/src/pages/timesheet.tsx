@@ -71,6 +71,8 @@ interface TimesheetEntry {
   overtimeMinutes: number;
   lateMinutes: number;
   notes?: string;
+  checkInSignature?: string;
+  checkOutSignature?: string;
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -309,6 +311,7 @@ export default function TimesheetPage() {
         <td>${entry.actualEndTime || "-"}</td>
         <td>${entry.actualHours?.toFixed(1) || "0"}</td>
         <td>${entry.lateMinutes || 0}</td>
+        <td>${entry.checkInSignature ? `<img src="${entry.checkInSignature}" alt="توقيع" style="max-height: 25px; max-width: 60px;" />` : "-"}</td>
       </tr>
     `).join("");
 
@@ -391,6 +394,7 @@ export default function TimesheetPage() {
               <th>وقت الانصراف</th>
               <th>ساعات العمل</th>
               <th>دقائق التأخير</th>
+              <th>التوقيع</th>
             </tr>
           </thead>
           <tbody>
@@ -619,12 +623,13 @@ export default function TimesheetPage() {
                             <TableHead className="text-center">وقت الانصراف</TableHead>
                             <TableHead className="text-center">ساعات العمل</TableHead>
                             <TableHead className="text-center">تأخير (دقائق)</TableHead>
+                            <TableHead className="text-center">توقيع الحضور</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {entriesLoading ? (
                             <TableRow>
-                              <TableCell colSpan={9} className="text-center py-8">
+                              <TableCell colSpan={10} className="text-center py-8">
                                 <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                               </TableCell>
                             </TableRow>
@@ -646,6 +651,11 @@ export default function TimesheetPage() {
                               <TableCell className="text-center">
                                 {entry.lateMinutes > 0 ? (
                                   <span className="text-amber-600 font-medium">{entry.lateMinutes}</span>
+                                ) : "-"}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {entry.checkInSignature ? (
+                                  <img src={entry.checkInSignature} alt="توقيع" className="h-8 max-w-16 mx-auto object-contain" />
                                 ) : "-"}
                               </TableCell>
                             </TableRow>
