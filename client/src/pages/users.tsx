@@ -439,12 +439,12 @@ export default function UsersPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="branch">الفرع</Label>
-                  <Select value={newUser.branchId} onValueChange={(branchId) => setNewUser({ ...newUser, branchId })}>
+                  <Select value={newUser.branchId || "none"} onValueChange={(branchId) => setNewUser({ ...newUser, branchId: branchId === "none" ? "" : branchId })}>
                     <SelectTrigger data-testid="select-branch">
                       <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">بدون فرع</SelectItem>
+                      <SelectItem value="none">بدون فرع</SelectItem>
                       {branches.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id}>
                           {branch.name}
@@ -857,12 +857,12 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="editBranch">الفرع</Label>
-              <Select value={editUser.branchId} onValueChange={(branchId) => setEditUser({ ...editUser, branchId })}>
+              <Select value={editUser.branchId || "none"} onValueChange={(branchId) => setEditUser({ ...editUser, branchId: branchId === "none" ? "" : branchId })}>
                 <SelectTrigger data-testid="select-edit-branch">
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">بدون فرع</SelectItem>
+                  <SelectItem value="none">بدون فرع</SelectItem>
                   {branches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}
