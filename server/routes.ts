@@ -9426,6 +9426,8 @@ export async function registerRoutes(
           actualHours,
           overtimeMinutes,
           lateMinutes,
+          checkInSignature: attendanceRecord?.checkInSignature || null,
+          checkOutSignature: attendanceRecord?.checkOutSignature || null,
         });
       }
 
