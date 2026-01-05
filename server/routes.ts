@@ -9752,5 +9752,82 @@ export async function registerRoutes(
     }
   });
 
+  // Link branch employee to user account
+  app.put("/api/branch-employees/:id/link-user", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: "معرف المستخدم مطلوب" });
+      
+      const employee = await storage.linkBranchEmployeeToUser(id, userId);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      res.json(employee);
+    } catch (error) {
+      console.error("Error linking branch employee to user:", error);
+      res.status(500).json({ error: "فشل في ربط الموظف بالمستخدم" });
+    }
+  });
+
+  // Get attendance records for branch employee
+  app.get("/api/branch-employees/:id/attendance", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const attendance = await storage.getAttendanceByBranchEmployeeId(id);
+      res.json(attendance);
+    } catch (error) {
+      console.error("Error getting branch employee attendance:", error);
+      res.status(500).json({ error: "فشل في جلب سجلات الحضور" });
+    }
+  });
+
+  // Get timesheet reports for branch employee
+  app.get("/api/branch-employees/:id/timesheets", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const timesheets = await storage.getTimesheetsByBranchEmployeeId(id);
+      res.json(timesheets);
+    } catch (error) {
+      console.error("Error getting branch employee timesheets:", error);
+      res.status(500).json({ error: "فشل في جلب تقارير الدوام" });
+    }
+  });
+
+  // Get schedules for branch employee
+  app.get("/api/branch-employees/:id/schedules", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const schedules = await storage.getSchedulesByBranchEmployeeId(id);
+      res.json(schedules);
+    } catch (error) {
+      console.error("Error getting branch employee schedules:", error);
+      res.status(500).json({ error: "فشل في جلب جداول الدوام" });
+    }
+  });
+
+  // Get branch employee by linked user ID
+  app.get("/api/branch-employees/by-user/:userId", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      const employee = await storage.getBranchEmployeeByLinkedUserId(userId);
+      if (!employee) {
+        return res.status(404).json({ error: "لا يوجد موظف فرع مرتبط بهذا المستخدم" });
+      }
+      res.json(employee);
+    } catch (error) {
+      console.error("Error getting branch employee by user:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الموظف" });
+    }
+  });
+
   return httpServer;
 }
