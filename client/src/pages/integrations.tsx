@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Phone
 } from "lucide-react";
+import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { toast } from "sonner";
 import type { ExternalIntegration, NotificationQueueItem, DataImportJob, AccountingExport } from "@shared/schema";
 
@@ -51,6 +52,7 @@ export default function IntegrationsPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl" dir="rtl">
+      <SettingsBreadcrumb currentPage="التكاملات" currentIcon={Link2} />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-butter-dark">التكامل مع الأنظمة الخارجية</h1>

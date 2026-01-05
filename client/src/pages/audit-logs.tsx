@@ -15,7 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Loader2, FileText, RefreshCw, Filter } from "lucide-react";
+import { Search, Loader2, FileText, RefreshCw, Filter, History } from "lucide-react";
+import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SystemAuditLog } from "@shared/schema";
@@ -108,6 +109,7 @@ export default function AuditLogsPage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
+        <SettingsBreadcrumb currentPage="سجل التدقيق" currentIcon={History} />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">

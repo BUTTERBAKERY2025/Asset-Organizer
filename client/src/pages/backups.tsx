@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Loader2, Database, Clock, CheckCircle, XCircle, HardDrive } from "lucide-react";
+import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { Backup } from "@shared/schema";
@@ -152,6 +153,7 @@ export default function BackupsPage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
+        <SettingsBreadcrumb currentPage="النسخ الاحتياطية" currentIcon={HardDrive} />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">

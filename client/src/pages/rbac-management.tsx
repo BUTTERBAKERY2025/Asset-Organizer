@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Loader2, Shield, Users, Building2, Key, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, Check, X } from "lucide-react";
+import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { useState, useEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -495,6 +496,7 @@ export default function RBACManagementPage() {
   return (
     <Layout>
       <div className="space-y-6">
+        <SettingsBreadcrumb currentPage="الأدوار والصلاحيات" currentIcon={Shield} />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>

@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
 import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil } from "lucide-react";
+import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import type { User, UserPermission, Branch } from "@shared/schema";
 import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
 import React, { useEffect, useState } from "react";
@@ -354,6 +355,7 @@ export default function UsersPage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
+        <SettingsBreadcrumb currentPage="إدارة المستخدمين" currentIcon={Users} />
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
