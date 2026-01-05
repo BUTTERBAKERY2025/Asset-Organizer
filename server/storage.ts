@@ -5902,6 +5902,20 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(employeeSchedules).where(eq(employeeSchedules.scheduleDate, date));
   }
 
+  async getEmployeeSchedulesByBranchAndDateRange(branchId: string, startDate: string, endDate: string): Promise<EmployeeSchedule[]> {
+    const branchUsers = await db.select().from(users).where(eq(users.branchId, branchId));
+    const employeeIds = branchUsers.map(u => u.id);
+    if (employeeIds.length === 0) return [];
+    
+    return await db.select().from(employeeSchedules)
+      .where(and(
+        inArray(employeeSchedules.employeeId, employeeIds),
+        gte(employeeSchedules.scheduleDate, startDate),
+        lte(employeeSchedules.scheduleDate, endDate)
+      ))
+      .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
+  }
+
   async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
     const [created] = await db.insert(employeeSchedules).values(schedule).returning();
     return created;
@@ -5909,8 +5923,33 @@ export class DatabaseStorage implements IStorage {
 
   async createBulkEmployeeSchedules(schedules: InsertEmployeeSchedule[]): Promise<EmployeeSchedule[]> {
     if (schedules.length === 0) return [];
-    const created = await db.insert(employeeSchedules).values(schedules).returning();
-    return created;
+    
+    const results: EmployeeSchedule[] = [];
+    
+    for (const schedule of schedules) {
+      const existing = await db.select().from(employeeSchedules)
+        .where(and(
+          eq(employeeSchedules.employeeId, schedule.employeeId),
+          eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
+        ))
+        .limit(1);
+      
+      if (existing.length > 0) {
+        const [updated] = await db.update(employeeSchedules)
+          .set({ 
+            ...schedule, 
+            updatedAt: new Date() 
+          })
+          .where(eq(employeeSchedules.id, existing[0].id))
+          .returning();
+        results.push(updated);
+      } else {
+        const [created] = await db.insert(employeeSchedules).values(schedule).returning();
+        results.push(created);
+      }
+    }
+    
+    return results;
   }
 
   async updateEmployeeSchedule(id: number, schedule: Partial<InsertEmployeeSchedule>): Promise<EmployeeSchedule | undefined> {

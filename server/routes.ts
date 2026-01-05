@@ -8894,6 +8894,14 @@ export async function registerRoutes(
         );
         return res.json(schedules);
       }
+      if (branchId && startDate && endDate) {
+        const schedules = await storage.getEmployeeSchedulesByBranchAndDateRange(
+          branchId as string,
+          startDate as string,
+          endDate as string
+        );
+        return res.json(schedules);
+      }
       if (date) {
         const schedules = await storage.getEmployeeSchedulesByDate(date as string, branchId as string);
         return res.json(schedules);
@@ -8926,7 +8934,18 @@ export async function registerRoutes(
       if (!Array.isArray(schedules)) {
         return res.status(400).json({ error: "يجب أن تكون البيانات مصفوفة" });
       }
-      const validatedSchedules = schedules.map(s => insertEmployeeScheduleSchema.parse(s));
+      
+      const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      const validatedSchedules = schedules.map(s => {
+        const date = new Date(s.scheduleDate);
+        const dayOfWeek = s.dayOfWeek || dayNames[date.getDay()];
+        return {
+          ...s,
+          dayOfWeek,
+          employeeName: s.employeeName || "Unknown",
+        };
+      });
+      
       const created = await storage.createBulkEmployeeSchedules(validatedSchedules);
       res.status(201).json(created);
     } catch (error) {

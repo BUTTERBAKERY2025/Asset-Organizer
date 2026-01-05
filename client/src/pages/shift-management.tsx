@@ -14,40 +14,29 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Copy, Save, Trash2, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, AlertCircle, Building2 } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, parseISO, isSameDay } from "date-fns";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer } from "lucide-react";
+import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
-import { DAYS_OF_WEEK_LABELS, SHIFT_TYPE_LABELS, ATTENDANCE_STATUS_LABELS, ATTENDANCE_STATUS_ICONS } from "@shared/schema";
 
+const DAYS_AR = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
 const DAYS_ORDER = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-700",
-  published: "bg-green-100 text-green-700",
-  archived: "bg-amber-100 text-amber-700",
-};
+interface ScheduleCell {
+  startTime: string;
+  endTime: string;
+  isOff: boolean;
+}
 
 export default function ShiftManagementPage() {
   const [activeTab, setActiveTab] = useState("schedule");
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    const now = new Date();
-    return startOfWeek(now, { weekStartsOn: 6 });
-  });
-  const [isCreatePeriodOpen, setIsCreatePeriodOpen] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<SchedulePeriod | null>(null);
-  const [scheduleData, setScheduleData] = useState<Record<string, Record<string, { startTime: string; endTime: string; isOff: boolean; shiftType: string }>>>({});
-  const [isBulkShiftOpen, setIsBulkShiftOpen] = useState(false);
-  const [bulkShiftForm, setBulkShiftForm] = useState({
-    name: "",
-    date: format(new Date(), "yyyy-MM-dd"),
-    startTime: "08:00",
-    endTime: "16:00",
-    supervisorName: "",
-    notes: "",
-  });
-  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<"week" | "month">("week");
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 6 }));
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  const [isCreateScheduleOpen, setIsCreateScheduleOpen] = useState(false);
+  const [scheduleData, setScheduleData] = useState<Record<string, Record<string, ScheduleCell>>>({});
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -58,24 +47,24 @@ export default function ShiftManagementPage() {
   const { data: periods } = useQuery<SchedulePeriod[]>({
     queryKey: ["/api/schedule-periods", selectedBranch],
   });
+  const startDateStr = format(currentWeekStart, "yyyy-MM-dd");
+  const endDateStr = format(addDays(currentWeekStart, 6), "yyyy-MM-dd");
+  
   const { data: employeeSchedules } = useQuery<EmployeeSchedule[]>({
-    queryKey: ["/api/employee-schedules", selectedPeriod?.id],
-    enabled: !!selectedPeriod,
+    queryKey: ["/api/employee-schedules", { branchId: selectedBranch, startDate: startDateStr, endDate: endDateStr }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/employee-schedules?branchId=${selectedBranch}&startDate=${startDateStr}&endDate=${endDateStr}`);
+      return res.json();
+    },
+    enabled: selectedBranch !== "all",
   });
-  const { data: todayAttendance } = useQuery<AttendanceRecord[]>({
-    queryKey: ["/api/attendance", format(new Date(), "yyyy-MM-dd"), selectedBranch],
-  });
-  const { data: attendanceStats } = useQuery<{
-    date: string;
-    total: number;
-    present: number;
-    late: number;
-    absent: number;
-    earlyLeave: number;
-    onLeave: number;
-    attendanceRate: number;
-  }>({
-    queryKey: ["/api/attendance/stats/today", selectedBranch],
+  const { data: attendanceRecords } = useQuery<AttendanceRecord[]>({
+    queryKey: ["/api/attendance", { branchId: selectedBranch, startDate: startDateStr, endDate: endDateStr }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/attendance?branchId=${selectedBranch}&startDate=${startDateStr}&endDate=${endDateStr}`);
+      return res.json();
+    },
+    enabled: selectedBranch !== "all",
   });
 
   const filteredUsers = useMemo(() => {
@@ -91,181 +80,118 @@ export default function ShiftManagementPage() {
   }, [user, selectedBranch]);
 
   useEffect(() => {
+    const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     if (employeeSchedules && Array.isArray(employeeSchedules) && employeeSchedules.length > 0) {
-      const newScheduleData: Record<string, Record<string, { startTime: string; endTime: string; isOff: boolean; shiftType: string }>> = {};
       employeeSchedules.forEach((schedule: EmployeeSchedule) => {
         if (!newScheduleData[schedule.employeeId]) {
           newScheduleData[schedule.employeeId] = {};
         }
         newScheduleData[schedule.employeeId][schedule.scheduleDate] = {
-          startTime: schedule.startTime || "",
-          endTime: schedule.endTime || "",
+          startTime: schedule.startTime || "08:00",
+          endTime: schedule.endTime || "16:00",
           isOff: schedule.isOff,
-          shiftType: schedule.shiftType || "morning",
         };
       });
-      setScheduleData(newScheduleData);
     }
-  }, [employeeSchedules]);
-
-  const createPeriodMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const result = await apiRequest("/api/schedule-periods", "POST", data);
-      return result as unknown as SchedulePeriod;
-    },
-    onSuccess: (period) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-periods"] });
-      setSelectedPeriod(period);
-      setIsCreatePeriodOpen(false);
-      toast({ title: "تم إنشاء فترة الجدول بنجاح" });
-    },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في إنشاء الفترة", variant: "destructive" });
-    },
-  });
-
-  const saveSchedulesMutation = useMutation({
-    mutationFn: async (data: { periodId: number; schedules: any[] }) => {
-      return apiRequest("/api/employee-schedules/bulk", "POST", { schedules: data.schedules });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
-      toast({ title: "تم حفظ الجداول بنجاح" });
-    },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في حفظ الجداول", variant: "destructive" });
-    },
-  });
-
-  const publishPeriodMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/schedule-periods/${id}/publish`, "POST", {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-periods"] });
-      toast({ title: "تم نشر الجدول بنجاح" });
-    },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في نشر الجدول", variant: "destructive" });
-    },
-  });
-
-  const createBulkShiftMutation = useMutation({
-    mutationFn: async (data: { shift: typeof bulkShiftForm; employees: string[]; branchId: string }) => {
-      const shiftData = {
-        branchId: data.branchId,
-        name: data.shift.name,
-        date: data.shift.date,
-        startTime: data.shift.startTime,
-        endTime: data.shift.endTime,
-        supervisorName: data.shift.supervisorName || null,
-        notes: data.shift.notes || null,
-        status: "active",
-        employeeCount: data.employees.length,
-      };
-      const shift = await apiRequest("/api/shifts", "POST", shiftData) as unknown as { id: number };
-      if (data.employees.length > 0 && shift?.id) {
-        const employeePromises = data.employees.map(empId => {
-          const emp = users?.find(u => u.id === empId);
-          const empName = emp ? `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || emp.username || "Unknown" : "Unknown";
-          return apiRequest(`/api/shifts/${shift.id}/employees`, "POST", {
-            employeeName: empName,
-            role: emp?.jobTitle || "موظف",
-            status: "expected",
-          });
-        });
-        await Promise.all(employeePromises);
-      }
-      return shift;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
-      setIsBulkShiftOpen(false);
-      setBulkShiftForm({
-        name: "",
-        date: format(new Date(), "yyyy-MM-dd"),
-        startTime: "08:00",
-        endTime: "16:00",
-        supervisorName: "",
-        notes: "",
-      });
-      setSelectedEmployees([]);
-      toast({ title: "تم إنشاء الوردية بنجاح", description: "تمت إضافة جميع الموظفين المحددين" });
-    },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في إنشاء الوردية", variant: "destructive" });
-    },
-  });
+    setScheduleData(newScheduleData);
+    setHasUnsavedChanges(false);
+  }, [employeeSchedules, currentWeekStart, selectedBranch]);
 
   const weekDates = useMemo(() => {
     return DAYS_ORDER.map((_, index) => addDays(currentWeekStart, index));
   }, [currentWeekStart]);
 
-  const handleCreatePeriod = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    createPeriodMutation.mutate({
-      branchId: formData.get("branchId"),
-      periodType: formData.get("periodType"),
-      startDate: format(currentWeekStart, "yyyy-MM-dd"),
-      endDate: format(endOfWeek(currentWeekStart, { weekStartsOn: 6 }), "yyyy-MM-dd"),
-      status: "draft",
-    });
-  };
-
-  const handleScheduleChange = (employeeId: string, date: Date, field: string, value: string | boolean) => {
-    const dateStr = format(date, "yyyy-MM-dd");
+  const handleScheduleChange = (employeeId: string, dateStr: string, field: keyof ScheduleCell, value: string | boolean) => {
     setScheduleData(prev => ({
       ...prev,
       [employeeId]: {
         ...prev[employeeId],
         [dateStr]: {
-          ...prev[employeeId]?.[dateStr],
           startTime: prev[employeeId]?.[dateStr]?.startTime || "08:00",
           endTime: prev[employeeId]?.[dateStr]?.endTime || "16:00",
           isOff: prev[employeeId]?.[dateStr]?.isOff || false,
-          shiftType: prev[employeeId]?.[dateStr]?.shiftType || "morning",
           [field]: value,
         },
       },
     }));
+    setHasUnsavedChanges(true);
   };
 
-  const handleSaveSchedules = () => {
-    if (!selectedPeriod) {
-      toast({ title: "يرجى اختيار فترة أولاً", variant: "destructive" });
-      return;
-    }
-    const schedules: any[] = [];
-    Object.entries(scheduleData).forEach(([employeeId, dates]) => {
-      const employee = filteredUsers.find(u => u.id === employeeId);
-      Object.entries(dates).forEach(([dateStr, data]) => {
-        const dayOfWeek = DAYS_ORDER[weekDates.findIndex(d => format(d, "yyyy-MM-dd") === dateStr)];
-        if (dayOfWeek) {
+  const saveSchedulesMutation = useMutation({
+    mutationFn: async () => {
+      const schedules: any[] = [];
+      Object.entries(scheduleData).forEach(([employeeId, dates]) => {
+        const employee = filteredUsers.find(u => u.id === employeeId);
+        Object.entries(dates).forEach(([dateStr, data]) => {
           schedules.push({
-            periodId: selectedPeriod.id,
             employeeId,
             employeeName: employee ? `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username : "Unknown",
             scheduleDate: dateStr,
-            dayOfWeek,
-            shiftType: data.shiftType,
             startTime: data.isOff ? null : data.startTime,
             endTime: data.isOff ? null : data.endTime,
             isOff: data.isOff,
+            branchId: selectedBranch,
           });
-        }
+        });
       });
-    });
-    saveSchedulesMutation.mutate({ periodId: selectedPeriod.id, schedules });
+      return apiRequest("POST", "/api/employee-schedules/bulk", { schedules });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
+      setHasUnsavedChanges(false);
+      toast({ title: "تم حفظ جدول الدوام بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في حفظ الجدول", variant: "destructive" });
+    },
+  });
+
+  const getAttendanceForEmployee = (employeeId: string, dateStr: string) => {
+    if (!attendanceRecords) return null;
+    return attendanceRecords.find(r => r.employeeId === employeeId && r.attendanceDate === dateStr);
+  };
+
+  const getAttendanceStatus = (employeeId: string, dateStr: string, scheduledStart?: string) => {
+    const attendance = getAttendanceForEmployee(employeeId, dateStr);
+    if (!attendance) return null;
+    
+    if (attendance.actualCheckIn && attendance.actualCheckOut) {
+      return { status: "completed", label: "حضر", color: "bg-green-100 text-green-700" };
+    }
+    if (attendance.actualCheckIn && !attendance.actualCheckOut) {
+      return { status: "in_progress", label: "في العمل", color: "bg-blue-100 text-blue-700" };
+    }
+    return null;
   };
 
   const getBranchName = (branchId: string) => branches?.find(b => b.id === branchId)?.name || branchId;
+
+  const applyDefaultSchedule = () => {
+    const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
+    filteredUsers.forEach(emp => {
+      newScheduleData[emp.id] = {};
+      weekDates.forEach((date, index) => {
+        const dateStr = format(date, "yyyy-MM-dd");
+        const isFriday = index === 6;
+        newScheduleData[emp.id][dateStr] = {
+          startTime: "08:00",
+          endTime: "16:00",
+          isOff: isFriday,
+        };
+      });
+    });
+    setScheduleData(newScheduleData);
+    setHasUnsavedChanges(true);
+    toast({ title: "تم تطبيق الجدول الافتراضي", description: "الجمعة إجازة لجميع الموظفين" });
+  };
 
   return (
     <Layout>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-primary" data-testid="page-title">إدارة الورديات</h1>
-            <p className="text-muted-foreground mt-1">جدولة وإدارة ورديات العمل والحضور والانصراف</p>
+            <h1 className="text-3xl font-bold text-primary" data-testid="page-title">جدولة الدوام</h1>
+            <p className="text-muted-foreground mt-1">إنشاء وإدارة جداول دوام الموظفين للفروع</p>
           </div>
           <div className="flex gap-2 items-center">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
@@ -283,492 +209,398 @@ export default function ShiftManagementPage() {
           </div>
         </div>
 
-        {attendanceStats && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-100"><Users className="w-5 h-5 text-blue-600" /></div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">إجمالي الموظفين</p>
-                    <p className="text-xl font-bold" data-testid="stat-total">{filteredUsers.length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-green-100"><Check className="w-5 h-5 text-green-600" /></div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">حاضرون اليوم</p>
-                    <p className="text-xl font-bold text-green-600" data-testid="stat-present">{attendanceStats.present || 0}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-100"><Clock className="w-5 h-5 text-amber-600" /></div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">متأخرون</p>
-                    <p className="text-xl font-bold text-amber-600" data-testid="stat-late">{attendanceStats.late || 0}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-red-100"><X className="w-5 h-5 text-red-600" /></div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">غائبون</p>
-                    <p className="text-xl font-bold text-red-600" data-testid="stat-absent">{attendanceStats.absent || 0}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-purple-100"><UserCheck className="w-5 h-5 text-purple-600" /></div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">نسبة الحضور</p>
-                    <p className="text-xl font-bold text-purple-600" data-testid="stat-rate">{attendanceStats.attendanceRate || 0}%</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {selectedBranch === "all" ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Building2 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">اختر الفرع</h3>
+              <p className="text-muted-foreground">يرجى اختيار فرع محدد لعرض وإدارة جدول الدوام</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid grid-cols-3 w-[450px]">
+              <TabsTrigger value="schedule" className="gap-2" data-testid="tab-schedule">
+                <CalendarDays className="w-4 h-4" />جدول الدوام
+              </TabsTrigger>
+              <TabsTrigger value="attendance" className="gap-2" data-testid="tab-attendance">
+                <UserCheck className="w-4 h-4" />سجل الحضور
+              </TabsTrigger>
+              <TabsTrigger value="reports" className="gap-2" data-testid="tab-reports">
+                <FileText className="w-4 h-4" />التقارير
+              </TabsTrigger>
+            </TabsList>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-3 w-[400px]">
-            <TabsTrigger value="schedule" className="gap-2"><Calendar className="w-4 h-4" />جدول الدوام</TabsTrigger>
-            <TabsTrigger value="attendance" className="gap-2"><UserCheck className="w-4 h-4" />الحضور اليومي</TabsTrigger>
-            <TabsTrigger value="reports" className="gap-2"><FileText className="w-4 h-4" />التقارير</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="schedule" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Calendar className="w-5 h-5" />
-                      جدول الدوام الأسبوعي
-                    </CardTitle>
-                    <CardDescription>
-                      {format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - {format(endOfWeek(currentWeekStart, { weekStartsOn: 6 }), "dd MMMM yyyy", { locale: ar })}
-                    </CardDescription>
+            <TabsContent value="schedule" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <CalendarDays className="w-5 h-5" />
+                        جدول الدوام الأسبوعي - {getBranchName(selectedBranch)}
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        {format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} data-testid="btn-prev-week">
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 6 }))} data-testid="btn-current-week">
+                        هذا الأسبوع
+                      </Button>
+                      <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-next-week">
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>
-                      <ChevronRight className="w-4 h-4" />
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-2 mb-4">
+                    <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2" data-testid="btn-apply-default">
+                      <Calendar className="w-4 h-4" />
+                      تطبيق جدول افتراضي
                     </Button>
-                    <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 6 }))}>
-                      هذا الأسبوع
-                    </Button>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <Dialog open={isCreatePeriodOpen} onOpenChange={setIsCreatePeriodOpen}>
-                      <DialogTrigger asChild>
-                        <Button className="gap-2"><Plus className="w-4 h-4" />إنشاء فترة جديدة</Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>إنشاء فترة جدول جديدة</DialogTitle>
-                          <DialogDescription>أنشئ فترة جدول أسبوعية أو شهرية جديدة</DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleCreatePeriod}>
-                          <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                              <Label>الفرع</Label>
-                              <Select name="branchId" defaultValue={selectedBranch !== "all" ? selectedBranch : undefined}>
-                                <SelectTrigger><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-                                <SelectContent>
-                                  {branches?.map(branch => (
-                                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>نوع الفترة</Label>
-                              <Select name="periodType" defaultValue="weekly">
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="weekly">أسبوعي</SelectItem>
-                                  <SelectItem value="monthly">شهري</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              <p>تاريخ البداية: {format(currentWeekStart, "dd MMMM yyyy", { locale: ar })}</p>
-                              <p>تاريخ النهاية: {format(endOfWeek(currentWeekStart, { weekStartsOn: 6 }), "dd MMMM yyyy", { locale: ar })}</p>
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button type="submit" disabled={createPeriodMutation.isPending}>
-                              {createPeriodMutation.isPending ? "جاري الإنشاء..." : "إنشاء"}
-                            </Button>
-                          </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                    <Dialog open={isBulkShiftOpen} onOpenChange={setIsBulkShiftOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className="gap-2" data-testid="btn-bulk-shift"><Users className="w-4 h-4" />وردية جماعية للفرع</Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                        <DialogHeader>
-                          <DialogTitle>إنشاء وردية جماعية للفرع</DialogTitle>
-                          <DialogDescription>أنشئ وردية واحدة وأضف جميع موظفي الفرع أو اختر موظفين محددين</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>اسم الوردية</Label>
-                              <Input
-                                value={bulkShiftForm.name}
-                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, name: e.target.value }))}
-                                placeholder="مثال: وردية صباحية - الأحد"
-                                data-testid="input-shift-name"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>التاريخ</Label>
-                              <Input
-                                type="date"
-                                value={bulkShiftForm.date}
-                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, date: e.target.value }))}
-                                data-testid="input-shift-date"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>وقت البداية</Label>
-                              <Input
-                                type="time"
-                                value={bulkShiftForm.startTime}
-                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, startTime: e.target.value }))}
-                                data-testid="input-shift-start"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>وقت النهاية</Label>
-                              <Input
-                                type="time"
-                                value={bulkShiftForm.endTime}
-                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, endTime: e.target.value }))}
-                                data-testid="input-shift-end"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>المشرف</Label>
-                              <Input
-                                value={bulkShiftForm.supervisorName}
-                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, supervisorName: e.target.value }))}
-                                placeholder="اسم المشرف"
-                                data-testid="input-shift-supervisor"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>ملاحظات</Label>
-                              <Input
-                                value={bulkShiftForm.notes}
-                                onChange={(e) => setBulkShiftForm(prev => ({ ...prev, notes: e.target.value }))}
-                                placeholder="ملاحظات إضافية (اختياري)"
-                                data-testid="input-shift-notes"
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label>اختيار الموظفين ({selectedEmployees.length} من {filteredUsers.length})</Label>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setSelectedEmployees(filteredUsers.map(u => u.id))}
-                                  data-testid="btn-select-all"
-                                >
-                                  تحديد الكل
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setSelectedEmployees([])}
-                                  data-testid="btn-deselect-all"
-                                >
-                                  إلغاء الكل
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="border rounded-lg p-3 max-h-48 overflow-y-auto">
-                              {filteredUsers.length === 0 ? (
-                                <p className="text-center text-muted-foreground py-4">يرجى اختيار فرع أولاً لعرض الموظفين</p>
-                              ) : (
-                                <div className="space-y-2">
-                                  {filteredUsers.map(emp => (
-                                    <div key={emp.id} className="flex items-center gap-2">
-                                      <Checkbox
-                                        id={`emp-${emp.id}`}
-                                        checked={selectedEmployees.includes(emp.id)}
-                                        onCheckedChange={(checked) => {
-                                          if (checked) {
-                                            setSelectedEmployees(prev => [...prev, emp.id]);
-                                          } else {
-                                            setSelectedEmployees(prev => prev.filter(id => id !== emp.id));
-                                          }
-                                        }}
-                                        data-testid={`checkbox-emp-${emp.id}`}
-                                      />
-                                      <label htmlFor={`emp-${emp.id}`} className="text-sm cursor-pointer flex-1">
-                                        {emp.firstName} {emp.lastName}
-                                        <span className="text-muted-foreground mr-2">({emp.jobTitle || "موظف"})</span>
-                                      </label>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            onClick={() => {
-                              if (!bulkShiftForm.name) {
-                                toast({ title: "يرجى إدخال اسم الوردية", variant: "destructive" });
-                                return;
-                              }
-                              if (selectedBranch === "all") {
-                                toast({ title: "يرجى اختيار فرع محدد", variant: "destructive" });
-                                return;
-                              }
-                              if (selectedEmployees.length === 0) {
-                                toast({ title: "يرجى اختيار موظف واحد على الأقل", variant: "destructive" });
-                                return;
-                              }
-                              createBulkShiftMutation.mutate({
-                                shift: bulkShiftForm,
-                                employees: selectedEmployees,
-                                branchId: selectedBranch,
-                              });
-                            }}
-                            disabled={createBulkShiftMutation.isPending || !bulkShiftForm.name || selectedBranch === "all" || selectedEmployees.length === 0}
-                            data-testid="btn-create-bulk-shift"
-                          >
-                            {createBulkShiftMutation.isPending ? "جاري الإنشاء..." : `إنشاء الوردية (${selectedEmployees.length} موظف)`}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {periods && periods.length > 0 && (
-                  <div className="mb-4">
-                    <Label>اختر فترة الجدول</Label>
-                    <Select value={selectedPeriod?.id?.toString() || ""} onValueChange={(v) => setSelectedPeriod(periods.find(p => p.id === parseInt(v)) || null)}>
-                      <SelectTrigger className="w-64"><SelectValue placeholder="اختر فترة" /></SelectTrigger>
-                      <SelectContent>
-                        {periods.map(period => (
-                          <SelectItem key={period.id} value={period.id.toString()}>
-                            {getBranchName(period.branchId)} - {period.startDate} إلى {period.endDate}
-                            <Badge className={`mr-2 ${STATUS_COLORS[period.status]}`}>{period.status === "draft" ? "مسودة" : period.status === "published" ? "منشور" : "مؤرشف"}</Badge>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="text-right sticky right-0 bg-muted/50 z-10 min-w-[150px]">الموظف</TableHead>
-                        {weekDates.map((date, index) => (
-                          <TableHead key={index} className="text-center min-w-[120px]">
-                            <div>{DAYS_OF_WEEK_LABELS[DAYS_ORDER[index] as keyof typeof DAYS_OF_WEEK_LABELS]}</div>
-                            <div className="text-xs text-muted-foreground">{format(date, "dd/MM")}</div>
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredUsers.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                            <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                            لا يوجد موظفين في هذا الفرع
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredUsers.map(employee => (
-                          <TableRow key={employee.id} data-testid={`employee-row-${employee.id}`}>
-                            <TableCell className="font-medium sticky right-0 bg-background z-10">
-                              {employee.firstName} {employee.lastName}
-                              <div className="text-xs text-muted-foreground">{employee.jobTitle || "موظف"}</div>
-                            </TableCell>
-                            {weekDates.map((date, index) => {
-                              const dateStr = format(date, "yyyy-MM-dd");
-                              const dayData = scheduleData[employee.id]?.[dateStr] || { startTime: "08:00", endTime: "16:00", isOff: false, shiftType: "morning" };
-                              return (
-                                <TableCell key={index} className="p-1">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <Checkbox
-                                        checked={dayData.isOff}
-                                        onCheckedChange={(checked) => handleScheduleChange(employee.id, date, "isOff", checked as boolean)}
-                                      />
-                                      <span className="text-xs">إجازة</span>
-                                    </div>
-                                    {!dayData.isOff && (
-                                      <>
-                                        <Select
-                                          value={dayData.shiftType}
-                                          onValueChange={(v) => handleScheduleChange(employee.id, date, "shiftType", v)}
-                                        >
-                                          <SelectTrigger className="h-7 text-xs">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="morning">صباحي</SelectItem>
-                                            <SelectItem value="evening">مسائي</SelectItem>
-                                            <SelectItem value="night">ليلي</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        <div className="flex gap-1">
-                                          <Input
-                                            type="time"
-                                            value={dayData.startTime}
-                                            onChange={(e) => handleScheduleChange(employee.id, date, "startTime", e.target.value)}
-                                            className="h-6 text-xs p-1"
-                                          />
-                                          <Input
-                                            type="time"
-                                            value={dayData.endTime}
-                                            onChange={(e) => handleScheduleChange(employee.id, date, "endTime", e.target.value)}
-                                            className="h-6 text-xs p-1"
-                                          />
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-                {selectedPeriod && (
-                  <div className="flex gap-2 mt-4 justify-end">
-                    <Button variant="outline" onClick={handleSaveSchedules} disabled={saveSchedulesMutation.isPending} className="gap-2">
-                      <Save className="w-4 h-4" />
-                      {saveSchedulesMutation.isPending ? "جاري الحفظ..." : "حفظ الجداول"}
-                    </Button>
-                    {selectedPeriod.status === "draft" && (
-                      <Button onClick={() => publishPeriodMutation.mutate(selectedPeriod.id)} disabled={publishPeriodMutation.isPending} className="gap-2">
-                        <Check className="w-4 h-4" />
-                        {publishPeriodMutation.isPending ? "جاري النشر..." : "نشر الجدول"}
+                    {hasUnsavedChanges && (
+                      <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2" data-testid="btn-save-schedule">
+                        <Save className="w-4 h-4" />
+                        {saveSchedulesMutation.isPending ? "جاري الحفظ..." : "حفظ الجدول"}
                       </Button>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          <TabsContent value="attendance" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="w-5 h-5" />
-                  سجل الحضور اليومي - {format(new Date(), "dd MMMM yyyy", { locale: ar })}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="text-right">الموظف</TableHead>
-                        <TableHead className="text-center">الحالة</TableHead>
-                        <TableHead className="text-center">وقت الحضور</TableHead>
-                        <TableHead className="text-center">وقت الانصراف</TableHead>
-                        <TableHead className="text-center">ساعات العمل</TableHead>
-                        <TableHead className="text-center">التوقيع</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(!todayAttendance || todayAttendance.length === 0) ? (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                            <AlertCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                            لا توجد سجلات حضور لليوم
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        todayAttendance.map(record => (
-                          <TableRow key={record.id} data-testid={`attendance-row-${record.id}`}>
-                            <TableCell className="font-medium">{record.employeeName}</TableCell>
-                            <TableCell className="text-center">
-                              <Badge className={
-                                record.status === "present" ? "bg-green-100 text-green-700" :
-                                record.status === "late" ? "bg-amber-100 text-amber-700" :
-                                record.status === "absent" ? "bg-red-100 text-red-700" :
-                                "bg-gray-100 text-gray-700"
-                              }>
-                                {ATTENDANCE_STATUS_ICONS[record.status as keyof typeof ATTENDANCE_STATUS_ICONS]} {ATTENDANCE_STATUS_LABELS[record.status as keyof typeof ATTENDANCE_STATUS_LABELS] || record.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-center font-mono">{record.actualCheckIn || "-"}</TableCell>
-                            <TableCell className="text-center font-mono">{record.actualCheckOut || "-"}</TableCell>
-                            <TableCell className="text-center">{record.workingHours ? `${record.workingHours.toFixed(1)} ساعة` : "-"}</TableCell>
-                            <TableCell className="text-center">
-                              {record.checkInSignature ? <Check className="w-4 h-4 text-green-600 mx-auto" /> : <X className="w-4 h-4 text-gray-400 mx-auto" />}
-                            </TableCell>
+                  {filteredUsers.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                      <p>لا يوجد موظفين في هذا الفرع</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="text-right sticky right-0 bg-muted/50 z-10 min-w-[180px] font-bold">
+                              الموظف
+                            </TableHead>
+                            {weekDates.map((date, index) => (
+                              <TableHead key={index} className={`text-center min-w-[140px] ${isToday(date) ? "bg-primary/10" : ""}`}>
+                                <div className="font-bold">{DAYS_AR[index]}</div>
+                                <div className={`text-sm ${isToday(date) ? "text-primary font-bold" : "text-muted-foreground"}`}>
+                                  {format(date, "dd/MM")}
+                                </div>
+                              </TableHead>
+                            ))}
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredUsers.map(employee => (
+                            <TableRow key={employee.id} data-testid={`row-employee-${employee.id}`}>
+                              <TableCell className="font-medium sticky right-0 bg-background z-10 border-l">
+                                <div className="font-semibold">{employee.firstName} {employee.lastName}</div>
+                                <div className="text-xs text-muted-foreground">{employee.jobTitle || "موظف"}</div>
+                              </TableCell>
+                              {weekDates.map((date, index) => {
+                                const dateStr = format(date, "yyyy-MM-dd");
+                                const cellData = scheduleData[employee.id]?.[dateStr] || { startTime: "08:00", endTime: "16:00", isOff: false };
+                                const attendance = getAttendanceStatus(employee.id, dateStr, cellData.startTime);
+                                
+                                return (
+                                  <TableCell key={index} className={`p-2 ${isToday(date) ? "bg-primary/5" : ""} ${cellData.isOff ? "bg-gray-100" : ""}`}>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-center gap-2">
+                                        <Checkbox
+                                          checked={cellData.isOff}
+                                          onCheckedChange={(checked) => handleScheduleChange(employee.id, dateStr, "isOff", checked as boolean)}
+                                          data-testid={`checkbox-off-${employee.id}-${dateStr}`}
+                                        />
+                                        <span className="text-xs">إجازة</span>
+                                      </div>
+                                      {!cellData.isOff && (
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-xs text-muted-foreground w-8">من</span>
+                                            <Input
+                                              type="time"
+                                              value={cellData.startTime}
+                                              onChange={(e) => handleScheduleChange(employee.id, dateStr, "startTime", e.target.value)}
+                                              className="h-7 text-xs"
+                                              data-testid={`input-start-${employee.id}-${dateStr}`}
+                                            />
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-xs text-muted-foreground w-8">إلى</span>
+                                            <Input
+                                              type="time"
+                                              value={cellData.endTime}
+                                              onChange={(e) => handleScheduleChange(employee.id, dateStr, "endTime", e.target.value)}
+                                              className="h-7 text-xs"
+                                              data-testid={`input-end-${employee.id}-${dateStr}`}
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+                                      {cellData.isOff && (
+                                        <div className="text-center">
+                                          <Badge variant="secondary" className="text-xs">إجازة</Badge>
+                                        </div>
+                                      )}
+                                      {attendance && (
+                                        <Badge className={`text-xs ${attendance.color}`}>{attendance.label}</Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="reports" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  تقارير الحضور والانصراف
-                </CardTitle>
-                <CardDescription>تقارير أسبوعية وشهرية مفصلة للموظفين</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">قريباً</p>
-                  <p>سيتم إضافة التقارير التفصيلية قريباً</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="attendance" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <UserCheck className="w-5 h-5" />
+                    سجل الحضور والانصراف - {getBranchName(selectedBranch)}
+                  </CardTitle>
+                  <CardDescription>
+                    مقارنة جدول الدوام مع الحضور الفعلي للموظفين
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-2 mb-4 items-center">
+                    <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm font-medium">
+                      {format(currentWeekStart, "dd MMMM", { locale: ar })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}
+                    </span>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {filteredUsers.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                      <p>لا يوجد موظفين</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="text-right min-w-[180px] font-bold">الموظف</TableHead>
+                            {weekDates.map((date, index) => (
+                              <TableHead key={index} className={`text-center min-w-[150px] ${isToday(date) ? "bg-primary/10" : ""}`}>
+                                <div className="font-bold">{DAYS_AR[index]}</div>
+                                <div className="text-sm text-muted-foreground">{format(date, "dd/MM")}</div>
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredUsers.map(employee => (
+                            <TableRow key={employee.id}>
+                              <TableCell className="font-medium border-l">
+                                <div className="font-semibold">{employee.firstName} {employee.lastName}</div>
+                                <div className="text-xs text-muted-foreground">{employee.jobTitle || "موظف"}</div>
+                              </TableCell>
+                              {weekDates.map((date, index) => {
+                                const dateStr = format(date, "yyyy-MM-dd");
+                                const cellData = scheduleData[employee.id]?.[dateStr];
+                                const attendance = getAttendanceForEmployee(employee.id, dateStr);
+                                
+                                return (
+                                  <TableCell key={index} className={`p-2 text-center ${isToday(date) ? "bg-primary/5" : ""}`}>
+                                    {cellData?.isOff ? (
+                                      <Badge variant="secondary">إجازة</Badge>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        <div className="text-xs text-muted-foreground">
+                                          المطلوب: {cellData?.startTime || "-"} - {cellData?.endTime || "-"}
+                                        </div>
+                                        {attendance ? (
+                                          <div className="space-y-1">
+                                            <div className="text-xs">
+                                              حضر: <span className="font-medium text-green-600">{attendance.actualCheckIn || "-"}</span>
+                                            </div>
+                                            <div className="text-xs">
+                                              انصرف: <span className="font-medium text-red-600">{attendance.actualCheckOut || "-"}</span>
+                                            </div>
+                                            {attendance.status === "present" && (
+                                              <Badge className="bg-green-100 text-green-700 text-xs">حاضر</Badge>
+                                            )}
+                                            {attendance.status === "late" && (
+                                              <Badge className="bg-amber-100 text-amber-700 text-xs">متأخر</Badge>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div className="text-xs text-muted-foreground">
+                                            {new Date(dateStr) < new Date() ? (
+                                              <Badge className="bg-red-100 text-red-700 text-xs">غائب</Badge>
+                                            ) : (
+                                              <span>-</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="reports" className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      التقرير الأسبوعي
+                    </CardTitle>
+                    <CardDescription>
+                      ملخص دوام الموظفين للأسبوع الحالي
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>عدد الموظفين:</span>
+                        <span className="font-bold">{filteredUsers.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>إجمالي أيام العمل المخططة:</span>
+                        <span className="font-bold">
+                          {Object.values(scheduleData).reduce((total, emp) => {
+                            return total + Object.values(emp).filter(d => !d.isOff).length;
+                          }, 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>إجمالي أيام الإجازات:</span>
+                        <span className="font-bold">
+                          {Object.values(scheduleData).reduce((total, emp) => {
+                            return total + Object.values(emp).filter(d => d.isOff).length;
+                          }, 0)}
+                        </span>
+                      </div>
+                      <Button variant="outline" className="w-full gap-2" data-testid="btn-export-weekly">
+                        <Download className="w-4 h-4" />
+                        تصدير التقرير
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5" />
+                      التقرير الشهري
+                    </CardTitle>
+                    <CardDescription>
+                      ملخص شامل لدوام الموظفين خلال الشهر
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <Select defaultValue={format(new Date(), "yyyy-MM")}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر الشهر" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={format(new Date(), "yyyy-MM")}>
+                            {format(new Date(), "MMMM yyyy", { locale: ar })}
+                          </SelectItem>
+                          <SelectItem value={format(subMonths(new Date(), 1), "yyyy-MM")}>
+                            {format(subMonths(new Date(), 1), "MMMM yyyy", { locale: ar })}
+                          </SelectItem>
+                          <SelectItem value={format(subMonths(new Date(), 2), "yyyy-MM")}>
+                            {format(subMonths(new Date(), 2), "MMMM yyyy", { locale: ar })}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button variant="outline" className="w-full gap-2" data-testid="btn-generate-monthly">
+                        <FileText className="w-4 h-4" />
+                        إنشاء التقرير
+                      </Button>
+                      <Button variant="outline" className="w-full gap-2" data-testid="btn-print-report">
+                        <Printer className="w-4 h-4" />
+                        طباعة التقرير
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>تقرير تفصيلي للموظفين</CardTitle>
+                  <CardDescription>عرض دوام كل موظف بالتفصيل</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">الموظف</TableHead>
+                          <TableHead className="text-center">أيام العمل</TableHead>
+                          <TableHead className="text-center">أيام الإجازة</TableHead>
+                          <TableHead className="text-center">أيام الحضور</TableHead>
+                          <TableHead className="text-center">أيام الغياب</TableHead>
+                          <TableHead className="text-center">نسبة الحضور</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.map(employee => {
+                          const empSchedule = scheduleData[employee.id] || {};
+                          const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
+                          const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
+                          const attendedDays = attendanceRecords?.filter(r => r.employeeId === employee.id && r.actualCheckIn).length || 0;
+                          const absentDays = workDays - attendedDays;
+                          const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
+                          
+                          return (
+                            <TableRow key={employee.id}>
+                              <TableCell className="font-medium">
+                                {employee.firstName} {employee.lastName}
+                              </TableCell>
+                              <TableCell className="text-center">{workDays}</TableCell>
+                              <TableCell className="text-center">{offDays}</TableCell>
+                              <TableCell className="text-center text-green-600 font-medium">{attendedDays}</TableCell>
+                              <TableCell className="text-center text-red-600 font-medium">{absentDays > 0 ? absentDays : 0}</TableCell>
+                              <TableCell className="text-center">
+                                <Badge className={rate >= 80 ? "bg-green-100 text-green-700" : rate >= 50 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}>
+                                  {rate}%
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </Layout>
   );
