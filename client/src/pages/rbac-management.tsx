@@ -109,6 +109,36 @@ const MODULE_LABELS: Record<string, string> = {
   branches: "الفروع",
   construction: "المشاريع الإنشائية",
   settings: "الإعدادات",
+  assets: "الأصول",
+  projects: "المشاريع",
+};
+
+const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
+  basic: {
+    label: "الأساسية",
+    color: "bg-blue-100 text-blue-800",
+    actions: ["view", "create", "edit", "delete"],
+  },
+  workflow: {
+    label: "سير العمل",
+    color: "bg-amber-100 text-amber-800",
+    actions: ["approve", "change_status"],
+  },
+  export: {
+    label: "التصدير والطباعة",
+    color: "bg-green-100 text-green-800",
+    actions: ["export", "print"],
+  },
+  special: {
+    label: "الخاصة",
+    color: "bg-purple-100 text-purple-800",
+    actions: ["sign", "notify", "transfer", "maintenance", "permissions", "advanced"],
+  },
+  scope: {
+    label: "نطاق العرض",
+    color: "bg-orange-100 text-orange-800",
+    actions: ["view_own", "view_all_branches"],
+  },
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -119,6 +149,15 @@ const ACTION_LABELS: Record<string, string> = {
   approve: "موافقة",
   export: "تصدير",
   print: "طباعة",
+  sign: "توقيع إلكتروني",
+  notify: "إرسال إشعارات",
+  change_status: "تغيير الحالة",
+  view_own: "عرض بياناتي فقط",
+  view_all_branches: "عرض جميع الفروع",
+  transfer: "تحويل",
+  maintenance: "صيانة",
+  advanced: "متقدم",
+  permissions: "صلاحيات",
 };
 
 const HIERARCHY_LABELS: Record<number, { label: string; color: string }> = {
@@ -728,44 +767,99 @@ export default function RBACManagementPage() {
         </Tabs>
 
         <Dialog open={isPermissionMatrixOpen} onOpenChange={setIsPermissionMatrixOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>إدارة صلاحيات: {selectedRole?.name}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5" />
+                إدارة صلاحيات: {selectedRole?.name}
+              </DialogTitle>
               <DialogDescription>
-                حدد الصلاحيات التي تريد منحها لهذا الدور
+                حدد الصلاحيات التي تريد منحها لهذا الدور - مصنفة حسب الوحدة والفئة
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              {Object.entries(permissionsByModule).map(([module, modulePerms]) => (
-                <div key={module} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold">{MODULE_LABELS[module] || module}</h4>
-                    <Badge variant="outline">{modulePerms.filter(p => isPermissionGranted(p.id)).length}/{modulePerms.length}</Badge>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {modulePerms.map((perm) => {
-                      const granted = isPermissionGranted(perm.id);
-                      return (
-                        <div
-                          key={perm.id}
-                          className={`flex items-center gap-2 p-2 border rounded-lg cursor-pointer transition-colors ${
-                            granted ? 'bg-green-50 border-green-300' : 'hover:bg-gray-50'
-                          }`}
-                          onClick={() => handlePermissionToggle(perm.id)}
-                          data-testid={`toggle-permission-${perm.id}`}
-                        >
-                          <Checkbox checked={granted} />
-                          <div className="text-sm">
-                            <div className="font-medium">{ACTION_LABELS[perm.action] || perm.action}</div>
-                          </div>
+            <div className="space-y-6 py-4">
+              {Object.entries(permissionsByModule).map(([module, modulePerms]) => {
+                const grantedCount = modulePerms.filter(p => isPermissionGranted(p.id)).length;
+                const permsByCategory = Object.entries(ACTION_CATEGORIES).map(([catKey, cat]) => ({
+                  key: catKey,
+                  ...cat,
+                  perms: modulePerms.filter(p => cat.actions.includes(p.action)),
+                })).filter(c => c.perms.length > 0);
+
+                return (
+                  <Collapsible
+                    key={module}
+                    open={expandedModules.includes(module)}
+                    onOpenChange={() => toggleModule(module)}
+                    className="border rounded-lg"
+                  >
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full justify-between p-4 h-auto" data-testid={`expand-module-${module}`}>
+                        <div className="flex items-center gap-3">
+                          <Key className="h-4 w-4 text-primary" />
+                          <span className="font-semibold text-lg">{MODULE_LABELS[module] || module}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant={grantedCount === modulePerms.length ? "default" : grantedCount > 0 ? "secondary" : "outline"}
+                            className={grantedCount === modulePerms.length ? "bg-green-500" : ""}
+                          >
+                            {grantedCount}/{modulePerms.length}
+                          </Badge>
+                          {expandedModules.includes(module) ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </div>
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="px-4 pb-4">
+                      <div className="space-y-4">
+                        {permsByCategory.map((category) => (
+                          <div key={category.key} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge className={category.color}>{category.label}</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {category.perms.filter(p => isPermissionGranted(p.id)).length}/{category.perms.length}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                              {category.perms.map((perm) => {
+                                const granted = isPermissionGranted(perm.id);
+                                return (
+                                  <div
+                                    key={perm.id}
+                                    className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all ${
+                                      granted 
+                                        ? 'bg-green-50 border-green-400 shadow-sm' 
+                                        : 'hover:bg-gray-50 hover:border-gray-300'
+                                    }`}
+                                    onClick={() => handlePermissionToggle(perm.id)}
+                                    data-testid={`toggle-permission-${perm.id}`}
+                                  >
+                                    <Checkbox checked={granted} className="pointer-events-none" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-sm font-medium truncate">{perm.name}</div>
+                                      <div className="text-xs text-muted-foreground">{ACTION_LABELS[perm.action] || perm.action}</div>
+                                    </div>
+                                    {granted && <Check className="h-4 w-4 text-green-600 flex-shrink-0" />}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
             </div>
-            <DialogFooter>
+            <DialogFooter className="flex justify-between">
+              <div className="text-sm text-muted-foreground">
+                إجمالي الصلاحيات الممنوحة: {rolePermissions.length} من {allPermissions.length}
+              </div>
               <Button variant="outline" onClick={() => setIsPermissionMatrixOpen(false)}>
                 إغلاق
               </Button>
