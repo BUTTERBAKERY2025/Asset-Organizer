@@ -540,7 +540,7 @@ export default function TimesheetPage() {
                       <SelectTrigger data-testid="select-employee">
                         <SelectValue placeholder="اختر الموظف" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {filteredEmployees.map((employee) => (
                           <SelectItem key={employee.id} value={employee.id}>
                             {employee.name}

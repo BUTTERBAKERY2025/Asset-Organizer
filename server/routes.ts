@@ -9529,10 +9529,21 @@ export async function registerRoutes(
         return res.status(400).json({ error: "يوجد تقرير مسبق لهذه الفترة", existingReportId: existing.id });
       }
 
-      // Get employee info
-      const employee = await storage.getUser(employeeId);
-      if (!employee) {
-        return res.status(404).json({ error: "الموظف غير موجود" });
+      // Get employee info - handle both regular users and branch employees
+      let employeeName = "";
+      if (employeeId.startsWith("branch_emp_")) {
+        const branchEmployeeId = parseInt(employeeId.replace("branch_emp_", ""));
+        const branchEmployee = await storage.getBranchEmployee(branchEmployeeId);
+        if (!branchEmployee) {
+          return res.status(404).json({ error: "موظف الفرع غير موجود" });
+        }
+        employeeName = branchEmployee.employeeName;
+      } else {
+        const user = await storage.getUser(employeeId);
+        if (!user) {
+          return res.status(404).json({ error: "الموظف غير موجود" });
+        }
+        employeeName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username;
       }
 
       // Get schedules and attendance for the date range
