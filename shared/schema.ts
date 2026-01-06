@@ -3553,7 +3553,7 @@ export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
 // Attendance Summary - ملخص الحضور الشهري
 export const attendanceSummary = pgTable("attendance_summary", {
   id: serial("id").primaryKey(),
-  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
   employeeName: text("employee_name").notNull(),
   branchId: varchar("branch_id").notNull().references(() => branches.id),
   periodMonth: text("period_month").notNull(), // YYYY-MM
@@ -3625,7 +3625,7 @@ export const DAYS_OF_WEEK_LABELS: Record<DayOfWeek, string> = {
 // Timesheet Reports - تقارير الدوام الشهرية
 export const timesheetReports = pgTable("timesheet_reports", {
   id: serial("id").primaryKey(),
-  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
   branchId: varchar("branch_id").notNull().references(() => branches.id),
   branchEmployeeId: integer("branch_employee_id"), // ربط مع موظف الفرع (اختياري)
   startDate: text("start_date").notNull(), // YYYY-MM-DD
