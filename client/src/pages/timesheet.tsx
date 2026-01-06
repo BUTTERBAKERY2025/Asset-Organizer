@@ -132,17 +132,16 @@ export default function TimesheetPage() {
     queryKey: ["/api/users"],
   });
 
-  // Fetch branch employees
+  // Fetch branch employees - always fetch to combine with users
   const { data: branchEmployees = [] } = useQuery<BranchEmployee[]>({
     queryKey: ["/api/branch-employees", selectedBranch],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (selectedBranch && selectedBranch !== "all") params.append("branchId", selectedBranch);
       const res = await fetch(`/api/branch-employees?${params}`);
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: selectedBranch !== "all",
   });
 
   // Combine users and branch employees (without linked user accounts)
