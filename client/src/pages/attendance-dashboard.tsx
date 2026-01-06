@@ -48,7 +48,11 @@ export default function AttendanceDashboardPage() {
   } | null>({
     queryKey: ["/api/attendance-dashboard-stats"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+    staleTime: 0,
+    refetchOnMount: true,
   });
+  
+  console.log("Stats data:", stats, "Loading:", isLoading, "Error:", error);
 
   const quickActions: QuickAction[] = [
     {
