@@ -31,6 +31,14 @@ interface User {
   jobTitle?: string;
 }
 
+interface BranchEmployee {
+  id: number;
+  name: string;
+  branchId: string;
+  position?: string;
+  linkedUserId?: string;
+}
+
 interface TimesheetReport {
   id: number;
   employeeId: string;
@@ -124,9 +132,36 @@ export default function TimesheetPage() {
     queryKey: ["/api/users"],
   });
 
-  const filteredEmployees = selectedBranch === "all" 
-    ? allUsers 
-    : allUsers.filter(u => u.branchId === selectedBranch);
+  // Fetch branch employees
+  const { data: branchEmployees = [] } = useQuery<BranchEmployee[]>({
+    queryKey: ["/api/branch-employees", selectedBranch],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      const res = await fetch(`/api/branch-employees?${params}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: selectedBranch !== "all",
+  });
+
+  // Combine users and branch employees (without linked user accounts)
+  const combinedEmployees = [
+    ...allUsers.filter(u => selectedBranch === "all" || u.branchId === selectedBranch).map(u => ({
+      id: u.id,
+      name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username,
+      branchId: u.branchId || '',
+      type: 'user' as const,
+    })),
+    ...branchEmployees.filter(be => !be.linkedUserId).map(be => ({
+      id: `branch_emp_${be.id}`,
+      name: be.name,
+      branchId: be.branchId,
+      type: 'branch_employee' as const,
+    })),
+  ];
+
+  const filteredEmployees = combinedEmployees;
 
   const { data: reports = [], isLoading: reportsLoading } = useQuery<TimesheetReport[]>({
     queryKey: ["/api/timesheet-reports", selectedBranch],
@@ -509,7 +544,7 @@ export default function TimesheetPage() {
                       <SelectContent>
                         {filteredEmployees.map((employee) => (
                           <SelectItem key={employee.id} value={employee.id}>
-                            {`${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username}
+                            {employee.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
