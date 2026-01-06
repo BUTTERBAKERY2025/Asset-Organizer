@@ -6243,15 +6243,28 @@ export class DatabaseStorage implements IStorage {
     
     let employeeName = employeeNameParam || 'Unknown';
     
-    // Try to get employee name from users table first
-    const employee = await this.getUser(employeeId);
-    if (employee) {
-      employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || employeeName;
-    } else if (scheduleId) {
-      // Try to get from schedule
-      const schedule = await db.select().from(employeeSchedules).where(eq(employeeSchedules.id, scheduleId)).limit(1);
-      if (schedule.length > 0 && schedule[0].employeeName) {
-        employeeName = schedule[0].employeeName;
+    // Only try to get user if employeeId doesn't start with "branch_emp_" (those are not real users)
+    if (!employeeId.startsWith('branch_emp_')) {
+      try {
+        const employee = await this.getUser(employeeId);
+        if (employee) {
+          employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || employeeName;
+        }
+      } catch (e) {
+        // User not found, continue with provided name
+        console.log('User lookup failed for:', employeeId);
+      }
+    }
+    
+    // If still unknown and we have scheduleId, try to get from schedule
+    if (employeeName === 'Unknown' && scheduleId) {
+      try {
+        const schedule = await db.select().from(employeeSchedules).where(eq(employeeSchedules.id, scheduleId)).limit(1);
+        if (schedule.length > 0 && schedule[0].employeeName) {
+          employeeName = schedule[0].employeeName;
+        }
+      } catch (e) {
+        console.log('Schedule lookup failed for:', scheduleId);
       }
     }
     
