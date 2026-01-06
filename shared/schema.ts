@@ -3476,7 +3476,7 @@ export type InsertEmployeeSchedule = z.infer<typeof insertEmployeeScheduleSchema
 // Attendance Records - سجلات الحضور والانصراف
 export const attendanceRecords = pgTable("attendance_records", {
   id: serial("id").primaryKey(),
-  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
   employeeName: text("employee_name").notNull(),
   branchId: varchar("branch_id").notNull().references(() => branches.id),
   branchEmployeeId: integer("branch_employee_id"), // ربط مع موظف الفرع (اختياري)
