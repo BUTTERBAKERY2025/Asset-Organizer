@@ -8719,6 +8719,95 @@ export async function registerRoutes(
   // نظام إدارة الورديات والحضور - Shift Management & Attendance APIs
   // ==========================================
 
+  // Branch Shift Profiles - إعدادات أوقات الورديات حسب الفرع
+  app.get("/api/shift-profiles/:branchId", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const profiles = await storage.getBranchShiftProfiles(branchId);
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching shift profiles:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات الورديات" });
+    }
+  });
+
+  app.get("/api/shift-profiles/:branchId/:shiftCode", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, shiftCode } = req.params;
+      const profile = await storage.getBranchShiftProfileByCode(branchId, shiftCode);
+      if (!profile) return res.status(404).json({ error: "إعدادات الوردية غير موجودة" });
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching shift profile:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات الوردية" });
+    }
+  });
+
+  app.post("/api/shift-profiles", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, shiftCode, displayName, startTime, endTime, breakMinutes, graceMinutesBefore, graceMinutesAfter, sortOrder } = req.body;
+      if (!branchId || !shiftCode || !displayName || !startTime || !endTime) {
+        return res.status(400).json({ error: "البيانات المطلوبة غير مكتملة" });
+      }
+      const profile = await storage.createBranchShiftProfile({
+        branchId,
+        shiftCode,
+        displayName,
+        startTime,
+        endTime,
+        breakMinutes: breakMinutes ?? 60,
+        graceMinutesBefore: graceMinutesBefore ?? 15,
+        graceMinutesAfter: graceMinutesAfter ?? 15,
+        sortOrder: sortOrder ?? 0,
+        isActive: true
+      });
+      res.status(201).json(profile);
+    } catch (error) {
+      console.error("Error creating shift profile:", error);
+      res.status(500).json({ error: "فشل في إنشاء إعدادات الوردية" });
+    }
+  });
+
+  app.put("/api/shift-profiles/:branchId", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const { profiles } = req.body;
+      if (!Array.isArray(profiles)) {
+        return res.status(400).json({ error: "البيانات غير صالحة" });
+      }
+      const updated = await storage.upsertBranchShiftProfiles(branchId, profiles);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating shift profiles:", error);
+      res.status(500).json({ error: "فشل في تحديث إعدادات الورديات" });
+    }
+  });
+
+  app.patch("/api/shift-profiles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const profile = await storage.updateBranchShiftProfile(id, req.body);
+      if (!profile) return res.status(404).json({ error: "إعدادات الوردية غير موجودة" });
+      res.json(profile);
+    } catch (error) {
+      console.error("Error updating shift profile:", error);
+      res.status(500).json({ error: "فشل في تحديث إعدادات الوردية" });
+    }
+  });
+
+  app.delete("/api/shift-profiles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      await storage.deleteBranchShiftProfile(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting shift profile:", error);
+      res.status(500).json({ error: "فشل في حذف إعدادات الوردية" });
+    }
+  });
+
   // Schedule Templates - قوالب الجداول
   app.get("/api/schedule-templates", isAuthenticated, async (req: any, res) => {
     try {
