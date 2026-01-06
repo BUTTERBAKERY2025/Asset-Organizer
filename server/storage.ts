@@ -6193,6 +6193,7 @@ export class DatabaseStorage implements IStorage {
 
   async getScheduledEmployeesForAttendance(branchId: string, shiftType: string, date: string): Promise<any[]> {
     // Get employees scheduled for this branch, shift type, and date
+    // Also include schedules where shiftType is null but time matches the requested shift
     const schedules = await db.select({
       id: employeeSchedules.id,
       employeeId: employeeSchedules.employeeId,
@@ -6205,14 +6206,26 @@ export class DatabaseStorage implements IStorage {
     .from(employeeSchedules)
     .where(and(
       eq(employeeSchedules.branchId, branchId),
-      eq(employeeSchedules.shiftType, shiftType),
       eq(employeeSchedules.scheduleDate, date),
+      eq(employeeSchedules.isOff, false),
       eq(employeeSchedules.status, 'scheduled')
     ));
 
+    // Filter by shift type or infer from start time
+    const filteredSchedules = schedules.filter(s => {
+      if (s.shiftType === shiftType) return true;
+      if (!s.shiftType && s.startTime) {
+        const hour = parseInt(s.startTime.split(":")[0], 10);
+        if (shiftType === "morning" && hour >= 5 && hour < 12) return true;
+        if (shiftType === "evening" && hour >= 12 && hour < 20) return true;
+        if (shiftType === "night" && (hour >= 20 || hour < 5)) return true;
+      }
+      return false;
+    });
+
     // Get attendance for these employees today
     const employeesWithAttendance = await Promise.all(
-      schedules.map(async (schedule) => {
+      filteredSchedules.map(async (schedule) => {
         const attendance = await this.getAttendanceByEmployeeAndDate(schedule.employeeId, date);
         return {
           ...schedule,

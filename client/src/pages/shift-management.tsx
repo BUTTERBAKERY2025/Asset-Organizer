@@ -146,12 +146,20 @@ export default function ShiftManagementPage() {
     setHasUnsavedChanges(true);
   };
 
+  const getShiftTypeFromTime = (startTime: string): string => {
+    const hour = parseInt(startTime.split(":")[0], 10);
+    if (hour >= 5 && hour < 12) return "morning";
+    if (hour >= 12 && hour < 20) return "evening";
+    return "night";
+  };
+
   const saveSchedulesMutation = useMutation({
     mutationFn: async () => {
       const schedules: any[] = [];
       Object.entries(scheduleData).forEach(([employeeId, dates]) => {
         const employee = filteredEmployees.find(u => String(u.id) === employeeId);
         Object.entries(dates).forEach(([dateStr, data]) => {
+          const shiftType = data.isOff ? null : getShiftTypeFromTime(data.startTime);
           schedules.push({
             employeeId: employee?.linkedUserId || `branch_emp_${employee?.id || employeeId}`,
             employeeName: employee?.employeeName || "غير معروف",
@@ -159,6 +167,7 @@ export default function ShiftManagementPage() {
             scheduleDate: dateStr,
             startTime: data.isOff ? null : data.startTime,
             endTime: data.isOff ? null : data.endTime,
+            shiftType: shiftType,
             isOff: data.isOff,
             branchId: selectedBranch,
           });
