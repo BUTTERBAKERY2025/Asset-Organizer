@@ -42,6 +42,7 @@ export default function ShiftManagementPage() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
   const [isExporting, setIsExporting] = useState(false);
   const [isGeneratingMonthly, setIsGeneratingMonthly] = useState(false);
+  const [selectedShiftProfile, setSelectedShiftProfile] = useState<string>("morning");
   const reportRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
@@ -49,6 +50,15 @@ export default function ShiftManagementPage() {
   const { user } = useAuth();
 
   const { data: branches } = useQuery<Branch[]>({ queryKey: ["/api/branches"] });
+  
+  const { data: shiftProfiles } = useQuery<{shiftCode: string; displayName: string; startTime: string; endTime: string; isActive: boolean}[]>({
+    queryKey: ["/api/shift-profiles", selectedBranch],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/shift-profiles/${selectedBranch}`);
+      return res.json();
+    },
+    enabled: selectedBranch !== "all",
+  });
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
   const { data: branchEmployees } = useQuery<BranchEmployee[]>({
     queryKey: ["/api/branch-employees", selectedBranch],
@@ -185,7 +195,36 @@ export default function ShiftManagementPage() {
 
   const getBranchName = (branchId: string) => branches?.find(b => b.id === branchId)?.name || branchId;
 
+  const activeShiftProfiles = useMemo(() => {
+    return (shiftProfiles || []).filter(p => p.isActive);
+  }, [shiftProfiles]);
+
+  useEffect(() => {
+    if (activeShiftProfiles.length > 0) {
+      if (!activeShiftProfiles.find(p => p.shiftCode === selectedShiftProfile)) {
+        setSelectedShiftProfile(activeShiftProfiles[0].shiftCode);
+      }
+    }
+  }, [activeShiftProfiles, selectedShiftProfile]);
+
+  useEffect(() => {
+    setSelectedShiftProfile("morning");
+  }, [selectedBranch]);
+
+  const selectedProfileValid = useMemo(() => {
+    return activeShiftProfiles.some(p => p.shiftCode === selectedShiftProfile);
+  }, [activeShiftProfiles, selectedShiftProfile]);
+
   const applyDefaultSchedule = () => {
+    const profile = activeShiftProfiles.find(p => p.shiftCode === selectedShiftProfile);
+    if (!profile && activeShiftProfiles.length > 0) {
+      toast({ title: "تنبيه", description: "يرجى اختيار وردية صالحة أولاً", variant: "destructive" });
+      return;
+    }
+    const startTime = profile?.startTime || "08:00";
+    const endTime = profile?.endTime || "16:00";
+    const profileName = profile?.displayName || "افتراضي";
+    
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     filteredEmployees.forEach(emp => {
       newScheduleData[String(emp.id)] = {};
@@ -193,15 +232,15 @@ export default function ShiftManagementPage() {
         const dateStr = format(date, "yyyy-MM-dd");
         const isFriday = index === 6;
         newScheduleData[String(emp.id)][dateStr] = {
-          startTime: "08:00",
-          endTime: "16:00",
+          startTime,
+          endTime,
           isOff: isFriday,
         };
       });
     });
     setScheduleData(newScheduleData);
     setHasUnsavedChanges(true);
-    toast({ title: "تم تطبيق الجدول الافتراضي", description: "الجمعة إجازة لجميع الموظفين" });
+    toast({ title: "تم تطبيق الجدول", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة` });
   };
 
   const exportWeeklyReport = () => {
@@ -488,10 +527,31 @@ export default function ShiftManagementPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex gap-2 mb-4">
+                  <div className="flex gap-2 mb-4 items-center">
+                    <Select value={selectedShiftProfile} onValueChange={setSelectedShiftProfile}>
+                      <SelectTrigger className="w-48" data-testid="select-shift-profile">
+                        <Clock className="w-4 h-4 ml-2" />
+                        <SelectValue placeholder="اختر الوردية" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeShiftProfiles.length > 0 ? (
+                          activeShiftProfiles.map(profile => (
+                            <SelectItem key={profile.shiftCode} value={profile.shiftCode}>
+                              {profile.displayName} ({profile.startTime} - {profile.endTime})
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <>
+                            <SelectItem value="morning">الوردية الصباحية (06:00 - 14:00)</SelectItem>
+                            <SelectItem value="evening">الوردية المسائية (14:00 - 22:00)</SelectItem>
+                            <SelectItem value="night">الوردية الليلية (22:00 - 06:00)</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
                     <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2" data-testid="btn-apply-default">
                       <Calendar className="w-4 h-4" />
-                      تطبيق جدول افتراضي
+                      تطبيق على الأسبوع
                     </Button>
                     {hasUnsavedChanges && (
                       <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2" data-testid="btn-save-schedule">
