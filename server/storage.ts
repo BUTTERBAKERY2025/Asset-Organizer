@@ -6033,12 +6033,25 @@ export class DatabaseStorage implements IStorage {
     const results: EmployeeSchedule[] = [];
     
     for (const schedule of schedules) {
-      const existing = await db.select().from(employeeSchedules)
-        .where(and(
-          eq(employeeSchedules.employeeId, schedule.employeeId),
-          eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
-        ))
-        .limit(1);
+      let existing: EmployeeSchedule[] = [];
+      
+      if (schedule.branchEmployeeId) {
+        existing = await db.select().from(employeeSchedules)
+          .where(and(
+            eq(employeeSchedules.branchEmployeeId, schedule.branchEmployeeId),
+            eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
+          ))
+          .limit(1);
+      }
+      
+      if (existing.length === 0) {
+        existing = await db.select().from(employeeSchedules)
+          .where(and(
+            eq(employeeSchedules.employeeId, schedule.employeeId),
+            eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
+          ))
+          .limit(1);
+      }
       
       if (existing.length > 0) {
         const [updated] = await db.update(employeeSchedules)

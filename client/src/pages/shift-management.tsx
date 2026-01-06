@@ -153,7 +153,7 @@ export default function ShiftManagementPage() {
         const employee = filteredEmployees.find(u => String(u.id) === employeeId);
         Object.entries(dates).forEach(([dateStr, data]) => {
           schedules.push({
-            employeeId: employee?.linkedUserId || employeeId,
+            employeeId: employee?.linkedUserId || `branch_emp_${employee?.id || employeeId}`,
             employeeName: employee?.employeeName || "غير معروف",
             branchEmployeeId: employee?.id,
             scheduleDate: dateStr,

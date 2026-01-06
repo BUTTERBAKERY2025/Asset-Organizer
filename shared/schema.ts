@@ -3441,7 +3441,7 @@ export type InsertSchedulePeriod = z.infer<typeof insertSchedulePeriodSchema>;
 export const employeeSchedules = pgTable("employee_schedules", {
   id: serial("id").primaryKey(),
   periodId: integer("period_id").references(() => schedulePeriods.id, { onDelete: "cascade" }),
-  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeId: varchar("employee_id").notNull(), // معرف الموظف (قد يكون userId أو branch_emp_XX)
   employeeName: text("employee_name").notNull(),
   branchId: varchar("branch_id").references(() => branches.id), // الفرع
   branchEmployeeId: integer("branch_employee_id"), // ربط مع موظف الفرع (اختياري)
