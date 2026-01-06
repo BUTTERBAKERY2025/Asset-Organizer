@@ -43,6 +43,7 @@ export default function ShiftManagementPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isGeneratingMonthly, setIsGeneratingMonthly] = useState(false);
   const [selectedShiftProfile, setSelectedShiftProfile] = useState<string>("morning");
+  const [employeeShiftSelections, setEmployeeShiftSelections] = useState<Record<string, string>>({});
   const reportRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
@@ -241,6 +242,41 @@ export default function ShiftManagementPage() {
     setScheduleData(newScheduleData);
     setHasUnsavedChanges(true);
     toast({ title: "تم تطبيق الجدول", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة` });
+  };
+
+  const getEmployeeShiftSelection = (empId: string) => {
+    return employeeShiftSelections[empId] || selectedShiftProfile || "morning";
+  };
+
+  const setEmployeeShiftSelection = (empId: string, shiftCode: string) => {
+    setEmployeeShiftSelections(prev => ({ ...prev, [empId]: shiftCode }));
+  };
+
+  const applyShiftToEmployee = (empId: string) => {
+    const shiftCode = getEmployeeShiftSelection(empId);
+    const profile = activeShiftProfiles.find(p => p.shiftCode === shiftCode);
+    const startTime = profile?.startTime || "08:00";
+    const endTime = profile?.endTime || "16:00";
+    const profileName = profile?.displayName || "افتراضي";
+
+    setScheduleData(prev => {
+      const newData = { ...prev };
+      if (!newData[empId]) {
+        newData[empId] = {};
+      }
+      weekDates.forEach((date, index) => {
+        const dateStr = format(date, "yyyy-MM-dd");
+        const isFriday = index === 6;
+        newData[empId][dateStr] = {
+          startTime,
+          endTime,
+          isOff: isFriday,
+        };
+      });
+      return newData;
+    });
+    setHasUnsavedChanges(true);
+    toast({ title: "تم تطبيق الوردية", description: `${profileName} (${startTime} - ${endTime})` });
   };
 
   const exportWeeklyReport = () => {
@@ -550,8 +586,8 @@ export default function ShiftManagementPage() {
                       </SelectContent>
                     </Select>
                     <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2" data-testid="btn-apply-default">
-                      <Calendar className="w-4 h-4" />
-                      تطبيق على الأسبوع
+                      <Users className="w-4 h-4" />
+                      تطبيق على الجميع
                     </Button>
                     {hasUnsavedChanges && (
                       <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2" data-testid="btn-save-schedule">
@@ -571,8 +607,8 @@ export default function ShiftManagementPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
-                            <TableHead className="text-right sticky right-0 bg-muted/50 z-10 min-w-[180px] font-bold">
-                              الموظف
+                            <TableHead className="text-right sticky right-0 bg-muted/50 z-10 min-w-[280px] font-bold">
+                              الموظف / الوردية
                             </TableHead>
                             {weekDates.map((date, index) => (
                               <TableHead key={index} className={`text-center min-w-[140px] ${isToday(date) ? "bg-primary/10" : ""}`}>
@@ -590,9 +626,43 @@ export default function ShiftManagementPage() {
                             const linkedUserId = employee.linkedUserId || empIdStr;
                             return (
                             <TableRow key={employee.id} data-testid={`row-employee-${employee.id}`}>
-                              <TableCell className="font-medium sticky right-0 bg-background z-10 border-l">
+                              <TableCell className="font-medium sticky right-0 bg-background z-10 border-l min-w-[280px]">
                                 <div className="font-semibold">{employee.employeeName}</div>
-                                <div className="text-xs text-muted-foreground">{employee.jobTitle || "موظف"}</div>
+                                <div className="text-xs text-muted-foreground mb-2">{employee.jobTitle || "موظف"}</div>
+                                <div className="flex gap-1 items-center">
+                                  <Select 
+                                    value={getEmployeeShiftSelection(empIdStr)} 
+                                    onValueChange={(val) => setEmployeeShiftSelection(empIdStr, val)}
+                                  >
+                                    <SelectTrigger className="h-7 text-xs w-28" data-testid={`select-shift-${employee.id}`}>
+                                      <SelectValue placeholder="الوردية" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {activeShiftProfiles.length > 0 ? (
+                                        activeShiftProfiles.map(profile => (
+                                          <SelectItem key={profile.shiftCode} value={profile.shiftCode} className="text-xs">
+                                            {profile.displayName}
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <>
+                                          <SelectItem value="morning" className="text-xs">صباحية</SelectItem>
+                                          <SelectItem value="evening" className="text-xs">مسائية</SelectItem>
+                                          <SelectItem value="night" className="text-xs">ليلية</SelectItem>
+                                        </>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-7 text-xs px-2"
+                                    onClick={() => applyShiftToEmployee(empIdStr)}
+                                    data-testid={`btn-apply-shift-${employee.id}`}
+                                  >
+                                    تطبيق
+                                  </Button>
+                                </div>
                               </TableCell>
                               {weekDates.map((date, index) => {
                                 const dateStr = format(date, "yyyy-MM-dd");
