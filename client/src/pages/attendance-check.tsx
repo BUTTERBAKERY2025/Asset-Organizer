@@ -90,7 +90,7 @@ export default function AttendanceCheckPage() {
   }, [selectedEmployee, signatureMode]);
 
   const checkInMutation = useMutation({
-    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduleId: number; scheduledStartTime?: string; scheduledEndTime?: string }) => {
+    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduleId: number; scheduledStartTime?: string; scheduledEndTime?: string; employeeName?: string }) => {
       return apiRequest("POST", "/api/attendance/check-in-employee", data);
     },
     onSuccess: () => {
@@ -194,6 +194,7 @@ export default function AttendanceCheckPage() {
         scheduleId: selectedEmployee.id,
         scheduledStartTime: selectedEmployee.startTime,
         scheduledEndTime: selectedEmployee.endTime,
+        employeeName: selectedEmployee.employeeName,
       });
     } else {
       checkOutMutation.mutate({

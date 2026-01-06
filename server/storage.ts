@@ -6237,16 +6237,23 @@ export class DatabaseStorage implements IStorage {
     return employeesWithAttendance;
   }
 
-  async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string): Promise<AttendanceRecord> {
+  async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string, employeeNameParam?: string): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
     const now = new Date().toTimeString().split(' ')[0].substring(0, 5);
     
-    const employee = await this.getUser(employeeId);
-    if (!employee) {
-      throw new Error("الموظف غير موجود");
-    }
+    let employeeName = employeeNameParam || 'Unknown';
     
-    const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'Unknown';
+    // Try to get employee name from users table first
+    const employee = await this.getUser(employeeId);
+    if (employee) {
+      employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || employeeName;
+    } else if (scheduleId) {
+      // Try to get from schedule
+      const schedule = await db.select().from(employeeSchedules).where(eq(employeeSchedules.id, scheduleId)).limit(1);
+      if (schedule.length > 0 && schedule[0].employeeName) {
+        employeeName = schedule[0].employeeName;
+      }
+    }
     
     let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
     

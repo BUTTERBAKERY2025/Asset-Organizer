@@ -9218,7 +9218,7 @@ export async function registerRoutes(
   // Check-in employee by manager
   app.post("/api/attendance/check-in-employee", isAuthenticated, async (req: any, res) => {
     try {
-      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime } = req.body;
+      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName } = req.body;
       
       if (!employeeId || !branchId) {
         return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
@@ -9234,7 +9234,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
       }
       
-      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime);
+      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName);
       res.status(201).json(record);
     } catch (error) {
       console.error("Error checking in employee:", error);
