@@ -446,7 +446,7 @@ export default function ShiftManagementPage() {
           </Card>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-3 w-[450px]">
+            <TabsList className="grid grid-cols-4 w-[600px]">
               <TabsTrigger value="schedule" className="gap-2" data-testid="tab-schedule">
                 <CalendarDays className="w-4 h-4" />جدول الدوام
               </TabsTrigger>
@@ -455,6 +455,9 @@ export default function ShiftManagementPage() {
               </TabsTrigger>
               <TabsTrigger value="reports" className="gap-2" data-testid="tab-reports">
                 <FileText className="w-4 h-4" />التقارير
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="gap-2" data-testid="tab-settings">
+                <Clock className="w-4 h-4" />إعدادات الورديات
               </TabsTrigger>
             </TabsList>
 
@@ -835,9 +838,261 @@ export default function ShiftManagementPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="settings" className="space-y-4 mt-4">
+              <ShiftProfilesSettings branchId={selectedBranch} branchName={getBranchName(selectedBranch)} />
+            </TabsContent>
           </Tabs>
         )}
       </div>
     </Layout>
+  );
+}
+
+interface ShiftProfile {
+  id?: number;
+  branchId: string;
+  shiftCode: string;
+  displayName: string;
+  startTime: string;
+  endTime: string;
+  breakMinutes: number;
+  graceMinutesBefore: number;
+  graceMinutesAfter: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+const DEFAULT_SHIFT_PROFILES: Omit<ShiftProfile, 'id' | 'branchId'>[] = [
+  { shiftCode: "morning", displayName: "الوردية الصباحية", startTime: "06:00", endTime: "14:00", breakMinutes: 60, graceMinutesBefore: 15, graceMinutesAfter: 15, isActive: true, sortOrder: 1 },
+  { shiftCode: "evening", displayName: "الوردية المسائية", startTime: "14:00", endTime: "22:00", breakMinutes: 60, graceMinutesBefore: 15, graceMinutesAfter: 15, isActive: true, sortOrder: 2 },
+  { shiftCode: "night", displayName: "الوردية الليلية", startTime: "22:00", endTime: "06:00", breakMinutes: 60, graceMinutesBefore: 15, graceMinutesAfter: 15, isActive: true, sortOrder: 3 },
+];
+
+function ShiftProfilesSettings({ branchId, branchName }: { branchId: string; branchName: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [profiles, setProfiles] = useState<ShiftProfile[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const { data: savedProfiles, isLoading } = useQuery<ShiftProfile[]>({
+    queryKey: ["/api/shift-profiles", branchId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/shift-profiles/${branchId}`);
+      return res.json();
+    },
+    enabled: !!branchId,
+  });
+
+  useEffect(() => {
+    if (savedProfiles && savedProfiles.length > 0) {
+      setProfiles(savedProfiles);
+    } else if (savedProfiles && savedProfiles.length === 0) {
+      setProfiles(DEFAULT_SHIFT_PROFILES.map(p => ({ ...p, branchId })));
+    }
+    setHasChanges(false);
+  }, [savedProfiles, branchId]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", `/api/shift-profiles/${branchId}`, { profiles });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/shift-profiles", branchId] });
+      setHasChanges(false);
+      toast({ title: "تم حفظ إعدادات الورديات بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في حفظ الإعدادات", variant: "destructive" });
+    },
+  });
+
+  const handleProfileChange = (index: number, field: keyof ShiftProfile, value: string | number | boolean) => {
+    setProfiles(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+    setHasChanges(true);
+  };
+
+  const addCustomShift = () => {
+    setProfiles(prev => [
+      ...prev,
+      {
+        branchId,
+        shiftCode: `custom_${Date.now()}`,
+        displayName: "وردية مخصصة",
+        startTime: "08:00",
+        endTime: "16:00",
+        breakMinutes: 60,
+        graceMinutesBefore: 15,
+        graceMinutesAfter: 15,
+        isActive: true,
+        sortOrder: prev.length + 1,
+      },
+    ]);
+    setHasChanges(true);
+  };
+
+  const resetToDefaults = () => {
+    setProfiles(DEFAULT_SHIFT_PROFILES.map(p => ({ ...p, branchId })));
+    setHasChanges(true);
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p>جاري تحميل الإعدادات...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              إعدادات ساعات العمل للورديات - {branchName}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              تحديد مواعيد بداية ونهاية كل وردية لهذا الفرع. سيتم تطبيق هذه الإعدادات تلقائياً عند إنشاء جداول الدوام.
+            </CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={resetToDefaults} data-testid="btn-reset-defaults">
+              إعادة الضبط
+            </Button>
+            <Button variant="outline" onClick={addCustomShift} data-testid="btn-add-custom-shift">
+              <Plus className="w-4 h-4 ml-2" />
+              إضافة وردية
+            </Button>
+            {hasChanges && (
+              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="btn-save-shift-settings">
+                <Save className="w-4 h-4 ml-2" />
+                {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {profiles.map((profile, index) => (
+            <Card key={profile.shiftCode} className={!profile.isActive ? "opacity-50" : ""}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <Input
+                    value={profile.displayName}
+                    onChange={(e) => handleProfileChange(index, "displayName", e.target.value)}
+                    className="font-bold text-lg border-0 p-0 h-auto focus-visible:ring-0"
+                    data-testid={`input-shift-name-${profile.shiftCode}`}
+                  />
+                  <Badge variant={profile.isActive ? "default" : "secondary"}>
+                    {profile.isActive ? "مفعّل" : "معطّل"}
+                  </Badge>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  كود الوردية: {profile.shiftCode}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">وقت البداية</Label>
+                    <Input
+                      type="time"
+                      value={profile.startTime}
+                      onChange={(e) => handleProfileChange(index, "startTime", e.target.value)}
+                      className="mt-1"
+                      data-testid={`input-start-time-${profile.shiftCode}`}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">وقت النهاية</Label>
+                    <Input
+                      type="time"
+                      value={profile.endTime}
+                      onChange={(e) => handleProfileChange(index, "endTime", e.target.value)}
+                      className="mt-1"
+                      data-testid={`input-end-time-${profile.shiftCode}`}
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <Label className="text-xs">فترة الاستراحة (دقائق)</Label>
+                  <Input
+                    type="number"
+                    value={profile.breakMinutes}
+                    onChange={(e) => handleProfileChange(index, "breakMinutes", parseInt(e.target.value) || 0)}
+                    className="mt-1"
+                    min={0}
+                    max={120}
+                    data-testid={`input-break-${profile.shiftCode}`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">سماحية قبل (دقائق)</Label>
+                    <Input
+                      type="number"
+                      value={profile.graceMinutesBefore}
+                      onChange={(e) => handleProfileChange(index, "graceMinutesBefore", parseInt(e.target.value) || 0)}
+                      className="mt-1"
+                      min={0}
+                      max={60}
+                      data-testid={`input-grace-before-${profile.shiftCode}`}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">سماحية بعد (دقائق)</Label>
+                    <Input
+                      type="number"
+                      value={profile.graceMinutesAfter}
+                      onChange={(e) => handleProfileChange(index, "graceMinutesAfter", parseInt(e.target.value) || 0)}
+                      className="mt-1"
+                      min={0}
+                      max={60}
+                      data-testid={`input-grace-after-${profile.shiftCode}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <Label htmlFor={`active-${profile.shiftCode}`} className="text-sm">تفعيل الوردية</Label>
+                  <Checkbox
+                    id={`active-${profile.shiftCode}`}
+                    checked={profile.isActive}
+                    onCheckedChange={(checked) => handleProfileChange(index, "isActive", checked === true)}
+                    data-testid={`checkbox-active-${profile.shiftCode}`}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+          <h4 className="font-semibold mb-2 flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            كيفية استخدام إعدادات الورديات
+          </h4>
+          <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+            <li>عند إنشاء جدول دوام جديد، اختر نوع الوردية وسيتم تعبئة الأوقات تلقائياً</li>
+            <li>فترة السماحية تستخدم لحساب التأخير (مثال: 15 دقيقة سماحية = لا يحتسب تأخير قبل 15 دقيقة)</li>
+            <li>يمكنك تعديل الأوقات يدوياً بعد التعبئة التلقائية إذا لزم الأمر</li>
+            <li>الورديات المعطلة لن تظهر في قائمة الاختيار عند إنشاء الجداول</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
