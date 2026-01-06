@@ -33,10 +33,10 @@ interface User {
 
 interface BranchEmployee {
   id: number;
-  name: string;
+  employeeName: string;
   branchId: string;
-  position?: string;
-  linkedUserId?: string;
+  jobTitle?: string;
+  linkedUserId?: string | null;
 }
 
 interface TimesheetReport {
@@ -154,7 +154,7 @@ export default function TimesheetPage() {
     })),
     ...branchEmployees.filter(be => !be.linkedUserId).map(be => ({
       id: `branch_emp_${be.id}`,
-      name: be.name,
+      name: be.employeeName,
       branchId: be.branchId,
       type: 'branch_employee' as const,
     })),
