@@ -1,10 +1,13 @@
--- تحديث بيانات موظفي فرع المدينة المنورة
+-- تحديث شامل لبيانات موظفي فرع المدينة المنورة
 -- تاريخ التحديث: 2026-01-06
+-- ملاحظة: يجب تنفيذ هذا الملف في Supabase SQL Editor
 
 -- إضافة عمود رقم الموظف
 ALTER TABLE branch_employees ADD COLUMN IF NOT EXISTS employee_number TEXT;
 
--- تحديث الموظفين السعوديين مع الأسماء الكاملة وتفاصيل الراتب
+-- ========================================
+-- تحديث الموظفين السعوديين
+-- ========================================
 
 UPDATE branch_employees SET 
   employee_name = 'ايمان علي حسن حامضي',
@@ -82,7 +85,9 @@ UPDATE branch_employees SET
   employee_number = 'MED-00008'
 WHERE id = 13;
 
--- تحديث الموظفين الأجانب
+-- ========================================
+-- تحديث الموظفين البنجلاديشيين
+-- ========================================
 
 UPDATE branch_employees SET 
   employee_name = 'سوجيل',
@@ -107,25 +112,84 @@ UPDATE branch_employees SET
 WHERE id = 34;
 
 UPDATE branch_employees SET 
+  employee_name = 'سناء الله',
   employee_number = 'MED-00012'
 WHERE id = 40;
 
+UPDATE branch_employees SET employee_number = 'MED-00015' WHERE id = 18;
+
 UPDATE branch_employees SET 
-  employee_name = 'خالد محمد علي قباني',
+  employee_name = 'مد ريحان',
+  nationality = 'بنجلاديشي',
+  employee_number = 'MED-00022'
+WHERE id = 25;
+
+UPDATE branch_employees SET 
+  employee_name = 'عرفات مد صامول',
+  employee_number = 'MED-00028'
+WHERE id = 35;
+
+UPDATE branch_employees SET 
+  employee_name = 'مد ياسين',
+  employee_number = 'MED-00029'
+WHERE id = 36;
+
+UPDATE branch_employees SET 
+  employee_name = 'مد سكيب',
+  employee_number = 'MED-00030'
+WHERE id = 37;
+
+UPDATE branch_employees SET 
+  employee_name = 'مد رجيب',
+  employee_number = 'MED-00031'
+WHERE id = 38;
+
+UPDATE branch_employees SET 
+  employee_name = 'مد انتور',
+  employee_number = 'MED-00032'
+WHERE id = 39;
+
+-- ========================================
+-- تحديث الموظفين السوريين
+-- ========================================
+
+UPDATE branch_employees SET 
+  employee_name = 'خالد علاء الدين العزو',
   salary = 3200,
   total_salary = 3200,
   employee_number = 'MED-00013'
 WHERE id = 16;
 
+-- ========================================
+-- تحديث الموظفين المصريين
+-- ========================================
+
 UPDATE branch_employees SET 
-  employee_name = 'اسماعيل محمد احمد محمود',
+  employee_name = 'إسماعيل جمال فوزي',
   salary = 3000,
-  housing_allowance = 500,
-  total_salary = 3500,
+  housing_allowance = 0,
+  total_salary = 3000,
   employee_number = 'MED-00014'
 WHERE id = 17;
 
-UPDATE branch_employees SET employee_number = 'MED-00015' WHERE id = 18;
+UPDATE branch_employees SET 
+  employee_name = 'محمد نور',
+  salary = 3000,
+  total_salary = 3000,
+  employee_number = 'MED-00019'
+WHERE id = 22;
+
+UPDATE branch_employees SET 
+  employee_name = 'احمد أسامة السيد البدراوي',
+  salary = 3000,
+  housing_allowance = 500,
+  total_salary = 3500,
+  employee_number = 'MED-00033'
+WHERE id = 41;
+
+-- ========================================
+-- تحديث الموظفين النيباليين
+-- ========================================
 
 UPDATE branch_employees SET 
   employee_name = 'ارجون تهابا',
@@ -151,46 +215,65 @@ UPDATE branch_employees SET
   employee_number = 'MED-00018'
 WHERE id = 21;
 
-UPDATE branch_employees SET 
-  employee_name = 'محمد نور الدين احمد',
-  salary = 2800,
-  total_salary = 2800,
-  employee_number = 'MED-00019'
-WHERE id = 22;
+-- ========================================
+-- تحديث الموظفين الفلبينيين
+-- ========================================
 
 UPDATE branch_employees SET 
-  employee_name = 'عبد الرحمن',
-  salary = 2500,
-  total_salary = 2500,
-  employee_number = 'MED-00020'
-WHERE id = 23;
+  employee_name = 'ديفلين ليون',
+  employee_number = 'MED-00024'
+WHERE id = 30;
 
+UPDATE branch_employees SET 
+  employee_name = 'ميري جون',
+  employee_number = 'MED-00025'
+WHERE id = 31;
+
+UPDATE branch_employees SET 
+  employee_name = 'جيلين كردوفا',
+  employee_number = 'MED-00026'
+WHERE id = 32;
+
+UPDATE branch_employees SET 
+  employee_name = 'مري جان فلورس',
+  employee_number = 'MED-00027'
+WHERE id = 33;
+
+-- ========================================
+-- تحديث باقي الموظفين بأرقام وظيفية
+-- ========================================
+
+UPDATE branch_employees SET employee_number = 'MED-00020' WHERE id = 23;
 UPDATE branch_employees SET employee_number = 'MED-00021' WHERE id = 24;
-UPDATE branch_employees SET employee_number = 'MED-00022' WHERE id = 25;
 UPDATE branch_employees SET employee_number = 'MED-00023' WHERE id = 29;
-UPDATE branch_employees SET employee_number = 'MED-00024' WHERE id = 30;
-UPDATE branch_employees SET employee_number = 'MED-00025' WHERE id = 31;
-UPDATE branch_employees SET employee_number = 'MED-00026' WHERE id = 32;
-UPDATE branch_employees SET employee_number = 'MED-00027' WHERE id = 33;
-UPDATE branch_employees SET employee_number = 'MED-00028' WHERE id = 35;
-UPDATE branch_employees SET employee_number = 'MED-00029' WHERE id = 36;
-UPDATE branch_employees SET employee_number = 'MED-00030' WHERE id = 37;
-UPDATE branch_employees SET employee_number = 'MED-00031' WHERE id = 38;
-UPDATE branch_employees SET employee_number = 'MED-00032' WHERE id = 39;
 
-UPDATE branch_employees SET 
-  employee_name = 'احمد أسامة السيد البدراوي',
-  salary = 3000,
-  housing_allowance = 500,
-  total_salary = 3500,
-  employee_number = 'MED-00033'
-WHERE id = 41;
+-- ========================================
+-- إضافة الموظفين الجدد
+-- ========================================
 
--- إضافة موظف جديد
+-- هاريدو مياه ريدوي - بنجلاديشي
 INSERT INTO branch_employees (
   branch_id, employee_number, employee_name, nationality, job_title, department,
   salary, housing_allowance, transport_allowance, other_allowances, total_salary, status
 ) VALUES (
   'medina', 'MED-00034', 'هاريدو مياه ريدوي', 'بنجلاديشي', 'عامل', 'عام',
   1000, 0, 0, 200, 1200, 'active'
+);
+
+-- وصال هيثم المخلالتي - سوري
+INSERT INTO branch_employees (
+  branch_id, employee_number, employee_name, nationality, job_title, department,
+  salary, housing_allowance, transport_allowance, other_allowances, total_salary, status
+) VALUES (
+  'medina', 'MED-00035', 'وصال هيثم المخلالتي', 'سوري', 'مدير صالة', 'الكاشير والصالة',
+  5500, 0, 0, 0, 5500, 'active'
+);
+
+-- محمد عبدالمنعم البادي الاتربي - مصري
+INSERT INTO branch_employees (
+  branch_id, employee_number, employee_name, nationality, job_title, department,
+  salary, housing_allowance, transport_allowance, other_allowances, total_salary, status
+) VALUES (
+  'medina', 'MED-00036', 'محمد عبدالمنعم البادي الاتربي', 'مصري', 'مدير صالة', 'الكاشير والصالة',
+  6000, 1400, 0, 0, 7400, 'active'
 );
