@@ -3717,6 +3717,7 @@ export const branchEmployees = pgTable("branch_employees", {
   branchId: varchar("branch_id").notNull().references(() => branches.id),
   linkedUserId: varchar("linked_user_id").references(() => users.id), // ربط بحساب المستخدم (للدخول للنظام)
   defaultScheduleTemplateId: integer("default_schedule_template_id").references(() => scheduleTemplates.id), // قالب الجدولة الافتراضي
+  employeeNumber: text("employee_number"), // رقم الموظف الوظيفي MED-00001
   employeeName: text("employee_name").notNull(),
   employeeNameEn: text("employee_name_en"), // الاسم بالإنجليزية
   jobTitle: text("job_title").notNull(), // الوظيفة
