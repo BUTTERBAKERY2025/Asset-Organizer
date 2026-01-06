@@ -274,6 +274,6 @@ INSERT INTO branch_employees (
   branch_id, employee_number, employee_name, nationality, job_title, department,
   salary, housing_allowance, transport_allowance, other_allowances, total_salary, status
 ) VALUES (
-  'medina', 'MED-00036', 'محمد عبدالمنعم البادي الاتربي', 'مصري', 'مدير صالة', 'الكاشير والصالة',
+  'medina', 'MED-00036', 'محمد عبدالمنعم البادي الاتربي', 'مصري', 'مدير منطقة', 'ادارة المنطقة',
   6000, 1400, 0, 0, 7400, 'active'
 );
