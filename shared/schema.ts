@@ -3522,7 +3522,7 @@ export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema
 export const timeEntries = pgTable("time_entries", {
   id: serial("id").primaryKey(),
   attendanceId: integer("attendance_id").references(() => attendanceRecords.id, { onDelete: "cascade" }),
-  employeeId: varchar("employee_id").notNull().references(() => users.id),
+  employeeId: varchar("employee_id").notNull(), // بدون foreign key لدعم موظفي الفروع بدون حسابات
   branchId: varchar("branch_id").notNull().references(() => branches.id),
   entryType: text("entry_type").notNull(), // check_in, check_out, break_start, break_end
   entryTime: timestamp("entry_time").defaultNow().notNull(),
