@@ -3354,6 +3354,35 @@ export type InsertMarketingAlert = z.infer<typeof insertMarketingAlertSchema>;
 // نظام إدارة الورديات المتقدم - Advanced Shift Management System
 // ==========================================
 
+// Branch Shift Profiles - إعدادات أوقات الورديات حسب الفرع
+export const branchShiftProfiles = pgTable("branch_shift_profiles", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  shiftCode: text("shift_code").notNull(), // morning, evening, night, custom
+  displayName: text("display_name").notNull(), // الوردية الصباحية، المسائية، الليلية
+  startTime: text("start_time").notNull(), // HH:MM format (e.g., "08:00")
+  endTime: text("end_time").notNull(), // HH:MM format (e.g., "16:00")
+  breakMinutes: integer("break_minutes").default(60), // فترة الاستراحة بالدقائق
+  graceMinutesBefore: integer("grace_minutes_before").default(15), // فترة السماح قبل الوقت
+  graceMinutesAfter: integer("grace_minutes_after").default(15), // فترة السماح بعد الوقت
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0), // ترتيب العرض
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_shift_profiles_branch").on(table.branchId),
+  index("idx_branch_shift_profiles_code").on(table.branchId, table.shiftCode),
+]);
+
+export const insertBranchShiftProfileSchema = createInsertSchema(branchShiftProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchShiftProfile = typeof branchShiftProfiles.$inferSelect;
+export type InsertBranchShiftProfile = z.infer<typeof insertBranchShiftProfileSchema>;
+
 // Schedule Templates - قوالب جداول الورديات
 export const scheduleTemplates = pgTable("schedule_templates", {
   id: serial("id").primaryKey(),
