@@ -294,10 +294,17 @@ export default function TimesheetPage() {
   };
 
   const getEmployeeName = useCallback((employeeId: string) => {
+    // Check if it's a branch employee
+    if (employeeId.startsWith("branch_emp_")) {
+      const branchEmployeeId = parseInt(employeeId.replace("branch_emp_", ""));
+      const branchEmployee = branchEmployees.find(be => be.id === branchEmployeeId);
+      if (branchEmployee) return branchEmployee.employeeName;
+    }
+    // Check regular users
     const employee = allUsers.find(u => u.id === employeeId);
     if (!employee) return "غير معروف";
     return `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username || "غير معروف";
-  }, [allUsers]);
+  }, [allUsers, branchEmployees]);
 
   const exportToExcel = () => {
     if (!selectedReport || reportEntries.length === 0) {

@@ -9599,16 +9599,16 @@ export async function registerRoutes(
         const attendanceRecord = attendance.find(a => a.attendanceDate === dateStr);
         
         const isOff = schedule?.isOff || dayOfWeek === 'fri';
-        const scheduledStartTime = schedule?.startTime || null;
-        const scheduledEndTime = schedule?.endTime || null;
+        const scheduledStartTime = schedule?.startTime || "08:00"; // Default start time
+        const scheduledEndTime = schedule?.endTime || "16:00"; // Default end time
         const actualStartTime = attendanceRecord?.actualCheckIn || null;
         const actualEndTime = attendanceRecord?.actualCheckOut || null;
         
-        // Calculate hours
-        let scheduledHours = 0;
-        if (scheduledStartTime && scheduledEndTime && !isOff) {
-          const startParts = scheduledStartTime.split(':').map(Number);
-          const endParts = scheduledEndTime.split(':').map(Number);
+        // Calculate hours (default 8 hours work day)
+        let scheduledHours = 8;
+        if (schedule?.startTime && schedule?.endTime && !isOff) {
+          const startParts = schedule.startTime.split(':').map(Number);
+          const endParts = schedule.endTime.split(':').map(Number);
           scheduledHours = (endParts[0] + endParts[1]/60) - (startParts[0] + startParts[1]/60);
         }
         
@@ -9625,12 +9625,13 @@ export async function registerRoutes(
           else if (attendanceRecord.status === "late") status = "late";
           else if (attendanceRecord.status === "absent") status = "absent";
           else status = attendanceRecord.status || "pending";
-        } else if (!isOff && scheduledStartTime) {
+        } else if (!isOff) {
+          // Count as work day without attendance record
           status = "absent";
         }
 
-        // Update totals
-        if (!isOff && scheduledStartTime) {
+        // Update totals - count all non-off days as scheduled work days
+        if (!isOff) {
           totalScheduledDays++;
           totalScheduledHours += scheduledHours;
           
