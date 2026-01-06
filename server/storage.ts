@@ -278,6 +278,9 @@ import {
   branchEmployees,
   type BranchEmployee,
   type InsertBranchEmployee,
+  branchShiftProfiles,
+  type BranchShiftProfile,
+  type InsertBranchShiftProfile,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -5850,6 +5853,63 @@ export class DatabaseStorage implements IStorage {
   // ==========================================
   // نظام إدارة الورديات والحضور - Shift Management & Attendance
   // ==========================================
+
+  // Branch Shift Profiles - إعدادات أوقات الورديات حسب الفرع
+  async getBranchShiftProfiles(branchId: string): Promise<BranchShiftProfile[]> {
+    return await db.select().from(branchShiftProfiles)
+      .where(and(eq(branchShiftProfiles.branchId, branchId), eq(branchShiftProfiles.isActive, true)))
+      .orderBy(branchShiftProfiles.sortOrder);
+  }
+
+  async getBranchShiftProfile(id: number): Promise<BranchShiftProfile | undefined> {
+    const [profile] = await db.select().from(branchShiftProfiles).where(eq(branchShiftProfiles.id, id));
+    return profile;
+  }
+
+  async getBranchShiftProfileByCode(branchId: string, shiftCode: string): Promise<BranchShiftProfile | undefined> {
+    const [profile] = await db.select().from(branchShiftProfiles)
+      .where(and(
+        eq(branchShiftProfiles.branchId, branchId),
+        eq(branchShiftProfiles.shiftCode, shiftCode),
+        eq(branchShiftProfiles.isActive, true)
+      ));
+    return profile;
+  }
+
+  async createBranchShiftProfile(profile: InsertBranchShiftProfile): Promise<BranchShiftProfile> {
+    const [created] = await db.insert(branchShiftProfiles).values(profile).returning();
+    return created;
+  }
+
+  async updateBranchShiftProfile(id: number, profile: Partial<InsertBranchShiftProfile>): Promise<BranchShiftProfile | undefined> {
+    const [updated] = await db.update(branchShiftProfiles)
+      .set({ ...profile, updatedAt: new Date() })
+      .where(eq(branchShiftProfiles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteBranchShiftProfile(id: number): Promise<boolean> {
+    await db.update(branchShiftProfiles)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(branchShiftProfiles.id, id));
+    return true;
+  }
+
+  async upsertBranchShiftProfiles(branchId: string, profiles: InsertBranchShiftProfile[]): Promise<BranchShiftProfile[]> {
+    const results: BranchShiftProfile[] = [];
+    for (const profile of profiles) {
+      const existing = await this.getBranchShiftProfileByCode(branchId, profile.shiftCode);
+      if (existing) {
+        const updated = await this.updateBranchShiftProfile(existing.id, profile);
+        if (updated) results.push(updated);
+      } else {
+        const created = await this.createBranchShiftProfile({ ...profile, branchId });
+        results.push(created);
+      }
+    }
+    return results;
+  }
 
   // Schedule Templates - قوالب الجداول
   async getAllScheduleTemplates(branchId?: string): Promise<ScheduleTemplate[]> {
