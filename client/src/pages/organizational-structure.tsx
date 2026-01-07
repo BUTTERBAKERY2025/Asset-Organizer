@@ -915,29 +915,178 @@ export default function OrganizationalStructurePage() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-white/80 backdrop-blur shadow-xl border-0 overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-green-500 to-teal-500 text-white py-3">
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-base">
-                      <Crown className="h-5 w-5" />
-                      التسلسل الهرمي الوظيفي
-                    </span>
-                    <Badge className="bg-white/20 text-white border-white/30 text-xs">
-                      {roles.length} وظيفة
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 overflow-x-auto">
-                  <OrgChartSVG
-                    tree={tree}
-                    scale={scale}
-                    onView={setSelectedRole}
-                    onEdit={handleEdit}
-                    onDelete={setDeleteConfirm}
-                    onAddChild={handleAddChild}
-                  />
-                </CardContent>
-              </Card>
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-3 space-y-4 print:hidden">
+                  <Card className="bg-gradient-to-br from-green-500 to-teal-500 text-white shadow-lg">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                          <Users className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{roles.length}</p>
+                          <p className="text-sm opacity-90">إجمالي الوظائف</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-lg">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                          <Building2 className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{Math.max(...roles.map((r: OrgJobRole) => r.level || 1))}</p>
+                          <p className="text-sm opacity-90">عدد المستويات</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                          <Crown className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{tree.length}</p>
+                          <p className="text-sm opacity-90">مناصب إدارية عليا</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-white/90 shadow-md">
+                    <CardHeader className="pb-2 pt-3">
+                      <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
+                        <Star className="h-4 w-4 text-amber-500" />
+                        دليل الاستخدام
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs text-gray-600 space-y-2 pb-4">
+                      <p className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500" />
+                        اضغط على الدائرة لفتح القائمة
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        استخدم التكبير/التصغير للتنقل
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        أضف وظائف تابعة من القائمة
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="col-span-6 print:col-span-12">
+                  <Card className="bg-white/80 backdrop-blur shadow-xl border-0 overflow-hidden h-full">
+                    <CardHeader className="bg-gradient-to-r from-green-500 to-teal-500 text-white py-3">
+                      <CardTitle className="flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-base">
+                          <Crown className="h-5 w-5" />
+                          التسلسل الهرمي الوظيفي
+                        </span>
+                        <Badge className="bg-white/20 text-white border-white/30 text-xs">
+                          {roles.length} وظيفة
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 overflow-x-auto">
+                      <OrgChartSVG
+                        tree={tree}
+                        scale={scale}
+                        onView={setSelectedRole}
+                        onEdit={handleEdit}
+                        onDelete={setDeleteConfirm}
+                        onAddChild={handleAddChild}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="col-span-3 space-y-4 print:hidden">
+                  <Card className="bg-white/90 shadow-md">
+                    <CardHeader className="pb-2 pt-3">
+                      <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
+                        <ClipboardList className="h-4 w-4 text-green-600" />
+                        الوظائف الأخيرة
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pb-4">
+                      <div className="space-y-2">
+                        {roles.slice(0, 5).map((role: OrgJobRole) => (
+                          <div 
+                            key={role.id} 
+                            className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                            onClick={() => setSelectedRole(role)}
+                          >
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center">
+                              <User className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-800 truncate">{role.titleAr}</p>
+                              <p className="text-[10px] text-gray-500">المستوى {role.level}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg">
+                    <CardContent className="p-4">
+                      <div className="text-center">
+                        <Network className="h-8 w-8 mx-auto mb-2 opacity-80" />
+                        <p className="text-lg font-bold">Butter Bakery</p>
+                        <p className="text-xs opacity-80">إدارة التشغيل</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-white/90 shadow-md">
+                    <CardHeader className="pb-2 pt-3">
+                      <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
+                        <Wrench className="h-4 w-4 text-blue-600" />
+                        إجراءات سريعة
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pb-4 space-y-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2 text-xs"
+                        onClick={handleAdd}
+                      >
+                        <Plus className="h-3 w-3" />
+                        إضافة وظيفة جديدة
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2 text-xs"
+                        onClick={exportToExcel}
+                      >
+                        <FileSpreadsheet className="h-3 w-3" />
+                        تصدير إلى Excel
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2 text-xs"
+                        onClick={() => handlePrint()}
+                      >
+                        <Printer className="h-3 w-3" />
+                        طباعة الهيكل
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             )}
           </div>
 
