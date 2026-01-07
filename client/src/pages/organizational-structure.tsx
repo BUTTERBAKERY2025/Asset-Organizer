@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from "react";
+import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
@@ -161,6 +161,147 @@ function buildTree(roles: OrgJobRole[]): TreeNode[] {
   return roots;
 }
 
+function CompactRoleCard({
+  role,
+  colorInfo,
+  onView,
+  onEdit,
+  onDelete,
+  onAddChild,
+}: {
+  role: TreeNode;
+  colorInfo: { gradient: string };
+  onView: (role: OrgJobRole) => void;
+  onEdit: (role: OrgJobRole) => void;
+  onDelete: (role: OrgJobRole) => void;
+  onAddChild: (parentId: number) => void;
+}) {
+  return (
+    <div className="relative group" data-testid={`node-${role.slug}`}>
+      <div className="relative bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg hover:border-amber-300 transition-all duration-200 cursor-pointer overflow-hidden w-[140px]">
+        <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${colorInfo.gradient}`} />
+        <div className="p-2 pt-3">
+          <div className="flex items-center gap-2 mb-1">
+            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-sm flex-shrink-0`}>
+              {SMALL_ICON_MAP[role.icon || "user"]}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold text-gray-900 text-xs leading-tight truncate">{role.titleAr}</h3>
+              <p className="text-[10px] text-gray-500 truncate" dir="ltr">{role.titleEn}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-1">
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-gray-50 text-gray-500 border-gray-200">
+              م{role.level}
+            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100" data-testid={`menu-${role.slug}`}>
+                  <MoreVertical className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-36">
+                <DropdownMenuItem onClick={() => onView(role)} className="text-xs" data-testid={`view-${role.slug}`}>
+                  <Eye className="h-3 w-3 ml-1" /> عرض
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onEdit(role)} className="text-xs" data-testid={`edit-${role.slug}`}>
+                  <Edit className="h-3 w-3 ml-1" /> تعديل
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onAddChild(role.id)} className="text-xs" data-testid={`add-child-${role.slug}`}>
+                  <Plus className="h-3 w-3 ml-1" /> إضافة تابع
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onDelete(role)} className="text-xs text-red-600" data-testid={`delete-${role.slug}`}>
+                  <Trash2 className="h-3 w-3 ml-1" /> حذف
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        {role.children.length > 0 && (
+          <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[8px] px-1.5 py-0 rounded-full">
+            {role.children.length}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HorizontalOrgChart({
+  roles,
+  onView,
+  onEdit,
+  onDelete,
+  onAddChild,
+}: {
+  roles: OrgJobRole[];
+  onView: (role: OrgJobRole) => void;
+  onEdit: (role: OrgJobRole) => void;
+  onDelete: (role: OrgJobRole) => void;
+  onAddChild: (parentId: number) => void;
+}) {
+  const levels: number[] = Array.from(new Set(roles.map(r => r.level))).sort((a, b) => a - b);
+  const getRolesByLevel = (level: number) => roles.filter(r => r.level === level).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="flex items-start gap-3 min-w-max p-4">
+        {levels.map((level, levelIdx) => {
+          const levelRoles = getRolesByLevel(level);
+          return (
+            <React.Fragment key={level}>
+              <div className="flex flex-col gap-2">
+                <div className="text-center mb-1">
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-[10px]">
+                    المستوى {level}
+                  </Badge>
+                </div>
+                {levelRoles.map((role) => {
+                  const colorInfo = COLOR_OPTIONS.find(c => c.value === role.color) || COLOR_OPTIONS[0];
+                  return (
+                    <CompactRoleCard
+                      key={role.id}
+                      role={role as TreeNode}
+                      colorInfo={colorInfo}
+                      onView={onView}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onAddChild={onAddChild}
+                    />
+                  );
+                })}
+              </div>
+              {levelIdx < levels.length - 1 && (
+                <div className="flex items-center self-center mt-6">
+                  <svg width="50" height="24" className="overflow-visible">
+                    <defs>
+                      <linearGradient id={`h-grad-${level}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#f59e0b" />
+                        <stop offset="100%" stopColor="#fbbf24" />
+                      </linearGradient>
+                      <marker id={`arrow-${level}`} markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                        <path d="M0,0 L8,4 L0,8 Z" fill="#f59e0b" />
+                      </marker>
+                    </defs>
+                    <path
+                      d="M0,12 L40,12"
+                      stroke={`url(#h-grad-${level})`}
+                      strokeWidth="3"
+                      fill="none"
+                      strokeLinecap="round"
+                      markerEnd={`url(#arrow-${level})`}
+                    />
+                  </svg>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function OrgNode({
   node,
   scale,
@@ -192,91 +333,73 @@ function OrgNode({
       >
         <div
           className="relative bg-white rounded-xl shadow-lg border-2 border-gray-100 hover:shadow-xl hover:border-amber-200 transition-all duration-300 cursor-pointer overflow-hidden"
-          style={{ width: "180px" }}
+          style={{ width: "160px" }}
         >
           <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${colorInfo.gradient}`} />
           
-          <div className="p-4 pt-5">
-            <div className="flex items-start justify-between mb-3">
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-md`}>
-                {ICON_MAP[node.icon || "user"]}
+          <div className="p-3 pt-4">
+            <div className="flex items-start justify-between mb-2">
+              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-md`}>
+                {SMALL_ICON_MAP[node.icon || "user"]}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                     data-testid={`menu-${node.slug}`}
                   >
-                    <MoreVertical className="h-4 w-4" />
+                    <MoreVertical className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem onClick={() => onView(node)} data-testid={`view-${node.slug}`}>
-                    <Eye className="h-4 w-4 ml-2" />
-                    عرض التفاصيل
+                <DropdownMenuContent align="end" className="w-36">
+                  <DropdownMenuItem onClick={() => onView(node)} className="text-xs" data-testid={`view-${node.slug}`}>
+                    <Eye className="h-3 w-3 ml-1" /> عرض التفاصيل
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEdit(node)} data-testid={`edit-${node.slug}`}>
-                    <Edit className="h-4 w-4 ml-2" />
-                    تعديل
+                  <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs" data-testid={`edit-${node.slug}`}>
+                    <Edit className="h-3 w-3 ml-1" /> تعديل
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onAddChild(node.id)} data-testid={`add-child-${node.slug}`}>
-                    <Plus className="h-4 w-4 ml-2" />
-                    إضافة تابع
+                  <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs" data-testid={`add-child-${node.slug}`}>
+                    <Plus className="h-3 w-3 ml-1" /> إضافة تابع
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => onDelete(node)} 
-                    className="text-red-600"
-                    data-testid={`delete-${node.slug}`}
-                  >
-                    <Trash2 className="h-4 w-4 ml-2" />
-                    حذف
+                  <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs text-red-600" data-testid={`delete-${node.slug}`}>
+                    <Trash2 className="h-3 w-3 ml-1" /> حذف
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
 
-            <div className="space-y-1">
-              <h3 className="font-bold text-gray-900 text-sm leading-tight line-clamp-2">
+            <div className="space-y-0.5">
+              <h3 className="font-bold text-gray-900 text-xs leading-tight line-clamp-2">
                 {node.titleAr}
               </h3>
-              <p className="text-xs text-gray-500 leading-tight" dir="ltr">
+              <p className="text-[10px] text-gray-500 leading-tight" dir="ltr">
                 {node.titleEn}
               </p>
             </div>
 
-            <div className="mt-3 flex items-center justify-between">
-              <Badge 
-                variant="outline" 
-                className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-600 border-gray-200"
-              >
-                المستوى {node.level}
+            <div className="mt-2 flex items-center justify-between">
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-gray-50 text-gray-600 border-gray-200">
+                م{node.level}
               </Badge>
               {hasChildren && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 rounded-full hover:bg-amber-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleCollapse(node.id);
-                  }}
+                  className="h-5 w-5 p-0 rounded-full hover:bg-amber-100"
+                  onClick={(e) => { e.stopPropagation(); onToggleCollapse(node.id); }}
                   data-testid={`toggle-${node.slug}`}
                 >
-                  {isCollapsed ? (
-                    <ChevronDown className="h-4 w-4 text-amber-600" />
-                  ) : (
-                    <ChevronUp className="h-4 w-4 text-amber-600" />
-                  )}
+                  {isCollapsed ? <ChevronDown className="h-3 w-3 text-amber-600" /> : <ChevronUp className="h-3 w-3 text-amber-600" />}
                 </Button>
               )}
             </div>
           </div>
 
           {hasChildren && (
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-sm">
-              {node.children.length} تابع
+            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[9px] px-1.5 py-0 rounded-full shadow-sm">
+              {node.children.length}
             </div>
           )}
         </div>
@@ -284,74 +407,22 @@ function OrgNode({
 
       {hasChildren && !isCollapsed && (
         <>
-          <svg width="24" height="40" className="overflow-visible">
-            <defs>
-              <linearGradient id={`grad-down-${node.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#f59e0b" />
-                <stop offset="100%" stopColor="#fbbf24" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M12,0 L12,40"
-              stroke={`url(#grad-down-${node.id})`}
-              strokeWidth="3"
-              fill="none"
-              strokeLinecap="round"
-            />
-            <circle cx="12" cy="40" r="4" fill="#f59e0b" />
-          </svg>
-          
+          <div className="w-0.5 h-6 bg-gradient-to-b from-amber-400 to-amber-300" />
           <div className="relative">
             {node.children.length > 1 && (
-              <svg 
-                className="absolute overflow-visible" 
-                style={{ 
-                  top: 0, 
-                  left: "50%", 
+              <div 
+                className="absolute top-0 h-0.5 bg-amber-400"
+                style={{
+                  left: "50%",
+                  width: `${(node.children.length - 1) * 170}px`,
                   transform: "translateX(-50%)",
-                  width: `${(node.children.length - 1) * 200 + 50}px`,
-                  height: "50px"
                 }}
-              >
-                <defs>
-                  <linearGradient id={`grad-h-${node.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#fcd34d" />
-                    <stop offset="50%" stopColor="#f59e0b" />
-                    <stop offset="100%" stopColor="#fcd34d" />
-                  </linearGradient>
-                </defs>
-                {node.children.map((_, idx) => {
-                  const totalWidth = (node.children.length - 1) * 200 + 50;
-                  const centerX = totalWidth / 2;
-                  const spacing = 204;
-                  const startX = centerX - ((node.children.length - 1) / 2) * spacing;
-                  const x = startX + idx * spacing;
-                  return (
-                    <g key={idx}>
-                      <path
-                        d={`M${centerX},0 Q${centerX},25 ${x},25 L${x},50`}
-                        stroke="#f59e0b"
-                        strokeWidth="2.5"
-                        fill="none"
-                        strokeLinecap="round"
-                        opacity="0.8"
-                      />
-                      <circle cx={x} cy="50" r="3" fill="#f59e0b" />
-                    </g>
-                  );
-                })}
-              </svg>
+              />
             )}
-            
-            <div className="flex gap-4 pt-12">
-              {node.children.map((child, idx) => (
+            <div className="flex gap-2 pt-0">
+              {node.children.map((child) => (
                 <div key={child.id} className="flex flex-col items-center">
-                  {node.children.length === 1 && (
-                    <svg width="24" height="30" className="overflow-visible">
-                      <path d="M12,0 L12,30" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                      <circle cx="12" cy="30" r="3" fill="#f59e0b" />
-                    </svg>
-                  )}
+                  <div className="w-0.5 h-6 bg-amber-400" />
                   <OrgNode
                     node={child}
                     scale={scale}
@@ -529,23 +600,33 @@ function RoleFormDialog({
   onSave: (data: any) => void;
   isLoading: boolean;
 }) {
-  const initialParentId = role?.parentId?.toString() || parentId?.toString() || "";
-  const [formData, setFormData] = useState({
-    slug: role?.slug || "",
-    titleAr: role?.titleAr || "",
-    titleEn: role?.titleEn || "",
-    summaryAr: role?.summaryAr || "",
-    summaryEn: role?.summaryEn || "",
-    parentId: initialParentId,
-    level: role?.level?.toString() || "1",
-    orderIndex: role?.orderIndex?.toString() || "0",
-    icon: role?.icon || "user",
-    color: role?.color || "bg-amber-500",
-    responsibilitiesAr: ((role?.responsibilitiesAr as string[]) || []).join("\n"),
-    responsibilitiesEn: ((role?.responsibilitiesEn as string[]) || []).join("\n"),
-    qualificationsAr: ((role?.qualificationsAr as string[]) || []).join("\n"),
-    qualificationsEn: ((role?.qualificationsEn as string[]) || []).join("\n"),
-  });
+  const getInitialFormData = useCallback(() => {
+    const initialParentId = role?.parentId?.toString() || parentId?.toString() || "";
+    return {
+      slug: role?.slug || "",
+      titleAr: role?.titleAr || "",
+      titleEn: role?.titleEn || "",
+      summaryAr: role?.summaryAr || "",
+      summaryEn: role?.summaryEn || "",
+      parentId: initialParentId,
+      level: role?.level?.toString() || "1",
+      orderIndex: role?.orderIndex?.toString() || "0",
+      icon: role?.icon || "user",
+      color: role?.color || "bg-amber-500",
+      responsibilitiesAr: ((role?.responsibilitiesAr as string[]) || []).join("\n"),
+      responsibilitiesEn: ((role?.responsibilitiesEn as string[]) || []).join("\n"),
+      qualificationsAr: ((role?.qualificationsAr as string[]) || []).join("\n"),
+      qualificationsEn: ((role?.qualificationsEn as string[]) || []).join("\n"),
+    };
+  }, [role, parentId]);
+
+  const [formData, setFormData] = useState(getInitialFormData);
+
+  useEffect(() => {
+    if (open) {
+      setFormData(getInitialFormData());
+    }
+  }, [open, getInitialFormData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -996,33 +1077,25 @@ export default function OrganizationalStructurePage() {
               </Card>
             ) : (
               <Card className="bg-white/60 backdrop-blur shadow-xl border-0 overflow-hidden" data-testid="card-hierarchy">
-                <CardHeader className="bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4">
+                <CardHeader className="bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3">
                   <CardTitle className="flex items-center justify-between">
-                    <span className="flex items-center gap-3 text-lg">
-                      <Crown className="h-6 w-6" />
+                    <span className="flex items-center gap-2 text-base">
+                      <Crown className="h-5 w-5" />
                       التسلسل الهرمي الوظيفي
                     </span>
-                    <Badge className="bg-white/20 text-white border-white/30 text-sm">
+                    <Badge className="bg-white/20 text-white border-white/30 text-xs">
                       {roles.length} وظيفة
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-8 overflow-x-auto">
-                  <div className="flex justify-center min-w-max py-4">
-                    {tree.map((node) => (
-                      <OrgNode
-                        key={node.id}
-                        node={node}
-                        scale={scale}
-                        collapsedNodes={collapsedNodes}
-                        onToggleCollapse={toggleCollapse}
-                        onView={setSelectedRole}
-                        onEdit={handleEdit}
-                        onDelete={setDeleteConfirm}
-                        onAddChild={handleAddChild}
-                      />
-                    ))}
-                  </div>
+                <CardContent className="p-4 overflow-x-auto">
+                  <HorizontalOrgChart
+                    roles={roles}
+                    onView={setSelectedRole}
+                    onEdit={handleEdit}
+                    onDelete={setDeleteConfirm}
+                    onAddChild={handleAddChild}
+                  />
                 </CardContent>
               </Card>
             )}
