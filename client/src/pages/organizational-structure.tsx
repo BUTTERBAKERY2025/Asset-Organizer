@@ -64,10 +64,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { OrgJobRole } from "@shared/schema";
 
-const NODE_WIDTH = 100;
-const NODE_HEIGHT = 120;
-const HORIZONTAL_GAP = 40;
-const VERTICAL_GAP = 80;
+const NODE_WIDTH = 160;
+const NODE_HEIGHT = 80;
+const HORIZONTAL_GAP = 30;
+const VERTICAL_GAP = 60;
 
 interface TreeNode extends OrgJobRole {
   children: TreeNode[];
@@ -145,7 +145,7 @@ function layoutTree(
       const childY = nodeY + NODE_HEIGHT + VERTICAL_GAP;
 
       edges.push({
-        from: { x: nodeX, y: nodeY + NODE_HEIGHT / 2 + 30 },
+        from: { x: nodeX, y: nodeY + NODE_HEIGHT },
         to: { x: childCenterX, y: childY },
       });
 
@@ -258,26 +258,32 @@ function OrgNode({
   onDelete: (role: OrgJobRole) => void;
   onAddChild: (parentId: number) => void;
 }) {
-  const getGradient = (color: string) => {
-    const colorMap: Record<string, { from: string; to: string; ring: string }> = {
-      "bg-green-400": { from: "#34d399", to: "#059669", ring: "#10b981" },
-      "bg-teal-400": { from: "#2dd4bf", to: "#0d9488", ring: "#14b8a6" },
-      "bg-cyan-400": { from: "#22d3ee", to: "#0891b2", ring: "#06b6d4" },
-      "bg-blue-400": { from: "#60a5fa", to: "#2563eb", ring: "#3b82f6" },
-      "bg-indigo-400": { from: "#818cf8", to: "#4f46e5", ring: "#6366f1" },
-      "bg-purple-400": { from: "#c084fc", to: "#9333ea", ring: "#a855f7" },
-      "bg-amber-500": { from: "#fbbf24", to: "#d97706", ring: "#f59e0b" },
-      "bg-amber-400": { from: "#fcd34d", to: "#f59e0b", ring: "#fbbf24" },
-      "bg-orange-400": { from: "#fb923c", to: "#ea580c", ring: "#f97316" },
+  const getColors = (color: string) => {
+    const colorMap: Record<string, { bg: string; border: string; icon: string }> = {
+      "bg-green-400": { bg: "bg-green-50", border: "border-green-400", icon: "text-green-600" },
+      "bg-teal-400": { bg: "bg-teal-50", border: "border-teal-400", icon: "text-teal-600" },
+      "bg-cyan-400": { bg: "bg-cyan-50", border: "border-cyan-400", icon: "text-cyan-600" },
+      "bg-blue-400": { bg: "bg-blue-50", border: "border-blue-400", icon: "text-blue-600" },
+      "bg-indigo-400": { bg: "bg-indigo-50", border: "border-indigo-400", icon: "text-indigo-600" },
+      "bg-purple-400": { bg: "bg-purple-50", border: "border-purple-400", icon: "text-purple-600" },
+      "bg-amber-500": { bg: "bg-amber-50", border: "border-amber-500", icon: "text-amber-600" },
+      "bg-amber-400": { bg: "bg-amber-50", border: "border-amber-400", icon: "text-amber-600" },
+      "bg-orange-400": { bg: "bg-orange-50", border: "border-orange-400", icon: "text-orange-600" },
+      "bg-yellow-400": { bg: "bg-yellow-50", border: "border-yellow-400", icon: "text-yellow-600" },
+      "bg-lime-400": { bg: "bg-lime-50", border: "border-lime-400", icon: "text-lime-600" },
+      "bg-pink-400": { bg: "bg-pink-50", border: "border-pink-400", icon: "text-pink-600" },
+      "bg-gray-400": { bg: "bg-gray-50", border: "border-gray-400", icon: "text-gray-600" },
+      "bg-amber-600": { bg: "bg-amber-50", border: "border-amber-600", icon: "text-amber-700" },
+      "bg-orange-500": { bg: "bg-orange-50", border: "border-orange-500", icon: "text-orange-600" },
     };
     return colorMap[color] || colorMap["bg-green-400"];
   };
 
-  const colors = getGradient(node.color || "bg-green-400");
+  const colors = getColors(node.color || "bg-green-400");
 
   return (
     <div
-      className="absolute flex flex-col items-center"
+      className="absolute"
       style={{
         left: x - NODE_WIDTH / 2,
         top: y,
@@ -288,15 +294,23 @@ function OrgNode({
     >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="focus:outline-none group">
+          <button className="focus:outline-none w-full">
             <div
-              className="relative w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg"
-              style={{
-                background: `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
-                boxShadow: `0 0 0 4px white, 0 0 0 6px ${colors.ring}`,
-              }}
+              className={`${colors.bg} ${colors.border} border-2 rounded-xl p-3 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg shadow-md`}
+              style={{ height: NODE_HEIGHT }}
             >
-              <User className="h-7 w-7 text-white" />
+              <div className="flex items-center gap-2 h-full">
+                <div className={`w-10 h-10 rounded-lg ${colors.border} border flex items-center justify-center ${colors.icon} flex-shrink-0`}>
+                  <User className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0 text-right">
+                  <p className="font-bold text-gray-800 text-[11px] leading-tight truncate">{node.titleAr}</p>
+                  <p className="text-[9px] text-gray-500 truncate mt-0.5" dir="ltr">{node.titleEn}</p>
+                  <Badge variant="outline" className="text-[8px] px-1 py-0 mt-1 h-4">
+                    المستوى {node.level}
+                  </Badge>
+                </div>
+              </div>
             </div>
           </button>
         </DropdownMenuTrigger>
@@ -315,11 +329,6 @@ function OrgNode({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <div className="mt-2 text-center">
-        <p className="font-bold text-gray-800 text-xs leading-tight">{node.titleAr}</p>
-        <p className="text-[10px] text-gray-500" dir="ltr">{node.titleEn}</p>
-      </div>
     </div>
   );
 }
