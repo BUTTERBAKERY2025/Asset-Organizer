@@ -319,11 +319,21 @@ export default function BranchEmployeesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/branch-employees/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("فشل في حذف الموظف");
+      const res = await fetch(`/api/branch-employees/${id}`, { 
+        method: "DELETE",
+        credentials: "include"
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "فشل في حذف الموظف");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      alert("تم حذف الموظف بنجاح");
+    },
+    onError: (error: Error) => {
+      alert(error.message || "فشل في حذف الموظف");
     },
   });
 
