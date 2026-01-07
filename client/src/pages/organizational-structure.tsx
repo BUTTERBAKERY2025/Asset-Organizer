@@ -64,54 +64,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { OrgJobRole } from "@shared/schema";
 
-const ICON_MAP: Record<string, React.ReactNode> = {
-  crown: <Crown className="h-6 w-6" />,
-  star: <Star className="h-6 w-6" />,
-  building: <Building2 className="h-6 w-6" />,
-  users: <Users className="h-6 w-6" />,
-  clipboard: <ClipboardList className="h-6 w-6" />,
-  "user-circle": <UserCircle className="h-6 w-6" />,
-  utensils: <Utensils className="h-6 w-6" />,
-  "shopping-cart": <ShoppingCart className="h-6 w-6" />,
-  coffee: <Coffee className="h-6 w-6" />,
-  "clipboard-list": <ClipboardList className="h-6 w-6" />,
-  "chef-hat": <ChefHat className="h-6 w-6" />,
-  wrench: <Wrench className="h-6 w-6" />,
-  user: <User className="h-6 w-6" />,
-};
-
-const COLOR_OPTIONS = [
-  { value: "bg-amber-500", label: "ذهبي", gradient: "from-amber-400 to-amber-600", ring: "ring-amber-400", border: "border-amber-400" },
-  { value: "bg-amber-400", label: "ذهبي فاتح", gradient: "from-amber-300 to-amber-500", ring: "ring-amber-300", border: "border-amber-300" },
-  { value: "bg-orange-400", label: "برتقالي", gradient: "from-orange-300 to-orange-500", ring: "ring-orange-300", border: "border-orange-300" },
-  { value: "bg-yellow-400", label: "أصفر", gradient: "from-yellow-300 to-yellow-500", ring: "ring-yellow-300", border: "border-yellow-300" },
-  { value: "bg-lime-400", label: "ليموني", gradient: "from-lime-300 to-lime-500", ring: "ring-lime-300", border: "border-lime-300" },
-  { value: "bg-green-400", label: "أخضر", gradient: "from-green-400 to-green-600", ring: "ring-green-400", border: "border-green-400" },
-  { value: "bg-teal-400", label: "فيروزي", gradient: "from-teal-300 to-teal-500", ring: "ring-teal-300", border: "border-teal-300" },
-  { value: "bg-cyan-400", label: "سماوي", gradient: "from-cyan-300 to-cyan-500", ring: "ring-cyan-300", border: "border-cyan-300" },
-  { value: "bg-blue-400", label: "أزرق", gradient: "from-blue-400 to-blue-600", ring: "ring-blue-400", border: "border-blue-400" },
-  { value: "bg-indigo-400", label: "نيلي", gradient: "from-indigo-300 to-indigo-500", ring: "ring-indigo-300", border: "border-indigo-300" },
-  { value: "bg-purple-400", label: "بنفسجي", gradient: "from-purple-400 to-purple-600", ring: "ring-purple-400", border: "border-purple-400" },
-  { value: "bg-pink-400", label: "وردي", gradient: "from-pink-300 to-pink-500", ring: "ring-pink-300", border: "border-pink-300" },
-  { value: "bg-gray-400", label: "رمادي", gradient: "from-gray-400 to-gray-600", ring: "ring-gray-400", border: "border-gray-400" },
-];
-
-const ICON_OPTIONS = [
-  { value: "crown", label: "تاج" },
-  { value: "star", label: "نجمة" },
-  { value: "building", label: "مبنى" },
-  { value: "users", label: "مجموعة" },
-  { value: "clipboard", label: "قائمة" },
-  { value: "user-circle", label: "مستخدم" },
-  { value: "utensils", label: "أدوات طعام" },
-  { value: "shopping-cart", label: "سلة" },
-  { value: "coffee", label: "قهوة" },
-  { value: "chef-hat", label: "طاقية شيف" },
-  { value: "wrench", label: "مفتاح" },
-];
+const NODE_WIDTH = 100;
+const NODE_HEIGHT = 120;
+const HORIZONTAL_GAP = 40;
+const VERTICAL_GAP = 80;
 
 interface TreeNode extends OrgJobRole {
   children: TreeNode[];
+  x?: number;
+  y?: number;
+  width?: number;
+}
+
+interface LayoutNode {
+  node: TreeNode;
+  x: number;
+  y: number;
+}
+
+interface Edge {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
 }
 
 function buildTree(roles: OrgJobRole[]): TreeNode[] {
@@ -140,161 +113,212 @@ function buildTree(roles: OrgJobRole[]): TreeNode[] {
   return roots;
 }
 
-function CircularNode({
-  node,
-  onView,
-  onEdit,
-  onDelete,
-  onAddChild,
-}: {
-  node: TreeNode;
-  onView: (role: OrgJobRole) => void;
-  onEdit: (role: OrgJobRole) => void;
-  onDelete: (role: OrgJobRole) => void;
-  onAddChild: (parentId: number) => void;
-}) {
-  const colorInfo = COLOR_OPTIONS.find(c => c.value === node.color) || COLOR_OPTIONS[0];
-  
-  return (
-    <div className="flex flex-col items-center group" data-testid={`node-${node.slug}`}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="focus:outline-none">
-            <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-lg ring-4 ${colorInfo.ring} ring-opacity-30 hover:ring-opacity-60 transition-all duration-200 cursor-pointer hover:scale-110`}>
-              {ICON_MAP[node.icon || "user"]}
-            </div>
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="w-40">
-          <DropdownMenuItem onClick={() => onView(node)} className="text-xs" data-testid={`view-${node.slug}`}>
-            <Eye className="h-3 w-3 ml-2" /> عرض التفاصيل
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs" data-testid={`edit-${node.slug}`}>
-            <Edit className="h-3 w-3 ml-2" /> تعديل
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs" data-testid={`add-child-${node.slug}`}>
-            <Plus className="h-3 w-3 ml-2" /> إضافة تابع
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs text-red-600" data-testid={`delete-${node.slug}`}>
-            <Trash2 className="h-3 w-3 ml-2" /> حذف
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <div className="mt-2 text-center max-w-[100px]">
-        <p className="font-bold text-gray-800 text-xs leading-tight truncate">{node.titleAr}</p>
-        <p className="text-[10px] text-gray-500 truncate" dir="ltr">{node.titleEn}</p>
-      </div>
-    </div>
+function computeSubtreeWidth(node: TreeNode): number {
+  if (node.children.length === 0) {
+    return NODE_WIDTH;
+  }
+  const childrenWidth = node.children.reduce(
+    (sum, child) => sum + computeSubtreeWidth(child) + HORIZONTAL_GAP,
+    -HORIZONTAL_GAP
   );
+  return Math.max(NODE_WIDTH, childrenWidth);
 }
 
-function TreeBranch({
-  node,
-  onView,
-  onEdit,
-  onDelete,
-  onAddChild,
-  isRoot = false,
-}: {
-  node: TreeNode;
-  onView: (role: OrgJobRole) => void;
-  onEdit: (role: OrgJobRole) => void;
-  onDelete: (role: OrgJobRole) => void;
-  onAddChild: (parentId: number) => void;
-  isRoot?: boolean;
-}) {
-  const hasChildren = node.children.length > 0;
-  const colorInfo = COLOR_OPTIONS.find(c => c.value === node.color) || COLOR_OPTIONS[0];
+function layoutTree(
+  node: TreeNode,
+  x: number,
+  y: number,
+  nodes: LayoutNode[],
+  edges: Edge[]
+): number {
+  const subtreeWidth = computeSubtreeWidth(node);
+  const nodeX = x + subtreeWidth / 2;
+  const nodeY = y;
 
-  return (
-    <div className="flex flex-col items-center">
-      <CircularNode
-        node={node}
-        onView={onView}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onAddChild={onAddChild}
-      />
-      
-      {hasChildren && (
-        <>
-          <svg width="4" height="30" className="overflow-visible">
-            <line x1="2" y1="0" x2="2" y2="30" stroke="#10b981" strokeWidth="2" />
-          </svg>
-          
-          <div className="relative">
-            {node.children.length > 1 && (
-              <svg 
-                className="absolute overflow-visible" 
-                style={{ 
-                  top: 0, 
-                  left: "50%", 
-                  transform: "translateX(-50%)",
-                  width: `${(node.children.length - 1) * 120 + 20}px`,
-                  height: "2px"
-                }}
-              >
-                <line 
-                  x1="10" 
-                  y1="1" 
-                  x2={`${(node.children.length - 1) * 120 + 10}`} 
-                  y2="1" 
-                  stroke="#10b981" 
-                  strokeWidth="2" 
-                />
-              </svg>
-            )}
-            
-            <div className="flex gap-8 pt-0">
-              {node.children.map((child) => (
-                <div key={child.id} className="flex flex-col items-center">
-                  <svg width="4" height="25" className="overflow-visible">
-                    <line x1="2" y1="0" x2="2" y2="25" stroke="#10b981" strokeWidth="2" />
-                  </svg>
-                  <TreeBranch
-                    node={child}
-                    onView={onView}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    onAddChild={onAddChild}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
+  nodes.push({ node, x: nodeX, y: nodeY });
+
+  if (node.children.length > 0) {
+    let childX = x;
+    node.children.forEach((child) => {
+      const childWidth = computeSubtreeWidth(child);
+      const childCenterX = childX + childWidth / 2;
+      const childY = nodeY + NODE_HEIGHT + VERTICAL_GAP;
+
+      edges.push({
+        from: { x: nodeX, y: nodeY + NODE_HEIGHT / 2 + 30 },
+        to: { x: childCenterX, y: childY },
+      });
+
+      layoutTree(child, childX, childY, nodes, edges);
+      childX += childWidth + HORIZONTAL_GAP;
+    });
+  }
+
+  return subtreeWidth;
 }
 
-function VerticalOrgChart({
+function computeLayout(tree: TreeNode[]): { nodes: LayoutNode[]; edges: Edge[]; width: number; height: number } {
+  const nodes: LayoutNode[] = [];
+  const edges: Edge[] = [];
+  let x = 50;
+  let maxHeight = 0;
+
+  tree.forEach((root) => {
+    const width = layoutTree(root, x, 50, nodes, edges);
+    x += width + HORIZONTAL_GAP * 2;
+  });
+
+  nodes.forEach((n) => {
+    maxHeight = Math.max(maxHeight, n.y + NODE_HEIGHT + 50);
+  });
+
+  return { nodes, edges, width: x, height: maxHeight };
+}
+
+function OrgChartSVG({
   tree,
+  scale,
   onView,
   onEdit,
   onDelete,
   onAddChild,
 }: {
   tree: TreeNode[];
+  scale: number;
   onView: (role: OrgJobRole) => void;
   onEdit: (role: OrgJobRole) => void;
   onDelete: (role: OrgJobRole) => void;
   onAddChild: (parentId: number) => void;
 }) {
+  const { nodes, edges, width, height } = useMemo(() => computeLayout(tree), [tree]);
+
   return (
-    <div className="w-full overflow-x-auto py-8">
-      <div className="flex justify-center gap-16 min-w-max">
-        {tree.map((node) => (
-          <TreeBranch
-            key={node.id}
-            node={node}
-            onView={onView}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onAddChild={onAddChild}
-            isRoot
-          />
-        ))}
+    <div 
+      className="relative overflow-auto"
+      style={{ 
+        transform: `scale(${scale})`, 
+        transformOrigin: "top center",
+        minHeight: height,
+      }}
+    >
+      <svg
+        width={width}
+        height={height}
+        className="absolute top-0 left-0"
+        style={{ zIndex: 0 }}
+      >
+        {edges.map((edge, idx) => {
+          const midY = (edge.from.y + edge.to.y) / 2;
+          return (
+            <path
+              key={idx}
+              d={`M ${edge.from.x} ${edge.from.y} 
+                  C ${edge.from.x} ${midY}, 
+                    ${edge.to.x} ${midY}, 
+                    ${edge.to.x} ${edge.to.y}`}
+              stroke="#10b981"
+              strokeWidth="2.5"
+              fill="none"
+              strokeLinecap="round"
+            />
+          );
+        })}
+      </svg>
+
+      {nodes.map(({ node, x, y }) => (
+        <OrgNode
+          key={node.id}
+          node={node}
+          x={x}
+          y={y}
+          onView={onView}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onAddChild={onAddChild}
+        />
+      ))}
+    </div>
+  );
+}
+
+function OrgNode({
+  node,
+  x,
+  y,
+  onView,
+  onEdit,
+  onDelete,
+  onAddChild,
+}: {
+  node: TreeNode;
+  x: number;
+  y: number;
+  onView: (role: OrgJobRole) => void;
+  onEdit: (role: OrgJobRole) => void;
+  onDelete: (role: OrgJobRole) => void;
+  onAddChild: (parentId: number) => void;
+}) {
+  const getGradient = (color: string) => {
+    const colorMap: Record<string, { from: string; to: string; ring: string }> = {
+      "bg-green-400": { from: "#34d399", to: "#059669", ring: "#10b981" },
+      "bg-teal-400": { from: "#2dd4bf", to: "#0d9488", ring: "#14b8a6" },
+      "bg-cyan-400": { from: "#22d3ee", to: "#0891b2", ring: "#06b6d4" },
+      "bg-blue-400": { from: "#60a5fa", to: "#2563eb", ring: "#3b82f6" },
+      "bg-indigo-400": { from: "#818cf8", to: "#4f46e5", ring: "#6366f1" },
+      "bg-purple-400": { from: "#c084fc", to: "#9333ea", ring: "#a855f7" },
+      "bg-amber-500": { from: "#fbbf24", to: "#d97706", ring: "#f59e0b" },
+      "bg-amber-400": { from: "#fcd34d", to: "#f59e0b", ring: "#fbbf24" },
+      "bg-orange-400": { from: "#fb923c", to: "#ea580c", ring: "#f97316" },
+    };
+    return colorMap[color] || colorMap["bg-green-400"];
+  };
+
+  const colors = getGradient(node.color || "bg-green-400");
+
+  return (
+    <div
+      className="absolute flex flex-col items-center"
+      style={{
+        left: x - NODE_WIDTH / 2,
+        top: y,
+        width: NODE_WIDTH,
+        zIndex: 1,
+      }}
+      data-testid={`node-${node.slug}`}
+    >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="focus:outline-none group">
+            <div
+              className="relative w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg"
+              style={{
+                background: `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
+                boxShadow: `0 0 0 4px white, 0 0 0 6px ${colors.ring}`,
+              }}
+            >
+              <User className="h-7 w-7 text-white" />
+            </div>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="w-40">
+          <DropdownMenuItem onClick={() => onView(node)} className="text-xs gap-2" data-testid={`view-${node.slug}`}>
+            <Eye className="h-3 w-3" /> عرض التفاصيل
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs gap-2" data-testid={`edit-${node.slug}`}>
+            <Edit className="h-3 w-3" /> تعديل
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs gap-2" data-testid={`add-child-${node.slug}`}>
+            <Plus className="h-3 w-3" /> إضافة تابع
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs gap-2 text-red-600" data-testid={`delete-${node.slug}`}>
+            <Trash2 className="h-3 w-3" /> حذف
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <div className="mt-2 text-center">
+        <p className="font-bold text-gray-800 text-xs leading-tight">{node.titleAr}</p>
+        <p className="text-[10px] text-gray-500" dir="ltr">{node.titleEn}</p>
       </div>
     </div>
   );
@@ -315,15 +339,14 @@ function RoleDetailsDialog({
   const responsibilitiesEn = (role.responsibilitiesEn as string[]) || [];
   const qualificationsAr = (role.qualificationsAr as string[]) || [];
   const qualificationsEn = (role.qualificationsEn as string[]) || [];
-  const colorInfo = COLOR_OPTIONS.find(c => c.value === role.color) || COLOR_OPTIONS[0];
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader className="pb-4 border-b">
           <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-lg ring-4 ${colorInfo.ring} ring-opacity-30`}>
-              {ICON_MAP[role.icon || "user"]}
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center text-white shadow-lg ring-4 ring-green-200">
+              <User className="h-7 w-7" />
             </div>
             <div>
               <DialogTitle className="text-xl mb-1">{role.titleAr}</DialogTitle>
@@ -337,25 +360,25 @@ function RoleDetailsDialog({
 
         <Tabs defaultValue="arabic" className="mt-4">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="arabic" data-testid="tab-arabic">العربية</TabsTrigger>
-            <TabsTrigger value="english" data-testid="tab-english">English</TabsTrigger>
+            <TabsTrigger value="arabic">العربية</TabsTrigger>
+            <TabsTrigger value="english">English</TabsTrigger>
           </TabsList>
 
           <TabsContent value="arabic" className="space-y-4 mt-4">
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-100">
-              <p className="text-gray-700 leading-relaxed">{role.summaryAr}</p>
+            <div className="bg-gradient-to-r from-green-50 to-teal-50 p-4 rounded-xl border border-green-100">
+              <p className="text-gray-700 leading-relaxed text-sm">{role.summaryAr}</p>
             </div>
             
             {responsibilitiesAr.length > 0 && (
               <div>
-                <h4 className="font-bold text-amber-700 mb-3 flex items-center gap-2">
+                <h4 className="font-bold text-green-700 mb-3 flex items-center gap-2 text-sm">
                   <ClipboardList className="h-4 w-4" />
                   المهام والمسؤوليات
                 </h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-40 overflow-y-auto">
                   {responsibilitiesAr.map((item, idx) => (
-                    <div key={idx} className="flex items-start gap-3 bg-white p-2 rounded-lg border border-gray-100">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] flex items-center justify-center font-bold">
+                    <div key={idx} className="flex items-start gap-2 bg-white p-2 rounded-lg border border-gray-100">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 text-[10px] flex items-center justify-center font-bold">
                         {idx + 1}
                       </span>
                       <span className="text-xs text-gray-700">{item}</span>
@@ -367,13 +390,13 @@ function RoleDetailsDialog({
             
             {qualificationsAr.length > 0 && (
               <div>
-                <h4 className="font-bold text-amber-700 mb-3 flex items-center gap-2">
+                <h4 className="font-bold text-green-700 mb-2 flex items-center gap-2 text-sm">
                   <Star className="h-4 w-4" />
-                  المؤهلات المطلوبة
+                  المؤهلات
                 </h4>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1">
                   {qualificationsAr.map((item, idx) => (
-                    <Badge key={idx} variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                    <Badge key={idx} variant="secondary" className="bg-green-50 text-green-700 border-green-200 text-xs">
                       {item}
                     </Badge>
                   ))}
@@ -383,20 +406,20 @@ function RoleDetailsDialog({
           </TabsContent>
 
           <TabsContent value="english" className="space-y-4 mt-4">
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-100">
-              <p className="text-gray-700 leading-relaxed" dir="ltr">{role.summaryEn}</p>
+            <div className="bg-gradient-to-r from-green-50 to-teal-50 p-4 rounded-xl border border-green-100">
+              <p className="text-gray-700 leading-relaxed text-sm" dir="ltr">{role.summaryEn}</p>
             </div>
             
             {responsibilitiesEn.length > 0 && (
               <div>
-                <h4 className="font-bold text-amber-700 mb-3 flex items-center gap-2">
+                <h4 className="font-bold text-green-700 mb-3 flex items-center gap-2 text-sm">
                   <ClipboardList className="h-4 w-4" />
                   Responsibilities
                 </h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-40 overflow-y-auto">
                   {responsibilitiesEn.map((item, idx) => (
-                    <div key={idx} className="flex items-start gap-3 bg-white p-2 rounded-lg border border-gray-100" dir="ltr">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] flex items-center justify-center font-bold">
+                    <div key={idx} className="flex items-start gap-2 bg-white p-2 rounded-lg border border-gray-100" dir="ltr">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 text-[10px] flex items-center justify-center font-bold">
                         {idx + 1}
                       </span>
                       <span className="text-xs text-gray-700">{item}</span>
@@ -408,13 +431,13 @@ function RoleDetailsDialog({
             
             {qualificationsEn.length > 0 && (
               <div>
-                <h4 className="font-bold text-amber-700 mb-3 flex items-center gap-2">
+                <h4 className="font-bold text-green-700 mb-2 flex items-center gap-2 text-sm">
                   <Star className="h-4 w-4" />
                   Qualifications
                 </h4>
-                <div className="flex flex-wrap gap-2" dir="ltr">
+                <div className="flex flex-wrap gap-1" dir="ltr">
                   {qualificationsEn.map((item, idx) => (
-                    <Badge key={idx} variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                    <Badge key={idx} variant="secondary" className="bg-green-50 text-green-700 border-green-200 text-xs">
                       {item}
                     </Badge>
                   ))}
@@ -424,14 +447,14 @@ function RoleDetailsDialog({
           </TabsContent>
         </Tabs>
 
-        <div className="mt-6 pt-4 border-t flex justify-between items-center">
+        <div className="mt-4 pt-4 border-t flex justify-between items-center">
           <Link href={`/branch-employees?jobTitle=${encodeURIComponent(role.titleAr)}`}>
-            <Button variant="outline" className="gap-2 text-sm" data-testid="btn-view-employees">
+            <Button variant="outline" size="sm" className="gap-2">
               <Users className="h-4 w-4" />
               عرض الموظفين
             </Button>
           </Link>
-          <Button onClick={onClose} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-close-dialog">
+          <Button onClick={onClose} size="sm" className="bg-green-600 hover:bg-green-700">
             إغلاق
           </Button>
         </div>
@@ -505,17 +528,27 @@ function RoleFormDialog({
     });
   };
 
+  const colorOptions = [
+    { value: "bg-green-400", label: "أخضر", gradient: "from-green-400 to-green-600" },
+    { value: "bg-teal-400", label: "فيروزي", gradient: "from-teal-400 to-teal-600" },
+    { value: "bg-cyan-400", label: "سماوي", gradient: "from-cyan-400 to-cyan-600" },
+    { value: "bg-blue-400", label: "أزرق", gradient: "from-blue-400 to-blue-600" },
+    { value: "bg-indigo-400", label: "نيلي", gradient: "from-indigo-400 to-indigo-600" },
+    { value: "bg-purple-400", label: "بنفسجي", gradient: "from-purple-400 to-purple-600" },
+    { value: "bg-amber-500", label: "ذهبي", gradient: "from-amber-400 to-amber-600" },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">
+          <DialogTitle>
             {role ? "تعديل الوظيفة" : parentId ? "إضافة وظيفة تابعة" : "إضافة وظيفة جديدة"}
           </DialogTitle>
-          <DialogDescription>أدخل بيانات الوظيفة بالعربية والإنجليزية</DialogDescription>
+          <DialogDescription>أدخل بيانات الوظيفة</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
@@ -532,7 +565,6 @@ function RoleFormDialog({
                     onChange={(e) => setFormData({ ...formData, titleAr: e.target.value })}
                     placeholder="مدير الفرع"
                     required
-                    data-testid="input-title-ar"
                   />
                 </div>
                 <div className="space-y-2">
@@ -543,7 +575,6 @@ function RoleFormDialog({
                     placeholder="Branch Manager"
                     required
                     dir="ltr"
-                    data-testid="input-title-en"
                   />
                 </div>
               </div>
@@ -554,9 +585,8 @@ function RoleFormDialog({
                   <Textarea
                     value={formData.summaryAr}
                     onChange={(e) => setFormData({ ...formData, summaryAr: e.target.value })}
-                    placeholder="وصف مختصر للوظيفة"
-                    rows={3}
-                    data-testid="input-summary-ar"
+                    placeholder="وصف الوظيفة"
+                    rows={2}
                   />
                 </div>
                 <div className="space-y-2">
@@ -564,26 +594,25 @@ function RoleFormDialog({
                   <Textarea
                     value={formData.summaryEn}
                     onChange={(e) => setFormData({ ...formData, summaryEn: e.target.value })}
-                    placeholder="Brief job description"
-                    rows={3}
+                    placeholder="Job description"
+                    rows={2}
                     dir="ltr"
-                    data-testid="input-summary-en"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>الوظيفة الأعلى</Label>
                   <Select
                     value={formData.parentId}
                     onValueChange={(v) => setFormData({ ...formData, parentId: v })}
                   >
-                    <SelectTrigger data-testid="select-parent">
+                    <SelectTrigger>
                       <SelectValue placeholder="بدون" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">بدون (أعلى مستوى)</SelectItem>
+                      <SelectItem value="">بدون</SelectItem>
                       {roles.filter(r => r.id !== role?.id).map((r) => (
                         <SelectItem key={r.id} value={r.id.toString()}>{r.titleAr}</SelectItem>
                       ))}
@@ -598,26 +627,7 @@ function RoleFormDialog({
                     onChange={(e) => setFormData({ ...formData, level: e.target.value })}
                     min="1"
                     max="10"
-                    data-testid="input-level"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label>الأيقونة</Label>
-                  <Select
-                    value={formData.icon}
-                    onValueChange={(v) => setFormData({ ...formData, icon: v })}
-                  >
-                    <SelectTrigger data-testid="select-icon">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ICON_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          <span className="flex items-center gap-2">{opt.label}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>اللون</Label>
@@ -625,11 +635,11 @@ function RoleFormDialog({
                     value={formData.color}
                     onValueChange={(v) => setFormData({ ...formData, color: v })}
                   >
-                    <SelectTrigger data-testid="select-color">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {COLOR_OPTIONS.map((opt) => (
+                      {colorOptions.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           <span className="flex items-center gap-2">
                             <span className={`w-4 h-4 rounded-full bg-gradient-to-br ${opt.gradient}`} />
@@ -650,20 +660,16 @@ function RoleFormDialog({
                   <Textarea
                     value={formData.responsibilitiesAr}
                     onChange={(e) => setFormData({ ...formData, responsibilitiesAr: e.target.value })}
-                    placeholder="إدارة العمليات اليومية&#10;تحقيق أهداف المبيعات&#10;إدارة فريق العمل"
                     rows={8}
-                    data-testid="input-resp-ar"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Responsibilities (English) - one per line</Label>
+                  <Label>Responsibilities (English)</Label>
                   <Textarea
                     value={formData.responsibilitiesEn}
                     onChange={(e) => setFormData({ ...formData, responsibilitiesEn: e.target.value })}
-                    placeholder="Manage daily operations&#10;Achieve sales targets&#10;Manage team"
                     rows={8}
                     dir="ltr"
-                    data-testid="input-resp-en"
                   />
                 </div>
               </div>
@@ -672,24 +678,20 @@ function RoleFormDialog({
             <TabsContent value="qualifications" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>المؤهلات (عربي) - سطر لكل مؤهل</Label>
+                  <Label>المؤهلات (عربي)</Label>
                   <Textarea
                     value={formData.qualificationsAr}
                     onChange={(e) => setFormData({ ...formData, qualificationsAr: e.target.value })}
-                    placeholder="خبرة 3 سنوات&#10;مهارات إدارية&#10;شهادة جامعية"
                     rows={6}
-                    data-testid="input-qual-ar"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Qualifications (English) - one per line</Label>
+                  <Label>Qualifications (English)</Label>
                   <Textarea
                     value={formData.qualificationsEn}
                     onChange={(e) => setFormData({ ...formData, qualificationsEn: e.target.value })}
-                    placeholder="3 years experience&#10;Management skills&#10;University degree"
                     rows={6}
                     dir="ltr"
-                    data-testid="input-qual-en"
                   />
                 </div>
               </div>
@@ -697,12 +699,12 @@ function RoleFormDialog({
           </Tabs>
 
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={onClose} data-testid="btn-cancel">
+            <Button type="button" variant="outline" onClick={onClose}>
               إلغاء
             </Button>
-            <Button type="submit" disabled={isLoading} className="bg-amber-600 hover:bg-amber-700 min-w-[120px]" data-testid="btn-save">
+            <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700 min-w-[100px]">
               {isLoading && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
-              {role ? "حفظ التعديلات" : "إضافة"}
+              {role ? "حفظ" : "إضافة"}
             </Button>
           </div>
         </form>
@@ -787,11 +789,10 @@ export default function OrganizationalStructurePage() {
       "المسمى الوظيفي": role.titleAr,
       "Job Title": role.titleEn,
       "الوصف": role.summaryAr,
-      "Description": role.summaryEn,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "الهيكل الوظيفي");
+    XLSX.utils.book_append_sheet(wb, ws, "الهيكل");
     XLSX.writeFile(wb, `الهيكل_الوظيفي_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
@@ -821,10 +822,6 @@ export default function OrganizationalStructurePage() {
     setIsFormOpen(true);
   };
 
-  const zoomIn = () => setScale(s => Math.min(s + 0.1, 1.5));
-  const zoomOut = () => setScale(s => Math.max(s - 0.1, 0.5));
-  const resetZoom = () => setScale(1);
-
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir="rtl">
@@ -832,14 +829,14 @@ export default function OrganizationalStructurePage() {
           <div className="flex items-center justify-between mb-6 print:hidden">
             <div className="flex items-center gap-4">
               <Link href="/branch-employees">
-                <Button variant="outline" size="sm" className="gap-2 shadow-sm" data-testid="btn-back">
+                <Button variant="outline" size="sm" className="gap-2">
                   <ArrowLeft className="h-4 w-4" />
                   العودة
                 </Button>
               </Link>
               <div>
                 <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <Network className="h-7 w-7 text-green-600" />
+                  <Network className="h-6 w-6 text-green-600" />
                   الهيكل الوظيفي
                 </h1>
                 <p className="text-sm text-gray-500">إدارة التشغيل - Butter Bakery</p>
@@ -850,7 +847,7 @@ export default function OrganizationalStructurePage() {
               <div className="flex items-center bg-white rounded-lg shadow-sm border p-1 gap-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={zoomOut} className="h-8 w-8 p-0" data-testid="btn-zoom-out">
+                    <Button variant="ghost" size="sm" onClick={() => setScale(s => Math.max(s - 0.1, 0.5))} className="h-8 w-8 p-0">
                       <ZoomOut className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -861,7 +858,7 @@ export default function OrganizationalStructurePage() {
                 </span>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={zoomIn} className="h-8 w-8 p-0" data-testid="btn-zoom-in">
+                    <Button variant="ghost" size="sm" onClick={() => setScale(s => Math.min(s + 0.1, 1.5))} className="h-8 w-8 p-0">
                       <ZoomIn className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -869,7 +866,7 @@ export default function OrganizationalStructurePage() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={resetZoom} className="h-8 w-8 p-0" data-testid="btn-reset-zoom">
+                    <Button variant="ghost" size="sm" onClick={() => setScale(1)} className="h-8 w-8 p-0">
                       <Maximize2 className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -877,15 +874,15 @@ export default function OrganizationalStructurePage() {
                 </Tooltip>
               </div>
 
-              <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2 shadow-sm" data-testid="btn-print">
+              <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2">
                 <Printer className="h-4 w-4" />
                 طباعة
               </Button>
-              <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2 shadow-sm" data-testid="btn-export">
+              <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
                 تصدير
               </Button>
-              <Button size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 shadow-sm" data-testid="btn-add">
+              <Button size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2">
                 <Plus className="h-4 w-4" />
                 إضافة وظيفة
               </Button>
@@ -901,24 +898,24 @@ export default function OrganizationalStructurePage() {
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24">
                 <Loader2 className="h-12 w-12 animate-spin text-green-600 mb-4" />
-                <p className="text-gray-500">جاري تحميل الهيكل الوظيفي...</p>
+                <p className="text-gray-500">جاري التحميل...</p>
               </div>
             ) : tree.length === 0 ? (
-              <Card className="text-center py-16 bg-white/80 backdrop-blur border-dashed border-2 border-gray-200">
+              <Card className="text-center py-16 bg-white/80 border-dashed border-2 border-gray-200">
                 <CardContent>
                   <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
                     <Network className="h-10 w-10 text-green-600" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-800 mb-2">لا توجد وظائف</h3>
-                  <p className="text-gray-500 mb-6">ابدأ بإضافة الوظيفة الأولى في الهيكل الوظيفي</p>
-                  <Button onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2" data-testid="btn-add-first">
+                  <p className="text-gray-500 mb-6">ابدأ بإضافة الوظيفة الأولى</p>
+                  <Button onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2">
                     <Plus className="h-4 w-4" />
                     إضافة أول وظيفة
                   </Button>
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-white/80 backdrop-blur shadow-xl border-0 overflow-hidden" data-testid="card-hierarchy">
+              <Card className="bg-white/80 backdrop-blur shadow-xl border-0 overflow-hidden">
                 <CardHeader className="bg-gradient-to-r from-green-500 to-teal-500 text-white py-3">
                   <CardTitle className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-base">
@@ -930,9 +927,10 @@ export default function OrganizationalStructurePage() {
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 overflow-x-auto" style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}>
-                  <VerticalOrgChart
+                <CardContent className="p-6 overflow-x-auto">
+                  <OrgChartSVG
                     tree={tree}
+                    scale={scale}
                     onView={setSelectedRole}
                     onEdit={handleEdit}
                     onDelete={setDeleteConfirm}
@@ -968,20 +966,16 @@ export default function OrganizationalStructurePage() {
                 </DialogTitle>
                 <DialogDescription className="pt-4">
                   هل أنت متأكد من حذف وظيفة <strong>"{deleteConfirm?.titleAr}"</strong>؟
-                  <br />
-                  <span className="text-red-500 text-sm">لا يمكن التراجع عن هذا الإجراء.</span>
                 </DialogDescription>
               </DialogHeader>
               <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => setDeleteConfirm(null)} data-testid="btn-cancel-delete">
+                <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
                   إلغاء
                 </Button>
                 <Button
                   variant="destructive"
                   onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
                   disabled={deleteMutation.isPending}
-                  className="min-w-[100px]"
-                  data-testid="btn-confirm-delete"
                 >
                   {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
                   حذف
