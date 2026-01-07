@@ -284,27 +284,74 @@ function OrgNode({
 
       {hasChildren && !isCollapsed && (
         <>
-          <div className="w-0.5 h-8 bg-gradient-to-b from-amber-400 to-amber-300" />
+          <svg width="24" height="40" className="overflow-visible">
+            <defs>
+              <linearGradient id={`grad-down-${node.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#fbbf24" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M12,0 L12,40"
+              stroke={`url(#grad-down-${node.id})`}
+              strokeWidth="3"
+              fill="none"
+              strokeLinecap="round"
+            />
+            <circle cx="12" cy="40" r="4" fill="#f59e0b" />
+          </svg>
           
           <div className="relative">
             {node.children.length > 1 && (
-              <div 
-                className="absolute top-0 h-0.5 bg-gradient-to-r from-amber-300 via-amber-400 to-amber-300"
-                style={{
-                  left: "50%",
-                  right: "50%",
-                  marginLeft: `-${(node.children.length - 1) * 100}px`,
-                  marginRight: `-${(node.children.length - 1) * 100}px`,
-                  width: `${(node.children.length - 1) * 200}px`,
+              <svg 
+                className="absolute overflow-visible" 
+                style={{ 
+                  top: 0, 
+                  left: "50%", 
                   transform: "translateX(-50%)",
+                  width: `${(node.children.length - 1) * 200 + 50}px`,
+                  height: "50px"
                 }}
-              />
+              >
+                <defs>
+                  <linearGradient id={`grad-h-${node.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#fcd34d" />
+                    <stop offset="50%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#fcd34d" />
+                  </linearGradient>
+                </defs>
+                {node.children.map((_, idx) => {
+                  const totalWidth = (node.children.length - 1) * 200 + 50;
+                  const centerX = totalWidth / 2;
+                  const spacing = 204;
+                  const startX = centerX - ((node.children.length - 1) / 2) * spacing;
+                  const x = startX + idx * spacing;
+                  return (
+                    <g key={idx}>
+                      <path
+                        d={`M${centerX},0 Q${centerX},25 ${x},25 L${x},50`}
+                        stroke="#f59e0b"
+                        strokeWidth="2.5"
+                        fill="none"
+                        strokeLinecap="round"
+                        opacity="0.8"
+                      />
+                      <circle cx={x} cy="50" r="3" fill="#f59e0b" />
+                    </g>
+                  );
+                })}
+              </svg>
             )}
             
-            <div className="flex gap-4 pt-0">
+            <div className="flex gap-4 pt-12">
               {node.children.map((child, idx) => (
                 <div key={child.id} className="flex flex-col items-center">
-                  <div className="w-0.5 h-8 bg-gradient-to-b from-amber-300 to-amber-400" />
+                  {node.children.length === 1 && (
+                    <svg width="24" height="30" className="overflow-visible">
+                      <path d="M12,0 L12,30" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                      <circle cx="12" cy="30" r="3" fill="#f59e0b" />
+                    </svg>
+                  )}
                   <OrgNode
                     node={child}
                     scale={scale}
