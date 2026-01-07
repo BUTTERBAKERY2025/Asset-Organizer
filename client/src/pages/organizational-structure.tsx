@@ -48,16 +48,13 @@ import {
   Edit,
   Trash2,
   Printer,
-  Download,
   FileSpreadsheet,
   Loader2,
   ZoomIn,
   ZoomOut,
   Maximize2,
-  ChevronDown,
-  ChevronUp,
   Eye,
-  MoreVertical,
+  User,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -68,51 +65,35 @@ import {
 import type { OrgJobRole } from "@shared/schema";
 
 const ICON_MAP: Record<string, React.ReactNode> = {
-  crown: <Crown className="h-5 w-5" />,
-  star: <Star className="h-5 w-5" />,
-  building: <Building2 className="h-5 w-5" />,
-  users: <Users className="h-5 w-5" />,
-  clipboard: <ClipboardList className="h-5 w-5" />,
-  "user-circle": <UserCircle className="h-5 w-5" />,
-  utensils: <Utensils className="h-5 w-5" />,
-  "shopping-cart": <ShoppingCart className="h-5 w-5" />,
-  coffee: <Coffee className="h-5 w-5" />,
-  "clipboard-list": <ClipboardList className="h-5 w-5" />,
-  "chef-hat": <ChefHat className="h-5 w-5" />,
-  wrench: <Wrench className="h-5 w-5" />,
-  user: <UserCircle className="h-5 w-5" />,
-};
-
-const SMALL_ICON_MAP: Record<string, React.ReactNode> = {
-  crown: <Crown className="h-4 w-4" />,
-  star: <Star className="h-4 w-4" />,
-  building: <Building2 className="h-4 w-4" />,
-  users: <Users className="h-4 w-4" />,
-  clipboard: <ClipboardList className="h-4 w-4" />,
-  "user-circle": <UserCircle className="h-4 w-4" />,
-  utensils: <Utensils className="h-4 w-4" />,
-  "shopping-cart": <ShoppingCart className="h-4 w-4" />,
-  coffee: <Coffee className="h-4 w-4" />,
-  "clipboard-list": <ClipboardList className="h-4 w-4" />,
-  "chef-hat": <ChefHat className="h-4 w-4" />,
-  wrench: <Wrench className="h-4 w-4" />,
-  user: <UserCircle className="h-4 w-4" />,
+  crown: <Crown className="h-6 w-6" />,
+  star: <Star className="h-6 w-6" />,
+  building: <Building2 className="h-6 w-6" />,
+  users: <Users className="h-6 w-6" />,
+  clipboard: <ClipboardList className="h-6 w-6" />,
+  "user-circle": <UserCircle className="h-6 w-6" />,
+  utensils: <Utensils className="h-6 w-6" />,
+  "shopping-cart": <ShoppingCart className="h-6 w-6" />,
+  coffee: <Coffee className="h-6 w-6" />,
+  "clipboard-list": <ClipboardList className="h-6 w-6" />,
+  "chef-hat": <ChefHat className="h-6 w-6" />,
+  wrench: <Wrench className="h-6 w-6" />,
+  user: <User className="h-6 w-6" />,
 };
 
 const COLOR_OPTIONS = [
-  { value: "bg-amber-500", label: "ذهبي", gradient: "from-amber-400 to-amber-600" },
-  { value: "bg-amber-400", label: "ذهبي فاتح", gradient: "from-amber-300 to-amber-500" },
-  { value: "bg-orange-400", label: "برتقالي", gradient: "from-orange-300 to-orange-500" },
-  { value: "bg-yellow-400", label: "أصفر", gradient: "from-yellow-300 to-yellow-500" },
-  { value: "bg-lime-400", label: "ليموني", gradient: "from-lime-300 to-lime-500" },
-  { value: "bg-green-400", label: "أخضر", gradient: "from-green-300 to-green-500" },
-  { value: "bg-teal-400", label: "فيروزي", gradient: "from-teal-300 to-teal-500" },
-  { value: "bg-cyan-400", label: "سماوي", gradient: "from-cyan-300 to-cyan-500" },
-  { value: "bg-blue-400", label: "أزرق", gradient: "from-blue-300 to-blue-500" },
-  { value: "bg-indigo-400", label: "نيلي", gradient: "from-indigo-300 to-indigo-500" },
-  { value: "bg-purple-400", label: "بنفسجي", gradient: "from-purple-300 to-purple-500" },
-  { value: "bg-pink-400", label: "وردي", gradient: "from-pink-300 to-pink-500" },
-  { value: "bg-gray-400", label: "رمادي", gradient: "from-gray-300 to-gray-500" },
+  { value: "bg-amber-500", label: "ذهبي", gradient: "from-amber-400 to-amber-600", ring: "ring-amber-400", border: "border-amber-400" },
+  { value: "bg-amber-400", label: "ذهبي فاتح", gradient: "from-amber-300 to-amber-500", ring: "ring-amber-300", border: "border-amber-300" },
+  { value: "bg-orange-400", label: "برتقالي", gradient: "from-orange-300 to-orange-500", ring: "ring-orange-300", border: "border-orange-300" },
+  { value: "bg-yellow-400", label: "أصفر", gradient: "from-yellow-300 to-yellow-500", ring: "ring-yellow-300", border: "border-yellow-300" },
+  { value: "bg-lime-400", label: "ليموني", gradient: "from-lime-300 to-lime-500", ring: "ring-lime-300", border: "border-lime-300" },
+  { value: "bg-green-400", label: "أخضر", gradient: "from-green-400 to-green-600", ring: "ring-green-400", border: "border-green-400" },
+  { value: "bg-teal-400", label: "فيروزي", gradient: "from-teal-300 to-teal-500", ring: "ring-teal-300", border: "border-teal-300" },
+  { value: "bg-cyan-400", label: "سماوي", gradient: "from-cyan-300 to-cyan-500", ring: "ring-cyan-300", border: "border-cyan-300" },
+  { value: "bg-blue-400", label: "أزرق", gradient: "from-blue-400 to-blue-600", ring: "ring-blue-400", border: "border-blue-400" },
+  { value: "bg-indigo-400", label: "نيلي", gradient: "from-indigo-300 to-indigo-500", ring: "ring-indigo-300", border: "border-indigo-300" },
+  { value: "bg-purple-400", label: "بنفسجي", gradient: "from-purple-400 to-purple-600", ring: "ring-purple-400", border: "border-purple-400" },
+  { value: "bg-pink-400", label: "وردي", gradient: "from-pink-300 to-pink-500", ring: "ring-pink-300", border: "border-pink-300" },
+  { value: "bg-gray-400", label: "رمادي", gradient: "from-gray-400 to-gray-600", ring: "ring-gray-400", border: "border-gray-400" },
 ];
 
 const ICON_OPTIONS = [
@@ -131,8 +112,6 @@ const ICON_OPTIONS = [
 
 interface TreeNode extends OrgJobRole {
   children: TreeNode[];
-  x?: number;
-  y?: number;
 }
 
 function buildTree(roles: OrgJobRole[]): TreeNode[] {
@@ -161,273 +140,119 @@ function buildTree(roles: OrgJobRole[]): TreeNode[] {
   return roots;
 }
 
-function CompactRoleCard({
-  role,
-  colorInfo,
-  onView,
-  onEdit,
-  onDelete,
-  onAddChild,
-}: {
-  role: TreeNode;
-  colorInfo: { gradient: string };
-  onView: (role: OrgJobRole) => void;
-  onEdit: (role: OrgJobRole) => void;
-  onDelete: (role: OrgJobRole) => void;
-  onAddChild: (parentId: number) => void;
-}) {
-  return (
-    <div className="relative group" data-testid={`node-${role.slug}`}>
-      <div className="relative bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg hover:border-amber-300 transition-all duration-200 cursor-pointer overflow-hidden w-[140px]">
-        <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${colorInfo.gradient}`} />
-        <div className="p-2 pt-3">
-          <div className="flex items-center gap-2 mb-1">
-            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-sm flex-shrink-0`}>
-              {SMALL_ICON_MAP[role.icon || "user"]}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-gray-900 text-xs leading-tight truncate">{role.titleAr}</h3>
-              <p className="text-[10px] text-gray-500 truncate" dir="ltr">{role.titleEn}</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-gray-50 text-gray-500 border-gray-200">
-              م{role.level}
-            </Badge>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100" data-testid={`menu-${role.slug}`}>
-                  <MoreVertical className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-36">
-                <DropdownMenuItem onClick={() => onView(role)} className="text-xs" data-testid={`view-${role.slug}`}>
-                  <Eye className="h-3 w-3 ml-1" /> عرض
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEdit(role)} className="text-xs" data-testid={`edit-${role.slug}`}>
-                  <Edit className="h-3 w-3 ml-1" /> تعديل
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onAddChild(role.id)} className="text-xs" data-testid={`add-child-${role.slug}`}>
-                  <Plus className="h-3 w-3 ml-1" /> إضافة تابع
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onDelete(role)} className="text-xs text-red-600" data-testid={`delete-${role.slug}`}>
-                  <Trash2 className="h-3 w-3 ml-1" /> حذف
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        {role.children.length > 0 && (
-          <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[8px] px-1.5 py-0 rounded-full">
-            {role.children.length}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function HorizontalOrgChart({
-  roles,
-  onView,
-  onEdit,
-  onDelete,
-  onAddChild,
-}: {
-  roles: OrgJobRole[];
-  onView: (role: OrgJobRole) => void;
-  onEdit: (role: OrgJobRole) => void;
-  onDelete: (role: OrgJobRole) => void;
-  onAddChild: (parentId: number) => void;
-}) {
-  const levels: number[] = Array.from(new Set(roles.map(r => r.level))).sort((a, b) => a - b);
-  const getRolesByLevel = (level: number) => roles.filter(r => r.level === level).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
-  return (
-    <div className="w-full overflow-x-auto">
-      <div className="flex items-start gap-3 min-w-max p-4">
-        {levels.map((level, levelIdx) => {
-          const levelRoles = getRolesByLevel(level);
-          return (
-            <React.Fragment key={level}>
-              <div className="flex flex-col gap-2">
-                <div className="text-center mb-1">
-                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-[10px]">
-                    المستوى {level}
-                  </Badge>
-                </div>
-                {levelRoles.map((role) => {
-                  const colorInfo = COLOR_OPTIONS.find(c => c.value === role.color) || COLOR_OPTIONS[0];
-                  return (
-                    <CompactRoleCard
-                      key={role.id}
-                      role={role as TreeNode}
-                      colorInfo={colorInfo}
-                      onView={onView}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      onAddChild={onAddChild}
-                    />
-                  );
-                })}
-              </div>
-              {levelIdx < levels.length - 1 && (
-                <div className="flex items-center self-center mt-6">
-                  <svg width="50" height="24" className="overflow-visible">
-                    <defs>
-                      <linearGradient id={`h-grad-${level}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#f59e0b" />
-                        <stop offset="100%" stopColor="#fbbf24" />
-                      </linearGradient>
-                      <marker id={`arrow-${level}`} markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                        <path d="M0,0 L8,4 L0,8 Z" fill="#f59e0b" />
-                      </marker>
-                    </defs>
-                    <path
-                      d="M0,12 L40,12"
-                      stroke={`url(#h-grad-${level})`}
-                      strokeWidth="3"
-                      fill="none"
-                      strokeLinecap="round"
-                      markerEnd={`url(#arrow-${level})`}
-                    />
-                  </svg>
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function OrgNode({
+function CircularNode({
   node,
-  scale,
-  collapsedNodes,
-  onToggleCollapse,
   onView,
   onEdit,
   onDelete,
   onAddChild,
 }: {
   node: TreeNode;
-  scale: number;
-  collapsedNodes: Set<number>;
-  onToggleCollapse: (id: number) => void;
   onView: (role: OrgJobRole) => void;
   onEdit: (role: OrgJobRole) => void;
   onDelete: (role: OrgJobRole) => void;
   onAddChild: (parentId: number) => void;
 }) {
-  const isCollapsed = collapsedNodes.has(node.id);
+  const colorInfo = COLOR_OPTIONS.find(c => c.value === node.color) || COLOR_OPTIONS[0];
+  
+  return (
+    <div className="flex flex-col items-center group" data-testid={`node-${node.slug}`}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="focus:outline-none">
+            <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-lg ring-4 ${colorInfo.ring} ring-opacity-30 hover:ring-opacity-60 transition-all duration-200 cursor-pointer hover:scale-110`}>
+              {ICON_MAP[node.icon || "user"]}
+            </div>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="w-40">
+          <DropdownMenuItem onClick={() => onView(node)} className="text-xs" data-testid={`view-${node.slug}`}>
+            <Eye className="h-3 w-3 ml-2" /> عرض التفاصيل
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs" data-testid={`edit-${node.slug}`}>
+            <Edit className="h-3 w-3 ml-2" /> تعديل
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs" data-testid={`add-child-${node.slug}`}>
+            <Plus className="h-3 w-3 ml-2" /> إضافة تابع
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs text-red-600" data-testid={`delete-${node.slug}`}>
+            <Trash2 className="h-3 w-3 ml-2" /> حذف
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <div className="mt-2 text-center max-w-[100px]">
+        <p className="font-bold text-gray-800 text-xs leading-tight truncate">{node.titleAr}</p>
+        <p className="text-[10px] text-gray-500 truncate" dir="ltr">{node.titleEn}</p>
+      </div>
+    </div>
+  );
+}
+
+function TreeBranch({
+  node,
+  onView,
+  onEdit,
+  onDelete,
+  onAddChild,
+  isRoot = false,
+}: {
+  node: TreeNode;
+  onView: (role: OrgJobRole) => void;
+  onEdit: (role: OrgJobRole) => void;
+  onDelete: (role: OrgJobRole) => void;
+  onAddChild: (parentId: number) => void;
+  isRoot?: boolean;
+}) {
   const hasChildren = node.children.length > 0;
   const colorInfo = COLOR_OPTIONS.find(c => c.value === node.color) || COLOR_OPTIONS[0];
 
   return (
-    <div className="flex flex-col items-center" data-testid={`node-${node.slug}`}>
-      <div
-        className="relative group"
-        style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}
-      >
-        <div
-          className="relative bg-white rounded-xl shadow-lg border-2 border-gray-100 hover:shadow-xl hover:border-amber-200 transition-all duration-300 cursor-pointer overflow-hidden"
-          style={{ width: "160px" }}
-        >
-          <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${colorInfo.gradient}`} />
-          
-          <div className="p-3 pt-4">
-            <div className="flex items-start justify-between mb-2">
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-md`}>
-                {SMALL_ICON_MAP[node.icon || "user"]}
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    data-testid={`menu-${node.slug}`}
-                  >
-                    <MoreVertical className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-36">
-                  <DropdownMenuItem onClick={() => onView(node)} className="text-xs" data-testid={`view-${node.slug}`}>
-                    <Eye className="h-3 w-3 ml-1" /> عرض التفاصيل
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs" data-testid={`edit-${node.slug}`}>
-                    <Edit className="h-3 w-3 ml-1" /> تعديل
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs" data-testid={`add-child-${node.slug}`}>
-                    <Plus className="h-3 w-3 ml-1" /> إضافة تابع
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs text-red-600" data-testid={`delete-${node.slug}`}>
-                    <Trash2 className="h-3 w-3 ml-1" /> حذف
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div className="space-y-0.5">
-              <h3 className="font-bold text-gray-900 text-xs leading-tight line-clamp-2">
-                {node.titleAr}
-              </h3>
-              <p className="text-[10px] text-gray-500 leading-tight" dir="ltr">
-                {node.titleEn}
-              </p>
-            </div>
-
-            <div className="mt-2 flex items-center justify-between">
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-gray-50 text-gray-600 border-gray-200">
-                م{node.level}
-              </Badge>
-              {hasChildren && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 w-5 p-0 rounded-full hover:bg-amber-100"
-                  onClick={(e) => { e.stopPropagation(); onToggleCollapse(node.id); }}
-                  data-testid={`toggle-${node.slug}`}
-                >
-                  {isCollapsed ? <ChevronDown className="h-3 w-3 text-amber-600" /> : <ChevronUp className="h-3 w-3 text-amber-600" />}
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {hasChildren && (
-            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[9px] px-1.5 py-0 rounded-full shadow-sm">
-              {node.children.length}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {hasChildren && !isCollapsed && (
+    <div className="flex flex-col items-center">
+      <CircularNode
+        node={node}
+        onView={onView}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onAddChild={onAddChild}
+      />
+      
+      {hasChildren && (
         <>
-          <div className="w-0.5 h-6 bg-gradient-to-b from-amber-400 to-amber-300" />
+          <svg width="4" height="30" className="overflow-visible">
+            <line x1="2" y1="0" x2="2" y2="30" stroke="#10b981" strokeWidth="2" />
+          </svg>
+          
           <div className="relative">
             {node.children.length > 1 && (
-              <div 
-                className="absolute top-0 h-0.5 bg-amber-400"
-                style={{
-                  left: "50%",
-                  width: `${(node.children.length - 1) * 170}px`,
+              <svg 
+                className="absolute overflow-visible" 
+                style={{ 
+                  top: 0, 
+                  left: "50%", 
                   transform: "translateX(-50%)",
+                  width: `${(node.children.length - 1) * 120 + 20}px`,
+                  height: "2px"
                 }}
-              />
+              >
+                <line 
+                  x1="10" 
+                  y1="1" 
+                  x2={`${(node.children.length - 1) * 120 + 10}`} 
+                  y2="1" 
+                  stroke="#10b981" 
+                  strokeWidth="2" 
+                />
+              </svg>
             )}
-            <div className="flex gap-2 pt-0">
+            
+            <div className="flex gap-8 pt-0">
               {node.children.map((child) => (
                 <div key={child.id} className="flex flex-col items-center">
-                  <div className="w-0.5 h-6 bg-amber-400" />
-                  <OrgNode
+                  <svg width="4" height="25" className="overflow-visible">
+                    <line x1="2" y1="0" x2="2" y2="25" stroke="#10b981" strokeWidth="2" />
+                  </svg>
+                  <TreeBranch
                     node={child}
-                    scale={scale}
-                    collapsedNodes={collapsedNodes}
-                    onToggleCollapse={onToggleCollapse}
                     onView={onView}
                     onEdit={onEdit}
                     onDelete={onDelete}
@@ -439,6 +264,38 @@ function OrgNode({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function VerticalOrgChart({
+  tree,
+  onView,
+  onEdit,
+  onDelete,
+  onAddChild,
+}: {
+  tree: TreeNode[];
+  onView: (role: OrgJobRole) => void;
+  onEdit: (role: OrgJobRole) => void;
+  onDelete: (role: OrgJobRole) => void;
+  onAddChild: (parentId: number) => void;
+}) {
+  return (
+    <div className="w-full overflow-x-auto py-8">
+      <div className="flex justify-center gap-16 min-w-max">
+        {tree.map((node) => (
+          <TreeBranch
+            key={node.id}
+            node={node}
+            onView={onView}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onAddChild={onAddChild}
+            isRoot
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -465,7 +322,7 @@ function RoleDetailsDialog({
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader className="pb-4 border-b">
           <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-lg`}>
+            <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${colorInfo.gradient} flex items-center justify-center text-white shadow-lg ring-4 ${colorInfo.ring} ring-opacity-30`}>
               {ICON_MAP[role.icon || "user"]}
             </div>
             <div>
@@ -495,13 +352,13 @@ function RoleDetailsDialog({
                   <ClipboardList className="h-4 w-4" />
                   المهام والمسؤوليات
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
                   {responsibilitiesAr.map((item, idx) => (
-                    <div key={idx} className="flex items-start gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold">
+                    <div key={idx} className="flex items-start gap-3 bg-white p-2 rounded-lg border border-gray-100">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] flex items-center justify-center font-bold">
                         {idx + 1}
                       </span>
-                      <span className="text-sm text-gray-700">{item}</span>
+                      <span className="text-xs text-gray-700">{item}</span>
                     </div>
                   ))}
                 </div>
@@ -516,7 +373,7 @@ function RoleDetailsDialog({
                 </h4>
                 <div className="flex flex-wrap gap-2">
                   {qualificationsAr.map((item, idx) => (
-                    <Badge key={idx} variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200">
+                    <Badge key={idx} variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
                       {item}
                     </Badge>
                   ))}
@@ -536,13 +393,13 @@ function RoleDetailsDialog({
                   <ClipboardList className="h-4 w-4" />
                   Responsibilities
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
                   {responsibilitiesEn.map((item, idx) => (
-                    <div key={idx} className="flex items-start gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm" dir="ltr">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center justify-center font-bold">
+                    <div key={idx} className="flex items-start gap-3 bg-white p-2 rounded-lg border border-gray-100" dir="ltr">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] flex items-center justify-center font-bold">
                         {idx + 1}
                       </span>
-                      <span className="text-sm text-gray-700">{item}</span>
+                      <span className="text-xs text-gray-700">{item}</span>
                     </div>
                   ))}
                 </div>
@@ -557,7 +414,7 @@ function RoleDetailsDialog({
                 </h4>
                 <div className="flex flex-wrap gap-2" dir="ltr">
                   {qualificationsEn.map((item, idx) => (
-                    <Badge key={idx} variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200">
+                    <Badge key={idx} variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
                       {item}
                     </Badge>
                   ))}
@@ -569,7 +426,7 @@ function RoleDetailsDialog({
 
         <div className="mt-6 pt-4 border-t flex justify-between items-center">
           <Link href={`/branch-employees?jobTitle=${encodeURIComponent(role.titleAr)}`}>
-            <Button variant="outline" className="gap-2" data-testid="btn-view-employees">
+            <Button variant="outline" className="gap-2 text-sm" data-testid="btn-view-employees">
               <Users className="h-4 w-4" />
               عرض الموظفين
             </Button>
@@ -612,7 +469,7 @@ function RoleFormDialog({
       level: role?.level?.toString() || "1",
       orderIndex: role?.orderIndex?.toString() || "0",
       icon: role?.icon || "user",
-      color: role?.color || "bg-amber-500",
+      color: role?.color || "bg-green-400",
       responsibilitiesAr: ((role?.responsibilitiesAr as string[]) || []).join("\n"),
       responsibilitiesEn: ((role?.responsibilitiesEn as string[]) || []).join("\n"),
       qualificationsAr: ((role?.qualificationsAr as string[]) || []).join("\n"),
@@ -675,7 +532,6 @@ function RoleFormDialog({
                     onChange={(e) => setFormData({ ...formData, titleAr: e.target.value })}
                     placeholder="مدير الفرع"
                     required
-                    className="h-10"
                     data-testid="input-title-ar"
                   />
                 </div>
@@ -687,7 +543,6 @@ function RoleFormDialog({
                     placeholder="Branch Manager"
                     required
                     dir="ltr"
-                    className="h-10"
                     data-testid="input-title-en"
                   />
                 </div>
@@ -758,7 +613,7 @@ function RoleFormDialog({
                     <SelectContent>
                       {ICON_OPTIONS.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
-                          <span className="flex items-center gap-2">{SMALL_ICON_MAP[opt.value]} {opt.label}</span>
+                          <span className="flex items-center gap-2">{opt.label}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -864,7 +719,6 @@ export default function OrganizationalStructurePage() {
   const [addChildParentId, setAddChildParentId] = useState<number | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<OrgJobRole | null>(null);
-  const [collapsedNodes, setCollapsedNodes] = useState<Set<number>>(new Set());
   const [scale, setScale] = useState(1);
 
   const { data: roles = [], isLoading } = useQuery({
@@ -967,25 +821,13 @@ export default function OrganizationalStructurePage() {
     setIsFormOpen(true);
   };
 
-  const toggleCollapse = useCallback((id: number) => {
-    setCollapsedNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
   const zoomIn = () => setScale(s => Math.min(s + 0.1, 1.5));
   const zoomOut = () => setScale(s => Math.max(s - 0.1, 0.5));
   const resetZoom = () => setScale(1);
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50/30 to-orange-50/20 print:bg-white" dir="rtl">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir="rtl">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between mb-6 print:hidden">
             <div className="flex items-center gap-4">
@@ -997,7 +839,7 @@ export default function OrganizationalStructurePage() {
               </Link>
               <div>
                 <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <Network className="h-7 w-7 text-amber-600" />
+                  <Network className="h-7 w-7 text-green-600" />
                   الهيكل الوظيفي
                 </h1>
                 <p className="text-sm text-gray-500">إدارة التشغيل - Butter Bakery</p>
@@ -1041,9 +883,9 @@ export default function OrganizationalStructurePage() {
               </Button>
               <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2 shadow-sm" data-testid="btn-export">
                 <FileSpreadsheet className="h-4 w-4" />
-                تصدير Excel
+                تصدير
               </Button>
-              <Button size="sm" onClick={handleAdd} className="bg-amber-600 hover:bg-amber-700 gap-2 shadow-sm" data-testid="btn-add">
+              <Button size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 shadow-sm" data-testid="btn-add">
                 <Plus className="h-4 w-4" />
                 إضافة وظيفة
               </Button>
@@ -1058,26 +900,26 @@ export default function OrganizationalStructurePage() {
 
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24">
-                <Loader2 className="h-12 w-12 animate-spin text-amber-600 mb-4" />
+                <Loader2 className="h-12 w-12 animate-spin text-green-600 mb-4" />
                 <p className="text-gray-500">جاري تحميل الهيكل الوظيفي...</p>
               </div>
             ) : tree.length === 0 ? (
               <Card className="text-center py-16 bg-white/80 backdrop-blur border-dashed border-2 border-gray-200">
                 <CardContent>
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-amber-100 flex items-center justify-center">
-                    <Network className="h-10 w-10 text-amber-600" />
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
+                    <Network className="h-10 w-10 text-green-600" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-800 mb-2">لا توجد وظائف</h3>
                   <p className="text-gray-500 mb-6">ابدأ بإضافة الوظيفة الأولى في الهيكل الوظيفي</p>
-                  <Button onClick={handleAdd} className="bg-amber-600 hover:bg-amber-700 gap-2" data-testid="btn-add-first">
+                  <Button onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2" data-testid="btn-add-first">
                     <Plus className="h-4 w-4" />
                     إضافة أول وظيفة
                   </Button>
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-white/60 backdrop-blur shadow-xl border-0 overflow-hidden" data-testid="card-hierarchy">
-                <CardHeader className="bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3">
+              <Card className="bg-white/80 backdrop-blur shadow-xl border-0 overflow-hidden" data-testid="card-hierarchy">
+                <CardHeader className="bg-gradient-to-r from-green-500 to-teal-500 text-white py-3">
                   <CardTitle className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-base">
                       <Crown className="h-5 w-5" />
@@ -1088,9 +930,9 @@ export default function OrganizationalStructurePage() {
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 overflow-x-auto">
-                  <HorizontalOrgChart
-                    roles={roles}
+                <CardContent className="p-4 overflow-x-auto" style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}>
+                  <VerticalOrgChart
+                    tree={tree}
                     onView={setSelectedRole}
                     onEdit={handleEdit}
                     onDelete={setDeleteConfirm}
@@ -1099,48 +941,6 @@ export default function OrganizationalStructurePage() {
                 </CardContent>
               </Card>
             )}
-
-            <div className="mt-6 grid grid-cols-3 gap-4 print:hidden">
-              <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200 shadow-md hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white shadow-md">
-                      <Crown className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-800">الإدارة العليا</p>
-                      <p className="text-sm text-gray-600">المستوى 1-3</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-md hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white shadow-md">
-                      <Users className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-800">الإدارة الوسطى</p>
-                      <p className="text-sm text-gray-600">المستوى 4-6</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-md hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white shadow-md">
-                      <Wrench className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-800">الموظفين التنفيذيين</p>
-                      <p className="text-sm text-gray-600">المستوى 7-9</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </div>
 
           <RoleDetailsDialog
