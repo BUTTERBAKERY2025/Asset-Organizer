@@ -9843,7 +9843,8 @@ export async function registerRoutes(
   app.delete("/api/branch-employees/:id", isAuthenticated, async (req: any, res) => {
     try {
       // التحقق من صلاحية مدير النظام فقط
-      if (req.user?.role !== "admin") {
+      const userRole = req.currentUser?.role || req.user?.role;
+      if (userRole !== "admin") {
         return res.status(403).json({ error: "غير مصرح - يمكن لمدير النظام فقط حذف الموظفين" });
       }
       
