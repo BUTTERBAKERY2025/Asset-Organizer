@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,6 +43,7 @@ import {
   Clock,
   Link,
   Upload,
+  Network,
 } from "lucide-react";
 import type { BranchEmployee } from "@shared/schema";
 
@@ -164,14 +165,33 @@ const getStatusLabel = (status: string): string => {
 };
 
 export default function BranchEmployeesPage() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(location.split('?')[1] || '');
+    const jobTitleParam = urlParams.get('jobTitle');
+    if (jobTitleParam) {
+      const decodedTitle = decodeURIComponent(jobTitleParam);
+      if (JOB_TITLES.includes(decodedTitle)) {
+        setSelectedJobTitle(decodedTitle);
+        setSearchQuery("");
+      } else {
+        setSearchQuery(decodedTitle);
+        setSelectedJobTitle("all");
+      }
+    } else {
+      setSelectedJobTitle("all");
+      setSearchQuery("");
+    }
+  }, [location]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<BranchEmployee | null>(null);
@@ -391,7 +411,8 @@ export default function BranchEmployeesPage() {
       const nameMatch = emp.employeeName?.toLowerCase().includes(query);
       const nameEnMatch = emp.employeeNameEn?.toLowerCase().includes(query);
       const empNumMatch = emp.employeeNumber?.toLowerCase().includes(query);
-      if (!nameMatch && !nameEnMatch && !empNumMatch) {
+      const jobTitleMatch = emp.jobTitle?.toLowerCase().includes(query);
+      if (!nameMatch && !nameEnMatch && !empNumMatch && !jobTitleMatch) {
         return false;
       }
     }
@@ -612,6 +633,10 @@ export default function BranchEmployeesPage() {
             <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="button-import">
               <Upload className="w-4 h-4 ml-2" />
               استيراد
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
+              <Network className="w-4 h-4 ml-2" />
+              الهيكل الوظيفي
             </Button>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
