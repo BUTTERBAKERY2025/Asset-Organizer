@@ -9759,11 +9759,17 @@ export async function registerRoutes(
   app.get("/api/branch-employees", isAuthenticated, async (req, res) => {
     try {
       const { branchId } = req.query;
+      let employees;
       if (branchId && typeof branchId === 'string') {
-        const employees = await storage.getBranchEmployeesByBranch(branchId);
-        return res.json(employees);
+        employees = await storage.getBranchEmployeesByBranch(branchId);
+      } else {
+        employees = await storage.getAllBranchEmployees();
       }
-      const employees = await storage.getAllBranchEmployees();
+      // Debug: log employees without employee numbers
+      const missingNumbers = employees.filter(e => !e.employeeNumber);
+      if (missingNumbers.length > 0) {
+        console.log("DEBUG: Employees missing employeeNumber:", missingNumbers.map(e => ({ id: e.id, name: e.employeeName, empNum: e.employeeNumber })));
+      }
       res.json(employees);
     } catch (error) {
       console.error("Error fetching branch employees:", error);
