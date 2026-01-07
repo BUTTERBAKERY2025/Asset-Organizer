@@ -281,6 +281,9 @@ import {
   branchShiftProfiles,
   type BranchShiftProfile,
   type InsertBranchShiftProfile,
+  orgJobRoles,
+  type OrgJobRole,
+  type InsertOrgJobRole,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -823,6 +826,13 @@ export interface IStorage {
   getAttendanceByBranchEmployeeId(branchEmployeeId: number): Promise<AttendanceRecord[]>;
   getTimesheetsByBranchEmployeeId(branchEmployeeId: number): Promise<TimesheetReport[]>;
   getSchedulesByBranchEmployeeId(branchEmployeeId: number): Promise<EmployeeSchedule[]>;
+
+  // Org Job Roles - الهيكل الوظيفي
+  getAllOrgJobRoles(): Promise<OrgJobRole[]>;
+  getOrgJobRole(id: number): Promise<OrgJobRole | undefined>;
+  createOrgJobRole(role: InsertOrgJobRole): Promise<OrgJobRole>;
+  updateOrgJobRole(id: number, role: Partial<InsertOrgJobRole>): Promise<OrgJobRole | undefined>;
+  deleteOrgJobRole(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6690,6 +6700,46 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(employeeSchedules)
       .where(eq(employeeSchedules.branchEmployeeId, branchEmployeeId))
       .orderBy(employeeSchedules.scheduleDate);
+  }
+
+  // Org Job Roles - الهيكل الوظيفي
+  async getAllOrgJobRoles(): Promise<OrgJobRole[]> {
+    return await db.select().from(orgJobRoles)
+      .where(eq(orgJobRoles.isActive, true))
+      .orderBy(orgJobRoles.level, orgJobRoles.orderIndex);
+  }
+
+  async getOrgJobRole(id: number): Promise<OrgJobRole | undefined> {
+    const [role] = await db.select().from(orgJobRoles).where(eq(orgJobRoles.id, id));
+    return role || undefined;
+  }
+
+  async createOrgJobRole(role: InsertOrgJobRole): Promise<OrgJobRole> {
+    const [created] = await db.insert(orgJobRoles).values({
+      ...role,
+      responsibilitiesAr: role.responsibilitiesAr || [],
+      responsibilitiesEn: role.responsibilitiesEn || [],
+      qualificationsAr: role.qualificationsAr || [],
+      qualificationsEn: role.qualificationsEn || [],
+    }).returning();
+    return created;
+  }
+
+  async updateOrgJobRole(id: number, role: Partial<InsertOrgJobRole>): Promise<OrgJobRole | undefined> {
+    const updateData: any = { ...role, updatedAt: new Date() };
+    const [updated] = await db.update(orgJobRoles)
+      .set(updateData)
+      .where(eq(orgJobRoles.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteOrgJobRole(id: number): Promise<boolean> {
+    const [deleted] = await db.update(orgJobRoles)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(orgJobRoles.id, id))
+      .returning();
+    return !!deleted;
   }
 }
 

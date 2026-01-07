@@ -3820,3 +3820,38 @@ export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
   terminated: "منتهي",
   on_leave: "إجازة",
 };
+
+// Organizational Job Roles - الهيكل الوظيفي
+export const orgJobRoles = pgTable("org_job_roles", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  parentId: integer("parent_id"),
+  level: integer("level").notNull().default(1),
+  orderIndex: integer("order_index").notNull().default(0),
+  titleAr: text("title_ar").notNull(),
+  titleEn: text("title_en").notNull(),
+  summaryAr: text("summary_ar"),
+  summaryEn: text("summary_en"),
+  responsibilitiesAr: jsonb("responsibilities_ar").$type<string[]>().default([]),
+  responsibilitiesEn: jsonb("responsibilities_en").$type<string[]>().default([]),
+  qualificationsAr: jsonb("qualifications_ar").$type<string[]>().default([]),
+  qualificationsEn: jsonb("qualifications_en").$type<string[]>().default([]),
+  icon: text("icon").default("user"),
+  color: text("color").default("bg-amber-500"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_org_job_roles_parent").on(table.parentId),
+  index("idx_org_job_roles_level").on(table.level),
+  index("idx_org_job_roles_active").on(table.isActive),
+]);
+
+export const insertOrgJobRoleSchema = createInsertSchema(orgJobRoles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type OrgJobRole = typeof orgJobRoles.$inferSelect;
+export type InsertOrgJobRole = z.infer<typeof insertOrgJobRoleSchema>;

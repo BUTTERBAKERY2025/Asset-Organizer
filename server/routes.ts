@@ -9945,5 +9945,75 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Org Job Roles - الهيكل الوظيفي ====================
+  
+  app.get("/api/org-job-roles", isAuthenticated, async (req, res) => {
+    try {
+      const roles = await storage.getAllOrgJobRoles();
+      res.json(roles);
+    } catch (error) {
+      console.error("Error getting org job roles:", error);
+      res.status(500).json({ error: "فشل في جلب الهيكل الوظيفي" });
+    }
+  });
+
+  app.get("/api/org-job-roles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const role = await storage.getOrgJobRole(id);
+      if (!role) {
+        return res.status(404).json({ error: "الوظيفة غير موجودة" });
+      }
+      res.json(role);
+    } catch (error) {
+      console.error("Error getting org job role:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الوظيفة" });
+    }
+  });
+
+  app.post("/api/org-job-roles", isAuthenticated, async (req, res) => {
+    try {
+      const role = await storage.createOrgJobRole(req.body);
+      res.status(201).json(role);
+    } catch (error) {
+      console.error("Error creating org job role:", error);
+      res.status(500).json({ error: "فشل في إنشاء الوظيفة" });
+    }
+  });
+
+  app.put("/api/org-job-roles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const role = await storage.updateOrgJobRole(id, req.body);
+      if (!role) {
+        return res.status(404).json({ error: "الوظيفة غير موجودة" });
+      }
+      res.json(role);
+    } catch (error) {
+      console.error("Error updating org job role:", error);
+      res.status(500).json({ error: "فشل في تحديث الوظيفة" });
+    }
+  });
+
+  app.delete("/api/org-job-roles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const deleted = await storage.deleteOrgJobRole(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "الوظيفة غير موجودة" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting org job role:", error);
+      res.status(500).json({ error: "فشل في حذف الوظيفة" });
+    }
+  });
+
   return httpServer;
 }
