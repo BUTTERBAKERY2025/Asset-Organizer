@@ -634,7 +634,7 @@ export default function BranchEmployeesPage() {
               <Upload className="w-4 h-4 ml-2" />
               استيراد
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
+            <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
               <Network className="w-4 h-4 ml-2" />
               الهيكل الوظيفي
             </Button>
