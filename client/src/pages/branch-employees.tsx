@@ -637,11 +637,11 @@ export default function BranchEmployeesPage() {
                           <span className="font-bold">إجمالي الراتب:</span>
                           <span className="text-xl font-bold text-amber-700">
                             {formatCurrency(
-                              (form.watch("salary") || 0) +
-                              (form.watch("housingAllowance") || 0) +
-                              (form.watch("transportAllowance") || 0) +
-                              (form.watch("foodAllowance") || 0) +
-                              (form.watch("otherAllowances") || 0)
+                              Number(form.watch("salary") || 0) +
+                              Number(form.watch("housingAllowance") || 0) +
+                              Number(form.watch("transportAllowance") || 0) +
+                              Number(form.watch("foodAllowance") || 0) +
+                              Number(form.watch("otherAllowances") || 0)
                             )}
                           </span>
                         </div>
