@@ -6564,8 +6564,37 @@ export class DatabaseStorage implements IStorage {
       (employee.foodAllowance || 0) + 
       (employee.otherAllowances || 0);
     
+    // Generate employee number if not provided
+    let employeeNumber = employee.employeeNumber;
+    if (!employeeNumber) {
+      // Get branch prefix (MED for medina, etc.)
+      const branchPrefixes: Record<string, string> = {
+        'medina': 'MED',
+        'jeddah': 'JED',
+        'riyadh': 'RYD',
+        'makkah': 'MAK',
+        'dammam': 'DAM',
+      };
+      const prefix = branchPrefixes[employee.branchId] || employee.branchId.substring(0, 3).toUpperCase();
+      
+      // Find the highest existing employee number for this branch
+      const existingEmployees = await this.getBranchEmployeesByBranch(employee.branchId);
+      let maxNumber = 0;
+      for (const emp of existingEmployees) {
+        if (emp.employeeNumber) {
+          const match = emp.employeeNumber.match(/(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNumber) maxNumber = num;
+          }
+        }
+      }
+      employeeNumber = `${prefix}-${String(maxNumber + 1).padStart(5, '0')}`;
+    }
+    
     const [created] = await db.insert(branchEmployees).values({
       ...employee,
+      employeeNumber,
       totalSalary,
     }).returning();
     return created;
