@@ -42,6 +42,7 @@ import {
   ClipboardList,
   Clock,
   Link,
+  Upload,
 } from "lucide-react";
 import type { BranchEmployee } from "@shared/schema";
 
@@ -170,12 +171,18 @@ export default function BranchEmployeesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<BranchEmployee | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedUserToLink, setSelectedUserToLink] = useState<string>("");
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: branches } = useQuery({
     queryKey: ["/api/branches"],
@@ -379,8 +386,14 @@ export default function BranchEmployeesPage() {
   };
 
   const filteredEmployees = (employees || []).filter((emp: BranchEmployee) => {
-    if (searchQuery && !emp.employeeName.includes(searchQuery) && !emp.employeeNameEn?.includes(searchQuery)) {
-      return false;
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      const nameMatch = emp.employeeName?.toLowerCase().includes(query);
+      const nameEnMatch = emp.employeeNameEn?.toLowerCase().includes(query);
+      const empNumMatch = emp.employeeNumber?.toLowerCase().includes(query);
+      if (!nameMatch && !nameEnMatch && !empNumMatch) {
+        return false;
+      }
     }
     if (selectedNationality !== "all" && emp.nationality !== selectedNationality) {
       return false;
@@ -388,8 +401,96 @@ export default function BranchEmployeesPage() {
     if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) {
       return false;
     }
+    if (selectedStatus !== "all" && emp.status !== selectedStatus) {
+      return false;
+    }
     return true;
   });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        setImportPreview(jsonData.slice(0, 5));
+        setIsImportDialogOpen(true);
+      } catch (error) {
+        alert("خطأ في قراءة الملف");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleImport = async () => {
+    if (!importFile) return;
+    setIsImporting(true);
+    
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const row of jsonData as any[]) {
+          try {
+            const employeeData = {
+              branchId: selectedBranch !== "all" ? selectedBranch : (row["الفرع"] || "medina"),
+              employeeName: row["الاسم"] || row["اسم الموظف"] || "",
+              jobTitle: row["الوظيفة"] || "عامل",
+              nationality: row["الجنسية"] || "أخرى",
+              salary: Number(row["الراتب"] || row["الراتب الأساسي"] || 0),
+              housingAllowance: Number(row["بدل السكن"] || 0),
+              transportAllowance: Number(row["بدل المواصلات"] || row["بدل انتقال"] || 0),
+              otherAllowances: Number(row["بدلات أخرى"] || row["البدلات الأخرى"] || 0),
+              status: "active",
+            };
+            
+            if (!employeeData.employeeName) continue;
+            
+            const res = await fetch("/api/branch-employees", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(employeeData),
+            });
+            
+            if (res.ok) {
+              successCount++;
+            } else {
+              console.error("Import error:", await res.text());
+              errorCount++;
+            }
+          } catch {
+            errorCount++;
+          }
+        }
+        
+        alert(`تم استيراد ${successCount} موظف بنجاح${errorCount > 0 ? ` (${errorCount} أخطاء)` : ""}`);
+        queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+        setIsImportDialogOpen(false);
+        setImportFile(null);
+        setImportPreview([]);
+        setIsImporting(false);
+      };
+      reader.readAsArrayBuffer(importFile);
+    } catch (error) {
+      alert("حدث خطأ أثناء الاستيراد");
+      setIsImporting(false);
+    }
+  };
 
   const getBranchName = (branchId: string) => {
     const branch = branches?.find((b: { id: string; name: string }) => b.id === branchId);
@@ -499,6 +600,18 @@ export default function BranchEmployeesPage() {
             <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="button-print">
               <Printer className="w-4 h-4 ml-2" />
               طباعة
+            </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleFileSelect}
+              data-testid="input-import-file"
+            />
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="button-import">
+              <Upload className="w-4 h-4 ml-2" />
+              استيراد
             </Button>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
@@ -834,12 +947,27 @@ export default function BranchEmployeesPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-gray-500" />
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger className="w-36" data-testid="filter-status">
+                <SelectValue placeholder="جميع الحالات" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع الحالات</SelectItem>
+                <SelectItem value="active">نشط</SelectItem>
+                <SelectItem value="inactive">غير نشط</SelectItem>
+                <SelectItem value="terminated">منتهي</SelectItem>
+                <SelectItem value="on_leave">في إجازة</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="relative flex-1">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="بحث بالاسم..."
+              placeholder="بحث بالاسم أو الرقم الوظيفي..."
               className="pr-10"
               data-testid="input-search"
             />
@@ -866,6 +994,7 @@ export default function BranchEmployeesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="text-right">الرقم الوظيفي</TableHead>
                     <TableHead className="text-right">الاسم</TableHead>
                     <TableHead className="text-right">الفرع</TableHead>
                     <TableHead className="text-right">الوظيفة</TableHead>
@@ -879,6 +1008,7 @@ export default function BranchEmployeesPage() {
                 <TableBody>
                   {filteredEmployees.map((emp: BranchEmployee) => (
                     <TableRow key={emp.id} data-testid={`row-employee-${emp.id}`}>
+                      <TableCell className="font-mono text-sm text-amber-700">{emp.employeeNumber || "--"}</TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{emp.employeeName}</p>
@@ -1211,6 +1341,70 @@ export default function BranchEmployeesPage() {
                   </Card>
                 </TabsContent>
               </Tabs>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Import Dialog */}
+        <Dialog open={isImportDialogOpen} onOpenChange={(open) => {
+          setIsImportDialogOpen(open);
+          if (!open) {
+            setImportFile(null);
+            setImportPreview([]);
+          }
+        }}>
+          <DialogContent className="max-w-2xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Upload className="w-5 h-5" />
+                استيراد موظفين من Excel
+              </DialogTitle>
+              <DialogDescription>
+                قم برفع ملف Excel يحتوي على بيانات الموظفين. يجب أن تكون الأعمدة: الاسم، الوظيفة، الجنسية، الراتب، بدل السكن، بدل المواصلات
+              </DialogDescription>
+            </DialogHeader>
+            
+            {importPreview.length > 0 && (
+              <div className="space-y-4">
+                <div className="text-sm font-medium">معاينة البيانات (أول 5 صفوف):</div>
+                <div className="max-h-60 overflow-auto border rounded">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {Object.keys(importPreview[0] || {}).slice(0, 5).map((key) => (
+                          <TableHead key={key} className="text-right text-xs">{key}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreview.map((row, idx) => (
+                        <TableRow key={idx}>
+                          {Object.values(row).slice(0, 5).map((val, vIdx) => (
+                            <TableCell key={vIdx} className="text-xs">{String(val)}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded">
+                  <strong>ملاحظة:</strong> سيتم إضافة الموظفين للفرع المحدد حالياً{selectedBranch !== "all" ? ` (${getBranchName(selectedBranch)})` : " (يرجى تحديد فرع)"}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                    إلغاء
+                  </Button>
+                  <Button 
+                    onClick={handleImport} 
+                    disabled={isImporting || selectedBranch === "all"}
+                    className="bg-amber-600 hover:bg-amber-700"
+                    data-testid="button-confirm-import"
+                  >
+                    {isImporting ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
+                    {isImporting ? "جاري الاستيراد..." : "استيراد الموظفين"}
+                  </Button>
+                </div>
+              </div>
             )}
           </DialogContent>
         </Dialog>
