@@ -843,7 +843,7 @@ export default function OrganizationalStructurePage() {
                 <FileSpreadsheet className="h-4 w-4" />
                 تصدير
               </Button>
-              <Button size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2">
+              <Button type="button" size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2" data-testid="button-add-role">
                 <Plus className="h-4 w-4" />
                 إضافة وظيفة
               </Button>
