@@ -64,27 +64,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { OrgJobRole } from "@shared/schema";
 
-const NODE_WIDTH = 160;
-const NODE_HEIGHT = 80;
-const HORIZONTAL_GAP = 30;
-const VERTICAL_GAP = 60;
-
 interface TreeNode extends OrgJobRole {
   children: TreeNode[];
-  x?: number;
-  y?: number;
-  width?: number;
-}
-
-interface LayoutNode {
-  node: TreeNode;
-  x: number;
-  y: number;
-}
-
-interface Edge {
-  from: { x: number; y: number };
-  to: { x: number; y: number };
 }
 
 function buildTree(roles: OrgJobRole[]): TreeNode[] {
@@ -113,222 +94,224 @@ function buildTree(roles: OrgJobRole[]): TreeNode[] {
   return roots;
 }
 
-function computeSubtreeWidth(node: TreeNode): number {
-  if (node.children.length === 0) {
-    return NODE_WIDTH;
-  }
-  const childrenWidth = node.children.reduce(
-    (sum, child) => sum + computeSubtreeWidth(child) + HORIZONTAL_GAP,
-    -HORIZONTAL_GAP
-  );
-  return Math.max(NODE_WIDTH, childrenWidth);
-}
+const LEVEL_COLORS = [
+  { bg: "bg-gradient-to-r from-amber-500 to-orange-500", text: "text-white", border: "border-amber-600" },
+  { bg: "bg-gradient-to-r from-amber-400 to-yellow-400", text: "text-amber-900", border: "border-amber-500" },
+  { bg: "bg-gradient-to-r from-orange-400 to-amber-400", text: "text-orange-900", border: "border-orange-500" },
+  { bg: "bg-gradient-to-r from-yellow-400 to-lime-400", text: "text-yellow-900", border: "border-yellow-500" },
+  { bg: "bg-gradient-to-r from-lime-400 to-green-400", text: "text-lime-900", border: "border-lime-500" },
+  { bg: "bg-gradient-to-r from-green-400 to-teal-400", text: "text-green-900", border: "border-green-500" },
+  { bg: "bg-gradient-to-r from-teal-400 to-cyan-400", text: "text-teal-900", border: "border-teal-500" },
+  { bg: "bg-gradient-to-r from-cyan-400 to-blue-400", text: "text-cyan-900", border: "border-cyan-500" },
+  { bg: "bg-gradient-to-r from-blue-400 to-indigo-400", text: "text-blue-900", border: "border-blue-500" },
+  { bg: "bg-gradient-to-r from-indigo-400 to-purple-400", text: "text-indigo-900", border: "border-indigo-500" },
+];
 
-function layoutTree(
-  node: TreeNode,
-  x: number,
-  y: number,
-  nodes: LayoutNode[],
-  edges: Edge[]
-): number {
-  const subtreeWidth = computeSubtreeWidth(node);
-  const nodeX = x + subtreeWidth / 2;
-  const nodeY = y;
-
-  nodes.push({ node, x: nodeX, y: nodeY });
-
-  if (node.children.length > 0) {
-    let childX = x;
-    node.children.forEach((child) => {
-      const childWidth = computeSubtreeWidth(child);
-      const childCenterX = childX + childWidth / 2;
-      const childY = nodeY + NODE_HEIGHT + VERTICAL_GAP;
-
-      edges.push({
-        from: { x: nodeX, y: nodeY + NODE_HEIGHT },
-        to: { x: childCenterX, y: childY },
-      });
-
-      layoutTree(child, childX, childY, nodes, edges);
-      childX += childWidth + HORIZONTAL_GAP;
-    });
-  }
-
-  return subtreeWidth;
-}
-
-function computeLayout(tree: TreeNode[]): { nodes: LayoutNode[]; edges: Edge[]; width: number; height: number } {
-  const nodes: LayoutNode[] = [];
-  const edges: Edge[] = [];
-  let x = 50;
-  let maxHeight = 0;
-
-  tree.forEach((root) => {
-    const width = layoutTree(root, x, 50, nodes, edges);
-    x += width + HORIZONTAL_GAP * 2;
-  });
-
-  nodes.forEach((n) => {
-    maxHeight = Math.max(maxHeight, n.y + NODE_HEIGHT + 50);
-  });
-
-  return { nodes, edges, width: x, height: maxHeight };
-}
-
-function OrgChartSVG({
-  tree,
-  scale,
-  onView,
-  onEdit,
-  onDelete,
-  onAddChild,
-}: {
-  tree: TreeNode[];
-  scale: number;
-  onView: (role: OrgJobRole) => void;
-  onEdit: (role: OrgJobRole) => void;
-  onDelete: (role: OrgJobRole) => void;
-  onAddChild: (parentId: number) => void;
-}) {
-  const { nodes, edges, width, height } = useMemo(() => computeLayout(tree), [tree]);
-
-  return (
-    <div 
-      className="relative overflow-auto"
-      style={{ 
-        transform: `scale(${scale})`, 
-        transformOrigin: "top center",
-        minHeight: height,
-      }}
-    >
-      <svg
-        width={width}
-        height={height}
-        className="absolute top-0 left-0"
-        style={{ zIndex: 0 }}
-      >
-        {edges.map((edge, idx) => {
-          const midY = (edge.from.y + edge.to.y) / 2;
-          return (
-            <path
-              key={idx}
-              d={`M ${edge.from.x} ${edge.from.y} 
-                  C ${edge.from.x} ${midY}, 
-                    ${edge.to.x} ${midY}, 
-                    ${edge.to.x} ${edge.to.y}`}
-              stroke="#10b981"
-              strokeWidth="2.5"
-              fill="none"
-              strokeLinecap="round"
-            />
-          );
-        })}
-      </svg>
-
-      {nodes.map(({ node, x, y }) => (
-        <OrgNode
-          key={node.id}
-          node={node}
-          x={x}
-          y={y}
-          onView={onView}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onAddChild={onAddChild}
-        />
-      ))}
-    </div>
-  );
-}
-
-function OrgNode({
+function CollapsibleTreeNode({
   node,
-  x,
-  y,
+  level,
+  expandedNodes,
+  onToggle,
   onView,
   onEdit,
   onDelete,
   onAddChild,
 }: {
   node: TreeNode;
-  x: number;
-  y: number;
+  level: number;
+  expandedNodes: Set<number>;
+  onToggle: (id: number) => void;
   onView: (role: OrgJobRole) => void;
   onEdit: (role: OrgJobRole) => void;
   onDelete: (role: OrgJobRole) => void;
   onAddChild: (parentId: number) => void;
 }) {
-  const getColors = (color: string) => {
-    const colorMap: Record<string, { bg: string; border: string; icon: string }> = {
-      "bg-green-400": { bg: "bg-green-50", border: "border-green-400", icon: "text-green-600" },
-      "bg-teal-400": { bg: "bg-teal-50", border: "border-teal-400", icon: "text-teal-600" },
-      "bg-cyan-400": { bg: "bg-cyan-50", border: "border-cyan-400", icon: "text-cyan-600" },
-      "bg-blue-400": { bg: "bg-blue-50", border: "border-blue-400", icon: "text-blue-600" },
-      "bg-indigo-400": { bg: "bg-indigo-50", border: "border-indigo-400", icon: "text-indigo-600" },
-      "bg-purple-400": { bg: "bg-purple-50", border: "border-purple-400", icon: "text-purple-600" },
-      "bg-amber-500": { bg: "bg-amber-50", border: "border-amber-500", icon: "text-amber-600" },
-      "bg-amber-400": { bg: "bg-amber-50", border: "border-amber-400", icon: "text-amber-600" },
-      "bg-orange-400": { bg: "bg-orange-50", border: "border-orange-400", icon: "text-orange-600" },
-      "bg-yellow-400": { bg: "bg-yellow-50", border: "border-yellow-400", icon: "text-yellow-600" },
-      "bg-lime-400": { bg: "bg-lime-50", border: "border-lime-400", icon: "text-lime-600" },
-      "bg-pink-400": { bg: "bg-pink-50", border: "border-pink-400", icon: "text-pink-600" },
-      "bg-gray-400": { bg: "bg-gray-50", border: "border-gray-400", icon: "text-gray-600" },
-      "bg-amber-600": { bg: "bg-amber-50", border: "border-amber-600", icon: "text-amber-700" },
-      "bg-orange-500": { bg: "bg-orange-50", border: "border-orange-500", icon: "text-orange-600" },
-    };
-    return colorMap[color] || colorMap["bg-green-400"];
-  };
-
-  const colors = getColors(node.color || "bg-green-400");
+  const hasChildren = node.children.length > 0;
+  const isExpanded = expandedNodes.has(node.id);
+  const colors = LEVEL_COLORS[Math.min(level, LEVEL_COLORS.length - 1)];
+  const indent = level * 24;
 
   return (
-    <div
-      className="absolute"
-      style={{
-        left: x - NODE_WIDTH / 2,
-        top: y,
-        width: NODE_WIDTH,
-        zIndex: 1,
-      }}
-      data-testid={`node-${node.slug}`}
-    >
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="focus:outline-none w-full">
-            <div
-              className={`${colors.bg} ${colors.border} border-2 rounded-xl p-3 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg shadow-md`}
-              style={{ height: NODE_HEIGHT }}
+    <div className="select-none" data-testid={`tree-node-${node.slug}`}>
+      <div
+        className={`flex items-center gap-2 p-3 rounded-lg mb-1 transition-all duration-200 hover:shadow-md ${colors.bg} ${colors.text} cursor-pointer`}
+        style={{ marginRight: indent }}
+        onClick={() => hasChildren && onToggle(node.id)}
+      >
+        {hasChildren ? (
+          <button
+            className="w-6 h-6 rounded-full bg-white/30 flex items-center justify-center hover:bg-white/50 transition-colors"
+            onClick={(e) => { e.stopPropagation(); onToggle(node.id); }}
+          >
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              <div className="flex items-center gap-2 h-full">
-                <div className={`w-10 h-10 rounded-lg ${colors.border} border flex items-center justify-center ${colors.icon} flex-shrink-0`}>
-                  <User className="h-5 w-5" />
-                </div>
-                <div className="flex-1 min-w-0 text-right">
-                  <p className="font-bold text-gray-800 text-[11px] leading-tight truncate">{node.titleAr}</p>
-                  <p className="text-[9px] text-gray-500 truncate mt-0.5" dir="ltr">{node.titleEn}</p>
-                  <Badge variant="outline" className="text-[8px] px-1 py-0 mt-1 h-4">
-                    المستوى {node.level}
-                  </Badge>
-                </div>
-              </div>
-            </div>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="w-40">
-          <DropdownMenuItem onClick={() => onView(node)} className="text-xs gap-2" data-testid={`view-${node.slug}`}>
-            <Eye className="h-3 w-3" /> عرض التفاصيل
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs gap-2" data-testid={`edit-${node.slug}`}>
-            <Edit className="h-3 w-3" /> تعديل
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs gap-2" data-testid={`add-child-${node.slug}`}>
-            <Plus className="h-3 w-3" /> إضافة تابع
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs gap-2 text-red-600" data-testid={`delete-${node.slug}`}>
-            <Trash2 className="h-3 w-3" /> حذف
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        ) : (
+          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+            <div className="w-2 h-2 rounded-full bg-current opacity-50" />
+          </div>
+        )}
+
+        <div className="w-10 h-10 rounded-full bg-white/30 flex items-center justify-center flex-shrink-0">
+          <User className="h-5 w-5" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm leading-tight truncate">{node.titleAr}</p>
+          <p className="text-xs opacity-80 truncate" dir="ltr">{node.titleEn}</p>
+        </div>
+
+        <Badge className="bg-white/30 text-current border-0 text-xs">
+          {node.level}
+        </Badge>
+
+        {hasChildren && (
+          <Badge className="bg-white/20 text-current border-0 text-xs">
+            {node.children.length} تابع
+          </Badge>
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <button className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={() => onView(node)} className="text-xs gap-2">
+              <Eye className="h-3 w-3" /> عرض التفاصيل
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs gap-2">
+              <Edit className="h-3 w-3" /> تعديل
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs gap-2">
+              <Plus className="h-3 w-3" /> إضافة وظيفة تابعة
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs gap-2 text-red-600">
+              <Trash2 className="h-3 w-3" /> حذف
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {hasChildren && isExpanded && (
+        <div className="relative">
+          <div
+            className="absolute top-0 bottom-4 w-0.5 bg-gray-300"
+            style={{ right: indent + 15 }}
+          />
+          {node.children.map((child, idx) => (
+            <div key={child.id} className="relative">
+              <div
+                className="absolute top-5 w-4 h-0.5 bg-gray-300"
+                style={{ right: indent + 15 }}
+              />
+              <CollapsibleTreeNode
+                node={child}
+                level={level + 1}
+                expandedNodes={expandedNodes}
+                onToggle={onToggle}
+                onView={onView}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onAddChild={onAddChild}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CollapsibleOrgChart({
+  tree,
+  onView,
+  onEdit,
+  onDelete,
+  onAddChild,
+}: {
+  tree: TreeNode[];
+  onView: (role: OrgJobRole) => void;
+  onEdit: (role: OrgJobRole) => void;
+  onDelete: (role: OrgJobRole) => void;
+  onAddChild: (parentId: number) => void;
+}) {
+  const [expandedNodes, setExpandedNodes] = useState<Set<number>>(() => {
+    const initial = new Set<number>();
+    const addAllIds = (nodes: TreeNode[]) => {
+      nodes.forEach((n) => {
+        initial.add(n.id);
+        addAllIds(n.children);
+      });
+    };
+    addAllIds(tree);
+    return initial;
+  });
+
+  const toggleNode = (id: number) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    const all = new Set<number>();
+    const addAllIds = (nodes: TreeNode[]) => {
+      nodes.forEach((n) => {
+        all.add(n.id);
+        addAllIds(n.children);
+      });
+    };
+    addAllIds(tree);
+    setExpandedNodes(all);
+  };
+
+  const collapseAll = () => {
+    setExpandedNodes(new Set());
+  };
+
+  return (
+    <div>
+      <div className="flex justify-end gap-2 mb-4">
+        <Button variant="outline" size="sm" onClick={expandAll} className="text-xs gap-1">
+          <Maximize2 className="h-3 w-3" />
+          توسيع الكل
+        </Button>
+        <Button variant="outline" size="sm" onClick={collapseAll} className="text-xs gap-1">
+          <ZoomOut className="h-3 w-3" />
+          طي الكل
+        </Button>
+      </div>
+      <div className="space-y-1">
+        {tree.map((node) => (
+          <CollapsibleTreeNode
+            key={node.id}
+            node={node}
+            level={0}
+            expandedNodes={expandedNodes}
+            onToggle={toggleNode}
+            onView={onView}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onAddChild={onAddChild}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -730,7 +713,6 @@ export default function OrganizationalStructurePage() {
   const [addChildParentId, setAddChildParentId] = useState<number | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<OrgJobRole | null>(null);
-  const [scale, setScale] = useState(1);
 
   const { data: roles = [], isLoading } = useQuery({
     queryKey: ["/api/org-job-roles"],
@@ -853,36 +835,6 @@ export default function OrganizationalStructurePage() {
             </div>
             
             <div className="flex items-center gap-2">
-              <div className="flex items-center bg-white rounded-lg shadow-sm border p-1 gap-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={() => setScale(s => Math.max(s - 0.1, 0.5))} className="h-8 w-8 p-0">
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>تصغير</TooltipContent>
-                </Tooltip>
-                <span className="text-xs font-medium text-gray-600 min-w-[40px] text-center">
-                  {Math.round(scale * 100)}%
-                </span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={() => setScale(s => Math.min(s + 0.1, 1.5))} className="h-8 w-8 p-0">
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>تكبير</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={() => setScale(1)} className="h-8 w-8 p-0">
-                      <Maximize2 className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>إعادة ضبط</TooltipContent>
-                </Tooltip>
-              </div>
-
               <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2">
                 <Printer className="h-4 w-4" />
                 طباعة
@@ -978,15 +930,15 @@ export default function OrganizationalStructurePage() {
                     <CardContent className="text-xs text-gray-600 space-y-2 pb-4">
                       <p className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-green-500" />
-                        اضغط على الدائرة لفتح القائمة
+                        اضغط على السهم لتوسيع/طي
                       </p>
                       <p className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        استخدم التكبير/التصغير للتنقل
+                        اضغط على النقاط الثلاث للخيارات
                       </p>
                       <p className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        أضف وظائف تابعة من القائمة
+                        كل لون يمثل مستوى مختلف
                       </p>
                     </CardContent>
                   </Card>
@@ -1005,10 +957,9 @@ export default function OrganizationalStructurePage() {
                         </Badge>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-6 overflow-x-auto">
-                      <OrgChartSVG
+                    <CardContent className="p-4">
+                      <CollapsibleOrgChart
                         tree={tree}
-                        scale={scale}
                         onView={setSelectedRole}
                         onEdit={handleEdit}
                         onDelete={setDeleteConfirm}
