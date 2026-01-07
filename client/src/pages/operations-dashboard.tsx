@@ -34,7 +34,7 @@ export default function OperationsDashboardPage() {
 
   const operationsLinks = [
     { title: "المنتجات", description: "إدارة كتالوج المنتجات", href: "/products", icon: Package, count: stats?.productsCount || 0, countLabel: "منتج" },
-    { title: "إدارة موظفي الفروع", description: "إدارة شاملة للموظفين والورديات والحضور", href: "/branch-employees", icon: Clock, count: stats?.todayShifts || 0, countLabel: "وردية", highlight: true },
+    { title: "إدارة موظفي الفروع", description: "إدارة شاملة للموظفين والورديات والحضور", href: "/attendance-dashboard", icon: Clock, count: stats?.todayShifts || 0, countLabel: "وردية", highlight: true },
     { title: "أوامر الإنتاج", description: "متابعة أوامر الإنتاج", href: "/production-dashboard", icon: ClipboardCheck, count: stats?.todayOrders || 0, countLabel: "أمر" },
     { title: "مراقبة الجودة", description: "فحوصات الجودة", href: "/quality-control", icon: CheckCircle, count: stats?.qualityChecks || 0, countLabel: "فحص" },
     { title: "بار العرض والهالك", description: "استلام الإنتاج ومتابعة الهالك", href: "/display-bar-waste", icon: AlertTriangle },
@@ -52,7 +52,7 @@ export default function OperationsDashboardPage() {
 
   const quickActions = [
     { label: "يومية جديدة", href: "/cashier-journals", icon: Wallet },
-    { label: "موظفي الفروع", href: "/branch-employees", icon: Clock },
+    { label: "موظفي الفروع", href: "/attendance-dashboard", icon: Clock },
     { label: "أمر إنتاج", href: "/production-dashboard", icon: ClipboardCheck },
     { label: "فحص جودة", href: "/quality-control", icon: CheckCircle },
   ];
