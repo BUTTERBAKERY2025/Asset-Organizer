@@ -597,14 +597,14 @@ function RoleFormDialog({
                 <div className="space-y-2">
                   <Label>الوظيفة الأعلى</Label>
                   <Select
-                    value={formData.parentId}
-                    onValueChange={(v) => setFormData({ ...formData, parentId: v })}
+                    value={formData.parentId || "__none__"}
+                    onValueChange={(v) => setFormData({ ...formData, parentId: v === "__none__" ? "" : v })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="بدون" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">بدون</SelectItem>
+                      <SelectItem value="__none__">بدون</SelectItem>
                       {roles.filter(r => r.id !== role?.id).map((r) => (
                         <SelectItem key={r.id} value={r.id.toString()}>{r.titleAr}</SelectItem>
                       ))}
