@@ -202,6 +202,7 @@ export default function BranchEmployeesPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [importBranchId, setImportBranchId] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -457,7 +458,7 @@ export default function BranchEmployeesPage() {
     if (!importFile) return;
     
     // التأكد من اختيار فرع
-    if (selectedBranch === "all") {
+    if (!importBranchId) {
       alert("يرجى اختيار فرع محدد قبل الاستيراد");
       return;
     }
@@ -476,20 +477,10 @@ export default function BranchEmployeesPage() {
         let successCount = 0;
         let errorCount = 0;
         
-        // دالة لتحويل اسم الفرع إلى معرّف الفرع
-        const getBranchIdFromName = (branchName: string): string => {
-          if (!branchName) return selectedBranch;
-          const branch = branches?.find((b: { id: string; name: string }) => 
-            b.name === branchName || b.name.includes(branchName) || branchName.includes(b.name)
-          );
-          return branch?.id || selectedBranch;
-        };
-        
         for (const row of jsonData as any[]) {
           try {
-            // تحديد الفرع: إما من الفلتر المحدد أو من ملف Excel
-            const branchFromExcel = row["الفرع"] || "";
-            const resolvedBranchId = selectedBranch !== "all" ? selectedBranch : getBranchIdFromName(branchFromExcel);
+            // استخدام الفرع المحدد في نافذة الاستيراد
+            const resolvedBranchId = importBranchId;
             
             const employeeData = {
               branchId: resolvedBranchId,
@@ -1462,6 +1453,7 @@ export default function BranchEmployeesPage() {
           if (!open) {
             setImportFile(null);
             setImportPreview([]);
+            setImportBranchId("");
           }
         }}>
           <DialogContent className="max-w-2xl" dir="rtl">
@@ -1477,6 +1469,21 @@ export default function BranchEmployeesPage() {
             
             {importPreview.length > 0 && (
               <div className="space-y-4">
+                {/* اختيار الفرع */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">اختر الفرع لإضافة الموظفين إليه *</Label>
+                  <Select value={importBranchId} onValueChange={setImportBranchId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="اختر الفرع..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches?.map((branch: { id: string; name: string }) => (
+                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="text-sm font-medium">معاينة البيانات (أول 5 صفوف):</div>
                 <div className="max-h-60 overflow-auto border rounded">
                   <Table>
@@ -1498,16 +1505,23 @@ export default function BranchEmployeesPage() {
                     </TableBody>
                   </Table>
                 </div>
-                <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded">
-                  <strong>ملاحظة:</strong> سيتم إضافة الموظفين للفرع المحدد حالياً{selectedBranch !== "all" ? ` (${getBranchName(selectedBranch)})` : " (يرجى تحديد فرع)"}
-                </div>
+                {importBranchId && (
+                  <div className="text-sm text-green-700 bg-green-50 p-3 rounded">
+                    <strong>الفرع المحدد:</strong> {getBranchName(importBranchId)} - سيتم إضافة {importPreview.length > 5 ? "جميع" : importPreview.length} الموظفين لهذا الفرع
+                  </div>
+                )}
+                {!importBranchId && (
+                  <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded">
+                    <strong>تنبيه:</strong> يرجى اختيار الفرع أولاً قبل الاستيراد
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
                     إلغاء
                   </Button>
                   <Button 
                     onClick={handleImport} 
-                    disabled={isImporting || selectedBranch === "all"}
+                    disabled={isImporting || !importBranchId}
                     className="bg-amber-600 hover:bg-amber-700"
                     data-testid="button-confirm-import"
                   >
