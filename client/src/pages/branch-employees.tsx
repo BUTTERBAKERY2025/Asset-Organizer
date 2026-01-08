@@ -83,6 +83,7 @@ const employeeFormSchema = z.object({
   transportAllowance: z.coerce.number().min(0).optional(),
   foodAllowance: z.coerce.number().min(0).optional(),
   otherAllowances: z.coerce.number().min(0).optional(),
+  socialInsuranceDeduction: z.coerce.number().min(0).optional(), // خصم التأمينات للسعوديين
   hireDate: z.string().optional(),
   healthCertificate: z.string().optional(),
   healthCertificateExpiry: z.string().optional(),
@@ -304,6 +305,7 @@ export default function BranchEmployeesPage() {
       transportAllowance: 0,
       foodAllowance: 0,
       otherAllowances: 0,
+      socialInsuranceDeduction: 0,
       status: "active",
       healthCertificate: "none",
     },
@@ -378,6 +380,7 @@ export default function BranchEmployeesPage() {
       transportAllowance: employee.transportAllowance || 0,
       foodAllowance: employee.foodAllowance || 0,
       otherAllowances: employee.otherAllowances || 0,
+      socialInsuranceDeduction: employee.socialInsuranceDeduction || 0,
       hireDate: employee.hireDate || "",
       healthCertificate: employee.healthCertificate || "none",
       healthCertificateExpiry: employee.healthCertificateExpiry || "",
@@ -769,17 +772,51 @@ export default function BranchEmployeesPage() {
                       <Label>بدلات أخرى (ريال)</Label>
                       <Input type="number" {...form.register("otherAllowances")} placeholder="0" data-testid="input-other" />
                     </div>
+                    
+                    {form.watch("nationality") === "سعودي" && (
+                      <div className="space-y-2">
+                        <Label className="text-red-600">خصم التأمينات الاجتماعية (ريال) - للسعوديين</Label>
+                        <Input 
+                          type="number" 
+                          {...form.register("socialInsuranceDeduction")} 
+                          placeholder="0" 
+                          className="border-red-200 focus:border-red-400"
+                          data-testid="input-social-insurance" 
+                        />
+                        <p className="text-xs text-gray-500">يتم خصم هذا المبلغ من إجمالي الراتب</p>
+                      </div>
+                    )}
+                    
                     <Card className="bg-amber-50">
-                      <CardContent className="pt-4">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold">إجمالي الراتب:</span>
-                          <span className="text-xl font-bold text-amber-700">
+                      <CardContent className="pt-4 space-y-2">
+                        <div className="flex justify-between items-center text-sm text-gray-600">
+                          <span>مجموع الراتب والبدلات:</span>
+                          <span>
                             {formatCurrency(
                               Number(form.watch("salary") || 0) +
                               Number(form.watch("housingAllowance") || 0) +
                               Number(form.watch("transportAllowance") || 0) +
                               Number(form.watch("foodAllowance") || 0) +
                               Number(form.watch("otherAllowances") || 0)
+                            )}
+                          </span>
+                        </div>
+                        {form.watch("nationality") === "سعودي" && Number(form.watch("socialInsuranceDeduction") || 0) > 0 && (
+                          <div className="flex justify-between items-center text-sm text-red-600">
+                            <span>خصم التأمينات الاجتماعية:</span>
+                            <span>- {formatCurrency(Number(form.watch("socialInsuranceDeduction") || 0))}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center border-t pt-2">
+                          <span className="font-bold">صافي الراتب:</span>
+                          <span className="text-xl font-bold text-amber-700">
+                            {formatCurrency(
+                              Number(form.watch("salary") || 0) +
+                              Number(form.watch("housingAllowance") || 0) +
+                              Number(form.watch("transportAllowance") || 0) +
+                              Number(form.watch("foodAllowance") || 0) +
+                              Number(form.watch("otherAllowances") || 0) -
+                              (form.watch("nationality") === "سعودي" ? Number(form.watch("socialInsuranceDeduction") || 0) : 0)
                             )}
                           </span>
                         </div>
@@ -1176,7 +1213,13 @@ export default function BranchEmployeesPage() {
                         <div className="flex justify-between"><span className="text-gray-500">بدل السكن:</span><span>{formatCurrency(viewingEmployee.housingAllowance)}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">بدل المواصلات:</span><span>{formatCurrency(viewingEmployee.transportAllowance)}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">بدل الطعام:</span><span>{formatCurrency(viewingEmployee.foodAllowance)}</span></div>
-                        <div className="flex justify-between font-bold border-t pt-2"><span>الإجمالي:</span><span>{formatCurrency(viewingEmployee.totalSalary)}</span></div>
+                        {viewingEmployee.nationality === "سعودي" && (viewingEmployee.socialInsuranceDeduction || 0) > 0 && (
+                          <div className="flex justify-between text-red-600">
+                            <span>خصم التأمينات الاجتماعية:</span>
+                            <span>- {formatCurrency(viewingEmployee.socialInsuranceDeduction)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-bold border-t pt-2"><span>صافي الراتب:</span><span>{formatCurrency(viewingEmployee.totalSalary)}</span></div>
                       </CardContent>
                     </Card>
                   </div>

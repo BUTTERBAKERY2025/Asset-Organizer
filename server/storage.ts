@@ -6568,11 +6568,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBranchEmployee(employee: InsertBranchEmployee): Promise<BranchEmployee> {
-    const totalSalary = (employee.salary || 0) + 
+    const grossSalary = (employee.salary || 0) + 
       (employee.housingAllowance || 0) + 
       (employee.transportAllowance || 0) + 
       (employee.foodAllowance || 0) + 
       (employee.otherAllowances || 0);
+    // خصم التأمينات الاجتماعية للموظفين السعوديين فقط
+    const socialInsurance = employee.nationality === "سعودي" ? (employee.socialInsuranceDeduction || 0) : 0;
+    const totalSalary = grossSalary - socialInsurance;
     
     // Generate employee number if not provided
     let employeeNumber = employee.employeeNumber;
@@ -6619,7 +6622,12 @@ export class DatabaseStorage implements IStorage {
     const transportAllowance = employee.transportAllowance ?? current.transportAllowance ?? 0;
     const foodAllowance = employee.foodAllowance ?? current.foodAllowance ?? 0;
     const otherAllowances = employee.otherAllowances ?? current.otherAllowances ?? 0;
-    const totalSalary = salary + housingAllowance + transportAllowance + foodAllowance + otherAllowances;
+    const nationality = employee.nationality ?? current.nationality;
+    const socialInsuranceDeduction = employee.socialInsuranceDeduction ?? current.socialInsuranceDeduction ?? 0;
+    // خصم التأمينات الاجتماعية للموظفين السعوديين فقط
+    const socialInsurance = nationality === "سعودي" ? socialInsuranceDeduction : 0;
+    const grossSalary = salary + housingAllowance + transportAllowance + foodAllowance + otherAllowances;
+    const totalSalary = grossSalary - socialInsurance;
 
     const [updated] = await db.update(branchEmployees)
       .set({ ...employee, totalSalary, updatedAt: new Date() })
