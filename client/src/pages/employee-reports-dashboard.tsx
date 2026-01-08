@@ -1260,6 +1260,88 @@ export default function EmployeeReportsDashboardPage() {
     };
   }, [filteredEmployees]);
 
+  // ==================== HEALTH CERTIFICATE ANALYSIS ====================
+  const healthCertificateAnalysis = useMemo(() => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const sixtyDaysFromNow = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const ninetyDaysFromNow = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000);
+    
+    const validCertificates: typeof filteredEmployees = [];
+    const expiredCertificates: typeof filteredEmployees = [];
+    const noCertificates: typeof filteredEmployees = [];
+    const expiringWithin30: { emp: BranchEmployee; daysLeft: number }[] = [];
+    const expiringWithin60: { emp: BranchEmployee; daysLeft: number }[] = [];
+    const expiringWithin90: { emp: BranchEmployee; daysLeft: number }[] = [];
+    
+    filteredEmployees.forEach(emp => {
+      const status = emp.healthCertificate || "none";
+      const expiry = emp.healthCertificateExpiry;
+      
+      if (status === "none" || !expiry) {
+        noCertificates.push(emp);
+      } else {
+        const expiryDate = new Date(expiry);
+        if (expiryDate < today) {
+          expiredCertificates.push(emp);
+        } else {
+          validCertificates.push(emp);
+          const daysLeft = Math.ceil((expiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+          if (expiryDate <= thirtyDaysFromNow) {
+            expiringWithin30.push({ emp, daysLeft });
+          } else if (expiryDate <= sixtyDaysFromNow) {
+            expiringWithin60.push({ emp, daysLeft });
+          } else if (expiryDate <= ninetyDaysFromNow) {
+            expiringWithin90.push({ emp, daysLeft });
+          }
+        }
+      }
+    });
+    
+    const complianceRate = filteredEmployees.length > 0 
+      ? Math.round((validCertificates.length / filteredEmployees.length) * 100) 
+      : 0;
+    
+    const branchCompliance = branches?.map(branch => {
+      const branchEmps = filteredEmployees.filter(e => e.branchId === branch.id);
+      const valid = branchEmps.filter(e => e.healthCertificate === "valid" && e.healthCertificateExpiry && new Date(e.healthCertificateExpiry) >= today).length;
+      const rate = branchEmps.length > 0 ? Math.round((valid / branchEmps.length) * 100) : 0;
+      return { branchId: branch.id, branchName: branch.name, total: branchEmps.length, valid, rate };
+    }).filter(b => b.total > 0) || [];
+    
+    const jobCompliance = new Map<string, { total: number; valid: number }>();
+    filteredEmployees.forEach(emp => {
+      const job = emp.jobTitle || "غير محدد";
+      const current = jobCompliance.get(job) || { total: 0, valid: 0 };
+      current.total++;
+      if (emp.healthCertificate === "valid" && emp.healthCertificateExpiry && new Date(emp.healthCertificateExpiry) >= today) {
+        current.valid++;
+      }
+      jobCompliance.set(job, current);
+    });
+    const jobComplianceArray = Array.from(jobCompliance.entries()).map(([job, data]) => ({
+      job,
+      ...data,
+      rate: data.total > 0 ? Math.round((data.valid / data.total) * 100) : 0
+    })).sort((a, b) => b.total - a.total);
+    
+    const allExpiring = [...expiringWithin30, ...expiringWithin60, ...expiringWithin90].sort((a, b) => a.daysLeft - b.daysLeft);
+    
+    return {
+      valid: validCertificates.length,
+      expired: expiredCertificates.length,
+      none: noCertificates.length,
+      complianceRate,
+      expiringWithin30,
+      expiringWithin60,
+      expiringWithin90,
+      allExpiring,
+      branchCompliance,
+      jobCompliance: jobComplianceArray,
+      needsRenewal: [...expiredCertificates, ...noCertificates, ...expiringWithin30.map(e => e.emp)],
+    };
+  }, [filteredEmployees, branches]);
+
   // ==================== TURNOVER ANALYSIS ====================
   const turnoverAnalysis = useMemo(() => {
     const terminatedEmployees = employees?.filter(emp => emp.status === "terminated") || [];
@@ -1724,6 +1806,10 @@ export default function EmployeeReportsDashboardPage() {
               <TabsTrigger value="kpis" data-testid="tab-kpis">
                 <PieChartIcon className="w-4 h-4 ml-1" />
                 المؤشرات
+              </TabsTrigger>
+              <TabsTrigger value="health-certificates" data-testid="tab-health-certificates">
+                <CheckCircle className="w-4 h-4 ml-1" />
+                الشهادات الصحية
               </TabsTrigger>
             </TabsList>
 
@@ -3048,6 +3134,279 @@ export default function EmployeeReportsDashboardPage() {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+
+            {/* Health Certificates Tab */}
+            <TabsContent value="health-certificates" className="space-y-4" data-testid="tab-content-health-certificates">
+              <div className="flex justify-end mb-4 gap-2">
+                <Button variant="outline" size="sm" onClick={() => {
+                  const ws = XLSX.utils.json_to_sheet(healthCertificateAnalysis.needsRenewal.map(emp => ({
+                    "رقم الموظف": emp.employeeNumber || "",
+                    "الاسم": emp.employeeName,
+                    "الفرع": getBranchName(emp.branchId),
+                    "الوظيفة": emp.jobTitle,
+                    "حالة الشهادة": emp.healthCertificate === "valid" ? "صالحة" : emp.healthCertificate === "expired" ? "منتهية" : "لا توجد",
+                    "تاريخ الانتهاء": emp.healthCertificateExpiry || "--",
+                    "الجوال": emp.phoneNumber || "",
+                  })));
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "الشهادات الصحية");
+                  XLSX.writeFile(wb, `health_certificates_${selectedMonth}.xlsx`);
+                }} data-testid="button-export-health-excel">
+                  <FileSpreadsheet className="w-4 h-4 ml-1" />
+                  Excel
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const docDefinition: any = {
+                    content: [
+                      { text: "تقرير الشهادات الصحية", style: "header", alignment: "center" },
+                      { text: `الشهر: ${selectedMonth}`, alignment: "center", margin: [0, 5, 0, 15] },
+                      { text: `نسبة الامتثال: ${healthCertificateAnalysis.complianceRate}%`, alignment: "center", margin: [0, 0, 0, 10] },
+                      {
+                        table: {
+                          headerRows: 1,
+                          widths: ["*", "*", "*", "*", "*"],
+                          body: [
+                            ["الموظف", "الفرع", "الوظيفة", "الحالة", "تاريخ الانتهاء"],
+                            ...healthCertificateAnalysis.needsRenewal.map(emp => [
+                              emp.employeeName,
+                              getBranchName(emp.branchId),
+                              emp.jobTitle,
+                              emp.healthCertificate === "valid" ? "صالحة" : emp.healthCertificate === "expired" ? "منتهية" : "لا توجد",
+                              emp.healthCertificateExpiry || "--"
+                            ])
+                          ]
+                        }
+                      }
+                    ],
+                    styles: { header: { fontSize: 18, bold: true } }
+                  };
+                  pdfMake.createPdf(docDefinition).download(`health_certificates_${selectedMonth}.pdf`);
+                }} data-testid="button-export-health-pdf">
+                  <FileText className="w-4 h-4 ml-1" />
+                  PDF
+                </Button>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200" data-testid="health-valid-count">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <CheckCircle className="w-8 h-8 mx-auto text-green-600 mb-2" />
+                      <p className="text-3xl font-bold text-green-700">{formatNumber(healthCertificateAnalysis.valid)}</p>
+                      <p className="text-sm text-green-600">شهادات صالحة</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200" data-testid="health-expired-count">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <XCircle className="w-8 h-8 mx-auto text-red-600 mb-2" />
+                      <p className="text-3xl font-bold text-red-700">{formatNumber(healthCertificateAnalysis.expired)}</p>
+                      <p className="text-sm text-red-600">شهادات منتهية</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200" data-testid="health-none-count">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <AlertCircle className="w-8 h-8 mx-auto text-gray-600 mb-2" />
+                      <p className="text-3xl font-bold text-gray-700">{formatNumber(healthCertificateAnalysis.none)}</p>
+                      <p className="text-sm text-gray-600">بدون شهادة</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className={`bg-gradient-to-br ${healthCertificateAnalysis.complianceRate >= 80 ? "from-teal-50 to-teal-100 border-teal-200" : healthCertificateAnalysis.complianceRate >= 50 ? "from-yellow-50 to-yellow-100 border-yellow-200" : "from-red-50 to-red-100 border-red-200"}`} data-testid="health-compliance-rate">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <TrendingUp className={`w-8 h-8 mx-auto mb-2 ${healthCertificateAnalysis.complianceRate >= 80 ? "text-teal-600" : healthCertificateAnalysis.complianceRate >= 50 ? "text-yellow-600" : "text-red-600"}`} />
+                      <p className={`text-3xl font-bold ${healthCertificateAnalysis.complianceRate >= 80 ? "text-teal-700" : healthCertificateAnalysis.complianceRate >= 50 ? "text-yellow-700" : "text-red-700"}`}>{healthCertificateAnalysis.complianceRate}%</p>
+                      <p className={`text-sm ${healthCertificateAnalysis.complianceRate >= 80 ? "text-teal-600" : healthCertificateAnalysis.complianceRate >= 50 ? "text-yellow-600" : "text-red-600"}`}>نسبة الامتثال</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Expiring Soon Alerts */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="border-red-200" data-testid="health-expiring-30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-red-700 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      تنتهي خلال 30 يوم
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-red-700">{healthCertificateAnalysis.expiringWithin30.length}</p>
+                    {healthCertificateAnalysis.expiringWithin30.length > 0 && (
+                      <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                        {healthCertificateAnalysis.expiringWithin30.map((item, i) => (
+                          <p key={i} className="text-xs text-red-600">{item.emp.employeeName} ({item.daysLeft} يوم)</p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card className="border-yellow-200" data-testid="health-expiring-60">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-yellow-700 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      تنتهي خلال 60 يوم
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-yellow-700">{healthCertificateAnalysis.expiringWithin60.length}</p>
+                    {healthCertificateAnalysis.expiringWithin60.length > 0 && (
+                      <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                        {healthCertificateAnalysis.expiringWithin60.map((item, i) => (
+                          <p key={i} className="text-xs text-yellow-600">{item.emp.employeeName} ({item.daysLeft} يوم)</p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card className="border-blue-200" data-testid="health-expiring-90">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      تنتهي خلال 90 يوم
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-blue-700">{healthCertificateAnalysis.expiringWithin90.length}</p>
+                    {healthCertificateAnalysis.expiringWithin90.length > 0 && (
+                      <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                        {healthCertificateAnalysis.expiringWithin90.map((item, i) => (
+                          <p key={i} className="text-xs text-blue-600">{item.emp.employeeName} ({item.daysLeft} يوم)</p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Branch Compliance Chart */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card data-testid="health-branch-compliance">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      نسبة الامتثال حسب الفرع
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {healthCertificateAnalysis.branchCompliance.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={healthCertificateAnalysis.branchCompliance} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" domain={[0, 100]} />
+                          <YAxis dataKey="branchName" type="category" width={100} />
+                          <Tooltip formatter={(value) => `${value}%`} />
+                          <Bar dataKey="rate" fill="#10b981" name="نسبة الامتثال">
+                            {healthCertificateAnalysis.branchCompliance.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.rate >= 80 ? "#10b981" : entry.rate >= 50 ? "#f59e0b" : "#ef4444"} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="text-center py-10 text-gray-500">لا توجد بيانات</div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="health-job-compliance">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      نسبة الامتثال حسب الوظيفة
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {healthCertificateAnalysis.jobCompliance.length > 0 ? (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {healthCertificateAnalysis.jobCompliance.map((job, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <div>
+                              <p className="font-medium text-sm">{job.job}</p>
+                              <p className="text-xs text-gray-500">{job.valid}/{job.total} موظف</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 bg-gray-200 rounded-full h-2">
+                                <div 
+                                  className={`h-2 rounded-full ${job.rate >= 80 ? "bg-green-500" : job.rate >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
+                                  style={{ width: `${job.rate}%` }}
+                                />
+                              </div>
+                              <span className={`font-bold text-sm ${job.rate >= 80 ? "text-green-600" : job.rate >= 50 ? "text-yellow-600" : "text-red-600"}`}>
+                                {job.rate}%
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-gray-500">لا توجد بيانات</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Renewal Needed Table */}
+              <Card data-testid="health-renewal-table">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-500" />
+                    الموظفين الذين يحتاجون تجديد الشهادة الصحية
+                  </CardTitle>
+                  <CardDescription>شهادات منتهية أو غير موجودة أو تنتهي خلال 30 يوم</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {healthCertificateAnalysis.needsRenewal.length > 0 ? (
+                    <div className="max-h-80 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">الموظف</TableHead>
+                            <TableHead className="text-right">الفرع</TableHead>
+                            <TableHead className="text-right">الوظيفة</TableHead>
+                            <TableHead className="text-right">الحالة</TableHead>
+                            <TableHead className="text-right">تاريخ الانتهاء</TableHead>
+                            <TableHead className="text-right">الجوال</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {healthCertificateAnalysis.needsRenewal.map((emp, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                              <TableCell>{getBranchName(emp.branchId)}</TableCell>
+                              <TableCell>{emp.jobTitle}</TableCell>
+                              <TableCell>
+                                <Badge className={
+                                  emp.healthCertificate === "expired" ? "bg-red-100 text-red-800" :
+                                  emp.healthCertificate === "none" || !emp.healthCertificate ? "bg-gray-100 text-gray-800" :
+                                  "bg-yellow-100 text-yellow-800"
+                                }>
+                                  {emp.healthCertificate === "expired" ? "منتهية" : 
+                                   emp.healthCertificate === "none" || !emp.healthCertificate ? "لا توجد" : "تنتهي قريباً"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{emp.healthCertificateExpiry || "--"}</TableCell>
+                              <TableCell dir="ltr">{emp.phoneNumber || "--"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-green-600">
+                      <CheckCircle className="w-12 h-12 mx-auto mb-2" />
+                      جميع الموظفين لديهم شهادات صحية سارية
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         )}
