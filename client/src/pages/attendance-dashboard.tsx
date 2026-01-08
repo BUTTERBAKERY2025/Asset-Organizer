@@ -84,6 +84,14 @@ export default function AttendanceDashboardPage() {
       href: "/branch-employees",
       color: "bg-amber-500",
     },
+    {
+      title: "التقارير الشاملة",
+      description: "تقارير تحليلية وإغلاق الرواتب الشهرية",
+      icon: <BarChart3 className="w-6 h-6" />,
+      href: "/employee-reports",
+      color: "bg-teal-500",
+      badge: "جديد",
+    },
   ];
 
   const managementCards = [
