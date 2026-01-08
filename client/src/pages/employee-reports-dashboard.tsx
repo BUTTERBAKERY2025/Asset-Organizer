@@ -1455,18 +1455,99 @@ export default function EmployeeReportsDashboardPage() {
       if (range) range.count++;
     });
 
+    // Tenure distribution analysis (مدة الخدمة)
+    const today = new Date();
+    const tenureRanges = [
+      { range: "أقل من سنة", min: 0, max: 1, count: 0, employees: [] as any[] },
+      { range: "1-3 سنوات", min: 1, max: 3, count: 0, employees: [] as any[] },
+      { range: "3-5 سنوات", min: 3, max: 5, count: 0, employees: [] as any[] },
+      { range: "أكثر من 5 سنوات", min: 5, max: 100, count: 0, employees: [] as any[] },
+    ];
+    const activeEmpsWithHireDate = employees.filter(e => e.status === "active" && e.hireDate);
+    activeEmpsWithHireDate.forEach(emp => {
+      const hireDate = new Date(emp.hireDate!);
+      const years = (today.getTime() - hireDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
+      const range = tenureRanges.find(r => years >= r.min && years < r.max);
+      if (range) {
+        range.count++;
+        range.employees.push({ name: emp.employeeName, years: Math.round(years * 10) / 10, salary: emp.salary });
+      }
+    });
+    const tenureByBranch = branches.map(branch => {
+      const branchEmps = activeEmpsWithHireDate.filter(e => e.branchId === branch.id);
+      const avgTenure = branchEmps.length > 0 
+        ? Math.round(branchEmps.reduce((sum, e) => {
+            const years = (today.getTime() - new Date(e.hireDate!).getTime()) / (1000 * 60 * 60 * 24 * 365);
+            return sum + years;
+          }, 0) / branchEmps.length * 10) / 10
+        : 0;
+      return { branchName: branch.name, avgTenure, count: branchEmps.length };
+    }).filter(b => b.count > 0).sort((a, b) => b.avgTenure - a.avgTenure);
+
+    // Salary gap analysis by nationality for same job (تحليل الفجوة الراتبية)
+    const salaryGapByJob: Array<{
+      jobTitle: string;
+      nationalityComparisons: Array<{ nationality: string; avgSalary: number; count: number }>;
+      maxGap: number;
+      highestPaidNat: string;
+      lowestPaidNat: string;
+    }> = [];
+    
+    jobTitles.forEach(job => {
+      const jobEmps = employees.filter(e => e.jobTitle === job && e.status === "active" && e.salary);
+      if (jobEmps.length < 2) return;
+      
+      const natSalaries = new Map<string, { total: number; count: number }>();
+      jobEmps.forEach(emp => {
+        const nat = emp.nationality || "غير محدد";
+        const current = natSalaries.get(nat) || { total: 0, count: 0 };
+        current.total += emp.salary || 0;
+        current.count++;
+        natSalaries.set(nat, current);
+      });
+      
+      if (natSalaries.size < 2) return;
+      
+      const comparisons = Array.from(natSalaries.entries()).map(([nat, data]) => ({
+        nationality: nat,
+        avgSalary: Math.round(data.total / data.count),
+        count: data.count
+      })).sort((a, b) => b.avgSalary - a.avgSalary);
+      
+      const maxSalary = comparisons[0]?.avgSalary || 0;
+      const minSalary = comparisons[comparisons.length - 1]?.avgSalary || 0;
+      
+      salaryGapByJob.push({
+        jobTitle: job,
+        nationalityComparisons: comparisons,
+        maxGap: maxSalary - minSalary,
+        highestPaidNat: comparisons[0]?.nationality || "--",
+        lowestPaidNat: comparisons[comparisons.length - 1]?.nationality || "--",
+      });
+    });
+    
+    const sortedSalaryGap = salaryGapByJob.sort((a, b) => b.maxGap - a.maxGap).slice(0, 15);
+
     return {
       branchSalaryStats,
       jobAcrossBranches: jobAcrossBranches.slice(0, 15),
       nationalityStats,
       branchEmployeeCounts,
       salaryRanges,
+      tenureRanges,
+      tenureByBranch,
+      salaryGapByJob: sortedSalaryGap,
       summary: {
         totalBranches: branchSalaryStats.length,
         totalActiveEmployees: employees.filter(e => e.status === "active").length,
         overallAvgSalary: activeSalaries.length > 0 ? Math.round(activeSalaries.reduce((a, b) => a + b, 0) / activeSalaries.length) : 0,
         highestAvgBranch: branchSalaryStats[0]?.branchName || "--",
         lowestAvgBranch: branchSalaryStats[branchSalaryStats.length - 1]?.branchName || "--",
+        avgTenure: activeEmpsWithHireDate.length > 0 
+          ? Math.round(activeEmpsWithHireDate.reduce((sum, e) => {
+              return sum + (today.getTime() - new Date(e.hireDate!).getTime()) / (1000 * 60 * 60 * 24 * 365);
+            }, 0) / activeEmpsWithHireDate.length * 10) / 10
+          : 0,
       }
     };
   }, [employees, branches]);
@@ -3578,6 +3659,18 @@ export default function EmployeeReportsDashboardPage() {
                     "فجوة الراتب": j.salaryGap,
                   })));
                   XLSX.utils.book_append_sheet(wb, jobSheet, "مقارنة الوظائف");
+                  const tenureSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.tenureRanges.map(t => ({
+                    "مدة الخدمة": t.range,
+                    "عدد الموظفين": t.count,
+                  })));
+                  XLSX.utils.book_append_sheet(wb, tenureSheet, "مدة الخدمة");
+                  const salaryGapSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.salaryGapByJob.map(g => ({
+                    "الوظيفة": g.jobTitle,
+                    "أعلى جنسية": g.highestPaidNat,
+                    "أقل جنسية": g.lowestPaidNat,
+                    "فجوة الراتب": g.maxGap,
+                  })));
+                  XLSX.utils.book_append_sheet(wb, salaryGapSheet, "فجوة الرواتب");
                   XLSX.writeFile(wb, `comparisons_report_${selectedMonth}.xlsx`);
                 }} data-testid="button-export-comparisons-excel">
                   <FileSpreadsheet className="w-4 h-4 ml-1" />
@@ -3826,6 +3919,134 @@ export default function EmployeeReportsDashboardPage() {
                           <Bar dataKey="count" fill="#8b5cf6" name="عدد الموظفين" />
                         </BarChart>
                       </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Tenure Distribution - مدة الخدمة */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card data-testid="card-tenure-distribution">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Clock className="w-5 h-5" />
+                          توزيع الموظفين حسب مدة الخدمة
+                        </CardTitle>
+                        <CardDescription>متوسط مدة الخدمة: {comprehensiveComparisons.summary.avgTenure} سنة</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={comprehensiveComparisons.tenureRanges}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="range" />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="count" fill="#10b981" name="عدد الموظفين" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          {comprehensiveComparisons.tenureRanges.map((range, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm font-medium">{range.range}</span>
+                              <Badge variant="secondary">{formatNumber(range.count)} موظف</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card data-testid="card-tenure-by-branch">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Building2 className="w-5 h-5" />
+                          متوسط مدة الخدمة حسب الفرع
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3 max-h-80 overflow-y-auto">
+                          {comprehensiveComparisons.tenureByBranch.map((branch, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div>
+                                <span className="font-medium">{branch.branchName}</span>
+                                <span className="text-xs text-gray-500 mr-2">({branch.count} موظف)</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full ${branch.avgTenure >= 3 ? "bg-green-500" : branch.avgTenure >= 1 ? "bg-yellow-500" : "bg-red-500"}`}
+                                    style={{ width: `${Math.min(branch.avgTenure * 20, 100)}%` }}
+                                  />
+                                </div>
+                                <Badge className={
+                                  branch.avgTenure >= 3 ? "bg-green-100 text-green-800" :
+                                  branch.avgTenure >= 1 ? "bg-yellow-100 text-yellow-800" :
+                                  "bg-red-100 text-red-800"
+                                }>
+                                  {branch.avgTenure} سنة
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Salary Gap Analysis - تحليل الفجوة الراتبية */}
+                  <Card data-testid="card-salary-gap-analysis">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-red-500" />
+                        تحليل الفجوة الراتبية بين الجنسيات لنفس الوظيفة
+                      </CardTitle>
+                      <CardDescription>الوظائف التي بها فرق في الراتب بين الجنسيات المختلفة</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {comprehensiveComparisons.salaryGapByJob.length > 0 ? (
+                        <div className="overflow-x-auto max-h-96">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right">الوظيفة</TableHead>
+                                <TableHead className="text-right">الجنسيات والرواتب</TableHead>
+                                <TableHead className="text-right">أعلى جنسية</TableHead>
+                                <TableHead className="text-right">أقل جنسية</TableHead>
+                                <TableHead className="text-right">فجوة الراتب</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {comprehensiveComparisons.salaryGapByJob.map((job, i) => (
+                                <TableRow key={i}>
+                                  <TableCell className="font-medium">{job.jobTitle}</TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-wrap gap-1">
+                                      {job.nationalityComparisons.map((nat, j) => (
+                                        <Badge key={j} variant="outline" className="text-xs">
+                                          {nat.nationality}: {formatCurrency(nat.avgSalary)} ({nat.count})
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-green-600 font-medium">{job.highestPaidNat}</TableCell>
+                                  <TableCell className="text-red-600 font-medium">{job.lowestPaidNat}</TableCell>
+                                  <TableCell>
+                                    <Badge className={
+                                      job.maxGap > 2000 ? "bg-red-100 text-red-800" :
+                                      job.maxGap > 1000 ? "bg-yellow-100 text-yellow-800" :
+                                      "bg-green-100 text-green-800"
+                                    }>
+                                      {formatCurrency(job.maxGap)}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <CheckCircle className="w-10 h-10 mx-auto mb-2 text-green-500" />
+                          لا توجد فجوات راتبية ملحوظة بين الجنسيات
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </>
