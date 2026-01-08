@@ -445,7 +445,7 @@ export default function BranchEmployeesPage() {
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        setImportPreview(jsonData.slice(0, 5));
+        setImportPreview(jsonData);
         setIsImportDialogOpen(true);
       } catch (error) {
         alert("خطأ في قراءة الملف");
@@ -1484,8 +1484,8 @@ export default function BranchEmployeesPage() {
                   </Select>
                 </div>
 
-                <div className="text-sm font-medium">معاينة البيانات (أول 5 صفوف):</div>
-                <div className="max-h-60 overflow-auto border rounded">
+                <div className="text-sm font-medium">معاينة البيانات ({importPreview.length} موظف):</div>
+                <div className="max-h-80 overflow-auto border rounded">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1507,7 +1507,7 @@ export default function BranchEmployeesPage() {
                 </div>
                 {importBranchId && (
                   <div className="text-sm text-green-700 bg-green-50 p-3 rounded">
-                    <strong>الفرع المحدد:</strong> {getBranchName(importBranchId)} - سيتم إضافة {importPreview.length > 5 ? "جميع" : importPreview.length} الموظفين لهذا الفرع
+                    <strong>الفرع المحدد:</strong> {getBranchName(importBranchId)} - سيتم إضافة {importPreview.length} موظف لهذا الفرع
                   </div>
                 )}
                 {!importBranchId && (
