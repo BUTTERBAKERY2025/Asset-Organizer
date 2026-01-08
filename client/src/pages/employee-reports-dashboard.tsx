@@ -739,6 +739,392 @@ export default function EmployeeReportsDashboardPage() {
     pdfMake.createPdf(docDefinition).download(`إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`);
   };
 
+  // ==================== NEW EXPORT FUNCTIONS ====================
+
+  const exportBranchComparisonToExcel = () => {
+    if (branchComparisonData.length === 0) return;
+    const data = branchComparisonData.map((branch, index) => ({
+      "م": index + 1,
+      "الفرع": branch.branchName,
+      "عدد الموظفين": branch.employeeCount,
+      "السعوديين": branch.saudiCount,
+      "نسبة السعودة %": branch.saudiPercentage,
+      "إجمالي الرواتب": branch.totalSalary,
+      "متوسط الراتب": branch.avgSalary,
+      "التأمينات": branch.totalInsurance,
+      "البدلات": branch.totalAllowances,
+      "نسبة الحضور %": branch.attendanceRate,
+      "نسبة الغياب %": branch.absentRate,
+      "أيام الحضور": branch.presentCount,
+      "أيام الغياب": branch.absentCount,
+      "أيام التأخير": branch.lateCount,
+      "إجمالي الساعات": branch.totalHours,
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "مقارنة الفروع");
+    XLSX.writeFile(wb, `مقارنة_الفروع_${selectedMonth}.xlsx`);
+  };
+
+  const exportBranchComparisonToPDF = () => {
+    if (branchComparisonData.length === 0) return;
+    const tableBody = [
+      [
+        { text: "الفرع", style: "tableHeader" },
+        { text: "الموظفين", style: "tableHeader" },
+        { text: "السعودة %", style: "tableHeader" },
+        { text: "الرواتب", style: "tableHeader" },
+        { text: "الحضور %", style: "tableHeader" },
+        { text: "الساعات", style: "tableHeader" },
+      ],
+      ...branchComparisonData.map((branch) => [
+        { text: branch.branchName, alignment: "right" as const },
+        { text: String(branch.employeeCount), alignment: "center" as const },
+        { text: `${branch.saudiPercentage}%`, alignment: "center" as const },
+        { text: formatNumber(branch.totalSalary), alignment: "center" as const },
+        { text: `${branch.attendanceRate}%`, alignment: "center" as const },
+        { text: String(branch.totalHours), alignment: "center" as const },
+      ]),
+    ];
+    const docDefinition: any = {
+      pageOrientation: "landscape",
+      content: [
+        { text: "تقرير مقارنة الفروع", style: "header", alignment: "center" },
+        { text: `الشهر: ${selectedMonth}`, alignment: "center", margin: [0, 0, 0, 20] },
+        { table: { headerRows: 1, widths: ["*", "auto", "auto", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
+      ],
+      styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
+      defaultStyle: { font: "Roboto", fontSize: 9 },
+    };
+    pdfMake.createPdf(docDefinition).download(`مقارنة_الفروع_${selectedMonth}.pdf`);
+  };
+
+  const exportJobComparisonToExcel = () => {
+    if (jobComparisonData.length === 0) return;
+    const data: any[] = [];
+    jobComparisonData.forEach((job, jobIndex) => {
+      job.branches.forEach((branch, branchIndex) => {
+        data.push({
+          "م": branchIndex === 0 ? jobIndex + 1 : "",
+          "المسمى الوظيفي": branchIndex === 0 ? job.jobTitle : "",
+          "الفرع": branch.branchName,
+          "العدد": branch.count,
+          "متوسط الراتب": branch.avgSalary,
+          "أدنى راتب": branch.minSalary,
+          "أعلى راتب": branch.maxSalary,
+          "نسبة الحضور %": branch.attendanceRate,
+          "الفرق عن المتوسط": branch.avgSalary - job.avgSalary,
+        });
+      });
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "مقارنة الوظائف");
+    XLSX.writeFile(wb, `مقارنة_الوظائف_${selectedMonth}.xlsx`);
+  };
+
+  const exportJobComparisonToPDF = () => {
+    if (jobComparisonData.length === 0) return;
+    const tableBody: any[] = [[
+      { text: "الوظيفة", style: "tableHeader" },
+      { text: "الفرع", style: "tableHeader" },
+      { text: "العدد", style: "tableHeader" },
+      { text: "متوسط الراتب", style: "tableHeader" },
+      { text: "الفرق", style: "tableHeader" },
+    ]];
+    jobComparisonData.forEach((job) => {
+      job.branches.forEach((branch, idx) => {
+        tableBody.push([
+          { text: idx === 0 ? job.jobTitle : "", alignment: "right" as const },
+          { text: branch.branchName, alignment: "right" as const },
+          { text: String(branch.count), alignment: "center" as const },
+          { text: formatNumber(branch.avgSalary), alignment: "center" as const },
+          { text: formatNumber(branch.avgSalary - job.avgSalary), alignment: "center" as const, color: branch.avgSalary >= job.avgSalary ? "green" : "red" },
+        ]);
+      });
+    });
+    const docDefinition: any = {
+      pageOrientation: "portrait",
+      content: [
+        { text: "تقرير مقارنة الوظائف عبر الفروع", style: "header", alignment: "center" },
+        { text: `الشهر: ${selectedMonth}`, alignment: "center", margin: [0, 0, 0, 20] },
+        { table: { headerRows: 1, widths: ["*", "*", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
+      ],
+      styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
+      defaultStyle: { font: "Roboto", fontSize: 9 },
+    };
+    pdfMake.createPdf(docDefinition).download(`مقارنة_الوظائف_${selectedMonth}.pdf`);
+  };
+
+  const exportSalariesTableToExcel = () => {
+    if (filteredEmployees.length === 0) return;
+    const data = filteredEmployees.map((emp, index) => {
+      const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
+      const storedIns = emp.socialInsuranceDeduction || 0;
+      const insurance = emp.nationality === "سعودي" ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975)) : 0;
+      return {
+        "م": index + 1,
+        "الموظف": emp.employeeName,
+        "رقم الموظف": emp.employeeNumber,
+        "الفرع": getBranchName(emp.branchId),
+        "الوظيفة": emp.jobTitle,
+        "الجنسية": emp.nationality,
+        "الراتب الأساسي": emp.salary || 0,
+        "البدلات": allowances,
+        "إجمالي الراتب": emp.totalSalary || emp.salary || 0,
+        "التأمينات": insurance,
+        "صافي الراتب": (emp.totalSalary || emp.salary || 0) - insurance,
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "جدول الرواتب");
+    XLSX.writeFile(wb, `جدول_الرواتب_التفصيلي_${selectedMonth}.xlsx`);
+  };
+
+  const exportSalariesTableToPDF = () => {
+    if (filteredEmployees.length === 0) return;
+    const tableBody: any[] = [[
+      { text: "م", style: "tableHeader" },
+      { text: "الموظف", style: "tableHeader" },
+      { text: "الوظيفة", style: "tableHeader" },
+      { text: "الراتب", style: "tableHeader" },
+      { text: "البدلات", style: "tableHeader" },
+      { text: "التأمينات", style: "tableHeader" },
+      { text: "الصافي", style: "tableHeader" },
+    ]];
+    filteredEmployees.forEach((emp, index) => {
+      const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
+      const storedIns = emp.socialInsuranceDeduction || 0;
+      const insurance = emp.nationality === "سعودي" ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975)) : 0;
+      const netSalary = (emp.totalSalary || emp.salary || 0) - insurance;
+      tableBody.push([
+        { text: String(index + 1), alignment: "center" as const },
+        { text: emp.employeeName, alignment: "right" as const },
+        { text: emp.jobTitle, alignment: "right" as const },
+        { text: formatNumber(emp.salary || 0), alignment: "center" as const },
+        { text: formatNumber(allowances), alignment: "center" as const },
+        { text: insurance > 0 ? formatNumber(insurance) : "-", alignment: "center" as const, color: "red" },
+        { text: formatNumber(netSalary), alignment: "center" as const, bold: true },
+      ]);
+    });
+    const docDefinition: any = {
+      pageOrientation: "landscape",
+      content: [
+        { text: "جدول الرواتب التفصيلي", style: "header", alignment: "center" },
+        { text: `الشهر: ${selectedMonth}`, alignment: "center", margin: [0, 0, 0, 20] },
+        { table: { headerRows: 1, widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
+      ],
+      styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
+      defaultStyle: { font: "Roboto", fontSize: 9 },
+    };
+    pdfMake.createPdf(docDefinition).download(`جدول_الرواتب_${selectedMonth}.pdf`);
+  };
+
+  const exportAnalyticsToExcel = () => {
+    if (filteredEmployees.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    
+    const empData = filteredEmployees.map((emp, index) => {
+      const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
+      const storedIns = emp.socialInsuranceDeduction || 0;
+      const insurance = emp.nationality === "سعودي" ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975)) : 0;
+      return {
+        "م": index + 1,
+        "الموظف": emp.employeeName,
+        "الفرع": getBranchName(emp.branchId),
+        "الوظيفة": emp.jobTitle,
+        "الجنسية": emp.nationality,
+        "الراتب الأساسي": emp.salary || 0,
+        "البدلات": allowances,
+        "التأمينات": insurance,
+      };
+    });
+    const wsEmp = XLSX.utils.json_to_sheet(empData);
+    XLSX.utils.book_append_sheet(wb, wsEmp, "بيانات الموظفين");
+    
+    const branchDistData = branchComparisonData.map((b: { branchName: string; employeeCount: number }) => ({
+      "الفرع": b.branchName,
+      "عدد الموظفين": b.employeeCount,
+    }));
+    const wsBranch = XLSX.utils.json_to_sheet(branchDistData);
+    XLSX.utils.book_append_sheet(wb, wsBranch, "توزيع الفروع");
+    
+    const jobData = jobTitleChartData.map(j => ({
+      "الوظيفة": j.name,
+      "العدد": j.value,
+    }));
+    const wsJob = XLSX.utils.json_to_sheet(jobData);
+    XLSX.utils.book_append_sheet(wb, wsJob, "توزيع الوظائف");
+    
+    XLSX.writeFile(wb, `تحليلات_الموظفين_${selectedMonth}.xlsx`);
+  };
+
+  const exportKPIsToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    
+    const kpiData = [
+      { "المؤشر": "إجمالي الموظفين", "القيمة": overviewStats.totalEmployees },
+      { "المؤشر": "الموظفين النشطين", "القيمة": filteredEmployees.filter(e => e.status === "active").length },
+      { "المؤشر": "نسبة الحضور", "القيمة": `${overviewStats.attendanceRate}%` },
+      { "المؤشر": "أيام الحضور", "القيمة": overviewStats.presentCount },
+      { "المؤشر": "أيام الغياب", "القيمة": overviewStats.absentCount },
+      { "المؤشر": "إجمالي الرواتب", "القيمة": overviewStats.totalSalaries },
+      { "المؤشر": "متوسط الراتب", "القيمة": overviewStats.totalEmployees > 0 ? Math.round(overviewStats.totalSalaries / overviewStats.totalEmployees) : 0 },
+      { "المؤشر": "عدد السعوديين", "القيمة": overviewStats.saudiEmployees },
+      { "المؤشر": "نسبة السعودة", "القيمة": `${overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%` },
+      { "المؤشر": "إجمالي التأمينات", "القيمة": overviewStats.totalInsurance },
+    ];
+    const wsKPI = XLSX.utils.json_to_sheet(kpiData);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "المؤشرات الرئيسية");
+    
+    const topData = topEmployeesBySalary.map((emp, index) => ({
+      "م": index + 1,
+      "الموظف": emp.employeeName,
+      "الفرع": getBranchName(emp.branchId),
+      "الوظيفة": emp.jobTitle,
+      "الراتب": emp.totalSalary || emp.salary,
+    }));
+    const wsTop = XLSX.utils.json_to_sheet(topData);
+    XLSX.utils.book_append_sheet(wb, wsTop, "أعلى الرواتب");
+    
+    const allowData = allowancesBreakdown.map(a => ({
+      "البدل": a.name,
+      "القيمة": a.value,
+    }));
+    const wsAllow = XLSX.utils.json_to_sheet(allowData);
+    XLSX.utils.book_append_sheet(wb, wsAllow, "البدلات");
+    
+    const branchSummary = branchComparisonData.map((b, index) => ({
+      "م": index + 1,
+      "الفرع": b.branchName,
+      "الموظفين": b.employeeCount,
+      "الرواتب": b.totalSalary,
+      "نسبة الحضور": `${b.attendanceRate}%`,
+    }));
+    const wsBranch = XLSX.utils.json_to_sheet(branchSummary);
+    XLSX.utils.book_append_sheet(wb, wsBranch, "ملخص الفروع");
+    
+    XLSX.writeFile(wb, `مؤشرات_الأداء_${selectedMonth}.xlsx`);
+  };
+
+  const exportKPIsToPDF = () => {
+    const docDefinition: any = {
+      pageOrientation: "portrait",
+      content: [
+        { text: "تقرير مؤشرات الأداء الرئيسية", style: "header", alignment: "center" },
+        { text: `الشهر: ${selectedMonth}`, alignment: "center", margin: [0, 0, 0, 20] },
+        {
+          columns: [
+            { text: `إجمالي الموظفين: ${formatNumber(overviewStats.totalEmployees)}`, width: "*" },
+            { text: `نسبة الحضور: ${overviewStats.attendanceRate}%`, width: "*" },
+          ],
+          margin: [0, 0, 0, 10],
+        },
+        {
+          columns: [
+            { text: `إجمالي الرواتب: ${formatCurrency(overviewStats.totalSalaries)}`, width: "*" },
+            { text: `نسبة السعودة: ${overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%`, width: "*" },
+          ],
+          margin: [0, 0, 0, 10],
+        },
+        { text: `إجمالي التأمينات الاجتماعية: ${formatCurrency(overviewStats.totalInsurance)}`, margin: [0, 0, 0, 20] },
+        { text: "أعلى 10 موظفين راتباً", style: "subheader", margin: [0, 10, 0, 10] },
+        {
+          table: {
+            headerRows: 1,
+            widths: ["auto", "*", "auto", "auto"],
+            body: [
+              [{ text: "م", style: "tableHeader" }, { text: "الموظف", style: "tableHeader" }, { text: "الوظيفة", style: "tableHeader" }, { text: "الراتب", style: "tableHeader" }],
+              ...topEmployeesBySalary.map((emp, index) => [
+                { text: String(index + 1), alignment: "center" as const },
+                { text: emp.employeeName, alignment: "right" as const },
+                { text: emp.jobTitle, alignment: "right" as const },
+                { text: formatNumber(emp.totalSalary || emp.salary), alignment: "center" as const },
+              ]),
+            ],
+          },
+          layout: "lightHorizontalLines",
+        },
+      ],
+      styles: {
+        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+        subheader: { fontSize: 14, bold: true },
+        tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" },
+      },
+      defaultStyle: { font: "Roboto", fontSize: 10 },
+    };
+    pdfMake.createPdf(docDefinition).download(`مؤشرات_الأداء_${selectedMonth}.pdf`);
+  };
+
+  // ==================== NEW ANALYTICS DATA ====================
+
+  const nationalityDistribution = useMemo(() => {
+    const map = new Map<string, number>();
+    filteredEmployees.forEach(emp => {
+      const nat = emp.nationality || "غير محدد";
+      map.set(nat, (map.get(nat) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [filteredEmployees]);
+
+  const lateAnalysis = useMemo(() => {
+    const lateMap = new Map<number, { name: string; branch: string; lateDays: number; lateMinutes: number }>();
+    filteredEmployees.forEach(emp => {
+      const attendance = attendanceByEmployee.get(emp.id);
+      if (attendance && attendance.late > 0) {
+        lateMap.set(emp.id, {
+          name: emp.employeeName,
+          branch: getBranchName(emp.branchId),
+          lateDays: attendance.late,
+          lateMinutes: 0,
+        });
+      }
+    });
+    return Array.from(lateMap.values()).sort((a, b) => b.lateDays - a.lateDays).slice(0, 10);
+  }, [filteredEmployees, attendanceByEmployee]);
+
+  const overtimeAnalysis = useMemo(() => {
+    if (!attendanceRecords || !branches) return [];
+    const monthStart = `${selectedMonth}-01`;
+    const monthEnd = `${selectedMonth}-31`;
+    
+    return branches.map(branch => {
+      const branchAttendance = attendanceRecords.filter(rec => 
+        rec.branchId === branch.id && 
+        rec.attendanceDate >= monthStart && 
+        rec.attendanceDate <= monthEnd
+      );
+      const totalHours = branchAttendance.reduce((sum, r) => sum + (Number(r.workingHours) || 0), 0);
+      const standardHours = branchAttendance.length * 8;
+      const overtime = Math.max(0, totalHours - standardHours);
+      return {
+        branchName: branch.name,
+        totalHours: Math.round(totalHours),
+        standardHours,
+        overtime: Math.round(overtime),
+      };
+    }).filter(b => b.totalHours > 0);
+  }, [attendanceRecords, branches, selectedMonth]);
+
+  const branchPerformanceRanking = useMemo(() => {
+    return branchComparisonData.map(branch => {
+      const saudiScore = branch.saudiPercentage >= 30 ? 25 : Math.round((branch.saudiPercentage / 30) * 25);
+      const attendanceScore = branch.attendanceRate >= 80 ? 25 : Math.round((branch.attendanceRate / 80) * 25);
+      const productivityScore = branch.totalHours > 0 ? Math.min(25, Math.round((branch.totalHours / (branch.employeeCount * 200)) * 25)) : 0;
+      const efficiencyScore = 25;
+      const totalScore = saudiScore + attendanceScore + productivityScore + efficiencyScore;
+      return {
+        ...branch,
+        saudiScore,
+        attendanceScore,
+        productivityScore,
+        efficiencyScore,
+        totalScore,
+      };
+    }).sort((a, b) => b.totalScore - a.totalScore);
+  }, [branchComparisonData]);
+
   const isLoading = employeesLoading || attendanceLoading;
 
   return (
@@ -1062,11 +1448,25 @@ export default function EmployeeReportsDashboardPage() {
             <TabsContent value="branch-comparison" className="space-y-4" data-testid="tab-content-branch-comparison">
               <Card data-testid="card-branch-comparison-table">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5" />
-                    مقارنة شاملة بين الفروع
-                  </CardTitle>
-                  <CardDescription>مقارنة مؤشرات الأداء والموظفين والرواتب عبر جميع الفروع لشهر {selectedMonth}</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5" />
+                        مقارنة شاملة بين الفروع
+                      </CardTitle>
+                      <CardDescription>مقارنة مؤشرات الأداء والموظفين والرواتب عبر جميع الفروع لشهر {selectedMonth}</CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={exportBranchComparisonToExcel} data-testid="button-export-branch-excel">
+                        <FileSpreadsheet className="w-4 h-4 ml-1" />
+                        Excel
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={exportBranchComparisonToPDF} data-testid="button-export-branch-pdf">
+                        <FileText className="w-4 h-4 ml-1" />
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -1190,11 +1590,25 @@ export default function EmployeeReportsDashboardPage() {
             <TabsContent value="job-comparison" className="space-y-4" data-testid="tab-content-job-comparison">
               <Card data-testid="card-job-comparison">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    مقارنة الوظائف عبر الفروع
-                  </CardTitle>
-                  <CardDescription>تحليل فروقات الرواتب لنفس المسمى الوظيفي في فروع مختلفة (مرتبة حسب أكبر فرق)</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="w-5 h-5" />
+                        مقارنة الوظائف عبر الفروع
+                      </CardTitle>
+                      <CardDescription>تحليل فروقات الرواتب لنفس المسمى الوظيفي في فروع مختلفة (مرتبة حسب أكبر فرق)</CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={exportJobComparisonToExcel} data-testid="button-export-job-excel">
+                        <FileSpreadsheet className="w-4 h-4 ml-1" />
+                        Excel
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={exportJobComparisonToPDF} data-testid="button-export-job-pdf">
+                        <FileText className="w-4 h-4 ml-1" />
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {jobComparisonData.length === 0 ? (
@@ -1326,8 +1740,22 @@ export default function EmployeeReportsDashboardPage() {
             <TabsContent value="salaries" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>تقرير الرواتب التفصيلي</CardTitle>
-                  <CardDescription>بيانات الرواتب والبدلات لجميع الموظفين</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>تقرير الرواتب التفصيلي</CardTitle>
+                      <CardDescription>بيانات الرواتب والبدلات لجميع الموظفين</CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={exportSalariesTableToExcel} data-testid="button-export-salaries-excel">
+                        <FileSpreadsheet className="w-4 h-4 ml-1" />
+                        Excel
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={exportSalariesTableToPDF} data-testid="button-export-salaries-pdf">
+                        <FileText className="w-4 h-4 ml-1" />
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -1372,6 +1800,12 @@ export default function EmployeeReportsDashboardPage() {
             </TabsContent>
 
             <TabsContent value="analytics" className="space-y-4">
+              <div className="flex justify-end mb-4">
+                <Button variant="outline" size="sm" onClick={exportAnalyticsToExcel} data-testid="button-export-analytics-excel">
+                  <FileSpreadsheet className="w-4 h-4 ml-1" />
+                  تصدير التحليلات Excel
+                </Button>
+              </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
@@ -1433,9 +1867,146 @@ export default function EmployeeReportsDashboardPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <Card data-testid="card-nationality-distribution">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      توزيع الجنسيات
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={nationalityDistribution} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="name" type="category" width={80} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#f59e0b" name="عدد الموظفين" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-late-analysis">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-red-500" />
+                      أكثر الموظفين تأخراً
+                    </CardTitle>
+                    <CardDescription>أعلى 10 موظفين في عدد أيام التأخير</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {lateAnalysis.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">لا توجد سجلات تأخير</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {lateAnalysis.map((emp, index) => (
+                          <div key={index} className="flex items-center gap-3 p-2 bg-red-50 rounded">
+                            <span className="w-6 h-6 flex items-center justify-center bg-red-100 text-red-700 rounded-full text-sm font-bold">
+                              {index + 1}
+                            </span>
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{emp.name}</p>
+                              <p className="text-xs text-gray-500">{emp.branch}</p>
+                            </div>
+                            <Badge className="bg-red-100 text-red-800">{emp.lateDays} يوم</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-overtime-analysis">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-blue-500" />
+                      تحليل ساعات العمل حسب الفرع
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={overtimeAnalysis}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="totalHours" fill="#3b82f6" name="إجمالي الساعات" />
+                        <Bar dataKey="overtime" fill="#10b981" name="ساعات إضافية" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-branch-ranking">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-amber-500" />
+                      ترتيب الفروع حسب الأداء
+                    </CardTitle>
+                    <CardDescription>التقييم الشامل بناءً على السعودة والحضور والإنتاجية</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {branchPerformanceRanking.slice(0, 5).map((branch, index) => (
+                        <div key={branch.branchId} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold ${
+                                index === 0 ? "bg-amber-500" : index === 1 ? "bg-gray-400" : index === 2 ? "bg-amber-700" : "bg-gray-300"
+                              }`}>
+                                {index + 1}
+                              </span>
+                              <span className="font-medium">{branch.branchName}</span>
+                            </div>
+                            <span className="text-lg font-bold text-amber-600">{branch.totalScore}/100</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 text-xs">
+                            <div className="text-center">
+                              <p className="text-gray-500">السعودة</p>
+                              <p className="font-bold">{branch.saudiScore}/25</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-gray-500">الحضور</p>
+                              <p className="font-bold">{branch.attendanceScore}/25</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-gray-500">الإنتاجية</p>
+                              <p className="font-bold">{branch.productivityScore}/25</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-gray-500">الكفاءة</p>
+                              <p className="font-bold">{branch.efficiencyScore}/25</p>
+                            </div>
+                          </div>
+                          <div className="mt-2 bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="h-2 rounded-full bg-gradient-to-r from-amber-400 to-amber-600" 
+                              style={{ width: `${branch.totalScore}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="kpis" className="space-y-4" data-testid="tab-content-kpis">
+              <div className="flex justify-end mb-4 gap-2">
+                <Button variant="outline" size="sm" onClick={exportKPIsToExcel} data-testid="button-export-kpis-excel">
+                  <FileSpreadsheet className="w-4 h-4 ml-1" />
+                  Excel
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportKPIsToPDF} data-testid="button-export-kpis-pdf">
+                  <FileText className="w-4 h-4 ml-1" />
+                  PDF
+                </Button>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200" data-testid="kpi-total-employees">
                   <CardContent className="pt-4">
