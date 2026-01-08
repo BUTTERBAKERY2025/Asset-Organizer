@@ -3845,30 +3845,30 @@ export default function EmployeeReportsDashboardPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
-                        <Table>
+                        <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right">الفرع</TableHead>
-                              <TableHead className="text-right">عدد الموظفين</TableHead>
-                              <TableHead className="text-right">إجمالي الرواتب</TableHead>
-                              <TableHead className="text-right">متوسط الراتب</TableHead>
-                              <TableHead className="text-right">أعلى راتب</TableHead>
-                              <TableHead className="text-right">أقل راتب</TableHead>
-                              <TableHead className="text-right">الأعلى راتباً</TableHead>
-                              <TableHead className="text-right">الأقل راتباً</TableHead>
+                              <TableHead className="text-right w-[120px]">الفرع</TableHead>
+                              <TableHead className="text-center w-[80px]">عدد الموظفين</TableHead>
+                              <TableHead className="text-center w-[100px]">إجمالي الرواتب</TableHead>
+                              <TableHead className="text-center w-[90px]">متوسط الراتب</TableHead>
+                              <TableHead className="text-center w-[80px]">أعلى راتب</TableHead>
+                              <TableHead className="text-center w-[80px]">أقل راتب</TableHead>
+                              <TableHead className="text-center w-[140px]">الأعلى راتباً</TableHead>
+                              <TableHead className="text-center w-[140px]">الأقل راتباً</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {comprehensiveComparisons.branchSalaryStats.map((branch, i) => (
                               <TableRow key={i}>
-                                <TableCell className="font-medium">{branch.branchName}</TableCell>
-                                <TableCell>{formatNumber(branch.employeeCount)}</TableCell>
-                                <TableCell>{formatCurrency(branch.totalSalary)}</TableCell>
-                                <TableCell className="font-bold text-amber-600">{formatCurrency(branch.avgSalary)}</TableCell>
-                                <TableCell className="text-green-600">{formatCurrency(branch.maxSalary)}</TableCell>
-                                <TableCell className="text-red-600">{formatCurrency(branch.minSalary)}</TableCell>
-                                <TableCell>{branch.highestPaid}</TableCell>
-                                <TableCell>{branch.lowestPaid}</TableCell>
+                                <TableCell className="font-medium text-right">{branch.branchName}</TableCell>
+                                <TableCell className="text-center">{formatNumber(branch.employeeCount)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.totalSalary)}</TableCell>
+                                <TableCell className="text-center font-bold text-amber-600">{formatCurrency(branch.avgSalary)}</TableCell>
+                                <TableCell className="text-center text-green-600">{formatCurrency(branch.maxSalary)}</TableCell>
+                                <TableCell className="text-center text-red-600">{formatCurrency(branch.minSalary)}</TableCell>
+                                <TableCell className="text-center">{branch.highestPaid}</TableCell>
+                                <TableCell className="text-center">{branch.lowestPaid}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -3949,26 +3949,26 @@ export default function EmployeeReportsDashboardPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto max-h-96">
-                        <Table>
+                        <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right">الوظيفة</TableHead>
-                              <TableHead className="text-right">العدد</TableHead>
-                              <TableHead className="text-right">متوسط الراتب</TableHead>
-                              <TableHead className="text-right">أعلى فرع</TableHead>
-                              <TableHead className="text-right">أقل فرع</TableHead>
-                              <TableHead className="text-right">فجوة الراتب</TableHead>
+                              <TableHead className="text-right w-[120px]">الوظيفة</TableHead>
+                              <TableHead className="text-center w-[70px]">العدد</TableHead>
+                              <TableHead className="text-center w-[100px]">متوسط الراتب</TableHead>
+                              <TableHead className="text-center w-[120px]">أعلى فرع</TableHead>
+                              <TableHead className="text-center w-[120px]">أقل فرع</TableHead>
+                              <TableHead className="text-center w-[90px]">فجوة الراتب</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {comprehensiveComparisons.jobAcrossBranches.map((job, i) => (
                               <TableRow key={i}>
-                                <TableCell className="font-medium">{job.jobTitle}</TableCell>
-                                <TableCell>{formatNumber(job.totalCount)}</TableCell>
-                                <TableCell className="font-bold text-amber-600">{formatCurrency(job.overallAvgSalary)}</TableCell>
-                                <TableCell className="text-green-600">{job.highestPayingBranch}</TableCell>
-                                <TableCell className="text-red-600">{job.lowestPayingBranch}</TableCell>
-                                <TableCell>
+                                <TableCell className="font-medium text-right">{job.jobTitle}</TableCell>
+                                <TableCell className="text-center">{formatNumber(job.totalCount)}</TableCell>
+                                <TableCell className="text-center font-bold text-amber-600">{formatCurrency(job.overallAvgSalary)}</TableCell>
+                                <TableCell className="text-center text-green-600">{job.highestPayingBranch}</TableCell>
+                                <TableCell className="text-center text-red-600">{job.lowestPayingBranch}</TableCell>
+                                <TableCell className="text-center">
                                   <Badge className={job.salaryGap > 1000 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}>
                                     {formatCurrency(job.salaryGap)}
                                   </Badge>
@@ -4082,22 +4082,22 @@ export default function EmployeeReportsDashboardPage() {
                     <CardContent>
                       {comprehensiveComparisons.salaryGapByJob.length > 0 ? (
                         <div className="overflow-x-auto max-h-96">
-                          <Table>
+                          <Table className="table-fixed w-full">
                             <TableHeader>
                               <TableRow>
-                                <TableHead className="text-right">الوظيفة</TableHead>
-                                <TableHead className="text-right">الجنسيات والرواتب</TableHead>
-                                <TableHead className="text-right">أعلى جنسية</TableHead>
-                                <TableHead className="text-right">أقل جنسية</TableHead>
-                                <TableHead className="text-right">فجوة الراتب</TableHead>
+                                <TableHead className="text-right w-[100px]">الوظيفة</TableHead>
+                                <TableHead className="text-center w-[250px]">الجنسيات والرواتب</TableHead>
+                                <TableHead className="text-center w-[90px]">أعلى جنسية</TableHead>
+                                <TableHead className="text-center w-[90px]">أقل جنسية</TableHead>
+                                <TableHead className="text-center w-[90px]">فجوة الراتب</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {comprehensiveComparisons.salaryGapByJob.map((job, i) => (
                                 <TableRow key={i}>
-                                  <TableCell className="font-medium">{job.jobTitle}</TableCell>
-                                  <TableCell>
-                                    <div className="flex flex-wrap gap-1">
+                                  <TableCell className="font-medium text-right">{job.jobTitle}</TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex flex-wrap gap-1 justify-center">
                                       {job.nationalityComparisons.map((nat, j) => (
                                         <Badge key={j} variant="outline" className="text-xs">
                                           {nat.nationality}: {formatCurrency(nat.avgSalary)} ({nat.count})
@@ -4105,9 +4105,9 @@ export default function EmployeeReportsDashboardPage() {
                                       ))}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="text-green-600 font-medium">{job.highestPaidNat}</TableCell>
-                                  <TableCell className="text-red-600 font-medium">{job.lowestPaidNat}</TableCell>
-                                  <TableCell>
+                                  <TableCell className="text-center text-green-600 font-medium">{job.highestPaidNat}</TableCell>
+                                  <TableCell className="text-center text-red-600 font-medium">{job.lowestPaidNat}</TableCell>
+                                  <TableCell className="text-center">
                                     <Badge className={
                                       job.maxGap > 2000 ? "bg-red-100 text-red-800" :
                                       job.maxGap > 1000 ? "bg-yellow-100 text-yellow-800" :
@@ -4154,26 +4154,26 @@ export default function EmployeeReportsDashboardPage() {
                         </BarChart>
                       </ResponsiveContainer>
                       <div className="mt-4 overflow-x-auto">
-                        <Table>
+                        <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right">الفرع</TableHead>
-                              <TableHead className="text-right">الموظفين</TableHead>
-                              <TableHead className="text-right">بدل السكن</TableHead>
-                              <TableHead className="text-right">بدل النقل</TableHead>
-                              <TableHead className="text-right">إجمالي البدلات</TableHead>
-                              <TableHead className="text-right">متوسط/موظف</TableHead>
+                              <TableHead className="text-right w-[120px]">الفرع</TableHead>
+                              <TableHead className="text-center w-[80px]">الموظفين</TableHead>
+                              <TableHead className="text-center w-[100px]">بدل السكن</TableHead>
+                              <TableHead className="text-center w-[100px]">بدل النقل</TableHead>
+                              <TableHead className="text-center w-[110px]">إجمالي البدلات</TableHead>
+                              <TableHead className="text-center w-[100px]">متوسط/موظف</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {comprehensiveComparisons.allowancesAnalysis.map((branch, i) => (
                               <TableRow key={i}>
-                                <TableCell className="font-medium">{branch.branchName}</TableCell>
-                                <TableCell>{formatNumber(branch.employeeCount)}</TableCell>
-                                <TableCell>{formatCurrency(branch.housingAllowance)}</TableCell>
-                                <TableCell>{formatCurrency(branch.transportAllowance)}</TableCell>
-                                <TableCell className="font-bold text-blue-600">{formatCurrency(branch.totalAllowances)}</TableCell>
-                                <TableCell>{formatCurrency(branch.avgAllowancePerEmployee)}</TableCell>
+                                <TableCell className="font-medium text-right">{branch.branchName}</TableCell>
+                                <TableCell className="text-center">{formatNumber(branch.employeeCount)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.housingAllowance)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.transportAllowance)}</TableCell>
+                                <TableCell className="text-center font-bold text-blue-600">{formatCurrency(branch.totalAllowances)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.avgAllowancePerEmployee)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -4210,28 +4210,28 @@ export default function EmployeeReportsDashboardPage() {
                         </BarChart>
                       </ResponsiveContainer>
                       <div className="mt-4 overflow-x-auto">
-                        <Table>
+                        <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right">الفرع</TableHead>
-                              <TableHead className="text-right">الموظفين</TableHead>
-                              <TableHead className="text-right">الرواتب</TableHead>
-                              <TableHead className="text-right">البدلات</TableHead>
-                              <TableHead className="text-right">التأمينات</TableHead>
-                              <TableHead className="text-right">إجمالي التكلفة</TableHead>
-                              <TableHead className="text-right">تكلفة/موظف</TableHead>
+                              <TableHead className="text-right w-[120px]">الفرع</TableHead>
+                              <TableHead className="text-center w-[80px]">الموظفين</TableHead>
+                              <TableHead className="text-center w-[100px]">الرواتب</TableHead>
+                              <TableHead className="text-center w-[90px]">البدلات</TableHead>
+                              <TableHead className="text-center w-[90px]">التأمينات</TableHead>
+                              <TableHead className="text-center w-[110px]">إجمالي التكلفة</TableHead>
+                              <TableHead className="text-center w-[100px]">تكلفة/موظف</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {comprehensiveComparisons.monthlyCostAnalysis.map((branch, i) => (
                               <TableRow key={i}>
-                                <TableCell className="font-medium">{branch.branchName}</TableCell>
-                                <TableCell>{formatNumber(branch.employeeCount)}</TableCell>
-                                <TableCell>{formatCurrency(branch.totalSalaries)}</TableCell>
-                                <TableCell>{formatCurrency(branch.totalAllowances)}</TableCell>
-                                <TableCell>{formatCurrency(branch.socialInsurance)}</TableCell>
-                                <TableCell className="font-bold text-green-600">{formatCurrency(branch.totalCost)}</TableCell>
-                                <TableCell>
+                                <TableCell className="font-medium text-right">{branch.branchName}</TableCell>
+                                <TableCell className="text-center">{formatNumber(branch.employeeCount)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.totalSalaries)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.totalAllowances)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.socialInsurance)}</TableCell>
+                                <TableCell className="text-center font-bold text-green-600">{formatCurrency(branch.totalCost)}</TableCell>
+                                <TableCell className="text-center">
                                   <Badge className="bg-purple-100 text-purple-800">
                                     {formatCurrency(branch.costPerEmployee)}
                                   </Badge>
