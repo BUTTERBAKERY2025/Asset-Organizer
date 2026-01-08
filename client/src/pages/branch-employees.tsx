@@ -455,6 +455,13 @@ export default function BranchEmployeesPage() {
 
   const handleImport = async () => {
     if (!importFile) return;
+    
+    // التأكد من اختيار فرع
+    if (selectedBranch === "all") {
+      alert("يرجى اختيار فرع محدد قبل الاستيراد");
+      return;
+    }
+    
     setIsImporting(true);
     
     try {
@@ -469,10 +476,23 @@ export default function BranchEmployeesPage() {
         let successCount = 0;
         let errorCount = 0;
         
+        // دالة لتحويل اسم الفرع إلى معرّف الفرع
+        const getBranchIdFromName = (branchName: string): string => {
+          if (!branchName) return selectedBranch;
+          const branch = branches?.find((b: { id: string; name: string }) => 
+            b.name === branchName || b.name.includes(branchName) || branchName.includes(b.name)
+          );
+          return branch?.id || selectedBranch;
+        };
+        
         for (const row of jsonData as any[]) {
           try {
+            // تحديد الفرع: إما من الفلتر المحدد أو من ملف Excel
+            const branchFromExcel = row["الفرع"] || "";
+            const resolvedBranchId = selectedBranch !== "all" ? selectedBranch : getBranchIdFromName(branchFromExcel);
+            
             const employeeData = {
-              branchId: selectedBranch !== "all" ? selectedBranch : (row["الفرع"] || "medina"),
+              branchId: resolvedBranchId,
               employeeName: row["الاسم"] || row["اسم الموظف"] || "",
               jobTitle: row["الوظيفة"] || "عامل",
               nationality: row["الجنسية"] || "أخرى",
@@ -480,6 +500,9 @@ export default function BranchEmployeesPage() {
               housingAllowance: Number(row["بدل السكن"] || 0),
               transportAllowance: Number(row["بدل المواصلات"] || row["بدل انتقال"] || 0),
               otherAllowances: Number(row["بدلات أخرى"] || row["البدلات الأخرى"] || 0),
+              phoneNumber: row["الجوال"] || row["رقم الجوال"] || row["الهاتف"] || "",
+              idNumber: row["رقم الهوية"] || row["الهوية"] || "",
+              department: row["القسم"] || "",
               status: "active",
             };
             
@@ -494,16 +517,23 @@ export default function BranchEmployeesPage() {
             if (res.ok) {
               successCount++;
             } else {
-              console.error("Import error:", await res.text());
+              const errorText = await res.text();
+              console.error("Import error:", errorText);
               errorCount++;
             }
-          } catch {
+          } catch (err) {
+            console.error("Import row error:", err);
             errorCount++;
           }
         }
         
-        alert(`تم استيراد ${successCount} موظف بنجاح${errorCount > 0 ? ` (${errorCount} أخطاء)` : ""}`);
-        queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+        if (successCount > 0) {
+          alert(`تم استيراد ${successCount} موظف بنجاح${errorCount > 0 ? ` (${errorCount} أخطاء)` : ""}`);
+          queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+        } else if (errorCount > 0) {
+          alert(`فشل استيراد الموظفين. تحقق من صحة البيانات في ملف Excel`);
+        }
+        
         setIsImportDialogOpen(false);
         setImportFile(null);
         setImportPreview([]);
@@ -511,6 +541,7 @@ export default function BranchEmployeesPage() {
       };
       reader.readAsArrayBuffer(importFile);
     } catch (error) {
+      console.error("Import error:", error);
       alert("حدث خطأ أثناء الاستيراد");
       setIsImporting(false);
     }
