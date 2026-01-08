@@ -1766,7 +1766,8 @@ export default function EmployeeReportsDashboardPage() {
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-10 text-xs">
+            <div className="overflow-x-auto pb-2">
+              <TabsList className="flex w-max min-w-full gap-1 text-xs">
               <TabsTrigger value="overview" data-testid="tab-overview">
                 <BarChart3 className="w-4 h-4 ml-1" />
                 نظرة عامة
@@ -1811,7 +1812,8 @@ export default function EmployeeReportsDashboardPage() {
                 <CheckCircle className="w-4 h-4 ml-1" />
                 الشهادات الصحية
               </TabsTrigger>
-            </TabsList>
+              </TabsList>
+            </div>
 
             <TabsContent value="overview" className="space-y-4">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
