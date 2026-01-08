@@ -70,6 +70,7 @@ import {
   CalendarDays,
   Wallet,
   RefreshCw,
+  Shield,
 } from "lucide-react";
 import type { BranchEmployee, AttendanceRecord, TimesheetReport } from "@shared/schema";
 
@@ -1376,6 +1377,131 @@ export default function EmployeeReportsDashboardPage() {
       }
     });
     
+    // نسبة السعودة لكل فرع
+    const branchSaudization = branches?.map(branch => {
+      const branchEmps = filteredEmployees.filter(e => e.branchId === branch.id && e.status === "active");
+      const branchSaudis = branchEmps.filter(e => e.nationality === "سعودي");
+      const rate = branchEmps.length > 0 ? Math.round((branchSaudis.length / branchEmps.length) * 100) : 0;
+      const status: "green" | "yellow" | "red" = rate >= requiredSaudization ? "green" : rate >= requiredSaudization - 5 ? "yellow" : "red";
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        total: branchEmps.length,
+        saudis: branchSaudis.length,
+        nonSaudis: branchEmps.length - branchSaudis.length,
+        rate,
+        gap: Math.max(0, requiredSaudization - rate),
+        neededSaudis: Math.max(0, Math.ceil((requiredSaudization / 100 * branchEmps.length) - branchSaudis.length)),
+        status,
+      };
+    }).filter(b => b.total > 0).sort((a, b) => b.rate - a.rate) || [];
+
+    // التكاليف الحكومية الشاملة
+    const MUQABIL_MALI_MONTHLY = 400; // المقابل المالي للعمالة الفائضة
+    const IQAMA_RENEWAL_YEARLY = 650; // تجديد الإقامة
+    const EXIT_REENTRY_SINGLE = 200; // تأشيرة خروج وعودة مفردة
+    const EXIT_REENTRY_MULTIPLE = 500; // تأشيرة خروج وعودة متعددة
+    
+    const activeNonSaudis = nonSaudiEmployees.filter(e => e.status === "active").length;
+    const excessWorkers = Math.max(0, activeNonSaudis - Math.floor(saudiEmployees.length * (100 / requiredSaudization - 1)));
+    
+    // تكاليف صاحب العمل فقط (لا تشمل حصة الموظف)
+    const laborFeesOnly = totalNonSaudiWorkPermit + totalNonSaudiIqama; // رسوم العمالة بدون التأمين (لتجنب الازدواجية)
+    const muqabilMaliMonthly = excessWorkers * MUQABIL_MALI_MONTHLY;
+    
+    const governmentCosts = {
+      // التأمينات الاجتماعية (حصة صاحب العمل فقط)
+      gosiSaudiEmployee: totalGosiEmployee, // للعرض فقط - يُخصم من الموظف
+      gosiSaudiEmployer: totalGosiEmployer, // تكلفة على صاحب العمل
+      gosiNonSaudiEmployer: totalNonSaudiInsurance, // 2% تأمين إصابات العمل
+      totalGosiEmployerOnly: totalGosiEmployer + totalNonSaudiInsurance, // إجمالي التأمينات على صاحب العمل
+      // رسوم العمالة (منفصلة عن التأمين)
+      workPermitTotal: totalNonSaudiWorkPermit,
+      iqamaFeesTotal: totalNonSaudiIqama,
+      laborFeesTotal: laborFeesOnly,
+      // المقابل المالي
+      excessWorkers,
+      muqabilMaliMonthly,
+      muqabilMaliYearly: muqabilMaliMonthly * 12,
+      // إجمالي تكاليف صاحب العمل الشهرية (بدون حصة الموظف)
+      totalMonthlyEmployerCost: totalGosiEmployer + totalNonSaudiInsurance + laborFeesOnly + muqabilMaliMonthly,
+      // إجمالي تكاليف صاحب العمل السنوية
+      totalYearlyEmployerCost: (totalGosiEmployer + totalNonSaudiInsurance + laborFeesOnly + muqabilMaliMonthly) * 12,
+    };
+
+    // حالة وثائق كل موظف
+    const employeeDocumentStatus = filteredEmployees.filter(e => e.status === "active").map(emp => {
+      const issues: string[] = [];
+      let status: "complete" | "incomplete" | "expired" = "complete";
+      
+      // فحص الإقامة
+      if (emp.nationality !== "سعودي") {
+        if (!emp.iqamaNumber) {
+          issues.push("رقم الإقامة غير مسجل");
+          status = "incomplete";
+        }
+        if (!emp.iqamaExpiry) {
+          issues.push("تاريخ انتهاء الإقامة غير مسجل");
+          status = "incomplete";
+        } else if (new Date(emp.iqamaExpiry) < today) {
+          issues.push("الإقامة منتهية");
+          status = "expired";
+        }
+      }
+      
+      // فحص الجواز
+      if (!emp.passportNumber) {
+        issues.push("رقم الجواز غير مسجل");
+        if (status !== "expired") status = "incomplete";
+      }
+      if (!emp.passportExpiry) {
+        issues.push("تاريخ انتهاء الجواز غير مسجل");
+        if (status !== "expired") status = "incomplete";
+      } else if (new Date(emp.passportExpiry) < today) {
+        issues.push("الجواز منتهي");
+        status = "expired";
+      }
+      
+      // فحص الشهادة الصحية
+      if (!emp.healthCertificate || emp.healthCertificate === "none") {
+        issues.push("الشهادة الصحية غير مسجلة");
+        if (status !== "expired") status = "incomplete";
+      } else if (!emp.healthCertificateExpiry) {
+        issues.push("تاريخ انتهاء الشهادة الصحية غير مسجل");
+        if (status !== "expired") status = "incomplete";
+      } else if (new Date(emp.healthCertificateExpiry) < today) {
+        issues.push("الشهادة الصحية منتهية");
+        status = "expired";
+      }
+      
+      // فحص البيانات الأساسية
+      if (!emp.nationality) {
+        issues.push("الجنسية غير محددة");
+        if (status !== "expired") status = "incomplete";
+      }
+      if (!emp.phoneNumber) {
+        issues.push("رقم الهاتف غير مسجل");
+        if (status !== "expired") status = "incomplete";
+      }
+      
+      return {
+        emp,
+        status,
+        issues,
+        issueCount: issues.length,
+      };
+    });
+
+    const documentStatusSummary = {
+      complete: employeeDocumentStatus.filter(e => e.status === "complete").length,
+      incomplete: employeeDocumentStatus.filter(e => e.status === "incomplete").length,
+      expired: employeeDocumentStatus.filter(e => e.status === "expired").length,
+      total: employeeDocumentStatus.length,
+      completionRate: employeeDocumentStatus.length > 0 
+        ? Math.round((employeeDocumentStatus.filter(e => e.status === "complete").length / employeeDocumentStatus.length) * 100) 
+        : 0,
+    };
+
     return {
       saudiEmployees: saudiEmployees.length,
       nonSaudiEmployees: nonSaudiEmployees.length,
@@ -1401,8 +1527,15 @@ export default function EmployeeReportsDashboardPage() {
       totalEmployerCostSaudi: totalGosiEmployer,
       totalEmployerCostNonSaudi: totalNonSaudiMonthlyCost,
       totalEmployerCost: totalGosiEmployer + totalNonSaudiMonthlyCost,
+      // السعودة حسب الفرع
+      branchSaudization,
+      // التكاليف الحكومية
+      governmentCosts,
+      // حالة الوثائق
+      employeeDocumentStatus: employeeDocumentStatus.sort((a, b) => b.issueCount - a.issueCount),
+      documentStatusSummary,
     };
-  }, [filteredEmployees]);
+  }, [filteredEmployees, branches]);
 
   // ==================== HEALTH CERTIFICATE ANALYSIS ====================
   const healthCertificateAnalysis = useMemo(() => {
@@ -2657,6 +2790,336 @@ export default function EmployeeReportsDashboardPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* تحذيرات الشهادات الصحية */}
+              <Card data-testid="card-health-warnings">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-500" />
+                    تحذيرات الشهادات الصحية
+                  </CardTitle>
+                  <CardDescription>الشهادات المنتهية أو القريبة من الانتهاء</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.expired > 0 ? "bg-red-50" : "bg-green-50"}`}>
+                      <p className={`text-2xl font-bold ${healthCertificateAnalysis.expired > 0 ? "text-red-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.expired)}</p>
+                      <p className="text-xs text-gray-600">منتهية</p>
+                    </div>
+                    <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.expiringWithin30.length > 0 ? "bg-orange-50" : "bg-green-50"}`}>
+                      <p className={`text-2xl font-bold ${healthCertificateAnalysis.expiringWithin30.length > 0 ? "text-orange-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.expiringWithin30.length)}</p>
+                      <p className="text-xs text-gray-600">تنتهي خلال 30 يوم</p>
+                    </div>
+                    <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.none > 0 ? "bg-yellow-50" : "bg-green-50"}`}>
+                      <p className={`text-2xl font-bold ${healthCertificateAnalysis.none > 0 ? "text-yellow-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.none)}</p>
+                      <p className="text-xs text-gray-600">بدون شهادة</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-green-50">
+                      <p className="text-2xl font-bold text-green-600">{healthCertificateAnalysis.complianceRate}%</p>
+                      <p className="text-xs text-gray-600">نسبة الامتثال</p>
+                    </div>
+                  </div>
+                  {(healthCertificateAnalysis.expired > 0 || healthCertificateAnalysis.expiringWithin30.length > 0) && (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {healthCertificateAnalysis.allExpiring.slice(0, 10).map((item, i) => (
+                        <div key={i} className={`flex items-center justify-between p-2 rounded ${item.daysLeft <= 0 ? "bg-red-50" : item.daysLeft <= 30 ? "bg-orange-50" : "bg-yellow-50"}`}>
+                          <div>
+                            <p className="font-medium text-sm">{item.emp.employeeName}</p>
+                            <p className="text-xs text-gray-500">{branches?.find(b => b.id === item.emp.branchId)?.name || item.emp.branchId}</p>
+                          </div>
+                          <Badge className={`${item.daysLeft <= 0 ? "bg-red-100 text-red-800" : item.daysLeft <= 30 ? "bg-orange-100 text-orange-800" : "bg-yellow-100 text-yellow-800"}`}>
+                            {item.daysLeft <= 0 ? "منتهية" : `${item.daysLeft} يوم`}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* نسبة السعودة لكل فرع */}
+              <Card data-testid="card-branch-saudization">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-teal-500" />
+                    نسبة السعودة حسب الفرع
+                  </CardTitle>
+                  <CardDescription>المطلوب: {complianceMetrics.requiredSaudization}% لكل فرع</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {complianceMetrics.branchSaudization.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {complianceMetrics.branchSaudization.map(branch => (
+                        <div key={branch.branchId} className={`p-4 rounded-lg border-2 ${branch.status === "green" ? "bg-green-50 border-green-200" : branch.status === "yellow" ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-bold text-gray-800">{branch.branchName}</h4>
+                            <Badge className={`${branch.status === "green" ? "bg-green-100 text-green-800" : branch.status === "yellow" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}`}>
+                              {branch.rate}%
+                            </Badge>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">إجمالي الموظفين:</span>
+                              <span className="font-medium">{formatNumber(branch.total)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-green-600">سعوديين:</span>
+                              <span className="font-medium text-green-700">{formatNumber(branch.saudis)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-orange-600">غير سعوديين:</span>
+                              <span className="font-medium text-orange-700">{formatNumber(branch.nonSaudis)}</span>
+                            </div>
+                            {branch.neededSaudis > 0 && (
+                              <div className="flex justify-between pt-1 border-t">
+                                <span className="text-red-600">المطلوب توظيفهم:</span>
+                                <span className="font-bold text-red-700">{formatNumber(branch.neededSaudis)}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-2 bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full ${branch.status === "green" ? "bg-green-500" : branch.status === "yellow" ? "bg-yellow-500" : "bg-red-500"}`}
+                              style={{ width: `${Math.min(100, branch.rate)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* تقرير التكاليف الحكومية الشامل */}
+              <Card data-testid="card-government-costs">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-blue-500" />
+                    تقرير التكاليف الحكومية الشامل
+                  </CardTitle>
+                  <CardDescription>جميع الرسوم والتكاليف الحكومية الشهرية والسنوية</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* التأمينات الاجتماعية */}
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <h4 className="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                        <Shield className="w-4 h-4" />
+                        التأمينات الاجتماعية (شهري)
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>حصة الموظف السعودي (9.75%):</span>
+                          <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.gosiSaudiEmployee)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>حصة صاحب العمل للسعوديين (11.75%):</span>
+                          <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.gosiSaudiEmployer)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>تأمين إصابات العمل لغير السعوديين (2%):</span>
+                          <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.gosiNonSaudiEmployer)}</span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t font-bold text-blue-800">
+                          <span>إجمالي التأمينات (صاحب العمل):</span>
+                          <span>{formatCurrency(complianceMetrics.governmentCosts.totalGosiEmployerOnly)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* رسوم العمالة */}
+                    <div className="p-4 bg-purple-50 rounded-lg">
+                      <h4 className="font-bold text-purple-800 mb-3 flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        رسوم العمالة (شهري)
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>رخص العمل (66 ريال/موظف):</span>
+                          <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.workPermitTotal)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>رسوم الإقامة (54 ريال/موظف):</span>
+                          <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.iqamaFeesTotal)}</span>
+                        </div>
+                        {complianceMetrics.governmentCosts.excessWorkers > 0 && (
+                          <div className="flex justify-between text-red-600">
+                            <span>المقابل المالي ({complianceMetrics.governmentCosts.excessWorkers} عامل فائض):</span>
+                            <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.muqabilMaliMonthly)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-2 border-t font-bold text-purple-800">
+                          <span>إجمالي رسوم العمالة:</span>
+                          <span>{formatCurrency(complianceMetrics.governmentCosts.laborFeesTotal + complianceMetrics.governmentCosts.muqabilMaliMonthly)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* الإجمالي */}
+                  <div className="mt-6 p-4 bg-gray-100 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-3 bg-white rounded-lg">
+                        <p className="text-2xl font-bold text-gray-800">{formatCurrency(complianceMetrics.governmentCosts.totalMonthlyEmployerCost)}</p>
+                        <p className="text-sm text-gray-600">إجمالي تكاليف صاحب العمل الشهرية</p>
+                      </div>
+                      <div className="text-center p-3 bg-white rounded-lg">
+                        <p className="text-2xl font-bold text-gray-800">{formatCurrency(complianceMetrics.governmentCosts.totalYearlyEmployerCost)}</p>
+                        <p className="text-sm text-gray-600">إجمالي تكاليف صاحب العمل السنوية</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* حالة وثائق الموظفين */}
+              <Card data-testid="card-document-status">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-indigo-500" />
+                    حالة وثائق الموظفين
+                  </CardTitle>
+                  <CardDescription>نسبة اكتمال ملفات الموظفين</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* ملخص الحالة */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <div className="text-center p-3 bg-green-50 rounded-lg">
+                      <p className="text-2xl font-bold text-green-600">{formatNumber(complianceMetrics.documentStatusSummary.complete)}</p>
+                      <p className="text-xs text-gray-600">مكتمل</p>
+                    </div>
+                    <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                      <p className="text-2xl font-bold text-yellow-600">{formatNumber(complianceMetrics.documentStatusSummary.incomplete)}</p>
+                      <p className="text-xs text-gray-600">ناقص</p>
+                    </div>
+                    <div className="text-center p-3 bg-red-50 rounded-lg">
+                      <p className="text-2xl font-bold text-red-600">{formatNumber(complianceMetrics.documentStatusSummary.expired)}</p>
+                      <p className="text-xs text-gray-600">منتهي</p>
+                    </div>
+                    <div className={`text-center p-3 rounded-lg ${complianceMetrics.documentStatusSummary.completionRate >= 80 ? "bg-green-50" : complianceMetrics.documentStatusSummary.completionRate >= 60 ? "bg-yellow-50" : "bg-red-50"}`}>
+                      <p className={`text-2xl font-bold ${complianceMetrics.documentStatusSummary.completionRate >= 80 ? "text-green-600" : complianceMetrics.documentStatusSummary.completionRate >= 60 ? "text-yellow-600" : "text-red-600"}`}>{complianceMetrics.documentStatusSummary.completionRate}%</p>
+                      <p className="text-xs text-gray-600">نسبة الاكتمال</p>
+                    </div>
+                  </div>
+
+                  {/* قائمة الموظفين بمشاكل */}
+                  {complianceMetrics.employeeDocumentStatus.filter(e => e.status !== "complete").length > 0 && (
+                    <div className="overflow-x-auto">
+                      <Table className="table-fixed w-full">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right w-[150px]">الموظف</TableHead>
+                            <TableHead className="text-center w-[100px]">الفرع</TableHead>
+                            <TableHead className="text-center w-[80px]">الحالة</TableHead>
+                            <TableHead className="text-right w-[250px]">المشاكل</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {complianceMetrics.employeeDocumentStatus.filter(e => e.status !== "complete").slice(0, 15).map((item, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium text-right">{item.emp.employeeName}</TableCell>
+                              <TableCell className="text-center text-sm">{branches?.find(b => b.id === item.emp.branchId)?.name || item.emp.branchId}</TableCell>
+                              <TableCell className="text-center">
+                                <Badge className={`${item.status === "expired" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
+                                  {item.status === "expired" ? "منتهي" : "ناقص"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-gray-600">{item.issues.slice(0, 3).join(" • ")}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* أزرار تصدير التقارير */}
+              <Card data-testid="card-export-reports">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Download className="w-5 h-5 text-green-500" />
+                    تصدير تقارير الجهات الحكومية
+                  </CardTitle>
+                  <CardDescription>تقارير جاهزة للتقديم للجهات الحكومية</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Button
+                      variant="outline"
+                      className="h-auto py-4 flex flex-col items-center gap-2"
+                      onClick={() => {
+                        const data = complianceMetrics.gosiReport.map(r => ({
+                          "اسم الموظف": r.emp.employeeName,
+                          "رقم الهوية": r.emp.iqamaNumber || "",
+                          "الراتب الأساسي": r.baseSalary,
+                          "حصة الموظف (9.75%)": r.employeeContribution,
+                          "حصة صاحب العمل (11.75%)": r.employerContribution,
+                          "الإجمالي": r.totalContribution,
+                        }));
+                        const ws = XLSX.utils.json_to_sheet(data);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "تقرير التأمينات");
+                        XLSX.writeFile(wb, `تقرير_التأمينات_${new Date().toISOString().split('T')[0]}.xlsx`);
+                      }}
+                    >
+                      <FileSpreadsheet className="w-8 h-8 text-blue-600" />
+                      <span className="font-medium">تقرير التأمينات الاجتماعية</span>
+                      <span className="text-xs text-gray-500">Excel</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="h-auto py-4 flex flex-col items-center gap-2"
+                      onClick={() => {
+                        const data = filteredEmployees.filter(e => e.nationality !== "سعودي" && e.status === "active").map(emp => ({
+                          "اسم الموظف": emp.employeeName,
+                          "الجنسية": emp.nationality,
+                          "رقم الإقامة": emp.iqamaNumber || "",
+                          "تاريخ انتهاء الإقامة": emp.iqamaExpiry || "",
+                          "رقم الجواز": emp.passportNumber || "",
+                          "المسمى الوظيفي": emp.jobTitle || "",
+                          "الفرع": branches?.find(b => b.id === emp.branchId)?.name || emp.branchId,
+                        }));
+                        const ws = XLSX.utils.json_to_sheet(data);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "العمالة الوافدة");
+                        XLSX.writeFile(wb, `تقرير_مكتب_العمل_${new Date().toISOString().split('T')[0]}.xlsx`);
+                      }}
+                    >
+                      <FileSpreadsheet className="w-8 h-8 text-purple-600" />
+                      <span className="font-medium">تقرير مكتب العمل</span>
+                      <span className="text-xs text-gray-500">Excel</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="h-auto py-4 flex flex-col items-center gap-2"
+                      onClick={() => {
+                        const data = complianceMetrics.branchSaudization.map(b => ({
+                          "الفرع": b.branchName,
+                          "إجمالي الموظفين": b.total,
+                          "السعوديين": b.saudis,
+                          "غير السعوديين": b.nonSaudis,
+                          "نسبة السعودة": `${b.rate}%`,
+                          "الحالة": b.status === "green" ? "ملتزم" : b.status === "yellow" ? "قريب" : "غير ملتزم",
+                          "المطلوب توظيفهم": b.neededSaudis,
+                        }));
+                        const ws = XLSX.utils.json_to_sheet(data);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "نسب السعودة");
+                        XLSX.writeFile(wb, `تقرير_السعودة_${new Date().toISOString().split('T')[0]}.xlsx`);
+                      }}
+                    >
+                      <FileSpreadsheet className="w-8 h-8 text-teal-600" />
+                      <span className="font-medium">تقرير نسب السعودة</span>
+                      <span className="text-xs text-gray-500">Excel</span>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* ==================== TURNOVER TAB ==================== */}
