@@ -1188,6 +1188,82 @@ export default function EmployeeReportsDashboardPage() {
     };
   }, [filteredEmployees, attendanceByEmployee]);
 
+  // ==================== NORMALIZATION FUNCTIONS ====================
+  // توحيد أسماء الجنسيات المتشابهة
+  const normalizeNationality = (nationality: string | null | undefined): string => {
+    if (!nationality) return "غير محدد";
+    const nat = nationality.trim().toLowerCase();
+    // توحيد الجنسيات المتشابهة
+    if (nat.includes("بنجلاديش") || nat.includes("بنغلاديش") || nat === "بنجلاديشي" || nat === "بنغلاديشي" || nat === "bangladesh" || nat === "bangladeshi") {
+      return "بنجلاديش";
+    }
+    if (nat.includes("مصر") || nat === "مصري" || nat === "egypt" || nat === "egyptian") {
+      return "مصري";
+    }
+    if (nat.includes("سعود") || nat === "saudi" || nat === "saudi arabian" || nat === "ksa") {
+      return "سعودي";
+    }
+    if (nat.includes("هند") || nat === "هندي" || nat === "india" || nat === "indian") {
+      return "هندي";
+    }
+    if (nat.includes("باكستان") || nat === "باكستاني" || nat === "pakistan" || nat === "pakistani") {
+      return "باكستاني";
+    }
+    if (nat.includes("فلبين") || nat === "فلبيني" || nat === "philippines" || nat === "filipino") {
+      return "فلبيني";
+    }
+    if (nat.includes("سودان") || nat === "سوداني" || nat === "sudan" || nat === "sudanese") {
+      return "سوداني";
+    }
+    if (nat.includes("يمن") || nat === "يمني" || nat === "yemen" || nat === "yemeni") {
+      return "يمني";
+    }
+    if (nat.includes("سريلانكا") || nat === "سريلانكي" || nat === "sri lanka" || nat === "sri lankan") {
+      return "سريلانكي";
+    }
+    if (nat.includes("نيبال") || nat === "نيبالي" || nat === "nepal" || nat === "nepali" || nat === "nepalese") {
+      return "نيبالي";
+    }
+    if (nat.includes("تونس") || nat === "تونسي" || nat === "tunisia" || nat === "tunisian") {
+      return "تونسي";
+    }
+    if (nat.includes("اردن") || nat.includes("أردن") || nat === "اردني" || nat === "أردني" || nat === "jordan" || nat === "jordanian") {
+      return "أردني";
+    }
+    if (nat.includes("سوري") || nat.includes("سوريا") || nat === "syria" || nat === "syrian") {
+      return "سوري";
+    }
+    return nationality.trim();
+  };
+
+  // توحيد أسماء الوظائف المتشابهة
+  const normalizeJobTitle = (jobTitle: string | null | undefined): string => {
+    if (!jobTitle) return "غير محدد";
+    const job = jobTitle.trim();
+    // إزالة المسافات الزائدة وتوحيد الكتابة
+    const normalizedJob = job.replace(/\s+/g, ' ').trim();
+    // توحيد بعض المسميات الشائعة
+    if (normalizedJob.toLowerCase() === "worker" || normalizedJob === "عامل " || normalizedJob === " عامل") {
+      return "عامل";
+    }
+    if (normalizedJob.toLowerCase() === "cashier" || normalizedJob === "كاشير " || normalizedJob === " كاشير") {
+      return "كاشير";
+    }
+    if (normalizedJob.toLowerCase() === "barista" || normalizedJob === "باريستا " || normalizedJob === " باريستا") {
+      return "باريستا";
+    }
+    if (normalizedJob.toLowerCase() === "baker" || normalizedJob.toLowerCase() === "bakery" || normalizedJob === "بيكري " || normalizedJob === " بيكري") {
+      return "بيكري";
+    }
+    if (normalizedJob.toLowerCase() === "waiter" || normalizedJob === "واتر " || normalizedJob === " واتر" || normalizedJob === "ويتر") {
+      return "واتر";
+    }
+    if (normalizedJob.toLowerCase() === "manager" || normalizedJob === "مدير " || normalizedJob === " مدير") {
+      return "مدير";
+    }
+    return normalizedJob;
+  };
+
   // ==================== COMPLIANCE METRICS ====================
   const complianceMetrics = useMemo(() => {
     const today = new Date();
@@ -1409,82 +1485,6 @@ export default function EmployeeReportsDashboardPage() {
       needsRenewal: [...expiredCertificates, ...noCertificates, ...expiringWithin30.map(e => e.emp)],
     };
   }, [filteredEmployees, branches]);
-
-  // ==================== NORMALIZATION FUNCTIONS ====================
-  // توحيد أسماء الجنسيات المتشابهة
-  const normalizeNationality = (nationality: string | null | undefined): string => {
-    if (!nationality) return "غير محدد";
-    const nat = nationality.trim().toLowerCase();
-    // توحيد الجنسيات المتشابهة
-    if (nat.includes("بنجلاديش") || nat.includes("بنغلاديش") || nat === "بنجلاديشي" || nat === "بنغلاديشي" || nat === "bangladesh" || nat === "bangladeshi") {
-      return "بنجلاديش";
-    }
-    if (nat.includes("مصر") || nat === "مصري" || nat === "egypt" || nat === "egyptian") {
-      return "مصري";
-    }
-    if (nat.includes("سعود") || nat === "saudi" || nat === "saudi arabian" || nat === "ksa") {
-      return "سعودي";
-    }
-    if (nat.includes("هند") || nat === "هندي" || nat === "india" || nat === "indian") {
-      return "هندي";
-    }
-    if (nat.includes("باكستان") || nat === "باكستاني" || nat === "pakistan" || nat === "pakistani") {
-      return "باكستاني";
-    }
-    if (nat.includes("فلبين") || nat === "فلبيني" || nat === "philippines" || nat === "filipino") {
-      return "فلبيني";
-    }
-    if (nat.includes("سودان") || nat === "سوداني" || nat === "sudan" || nat === "sudanese") {
-      return "سوداني";
-    }
-    if (nat.includes("يمن") || nat === "يمني" || nat === "yemen" || nat === "yemeni") {
-      return "يمني";
-    }
-    if (nat.includes("سريلانكا") || nat === "سريلانكي" || nat === "sri lanka" || nat === "sri lankan") {
-      return "سريلانكي";
-    }
-    if (nat.includes("نيبال") || nat === "نيبالي" || nat === "nepal" || nat === "nepali" || nat === "nepalese") {
-      return "نيبالي";
-    }
-    if (nat.includes("تونس") || nat === "تونسي" || nat === "tunisia" || nat === "tunisian") {
-      return "تونسي";
-    }
-    if (nat.includes("اردن") || nat.includes("أردن") || nat === "اردني" || nat === "أردني" || nat === "jordan" || nat === "jordanian") {
-      return "أردني";
-    }
-    if (nat.includes("سوري") || nat.includes("سوريا") || nat === "syria" || nat === "syrian") {
-      return "سوري";
-    }
-    return nationality.trim();
-  };
-
-  // توحيد أسماء الوظائف المتشابهة
-  const normalizeJobTitle = (jobTitle: string | null | undefined): string => {
-    if (!jobTitle) return "غير محدد";
-    const job = jobTitle.trim();
-    // إزالة المسافات الزائدة وتوحيد الكتابة
-    const normalizedJob = job.replace(/\s+/g, ' ').trim();
-    // توحيد بعض المسميات الشائعة
-    if (normalizedJob.toLowerCase() === "worker" || normalizedJob === "عامل " || normalizedJob === " عامل") {
-      return "عامل";
-    }
-    if (normalizedJob.toLowerCase() === "cashier" || normalizedJob === "كاشير " || normalizedJob === " كاشير") {
-      return "كاشير";
-    }
-    if (normalizedJob.toLowerCase() === "barista" || normalizedJob === "باريستا " || normalizedJob === " باريستا") {
-      return "باريستا";
-    }
-    if (normalizedJob.toLowerCase() === "baker" || normalizedJob.toLowerCase() === "bakery" || normalizedJob === "بيكري " || normalizedJob === " بيكري") {
-      return "بيكري";
-    }
-    if (normalizedJob.toLowerCase() === "waiter" || normalizedJob === "واتر " || normalizedJob === " واتر" || normalizedJob === "ويتر") {
-      return "واتر";
-    }
-    if (normalizedJob.toLowerCase() === "manager" || normalizedJob === "مدير " || normalizedJob === " مدير") {
-      return "مدير";
-    }
-    return normalizedJob;
-  };
 
   // ==================== COMPREHENSIVE COMPARISONS ====================
   const comprehensiveComparisons = useMemo(() => {
