@@ -128,6 +128,16 @@ export default function EmployeeReportsDashboardPage() {
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
+  const { data: employeeSchedules } = useQuery<{ id: number; employeeId: string; branchEmployeeId: number | null; scheduleDate: string; shiftStart: string; shiftEnd: string; status: string }[]>({
+    queryKey: ["/api/employee-schedules", { startDate: `${selectedMonth}-01`, endDate: `${selectedMonth}-31` }],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+
+  const { data: cashierJournals } = useQuery<{ id: number; branchId: string; cashierName: string; cashierId: string; reportDate: string; totalSales: number; totalCash: number; status: string }[]>({
+    queryKey: ["/api/cashier-journals"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+
   const getBranchName = (branchId: string) => {
     const branch = branches?.find(b => b.id === branchId);
     return branch?.name || branchId;
@@ -1125,6 +1135,340 @@ export default function EmployeeReportsDashboardPage() {
     }).sort((a, b) => b.totalScore - a.totalScore);
   }, [branchComparisonData]);
 
+  // ==================== DATA QUALITY METRICS ====================
+  const dataQualityMetrics = useMemo(() => {
+    const today = new Date();
+    const monthDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const workingDays = Math.floor(monthDays * (5/7));
+    
+    const employeesWithMissingAttendance: { emp: BranchEmployee; missingDays: number; percentage: number }[] = [];
+    const employeesWithMissingSalary: BranchEmployee[] = [];
+    const employeesWithAnomalies: { emp: BranchEmployee; issue: string; severity: "high" | "medium" | "low" }[] = [];
+    
+    filteredEmployees.forEach(emp => {
+      const attendance = attendanceByEmployee.get(emp.id);
+      const recordedDays = attendance?.total || 0;
+      const missingDays = Math.max(0, workingDays - recordedDays);
+      
+      if (missingDays > 5) {
+        const percentage = Math.round((missingDays / workingDays) * 100);
+        employeesWithMissingAttendance.push({ emp, missingDays, percentage });
+      }
+      
+      if (!emp.salary || emp.salary <= 0) {
+        employeesWithMissingSalary.push(emp);
+      }
+      
+      if (emp.salary && emp.salary < 1500) {
+        employeesWithAnomalies.push({ emp, issue: "راتب أقل من الحد الأدنى (1500)", severity: "high" });
+      }
+      if (emp.salary && emp.salary > 50000) {
+        employeesWithAnomalies.push({ emp, issue: "راتب مرتفع جداً (> 50,000)", severity: "medium" });
+      }
+      if (!emp.nationality) {
+        employeesWithAnomalies.push({ emp, issue: "الجنسية غير محددة", severity: "medium" });
+      }
+      if (!emp.jobTitle) {
+        employeesWithAnomalies.push({ emp, issue: "المسمى الوظيفي غير محدد", severity: "low" });
+      }
+      if (emp.nationality !== "سعودي" && !emp.iqamaNumber) {
+        employeesWithAnomalies.push({ emp, issue: "رقم الإقامة غير مسجل", severity: "high" });
+      }
+    });
+    
+    const totalIssues = employeesWithMissingAttendance.length + employeesWithMissingSalary.length + employeesWithAnomalies.length;
+    const qualityScore = Math.max(0, 100 - Math.round((totalIssues / Math.max(1, filteredEmployees.length)) * 100));
+    
+    return {
+      employeesWithMissingAttendance: employeesWithMissingAttendance.sort((a, b) => b.missingDays - a.missingDays),
+      employeesWithMissingSalary,
+      employeesWithAnomalies,
+      qualityScore,
+      totalIssues,
+    };
+  }, [filteredEmployees, attendanceByEmployee]);
+
+  // ==================== COMPLIANCE METRICS ====================
+  const complianceMetrics = useMemo(() => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const sixtyDaysFromNow = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);
+    
+    const saudiEmployees = filteredEmployees.filter(emp => emp.nationality === "سعودي");
+    const nonSaudiEmployees = filteredEmployees.filter(emp => emp.nationality !== "سعودي");
+    const saudizationRate = filteredEmployees.length > 0 ? Math.round((saudiEmployees.length / filteredEmployees.length) * 100) : 0;
+    const requiredSaudization = 30;
+    const saudizationGap = requiredSaudization - saudizationRate;
+    const saudizationStatus: "green" | "yellow" | "red" = saudizationRate >= requiredSaudization ? "green" : saudizationRate >= requiredSaudization - 5 ? "yellow" : "red";
+    
+    const gosiReport = saudiEmployees.map(emp => {
+      const baseSalary = emp.salary || 0;
+      const storedDeduction = emp.socialInsuranceDeduction || 0;
+      const calculatedDeduction = storedDeduction > 0 ? storedDeduction : Math.round(baseSalary * 0.0975);
+      const employerContribution = Math.round(baseSalary * 0.1175);
+      return {
+        emp,
+        baseSalary,
+        employeeContribution: calculatedDeduction,
+        employerContribution,
+        totalContribution: calculatedDeduction + employerContribution,
+      };
+    });
+    const totalGosiEmployee = gosiReport.reduce((sum, r) => sum + r.employeeContribution, 0);
+    const totalGosiEmployer = gosiReport.reduce((sum, r) => sum + r.employerContribution, 0);
+    
+    const expiringContracts: { emp: BranchEmployee; expiryDate: string; daysLeft: number; type: "contract" | "iqama" | "passport" }[] = [];
+    
+    filteredEmployees.forEach(emp => {
+      if (emp.iqamaExpiry) {
+        const expiryDate = new Date(emp.iqamaExpiry);
+        if (expiryDate <= sixtyDaysFromNow && expiryDate >= today) {
+          expiringContracts.push({
+            emp,
+            expiryDate: emp.iqamaExpiry,
+            daysLeft: Math.ceil((expiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)),
+            type: "iqama",
+          });
+        }
+      }
+      if (emp.passportExpiry) {
+        const expiryDate = new Date(emp.passportExpiry);
+        if (expiryDate <= sixtyDaysFromNow && expiryDate >= today) {
+          expiringContracts.push({
+            emp,
+            expiryDate: emp.passportExpiry,
+            daysLeft: Math.ceil((expiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)),
+            type: "passport",
+          });
+        }
+      }
+    });
+    
+    return {
+      saudiEmployees: saudiEmployees.length,
+      nonSaudiEmployees: nonSaudiEmployees.length,
+      saudizationRate,
+      requiredSaudization,
+      saudizationGap,
+      saudizationStatus,
+      gosiReport,
+      totalGosiEmployee,
+      totalGosiEmployer,
+      totalGosi: totalGosiEmployee + totalGosiEmployer,
+      expiringContracts: expiringContracts.sort((a, b) => a.daysLeft - b.daysLeft),
+      criticalExpiries: expiringContracts.filter(e => e.daysLeft <= 30).length,
+    };
+  }, [filteredEmployees]);
+
+  // ==================== TURNOVER ANALYSIS ====================
+  const turnoverAnalysis = useMemo(() => {
+    const terminatedEmployees = employees?.filter(emp => emp.status === "terminated") || [];
+    const onLeaveEmployees = employees?.filter(emp => emp.status === "on_leave") || [];
+    const activeEmployees = employees?.filter(emp => emp.status === "active") || [];
+    
+    const totalEmployeesEver = (employees?.length || 0);
+    const turnoverRate = totalEmployeesEver > 0 ? Math.round((terminatedEmployees.length / totalEmployeesEver) * 100) : 0;
+    
+    const turnoverByBranch = branches?.map(branch => {
+      const branchTerminated = terminatedEmployees.filter(emp => emp.branchId === branch.id).length;
+      const branchActive = activeEmployees.filter(emp => emp.branchId === branch.id).length;
+      const branchTotal = branchTerminated + branchActive;
+      const rate = branchTotal > 0 ? Math.round((branchTerminated / branchTotal) * 100) : 0;
+      return { branchName: branch.name, branchId: branch.id, terminated: branchTerminated, active: branchActive, rate };
+    }).filter(b => b.terminated > 0 || b.active > 0) || [];
+    
+    const turnoverByJob = new Map<string, { terminated: number; active: number }>();
+    terminatedEmployees.forEach(emp => {
+      const current = turnoverByJob.get(emp.jobTitle) || { terminated: 0, active: 0 };
+      current.terminated++;
+      turnoverByJob.set(emp.jobTitle, current);
+    });
+    activeEmployees.forEach(emp => {
+      const current = turnoverByJob.get(emp.jobTitle) || { terminated: 0, active: 0 };
+      current.active++;
+      turnoverByJob.set(emp.jobTitle, current);
+    });
+    const turnoverByJobArray = Array.from(turnoverByJob.entries()).map(([jobTitle, data]) => ({
+      jobTitle,
+      ...data,
+      rate: data.terminated + data.active > 0 ? Math.round((data.terminated / (data.terminated + data.active)) * 100) : 0,
+    })).sort((a, b) => b.rate - a.rate);
+    
+    return {
+      totalTerminated: terminatedEmployees.length,
+      totalOnLeave: onLeaveEmployees.length,
+      totalActive: activeEmployees.length,
+      turnoverRate,
+      turnoverByBranch: turnoverByBranch.sort((a, b) => b.rate - a.rate),
+      turnoverByJob: turnoverByJobArray.slice(0, 10),
+      recentTerminations: terminatedEmployees.slice(0, 10),
+    };
+  }, [employees, branches]);
+
+  // ==================== ATTENDANCE vs SCHEDULE VARIANCE ====================
+  const scheduleVarianceAnalysis = useMemo(() => {
+    if (!employeeSchedules || !attendanceRecords) return { variances: [], summary: { onTime: 0, late: 0, absent: 0, early: 0, total: 0 } };
+    
+    const monthStart = `${selectedMonth}-01`;
+    const monthEnd = `${selectedMonth}-31`;
+    
+    const scheduledForMonth = employeeSchedules.filter(s => 
+      s.scheduleDate >= monthStart && s.scheduleDate <= monthEnd &&
+      (selectedBranch === "all" || s.branchEmployeeId)
+    );
+    
+    const attendanceMap = new Map<string, AttendanceRecord>();
+    attendanceRecords.filter(r => r.attendanceDate >= monthStart && r.attendanceDate <= monthEnd)
+      .forEach(r => {
+        const key = `${r.branchEmployeeId || r.employeeId}-${r.attendanceDate}`;
+        attendanceMap.set(key, r);
+      });
+    
+    let onTime = 0, late = 0, absent = 0, early = 0;
+    const employeeVariances = new Map<number, { name: string; scheduled: number; attended: number; lateCount: number; earlyDepartures: number }>();
+    
+    scheduledForMonth.forEach(schedule => {
+      if (!schedule.branchEmployeeId) return;
+      const key = `${schedule.branchEmployeeId}-${schedule.scheduleDate}`;
+      const attendance = attendanceMap.get(key);
+      const emp = filteredEmployees.find(e => e.id === schedule.branchEmployeeId);
+      
+      if (!employeeVariances.has(schedule.branchEmployeeId)) {
+        employeeVariances.set(schedule.branchEmployeeId, { 
+          name: emp?.employeeName || "غير معروف", 
+          scheduled: 0, attended: 0, lateCount: 0, earlyDepartures: 0 
+        });
+      }
+      const empVar = employeeVariances.get(schedule.branchEmployeeId)!;
+      empVar.scheduled++;
+      
+      if (!attendance) {
+        absent++;
+      } else {
+        empVar.attended++;
+        if (attendance.status === "late") {
+          late++;
+          empVar.lateCount++;
+        } else if (attendance.status === "present") {
+          onTime++;
+        }
+      }
+    });
+    
+    return {
+      variances: Array.from(employeeVariances.values())
+        .map(v => ({ ...v, attendanceRate: v.scheduled > 0 ? Math.round((v.attended / v.scheduled) * 100) : 0 }))
+        .sort((a, b) => a.attendanceRate - b.attendanceRate)
+        .slice(0, 10),
+      summary: { onTime, late, absent, early, total: scheduledForMonth.length },
+    };
+  }, [employeeSchedules, attendanceRecords, selectedMonth, selectedBranch, filteredEmployees]);
+
+  // ==================== CASHIER SALES PERFORMANCE ====================
+  const cashierPerformanceAnalysis = useMemo(() => {
+    if (!cashierJournals || !employees) return { cashierPerformance: [], branchSales: [], totalSales: 0 };
+    
+    const monthStart = `${selectedMonth}-01`;
+    const monthEnd = `${selectedMonth}-31`;
+    
+    const monthJournals = cashierJournals.filter(j => 
+      j.reportDate >= monthStart && j.reportDate <= monthEnd &&
+      (selectedBranch === "all" || j.branchId === selectedBranch)
+    );
+    
+    const cashierSalesMap = new Map<string, { name: string; totalSales: number; daysWorked: number; avgDaily: number }>();
+    const branchSalesMap = new Map<string, { branchName: string; totalSales: number; journalCount: number }>();
+    
+    monthJournals.forEach(journal => {
+      const branchName = getBranchName(journal.branchId);
+      
+      if (!cashierSalesMap.has(journal.cashierId)) {
+        const emp = employees.find(e => e.linkedUserId === journal.cashierId);
+        cashierSalesMap.set(journal.cashierId, { 
+          name: journal.cashierName || emp?.employeeName || "كاشير غير معروف",
+          totalSales: 0, daysWorked: 0, avgDaily: 0 
+        });
+      }
+      const cashierData = cashierSalesMap.get(journal.cashierId)!;
+      cashierData.totalSales += journal.totalSales || 0;
+      cashierData.daysWorked++;
+      
+      if (!branchSalesMap.has(journal.branchId)) {
+        branchSalesMap.set(journal.branchId, { branchName, totalSales: 0, journalCount: 0 });
+      }
+      const branchData = branchSalesMap.get(journal.branchId)!;
+      branchData.totalSales += journal.totalSales || 0;
+      branchData.journalCount++;
+    });
+    
+    const cashierPerformance = Array.from(cashierSalesMap.values())
+      .map(c => ({ ...c, avgDaily: c.daysWorked > 0 ? Math.round(c.totalSales / c.daysWorked) : 0 }))
+      .sort((a, b) => b.totalSales - a.totalSales)
+      .slice(0, 10);
+    
+    const branchSales = Array.from(branchSalesMap.values()).sort((a, b) => b.totalSales - a.totalSales);
+    const totalSales = monthJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+    
+    return { cashierPerformance, branchSales, totalSales };
+  }, [cashierJournals, employees, selectedMonth, selectedBranch, getBranchName]);
+
+  // ==================== ADVANCED FILTERS DATA ====================
+  const tenureDistribution = useMemo(() => {
+    const distribution = { lessThan1Year: 0, oneToThree: 0, threeToFive: 0, moreThanFive: 0 };
+    const today = new Date();
+    
+    filteredEmployees.forEach(emp => {
+      if (!emp.hireDate) {
+        distribution.lessThan1Year++;
+        return;
+      }
+      const hireDate = new Date(emp.hireDate);
+      const yearsOfService = (today.getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      
+      if (yearsOfService < 1) distribution.lessThan1Year++;
+      else if (yearsOfService < 3) distribution.oneToThree++;
+      else if (yearsOfService < 5) distribution.threeToFive++;
+      else distribution.moreThanFive++;
+    });
+    
+    return [
+      { name: "أقل من سنة", value: distribution.lessThan1Year },
+      { name: "1-3 سنوات", value: distribution.oneToThree },
+      { name: "3-5 سنوات", value: distribution.threeToFive },
+      { name: "أكثر من 5 سنوات", value: distribution.moreThanFive },
+    ];
+  }, [filteredEmployees]);
+
+  // ==================== EARLY WARNING INDICATORS ====================
+  const earlyWarningIndicators = useMemo(() => {
+    const warnings: { emp: BranchEmployee; type: string; severity: "high" | "medium" | "low"; description: string }[] = [];
+    
+    filteredEmployees.forEach(emp => {
+      const attendance = attendanceByEmployee.get(emp.id);
+      if (!attendance) return;
+      
+      const absentRate = attendance.total > 0 ? (attendance.absent / attendance.total) * 100 : 0;
+      const lateRate = attendance.total > 0 ? (attendance.late / attendance.total) * 100 : 0;
+      
+      if (absentRate >= 20) {
+        warnings.push({ emp, type: "غياب متكرر", severity: "high", description: `نسبة غياب ${Math.round(absentRate)}%` });
+      } else if (absentRate >= 10) {
+        warnings.push({ emp, type: "غياب متوسط", severity: "medium", description: `نسبة غياب ${Math.round(absentRate)}%` });
+      }
+      
+      if (lateRate >= 30) {
+        warnings.push({ emp, type: "تأخير متكرر", severity: "high", description: `نسبة تأخير ${Math.round(lateRate)}%` });
+      } else if (lateRate >= 15) {
+        warnings.push({ emp, type: "تأخير متوسط", severity: "medium", description: `نسبة تأخير ${Math.round(lateRate)}%` });
+      }
+    });
+    
+    return warnings.sort((a, b) => {
+      const severityOrder = { high: 0, medium: 1, low: 2 };
+      return severityOrder[a.severity] - severityOrder[b.severity];
+    });
+  }, [filteredEmployees, attendanceByEmployee]);
+
   const isLoading = employeesLoading || attendanceLoading;
 
   return (
@@ -1340,18 +1684,30 @@ export default function EmployeeReportsDashboardPage() {
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-10 text-xs">
               <TabsTrigger value="overview" data-testid="tab-overview">
                 <BarChart3 className="w-4 h-4 ml-1" />
                 نظرة عامة
               </TabsTrigger>
+              <TabsTrigger value="data-quality" data-testid="tab-data-quality">
+                <AlertCircle className="w-4 h-4 ml-1" />
+                جودة البيانات
+              </TabsTrigger>
+              <TabsTrigger value="compliance" data-testid="tab-compliance">
+                <CheckCircle className="w-4 h-4 ml-1" />
+                الامتثال
+              </TabsTrigger>
+              <TabsTrigger value="turnover" data-testid="tab-turnover">
+                <RefreshCw className="w-4 h-4 ml-1" />
+                الدوران
+              </TabsTrigger>
               <TabsTrigger value="branch-comparison" data-testid="tab-branch-comparison">
                 <Building2 className="w-4 h-4 ml-1" />
-                مقارنة الفروع
+                الفروع
               </TabsTrigger>
               <TabsTrigger value="job-comparison" data-testid="tab-job-comparison">
                 <Users className="w-4 h-4 ml-1" />
-                مقارنة الوظائف
+                الوظائف
               </TabsTrigger>
               <TabsTrigger value="attendance" data-testid="tab-attendance">
                 <Calendar className="w-4 h-4 ml-1" />
@@ -1443,6 +1799,359 @@ export default function EmployeeReportsDashboardPage() {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* ==================== DATA QUALITY TAB ==================== */}
+            <TabsContent value="data-quality" className="space-y-4" data-testid="tab-content-data-quality">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className={`${dataQualityMetrics.qualityScore >= 80 ? "bg-green-50 border-green-200" : dataQualityMetrics.qualityScore >= 60 ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"}`}>
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className={`text-4xl font-bold ${dataQualityMetrics.qualityScore >= 80 ? "text-green-700" : dataQualityMetrics.qualityScore >= 60 ? "text-yellow-700" : "text-red-700"}`}>
+                        {dataQualityMetrics.qualityScore}%
+                      </p>
+                      <p className="text-sm text-gray-600">مؤشر جودة البيانات</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-orange-50 border-orange-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-orange-700">{dataQualityMetrics.employeesWithMissingAttendance.length}</p>
+                      <p className="text-sm text-orange-600">حضور ناقص</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-red-700">{dataQualityMetrics.employeesWithMissingSalary.length}</p>
+                      <p className="text-sm text-red-600">رواتب غير مدخلة</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-purple-50 border-purple-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-purple-700">{dataQualityMetrics.employeesWithAnomalies.length}</p>
+                      <p className="text-sm text-purple-600">قيم غير منطقية</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card data-testid="card-missing-attendance">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-orange-700">
+                      <AlertCircle className="w-5 h-5" />
+                      موظفين بحضور ناقص
+                    </CardTitle>
+                    <CardDescription>موظفين لديهم أكثر من 5 أيام حضور مفقودة</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {dataQualityMetrics.employeesWithMissingAttendance.length === 0 ? (
+                      <div className="text-center py-8 text-green-600">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-2" />
+                        جميع سجلات الحضور مكتملة
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {dataQualityMetrics.employeesWithMissingAttendance.map(({ emp, missingDays, percentage }) => (
+                          <div key={emp.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
+                            <div>
+                              <p className="font-medium text-sm">{emp.employeeName}</p>
+                              <p className="text-xs text-gray-500">{getBranchName(emp.branchId)}</p>
+                            </div>
+                            <Badge className="bg-orange-100 text-orange-800">{missingDays} يوم ({percentage}%)</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-anomalies">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-purple-700">
+                      <XCircle className="w-5 h-5" />
+                      قيم غير منطقية
+                    </CardTitle>
+                    <CardDescription>بيانات تحتاج مراجعة وتصحيح</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {dataQualityMetrics.employeesWithAnomalies.length === 0 ? (
+                      <div className="text-center py-8 text-green-600">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-2" />
+                        لا توجد قيم غير منطقية
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {dataQualityMetrics.employeesWithAnomalies.map((item, index) => (
+                          <div key={index} className={`flex items-center justify-between p-2 rounded ${item.severity === "high" ? "bg-red-50" : item.severity === "medium" ? "bg-yellow-50" : "bg-gray-50"}`}>
+                            <div>
+                              <p className="font-medium text-sm">{item.emp.employeeName}</p>
+                              <p className="text-xs text-gray-500">{item.issue}</p>
+                            </div>
+                            <Badge className={`${item.severity === "high" ? "bg-red-100 text-red-800" : item.severity === "medium" ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-800"}`}>
+                              {item.severity === "high" ? "عالي" : item.severity === "medium" ? "متوسط" : "منخفض"}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* ==================== COMPLIANCE TAB ==================== */}
+            <TabsContent value="compliance" className="space-y-4" data-testid="tab-content-compliance">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className={`${complianceMetrics.saudizationStatus === "green" ? "bg-green-50 border-green-200" : complianceMetrics.saudizationStatus === "yellow" ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"}`}>
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className={`text-4xl font-bold ${complianceMetrics.saudizationStatus === "green" ? "text-green-700" : complianceMetrics.saudizationStatus === "yellow" ? "text-yellow-700" : "text-red-700"}`}>
+                        {complianceMetrics.saudizationRate}%
+                      </p>
+                      <p className="text-sm text-gray-600">نسبة السعودة</p>
+                      <p className="text-xs text-gray-500">المطلوب: {complianceMetrics.requiredSaudization}%</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosi)}</p>
+                      <p className="text-sm text-blue-600">إجمالي التأمينات</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-teal-50 border-teal-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-teal-700">{complianceMetrics.saudiEmployees}</p>
+                      <p className="text-sm text-teal-600">موظفين سعوديين</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className={`${complianceMetrics.criticalExpiries > 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className={`text-3xl font-bold ${complianceMetrics.criticalExpiries > 0 ? "text-red-700" : "text-green-700"}`}>{complianceMetrics.expiringContracts.length}</p>
+                      <p className={`text-sm ${complianceMetrics.criticalExpiries > 0 ? "text-red-600" : "text-green-600"}`}>وثائق تنتهي قريباً</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card data-testid="card-gosi-report">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-blue-600" />
+                      تقرير التأمينات الاجتماعية (GOSI)
+                    </CardTitle>
+                    <CardDescription>حصة الموظف 9.75% + حصة صاحب العمل 11.75%</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployee)}</p>
+                          <p className="text-xs text-blue-600">حصة الموظف (9.75%)</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployer)}</p>
+                          <p className="text-xs text-blue-600">حصة صاحب العمل (11.75%)</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-blue-800">{formatCurrency(complianceMetrics.totalGosi)}</p>
+                          <p className="text-xs text-blue-600">الإجمالي</p>
+                        </div>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">الموظف</TableHead>
+                              <TableHead className="text-center">الراتب الأساسي</TableHead>
+                              <TableHead className="text-center">حصة الموظف</TableHead>
+                              <TableHead className="text-center">حصة صاحب العمل</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {complianceMetrics.gosiReport.slice(0, 10).map(row => (
+                              <TableRow key={row.emp.id}>
+                                <TableCell className="text-right">{row.emp.employeeName}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(row.baseSalary)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(row.employeeContribution)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(row.employerContribution)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-expiring-documents">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-red-600" />
+                      وثائق تنتهي خلال 60 يوم
+                    </CardTitle>
+                    <CardDescription>إقامات وجوازات تحتاج تجديد</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {complianceMetrics.expiringContracts.length === 0 ? (
+                      <div className="text-center py-8 text-green-600">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-2" />
+                        لا توجد وثائق تنتهي قريباً
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {complianceMetrics.expiringContracts.map((item, index) => (
+                          <div key={index} className={`flex items-center justify-between p-2 rounded ${item.daysLeft <= 30 ? "bg-red-50" : "bg-yellow-50"}`}>
+                            <div>
+                              <p className="font-medium text-sm">{item.emp.employeeName}</p>
+                              <p className="text-xs text-gray-500">
+                                {item.type === "iqama" ? "إقامة" : item.type === "passport" ? "جواز" : "عقد"} - ينتهي: {formatDate(item.expiryDate)}
+                              </p>
+                            </div>
+                            <Badge className={`${item.daysLeft <= 30 ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
+                              {item.daysLeft} يوم
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {complianceMetrics.saudizationGap > 0 && (
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="py-4">
+                    <div className="flex items-center gap-4">
+                      <AlertCircle className="w-8 h-8 text-red-600" />
+                      <div>
+                        <p className="font-bold text-red-800">تحذير: نسبة السعودة أقل من المطلوب</p>
+                        <p className="text-sm text-red-600">
+                          يجب توظيف {Math.ceil((complianceMetrics.requiredSaudization / 100 * (complianceMetrics.saudiEmployees + complianceMetrics.nonSaudiEmployees)) - complianceMetrics.saudiEmployees)} موظف سعودي إضافي للوصول للنسبة المطلوبة ({complianceMetrics.requiredSaudization}%)
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            {/* ==================== TURNOVER TAB ==================== */}
+            <TabsContent value="turnover" className="space-y-4" data-testid="tab-content-turnover">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className={`${turnoverAnalysis.turnoverRate <= 10 ? "bg-green-50 border-green-200" : turnoverAnalysis.turnoverRate <= 20 ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"}`}>
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className={`text-4xl font-bold ${turnoverAnalysis.turnoverRate <= 10 ? "text-green-700" : turnoverAnalysis.turnoverRate <= 20 ? "text-yellow-700" : "text-red-700"}`}>
+                        {turnoverAnalysis.turnoverRate}%
+                      </p>
+                      <p className="text-sm text-gray-600">نسبة الدوران</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-green-700">{formatNumber(turnoverAnalysis.totalActive)}</p>
+                      <p className="text-sm text-green-600">نشط</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-red-700">{formatNumber(turnoverAnalysis.totalTerminated)}</p>
+                      <p className="text-sm text-red-600">منتهي</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-yellow-50 border-yellow-200">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-yellow-700">{formatNumber(turnoverAnalysis.totalOnLeave)}</p>
+                      <p className="text-sm text-yellow-600">في إجازة</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card data-testid="card-turnover-by-branch">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      الدوران حسب الفرع
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {turnoverAnalysis.turnoverByBranch.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={turnoverAnalysis.turnoverByBranch} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" />
+                          <YAxis dataKey="branchName" type="category" width={100} />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="active" fill="#10b981" name="نشط" />
+                          <Bar dataKey="terminated" fill="#ef4444" name="منتهي" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-turnover-by-job">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      أعلى وظائف في الدوران
+                    </CardTitle>
+                    <CardDescription>الوظائف ذات أعلى نسبة ترك عمل</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {turnoverAnalysis.turnoverByJob.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {turnoverAnalysis.turnoverByJob.map((job, index) => (
+                          <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">{job.jobTitle}</span>
+                              <Badge className={`${job.rate >= 30 ? "bg-red-100 text-red-800" : job.rate >= 15 ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                                {job.rate}%
+                              </Badge>
+                            </div>
+                            <div className="flex gap-4 text-xs text-gray-500">
+                              <span>نشط: {job.active}</span>
+                              <span>منتهي: {job.terminated}</span>
+                            </div>
+                            <div className="mt-2 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full ${job.rate >= 30 ? "bg-red-500" : job.rate >= 15 ? "bg-yellow-500" : "bg-green-500"}`}
+                                style={{ width: `${Math.min(100, job.rate)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="branch-comparison" className="space-y-4" data-testid="tab-content-branch-comparison">
@@ -1991,6 +2700,159 @@ export default function EmployeeReportsDashboardPage() {
                         </div>
                       ))}
                     </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Additional Analytics Sections */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                {/* Tenure Distribution */}
+                <Card data-testid="card-tenure-distribution">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-indigo-500" />
+                      توزيع الموظفين حسب مدة الخدمة
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={tenureDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {tenureDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Early Warning Indicators */}
+                <Card data-testid="card-early-warning">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      مؤشرات الإنذار المبكر
+                    </CardTitle>
+                    <CardDescription>موظفين يحتاجون متابعة بسبب نمط الحضور</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {earlyWarningIndicators.length === 0 ? (
+                      <div className="text-center py-8 text-green-600">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-2" />
+                        لا توجد تنبيهات حالياً
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {earlyWarningIndicators.slice(0, 8).map((warning, index) => (
+                          <div key={index} className={`flex items-center justify-between p-2 rounded ${warning.severity === "high" ? "bg-red-50" : "bg-yellow-50"}`}>
+                            <div>
+                              <p className="font-medium text-sm">{warning.emp.employeeName}</p>
+                              <p className="text-xs text-gray-500">{warning.type}: {warning.description}</p>
+                            </div>
+                            <Badge className={`${warning.severity === "high" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
+                              {warning.severity === "high" ? "عالي" : "متوسط"}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Schedule vs Attendance Variance */}
+                <Card data-testid="card-schedule-variance">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-blue-500" />
+                      مقارنة الجدولة بالحضور الفعلي
+                    </CardTitle>
+                    <CardDescription>تحليل الفروقات بين الورديات المجدولة والحضور</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {scheduleVarianceAnalysis.summary.total === 0 ? (
+                      <div className="text-center py-8 text-gray-500">لا توجد بيانات جدولة</div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-4 gap-2 mb-4 text-center">
+                          <div className="p-2 bg-green-50 rounded">
+                            <p className="text-xl font-bold text-green-700">{scheduleVarianceAnalysis.summary.onTime}</p>
+                            <p className="text-xs text-green-600">في الموعد</p>
+                          </div>
+                          <div className="p-2 bg-yellow-50 rounded">
+                            <p className="text-xl font-bold text-yellow-700">{scheduleVarianceAnalysis.summary.late}</p>
+                            <p className="text-xs text-yellow-600">متأخر</p>
+                          </div>
+                          <div className="p-2 bg-red-50 rounded">
+                            <p className="text-xl font-bold text-red-700">{scheduleVarianceAnalysis.summary.absent}</p>
+                            <p className="text-xs text-red-600">غائب</p>
+                          </div>
+                          <div className="p-2 bg-blue-50 rounded">
+                            <p className="text-xl font-bold text-blue-700">{scheduleVarianceAnalysis.summary.total}</p>
+                            <p className="text-xs text-blue-600">إجمالي</p>
+                          </div>
+                        </div>
+                        {scheduleVarianceAnalysis.variances.length > 0 && (
+                          <div className="space-y-2 max-h-32 overflow-y-auto">
+                            {scheduleVarianceAnalysis.variances.map((v, i) => (
+                              <div key={i} className="flex items-center justify-between text-sm p-1 bg-gray-50 rounded">
+                                <span>{v.name}</span>
+                                <span className={`font-bold ${v.attendanceRate >= 80 ? "text-green-600" : v.attendanceRate >= 60 ? "text-yellow-600" : "text-red-600"}`}>
+                                  {v.attendanceRate}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Cashier Sales Performance */}
+                <Card data-testid="card-cashier-performance">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-green-500" />
+                      أداء الكاشير والمبيعات
+                    </CardTitle>
+                    <CardDescription>ربط موظفي الكاشير بإجمالي المبيعات</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {cashierPerformanceAnalysis.cashierPerformance.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">لا توجد بيانات مبيعات</div>
+                    ) : (
+                      <>
+                        <div className="p-3 bg-green-50 rounded-lg mb-4 text-center">
+                          <p className="text-2xl font-bold text-green-700">{formatCurrency(cashierPerformanceAnalysis.totalSales)}</p>
+                          <p className="text-xs text-green-600">إجمالي المبيعات للشهر</p>
+                        </div>
+                        <div className="space-y-2 max-h-32 overflow-y-auto">
+                          {cashierPerformanceAnalysis.cashierPerformance.map((cashier, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <div>
+                                <p className="font-medium text-sm">{cashier.name}</p>
+                                <p className="text-xs text-gray-500">{cashier.daysWorked} يوم عمل</p>
+                              </div>
+                              <div className="text-left">
+                                <p className="font-bold text-green-700">{formatCurrency(cashier.totalSales)}</p>
+                                <p className="text-xs text-gray-500">متوسط: {formatCurrency(cashier.avgDaily)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </div>
