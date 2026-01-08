@@ -723,7 +723,16 @@ export default function BranchEmployeesPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>الجنسية *</Label>
-                        <Select value={form.watch("nationality")} onValueChange={(v) => form.setValue("nationality", v)}>
+                        <Select 
+                          value={form.watch("nationality")} 
+                          onValueChange={(v) => {
+                            form.setValue("nationality", v);
+                            // مسح خصم التأمينات إذا تم تغيير الجنسية من سعودي
+                            if (v !== "سعودي") {
+                              form.setValue("socialInsuranceDeduction", 0);
+                            }
+                          }}
+                        >
                           <SelectTrigger data-testid="select-nationality">
                             <SelectValue placeholder="اختر الجنسية" />
                           </SelectTrigger>
