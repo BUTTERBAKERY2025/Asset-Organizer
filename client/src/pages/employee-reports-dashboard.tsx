@@ -1342,6 +1342,135 @@ export default function EmployeeReportsDashboardPage() {
     };
   }, [filteredEmployees, branches]);
 
+  // ==================== COMPREHENSIVE COMPARISONS ====================
+  const comprehensiveComparisons = useMemo(() => {
+    if (!employees || !branches) return null;
+    
+    // Branch salary comparisons
+    const branchSalaryStats = branches.map(branch => {
+      const branchEmps = employees.filter(e => e.branchId === branch.id && e.status === "active");
+      const salaries = branchEmps.map(e => e.salary || 0).filter(s => s > 0);
+      const totalSalary = salaries.reduce((sum, s) => sum + s, 0);
+      const avgSalary = salaries.length > 0 ? Math.round(totalSalary / salaries.length) : 0;
+      const maxSalary = salaries.length > 0 ? Math.max(...salaries) : 0;
+      const minSalary = salaries.length > 0 ? Math.min(...salaries) : 0;
+      const highestPaid = branchEmps.find(e => e.salary === maxSalary);
+      const lowestPaid = branchEmps.find(e => e.salary === minSalary);
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        employeeCount: branchEmps.length,
+        totalSalary,
+        avgSalary,
+        maxSalary,
+        minSalary,
+        highestPaid: highestPaid?.employeeName || "--",
+        lowestPaid: lowestPaid?.employeeName || "--",
+      };
+    }).filter(b => b.employeeCount > 0).sort((a, b) => b.avgSalary - a.avgSalary);
+
+    // Job title comparisons across branches
+    const jobTitles = Array.from(new Set(employees.filter(e => e.status === "active").map(e => e.jobTitle)));
+    const jobAcrossBranches = jobTitles.map(job => {
+      const jobEmps = employees.filter(e => e.jobTitle === job && e.status === "active");
+      const byBranch = branches.map(branch => {
+        const branchJobEmps = jobEmps.filter(e => e.branchId === branch.id);
+        const salaries = branchJobEmps.map(e => e.salary || 0);
+        const avg = salaries.length > 0 ? Math.round(salaries.reduce((a, b) => a + b, 0) / salaries.length) : 0;
+        return { branchId: branch.id, branchName: branch.name, count: branchJobEmps.length, avgSalary: avg };
+      }).filter(b => b.count > 0);
+      const allSalaries = jobEmps.map(e => e.salary || 0).filter(s => s > 0);
+      const overallAvg = allSalaries.length > 0 ? Math.round(allSalaries.reduce((a, b) => a + b, 0) / allSalaries.length) : 0;
+      const maxBranch = byBranch.reduce((max, b) => b.avgSalary > max.avgSalary ? b : max, { avgSalary: 0, branchName: "--" } as any);
+      const minBranch = byBranch.filter(b => b.avgSalary > 0).reduce((min, b) => b.avgSalary < min.avgSalary ? b : min, { avgSalary: Infinity, branchName: "--" } as any);
+      return {
+        jobTitle: job,
+        totalCount: jobEmps.length,
+        overallAvgSalary: overallAvg,
+        byBranch,
+        highestPayingBranch: maxBranch.branchName,
+        lowestPayingBranch: minBranch.avgSalary !== Infinity ? minBranch.branchName : "--",
+        salaryGap: maxBranch.avgSalary - (minBranch.avgSalary !== Infinity ? minBranch.avgSalary : 0),
+      };
+    }).filter(j => j.totalCount > 0).sort((a, b) => b.totalCount - a.totalCount);
+
+    // Nationality comparisons
+    const nationalities = Array.from(new Set(employees.filter(e => e.status === "active").map(e => e.nationality || "غير محدد")));
+    const nationalityStats = nationalities.map(nat => {
+      const natEmps = employees.filter(e => (e.nationality || "غير محدد") === nat && e.status === "active");
+      const salaries = natEmps.map(e => e.salary || 0).filter(s => s > 0);
+      const totalSalary = salaries.reduce((sum, s) => sum + s, 0);
+      const avgSalary = salaries.length > 0 ? Math.round(totalSalary / salaries.length) : 0;
+      const byBranch = branches.map(branch => ({
+        branchName: branch.name,
+        count: natEmps.filter(e => e.branchId === branch.id).length
+      })).filter(b => b.count > 0);
+      return {
+        nationality: nat,
+        count: natEmps.length,
+        percentage: employees.filter(e => e.status === "active").length > 0 
+          ? Math.round((natEmps.length / employees.filter(e => e.status === "active").length) * 100) : 0,
+        avgSalary,
+        totalSalary,
+        byBranch,
+      };
+    }).sort((a, b) => b.count - a.count);
+
+    // Employee count per branch with details
+    const branchEmployeeCounts = branches.map(branch => {
+      const branchEmps = employees.filter(e => e.branchId === branch.id);
+      const active = branchEmps.filter(e => e.status === "active").length;
+      const terminated = branchEmps.filter(e => e.status === "terminated").length;
+      const onLeave = branchEmps.filter(e => e.status === "on_leave").length;
+      const saudis = branchEmps.filter(e => e.nationality === "سعودي" && e.status === "active").length;
+      const saudizationRate = active > 0 ? Math.round((saudis / active) * 100) : 0;
+      const totalSalary = branchEmps.filter(e => e.status === "active").reduce((sum, e) => sum + (e.salary || 0), 0);
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        total: branchEmps.length,
+        active,
+        terminated,
+        onLeave,
+        saudis,
+        nonSaudis: active - saudis,
+        saudizationRate,
+        totalSalary,
+        avgSalary: active > 0 ? Math.round(totalSalary / active) : 0,
+      };
+    }).filter(b => b.total > 0).sort((a, b) => b.active - a.active);
+
+    // Salary distribution analysis
+    const activeSalaries = employees.filter(e => e.status === "active" && e.salary).map(e => e.salary || 0);
+    const salaryRanges = [
+      { range: "أقل من 3,000", min: 0, max: 3000, count: 0 },
+      { range: "3,000 - 5,000", min: 3000, max: 5000, count: 0 },
+      { range: "5,000 - 8,000", min: 5000, max: 8000, count: 0 },
+      { range: "8,000 - 12,000", min: 8000, max: 12000, count: 0 },
+      { range: "12,000 - 20,000", min: 12000, max: 20000, count: 0 },
+      { range: "أكثر من 20,000", min: 20000, max: Infinity, count: 0 },
+    ];
+    activeSalaries.forEach(sal => {
+      const range = salaryRanges.find(r => sal >= r.min && sal < r.max);
+      if (range) range.count++;
+    });
+
+    return {
+      branchSalaryStats,
+      jobAcrossBranches: jobAcrossBranches.slice(0, 15),
+      nationalityStats,
+      branchEmployeeCounts,
+      salaryRanges,
+      summary: {
+        totalBranches: branchSalaryStats.length,
+        totalActiveEmployees: employees.filter(e => e.status === "active").length,
+        overallAvgSalary: activeSalaries.length > 0 ? Math.round(activeSalaries.reduce((a, b) => a + b, 0) / activeSalaries.length) : 0,
+        highestAvgBranch: branchSalaryStats[0]?.branchName || "--",
+        lowestAvgBranch: branchSalaryStats[branchSalaryStats.length - 1]?.branchName || "--",
+      }
+    };
+  }, [employees, branches]);
+
   // ==================== TURNOVER ANALYSIS ====================
   const turnoverAnalysis = useMemo(() => {
     const terminatedEmployees = employees?.filter(emp => emp.status === "terminated") || [];
@@ -1811,6 +1940,10 @@ export default function EmployeeReportsDashboardPage() {
               <TabsTrigger value="health-certificates" data-testid="tab-health-certificates">
                 <CheckCircle className="w-4 h-4 ml-1" />
                 الشهادات الصحية
+              </TabsTrigger>
+              <TabsTrigger value="comparisons" data-testid="tab-comparisons">
+                <BarChart3 className="w-4 h-4 ml-1" />
+                المقارنات
               </TabsTrigger>
               </TabsList>
             </div>
@@ -3409,6 +3542,296 @@ export default function EmployeeReportsDashboardPage() {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Comprehensive Comparisons Tab */}
+            <TabsContent value="comparisons" className="space-y-4" data-testid="tab-content-comparisons">
+              <div className="flex justify-end mb-4 gap-2">
+                <Button variant="outline" size="sm" onClick={() => {
+                  if (!comprehensiveComparisons) return;
+                  const wb = XLSX.utils.book_new();
+                  const branchSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.branchSalaryStats.map(b => ({
+                    "الفرع": b.branchName,
+                    "عدد الموظفين": b.employeeCount,
+                    "إجمالي الرواتب": b.totalSalary,
+                    "متوسط الراتب": b.avgSalary,
+                    "أعلى راتب": b.maxSalary,
+                    "أقل راتب": b.minSalary,
+                    "الأعلى راتباً": b.highestPaid,
+                    "الأقل راتباً": b.lowestPaid,
+                  })));
+                  XLSX.utils.book_append_sheet(wb, branchSheet, "مقارنة الفروع");
+                  const natSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.nationalityStats.map(n => ({
+                    "الجنسية": n.nationality,
+                    "العدد": n.count,
+                    "النسبة": `${n.percentage}%`,
+                    "متوسط الراتب": n.avgSalary,
+                    "إجمالي الرواتب": n.totalSalary,
+                  })));
+                  XLSX.utils.book_append_sheet(wb, natSheet, "مقارنة الجنسيات");
+                  const jobSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.jobAcrossBranches.map(j => ({
+                    "الوظيفة": j.jobTitle,
+                    "العدد": j.totalCount,
+                    "متوسط الراتب": j.overallAvgSalary,
+                    "أعلى فرع": j.highestPayingBranch,
+                    "أقل فرع": j.lowestPayingBranch,
+                    "فجوة الراتب": j.salaryGap,
+                  })));
+                  XLSX.utils.book_append_sheet(wb, jobSheet, "مقارنة الوظائف");
+                  XLSX.writeFile(wb, `comparisons_report_${selectedMonth}.xlsx`);
+                }} data-testid="button-export-comparisons-excel">
+                  <FileSpreadsheet className="w-4 h-4 ml-1" />
+                  Excel
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => {
+                  if (!comprehensiveComparisons) return;
+                  const docDefinition: any = {
+                    content: [
+                      { text: "تقرير المقارنات الشامل", style: "header", alignment: "center" },
+                      { text: `الشهر: ${selectedMonth}`, alignment: "center", margin: [0, 5, 0, 15] },
+                      { text: "مقارنة الفروع", style: "subheader", margin: [0, 10, 0, 5] },
+                      {
+                        table: {
+                          headerRows: 1,
+                          widths: ["*", "auto", "auto", "auto", "auto"],
+                          body: [
+                            ["الفرع", "العدد", "المتوسط", "الأعلى", "الأقل"],
+                            ...comprehensiveComparisons.branchSalaryStats.map(b => [
+                              b.branchName, b.employeeCount.toString(), b.avgSalary.toString(), b.maxSalary.toString(), b.minSalary.toString()
+                            ])
+                          ]
+                        }
+                      },
+                      { text: "مقارنة الجنسيات", style: "subheader", margin: [0, 15, 0, 5] },
+                      {
+                        table: {
+                          headerRows: 1,
+                          widths: ["*", "auto", "auto", "auto"],
+                          body: [
+                            ["الجنسية", "العدد", "النسبة", "متوسط الراتب"],
+                            ...comprehensiveComparisons.nationalityStats.map(n => [
+                              n.nationality, n.count.toString(), `${n.percentage}%`, n.avgSalary.toString()
+                            ])
+                          ]
+                        }
+                      }
+                    ],
+                    styles: { header: { fontSize: 18, bold: true }, subheader: { fontSize: 14, bold: true } }
+                  };
+                  pdfMake.createPdf(docDefinition).download(`comparisons_report_${selectedMonth}.pdf`);
+                }} data-testid="button-export-comparisons-pdf">
+                  <FileText className="w-4 h-4 ml-1" />
+                  PDF
+                </Button>
+              </div>
+
+              {comprehensiveComparisons ? (
+                <>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                      <CardContent className="pt-4 text-center">
+                        <p className="text-2xl font-bold text-blue-700">{formatNumber(comprehensiveComparisons.summary.totalBranches)}</p>
+                        <p className="text-sm text-blue-600">عدد الفروع</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                      <CardContent className="pt-4 text-center">
+                        <p className="text-2xl font-bold text-green-700">{formatNumber(comprehensiveComparisons.summary.totalActiveEmployees)}</p>
+                        <p className="text-sm text-green-600">موظف نشط</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                      <CardContent className="pt-4 text-center">
+                        <p className="text-2xl font-bold text-amber-700">{formatCurrency(comprehensiveComparisons.summary.overallAvgSalary)}</p>
+                        <p className="text-sm text-amber-600">متوسط الراتب</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+                      <CardContent className="pt-4 text-center">
+                        <p className="text-lg font-bold text-teal-700">{comprehensiveComparisons.summary.highestAvgBranch}</p>
+                        <p className="text-sm text-teal-600">أعلى متوسط</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                      <CardContent className="pt-4 text-center">
+                        <p className="text-lg font-bold text-purple-700">{comprehensiveComparisons.summary.lowestAvgBranch}</p>
+                        <p className="text-sm text-purple-600">أقل متوسط</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Branch Salary Comparison */}
+                  <Card data-testid="card-branch-salary-comparison">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5" />
+                        مقارنة الرواتب حسب الفروع
+                      </CardTitle>
+                      <CardDescription>أعلى وأقل راتب في كل فرع مع المتوسط</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">الفرع</TableHead>
+                              <TableHead className="text-right">عدد الموظفين</TableHead>
+                              <TableHead className="text-right">إجمالي الرواتب</TableHead>
+                              <TableHead className="text-right">متوسط الراتب</TableHead>
+                              <TableHead className="text-right">أعلى راتب</TableHead>
+                              <TableHead className="text-right">أقل راتب</TableHead>
+                              <TableHead className="text-right">الأعلى راتباً</TableHead>
+                              <TableHead className="text-right">الأقل راتباً</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {comprehensiveComparisons.branchSalaryStats.map((branch, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-medium">{branch.branchName}</TableCell>
+                                <TableCell>{formatNumber(branch.employeeCount)}</TableCell>
+                                <TableCell>{formatCurrency(branch.totalSalary)}</TableCell>
+                                <TableCell className="font-bold text-amber-600">{formatCurrency(branch.avgSalary)}</TableCell>
+                                <TableCell className="text-green-600">{formatCurrency(branch.maxSalary)}</TableCell>
+                                <TableCell className="text-red-600">{formatCurrency(branch.minSalary)}</TableCell>
+                                <TableCell>{branch.highestPaid}</TableCell>
+                                <TableCell>{branch.lowestPaid}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Nationality Comparison */}
+                    <Card data-testid="card-nationality-comparison">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="w-5 h-5" />
+                          مقارنة حسب الجنسيات
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart data={comprehensiveComparisons.nationalityStats.slice(0, 8)}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="nationality" />
+                            <YAxis />
+                            <Tooltip formatter={(value) => formatNumber(Number(value))} />
+                            <Bar dataKey="count" fill="#f59e0b" name="العدد" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
+                          {comprehensiveComparisons.nationalityStats.map((nat, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <div>
+                                <span className="font-medium">{nat.nationality}</span>
+                                <span className="text-xs text-gray-500 mr-2">({nat.percentage}%)</span>
+                              </div>
+                              <div className="text-left">
+                                <span className="font-bold">{formatNumber(nat.count)}</span>
+                                <span className="text-xs text-gray-500 mr-2">متوسط: {formatCurrency(nat.avgSalary)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Employee Count per Branch */}
+                    <Card data-testid="card-branch-count-comparison">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Building2 className="w-5 h-5" />
+                          عدد الموظفين حسب الفرع
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart data={comprehensiveComparisons.branchEmployeeCounts} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" />
+                            <YAxis dataKey="branchName" type="category" width={80} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="active" stackId="a" fill="#10b981" name="نشط" />
+                            <Bar dataKey="onLeave" stackId="a" fill="#f59e0b" name="إجازة" />
+                            <Bar dataKey="terminated" stackId="a" fill="#ef4444" name="منتهي" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Job Title Comparison Across Branches */}
+                  <Card data-testid="card-job-comparison-branches">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <DollarSign className="w-5 h-5" />
+                        مقارنة الوظائف عبر الفروع
+                      </CardTitle>
+                      <CardDescription>متوسط الراتب لكل وظيفة مع الفرق بين الفروع</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto max-h-96">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">الوظيفة</TableHead>
+                              <TableHead className="text-right">العدد</TableHead>
+                              <TableHead className="text-right">متوسط الراتب</TableHead>
+                              <TableHead className="text-right">أعلى فرع</TableHead>
+                              <TableHead className="text-right">أقل فرع</TableHead>
+                              <TableHead className="text-right">فجوة الراتب</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {comprehensiveComparisons.jobAcrossBranches.map((job, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-medium">{job.jobTitle}</TableCell>
+                                <TableCell>{formatNumber(job.totalCount)}</TableCell>
+                                <TableCell className="font-bold text-amber-600">{formatCurrency(job.overallAvgSalary)}</TableCell>
+                                <TableCell className="text-green-600">{job.highestPayingBranch}</TableCell>
+                                <TableCell className="text-red-600">{job.lowestPayingBranch}</TableCell>
+                                <TableCell>
+                                  <Badge className={job.salaryGap > 1000 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}>
+                                    {formatCurrency(job.salaryGap)}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Salary Distribution */}
+                  <Card data-testid="card-salary-distribution">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Wallet className="w-5 h-5" />
+                        توزيع الرواتب
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={comprehensiveComparisons.salaryRanges}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="range" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="count" fill="#8b5cf6" name="عدد الموظفين" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <div className="text-center py-10 text-gray-500">لا توجد بيانات</div>
+              )}
             </TabsContent>
           </Tabs>
         )}
