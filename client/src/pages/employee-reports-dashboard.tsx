@@ -1216,6 +1216,62 @@ export default function EmployeeReportsDashboardPage() {
     });
     const totalGosiEmployee = gosiReport.reduce((sum, r) => sum + r.employeeContribution, 0);
     const totalGosiEmployer = gosiReport.reduce((sum, r) => sum + r.employerContribution, 0);
+
+    // تحليل تكاليف غير السعوديين (2% تأمين إصابات عمل + رسوم)
+    const WORK_PERMIT_MONTHLY = 66; // 800 ريال/سنة
+    const IQAMA_FEES_MONTHLY = 54; // 650 ريال/سنة
+    const NON_SAUDI_INSURANCE_RATE = 0.02; // 2% تأمين إصابات العمل
+
+    const nonSaudiByNationality = new Map<string, { 
+      count: number; 
+      totalBaseSalary: number; 
+      totalHousing: number;
+      insurableSalary: number;
+      insuranceCost: number;
+      workPermitCost: number;
+      iqamaCost: number;
+      totalMonthlyCost: number;
+    }>();
+
+    nonSaudiEmployees.filter(e => e.status === "active").forEach(emp => {
+      const nat = normalizeNationality(emp.nationality) || "غير محدد";
+      const existing = nonSaudiByNationality.get(nat) || { 
+        count: 0, 
+        totalBaseSalary: 0, 
+        totalHousing: 0,
+        insurableSalary: 0,
+        insuranceCost: 0,
+        workPermitCost: 0,
+        iqamaCost: 0,
+        totalMonthlyCost: 0,
+      };
+      const baseSalary = emp.salary || 0;
+      const housing = emp.housingAllowance || 0;
+      const insurableSalary = baseSalary + housing;
+      const insuranceCost = Math.round(insurableSalary * NON_SAUDI_INSURANCE_RATE);
+      
+      existing.count++;
+      existing.totalBaseSalary += baseSalary;
+      existing.totalHousing += housing;
+      existing.insurableSalary += insurableSalary;
+      existing.insuranceCost += insuranceCost;
+      existing.workPermitCost += WORK_PERMIT_MONTHLY;
+      existing.iqamaCost += IQAMA_FEES_MONTHLY;
+      existing.totalMonthlyCost += insuranceCost + WORK_PERMIT_MONTHLY + IQAMA_FEES_MONTHLY;
+      nonSaudiByNationality.set(nat, existing);
+    });
+
+    const nonSaudiCostAnalysis = Array.from(nonSaudiByNationality.entries()).map(([nationality, data]) => ({
+      nationality,
+      ...data,
+    })).sort((a, b) => b.count - a.count);
+
+    const totalNonSaudiCount = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.count, 0);
+    const totalNonSaudiInsurance = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.insuranceCost, 0);
+    const totalNonSaudiWorkPermit = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.workPermitCost, 0);
+    const totalNonSaudiIqama = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.iqamaCost, 0);
+    const totalNonSaudiMonthlyCost = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.totalMonthlyCost, 0);
+    const totalNonSaudiInsurableSalary = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.insurableSalary, 0);
     
     const expiringContracts: { emp: BranchEmployee; expiryDate: string; daysLeft: number; type: "contract" | "iqama" | "passport" }[] = [];
     
@@ -1257,6 +1313,18 @@ export default function EmployeeReportsDashboardPage() {
       totalGosi: totalGosiEmployee + totalGosiEmployer,
       expiringContracts: expiringContracts.sort((a, b) => a.daysLeft - b.daysLeft),
       criticalExpiries: expiringContracts.filter(e => e.daysLeft <= 30).length,
+      // تكاليف غير السعوديين
+      nonSaudiCostAnalysis,
+      totalNonSaudiCount,
+      totalNonSaudiInsurance,
+      totalNonSaudiWorkPermit,
+      totalNonSaudiIqama,
+      totalNonSaudiMonthlyCost,
+      totalNonSaudiInsurableSalary,
+      // مقارنة التكاليف
+      totalEmployerCostSaudi: totalGosiEmployer,
+      totalEmployerCostNonSaudi: totalNonSaudiMonthlyCost,
+      totalEmployerCost: totalGosiEmployer + totalNonSaudiMonthlyCost,
     };
   }, [filteredEmployees]);
 
@@ -2481,6 +2549,98 @@ export default function EmployeeReportsDashboardPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* تكاليف غير السعوديين */}
+              <Card data-testid="card-non-saudi-costs">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-orange-500" />
+                    تكاليف الموظفين غير السعوديين على صاحب العمل
+                  </CardTitle>
+                  <CardDescription>
+                    تأمين إصابات العمل (2%) + رسوم رخصة العمل (66 ريال/شهر) + رسوم الإقامة (54 ريال/شهر)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* ملخص التكاليف */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                    <div className="text-center p-3 bg-orange-50 rounded-lg">
+                      <p className="text-2xl font-bold text-orange-600">{formatNumber(complianceMetrics.totalNonSaudiCount)}</p>
+                      <p className="text-xs text-gray-600">غير سعودي</p>
+                    </div>
+                    <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <p className="text-xl font-bold text-blue-600">{formatCurrency(complianceMetrics.totalNonSaudiInsurance)}</p>
+                      <p className="text-xs text-gray-600">تأمين 2%</p>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-lg">
+                      <p className="text-xl font-bold text-purple-600">{formatCurrency(complianceMetrics.totalNonSaudiWorkPermit)}</p>
+                      <p className="text-xs text-gray-600">رخصة العمل</p>
+                    </div>
+                    <div className="text-center p-3 bg-teal-50 rounded-lg">
+                      <p className="text-xl font-bold text-teal-600">{formatCurrency(complianceMetrics.totalNonSaudiIqama)}</p>
+                      <p className="text-xs text-gray-600">رسوم الإقامة</p>
+                    </div>
+                    <div className="text-center p-3 bg-red-50 rounded-lg">
+                      <p className="text-xl font-bold text-red-600">{formatCurrency(complianceMetrics.totalNonSaudiMonthlyCost)}</p>
+                      <p className="text-xs text-gray-600">إجمالي شهري</p>
+                    </div>
+                  </div>
+
+                  {/* جدول التفاصيل حسب الجنسية */}
+                  {complianceMetrics.nonSaudiCostAnalysis.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <Table className="table-fixed w-full">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right w-[100px]">الجنسية</TableHead>
+                            <TableHead className="text-center w-[60px]">العدد</TableHead>
+                            <TableHead className="text-center w-[100px]">الراتب+السكن</TableHead>
+                            <TableHead className="text-center w-[80px]">تأمين 2%</TableHead>
+                            <TableHead className="text-center w-[80px]">رخصة العمل</TableHead>
+                            <TableHead className="text-center w-[80px]">الإقامة</TableHead>
+                            <TableHead className="text-center w-[100px]">إجمالي التكلفة</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {complianceMetrics.nonSaudiCostAnalysis.map((nat, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium text-right">{nat.nationality}</TableCell>
+                              <TableCell className="text-center">{formatNumber(nat.count)}</TableCell>
+                              <TableCell className="text-center">{formatCurrency(nat.insurableSalary)}</TableCell>
+                              <TableCell className="text-center text-blue-600">{formatCurrency(nat.insuranceCost)}</TableCell>
+                              <TableCell className="text-center text-purple-600">{formatCurrency(nat.workPermitCost)}</TableCell>
+                              <TableCell className="text-center text-teal-600">{formatCurrency(nat.iqamaCost)}</TableCell>
+                              <TableCell className="text-center font-bold text-red-600">{formatCurrency(nat.totalMonthlyCost)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {/* مقارنة التكاليف */}
+                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-bold mb-3 text-gray-700">مقارنة تكاليف صاحب العمل الشهرية</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-3 bg-green-100 rounded-lg text-center">
+                        <p className="text-lg font-bold text-green-700">{formatCurrency(complianceMetrics.totalEmployerCostSaudi)}</p>
+                        <p className="text-xs text-green-600">السعوديين (11.75%)</p>
+                        <p className="text-xs text-gray-500">{complianceMetrics.saudiEmployees} موظف</p>
+                      </div>
+                      <div className="p-3 bg-orange-100 rounded-lg text-center">
+                        <p className="text-lg font-bold text-orange-700">{formatCurrency(complianceMetrics.totalEmployerCostNonSaudi)}</p>
+                        <p className="text-xs text-orange-600">غير السعوديين (2%+رسوم)</p>
+                        <p className="text-xs text-gray-500">{complianceMetrics.totalNonSaudiCount} موظف</p>
+                      </div>
+                      <div className="p-3 bg-blue-100 rounded-lg text-center">
+                        <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalEmployerCost)}</p>
+                        <p className="text-xs text-blue-600">الإجمالي الشهري</p>
+                        <p className="text-xs text-gray-500">{complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} موظف</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
               {complianceMetrics.saudizationGap > 0 && (
                 <Card className="bg-red-50 border-red-200">
