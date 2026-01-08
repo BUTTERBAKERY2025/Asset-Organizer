@@ -1342,6 +1342,82 @@ export default function EmployeeReportsDashboardPage() {
     };
   }, [filteredEmployees, branches]);
 
+  // ==================== NORMALIZATION FUNCTIONS ====================
+  // توحيد أسماء الجنسيات المتشابهة
+  const normalizeNationality = (nationality: string | null | undefined): string => {
+    if (!nationality) return "غير محدد";
+    const nat = nationality.trim().toLowerCase();
+    // توحيد الجنسيات المتشابهة
+    if (nat.includes("بنجلاديش") || nat.includes("بنغلاديش") || nat === "بنجلاديشي" || nat === "بنغلاديشي" || nat === "bangladesh" || nat === "bangladeshi") {
+      return "بنجلاديش";
+    }
+    if (nat.includes("مصر") || nat === "مصري" || nat === "egypt" || nat === "egyptian") {
+      return "مصري";
+    }
+    if (nat.includes("سعود") || nat === "saudi" || nat === "saudi arabian" || nat === "ksa") {
+      return "سعودي";
+    }
+    if (nat.includes("هند") || nat === "هندي" || nat === "india" || nat === "indian") {
+      return "هندي";
+    }
+    if (nat.includes("باكستان") || nat === "باكستاني" || nat === "pakistan" || nat === "pakistani") {
+      return "باكستاني";
+    }
+    if (nat.includes("فلبين") || nat === "فلبيني" || nat === "philippines" || nat === "filipino") {
+      return "فلبيني";
+    }
+    if (nat.includes("سودان") || nat === "سوداني" || nat === "sudan" || nat === "sudanese") {
+      return "سوداني";
+    }
+    if (nat.includes("يمن") || nat === "يمني" || nat === "yemen" || nat === "yemeni") {
+      return "يمني";
+    }
+    if (nat.includes("سريلانكا") || nat === "سريلانكي" || nat === "sri lanka" || nat === "sri lankan") {
+      return "سريلانكي";
+    }
+    if (nat.includes("نيبال") || nat === "نيبالي" || nat === "nepal" || nat === "nepali" || nat === "nepalese") {
+      return "نيبالي";
+    }
+    if (nat.includes("تونس") || nat === "تونسي" || nat === "tunisia" || nat === "tunisian") {
+      return "تونسي";
+    }
+    if (nat.includes("اردن") || nat.includes("أردن") || nat === "اردني" || nat === "أردني" || nat === "jordan" || nat === "jordanian") {
+      return "أردني";
+    }
+    if (nat.includes("سوري") || nat.includes("سوريا") || nat === "syria" || nat === "syrian") {
+      return "سوري";
+    }
+    return nationality.trim();
+  };
+
+  // توحيد أسماء الوظائف المتشابهة
+  const normalizeJobTitle = (jobTitle: string | null | undefined): string => {
+    if (!jobTitle) return "غير محدد";
+    const job = jobTitle.trim();
+    // إزالة المسافات الزائدة وتوحيد الكتابة
+    const normalizedJob = job.replace(/\s+/g, ' ').trim();
+    // توحيد بعض المسميات الشائعة
+    if (normalizedJob.toLowerCase() === "worker" || normalizedJob === "عامل " || normalizedJob === " عامل") {
+      return "عامل";
+    }
+    if (normalizedJob.toLowerCase() === "cashier" || normalizedJob === "كاشير " || normalizedJob === " كاشير") {
+      return "كاشير";
+    }
+    if (normalizedJob.toLowerCase() === "barista" || normalizedJob === "باريستا " || normalizedJob === " باريستا") {
+      return "باريستا";
+    }
+    if (normalizedJob.toLowerCase() === "baker" || normalizedJob.toLowerCase() === "bakery" || normalizedJob === "بيكري " || normalizedJob === " بيكري") {
+      return "بيكري";
+    }
+    if (normalizedJob.toLowerCase() === "waiter" || normalizedJob === "واتر " || normalizedJob === " واتر" || normalizedJob === "ويتر") {
+      return "واتر";
+    }
+    if (normalizedJob.toLowerCase() === "manager" || normalizedJob === "مدير " || normalizedJob === " مدير") {
+      return "مدير";
+    }
+    return normalizedJob;
+  };
+
   // ==================== COMPREHENSIVE COMPARISONS ====================
   const comprehensiveComparisons = useMemo(() => {
     if (!employees || !branches) return null;
@@ -1369,10 +1445,17 @@ export default function EmployeeReportsDashboardPage() {
       };
     }).filter(b => b.employeeCount > 0).sort((a, b) => b.avgSalary - a.avgSalary);
 
-    // Job title comparisons across branches
-    const jobTitles = Array.from(new Set(employees.filter(e => e.status === "active").map(e => e.jobTitle)));
+    // Job title comparisons across branches (with normalization)
+    const normalizedJobMap = new Map<string, typeof employees>();
+    employees.filter(e => e.status === "active").forEach(emp => {
+      const normalizedJob = normalizeJobTitle(emp.jobTitle);
+      const existing = normalizedJobMap.get(normalizedJob) || [];
+      existing.push(emp);
+      normalizedJobMap.set(normalizedJob, existing);
+    });
+    const jobTitles = Array.from(normalizedJobMap.keys());
     const jobAcrossBranches = jobTitles.map(job => {
-      const jobEmps = employees.filter(e => e.jobTitle === job && e.status === "active");
+      const jobEmps = normalizedJobMap.get(job) || [];
       const byBranch = branches.map(branch => {
         const branchJobEmps = jobEmps.filter(e => e.branchId === branch.id);
         const salaries = branchJobEmps.map(e => e.salary || 0);
@@ -1394,10 +1477,17 @@ export default function EmployeeReportsDashboardPage() {
       };
     }).filter(j => j.totalCount > 0).sort((a, b) => b.totalCount - a.totalCount);
 
-    // Nationality comparisons
-    const nationalities = Array.from(new Set(employees.filter(e => e.status === "active").map(e => e.nationality || "غير محدد")));
+    // Nationality comparisons (with normalization)
+    const normalizedNatMap = new Map<string, typeof employees>();
+    employees.filter(e => e.status === "active").forEach(emp => {
+      const normalizedNat = normalizeNationality(emp.nationality);
+      const existing = normalizedNatMap.get(normalizedNat) || [];
+      existing.push(emp);
+      normalizedNatMap.set(normalizedNat, existing);
+    });
+    const nationalities = Array.from(normalizedNatMap.keys());
     const nationalityStats = nationalities.map(nat => {
-      const natEmps = employees.filter(e => (e.nationality || "غير محدد") === nat && e.status === "active");
+      const natEmps = normalizedNatMap.get(nat) || [];
       const salaries = natEmps.map(e => e.salary || 0).filter(s => s > 0);
       const totalSalary = salaries.reduce((sum, s) => sum + s, 0);
       const avgSalary = salaries.length > 0 ? Math.round(totalSalary / salaries.length) : 0;
@@ -1484,7 +1574,7 @@ export default function EmployeeReportsDashboardPage() {
       return { branchName: branch.name, avgTenure, count: branchEmps.length };
     }).filter(b => b.count > 0).sort((a, b) => b.avgTenure - a.avgTenure);
 
-    // Salary gap analysis by nationality for same job (تحليل الفجوة الراتبية)
+    // Salary gap analysis by nationality for same job (تحليل الفجوة الراتبية) - with normalization
     const salaryGapByJob: Array<{
       jobTitle: string;
       nationalityComparisons: Array<{ nationality: string; avgSalary: number; count: number }>;
@@ -1494,12 +1584,12 @@ export default function EmployeeReportsDashboardPage() {
     }> = [];
     
     jobTitles.forEach(job => {
-      const jobEmps = employees.filter(e => e.jobTitle === job && e.status === "active" && e.salary);
+      const jobEmps = (normalizedJobMap.get(job) || []).filter(e => e.salary);
       if (jobEmps.length < 2) return;
       
       const natSalaries = new Map<string, { total: number; count: number }>();
       jobEmps.forEach(emp => {
-        const nat = emp.nationality || "غير محدد";
+        const nat = normalizeNationality(emp.nationality);
         const current = natSalaries.get(nat) || { total: 0, count: 0 };
         current.total += emp.salary || 0;
         current.count++;
@@ -1559,7 +1649,7 @@ export default function EmployeeReportsDashboardPage() {
       const totalOther = branchEmps.reduce((sum, e) => sum + (e.otherAllowances || 0), 0);
       const totalAllowances = totalHousing + totalTransport + totalFood + totalOther;
       // التأمينات الاجتماعية 9.75% للسعوديين فقط
-      const saudiEmps = branchEmps.filter(e => e.nationality === "سعودي");
+      const saudiEmps = branchEmps.filter(e => normalizeNationality(e.nationality) === "سعودي");
       const socialInsurance = saudiEmps.reduce((sum, e) => sum + Math.round((e.salary || 0) * 0.0975), 0);
       const totalCost = totalSalaries + totalAllowances + socialInsurance;
       const costPerEmployee = branchEmps.length > 0 ? Math.round(totalCost / branchEmps.length) : 0;
