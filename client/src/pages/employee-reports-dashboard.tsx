@@ -279,6 +279,186 @@ export default function EmployeeReportsDashboardPage() {
     return Array.from(map.entries()).map(([name, salary]) => ({ name, salary }));
   }, [filteredEmployees, branches]);
 
+  const branchComparisonData = useMemo(() => {
+    if (!employees || !branches || !attendanceRecords) return [];
+    const monthStart = `${selectedMonth}-01`;
+    const monthEnd = `${selectedMonth}-31`;
+    
+    return branches.map(branch => {
+      const branchEmps = employees.filter(emp => emp.branchId === branch.id && emp.status === "active");
+      const branchAttendance = attendanceRecords.filter(rec => 
+        rec.branchId === branch.id && 
+        rec.attendanceDate >= monthStart && 
+        rec.attendanceDate <= monthEnd
+      );
+      
+      const employeeCount = branchEmps.length;
+      const saudiCount = branchEmps.filter(emp => emp.nationality === "سعودي").length;
+      const saudiPercentage = employeeCount > 0 ? Math.round((saudiCount / employeeCount) * 100) : 0;
+      const totalSalary = branchEmps.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
+      const avgSalary = employeeCount > 0 ? Math.round(totalSalary / employeeCount) : 0;
+      const totalInsurance = branchEmps.filter(emp => emp.nationality === "سعودي")
+        .reduce((sum, emp) => sum + (emp.socialInsuranceDeduction || 0), 0);
+      const totalAllowances = branchEmps.reduce((sum, emp) => 
+        sum + (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0), 0);
+      
+      const presentCount = branchAttendance.filter(r => r.status === "present" || r.status === "late").length;
+      const absentCount = branchAttendance.filter(r => r.status === "absent").length;
+      const lateCount = branchAttendance.filter(r => r.status === "late").length;
+      const totalAttendance = branchAttendance.length;
+      const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 0;
+      const absentRate = totalAttendance > 0 ? Math.round((absentCount / totalAttendance) * 100) : 0;
+      const totalHours = branchAttendance.reduce((sum, r) => sum + (Number(r.workingHours) || 0), 0);
+      
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        employeeCount,
+        saudiCount,
+        saudiPercentage,
+        totalSalary,
+        avgSalary,
+        totalInsurance,
+        totalAllowances,
+        presentCount,
+        absentCount,
+        lateCount,
+        attendanceRate,
+        absentRate,
+        totalHours: Math.round(totalHours),
+      };
+    }).filter(b => b.employeeCount > 0);
+  }, [employees, branches, attendanceRecords, selectedMonth]);
+
+  const jobComparisonData = useMemo(() => {
+    if (!employees || !branches || !attendanceRecords) return [];
+    const monthStart = `${selectedMonth}-01`;
+    const monthEnd = `${selectedMonth}-31`;
+    
+    const jobBranchMap = new Map<string, Map<string, {
+      count: number;
+      totalSalary: number;
+      minSalary: number;
+      maxSalary: number;
+      present: number;
+      absent: number;
+      totalRecords: number;
+    }>>();
+    
+    employees.filter(emp => emp.status === "active").forEach(emp => {
+      if (!jobBranchMap.has(emp.jobTitle)) {
+        jobBranchMap.set(emp.jobTitle, new Map());
+      }
+      const branchMap = jobBranchMap.get(emp.jobTitle)!;
+      const branchName = getBranchName(emp.branchId);
+      const current = branchMap.get(branchName) || { 
+        count: 0, totalSalary: 0, minSalary: Infinity, maxSalary: 0, present: 0, absent: 0, totalRecords: 0 
+      };
+      const salary = emp.totalSalary || emp.salary || 0;
+      current.count++;
+      current.totalSalary += salary;
+      current.minSalary = Math.min(current.minSalary, salary);
+      current.maxSalary = Math.max(current.maxSalary, salary);
+      
+      const empAttendance = attendanceRecords.filter(rec => 
+        (rec.branchEmployeeId === emp.id || rec.employeeId === emp.id.toString()) &&
+        rec.attendanceDate >= monthStart && rec.attendanceDate <= monthEnd
+      );
+      current.present += empAttendance.filter(r => r.status === "present" || r.status === "late").length;
+      current.absent += empAttendance.filter(r => r.status === "absent").length;
+      current.totalRecords += empAttendance.length;
+      
+      branchMap.set(branchName, current);
+    });
+    
+    const results: Array<{
+      jobTitle: string;
+      branches: Array<{
+        branchName: string;
+        count: number;
+        avgSalary: number;
+        minSalary: number;
+        maxSalary: number;
+        attendanceRate: number;
+      }>;
+      totalCount: number;
+      avgSalary: number;
+      minSalary: number;
+      maxSalary: number;
+      salaryVariance: number;
+    }> = [];
+    
+    jobBranchMap.forEach((branchMap, jobTitle) => {
+      const branchData: Array<{
+        branchName: string;
+        count: number;
+        avgSalary: number;
+        minSalary: number;
+        maxSalary: number;
+        attendanceRate: number;
+      }> = [];
+      let totalCount = 0;
+      let totalSalary = 0;
+      let overallMin = Infinity;
+      let overallMax = 0;
+      
+      branchMap.forEach((data, branchName) => {
+        const avgSalary = data.count > 0 ? Math.round(data.totalSalary / data.count) : 0;
+        const attendanceRate = data.totalRecords > 0 ? Math.round((data.present / data.totalRecords) * 100) : 0;
+        branchData.push({
+          branchName,
+          count: data.count,
+          avgSalary,
+          minSalary: data.minSalary === Infinity ? 0 : data.minSalary,
+          maxSalary: data.maxSalary,
+          attendanceRate,
+        });
+        totalCount += data.count;
+        totalSalary += data.totalSalary;
+        overallMin = Math.min(overallMin, data.minSalary);
+        overallMax = Math.max(overallMax, data.maxSalary);
+      });
+      
+      if (branchData.length > 1) {
+        const avgSalary = totalCount > 0 ? Math.round(totalSalary / totalCount) : 0;
+        const salaryVariance = overallMax - (overallMin === Infinity ? 0 : overallMin);
+        results.push({
+          jobTitle,
+          branches: branchData.sort((a, b) => b.avgSalary - a.avgSalary),
+          totalCount,
+          avgSalary,
+          minSalary: overallMin === Infinity ? 0 : overallMin,
+          maxSalary: overallMax,
+          salaryVariance,
+        });
+      }
+    });
+    
+    return results.sort((a, b) => b.salaryVariance - a.salaryVariance);
+  }, [employees, branches, attendanceRecords, selectedMonth, getBranchName]);
+
+  const topEmployeesBySalary = useMemo(() => {
+    return [...filteredEmployees]
+      .sort((a, b) => (b.totalSalary || b.salary || 0) - (a.totalSalary || a.salary || 0))
+      .slice(0, 10);
+  }, [filteredEmployees]);
+
+  const allowancesBreakdown = useMemo(() => {
+    const totals = filteredEmployees.reduce((acc, emp) => ({
+      housing: acc.housing + (emp.housingAllowance || 0),
+      transport: acc.transport + (emp.transportAllowance || 0),
+      food: acc.food + (emp.foodAllowance || 0),
+      other: acc.other + (emp.otherAllowances || 0),
+    }), { housing: 0, transport: 0, food: 0, other: 0 });
+    
+    return [
+      { name: "بدل السكن", value: totals.housing, color: "#3b82f6" },
+      { name: "بدل النقل", value: totals.transport, color: "#10b981" },
+      { name: "بدل الطعام", value: totals.food, color: "#f59e0b" },
+      { name: "بدلات أخرى", value: totals.other, color: "#8b5cf6" },
+    ].filter(item => item.value > 0);
+  }, [filteredEmployees]);
+
   const { salaryClosingData, salaryClosingUnlinkedCount, salaryClosingUnlinkedRecords, salaryClosingUnlinkedSummary } = useMemo(() => {
     if (!salaryClosingBranch || salaryClosingBranch === "all") return { salaryClosingData: [], salaryClosingUnlinkedCount: 0, salaryClosingUnlinkedRecords: [] as AttendanceRecord[], salaryClosingUnlinkedSummary: { totalRecords: 0, presentRecords: 0, totalHours: 0 } };
     
@@ -761,22 +941,34 @@ export default function EmployeeReportsDashboardPage() {
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="overview" data-testid="tab-overview">
-                <BarChart3 className="w-4 h-4 ml-2" />
+                <BarChart3 className="w-4 h-4 ml-1" />
                 نظرة عامة
               </TabsTrigger>
+              <TabsTrigger value="branch-comparison" data-testid="tab-branch-comparison">
+                <Building2 className="w-4 h-4 ml-1" />
+                مقارنة الفروع
+              </TabsTrigger>
+              <TabsTrigger value="job-comparison" data-testid="tab-job-comparison">
+                <Users className="w-4 h-4 ml-1" />
+                مقارنة الوظائف
+              </TabsTrigger>
               <TabsTrigger value="attendance" data-testid="tab-attendance">
-                <Calendar className="w-4 h-4 ml-2" />
-                تقرير الحضور
+                <Calendar className="w-4 h-4 ml-1" />
+                الحضور
               </TabsTrigger>
               <TabsTrigger value="salaries" data-testid="tab-salaries">
-                <DollarSign className="w-4 h-4 ml-2" />
-                تقرير الرواتب
+                <DollarSign className="w-4 h-4 ml-1" />
+                الرواتب
               </TabsTrigger>
               <TabsTrigger value="analytics" data-testid="tab-analytics">
-                <TrendingUp className="w-4 h-4 ml-2" />
+                <TrendingUp className="w-4 h-4 ml-1" />
                 التحليلات
+              </TabsTrigger>
+              <TabsTrigger value="kpis" data-testid="tab-kpis">
+                <PieChartIcon className="w-4 h-4 ml-1" />
+                المؤشرات
               </TabsTrigger>
             </TabsList>
 
@@ -850,6 +1042,211 @@ export default function EmployeeReportsDashboardPage() {
                       <Bar dataKey="salary" fill="#10b981" name="إجمالي الرواتب" />
                     </BarChart>
                   </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="branch-comparison" className="space-y-4" data-testid="tab-content-branch-comparison">
+              <Card data-testid="card-branch-comparison-table">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5" />
+                    مقارنة شاملة بين الفروع
+                  </CardTitle>
+                  <CardDescription>مقارنة مؤشرات الأداء والموظفين والرواتب عبر جميع الفروع لشهر {selectedMonth}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">الفرع</TableHead>
+                          <TableHead className="text-center">الموظفين</TableHead>
+                          <TableHead className="text-center">السعوديين</TableHead>
+                          <TableHead className="text-center">نسبة السعودة</TableHead>
+                          <TableHead className="text-center">إجمالي الرواتب</TableHead>
+                          <TableHead className="text-center">متوسط الراتب</TableHead>
+                          <TableHead className="text-center">نسبة الحضور</TableHead>
+                          <TableHead className="text-center">الغياب</TableHead>
+                          <TableHead className="text-center">ساعات العمل</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {branchComparisonData.map((branch) => (
+                          <TableRow key={branch.branchId}>
+                            <TableCell className="font-medium">{branch.branchName}</TableCell>
+                            <TableCell className="text-center">{formatNumber(branch.employeeCount)}</TableCell>
+                            <TableCell className="text-center">{formatNumber(branch.saudiCount)}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={branch.saudiPercentage >= 30 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                                {branch.saudiPercentage}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">{formatCurrency(branch.totalSalary)}</TableCell>
+                            <TableCell className="text-center">{formatCurrency(branch.avgSalary)}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={branch.attendanceRate >= 80 ? "bg-green-100 text-green-800" : branch.attendanceRate >= 60 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}>
+                                {branch.attendanceRate}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center text-red-600">{formatNumber(branch.absentCount)}</TableCell>
+                            <TableCell className="text-center">{formatNumber(branch.totalHours)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>مقارنة عدد الموظفين</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={branchComparisonData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="employeeCount" fill="#3b82f6" name="إجمالي الموظفين" />
+                        <Bar dataKey="saudiCount" fill="#10b981" name="السعوديين" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>مقارنة نسب الحضور والغياب</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={branchComparisonData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="attendanceRate" fill="#10b981" name="نسبة الحضور %" />
+                        <Bar dataKey="absentRate" fill="#ef4444" name="نسبة الغياب %" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>مقارنة متوسط الرواتب</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={branchComparisonData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                        <Bar dataKey="avgSalary" fill="#f59e0b" name="متوسط الراتب" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>مقارنة ساعات العمل</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={branchComparisonData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="totalHours" fill="#8b5cf6" name="إجمالي الساعات" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="job-comparison" className="space-y-4" data-testid="tab-content-job-comparison">
+              <Card data-testid="card-job-comparison">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    مقارنة الوظائف عبر الفروع
+                  </CardTitle>
+                  <CardDescription>تحليل فروقات الرواتب لنفس المسمى الوظيفي في فروع مختلفة (مرتبة حسب أكبر فرق)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {jobComparisonData.length === 0 ? (
+                    <div className="text-center py-10 text-gray-500">
+                      لا توجد وظائف متكررة في أكثر من فرع للمقارنة
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {jobComparisonData.slice(0, 10).map((job) => (
+                        <Card key={job.jobTitle} className="border-amber-200">
+                          <CardHeader className="py-3 bg-amber-50">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg">{job.jobTitle}</CardTitle>
+                              <div className="flex items-center gap-4 text-sm">
+                                <span>العدد الكلي: <strong>{job.totalCount}</strong></span>
+                                <span>المتوسط: <strong>{formatCurrency(job.avgSalary)}</strong></span>
+                                <Badge className={job.salaryVariance > 1000 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}>
+                                  فرق: {formatCurrency(job.salaryVariance)}
+                                </Badge>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="py-3">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-right">الفرع</TableHead>
+                                  <TableHead className="text-center">العدد</TableHead>
+                                  <TableHead className="text-center">متوسط الراتب</TableHead>
+                                  <TableHead className="text-center">أقل راتب</TableHead>
+                                  <TableHead className="text-center">أعلى راتب</TableHead>
+                                  <TableHead className="text-center">نسبة الحضور</TableHead>
+                                  <TableHead className="text-center">الفرق عن المتوسط</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {job.branches.map((branch) => {
+                                  const diff = branch.avgSalary - job.avgSalary;
+                                  return (
+                                    <TableRow key={branch.branchName}>
+                                      <TableCell className="font-medium">{branch.branchName}</TableCell>
+                                      <TableCell className="text-center">{branch.count}</TableCell>
+                                      <TableCell className="text-center font-bold">{formatCurrency(branch.avgSalary)}</TableCell>
+                                      <TableCell className="text-center text-gray-500">{formatCurrency(branch.minSalary)}</TableCell>
+                                      <TableCell className="text-center text-gray-500">{formatCurrency(branch.maxSalary)}</TableCell>
+                                      <TableCell className="text-center">
+                                        <Badge className={branch.attendanceRate >= 80 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
+                                          {branch.attendanceRate}%
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <span className={diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-gray-500"}>
+                                          {diff > 0 ? "+" : ""}{formatCurrency(diff)}
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1013,6 +1410,188 @@ export default function EmployeeReportsDashboardPage() {
                               className={`h-2 rounded-full ${item.color}`} 
                               style={{ width: `${(item.value / filteredEmployees.length) * 100}%` }}
                             />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="kpis" className="space-y-4" data-testid="tab-content-kpis">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200" data-testid="kpi-total-employees">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-blue-700">{formatNumber(overviewStats.totalEmployees)}</p>
+                      <p className="text-sm text-blue-600">إجمالي الموظفين</p>
+                      <p className="text-xs text-blue-500 mt-1">نشط: {filteredEmployees.filter(e => e.status === "active").length}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200" data-testid="kpi-attendance-rate">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-green-700">{overviewStats.attendanceRate}%</p>
+                      <p className="text-sm text-green-600">نسبة الحضور</p>
+                      <p className="text-xs text-green-500 mt-1">{formatNumber(overviewStats.presentCount)} يوم حضور</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200" data-testid="kpi-total-salaries">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-amber-700">{formatCurrency(overviewStats.totalSalaries)}</p>
+                      <p className="text-sm text-amber-600">إجمالي الرواتب</p>
+                      <p className="text-xs text-amber-500 mt-1">متوسط: {formatCurrency(overviewStats.totalEmployees > 0 ? Math.round(overviewStats.totalSalaries / overviewStats.totalEmployees) : 0)}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200" data-testid="kpi-saudization">
+                  <CardContent className="pt-4">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-teal-700">{overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%</p>
+                      <p className="text-sm text-teal-600">نسبة السعودة</p>
+                      <p className="text-xs text-teal-500 mt-1">{formatNumber(overviewStats.saudiEmployees)} موظف سعودي</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card data-testid="card-top-employees">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5" />
+                      أعلى 10 موظفين راتباً
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table data-testid="table-top-employees">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">م</TableHead>
+                          <TableHead className="text-right">الموظف</TableHead>
+                          <TableHead className="text-right">الفرع</TableHead>
+                          <TableHead className="text-right">الوظيفة</TableHead>
+                          <TableHead className="text-center">الراتب</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {topEmployeesBySalary.map((emp, index) => (
+                          <TableRow key={emp.id} data-testid={`row-top-employee-${emp.id}`}>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                            <TableCell>{getBranchName(emp.branchId)}</TableCell>
+                            <TableCell>{emp.jobTitle}</TableCell>
+                            <TableCell className="text-center font-bold">{formatCurrency(emp.totalSalary || emp.salary)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-allowances-breakdown">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Wallet className="w-5 h-5" />
+                      تحليل البدلات
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {allowancesBreakdown.length > 0 ? (
+                      <>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <PieChart>
+                            <Pie
+                              data={allowancesBreakdown}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={70}
+                              fill="#8884d8"
+                              dataKey="value"
+                              label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                            >
+                              {allowancesBreakdown.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                          {allowancesBreakdown.map((item) => (
+                            <div key={item.name} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                              <span className="text-sm flex-1">{item.name}</span>
+                              <span className="font-bold text-sm">{formatCurrency(item.value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-10 text-gray-500">لا توجد بدلات مسجلة</div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-insurance-summary">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5" />
+                      ملخص التأمينات الاجتماعية
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg" data-testid="text-total-insurance">
+                        <div>
+                          <p className="text-sm text-purple-600">إجمالي التأمينات</p>
+                          <p className="text-2xl font-bold text-purple-700">{formatCurrency(overviewStats.totalInsurance)}</p>
+                        </div>
+                        <div className="p-3 bg-purple-100 rounded-full">
+                          <Wallet className="w-8 h-8 text-purple-600" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-gray-50 rounded-lg text-center" data-testid="text-saudi-count">
+                          <p className="text-lg font-bold">{formatNumber(overviewStats.saudiEmployees)}</p>
+                          <p className="text-xs text-gray-500">موظف سعودي</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg text-center" data-testid="text-avg-insurance">
+                          <p className="text-lg font-bold">{formatCurrency(overviewStats.saudiEmployees > 0 ? Math.round(overviewStats.totalInsurance / overviewStats.saudiEmployees) : 0)}</p>
+                          <p className="text-xs text-gray-500">متوسط التأمينات</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-branches-summary">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      ملخص الفروع
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {branchComparisonData.slice(0, 5).map((branch, index) => (
+                        <div key={branch.branchId} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
+                          <span className="w-6 h-6 flex items-center justify-center bg-amber-100 text-amber-700 rounded-full text-sm font-bold">
+                            {index + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="font-medium">{branch.branchName}</p>
+                            <p className="text-xs text-gray-500">{branch.employeeCount} موظف</p>
+                          </div>
+                          <div className="text-left">
+                            <p className="font-bold text-sm">{formatCurrency(branch.totalSalary)}</p>
+                            <Badge className={branch.attendanceRate >= 80 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
+                              {branch.attendanceRate}%
+                            </Badge>
                           </div>
                         </div>
                       ))}
