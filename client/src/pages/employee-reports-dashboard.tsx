@@ -189,7 +189,12 @@ export default function EmployeeReportsDashboardPage() {
     const activeEmployees = filteredEmployees.filter(emp => emp.status === "active").length;
     const totalInsurance = filteredEmployees
       .filter(emp => emp.nationality === "سعودي")
-      .reduce((sum, emp) => sum + (emp.socialInsuranceDeduction || 0), 0);
+      .reduce((sum, emp) => {
+        const storedDeduction = emp.socialInsuranceDeduction || 0;
+        if (storedDeduction > 0) return sum + storedDeduction;
+        const baseSalary = emp.salary || 0;
+        return sum + Math.round(baseSalary * 0.0975);
+      }, 0);
     
     const attendanceCount = allBranchMonthAttendance.length;
     const presentCount = allBranchMonthAttendance.filter(r => r.status === "present").length;
@@ -298,7 +303,12 @@ export default function EmployeeReportsDashboardPage() {
       const totalSalary = branchEmps.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
       const avgSalary = employeeCount > 0 ? Math.round(totalSalary / employeeCount) : 0;
       const totalInsurance = branchEmps.filter(emp => emp.nationality === "سعودي")
-        .reduce((sum, emp) => sum + (emp.socialInsuranceDeduction || 0), 0);
+        .reduce((sum, emp) => {
+          const storedDeduction = emp.socialInsuranceDeduction || 0;
+          if (storedDeduction > 0) return sum + storedDeduction;
+          const baseSalary = emp.salary || 0;
+          return sum + Math.round(baseSalary * 0.0975);
+        }, 0);
       const totalAllowances = branchEmps.reduce((sum, emp) => 
         sum + (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0), 0);
       
@@ -521,7 +531,10 @@ export default function EmployeeReportsDashboardPage() {
       const baseSalary = emp.salary || 0;
       const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
       const grossSalary = baseSalary + allowances;
-      const socialInsurance = emp.nationality === "سعودي" ? (emp.socialInsuranceDeduction || 0) : 0;
+      const storedInsurance = emp.socialInsuranceDeduction || 0;
+      const socialInsurance = emp.nationality === "سعودي" 
+        ? (storedInsurance > 0 ? storedInsurance : Math.round(baseSalary * 0.0975))
+        : 0;
       const netSalary = grossSalary - socialInsurance;
 
       return {
@@ -1333,7 +1346,10 @@ export default function EmployeeReportsDashboardPage() {
                     <TableBody>
                       {filteredEmployees.map((emp, index) => {
                         const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
-                        const insurance = emp.nationality === "سعودي" ? (emp.socialInsuranceDeduction || 0) : 0;
+                        const storedIns = emp.socialInsuranceDeduction || 0;
+                        const insurance = emp.nationality === "سعودي" 
+                          ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975))
+                          : 0;
                         return (
                           <TableRow key={emp.id}>
                             <TableCell>{index + 1}</TableCell>
