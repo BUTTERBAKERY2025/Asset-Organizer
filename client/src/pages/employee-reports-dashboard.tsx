@@ -1528,6 +1528,59 @@ export default function EmployeeReportsDashboardPage() {
     
     const sortedSalaryGap = salaryGapByJob.sort((a, b) => b.maxGap - a.maxGap).slice(0, 15);
 
+    // تحليل البدلات حسب الفرع
+    const allowancesAnalysis = branches.map(branch => {
+      const branchEmps = employees.filter(e => e.branchId === branch.id && e.status === "active");
+      const totalHousing = branchEmps.reduce((sum, e) => sum + (e.housingAllowance || 0), 0);
+      const totalTransport = branchEmps.reduce((sum, e) => sum + (e.transportAllowance || 0), 0);
+      const totalFood = branchEmps.reduce((sum, e) => sum + (e.foodAllowance || 0), 0);
+      const totalOther = branchEmps.reduce((sum, e) => sum + (e.otherAllowances || 0), 0);
+      const totalAllowances = totalHousing + totalTransport + totalFood + totalOther;
+      return {
+        branchName: branch.name,
+        branchId: branch.id,
+        employeeCount: branchEmps.length,
+        housingAllowance: totalHousing,
+        transportAllowance: totalTransport,
+        foodAllowance: totalFood,
+        otherAllowances: totalOther,
+        totalAllowances,
+        avgAllowancePerEmployee: branchEmps.length > 0 ? Math.round(totalAllowances / branchEmps.length) : 0,
+      };
+    }).filter(b => b.employeeCount > 0).sort((a, b) => b.totalAllowances - a.totalAllowances);
+
+    // التكلفة الشهرية الإجمالية لكل فرع
+    const monthlyCostAnalysis = branches.map(branch => {
+      const branchEmps = employees.filter(e => e.branchId === branch.id && e.status === "active");
+      const totalSalaries = branchEmps.reduce((sum, e) => sum + (e.salary || 0), 0);
+      const totalHousing = branchEmps.reduce((sum, e) => sum + (e.housingAllowance || 0), 0);
+      const totalTransport = branchEmps.reduce((sum, e) => sum + (e.transportAllowance || 0), 0);
+      const totalFood = branchEmps.reduce((sum, e) => sum + (e.foodAllowance || 0), 0);
+      const totalOther = branchEmps.reduce((sum, e) => sum + (e.otherAllowances || 0), 0);
+      const totalAllowances = totalHousing + totalTransport + totalFood + totalOther;
+      // التأمينات الاجتماعية 9.75% للسعوديين فقط
+      const saudiEmps = branchEmps.filter(e => e.nationality === "سعودي");
+      const socialInsurance = saudiEmps.reduce((sum, e) => sum + Math.round((e.salary || 0) * 0.0975), 0);
+      const totalCost = totalSalaries + totalAllowances + socialInsurance;
+      const costPerEmployee = branchEmps.length > 0 ? Math.round(totalCost / branchEmps.length) : 0;
+      return {
+        branchName: branch.name,
+        branchId: branch.id,
+        employeeCount: branchEmps.length,
+        totalSalaries,
+        totalAllowances,
+        socialInsurance,
+        totalCost,
+        costPerEmployee,
+      };
+    }).filter(b => b.employeeCount > 0).sort((a, b) => b.totalCost - a.totalCost);
+
+    // كفاءة الفرع المالية (الرواتب مقابل المبيعات)
+    const grandTotalCost = monthlyCostAnalysis.reduce((sum, b) => sum + b.totalCost, 0);
+    const grandTotalSalaries = monthlyCostAnalysis.reduce((sum, b) => sum + b.totalSalaries, 0);
+    const grandTotalAllowances = monthlyCostAnalysis.reduce((sum, b) => sum + b.totalAllowances, 0);
+    const grandTotalInsurance = monthlyCostAnalysis.reduce((sum, b) => sum + b.socialInsurance, 0);
+
     return {
       branchSalaryStats,
       jobAcrossBranches: jobAcrossBranches.slice(0, 15),
@@ -1537,6 +1590,8 @@ export default function EmployeeReportsDashboardPage() {
       tenureRanges,
       tenureByBranch,
       salaryGapByJob: sortedSalaryGap,
+      allowancesAnalysis,
+      monthlyCostAnalysis,
       summary: {
         totalBranches: branchSalaryStats.length,
         totalActiveEmployees: employees.filter(e => e.status === "active").length,
@@ -1548,6 +1603,10 @@ export default function EmployeeReportsDashboardPage() {
               return sum + (today.getTime() - new Date(e.hireDate!).getTime()) / (1000 * 60 * 60 * 24 * 365);
             }, 0) / activeEmpsWithHireDate.length * 10) / 10
           : 0,
+        grandTotalCost,
+        grandTotalSalaries,
+        grandTotalAllowances,
+        grandTotalInsurance,
       }
     };
   }, [employees, branches]);
@@ -3671,6 +3730,27 @@ export default function EmployeeReportsDashboardPage() {
                     "فجوة الراتب": g.maxGap,
                   })));
                   XLSX.utils.book_append_sheet(wb, salaryGapSheet, "فجوة الرواتب");
+                  const allowancesSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.allowancesAnalysis.map(a => ({
+                    "الفرع": a.branchName,
+                    "الموظفين": a.employeeCount,
+                    "بدل السكن": a.housingAllowance,
+                    "بدل النقل": a.transportAllowance,
+                    "بدل الطعام": a.foodAllowance,
+                    "بدلات أخرى": a.otherAllowances,
+                    "إجمالي البدلات": a.totalAllowances,
+                    "متوسط/موظف": a.avgAllowancePerEmployee,
+                  })));
+                  XLSX.utils.book_append_sheet(wb, allowancesSheet, "تحليل البدلات");
+                  const costSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.monthlyCostAnalysis.map(c => ({
+                    "الفرع": c.branchName,
+                    "الموظفين": c.employeeCount,
+                    "الرواتب": c.totalSalaries,
+                    "البدلات": c.totalAllowances,
+                    "التأمينات": c.socialInsurance,
+                    "إجمالي التكلفة": c.totalCost,
+                    "تكلفة/موظف": c.costPerEmployee,
+                  })));
+                  XLSX.utils.book_append_sheet(wb, costSheet, "التكلفة الشهرية");
                   XLSX.writeFile(wb, `comparisons_report_${selectedMonth}.xlsx`);
                 }} data-testid="button-export-comparisons-excel">
                   <FileSpreadsheet className="w-4 h-4 ml-1" />
@@ -4047,6 +4127,160 @@ export default function EmployeeReportsDashboardPage() {
                           لا توجد فجوات راتبية ملحوظة بين الجنسيات
                         </div>
                       )}
+                    </CardContent>
+                  </Card>
+
+                  {/* تحليل البدلات حسب الفرع */}
+                  <Card data-testid="card-allowances-analysis">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Wallet className="w-5 h-5 text-blue-500" />
+                        تحليل البدلات حسب الفرع
+                      </CardTitle>
+                      <CardDescription>مقارنة بدل السكن والنقل والطعام بين الفروع</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={comprehensiveComparisons.allowancesAnalysis}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="branchName" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                          <Legend />
+                          <Bar dataKey="housingAllowance" stackId="a" fill="#3b82f6" name="بدل السكن" />
+                          <Bar dataKey="transportAllowance" stackId="a" fill="#10b981" name="بدل النقل" />
+                          <Bar dataKey="foodAllowance" stackId="a" fill="#f59e0b" name="بدل الطعام" />
+                          <Bar dataKey="otherAllowances" stackId="a" fill="#8b5cf6" name="بدلات أخرى" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">الفرع</TableHead>
+                              <TableHead className="text-right">الموظفين</TableHead>
+                              <TableHead className="text-right">بدل السكن</TableHead>
+                              <TableHead className="text-right">بدل النقل</TableHead>
+                              <TableHead className="text-right">إجمالي البدلات</TableHead>
+                              <TableHead className="text-right">متوسط/موظف</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {comprehensiveComparisons.allowancesAnalysis.map((branch, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-medium">{branch.branchName}</TableCell>
+                                <TableCell>{formatNumber(branch.employeeCount)}</TableCell>
+                                <TableCell>{formatCurrency(branch.housingAllowance)}</TableCell>
+                                <TableCell>{formatCurrency(branch.transportAllowance)}</TableCell>
+                                <TableCell className="font-bold text-blue-600">{formatCurrency(branch.totalAllowances)}</TableCell>
+                                <TableCell>{formatCurrency(branch.avgAllowancePerEmployee)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* التكلفة الشهرية الإجمالية */}
+                  <Card data-testid="card-monthly-cost-analysis">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-green-500" />
+                        التكلفة الشهرية الإجمالية لكل فرع
+                      </CardTitle>
+                      <CardDescription>
+                        إجمالي التكاليف: {formatCurrency(comprehensiveComparisons.summary.grandTotalCost || 0)} 
+                        (رواتب: {formatCurrency(comprehensiveComparisons.summary.grandTotalSalaries || 0)} + 
+                        بدلات: {formatCurrency(comprehensiveComparisons.summary.grandTotalAllowances || 0)} + 
+                        تأمينات: {formatCurrency(comprehensiveComparisons.summary.grandTotalInsurance || 0)})
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={comprehensiveComparisons.monthlyCostAnalysis} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
+                          <YAxis dataKey="branchName" type="category" width={100} />
+                          <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                          <Legend />
+                          <Bar dataKey="totalSalaries" stackId="a" fill="#10b981" name="الرواتب" />
+                          <Bar dataKey="totalAllowances" stackId="a" fill="#3b82f6" name="البدلات" />
+                          <Bar dataKey="socialInsurance" stackId="a" fill="#f59e0b" name="التأمينات" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">الفرع</TableHead>
+                              <TableHead className="text-right">الموظفين</TableHead>
+                              <TableHead className="text-right">الرواتب</TableHead>
+                              <TableHead className="text-right">البدلات</TableHead>
+                              <TableHead className="text-right">التأمينات</TableHead>
+                              <TableHead className="text-right">إجمالي التكلفة</TableHead>
+                              <TableHead className="text-right">تكلفة/موظف</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {comprehensiveComparisons.monthlyCostAnalysis.map((branch, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-medium">{branch.branchName}</TableCell>
+                                <TableCell>{formatNumber(branch.employeeCount)}</TableCell>
+                                <TableCell>{formatCurrency(branch.totalSalaries)}</TableCell>
+                                <TableCell>{formatCurrency(branch.totalAllowances)}</TableCell>
+                                <TableCell>{formatCurrency(branch.socialInsurance)}</TableCell>
+                                <TableCell className="font-bold text-green-600">{formatCurrency(branch.totalCost)}</TableCell>
+                                <TableCell>
+                                  <Badge className="bg-purple-100 text-purple-800">
+                                    {formatCurrency(branch.costPerEmployee)}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* ترتيب الفروع حسب الكفاءة المالية */}
+                  <Card data-testid="card-efficiency-ranking">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-amber-500" />
+                        ترتيب الفروع حسب تكلفة الموظف
+                      </CardTitle>
+                      <CardDescription>الفروع مرتبة من الأقل تكلفة إلى الأعلى (الأقل = الأكثر كفاءة)</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {[...comprehensiveComparisons.monthlyCostAnalysis].sort((a, b) => a.costPerEmployee - b.costPerEmployee).map((branch, i) => {
+                          const maxCost = Math.max(...comprehensiveComparisons.monthlyCostAnalysis.map(b => b.costPerEmployee));
+                          const percentage = maxCost > 0 ? (branch.costPerEmployee / maxCost) * 100 : 0;
+                          return (
+                            <div key={i} className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
+                                i === 0 ? "bg-green-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-amber-500" : "bg-gray-400"
+                              }`}>
+                                {i + 1}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex justify-between mb-1">
+                                  <span className="font-medium">{branch.branchName}</span>
+                                  <span className="text-sm text-gray-600">{formatCurrency(branch.costPerEmployee)} / موظف</span>
+                                </div>
+                                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full ${i === 0 ? "bg-green-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-amber-500" : "bg-gray-400"}`}
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
                 </>
