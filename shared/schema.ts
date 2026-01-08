@@ -3728,6 +3728,7 @@ export const branchEmployees = pgTable("branch_employees", {
   transportAllowance: real("transport_allowance").default(0), // بدل المواصلات
   foodAllowance: real("food_allowance").default(0), // بدل الطعام
   otherAllowances: real("other_allowances").default(0), // بدلات أخرى
+  socialInsuranceDeduction: real("social_insurance_deduction").default(0), // خصم التأمينات الاجتماعية للسعوديين
   totalSalary: real("total_salary"), // إجمالي الراتب
   hireDate: text("hire_date"), // تاريخ التعيين
   healthCertificate: text("health_certificate").default("none"), // شهادة صحية: none, valid, expired
