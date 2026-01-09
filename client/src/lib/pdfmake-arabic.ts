@@ -4,7 +4,7 @@ import { droidKufiRegularBase64, notoKufiArabicRegularBase64 } from "./fonts/ara
 
 // Get existing VFS from multiple possible locations
 const pdfFontsAny = pdfFonts as any;
-const existingVfs = pdfFontsAny.pdfMake?.vfs || pdfFontsAny.vfs || pdfFontsAny.default?.pdfMake?.vfs || {};
+const existingVfs = pdfFontsAny.pdfMake?.vfs || pdfFontsAny.vfs || pdfFontsAny.default?.pdfMake?.vfs || pdfFontsAny.default?.vfs || {};
 
 // Create combined VFS with Arabic fonts
 const customVfs: Record<string, string> = {
@@ -12,9 +12,6 @@ const customVfs: Record<string, string> = {
   'DroidKufi-Regular.ttf': droidKufiRegularBase64,
   'NotoKufi-Regular.ttf': notoKufiArabicRegularBase64,
 };
-
-// Also set VFS globally for fallback
-(pdfMakeLib as any).vfs = customVfs;
 
 const customFonts = {
   Roboto: {
