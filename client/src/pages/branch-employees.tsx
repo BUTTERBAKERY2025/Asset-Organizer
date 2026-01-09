@@ -12,7 +12,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useReactToPrint } from "react-to-print";
@@ -434,6 +434,15 @@ export default function BranchEmployeesPage() {
       healthCertificate: "none",
     },
   });
+
+  // استخدام useWatch لتحسين الأداء - مراقبة الحقول المطلوبة فقط
+  const watchedNationality = useWatch({ control: form.control, name: "nationality" });
+  const watchedSalary = useWatch({ control: form.control, name: "salary" });
+  const watchedHousingAllowance = useWatch({ control: form.control, name: "housingAllowance" });
+  const watchedTransportAllowance = useWatch({ control: form.control, name: "transportAllowance" });
+  const watchedFoodAllowance = useWatch({ control: form.control, name: "foodAllowance" });
+  const watchedOtherAllowances = useWatch({ control: form.control, name: "otherAllowances" });
+  const watchedSocialInsurance = useWatch({ control: form.control, name: "socialInsuranceDeduction" });
 
   const createMutation = useMutation({
     mutationFn: async (data: EmployeeFormData) => {
@@ -957,7 +966,7 @@ export default function BranchEmployeesPage() {
                       <Input type="number" {...form.register("otherAllowances")} placeholder="0" data-testid="input-other" />
                     </div>
                     
-                    {form.watch("nationality") === "سعودي" && (
+                    {watchedNationality === "سعودي" && (
                       <div className="space-y-2">
                         <Label className="text-red-600">خصم التأمينات الاجتماعية (ريال) - للسعوديين</Label>
                         <Input 
@@ -977,30 +986,30 @@ export default function BranchEmployeesPage() {
                           <span>مجموع الراتب والبدلات:</span>
                           <span>
                             {formatCurrency(
-                              Number(form.watch("salary") || 0) +
-                              Number(form.watch("housingAllowance") || 0) +
-                              Number(form.watch("transportAllowance") || 0) +
-                              Number(form.watch("foodAllowance") || 0) +
-                              Number(form.watch("otherAllowances") || 0)
+                              Number(watchedSalary || 0) +
+                              Number(watchedHousingAllowance || 0) +
+                              Number(watchedTransportAllowance || 0) +
+                              Number(watchedFoodAllowance || 0) +
+                              Number(watchedOtherAllowances || 0)
                             )}
                           </span>
                         </div>
-                        {form.watch("nationality") === "سعودي" && Number(form.watch("socialInsuranceDeduction") || 0) > 0 && (
+                        {watchedNationality === "سعودي" && Number(watchedSocialInsurance || 0) > 0 && (
                           <div className="flex justify-between items-center text-sm text-red-600">
                             <span>خصم التأمينات الاجتماعية:</span>
-                            <span>- {formatCurrency(Number(form.watch("socialInsuranceDeduction") || 0))}</span>
+                            <span>- {formatCurrency(Number(watchedSocialInsurance || 0))}</span>
                           </div>
                         )}
                         <div className="flex justify-between items-center border-t pt-2">
                           <span className="font-bold">صافي الراتب:</span>
                           <span className="text-xl font-bold text-amber-700">
                             {formatCurrency(
-                              Number(form.watch("salary") || 0) +
-                              Number(form.watch("housingAllowance") || 0) +
-                              Number(form.watch("transportAllowance") || 0) +
-                              Number(form.watch("foodAllowance") || 0) +
-                              Number(form.watch("otherAllowances") || 0) -
-                              (form.watch("nationality") === "سعودي" ? Number(form.watch("socialInsuranceDeduction") || 0) : 0)
+                              Number(watchedSalary || 0) +
+                              Number(watchedHousingAllowance || 0) +
+                              Number(watchedTransportAllowance || 0) +
+                              Number(watchedFoodAllowance || 0) +
+                              Number(watchedOtherAllowances || 0) -
+                              (watchedNationality === "سعودي" ? Number(watchedSocialInsurance || 0) : 0)
                             )}
                           </span>
                         </div>
