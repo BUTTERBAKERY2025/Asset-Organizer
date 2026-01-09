@@ -786,7 +786,12 @@ export default function EmployeeReportsDashboardPage() {
   };
 
   const exportSalaryClosingToPDF = () => {
-    if (salaryClosingData.length === 0) return;
+    console.log("PDF export button clicked, data length:", salaryClosingData.length);
+    if (salaryClosingData.length === 0) {
+      console.log("No data to export");
+      alert("لا توجد بيانات للتصدير");
+      return;
+    }
     
     const tableBody = [
       [
@@ -864,7 +869,14 @@ export default function EmployeeReportsDashboardPage() {
       defaultStyle: { fontSize: 8 },
     };
 
-    downloadArabicPdf(docDefinition, `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`);
+    try {
+      console.log("Calling downloadArabicPdf...");
+      downloadArabicPdf(docDefinition, `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`);
+      console.log("downloadArabicPdf completed");
+    } catch (error) {
+      console.error("Error in exportSalaryClosingToPDF:", error);
+      alert("خطأ في تصدير PDF: " + (error as Error).message);
+    }
   };
 
   // ==================== NEW EXPORT FUNCTIONS ====================
