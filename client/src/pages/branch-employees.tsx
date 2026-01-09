@@ -203,6 +203,8 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [approvalNotes, setApprovalNotes] = useState<string>("");
   const [rejectionReason, setRejectionReason] = useState<string>("");
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState<string>("");
+  const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
 
   const { data: transfers, isLoading } = useQuery<EmployeeTransferRequest[]>({
     queryKey: ["/api/employee-transfers"],
@@ -294,7 +296,18 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
     setEffectiveDate("");
     setReason("");
     setNotes("");
+    setEmployeeSearchQuery("");
+    setIsEmployeeDropdownOpen(false);
   };
+
+  const filteredEmployees = employees.filter(e => {
+    if (e.status !== "active") return false;
+    if (!employeeSearchQuery.trim()) return true;
+    const query = employeeSearchQuery.toLowerCase().trim();
+    const matchesName = e.employeeName.toLowerCase().includes(query);
+    const matchesNumber = e.employeeNumber?.toLowerCase().includes(query);
+    return matchesName || matchesNumber;
+  });
 
   const getEmployeeName = (employeeId: number) => {
     const emp = employees.find(e => e.id === employeeId);
@@ -419,23 +432,88 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>الموظف *</Label>
-                    <Select value={selectedEmployee?.toString() || ""} onValueChange={(v) => setSelectedEmployee(parseInt(v))}>
-                      <SelectTrigger data-testid="select-employee">
-                        <SelectValue placeholder="اختر الموظف" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {employees.filter(e => e.status === "active").map(emp => (
-                          <SelectItem key={emp.id} value={emp.id.toString()}>
-                            {emp.employeeName} - {getBranchName(emp.branchId)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>الموظف * (ابحث بالاسم أو رقم الموظف)</Label>
+                    <div className="relative">
+                      <div className="relative">
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                          value={selectedEmployee ? `${getSelectedEmployee()?.employeeName} (${getSelectedEmployee()?.employeeNumber || ""})` : employeeSearchQuery}
+                          onChange={(e) => {
+                            setEmployeeSearchQuery(e.target.value);
+                            setSelectedEmployee(null);
+                            setIsEmployeeDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsEmployeeDropdownOpen(true)}
+                          placeholder="ابحث باسم الموظف أو رقمه..."
+                          className="pr-10"
+                          data-testid="input-employee-search"
+                        />
+                        {selectedEmployee && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                            onClick={() => {
+                              setSelectedEmployee(null);
+                              setEmployeeSearchQuery("");
+                            }}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {isEmployeeDropdownOpen && !selectedEmployee && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {filteredEmployees.length === 0 ? (
+                            <div className="p-3 text-center text-gray-500 text-sm">
+                              لا يوجد موظفين مطابقين
+                            </div>
+                          ) : (
+                            filteredEmployees.slice(0, 20).map(emp => (
+                              <div
+                                key={emp.id}
+                                className="p-3 hover:bg-amber-50 cursor-pointer border-b last:border-b-0"
+                                onClick={() => {
+                                  setSelectedEmployee(emp.id);
+                                  setIsEmployeeDropdownOpen(false);
+                                  setEmployeeSearchQuery("");
+                                }}
+                                data-testid={`employee-option-${emp.id}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="font-medium">{emp.employeeName}</p>
+                                    <p className="text-sm text-gray-500">
+                                      {emp.employeeNumber && <span className="text-amber-600 ml-2">#{emp.employeeNumber}</span>}
+                                      {getBranchName(emp.branchId)}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs">{emp.jobTitle}</Badge>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                          {filteredEmployees.length > 20 && (
+                            <div className="p-2 text-center text-gray-400 text-xs bg-gray-50">
+                              يوجد {filteredEmployees.length - 20} موظف آخر - حدد البحث للمزيد
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   {selectedEmployee && (
-                    <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                    <div className="p-3 bg-amber-50 rounded-lg text-sm border border-amber-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <UserCheck className="w-4 h-4 text-amber-600" />
+                        <span className="font-medium text-amber-800">الموظف المختار</span>
+                      </div>
+                      <p><strong>الاسم:</strong> {getSelectedEmployee()?.employeeName}</p>
+                      {getSelectedEmployee()?.employeeNumber && (
+                        <p><strong>رقم الموظف:</strong> {getSelectedEmployee()?.employeeNumber}</p>
+                      )}
                       <p><strong>الفرع الحالي:</strong> {getBranchName(getSelectedEmployee()?.branchId || "")}</p>
                       <p><strong>الوظيفة:</strong> {getSelectedEmployee()?.jobTitle}</p>
                     </div>
