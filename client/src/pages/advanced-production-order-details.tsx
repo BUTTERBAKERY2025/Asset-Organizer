@@ -19,10 +19,7 @@ import { ar } from "date-fns/locale";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
-
-pdfMake.vfs = pdfFonts.vfs;
+import { downloadArabicPdf } from "@/lib/pdfmake-arabic";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
   draft: { label: "مسودة", color: "text-gray-700", bgColor: "bg-gray-100" },
@@ -279,12 +276,10 @@ export default function AdvancedProductionOrderDetailsPage() {
         subheader: { fontSize: 14, margin: [0, 0, 0, 5] },
         sectionHeader: { fontSize: 14, bold: true, margin: [0, 0, 0, 10] },
       },
-      defaultStyle: {
-        font: "Roboto"
-      }
+      defaultStyle: {}
     };
 
-    pdfMake.createPdf(docDefinition).download(`امر_انتاج_${order.orderNumber}.pdf`);
+    downloadArabicPdf(docDefinition, `امر_انتاج_${order.orderNumber}.pdf`);
   };
 
   if (isLoading) {

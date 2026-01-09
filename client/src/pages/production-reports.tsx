@@ -312,9 +312,7 @@ export default function ProductionReportsPage() {
   const exportToPDF = useCallback(async () => {
     setIsExporting("pdf");
     try {
-      const pdfMake = (await import("pdfmake/build/pdfmake")).default;
-      const pdfFonts = (await import("pdfmake/build/vfs_fonts")).default;
-      pdfMake.vfs = pdfFonts.vfs;
+      const { downloadArabicPdf } = await import("@/lib/pdfmake-arabic");
 
       const docDefinition: any = {
         content: [
@@ -340,7 +338,7 @@ export default function ProductionReportsPage() {
         },
       };
 
-      pdfMake.createPdf(docDefinition).download(`تقارير_الإنتاج_${startDate}.pdf`);
+      downloadArabicPdf(docDefinition, `تقارير_الإنتاج_${startDate}.pdf`);
     } catch (error) {
       console.error("PDF export error:", error);
     } finally {

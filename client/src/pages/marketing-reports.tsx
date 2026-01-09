@@ -330,9 +330,7 @@ export default function MarketingReportsPage() {
   };
 
   const exportReportToPdf = async () => {
-    const pdfMake = (await import("pdfmake/build/pdfmake")).default;
-    const pdfFonts = (await import("pdfmake/build/vfs_fonts")).default;
-    pdfMake.vfs = pdfFonts.vfs;
+    const { downloadArabicPdf } = await import("@/lib/pdfmake-arabic");
 
     const activeFiltersText = getActiveFiltersDescription();
     const today = new Date().toLocaleDateString('ar-SA');
@@ -419,11 +417,10 @@ export default function MarketingReportsPage() {
         subheader: { fontSize: 12, color: '#666' },
         filters: { fontSize: 10, color: '#888', italics: true },
         sectionHeader: { fontSize: 14, bold: true, color: '#d946ef' }
-      },
-      defaultStyle: { font: 'Roboto' }
+      }
     };
 
-    pdfMake.createPdf(docDefinition).download(`تقرير_التسويق_${new Date().toISOString().split('T')[0]}.pdf`);
+    downloadArabicPdf(docDefinition, `تقرير_التسويق_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const getActiveFiltersDescription = () => {
