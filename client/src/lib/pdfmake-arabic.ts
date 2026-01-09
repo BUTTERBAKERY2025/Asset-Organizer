@@ -74,8 +74,17 @@ export function createArabicPdf(docDefinition: any): any {
 }
 
 export function downloadArabicPdf(docDefinition: any, filename: string): void {
-  const pdf = createArabicPdf(docDefinition);
-  pdf.download(filename);
+  try {
+    console.log('Starting PDF generation...');
+    console.log('VFS keys:', Object.keys(customVfs));
+    const pdf = createArabicPdf(docDefinition);
+    console.log('PDF created, downloading...');
+    pdf.download(filename);
+    console.log('PDF download initiated');
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    alert('خطأ في إنشاء ملف PDF: ' + (error as Error).message);
+  }
 }
 
 export const pdfMake = pdfMakeLib;
