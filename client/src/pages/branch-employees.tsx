@@ -44,8 +44,13 @@ import {
   Link,
   Upload,
   Network,
+  Settings,
+  Flag,
+  CreditCard,
+  Layers,
+  FileCheck,
 } from "lucide-react";
-import type { BranchEmployee } from "@shared/schema";
+import type { BranchEmployee, EmployeeSetting } from "@shared/schema";
 
 const JOB_TITLES = [
   "كاشير", "مشرف", "مدير صالة", "معبأ طلبات", "بيكري", "بستري",
@@ -203,6 +208,13 @@ export default function BranchEmployeesPage() {
   const [importPreview, setImportPreview] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importBranchId, setImportBranchId] = useState<string>("");
+  const [mainTab, setMainTab] = useState<string>("employees");
+  const [settingsCategory, setSettingsCategory] = useState<string>("nationality");
+  const [isSettingDialogOpen, setIsSettingDialogOpen] = useState(false);
+  const [editingSetting, setEditingSetting] = useState<EmployeeSetting | null>(null);
+  const [newSettingValue, setNewSettingValue] = useState("");
+  const [newSettingLabelAr, setNewSettingLabelAr] = useState("");
+  const [newSettingLabelEn, setNewSettingLabelEn] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -293,6 +305,122 @@ export default function BranchEmployeesPage() {
       setSelectedUserToLink("");
     },
   });
+
+  // Employee Settings Queries and Mutations
+  const { data: employeeSettingsData, isLoading: isLoadingSettings } = useQuery({
+    queryKey: ["/api/employee-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/employee-settings");
+      return res.json() as Promise<EmployeeSetting[]>;
+    },
+  });
+
+  const settingsByCategory = React.useMemo(() => {
+    const grouped: Record<string, EmployeeSetting[]> = {};
+    employeeSettingsData?.forEach((setting) => {
+      if (!grouped[setting.category]) {
+        grouped[setting.category] = [];
+      }
+      grouped[setting.category].push(setting);
+    });
+    return grouped;
+  }, [employeeSettingsData]);
+
+  const createSettingMutation = useMutation({
+    mutationFn: async (data: { category: string; value: string; labelAr: string; labelEn?: string }) => {
+      const res = await fetch("/api/employee-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("فشل في إنشاء الإعداد");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-settings"] });
+      setIsSettingDialogOpen(false);
+      setNewSettingValue("");
+      setNewSettingLabelAr("");
+      setNewSettingLabelEn("");
+    },
+  });
+
+  const updateSettingMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<EmployeeSetting> }) => {
+      const res = await fetch(`/api/employee-settings/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("فشل في تحديث الإعداد");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-settings"] });
+      setIsSettingDialogOpen(false);
+      setEditingSetting(null);
+      setNewSettingValue("");
+      setNewSettingLabelAr("");
+      setNewSettingLabelEn("");
+    },
+  });
+
+  const deleteSettingMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/employee-settings/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("فشل في حذف الإعداد");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-settings"] });
+    },
+  });
+
+  const handleSaveSetting = () => {
+    if (editingSetting) {
+      updateSettingMutation.mutate({
+        id: editingSetting.id,
+        data: {
+          value: newSettingValue,
+          labelAr: newSettingLabelAr,
+          labelEn: newSettingLabelEn || undefined,
+        },
+      });
+    } else {
+      createSettingMutation.mutate({
+        category: settingsCategory,
+        value: newSettingValue,
+        labelAr: newSettingLabelAr,
+        labelEn: newSettingLabelEn || undefined,
+      });
+    }
+  };
+
+  const handleEditSetting = (setting: EmployeeSetting) => {
+    setEditingSetting(setting);
+    setNewSettingValue(setting.value);
+    setNewSettingLabelAr(setting.labelAr);
+    setNewSettingLabelEn(setting.labelEn || "");
+    setIsSettingDialogOpen(true);
+  };
+
+  const handleAddSetting = () => {
+    setEditingSetting(null);
+    setNewSettingValue("");
+    setNewSettingLabelAr("");
+    setNewSettingLabelEn("");
+    setIsSettingDialogOpen(true);
+  };
+
+  const SETTING_CATEGORIES = [
+    { value: "nationality", labelAr: "الجنسيات", icon: Flag },
+    { value: "job_title", labelAr: "الوظائف", icon: Briefcase },
+    { value: "department", labelAr: "الأقسام", icon: Layers },
+    { value: "contract_type", labelAr: "أنواع العقود", icon: FileCheck },
+    { value: "bank", labelAr: "البنوك", icon: CreditCard },
+  ];
 
   const form = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeFormSchema),
@@ -945,6 +1073,20 @@ export default function BranchEmployeesPage() {
           </div>
         </div>
 
+        {/* Main Tabs */}
+        <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
+          <TabsList className="grid grid-cols-2 w-[300px]">
+            <TabsTrigger value="employees" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              الموظفين
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              الإعدادات
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="employees" className="space-y-6 mt-6">
         <div className="grid grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-6">
@@ -1192,6 +1334,182 @@ export default function BranchEmployeesPage() {
             </Card>
           </div>
         )}
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  إعدادات بيانات الموظفين
+                </CardTitle>
+                <CardDescription>إدارة القوائم المنسدلة وخيارات البيانات التي تظهر في نماذج الموظفين</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {/* Categories sidebar */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-sm text-gray-500 mb-3">الفئات</h4>
+                    {SETTING_CATEGORIES.map((cat) => {
+                      const Icon = cat.icon;
+                      return (
+                        <Button
+                          key={cat.value}
+                          variant={settingsCategory === cat.value ? "default" : "ghost"}
+                          className={`w-full justify-start gap-2 ${settingsCategory === cat.value ? "bg-amber-600 hover:bg-amber-700" : ""}`}
+                          onClick={() => setSettingsCategory(cat.value)}
+                          data-testid={`btn-category-${cat.value}`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {cat.labelAr}
+                          <Badge variant="outline" className="mr-auto">{settingsByCategory[cat.value]?.length || 0}</Badge>
+                        </Button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Settings list */}
+                  <div className="md:col-span-3 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-medium">
+                        {SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelAr || settingsCategory}
+                      </h4>
+                      <Button size="sm" className="bg-amber-600 hover:bg-amber-700" onClick={handleAddSetting} data-testid="btn-add-setting">
+                        <Plus className="w-4 h-4 ml-2" />
+                        إضافة جديد
+                      </Button>
+                    </div>
+
+                    {isLoadingSettings ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+                      </div>
+                    ) : (
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">#</TableHead>
+                              <TableHead className="text-right">القيمة</TableHead>
+                              <TableHead className="text-right">الاسم بالعربي</TableHead>
+                              <TableHead className="text-right">الاسم بالإنجليزي</TableHead>
+                              <TableHead className="text-right">الحالة</TableHead>
+                              <TableHead className="text-center w-32">إجراءات</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(settingsByCategory[settingsCategory] || []).map((setting, idx) => (
+                              <TableRow key={setting.id} data-testid={`row-setting-${setting.id}`}>
+                                <TableCell>{idx + 1}</TableCell>
+                                <TableCell>{setting.value}</TableCell>
+                                <TableCell>{setting.labelAr}</TableCell>
+                                <TableCell>{setting.labelEn || "-"}</TableCell>
+                                <TableCell>
+                                  <Badge className={setting.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                                    {setting.isActive ? "نشط" : "غير نشط"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button variant="ghost" size="icon" onClick={() => handleEditSetting(setting)} data-testid={`btn-edit-${setting.id}`}>
+                                      <Edit className="w-4 h-4 text-blue-600" />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      onClick={() => {
+                                        if (confirm(`هل أنت متأكد من حذف "${setting.labelAr}"؟`)) {
+                                          deleteSettingMutation.mutate(setting.id);
+                                        }
+                                      }}
+                                      data-testid={`btn-delete-${setting.id}`}
+                                    >
+                                      <Trash2 className="w-4 h-4 text-red-600" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {(!settingsByCategory[settingsCategory] || settingsByCategory[settingsCategory].length === 0) && (
+                              <TableRow>
+                                <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                                  لا توجد بيانات في هذه الفئة
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Add/Edit Setting Dialog */}
+            <Dialog open={isSettingDialogOpen} onOpenChange={(open) => {
+              setIsSettingDialogOpen(open);
+              if (!open) {
+                setEditingSetting(null);
+                setNewSettingValue("");
+                setNewSettingLabelAr("");
+                setNewSettingLabelEn("");
+              }
+            }}>
+              <DialogContent className="max-w-md" dir="rtl">
+                <DialogHeader>
+                  <DialogTitle>{editingSetting ? "تعديل الإعداد" : "إضافة إعداد جديد"}</DialogTitle>
+                  <DialogDescription>
+                    {editingSetting ? "تعديل القيمة الموجودة" : `إضافة قيمة جديدة إلى ${SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelAr}`}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>القيمة *</Label>
+                    <Input 
+                      value={newSettingValue}
+                      onChange={(e) => setNewSettingValue(e.target.value)}
+                      placeholder="مثال: سعودي"
+                      data-testid="input-setting-value"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>الاسم بالعربي *</Label>
+                    <Input 
+                      value={newSettingLabelAr}
+                      onChange={(e) => setNewSettingLabelAr(e.target.value)}
+                      placeholder="مثال: سعودي"
+                      data-testid="input-setting-label-ar"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>الاسم بالإنجليزي (اختياري)</Label>
+                    <Input 
+                      value={newSettingLabelEn}
+                      onChange={(e) => setNewSettingLabelEn(e.target.value)}
+                      placeholder="مثال: Saudi"
+                      dir="ltr"
+                      data-testid="input-setting-label-en"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setIsSettingDialogOpen(false)}>إلغاء</Button>
+                  <Button 
+                    className="bg-amber-600 hover:bg-amber-700"
+                    onClick={handleSaveSetting}
+                    disabled={!newSettingValue || !newSettingLabelAr || createSettingMutation.isPending || updateSettingMutation.isPending}
+                    data-testid="btn-save-setting"
+                  >
+                    {(createSettingMutation.isPending || updateSettingMutation.isPending) && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                    {editingSetting ? "تحديث" : "إضافة"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+        </Tabs>
 
         {/* Employee Details Dialog */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
