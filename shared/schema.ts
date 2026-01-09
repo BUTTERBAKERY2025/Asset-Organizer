@@ -3856,3 +3856,40 @@ export const insertOrgJobRoleSchema = createInsertSchema(orgJobRoles).omit({
 
 export type OrgJobRole = typeof orgJobRoles.$inferSelect;
 export type InsertOrgJobRole = z.infer<typeof insertOrgJobRoleSchema>;
+
+// Employee Settings - إعدادات بيانات الموظفين (القوائم المنسدلة)
+export const employeeSettings = pgTable("employee_settings", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull(), // nationality, job_title, status, health_cert, contract_type, department, bank
+  value: text("value").notNull(), // القيمة الفعلية
+  labelAr: text("label_ar").notNull(), // التسمية بالعربي
+  labelEn: text("label_en"), // التسمية بالإنجليزي (اختياري)
+  color: text("color"), // لون البادج (اختياري)
+  icon: text("icon"), // أيقونة (اختياري)
+  orderIndex: integer("order_index").default(0).notNull(), // ترتيب العرض
+  isActive: boolean("is_active").default(true).notNull(), // نشط/غير نشط
+  isDefault: boolean("is_default").default(false).notNull(), // القيمة الافتراضية
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_settings_category").on(table.category),
+  index("idx_employee_settings_active").on(table.isActive),
+]);
+
+export const insertEmployeeSettingSchema = createInsertSchema(employeeSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type EmployeeSetting = typeof employeeSettings.$inferSelect;
+export type InsertEmployeeSetting = z.infer<typeof insertEmployeeSettingSchema>;
+
+// Employee Setting Categories - فئات الإعدادات
+export const EMPLOYEE_SETTING_CATEGORIES = [
+  { value: "nationality", labelAr: "الجنسيات", labelEn: "Nationalities" },
+  { value: "job_title", labelAr: "الوظائف", labelEn: "Job Titles" },
+  { value: "department", labelAr: "الأقسام", labelEn: "Departments" },
+  { value: "contract_type", labelAr: "أنواع العقود", labelEn: "Contract Types" },
+  { value: "bank", labelAr: "البنوك", labelEn: "Banks" },
+] as const;
