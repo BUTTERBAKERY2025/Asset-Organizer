@@ -275,7 +275,9 @@ export default function EmployeeReportsDashboardPage() {
     filteredEmployees.forEach(emp => {
       map.set(emp.nationality, (map.get(emp.nationality) || 0) + 1);
     });
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
   }, [filteredEmployees]);
 
   const jobTitleChartData = useMemo(() => {
@@ -283,7 +285,9 @@ export default function EmployeeReportsDashboardPage() {
     filteredEmployees.forEach(emp => {
       map.set(emp.jobTitle, (map.get(emp.jobTitle) || 0) + 1);
     });
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
   }, [filteredEmployees]);
 
   const branchSalaryData = useMemo(() => {
@@ -292,8 +296,42 @@ export default function EmployeeReportsDashboardPage() {
       const branchName = getBranchName(emp.branchId);
       map.set(branchName, (map.get(branchName) || 0) + (emp.totalSalary || emp.salary || 0));
     });
-    return Array.from(map.entries()).map(([name, salary]) => ({ name, salary }));
+    return Array.from(map.entries())
+      .map(([name, salary]) => ({ name, salary }))
+      .sort((a, b) => b.salary - a.salary);
   }, [filteredEmployees, branches]);
+
+  const previousMonthStats = useMemo(() => {
+    if (!employees || !attendanceRecords) return null;
+    const currentDate = new Date(selectedMonth + "-01");
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    const prevMonth = currentDate.toISOString().slice(0, 7);
+    const prevMonthStart = `${prevMonth}-01`;
+    const prevMonthEnd = `${prevMonth}-31`;
+    
+    const prevAttendance = attendanceRecords.filter(rec => {
+      if (selectedBranch !== "all" && rec.branchId !== selectedBranch) return false;
+      return rec.attendanceDate >= prevMonthStart && rec.attendanceDate <= prevMonthEnd;
+    });
+    
+    const prevPresentCount = prevAttendance.filter(r => r.status === "present").length;
+    const prevTotalAttendance = prevAttendance.length;
+    const prevAttendanceRate = prevTotalAttendance > 0 ? Math.round((prevPresentCount / prevTotalAttendance) * 100) : 0;
+    
+    const prevTotalSalaries = filteredEmployees.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
+    
+    return {
+      attendanceRate: prevAttendanceRate,
+      totalSalaries: prevTotalSalaries,
+      totalEmployees: filteredEmployees.length,
+    };
+  }, [employees, attendanceRecords, selectedMonth, selectedBranch, filteredEmployees]);
+
+  const getChangeIndicator = (current: number, previous: number | undefined) => {
+    if (!previous || previous === 0) return { change: 0, isPositive: true };
+    const change = Math.round(((current - previous) / previous) * 100);
+    return { change, isPositive: change >= 0 };
+  };
 
   const branchComparisonData = useMemo(() => {
     if (!employees || !branches || !attendanceRecords) return [];
@@ -2380,6 +2418,85 @@ export default function EmployeeReportsDashboardPage() {
             </div>
 
             <TabsContent value="overview" className="space-y-4">
+              {/* KPI Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-blue-600 font-medium">إجمالي الموظفين</p>
+                        <p className="text-3xl font-bold text-blue-800">{formatNumber(overviewStats.totalEmployees)}</p>
+                        <p className="text-xs text-blue-500 mt-1">
+                          نشط: {formatNumber(overviewStats.activeEmployees)}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-blue-200 rounded-full">
+                        <Users className="w-6 h-6 text-blue-700" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-green-600 font-medium">إجمالي الرواتب</p>
+                        <p className="text-2xl font-bold text-green-800">{formatCurrency(overviewStats.totalSalaries)}</p>
+                        <p className="text-xs text-green-500 mt-1">
+                          تأمينات: {formatCurrency(overviewStats.totalInsurance)}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-green-200 rounded-full">
+                        <DollarSign className="w-6 h-6 text-green-700" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-amber-600 font-medium">نسبة السعودة</p>
+                        <p className="text-3xl font-bold text-amber-800">
+                          {overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%
+                        </p>
+                        <p className="text-xs text-amber-500 mt-1">
+                          {formatNumber(overviewStats.saudiEmployees)} سعودي من {formatNumber(overviewStats.totalEmployees)}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-amber-200 rounded-full">
+                        <Shield className="w-6 h-6 text-amber-700" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-purple-600 font-medium">معدل الحضور</p>
+                        <p className="text-3xl font-bold text-purple-800">{overviewStats.attendanceRate}%</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {previousMonthStats && (
+                            <span className={`text-xs flex items-center gap-1 ${getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? "text-green-600" : "text-red-600"}`}>
+                              {getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
+                              {Math.abs(getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).change)}% من الشهر السابق
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-purple-200 rounded-full">
+                        <Clock className="w-6 h-6 text-purple-700" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Charts Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
@@ -2387,27 +2504,40 @@ export default function EmployeeReportsDashboardPage() {
                       <PieChartIcon className="w-5 h-5" />
                       توزيع الموظفين حسب الجنسية
                     </CardTitle>
+                    <CardDescription>مرتب من الأكثر للأقل</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={nationalityChartData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {nationalityChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <div className="flex flex-col lg:flex-row items-center gap-4">
+                      <ResponsiveContainer width="100%" height={280}>
+                        <PieChart>
+                          <Pie
+                            data={nationalityChartData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={true}
+                            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                            outerRadius={90}
+                            innerRadius={40}
+                            fill="#8884d8"
+                            dataKey="value"
+                            paddingAngle={2}
+                          >
+                            {nationalityChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value, name) => [formatNumber(Number(value)), name]} />
+                          <Legend 
+                            layout="vertical" 
+                            align="right" 
+                            verticalAlign="middle"
+                            formatter={(value: string, entry: any) => (
+                              <span className="text-sm">{value} ({entry.payload.value})</span>
+                            )}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -2417,40 +2547,98 @@ export default function EmployeeReportsDashboardPage() {
                       <BarChart3 className="w-5 h-5" />
                       توزيع الموظفين حسب الوظيفة
                     </CardTitle>
+                    <CardDescription>مرتب من الأكثر للأقل</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={jobTitleChartData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
+                    <ResponsiveContainer width="100%" height={Math.max(300, jobTitleChartData.length * 35)}>
+                      <BarChart data={jobTitleChartData} layout="vertical" margin={{ right: 30 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
-                        <YAxis dataKey="name" type="category" width={100} />
+                        <YAxis 
+                          dataKey="name" 
+                          type="category" 
+                          width={120} 
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) => value.length > 15 ? value.slice(0, 15) + "..." : value}
+                        />
                         <Tooltip />
-                        <Bar dataKey="value" fill="#f59e0b" name="عدد الموظفين" />
+                        <Bar 
+                          dataKey="value" 
+                          fill="#f59e0b" 
+                          name="عدد الموظفين"
+                          label={{ position: 'right', fill: '#666', fontSize: 11 }}
+                          radius={[0, 4, 4, 0]}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
               </div>
 
+              {/* Branch Salary Chart */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="w-5 h-5" />
                     إجمالي الرواتب حسب الفرع
                   </CardTitle>
+                  <CardDescription>مرتب من الأعلى للأقل</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={branchSalaryData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
+                    <BarChart data={branchSalaryData} margin={{ top: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tickFormatter={(value) => formatNumber(value)} />
                       <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                      <Bar dataKey="salary" fill="#10b981" name="إجمالي الرواتب" />
+                      <Bar 
+                        dataKey="salary" 
+                        fill="#10b981" 
+                        name="إجمالي الرواتب"
+                        label={{ position: 'top', fill: '#666', fontSize: 10, formatter: (value: number) => formatNumber(value) }}
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
+
+              {/* Attendance Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-green-600">حضور</p>
+                        <p className="text-2xl font-bold text-green-800">{formatNumber(overviewStats.presentCount)}</p>
+                      </div>
+                      <CheckCircle className="w-8 h-8 text-green-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-red-50 border-red-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-red-600">غياب</p>
+                        <p className="text-2xl font-bold text-red-800">{formatNumber(overviewStats.absentCount)}</p>
+                      </div>
+                      <XCircle className="w-8 h-8 text-red-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-yellow-50 border-yellow-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-yellow-600">تأخير</p>
+                        <p className="text-2xl font-bold text-yellow-800">{formatNumber(overviewStats.lateCount)}</p>
+                      </div>
+                      <AlertCircle className="w-8 h-8 text-yellow-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             {/* ==================== DATA QUALITY TAB ==================== */}
