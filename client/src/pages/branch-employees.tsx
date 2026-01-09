@@ -8,6 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import React, { useState, useRef, useEffect } from "react";
@@ -16,6 +27,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useReactToPrint } from "react-to-print";
+import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
 import pdfMake from "pdfmake/build/pdfmake";
 import {
@@ -49,6 +61,10 @@ import {
   CreditCard,
   Layers,
   FileCheck,
+  SlidersHorizontal,
+  AlertTriangle,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import type { BranchEmployee, EmployeeSetting } from "@shared/schema";
 
@@ -166,6 +182,7 @@ export default function BranchEmployeesPage() {
   const [location, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { toast } = useToast();
   
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -192,6 +209,15 @@ export default function BranchEmployeesPage() {
   const [newSettingLabelEn, setNewSettingLabelEn] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<BranchEmployee | null>(null);
+  const [salaryMin, setSalaryMin] = useState<number | undefined>(undefined);
+  const [salaryMax, setSalaryMax] = useState<number | undefined>(undefined);
+  const [hireDateFrom, setHireDateFrom] = useState<string>("");
+  const [hireDateTo, setHireDateTo] = useState<string>("");
 
   const { data: branches } = useQuery({
     queryKey: ["/api/branches"],
@@ -465,6 +491,17 @@ export default function BranchEmployeesPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
       setIsDialogOpen(false);
       form.reset();
+      toast({
+        title: "تمت الإضافة بنجاح",
+        description: "تم إضافة الموظف الجديد بنجاح",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "خطأ في الإضافة",
+        description: error.message || "فشل في إضافة الموظف",
+        variant: "destructive",
+      });
     },
   });
 
@@ -483,6 +520,17 @@ export default function BranchEmployeesPage() {
       setIsDialogOpen(false);
       setEditingEmployee(null);
       form.reset();
+      toast({
+        title: "تم التحديث بنجاح",
+        description: "تم تحديث بيانات الموظف بنجاح",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "خطأ في التحديث",
+        description: error.message || "فشل في تحديث الموظف",
+        variant: "destructive",
+      });
     },
   });
 
@@ -499,12 +547,32 @@ export default function BranchEmployeesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
-      alert("تم حذف الموظف بنجاح");
+      setIsDeleteDialogOpen(false);
+      setEmployeeToDelete(null);
+      toast({
+        title: "تم الحذف بنجاح",
+        description: "تم حذف الموظف بنجاح",
+      });
     },
     onError: (error: Error) => {
-      alert(error.message || "فشل في حذف الموظف");
+      toast({
+        title: "خطأ في الحذف",
+        description: error.message || "فشل في حذف الموظف",
+        variant: "destructive",
+      });
     },
   });
+
+  const handleDeleteClick = (employee: BranchEmployee) => {
+    setEmployeeToDelete(employee);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (employeeToDelete) {
+      deleteMutation.mutate(employeeToDelete.id);
+    }
+  };
 
   const handleEdit = (employee: BranchEmployee) => {
     setEditingEmployee(employee);
@@ -568,8 +636,51 @@ export default function BranchEmployeesPage() {
     if (selectedStatus !== "all" && emp.status !== selectedStatus) {
       return false;
     }
+    if (salaryMin !== undefined && emp.salary < salaryMin) {
+      return false;
+    }
+    if (salaryMax !== undefined && emp.salary > salaryMax) {
+      return false;
+    }
+    if (hireDateFrom && emp.hireDate && emp.hireDate < hireDateFrom) {
+      return false;
+    }
+    if (hireDateTo && emp.hireDate && emp.hireDate > hireDateTo) {
+      return false;
+    }
     return true;
   });
+
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedEmployees = filteredEmployees.slice(startIndex, startIndex + pageSize);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedBranch, selectedNationality, selectedJobTitle, selectedStatus, salaryMin, salaryMax, hireDateFrom, hireDateTo]);
+
+  const hasActiveFilters = 
+    selectedBranch !== "all" ||
+    selectedNationality !== "all" ||
+    selectedJobTitle !== "all" ||
+    selectedStatus !== "all" ||
+    searchQuery !== "" ||
+    salaryMin !== undefined ||
+    salaryMax !== undefined ||
+    hireDateFrom !== "" ||
+    hireDateTo !== "";
+
+  const resetFilters = () => {
+    setSelectedBranch("all");
+    setSelectedNationality("all");
+    setSelectedJobTitle("all");
+    setSelectedStatus("all");
+    setSearchQuery("");
+    setSalaryMin(undefined);
+    setSalaryMax(undefined);
+    setHireDateFrom("");
+    setHireDateTo("");
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1290,6 +1401,80 @@ export default function BranchEmployeesPage() {
               data-testid="input-search"
             />
           </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2" data-testid="btn-advanced-filters">
+                <Filter className="w-4 h-4" />
+                فلترة متقدمة
+                {(salaryMin !== undefined || salaryMax !== undefined || hireDateFrom || hireDateTo) && (
+                  <Badge variant="secondary" className="mr-1">{[salaryMin !== undefined, salaryMax !== undefined, hireDateFrom, hireDateTo].filter(Boolean).length}</Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="start">
+              <div className="space-y-4">
+                <h4 className="font-medium">فلترة متقدمة</h4>
+                <div className="space-y-2">
+                  <Label>نطاق الراتب</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      placeholder="من"
+                      value={salaryMin ?? ""}
+                      onChange={(e) => setSalaryMin(e.target.value ? Number(e.target.value) : undefined)}
+                      data-testid="input-salary-min"
+                    />
+                    <Input
+                      type="number"
+                      placeholder="إلى"
+                      value={salaryMax ?? ""}
+                      onChange={(e) => setSalaryMax(e.target.value ? Number(e.target.value) : undefined)}
+                      data-testid="input-salary-max"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>تاريخ التوظيف</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      placeholder="من"
+                      value={hireDateFrom}
+                      onChange={(e) => setHireDateFrom(e.target.value)}
+                      data-testid="input-hire-from"
+                    />
+                    <Input
+                      type="date"
+                      placeholder="إلى"
+                      value={hireDateTo}
+                      onChange={(e) => setHireDateTo(e.target.value)}
+                      data-testid="input-hire-to"
+                    />
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    setSalaryMin(undefined);
+                    setSalaryMax(undefined);
+                    setHireDateFrom("");
+                    setHireDateTo("");
+                  }}
+                  data-testid="btn-clear-advanced"
+                >
+                  مسح الفلاتر المتقدمة
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={resetFilters} className="text-red-600" data-testid="btn-reset-all-filters">
+              <X className="w-4 h-4 ml-1" />
+              مسح جميع الفلاتر
+            </Button>
+          )}
         </div>
 
         <div ref={printRef}>
@@ -1324,7 +1509,7 @@ export default function BranchEmployeesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEmployees.map((emp: BranchEmployee) => (
+                  {paginatedEmployees.map((emp: BranchEmployee) => (
                     <TableRow key={emp.id} data-testid={`row-employee-${emp.id}`}>
                       <TableCell className="font-mono text-sm text-amber-700">{emp.employeeNumber || "--"}</TableCell>
                       <TableCell>
@@ -1352,11 +1537,7 @@ export default function BranchEmployeesPage() {
                               size="sm"
                               variant="ghost"
                               className="text-red-600 hover:text-red-700"
-                              onClick={() => {
-                                if (confirm("هل أنت متأكد من حذف هذا الموظف نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.")) {
-                                  deleteMutation.mutate(emp.id);
-                                }
-                              }}
+                              onClick={() => handleDeleteClick(emp)}
                               data-testid={`button-delete-${emp.id}`}
                               title="حذف (مدير النظام فقط)"
                             >
@@ -1369,6 +1550,45 @@ export default function BranchEmployeesPage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-gray-500">
+                  عرض {formatNumber(startIndex + 1)} - {formatNumber(Math.min(startIndex + pageSize, filteredEmployees.length))} من {formatNumber(filteredEmployees.length)}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-24" data-testid="select-page-size">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    data-testid="btn-prev-page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm">صفحة {formatNumber(currentPage)} من {formatNumber(totalPages)}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    data-testid="btn-next-page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1931,6 +2151,37 @@ export default function BranchEmployeesPage() {
             )}
           </DialogContent>
         </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              تأكيد حذف الموظف
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              {employeeToDelete && (
+                <>
+                  هل أنت متأكد من حذف الموظف <strong>{employeeToDelete.employeeName}</strong>؟
+                  <br />
+                  <span className="text-red-500">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع بيانات الموظف نهائياً.</span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel data-testid="btn-cancel-delete">إلغاء</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="btn-confirm-delete"
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
+              حذف نهائياً
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </div>
     </Layout>
   );
