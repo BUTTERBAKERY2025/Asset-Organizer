@@ -2,13 +2,19 @@ import pdfMakeLib from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { droidKufiRegularBase64, notoKufiArabicRegularBase64 } from "./fonts/arabic-fonts";
 
-const existingVfs = (pdfFonts as any).pdfMake?.vfs || {};
+// Get existing VFS from multiple possible locations
+const pdfFontsAny = pdfFonts as any;
+const existingVfs = pdfFontsAny.pdfMake?.vfs || pdfFontsAny.vfs || pdfFontsAny.default?.pdfMake?.vfs || {};
 
-const customVfs = {
+// Create combined VFS with Arabic fonts
+const customVfs: Record<string, string> = {
   ...existingVfs,
   'DroidKufi-Regular.ttf': droidKufiRegularBase64,
   'NotoKufi-Regular.ttf': notoKufiArabicRegularBase64,
 };
+
+// Also set VFS globally for fallback
+(pdfMakeLib as any).vfs = customVfs;
 
 const customFonts = {
   Roboto: {
