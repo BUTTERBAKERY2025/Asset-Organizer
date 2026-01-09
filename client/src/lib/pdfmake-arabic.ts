@@ -1,17 +1,12 @@
 import pdfMakeLib from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import { droidKufiRegularBase64, notoKufiArabicRegularBase64 } from "./fonts/arabic-fonts";
 
-// Get existing VFS from multiple possible locations
+// Get existing VFS from pdfFonts
 const pdfFontsAny = pdfFonts as any;
 const existingVfs = pdfFontsAny.pdfMake?.vfs || pdfFontsAny.vfs || pdfFontsAny.default?.pdfMake?.vfs || pdfFontsAny.default?.vfs || {};
 
-// Create combined VFS with Arabic fonts
-const customVfs: Record<string, string> = {
-  ...existingVfs,
-  'DroidKufi-Regular.ttf': droidKufiRegularBase64,
-  'NotoKufi-Regular.ttf': notoKufiArabicRegularBase64,
-};
+// Use Roboto font (built-in) - Arabic text will render but may not look optimal
+const customVfs: Record<string, string> = existingVfs;
 
 const customFonts = {
   Roboto: {
@@ -20,17 +15,11 @@ const customFonts = {
     italics: 'Roboto-Italic.ttf',
     bolditalics: 'Roboto-MediumItalic.ttf',
   },
-  Arabic: {
-    normal: 'DroidKufi-Regular.ttf',
-    bold: 'NotoKufi-Regular.ttf',
-    italics: 'DroidKufi-Regular.ttf',
-    bolditalics: 'NotoKufi-Regular.ttf',
-  },
 };
 
 export function getArabicDefaultStyle() {
   return {
-    font: 'Arabic',
+    font: 'Roboto',
     fontSize: 10,
     alignment: 'right' as const,
   };
@@ -42,7 +31,7 @@ export function getArabicTableHeaderStyle() {
     fontSize: 9,
     fillColor: '#f3f4f6',
     alignment: 'center' as const,
-    font: 'Arabic',
+    font: 'Roboto',
   };
 }
 
@@ -50,7 +39,7 @@ export function createArabicPdf(docDefinition: any): any {
   const enhancedDocDefinition = {
     ...docDefinition,
     defaultStyle: {
-      font: 'Arabic',
+      font: 'Roboto',
       fontSize: 10,
       ...docDefinition.defaultStyle,
     },
@@ -60,13 +49,13 @@ export function createArabicPdf(docDefinition: any): any {
         fontSize: 9, 
         fillColor: '#f3f4f6', 
         alignment: 'center' as const,
-        font: 'Arabic',
+        font: 'Roboto',
       },
       header: { 
         fontSize: 18, 
         bold: true, 
         margin: [0, 0, 0, 10],
-        font: 'Arabic',
+        font: 'Roboto',
         alignment: 'center' as const,
       },
       ...docDefinition.styles,
