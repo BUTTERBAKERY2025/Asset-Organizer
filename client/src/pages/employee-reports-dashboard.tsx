@@ -275,12 +275,33 @@ export default function EmployeeReportsDashboardPage() {
     filteredEmployees.forEach(emp => {
       map.set(emp.nationality, (map.get(emp.nationality) || 0) + 1);
     });
-    return Array.from(map.entries())
+    const sorted = Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
+    
+    // Show top 5 and group rest as "أخرى"
+    if (sorted.length > 5) {
+      const top5 = sorted.slice(0, 5);
+      const othersSum = sorted.slice(5).reduce((sum, item) => sum + item.value, 0);
+      return [...top5, { name: "أخرى", value: othersSum }];
+    }
+    return sorted;
   }, [filteredEmployees]);
 
   const jobTitleChartData = useMemo(() => {
+    const map = new Map<string, number>();
+    filteredEmployees.forEach(emp => {
+      map.set(emp.jobTitle, (map.get(emp.jobTitle) || 0) + 1);
+    });
+    const sorted = Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+    
+    // Show top 8 only for cleaner chart
+    return sorted.slice(0, 8);
+  }, [filteredEmployees]);
+
+  const jobTitleFullData = useMemo(() => {
     const map = new Map<string, number>();
     filteredEmployees.forEach(emp => {
       map.set(emp.jobTitle, (map.get(emp.jobTitle) || 0) + 1);
@@ -2496,81 +2517,123 @@ export default function EmployeeReportsDashboardPage() {
                 </Card>
               </div>
 
-              {/* Charts Row */}
+              {/* Charts Row - Improved Design */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                {/* Nationality Distribution - Clean Donut with Summary */}
+                <Card className="overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
+                    <CardTitle className="flex items-center gap-2 text-amber-800">
                       <PieChartIcon className="w-5 h-5" />
                       توزيع الموظفين حسب الجنسية
                     </CardTitle>
-                    <CardDescription>مرتب من الأكثر للأقل</CardDescription>
+                    <CardDescription>أعلى 5 جنسيات + أخرى</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col lg:flex-row items-center gap-4">
-                      <ResponsiveContainer width="100%" height={280}>
-                        <PieChart>
-                          <Pie
-                            data={nationalityChartData}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={true}
-                            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                            outerRadius={90}
-                            innerRadius={40}
-                            fill="#8884d8"
-                            dataKey="value"
-                            paddingAngle={2}
-                          >
-                            {nationalityChartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value, name) => [formatNumber(Number(value)), name]} />
-                          <Legend 
-                            layout="vertical" 
-                            align="right" 
-                            verticalAlign="middle"
-                            formatter={(value: string, entry: any) => (
-                              <span className="text-sm">{value} ({entry.payload.value})</span>
-                            )}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-6">
+                      {/* Donut Chart */}
+                      <div className="flex-shrink-0" style={{ width: 200, height: 200 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={nationalityChartData}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={80}
+                              innerRadius={50}
+                              fill="#8884d8"
+                              dataKey="value"
+                              paddingAngle={3}
+                            >
+                              {nationalityChartData.map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={COLORS[index % COLORS.length]}
+                                  stroke="#fff"
+                                  strokeWidth={2}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value, name) => [formatNumber(Number(value)), name]} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      {/* Custom Legend */}
+                      <div className="flex-1 space-y-2">
+                        {nationalityChartData.map((item, index) => {
+                          const total = nationalityChartData.reduce((sum, i) => sum + i.value, 0);
+                          const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                          return (
+                            <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="w-3 h-3 rounded-full flex-shrink-0" 
+                                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                                />
+                                <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-bold text-gray-900">{formatNumber(item.value)}</span>
+                                <span className="text-xs text-gray-500 w-10 text-left">{percent}%</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                {/* Job Title Distribution - Clean Horizontal Bars */}
+                <Card className="overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+                    <CardTitle className="flex items-center gap-2 text-green-800">
                       <BarChart3 className="w-5 h-5" />
                       توزيع الموظفين حسب الوظيفة
                     </CardTitle>
-                    <CardDescription>مرتب من الأكثر للأقل</CardDescription>
+                    <CardDescription>أعلى 8 وظائف (إجمالي {jobTitleFullData.length} وظيفة)</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={Math.max(300, jobTitleChartData.length * 35)}>
-                      <BarChart data={jobTitleChartData} layout="vertical" margin={{ right: 30 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" />
-                        <YAxis 
-                          dataKey="name" 
-                          type="category" 
-                          width={120} 
-                          tick={{ fontSize: 11 }}
-                          tickFormatter={(value) => value.length > 15 ? value.slice(0, 15) + "..." : value}
-                        />
-                        <Tooltip />
-                        <Bar 
-                          dataKey="value" 
-                          fill="#f59e0b" 
-                          name="عدد الموظفين"
-                          label={{ position: 'right', fill: '#666', fontSize: 11 }}
-                          radius={[0, 4, 4, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      {jobTitleChartData.map((item, index) => {
+                        const maxValue = jobTitleChartData[0]?.value || 1;
+                        const percent = Math.round((item.value / maxValue) * 100);
+                        const gradientColors = [
+                          "from-amber-400 to-amber-500",
+                          "from-orange-400 to-orange-500",
+                          "from-yellow-400 to-yellow-500",
+                          "from-lime-400 to-lime-500",
+                          "from-green-400 to-green-500",
+                          "from-teal-400 to-teal-500",
+                          "from-cyan-400 to-cyan-500",
+                          "from-sky-400 to-sky-500",
+                        ];
+                        return (
+                          <div key={item.name} className="group">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-gray-700 truncate max-w-[150px]" title={item.name}>
+                                {item.name}
+                              </span>
+                              <span className="text-sm font-bold text-gray-900">{formatNumber(item.value)}</span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden">
+                              <div 
+                                className={`h-full bg-gradient-to-r ${gradientColors[index % gradientColors.length]} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                                style={{ width: `${percent}%` }}
+                              >
+                                {percent >= 30 && (
+                                  <span className="text-xs font-medium text-white">{percent}%</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {jobTitleFullData.length > 8 && (
+                      <p className="text-xs text-gray-400 text-center mt-4">
+                        و {jobTitleFullData.length - 8} وظائف أخرى...
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </div>
