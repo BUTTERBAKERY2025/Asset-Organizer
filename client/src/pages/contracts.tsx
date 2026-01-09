@@ -385,7 +385,7 @@ export default function ContractsPage() {
                   <SelectTrigger data-testid="select-status-filter">
                     <SelectValue placeholder="جميع الحالات" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="all">جميع الحالات</SelectItem>
                     {CONTRACT_STATUSES.map((status) => (
                       <SelectItem key={status.value} value={status.value}>
@@ -401,7 +401,7 @@ export default function ContractsPage() {
                   <SelectTrigger data-testid="select-project-filter">
                     <SelectValue placeholder="جميع المشاريع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="all">جميع المشاريع</SelectItem>
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id.toString()}>
@@ -565,7 +565,7 @@ export default function ContractsPage() {
                   <SelectTrigger data-testid="select-project">
                     <SelectValue placeholder="اختر المشروع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id.toString()}>
                         {project.title}
@@ -587,7 +587,7 @@ export default function ContractsPage() {
                   <SelectTrigger data-testid="select-contractor">
                     <SelectValue placeholder="اختر المقاول" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {contractors.map((contractor) => (
                       <SelectItem key={contractor.id} value={contractor.id.toString()}>
                         {contractor.name}
@@ -625,7 +625,7 @@ export default function ContractsPage() {
                   <SelectTrigger data-testid="select-contract-type">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {CONTRACT_TYPES.map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
@@ -643,7 +643,7 @@ export default function ContractsPage() {
                   <SelectTrigger data-testid="select-status">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {CONTRACT_STATUSES.map((status) => (
                       <SelectItem key={status.value} value={status.value}>
                         {status.label}
@@ -729,7 +729,7 @@ export default function ContractsPage() {
                   <SelectTrigger>
                     <SelectValue placeholder="اختر المشروع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id.toString()}>
                         {project.title}
@@ -748,7 +748,7 @@ export default function ContractsPage() {
                   <SelectTrigger>
                     <SelectValue placeholder="اختر المقاول" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {contractors.map((contractor) => (
                       <SelectItem key={contractor.id} value={contractor.id.toString()}>
                         {contractor.name}
@@ -780,7 +780,7 @@ export default function ContractsPage() {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {CONTRACT_TYPES.map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
@@ -798,7 +798,7 @@ export default function ContractsPage() {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {CONTRACT_STATUSES.map((status) => (
                       <SelectItem key={status.value} value={status.value}>
                         {status.label}

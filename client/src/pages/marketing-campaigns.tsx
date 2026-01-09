@@ -305,7 +305,7 @@ export default function MarketingCampaignsPage() {
             <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
               <SelectValue placeholder="جميع الحالات" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الحالات</SelectItem>
               {CAMPAIGN_STATUSES.map((status) => (
                 <SelectItem key={status} value={status}>
@@ -318,7 +318,7 @@ export default function MarketingCampaignsPage() {
             <SelectTrigger className="w-full sm:w-48" data-testid="select-objective-filter">
               <SelectValue placeholder="جميع الأهداف" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الأهداف</SelectItem>
               {CAMPAIGN_OBJECTIVES.map((objective) => (
                 <SelectItem key={objective} value={objective}>
@@ -331,7 +331,7 @@ export default function MarketingCampaignsPage() {
             <SelectTrigger className="w-full sm:w-48" data-testid="select-season-filter">
               <SelectValue placeholder="جميع المواسم" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع المواسم</SelectItem>
               {CAMPAIGN_SEASONS.map((season) => (
                 <SelectItem key={season} value={season}>
@@ -503,7 +503,7 @@ export default function MarketingCampaignsPage() {
                     <SelectTrigger data-testid="select-campaign-objective">
                       <SelectValue placeholder="اختر هدف الحملة" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {CAMPAIGN_OBJECTIVES.map((objective) => (
                         <SelectItem key={objective} value={objective}>
                           {CAMPAIGN_OBJECTIVE_LABELS[objective]}
@@ -524,7 +524,7 @@ export default function MarketingCampaignsPage() {
                     <SelectTrigger data-testid="select-campaign-season">
                       <SelectValue placeholder="اختر الموسم" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {CAMPAIGN_SEASONS.map((season) => (
                         <SelectItem key={season} value={season}>
                           {CAMPAIGN_SEASON_LABELS[season]}

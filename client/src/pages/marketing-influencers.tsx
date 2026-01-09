@@ -486,7 +486,7 @@ export default function MarketingInfluencersPage() {
           <SelectTrigger data-testid="select-influencer-specialty">
             <SelectValue placeholder="اختر التخصص" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-60 overflow-y-auto">
             {INFLUENCER_SPECIALTIES.map((specialty) => (
               <SelectItem key={specialty} value={specialty}>
                 {INFLUENCER_SPECIALTY_LABELS[specialty]}
@@ -722,7 +722,7 @@ export default function MarketingInfluencersPage() {
             <SelectTrigger className="w-full sm:w-48" data-testid="select-specialty-filter">
               <SelectValue placeholder="جميع التخصصات" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع التخصصات</SelectItem>
               {INFLUENCER_SPECIALTIES.map((specialty) => (
                 <SelectItem key={specialty} value={specialty}>
@@ -735,7 +735,7 @@ export default function MarketingInfluencersPage() {
             <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
               <SelectValue placeholder="جميع الحالات" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الحالات</SelectItem>
               <SelectItem value="active">نشط</SelectItem>
               <SelectItem value="inactive">غير نشط</SelectItem>

@@ -631,7 +631,7 @@ export default function PaymentRequestsPage() {
                     <SelectTrigger data-testid="select-project-filter" className="h-9 text-sm">
                       <SelectValue placeholder="جميع المشاريع" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       <SelectItem value="all">جميع المشاريع</SelectItem>
                       {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id.toString()}>
@@ -647,7 +647,7 @@ export default function PaymentRequestsPage() {
                     <SelectTrigger data-testid="select-type-filter" className="h-9 text-sm">
                       <SelectValue placeholder="جميع الأنواع" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       <SelectItem value="all">جميع الأنواع</SelectItem>
                       {REQUEST_TYPES.map((type) => (
                         <SelectItem key={type.value} value={type.value}>
@@ -1028,7 +1028,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger data-testid="select-project">
                     <SelectValue placeholder="اختر المشروع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id.toString()}>
                         {project.title}
@@ -1050,7 +1050,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger data-testid="select-request-type">
                     <SelectValue placeholder="اختر النوع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {REQUEST_TYPES.map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
@@ -1084,7 +1084,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger data-testid="select-priority">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {PRIORITIES.map((priority) => (
                       <SelectItem key={priority.value} value={priority.value}>
                         {priority.label}
@@ -1148,7 +1148,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger data-testid="select-category">
                     <SelectValue placeholder="اختر الفئة" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="none">بدون فئة</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
@@ -1207,7 +1207,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger>
                     <SelectValue placeholder="اختر المشروع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id.toString()}>
                         {project.title}
@@ -1226,7 +1226,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger>
                     <SelectValue placeholder="اختر النوع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {REQUEST_TYPES.map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
@@ -1251,7 +1251,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {PRIORITIES.map((priority) => (
                       <SelectItem key={priority.value} value={priority.value}>
                         {priority.label}
@@ -1296,7 +1296,7 @@ export default function PaymentRequestsPage() {
                   <SelectTrigger>
                     <SelectValue placeholder="اختر الفئة" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="none">بدون فئة</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>

@@ -532,7 +532,7 @@ export default function TimesheetPage() {
                       <SelectTrigger data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">جميع الفروع</SelectItem>
                         {branches.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
@@ -563,7 +563,7 @@ export default function TimesheetPage() {
                       <SelectTrigger data-testid="select-month">
                         <SelectValue placeholder="اختر الشهر" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value={format(new Date(), "yyyy-MM")}>
                           {format(new Date(), "MMMM yyyy", { locale: ar })}
                         </SelectItem>
@@ -795,7 +795,7 @@ export default function TimesheetPage() {
                     <SelectTrigger className="w-[200px]" data-testid="select-history-branch">
                       <SelectValue placeholder="فلترة حسب الفرع" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       <SelectItem value="all">جميع الفروع</SelectItem>
                       {branches.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>

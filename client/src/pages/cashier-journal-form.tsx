@@ -845,7 +845,7 @@ export default function CashierJournalFormPage() {
                       <SelectTrigger data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {filteredBranches?.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
                             {branch.name}
@@ -870,7 +870,7 @@ export default function CashierJournalFormPage() {
                       <SelectTrigger data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {SHIFT_TYPES.map((shift) => (
                           <SelectItem key={shift.value} value={shift.value}>
                             {shift.label}
@@ -986,7 +986,7 @@ export default function CashierJournalFormPage() {
                         <SelectTrigger className="w-40">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           {PAYMENT_METHODS.map((m) => (
                             <SelectItem key={m.value} value={m.value}>
                               {m.label}

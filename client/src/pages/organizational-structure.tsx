@@ -603,7 +603,7 @@ function RoleFormDialog({
                     <SelectTrigger>
                       <SelectValue placeholder="بدون" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       <SelectItem value="__none__">بدون</SelectItem>
                       {roles.filter(r => r.id !== role?.id).map((r) => (
                         <SelectItem key={r.id} value={r.id.toString()}>{r.titleAr}</SelectItem>
@@ -630,7 +630,7 @@ function RoleFormDialog({
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {colorOptions.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           <span className="flex items-center gap-2">

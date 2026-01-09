@@ -277,7 +277,7 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   {branches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}

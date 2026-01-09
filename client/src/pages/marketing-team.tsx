@@ -208,7 +208,7 @@ export default function MarketingTeamPage() {
                     <SelectTrigger data-testid="select-member-role">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {TEAM_ROLES.map((role) => (
                         <SelectItem key={role.value} value={role.value}>
                           {role.label}

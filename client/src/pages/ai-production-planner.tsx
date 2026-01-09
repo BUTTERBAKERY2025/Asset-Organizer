@@ -237,7 +237,7 @@ export default function AdvancedProductionPlannerPage() {
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
@@ -286,7 +286,7 @@ export default function AdvancedProductionPlannerPage() {
                   <SelectTrigger data-testid="select-sales-data">
                     <SelectValue placeholder="اختر ملف بيانات المبيعات" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="none">بدون بيانات سابقة</SelectItem>
                     {salesDataFiles?.filter(f => f.status === 'completed').map((file) => (
                       <SelectItem key={file.id} value={file.id.toString()}>

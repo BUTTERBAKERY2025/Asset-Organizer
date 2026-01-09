@@ -291,7 +291,7 @@ export default function AdvancedProductionOrdersPage() {
                   <Building2 className="h-4 w-4 ml-2 text-muted-foreground" />
                   <SelectValue placeholder="الفرع" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="all">جميع الفروع</SelectItem>
                   {branches?.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
@@ -304,7 +304,7 @@ export default function AdvancedProductionOrdersPage() {
                 <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-status">
                   <SelectValue placeholder="الحالة" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="all">جميع الحالات</SelectItem>
                   {Object.entries(STATUS_CONFIG).map(([value, { label }]) => (
                     <SelectItem key={value} value={value}>
@@ -317,7 +317,7 @@ export default function AdvancedProductionOrdersPage() {
                 <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-order-type">
                   <SelectValue placeholder="نوع الأمر" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="all">جميع الأنواع</SelectItem>
                   {Object.entries(ORDER_TYPE_CONFIG).map(([value, { label }]) => (
                     <SelectItem key={value} value={value}>

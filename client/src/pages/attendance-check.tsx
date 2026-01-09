@@ -263,7 +263,7 @@ export default function AttendanceCheckPage() {
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {branches?.map(branch => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                     ))}
@@ -280,7 +280,7 @@ export default function AttendanceCheckPage() {
                   <SelectTrigger data-testid="select-shift">
                     <SelectValue placeholder="اختر الوردية" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {SHIFT_TYPES.map(shift => (
                       <SelectItem key={shift.value} value={shift.value}>
                         <div className="flex items-center gap-2">

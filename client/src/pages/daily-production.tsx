@@ -679,7 +679,7 @@ export default function DailyProductionPage() {
               <SelectTrigger data-testid="select-branch">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 {branches?.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                 ))}
@@ -702,7 +702,7 @@ export default function DailyProductionPage() {
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="الوردية" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 {SHIFTS.map((shift) => {
                   const Icon = shift.icon;
                   return (
@@ -903,7 +903,7 @@ export default function DailyProductionPage() {
                         <SelectTrigger data-testid="select-category">
                           <SelectValue placeholder="اختر الفئة" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           {BAKERY_CATEGORIES.map((cat) => (
                             <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                           ))}
@@ -1037,7 +1037,7 @@ export default function DailyProductionPage() {
                         <SelectTrigger className="w-[140px] h-9" data-testid="select-filter-category">
                           <SelectValue placeholder="الفئة" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value="all">كل الفئات</SelectItem>
                           {BAKERY_CATEGORIES.map(cat => (
                             <SelectItem key={cat} value={cat}>{cat}</SelectItem>
@@ -1048,7 +1048,7 @@ export default function DailyProductionPage() {
                         <SelectTrigger className="w-[140px] h-9" data-testid="select-filter-destination">
                           <SelectValue placeholder="الوجهة" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value="all">كل الوجهات</SelectItem>
                           {DESTINATIONS.map(d => (
                             <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
@@ -1677,7 +1677,7 @@ export default function DailyProductionPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   {DESTINATIONS.map((dest) => (
                     <SelectItem key={dest.value} value={dest.value}>{dest.label}</SelectItem>
                   ))}

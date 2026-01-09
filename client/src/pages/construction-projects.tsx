@@ -246,7 +246,7 @@ export default function ConstructionProjectsPage() {
             <SelectTrigger className="w-full sm:w-48" data-testid="select-branch-filter">
               <SelectValue placeholder="جميع الفروع" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الفروع</SelectItem>
               {branches.map((branch) => (
                 <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
@@ -257,7 +257,7 @@ export default function ConstructionProjectsPage() {
             <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
               <SelectValue placeholder="جميع الحالات" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الحالات</SelectItem>
               {PROJECT_STATUSES.map((status) => (
                 <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
@@ -366,7 +366,7 @@ export default function ConstructionProjectsPage() {
                   <SelectTrigger data-testid="select-project-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {branches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                     ))}
@@ -397,7 +397,7 @@ export default function ConstructionProjectsPage() {
                     <SelectTrigger data-testid="select-project-status">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {PROJECT_STATUSES.map((status) => (
                         <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
                       ))}

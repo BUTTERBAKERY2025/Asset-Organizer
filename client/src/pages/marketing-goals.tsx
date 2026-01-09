@@ -202,7 +202,7 @@ export default function MarketingGoalsPage() {
                     <SelectTrigger data-testid="select-campaign">
                       <SelectValue placeholder="اختر الحملة" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {campaigns.map((campaign) => (
                         <SelectItem key={campaign.id} value={campaign.id.toString()}>
                           {campaign.name}
@@ -220,7 +220,7 @@ export default function MarketingGoalsPage() {
                     <SelectTrigger data-testid="select-goal-type">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {Object.entries(goalTypeLabels).map(([value, label]) => (
                         <SelectItem key={value} value={value}>{label}</SelectItem>
                       ))}
@@ -286,7 +286,7 @@ export default function MarketingGoalsPage() {
             <SelectTrigger className="w-64 bg-white" data-testid="select-filter-campaign">
               <SelectValue placeholder="جميع الحملات" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الحملات</SelectItem>
               {campaigns.map((campaign) => (
                 <SelectItem key={campaign.id} value={campaign.id.toString()}>

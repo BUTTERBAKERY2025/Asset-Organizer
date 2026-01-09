@@ -202,7 +202,7 @@ export default function MarketingCalendarPage() {
                     <SelectTrigger data-testid="select-event-type">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {EVENT_TYPES.map((type) => (
                         <SelectItem key={type.value} value={type.value}>
                           {type.label}

@@ -343,7 +343,7 @@ export default function SalesDataUploadsPage() {
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
@@ -648,7 +648,7 @@ export default function SalesDataUploadsPage() {
                                               <SelectTrigger>
                                                 <SelectValue placeholder="اختر الفرع" />
                                               </SelectTrigger>
-                                              <SelectContent>
+                                              <SelectContent className="max-h-60 overflow-y-auto">
                                                 {branches?.map((branch) => (
                                                   <SelectItem key={branch.id} value={branch.id}>
                                                     {branch.name}

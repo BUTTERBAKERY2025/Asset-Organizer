@@ -208,7 +208,7 @@ export default function MaintenancePage() {
                 <SelectTrigger className="w-full md:w-[200px]" data-testid="select-branch-filter-maintenance">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="all">جميع الفروع</SelectItem>
                   {branches.map(branch => (
                     <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
@@ -220,7 +220,7 @@ export default function MaintenancePage() {
                 <SelectTrigger className="w-full md:w-[200px]" data-testid="select-status-filter-maintenance">
                   <SelectValue placeholder="جميع الحالات" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="all">جميع الحالات</SelectItem>
                   <SelectItem value="maintenance">صيانة</SelectItem>
                   <SelectItem value="damaged">تالف</SelectItem>

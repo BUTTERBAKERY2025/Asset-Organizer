@@ -428,7 +428,7 @@ export default function BudgetPlanningPage() {
                   <SelectTrigger className="w-full md:w-[400px]" data-testid="select-project">
                     <SelectValue placeholder="اختر مشروع..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id.toString()}>
                         {project.title} - {getBranchName(project.branchId)}

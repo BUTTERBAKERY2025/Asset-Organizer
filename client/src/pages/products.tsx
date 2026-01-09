@@ -256,7 +256,7 @@ export default function ProductsPage() {
                         <SelectTrigger data-testid="select-category">
                           <SelectValue placeholder="اختر الفئة" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           {PRODUCT_CATEGORIES.map(cat => (
                             <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                           ))}
@@ -269,7 +269,7 @@ export default function ProductsPage() {
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           {UNITS.map(u => (
                             <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                           ))}
@@ -282,7 +282,7 @@ export default function ProductsPage() {
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value="0.15">15%</SelectItem>
                           <SelectItem value="0">0%</SelectItem>
                         </SelectContent>

@@ -2148,7 +2148,7 @@ export default function EmployeeReportsDashboardPage() {
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="all">جميع الفروع</SelectItem>
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
@@ -2171,7 +2171,7 @@ export default function EmployeeReportsDashboardPage() {
                   <SelectTrigger data-testid="select-job">
                     <SelectValue placeholder="جميع الوظائف" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="all">جميع الوظائف</SelectItem>
                     {jobTitles.map((job) => (
                       <SelectItem key={job} value={job}>{job}</SelectItem>
@@ -2185,7 +2185,7 @@ export default function EmployeeReportsDashboardPage() {
                   <SelectTrigger data-testid="select-employee">
                     <SelectValue placeholder="جميع الموظفين" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="all">جميع الموظفين</SelectItem>
                     {employees?.map((emp) => (
                       <SelectItem key={emp.id} value={emp.id.toString()}>{emp.employeeName}</SelectItem>
@@ -5024,7 +5024,7 @@ export default function EmployeeReportsDashboardPage() {
                     <SelectTrigger>
                       <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {branches?.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                       ))}

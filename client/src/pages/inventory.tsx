@@ -604,7 +604,7 @@ export default function InventoryPage() {
                     <SelectTrigger data-testid="select-category">
                       <SelectValue placeholder="تصفية حسب الفئة" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       <SelectItem value="all">جميع الفئات</SelectItem>
                       {allCategories.map(cat => (
                         <SelectItem key={cat} value={cat}>{cat}</SelectItem>

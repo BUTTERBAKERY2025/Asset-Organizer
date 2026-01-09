@@ -158,7 +158,7 @@ export function AdvancedFilters({ filters, onFiltersChange, onApply, onClear }: 
               <SelectTrigger data-testid="filter-status">
                 <SelectValue placeholder="اختر الحالة" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الحالات</SelectItem>
                 <SelectItem value="good">جيد</SelectItem>
                 <SelectItem value="maintenance">يحتاج صيانة</SelectItem>

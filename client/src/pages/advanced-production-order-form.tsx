@@ -513,7 +513,7 @@ export default function AdvancedProductionOrderFormPage() {
                       <SelectTrigger id="orderType" data-testid="select-order-type">
                         <SelectValue placeholder="اختر نوع الأمر" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {ORDER_TYPES.map((type) => (
                           <SelectItem key={type.value} value={type.value}>
                             {type.label}
@@ -532,7 +532,7 @@ export default function AdvancedProductionOrderFormPage() {
                       <SelectTrigger id="branchId" data-testid="select-source-branch">
                         <SelectValue placeholder="اختر الفرع المصدر" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {branches?.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
                             {branch.name}
@@ -551,7 +551,7 @@ export default function AdvancedProductionOrderFormPage() {
                       <SelectTrigger id="targetBranchId" data-testid="select-target-branch">
                         <SelectValue placeholder="اختر الفرع المستهدف" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="same_branch">نفس الفرع</SelectItem>
                         {branches?.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
@@ -571,7 +571,7 @@ export default function AdvancedProductionOrderFormPage() {
                       <SelectTrigger id="priority" data-testid="select-priority">
                         <SelectValue placeholder="اختر الأولوية" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {PRIORITIES.map((priority) => (
                           <SelectItem key={priority.value} value={priority.value}>
                             {priority.label}
@@ -800,7 +800,7 @@ export default function AdvancedProductionOrderFormPage() {
                                         <SelectTrigger data-testid={`select-shift-${index}`}>
                                           <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className="max-h-60 overflow-y-auto">
                                           {SHIFT_TYPES.map((shift) => (
                                             <SelectItem key={shift.value} value={shift.value}>
                                               {shift.label}

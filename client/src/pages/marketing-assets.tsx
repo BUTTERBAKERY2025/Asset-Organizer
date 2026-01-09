@@ -210,7 +210,7 @@ export default function MarketingAssetsPage() {
                     <SelectTrigger data-testid="select-asset-type">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {Object.entries(assetTypeLabels).map(([value, label]) => (
                         <SelectItem key={value} value={value}>{label}</SelectItem>
                       ))}
@@ -226,7 +226,7 @@ export default function MarketingAssetsPage() {
                     <SelectTrigger data-testid="select-campaign">
                       <SelectValue placeholder="اختر الحملة" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       <SelectItem value="none">عام (بدون حملة)</SelectItem>
                       {campaigns.map((campaign) => (
                         <SelectItem key={campaign.id} value={campaign.id.toString()}>
@@ -284,7 +284,7 @@ export default function MarketingAssetsPage() {
             <SelectTrigger className="w-48 bg-white" data-testid="select-filter-type">
               <SelectValue placeholder="جميع الأنواع" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الأنواع</SelectItem>
               {Object.entries(assetTypeLabels).map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -299,7 +299,7 @@ export default function MarketingAssetsPage() {
             <SelectTrigger className="w-48 bg-white" data-testid="select-filter-campaign">
               <SelectValue placeholder="جميع الحملات" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الحملات</SelectItem>
               {campaigns.map((campaign) => (
                 <SelectItem key={campaign.id} value={campaign.id.toString()}>

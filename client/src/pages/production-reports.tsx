@@ -447,7 +447,7 @@ export default function ProductionReportsPage() {
                   <SelectTrigger className="w-[140px] h-8 text-sm" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="all">جميع الفروع</SelectItem>
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>

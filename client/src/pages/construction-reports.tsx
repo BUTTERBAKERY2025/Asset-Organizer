@@ -628,7 +628,7 @@ export default function ConstructionReportsPage() {
                       <SelectTrigger data-testid="select-branch-filter">
                         <SelectValue placeholder="جميع الفروع" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">جميع الفروع</SelectItem>
                         {branches.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
@@ -645,7 +645,7 @@ export default function ConstructionReportsPage() {
                       <SelectTrigger data-testid="select-category-filter">
                         <SelectValue placeholder="جميع الفئات" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">جميع الفئات</SelectItem>
                         {categories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.id.toString()}>
@@ -662,7 +662,7 @@ export default function ConstructionReportsPage() {
                       <SelectTrigger data-testid="select-contractor-filter">
                         <SelectValue placeholder="جميع المقاولين" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">جميع المقاولين</SelectItem>
                         {contractors.map((c) => (
                           <SelectItem key={c.id} value={c.id.toString()}>
@@ -679,7 +679,7 @@ export default function ConstructionReportsPage() {
                       <SelectTrigger data-testid="select-status-filter">
                         <SelectValue placeholder="جميع الحالات" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">جميع الحالات</SelectItem>
                         <SelectItem value="pending">معلق</SelectItem>
                         <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
@@ -849,7 +849,7 @@ export default function ConstructionReportsPage() {
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value="actualCost">التكلفة</SelectItem>
                           <SelectItem value="name">الاسم</SelectItem>
                         </SelectContent>

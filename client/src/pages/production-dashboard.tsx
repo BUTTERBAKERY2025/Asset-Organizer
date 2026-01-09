@@ -325,7 +325,7 @@ export default function ProductionDashboardPage() {
                   <SelectTrigger className="bg-white border-amber-200">
                     <SelectValue placeholder="كل الفروع" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="all">كل الفروع</SelectItem>
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>

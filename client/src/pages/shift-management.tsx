@@ -510,7 +510,7 @@ export default function ShiftManagementPage() {
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 {user?.role === "admin" && <SelectItem value="all">جميع الفروع</SelectItem>}
                 {branches?.map(branch => (
                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
@@ -578,7 +578,7 @@ export default function ShiftManagementPage() {
                         <Clock className="w-4 h-4 ml-2" />
                         <SelectValue placeholder="اختر الوردية" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {activeShiftProfiles.length > 0 ? (
                           activeShiftProfiles.map(profile => (
                             <SelectItem key={profile.shiftCode} value={profile.shiftCode}>
@@ -646,7 +646,7 @@ export default function ShiftManagementPage() {
                                     <SelectTrigger className="h-7 text-xs w-28" data-testid={`select-shift-${employee.id}`}>
                                       <SelectValue placeholder="الوردية" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="max-h-60 overflow-y-auto">
                                       {activeShiftProfiles.length > 0 ? (
                                         activeShiftProfiles.map(profile => (
                                           <SelectItem key={profile.shiftCode} value={profile.shiftCode} className="text-xs">
@@ -900,7 +900,7 @@ export default function ShiftManagementPage() {
                         <SelectTrigger>
                           <SelectValue placeholder="اختر الشهر" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value={format(new Date(), "yyyy-MM")}>
                             {format(new Date(), "MMMM yyyy", { locale: ar })}
                           </SelectItem>

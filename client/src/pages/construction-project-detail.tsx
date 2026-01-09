@@ -607,7 +607,7 @@ export default function ConstructionProjectDetailPage() {
                 <SelectTrigger className="w-full max-w-md" data-testid="select-project">
                   <SelectValue placeholder="اختر مشروع" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   {allProjects.map((p) => (
                     <SelectItem key={p.id} value={p.id.toString()}>
                       {p.title} - {getBranchName(p.branchId)}
@@ -965,7 +965,7 @@ export default function ConstructionProjectDetailPage() {
                     <SelectTrigger data-testid="select-work-item-category">
                       <SelectValue placeholder="اختر الفئة" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {categories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
                       ))}
@@ -978,7 +978,7 @@ export default function ConstructionProjectDetailPage() {
                     <SelectTrigger data-testid="select-work-item-contractor">
                       <SelectValue placeholder="اختر المقاول" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {contractors.map((con) => (
                         <SelectItem key={con.id} value={con.id.toString()}>{con.name}</SelectItem>
                       ))}
@@ -999,7 +999,7 @@ export default function ConstructionProjectDetailPage() {
                     <SelectTrigger data-testid="select-work-item-status">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {WORK_ITEM_STATUSES.map((status) => (
                         <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
                       ))}

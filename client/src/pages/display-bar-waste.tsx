@@ -660,7 +660,7 @@ export default function DisplayBarWastePage() {
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="الفرع" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الفروع</SelectItem>
                 {branches.map(b => (
                   <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
@@ -855,7 +855,7 @@ export default function DisplayBarWastePage() {
                               <SelectTrigger className="h-7 text-xs w-[120px] border-0 bg-white/50 p-1">
                                 <SelectValue placeholder="اختر الفرع" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="max-h-60 overflow-y-auto">
                                 {branches.map(b => (
                                   <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                                 ))}
@@ -1074,7 +1074,7 @@ export default function DisplayBarWastePage() {
                                   <SelectTrigger data-testid="select-reason">
                                     <SelectValue />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="max-h-60 overflow-y-auto">
                                     {WASTE_REASONS.map(r => (
                                       <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
                                     ))}
@@ -1395,7 +1395,7 @@ export default function DisplayBarWastePage() {
                         <Building2 className="w-4 h-4 ml-2" />
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {branches.map(b => (
                           <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                         ))}
@@ -1406,7 +1406,7 @@ export default function DisplayBarWastePage() {
                         <Clock className="w-4 h-4 ml-2" />
                         <SelectValue placeholder="الوردية" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {SHIFT_OPTIONS.map(shift => (
                           <SelectItem key={shift.value} value={shift.value}>
                             <div className="flex flex-col">
@@ -1539,7 +1539,7 @@ export default function DisplayBarWastePage() {
                                 <SelectTrigger className="h-8 text-xs">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="max-h-60 overflow-y-auto">
                                   {WASTE_REASONS.map(r => (
                                     <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
                                   ))}

@@ -188,7 +188,7 @@ export default function InspectionsPage() {
             <SelectTrigger className="w-[200px]" data-testid="select-filter-branch">
               <SelectValue placeholder="اختر الفرع" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="all">جميع الفروع</SelectItem>
               {branches.map(branch => (
                 <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
