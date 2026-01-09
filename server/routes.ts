@@ -10095,5 +10095,362 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== EMPLOYEE TRANSFERS API ====================
+
+  // Get all transfer requests - requires hr_management view permission
+  app.get("/api/employee-transfers", isAuthenticated, requirePermission("hr_management", "view"), async (req, res) => {
+    try {
+      const { status, branchId, employeeId } = req.query;
+      const filters: any = {};
+      if (status) filters.status = status as string;
+      if (branchId) filters.branchId = branchId as string;
+      if (employeeId) filters.employeeId = parseInt(employeeId as string);
+      
+      const transfers = await storage.getAllTransferRequests(filters);
+      res.json(transfers);
+    } catch (error) {
+      console.error("Error getting transfer requests:", error);
+      res.status(500).json({ error: "فشل في جلب طلبات النقل" });
+    }
+  });
+
+  // Get single transfer request
+  app.get("/api/employee-transfers/:id", isAuthenticated, requirePermission("hr_management", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const transfer = await storage.getTransferRequest(id);
+      if (!transfer) {
+        return res.status(404).json({ error: "طلب النقل غير موجود" });
+      }
+      res.json(transfer);
+    } catch (error) {
+      console.error("Error getting transfer request:", error);
+      res.status(500).json({ error: "فشل في جلب طلب النقل" });
+    }
+  });
+
+  // Create transfer request - requires hr_management create permission
+  app.post("/api/employee-transfers", isAuthenticated, requirePermission("hr_management", "create"), async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) return res.status(401).json({ error: "غير مصرح" });
+      
+      // Validate required fields
+      const { employeeId, sourceBranchId, destinationBranchId, effectiveDate, reason } = req.body;
+      if (!employeeId || !sourceBranchId || !destinationBranchId || !effectiveDate || !reason) {
+        return res.status(400).json({ error: "جميع الحقول المطلوبة يجب أن تكون موجودة" });
+      }
+      
+      // Validate source and destination are different
+      if (sourceBranchId === destinationBranchId) {
+        return res.status(400).json({ error: "الفرع المصدر والوجهة يجب أن يكونا مختلفين" });
+      }
+      
+      const transferData = {
+        employeeId,
+        sourceBranchId,
+        destinationBranchId,
+        effectiveDate,
+        reason,
+        notes: req.body.notes || null,
+        requestedBy: userId,
+        status: "pending",
+        currentApproverRole: "source_manager"
+      };
+      
+      const transfer = await storage.createTransferRequest(transferData);
+      
+      // Create approval steps
+      await storage.createTransferApprovalStep({
+        transferId: transfer.id,
+        stepOrder: 1,
+        approverRole: "source_manager",
+        status: "pending"
+      });
+      await storage.createTransferApprovalStep({
+        transferId: transfer.id,
+        stepOrder: 2,
+        approverRole: "destination_manager",
+        status: "pending"
+      });
+      await storage.createTransferApprovalStep({
+        transferId: transfer.id,
+        stepOrder: 3,
+        approverRole: "hr_admin",
+        status: "pending"
+      });
+      
+      // Log history
+      await storage.createTransferHistoryEntry({
+        transferId: transfer.id,
+        eventType: "created",
+        performedBy: userId,
+        details: { message: "تم إنشاء طلب النقل" }
+      });
+      
+      res.status(201).json(transfer);
+    } catch (error) {
+      console.error("Error creating transfer request:", error);
+      res.status(500).json({ error: "فشل في إنشاء طلب النقل" });
+    }
+  });
+
+  // Update transfer request - requires hr_management edit permission
+  app.put("/api/employee-transfers/:id", isAuthenticated, requirePermission("hr_management", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const transfer = await storage.updateTransferRequest(id, req.body);
+      if (!transfer) {
+        return res.status(404).json({ error: "طلب النقل غير موجود" });
+      }
+      res.json(transfer);
+    } catch (error) {
+      console.error("Error updating transfer request:", error);
+      res.status(500).json({ error: "فشل في تحديث طلب النقل" });
+    }
+  });
+
+  // Approve transfer request - requires hr_management edit permission
+  app.post("/api/employee-transfers/:id/approve", isAuthenticated, requirePermission("hr_management", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const userId = (req as any).user?.id;
+      const { approverRole, notes } = req.body;
+      
+      const transfer = await storage.getTransferRequest(id);
+      if (!transfer) {
+        return res.status(404).json({ error: "طلب النقل غير موجود" });
+      }
+      
+      // Update approval step
+      const steps = await storage.getTransferApprovalSteps(id);
+      const currentStep = steps.find(s => s.approverRole === approverRole && s.status === "pending");
+      if (currentStep) {
+        await storage.updateTransferApprovalStep(currentStep.id, {
+          status: "approved",
+          approverId: userId,
+          notes
+        });
+      }
+      
+      // Determine next status
+      let newStatus = transfer.status;
+      let nextApprover: string | null = transfer.currentApproverRole;
+      
+      if (approverRole === "source_manager") {
+        newStatus = "source_approved";
+        nextApprover = "destination_manager";
+      } else if (approverRole === "destination_manager") {
+        newStatus = "dest_approved";
+        nextApprover = "hr_admin";
+      } else if (approverRole === "hr_admin") {
+        newStatus = "hr_approved";
+        nextApprover = null;
+      }
+      
+      const updated = await storage.updateTransferRequest(id, {
+        status: newStatus,
+        currentApproverRole: nextApprover
+      });
+      
+      // Log history
+      await storage.createTransferHistoryEntry({
+        transferId: id,
+        eventType: "approved",
+        performedBy: userId,
+        details: { approverRole, notes, newStatus }
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error approving transfer request:", error);
+      res.status(500).json({ error: "فشل في الموافقة على طلب النقل" });
+    }
+  });
+
+  // Reject transfer request - requires hr_management edit permission
+  app.post("/api/employee-transfers/:id/reject", isAuthenticated, requirePermission("hr_management", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const userId = (req as any).user?.id;
+      const { approverRole, rejectionReason } = req.body;
+      
+      const transfer = await storage.getTransferRequest(id);
+      if (!transfer) {
+        return res.status(404).json({ error: "طلب النقل غير موجود" });
+      }
+      
+      // Update approval step
+      const steps = await storage.getTransferApprovalSteps(id);
+      const currentStep = steps.find(s => s.approverRole === approverRole && s.status === "pending");
+      if (currentStep) {
+        await storage.updateTransferApprovalStep(currentStep.id, {
+          status: "rejected",
+          approverId: userId,
+          notes: rejectionReason
+        });
+      }
+      
+      const updated = await storage.updateTransferRequest(id, {
+        status: "rejected",
+        rejectionReason
+      });
+      
+      // Log history
+      await storage.createTransferHistoryEntry({
+        transferId: id,
+        eventType: "rejected",
+        performedBy: userId,
+        details: { approverRole, rejectionReason }
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error rejecting transfer request:", error);
+      res.status(500).json({ error: "فشل في رفض طلب النقل" });
+    }
+  });
+
+  // Complete transfer (execute the transfer) - requires hr_management edit permission
+  app.post("/api/employee-transfers/:id/complete", isAuthenticated, requirePermission("hr_management", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const userId = (req as any).user?.id;
+      
+      const transfer = await storage.getTransferRequest(id);
+      if (!transfer) {
+        return res.status(404).json({ error: "طلب النقل غير موجود" });
+      }
+      
+      if (transfer.status !== "hr_approved") {
+        return res.status(400).json({ error: "طلب النقل غير معتمد بالكامل" });
+      }
+      
+      // Update employee's branch
+      await storage.updateBranchEmployee(transfer.employeeId, {
+        branchId: transfer.destinationBranchId
+      });
+      
+      // Mark transfer as completed
+      const updated = await storage.updateTransferRequest(id, {
+        status: "completed"
+      });
+      
+      // Log history
+      await storage.createTransferHistoryEntry({
+        transferId: id,
+        eventType: "completed",
+        performedBy: userId,
+        details: { 
+          message: "تم تنفيذ النقل",
+          fromBranch: transfer.sourceBranchId,
+          toBranch: transfer.destinationBranchId
+        }
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error completing transfer:", error);
+      res.status(500).json({ error: "فشل في إتمام النقل" });
+    }
+  });
+
+  // Cancel transfer request - requires hr_management edit permission
+  app.post("/api/employee-transfers/:id/cancel", isAuthenticated, requirePermission("hr_management", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const userId = (req as any).user?.id;
+      const { reason } = req.body;
+      
+      const updated = await storage.updateTransferRequest(id, {
+        status: "cancelled",
+        rejectionReason: reason
+      });
+      
+      if (!updated) {
+        return res.status(404).json({ error: "طلب النقل غير موجود" });
+      }
+      
+      // Log history
+      await storage.createTransferHistoryEntry({
+        transferId: id,
+        eventType: "cancelled",
+        performedBy: userId,
+        details: { reason }
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error cancelling transfer:", error);
+      res.status(500).json({ error: "فشل في إلغاء طلب النقل" });
+    }
+  });
+
+  // Get transfer approval steps - requires hr_management view permission
+  app.get("/api/employee-transfers/:id/steps", isAuthenticated, requirePermission("hr_management", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const steps = await storage.getTransferApprovalSteps(id);
+      res.json(steps);
+    } catch (error) {
+      console.error("Error getting transfer approval steps:", error);
+      res.status(500).json({ error: "فشل في جلب خطوات الموافقة" });
+    }
+  });
+
+  // Get transfer history - requires hr_management view permission
+  app.get("/api/employee-transfers/:id/history", isAuthenticated, requirePermission("hr_management", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const history = await storage.getTransferHistory(id);
+      res.json(history);
+    } catch (error) {
+      console.error("Error getting transfer history:", error);
+      res.status(500).json({ error: "فشل في جلب سجل النقل" });
+    }
+  });
+
+  // Get transfers for employee - requires hr_management view permission
+  app.get("/api/employees/:employeeId/transfers", isAuthenticated, requirePermission("hr_management", "view"), async (req, res) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId);
+      if (isNaN(employeeId)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const transfers = await storage.getTransfersByEmployee(employeeId);
+      res.json(transfers);
+    } catch (error) {
+      console.error("Error getting employee transfers:", error);
+      res.status(500).json({ error: "فشل في جلب سجل نقل الموظف" });
+    }
+  });
+
+  // Get pending transfers for branch - requires hr_management view permission
+  app.get("/api/branches/:branchId/pending-transfers", isAuthenticated, requirePermission("hr_management", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      const transfers = await storage.getPendingTransfersForBranch(branchId);
+      res.json(transfers);
+    } catch (error) {
+      console.error("Error getting pending transfers for branch:", error);
+      res.status(500).json({ error: "فشل في جلب طلبات النقل المعلقة" });
+    }
+  });
+
   return httpServer;
 }

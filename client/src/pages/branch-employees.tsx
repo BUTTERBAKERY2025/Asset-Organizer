@@ -65,7 +65,9 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
-import type { BranchEmployee, EmployeeSetting } from "@shared/schema";
+import type { BranchEmployee, EmployeeSetting, EmployeeTransferRequest, Branch } from "@shared/schema";
+import { Textarea } from "@/components/ui/textarea";
+import { CheckCircle, XCircle, ArrowRight, History } from "lucide-react";
 
 // تمت إزالة JOB_TITLES و NATIONALITIES - الآن يتم استخدام البيانات من قاعدة البيانات
 
@@ -176,6 +178,545 @@ const getStatusLabel = (status: string): string => {
   };
   return labels[status] || status;
 };
+
+const TRANSFER_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  pending: { label: "في انتظار موافقة مدير الفرع المصدر", color: "bg-yellow-100 text-yellow-800" },
+  source_approved: { label: "موافق عليه من الفرع المصدر", color: "bg-blue-100 text-blue-800" },
+  dest_approved: { label: "موافق عليه من الفرع الوجهة", color: "bg-indigo-100 text-indigo-800" },
+  hr_approved: { label: "معتمد من الموارد البشرية", color: "bg-green-100 text-green-800" },
+  completed: { label: "مكتمل", color: "bg-green-100 text-green-800" },
+  rejected: { label: "مرفوض", color: "bg-red-100 text-red-800" },
+  cancelled: { label: "ملغي", color: "bg-gray-100 text-gray-800" },
+};
+
+function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmployee[]; branches: Branch[] }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
+  const [destinationBranch, setDestinationBranch] = useState<string>("");
+  const [effectiveDate, setEffectiveDate] = useState<string>("");
+  const [reason, setReason] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewingTransfer, setViewingTransfer] = useState<EmployeeTransferRequest | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [approvalNotes, setApprovalNotes] = useState<string>("");
+  const [rejectionReason, setRejectionReason] = useState<string>("");
+
+  const { data: transfers, isLoading } = useQuery<EmployeeTransferRequest[]>({
+    queryKey: ["/api/employee-transfers"],
+    queryFn: async () => {
+      const res = await fetch("/api/employee-transfers");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/employee-transfers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في إنشاء طلب النقل");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
+      setIsCreateDialogOpen(false);
+      resetForm();
+      toast({ title: "تم إنشاء طلب النقل بنجاح" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async ({ id, approverRole, notes }: { id: number; approverRole: string; notes?: string }) => {
+      const res = await fetch(`/api/employee-transfers/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approverRole, notes }),
+      });
+      if (!res.ok) throw new Error("فشل في الموافقة");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
+      setIsDetailsDialogOpen(false);
+      toast({ title: "تمت الموافقة بنجاح" });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async ({ id, approverRole, rejectionReason }: { id: number; approverRole: string; rejectionReason: string }) => {
+      const res = await fetch(`/api/employee-transfers/${id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approverRole, rejectionReason }),
+      });
+      if (!res.ok) throw new Error("فشل في الرفض");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
+      setIsDetailsDialogOpen(false);
+      toast({ title: "تم رفض الطلب" });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/employee-transfers/${id}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("فشل في إتمام النقل");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      setIsDetailsDialogOpen(false);
+      toast({ title: "تم تنفيذ النقل بنجاح" });
+    },
+  });
+
+  const resetForm = () => {
+    setSelectedEmployee(null);
+    setDestinationBranch("");
+    setEffectiveDate("");
+    setReason("");
+    setNotes("");
+  };
+
+  const getEmployeeName = (employeeId: number) => {
+    const emp = employees.find(e => e.id === employeeId);
+    return emp?.employeeName || "غير معروف";
+  };
+
+  const getBranchName = (branchId: string) => {
+    const branch = branches.find(b => b.id === branchId);
+    return branch?.name || branchId;
+  };
+
+  const getSelectedEmployee = () => {
+    return employees.find(e => e.id === selectedEmployee);
+  };
+
+  const handleCreateTransfer = () => {
+    if (!selectedEmployee || !destinationBranch || !effectiveDate || !reason) {
+      toast({ title: "خطأ", description: "جميع الحقول المطلوبة يجب أن تكون موجودة", variant: "destructive" });
+      return;
+    }
+    
+    const emp = getSelectedEmployee();
+    if (!emp) return;
+    
+    createMutation.mutate({
+      employeeId: selectedEmployee,
+      sourceBranchId: emp.branchId,
+      destinationBranchId: destinationBranch,
+      effectiveDate,
+      reason,
+      notes,
+    });
+  };
+
+  const getCurrentApproverRole = (status: string) => {
+    if (status === "pending") return "source_manager";
+    if (status === "source_approved") return "destination_manager";
+    if (status === "dest_approved") return "hr_admin";
+    return null;
+  };
+
+  const filteredTransfers = transfers?.filter(t => 
+    statusFilter === "all" || t.status === statusFilter
+  ) || [];
+
+  const stats = {
+    pending: transfers?.filter(t => ["pending", "source_approved", "dest_approved"].includes(t.status)).length || 0,
+    approved: transfers?.filter(t => t.status === "hr_approved").length || 0,
+    completed: transfers?.filter(t => t.status === "completed").length || 0,
+    rejected: transfers?.filter(t => t.status === "rejected").length || 0,
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-yellow-50 border-yellow-200">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-yellow-600">معلقة</p>
+                <p className="text-2xl font-bold text-yellow-800">{stats.pending}</p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600">معتمدة</p>
+                <p className="text-2xl font-bold text-green-800">{stats.approved}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600">مكتملة</p>
+                <p className="text-2xl font-bold text-blue-800">{stats.completed}</p>
+              </div>
+              <ArrowRight className="w-8 h-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-red-50 border-red-200">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-600">مرفوضة</p>
+                <p className="text-2xl font-bold text-red-800">{stats.rejected}</p>
+              </div>
+              <XCircle className="w-8 h-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Controls */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Network className="w-5 h-5" />
+              طلبات نقل الموظفين
+            </CardTitle>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-amber-600 hover:bg-amber-700" data-testid="btn-create-transfer">
+                  <Plus className="w-4 h-4 ml-2" />
+                  طلب نقل جديد
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md" dir="rtl">
+                <DialogHeader>
+                  <DialogTitle>إنشاء طلب نقل موظف</DialogTitle>
+                  <DialogDescription>اختر الموظف والفرع الجديد ومعلومات النقل</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>الموظف *</Label>
+                    <Select value={selectedEmployee?.toString() || ""} onValueChange={(v) => setSelectedEmployee(parseInt(v))}>
+                      <SelectTrigger data-testid="select-employee">
+                        <SelectValue placeholder="اختر الموظف" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employees.filter(e => e.status === "active").map(emp => (
+                          <SelectItem key={emp.id} value={emp.id.toString()}>
+                            {emp.employeeName} - {getBranchName(emp.branchId)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {selectedEmployee && (
+                    <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                      <p><strong>الفرع الحالي:</strong> {getBranchName(getSelectedEmployee()?.branchId || "")}</p>
+                      <p><strong>الوظيفة:</strong> {getSelectedEmployee()?.jobTitle}</p>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <Label>الفرع الجديد *</Label>
+                    <Select value={destinationBranch} onValueChange={setDestinationBranch}>
+                      <SelectTrigger data-testid="select-destination">
+                        <SelectValue placeholder="اختر الفرع الجديد" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches
+                          .filter(b => b.id !== getSelectedEmployee()?.branchId)
+                          .map(branch => (
+                            <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>تاريخ النقل المطلوب *</Label>
+                    <Input 
+                      type="date" 
+                      value={effectiveDate} 
+                      onChange={(e) => setEffectiveDate(e.target.value)}
+                      data-testid="input-effective-date"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>سبب النقل *</Label>
+                    <Textarea 
+                      value={reason} 
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="اشرح سبب طلب النقل"
+                      data-testid="input-reason"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>ملاحظات إضافية</Label>
+                    <Textarea 
+                      value={notes} 
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="أي ملاحظات إضافية (اختياري)"
+                      data-testid="input-notes"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>إلغاء</Button>
+                  <Button 
+                    onClick={handleCreateTransfer}
+                    className="bg-amber-600 hover:bg-amber-700"
+                    disabled={createMutation.isPending}
+                    data-testid="btn-submit-transfer"
+                  >
+                    {createMutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                    إرسال الطلب
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <div className="flex items-center gap-4 mt-4">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-status-filter">
+                <SelectValue placeholder="فلترة حسب الحالة" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع الحالات</SelectItem>
+                <SelectItem value="pending">معلق</SelectItem>
+                <SelectItem value="source_approved">موافق من المصدر</SelectItem>
+                <SelectItem value="dest_approved">موافق من الوجهة</SelectItem>
+                <SelectItem value="hr_approved">معتمد</SelectItem>
+                <SelectItem value="completed">مكتمل</SelectItem>
+                <SelectItem value="rejected">مرفوض</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+            </div>
+          ) : filteredTransfers.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Network className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>لا توجد طلبات نقل</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">الموظف</TableHead>
+                  <TableHead className="text-right">من</TableHead>
+                  <TableHead className="text-right">إلى</TableHead>
+                  <TableHead className="text-right">تاريخ النقل</TableHead>
+                  <TableHead className="text-right">الحالة</TableHead>
+                  <TableHead className="text-right">إجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTransfers.map((transfer) => (
+                  <TableRow key={transfer.id} data-testid={`row-transfer-${transfer.id}`}>
+                    <TableCell>{getEmployeeName(transfer.employeeId)}</TableCell>
+                    <TableCell>{getBranchName(transfer.sourceBranchId)}</TableCell>
+                    <TableCell>{getBranchName(transfer.destinationBranchId)}</TableCell>
+                    <TableCell>{transfer.effectiveDate}</TableCell>
+                    <TableCell>
+                      <Badge className={TRANSFER_STATUS_LABELS[transfer.status]?.color || "bg-gray-100"}>
+                        {TRANSFER_STATUS_LABELS[transfer.status]?.label || transfer.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setViewingTransfer(transfer);
+                          setIsDetailsDialogOpen(true);
+                        }}
+                        data-testid={`btn-view-transfer-${transfer.id}`}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Transfer Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تفاصيل طلب النقل</DialogTitle>
+          </DialogHeader>
+          {viewingTransfer && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500">الموظف</p>
+                  <p className="font-medium">{getEmployeeName(viewingTransfer.employeeId)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">الحالة</p>
+                  <Badge className={TRANSFER_STATUS_LABELS[viewingTransfer.status]?.color}>
+                    {TRANSFER_STATUS_LABELS[viewingTransfer.status]?.label}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-gray-500">من فرع</p>
+                  <p className="font-medium">{getBranchName(viewingTransfer.sourceBranchId)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">إلى فرع</p>
+                  <p className="font-medium">{getBranchName(viewingTransfer.destinationBranchId)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">تاريخ النقل</p>
+                  <p className="font-medium">{viewingTransfer.effectiveDate}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">تاريخ الطلب</p>
+                  <p className="font-medium">{new Date(viewingTransfer.requestedAt).toLocaleDateString("ar-SA")}</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-gray-500 text-sm">سبب النقل</p>
+                <p className="font-medium bg-gray-50 p-2 rounded">{viewingTransfer.reason}</p>
+              </div>
+              
+              {viewingTransfer.notes && (
+                <div>
+                  <p className="text-gray-500 text-sm">ملاحظات</p>
+                  <p className="bg-gray-50 p-2 rounded">{viewingTransfer.notes}</p>
+                </div>
+              )}
+              
+              {viewingTransfer.rejectionReason && (
+                <div className="p-3 bg-red-50 rounded-lg">
+                  <p className="text-red-600 text-sm font-medium">سبب الرفض</p>
+                  <p className="text-red-800">{viewingTransfer.rejectionReason}</p>
+                </div>
+              )}
+
+              {/* Approval Actions */}
+              {["pending", "source_approved", "dest_approved"].includes(viewingTransfer.status) && (
+                <div className="border-t pt-4 space-y-3">
+                  <p className="font-medium">إجراءات الموافقة</p>
+                  <div className="space-y-2">
+                    <Label>ملاحظات الموافقة (اختياري)</Label>
+                    <Input 
+                      value={approvalNotes} 
+                      onChange={(e) => setApprovalNotes(e.target.value)}
+                      placeholder="أدخل ملاحظات الموافقة"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => approveMutation.mutate({
+                        id: viewingTransfer.id,
+                        approverRole: getCurrentApproverRole(viewingTransfer.status) || "",
+                        notes: approvalNotes
+                      })}
+                      disabled={approveMutation.isPending}
+                      data-testid="btn-approve"
+                    >
+                      <CheckCircle className="w-4 h-4 ml-2" />
+                      موافقة
+                    </Button>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="destructive" data-testid="btn-reject">
+                          <XCircle className="w-4 h-4 ml-2" />
+                          رفض
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent dir="rtl">
+                        <DialogHeader>
+                          <DialogTitle>رفض طلب النقل</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>سبب الرفض *</Label>
+                            <Textarea 
+                              value={rejectionReason}
+                              onChange={(e) => setRejectionReason(e.target.value)}
+                              placeholder="أدخل سبب رفض الطلب"
+                            />
+                          </div>
+                          <Button 
+                            variant="destructive" 
+                            className="w-full"
+                            onClick={() => rejectMutation.mutate({
+                              id: viewingTransfer.id,
+                              approverRole: getCurrentApproverRole(viewingTransfer.status) || "",
+                              rejectionReason
+                            })}
+                            disabled={!rejectionReason || rejectMutation.isPending}
+                          >
+                            تأكيد الرفض
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </div>
+              )}
+
+              {/* Complete Button */}
+              {viewingTransfer.status === "hr_approved" && (
+                <div className="border-t pt-4">
+                  <Button 
+                    className="w-full bg-amber-600 hover:bg-amber-700"
+                    onClick={() => completeMutation.mutate(viewingTransfer.id)}
+                    disabled={completeMutation.isPending}
+                    data-testid="btn-complete"
+                  >
+                    {completeMutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                    تنفيذ النقل
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 export default function BranchEmployeesPage() {
   const [location, navigate] = useLocation();
@@ -1394,10 +1935,14 @@ export default function BranchEmployeesPage() {
 
         {/* Main Tabs */}
         <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
-          <TabsList className="grid grid-cols-2 w-[300px]">
+          <TabsList className="grid grid-cols-3 w-[450px]">
             <TabsTrigger value="employees" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               الموظفين
+            </TabsTrigger>
+            <TabsTrigger value="transfers" className="flex items-center gap-2" data-testid="tab-transfers">
+              <Network className="w-4 h-4" />
+              نقل الموظفين
             </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="w-4 h-4" />
@@ -1762,6 +2307,14 @@ export default function BranchEmployeesPage() {
             </Card>
           </div>
         )}
+          </TabsContent>
+
+          {/* Transfers Tab */}
+          <TabsContent value="transfers" className="space-y-6 mt-6">
+            <EmployeeTransfersTab 
+              employees={employees || []} 
+              branches={branches || []} 
+            />
           </TabsContent>
 
           {/* Settings Tab */}

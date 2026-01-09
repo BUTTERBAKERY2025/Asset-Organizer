@@ -287,7 +287,16 @@ import {
   employeeSettings,
   type EmployeeSetting,
   type InsertEmployeeSetting,
+  employeeTransferRequests,
+  transferApprovalSteps,
+  transferHistory,
+  type EmployeeTransferRequest,
+  type InsertEmployeeTransferRequest,
+  type TransferApprovalStep,
+  type InsertTransferApprovalStep,
 } from "@shared/schema";
+
+type TransferHistory = typeof transferHistory.$inferSelect;
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -844,6 +853,24 @@ export interface IStorage {
   createEmployeeSetting(setting: InsertEmployeeSetting): Promise<EmployeeSetting>;
   updateEmployeeSetting(id: number, setting: Partial<InsertEmployeeSetting>): Promise<EmployeeSetting | undefined>;
   deleteEmployeeSetting(id: number): Promise<boolean>;
+
+  // Employee Transfer Requests - طلبات نقل الموظفين
+  getAllTransferRequests(filters?: { status?: string; branchId?: string; employeeId?: number }): Promise<EmployeeTransferRequest[]>;
+  getTransferRequest(id: number): Promise<EmployeeTransferRequest | undefined>;
+  createTransferRequest(request: InsertEmployeeTransferRequest): Promise<EmployeeTransferRequest>;
+  updateTransferRequest(id: number, request: Partial<InsertEmployeeTransferRequest>): Promise<EmployeeTransferRequest | undefined>;
+  deleteTransferRequest(id: number): Promise<boolean>;
+  getTransfersByEmployee(employeeId: number): Promise<EmployeeTransferRequest[]>;
+  getPendingTransfersForBranch(branchId: string): Promise<EmployeeTransferRequest[]>;
+  
+  // Transfer Approval Steps - خطوات الموافقة
+  getTransferApprovalSteps(transferId: number): Promise<TransferApprovalStep[]>;
+  createTransferApprovalStep(step: InsertTransferApprovalStep): Promise<TransferApprovalStep>;
+  updateTransferApprovalStep(id: number, step: Partial<InsertTransferApprovalStep>): Promise<TransferApprovalStep | undefined>;
+  
+  // Transfer History - سجل النقل
+  getTransferHistory(transferId: number): Promise<TransferHistory[]>;
+  createTransferHistoryEntry(entry: { transferId: number; eventType: string; performedBy?: string; details?: any }): Promise<TransferHistory>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6802,6 +6829,117 @@ export class DatabaseStorage implements IStorage {
       .where(eq(employeeSettings.id, id))
       .returning();
     return !!deleted;
+  }
+
+  // Employee Transfer Requests - طلبات نقل الموظفين
+  async getAllTransferRequests(filters?: { status?: string; branchId?: string; employeeId?: number }): Promise<EmployeeTransferRequest[]> {
+    let query = db.select().from(employeeTransferRequests);
+    
+    const conditions: any[] = [];
+    if (filters?.status) conditions.push(eq(employeeTransferRequests.status, filters.status));
+    if (filters?.branchId) {
+      conditions.push(or(
+        eq(employeeTransferRequests.sourceBranchId, filters.branchId),
+        eq(employeeTransferRequests.destinationBranchId, filters.branchId)
+      ));
+    }
+    if (filters?.employeeId) conditions.push(eq(employeeTransferRequests.employeeId, filters.employeeId));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(employeeTransferRequests)
+        .where(and(...conditions))
+        .orderBy(desc(employeeTransferRequests.requestedAt));
+    }
+    
+    return await db.select().from(employeeTransferRequests)
+      .orderBy(desc(employeeTransferRequests.requestedAt));
+  }
+
+  async getTransferRequest(id: number): Promise<EmployeeTransferRequest | undefined> {
+    const [request] = await db.select().from(employeeTransferRequests)
+      .where(eq(employeeTransferRequests.id, id));
+    return request || undefined;
+  }
+
+  async createTransferRequest(request: InsertEmployeeTransferRequest): Promise<EmployeeTransferRequest> {
+    const [created] = await db.insert(employeeTransferRequests)
+      .values(request)
+      .returning();
+    return created;
+  }
+
+  async updateTransferRequest(id: number, request: Partial<InsertEmployeeTransferRequest>): Promise<EmployeeTransferRequest | undefined> {
+    const updateData: any = { ...request, updatedAt: new Date() };
+    const [updated] = await db.update(employeeTransferRequests)
+      .set(updateData)
+      .where(eq(employeeTransferRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTransferRequest(id: number): Promise<boolean> {
+    const [deleted] = await db.delete(employeeTransferRequests)
+      .where(eq(employeeTransferRequests.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  async getTransfersByEmployee(employeeId: number): Promise<EmployeeTransferRequest[]> {
+    return await db.select().from(employeeTransferRequests)
+      .where(eq(employeeTransferRequests.employeeId, employeeId))
+      .orderBy(desc(employeeTransferRequests.requestedAt));
+  }
+
+  async getPendingTransfersForBranch(branchId: string): Promise<EmployeeTransferRequest[]> {
+    return await db.select().from(employeeTransferRequests)
+      .where(and(
+        or(
+          eq(employeeTransferRequests.sourceBranchId, branchId),
+          eq(employeeTransferRequests.destinationBranchId, branchId)
+        ),
+        or(
+          eq(employeeTransferRequests.status, "pending"),
+          eq(employeeTransferRequests.status, "source_approved"),
+          eq(employeeTransferRequests.status, "dest_approved")
+        )
+      ))
+      .orderBy(desc(employeeTransferRequests.requestedAt));
+  }
+
+  // Transfer Approval Steps - خطوات الموافقة
+  async getTransferApprovalSteps(transferId: number): Promise<TransferApprovalStep[]> {
+    return await db.select().from(transferApprovalSteps)
+      .where(eq(transferApprovalSteps.transferId, transferId))
+      .orderBy(transferApprovalSteps.stepOrder);
+  }
+
+  async createTransferApprovalStep(step: InsertTransferApprovalStep): Promise<TransferApprovalStep> {
+    const [created] = await db.insert(transferApprovalSteps)
+      .values(step)
+      .returning();
+    return created;
+  }
+
+  async updateTransferApprovalStep(id: number, step: Partial<InsertTransferApprovalStep>): Promise<TransferApprovalStep | undefined> {
+    const [updated] = await db.update(transferApprovalSteps)
+      .set({ ...step, actionTakenAt: new Date() })
+      .where(eq(transferApprovalSteps.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Transfer History - سجل النقل
+  async getTransferHistory(transferId: number): Promise<TransferHistory[]> {
+    return await db.select().from(transferHistory)
+      .where(eq(transferHistory.transferId, transferId))
+      .orderBy(desc(transferHistory.eventTimestamp));
+  }
+
+  async createTransferHistoryEntry(entry: { transferId: number; eventType: string; performedBy?: string; details?: any }): Promise<TransferHistory> {
+    const [created] = await db.insert(transferHistory)
+      .values(entry)
+      .returning();
+    return created;
   }
 }
 

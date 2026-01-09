@@ -3893,3 +3893,91 @@ export const EMPLOYEE_SETTING_CATEGORIES = [
   { value: "contract_type", labelAr: "أنواع العقود", labelEn: "Contract Types" },
   { value: "bank", labelAr: "البنوك", labelEn: "Banks" },
 ] as const;
+
+// Employee Transfer Status
+export const TRANSFER_STATUS = [
+  "pending",
+  "source_approved",
+  "dest_approved", 
+  "hr_approved",
+  "completed",
+  "rejected",
+  "cancelled"
+] as const;
+
+export type TransferStatus = typeof TRANSFER_STATUS[number];
+
+// Employee Transfer Requests - طلبات نقل الموظفين
+export const employeeTransferRequests = pgTable("employee_transfer_requests", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => branchEmployees.id),
+  sourceBranchId: varchar("source_branch_id").notNull().references(() => branches.id),
+  destinationBranchId: varchar("destination_branch_id").notNull().references(() => branches.id),
+  requestedBy: varchar("requested_by").notNull().references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  effectiveDate: text("effective_date").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").default("pending").notNull(),
+  currentApproverRole: text("current_approver_role").default("source_manager"),
+  rejectionReason: text("rejection_reason"),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_transfer_employee").on(table.employeeId),
+  index("idx_transfer_source").on(table.sourceBranchId),
+  index("idx_transfer_dest").on(table.destinationBranchId),
+  index("idx_transfer_status").on(table.status),
+  index("idx_transfer_requested_by").on(table.requestedBy),
+]);
+
+export const insertEmployeeTransferRequestSchema = createInsertSchema(employeeTransferRequests).omit({
+  id: true,
+  requestedAt: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type EmployeeTransferRequest = typeof employeeTransferRequests.$inferSelect;
+export type InsertEmployeeTransferRequest = z.infer<typeof insertEmployeeTransferRequestSchema>;
+
+// Transfer Approval Steps - خطوات الموافقة على النقل
+export const transferApprovalSteps = pgTable("transfer_approval_steps", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => employeeTransferRequests.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(),
+  approverRole: text("approver_role").notNull(),
+  approverId: varchar("approver_id").references(() => users.id),
+  status: text("status").default("pending").notNull(),
+  actionTakenAt: timestamp("action_taken_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_approval_transfer").on(table.transferId),
+  index("idx_approval_approver").on(table.approverId),
+  index("idx_approval_status").on(table.status),
+]);
+
+export const insertTransferApprovalStepSchema = createInsertSchema(transferApprovalSteps).omit({
+  id: true,
+  actionTakenAt: true,
+  createdAt: true,
+});
+
+export type TransferApprovalStep = typeof transferApprovalSteps.$inferSelect;
+export type InsertTransferApprovalStep = z.infer<typeof insertTransferApprovalStepSchema>;
+
+// Transfer History/Audit Log - سجل تاريخ النقل
+export const transferHistory = pgTable("transfer_history", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => employeeTransferRequests.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  performedBy: varchar("performed_by").references(() => users.id),
+  details: jsonb("details"),
+  eventTimestamp: timestamp("event_timestamp").defaultNow().notNull(),
+}, (table) => [
+  index("idx_history_transfer").on(table.transferId),
+  index("idx_history_event").on(table.eventType),
+]);
