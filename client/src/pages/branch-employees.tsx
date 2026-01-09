@@ -829,7 +829,7 @@ export default function BranchEmployeesPage() {
                           <SelectTrigger data-testid="select-branch">
                             <SelectValue placeholder="اختر الفرع" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60 overflow-y-auto">
                             {branches?.map((b: { id: string; name: string }) => (
                               <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                             ))}
@@ -842,7 +842,7 @@ export default function BranchEmployeesPage() {
                           <SelectTrigger data-testid="select-status">
                             <SelectValue placeholder="اختر الحالة" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60 overflow-y-auto">
                             {STATUS_OPTIONS.map((opt) => (
                               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                             ))}
@@ -867,7 +867,7 @@ export default function BranchEmployeesPage() {
                           <SelectTrigger data-testid="select-job">
                             <SelectValue placeholder="اختر الوظيفة" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60 overflow-y-auto">
                             {(settingsByCategory.job_title?.filter(s => s.isActive) || []).length > 0 ? (
                               settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
                                 <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
@@ -895,7 +895,7 @@ export default function BranchEmployeesPage() {
                           <SelectTrigger data-testid="select-nationality">
                             <SelectValue placeholder="اختر الجنسية" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60 overflow-y-auto">
                             {(settingsByCategory.nationality?.filter(s => s.isActive) || []).length > 0 ? (
                               settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
                                 <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
@@ -916,7 +916,7 @@ export default function BranchEmployeesPage() {
                           <SelectTrigger data-testid="select-department">
                             <SelectValue placeholder="اختر القسم" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60 overflow-y-auto">
                             {(settingsByCategory.department?.filter(s => s.isActive) || []).length > 0 ? (
                               settingsByCategory.department?.filter(s => s.isActive).map((dept) => (
                                 <SelectItem key={dept.id} value={dept.labelAr}>{dept.labelAr}</SelectItem>
@@ -1021,7 +1021,7 @@ export default function BranchEmployeesPage() {
                           <SelectTrigger data-testid="select-health-cert">
                             <SelectValue placeholder="اختر الحالة" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60 overflow-y-auto">
                             {HEALTH_CERT_OPTIONS.map((opt) => (
                               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                             ))}
@@ -1176,7 +1176,7 @@ export default function BranchEmployeesPage() {
               <SelectTrigger className="w-48" data-testid="filter-branch">
                 <SelectValue placeholder="جميع الفروع" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الفروع</SelectItem>
                 {branches?.map((b: { id: string; name: string }) => (
                   <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
@@ -1190,7 +1190,7 @@ export default function BranchEmployeesPage() {
               <SelectTrigger className="w-40" data-testid="filter-nationality">
                 <SelectValue placeholder="جميع الجنسيات" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الجنسيات</SelectItem>
                 {(settingsByCategory.nationality?.filter(s => s.isActive) || []).length > 0 ? (
                   settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
@@ -1210,7 +1210,7 @@ export default function BranchEmployeesPage() {
               <SelectTrigger className="w-40" data-testid="filter-job">
                 <SelectValue placeholder="جميع الوظائف" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الوظائف</SelectItem>
                 {(settingsByCategory.job_title?.filter(s => s.isActive) || []).length > 0 ? (
                   settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
@@ -1230,7 +1230,7 @@ export default function BranchEmployeesPage() {
               <SelectTrigger className="w-36" data-testid="filter-status">
                 <SelectValue placeholder="جميع الحالات" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الحالات</SelectItem>
                 <SelectItem value="active">نشط</SelectItem>
                 <SelectItem value="inactive">غير نشط</SelectItem>
@@ -1627,7 +1627,7 @@ export default function BranchEmployeesPage() {
                               <SelectTrigger className="w-64 bg-white">
                                 <SelectValue placeholder="اختر مستخدم للربط" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="max-h-60 overflow-y-auto">
                                 {systemUsers?.map((user: any) => (
                                   <SelectItem key={user.id} value={user.id}>
                                     {user.displayName || user.username || user.id}
@@ -1833,7 +1833,7 @@ export default function BranchEmployeesPage() {
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="اختر الفرع..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {branches?.map((branch: { id: string; name: string }) => (
                         <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                       ))}
