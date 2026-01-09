@@ -1,42 +1,29 @@
-import * as pdfMake from "pdfmake/build/pdfmake";
-import * as pdfFonts from "pdfmake/build/vfs_fonts";
+import pdfMakeLib from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
 import { droidKufiRegularBase64, notoKufiArabicRegularBase64 } from "./fonts/arabic-fonts";
 
-let fontsInitialized = false;
+const existingVfs = (pdfFonts as any).pdfMake?.vfs || {};
 
-function initializeFonts(): void {
-  if (fontsInitialized) return;
+const customVfs = {
+  ...existingVfs,
+  'DroidKufi-Regular.ttf': droidKufiRegularBase64,
+  'NotoKufi-Regular.ttf': notoKufiArabicRegularBase64,
+};
 
-  const existingVfs = (pdfFonts as any).pdfMake?.vfs || {};
-
-  const customVfs = {
-    ...existingVfs,
-    'DroidKufi-Regular.ttf': droidKufiRegularBase64,
-    'NotoKufi-Regular.ttf': notoKufiArabicRegularBase64,
-  };
-
-  const customFonts = {
-    Roboto: {
-      normal: 'Roboto-Regular.ttf',
-      bold: 'Roboto-Medium.ttf',
-      italics: 'Roboto-Italic.ttf',
-      bolditalics: 'Roboto-MediumItalic.ttf',
-    },
-    Arabic: {
-      normal: 'DroidKufi-Regular.ttf',
-      bold: 'NotoKufi-Regular.ttf',
-      italics: 'DroidKufi-Regular.ttf',
-      bolditalics: 'NotoKufi-Regular.ttf',
-    },
-  };
-
-  (pdfMake as any).vfs = customVfs;
-  (pdfMake as any).fonts = customFonts;
-
-  fontsInitialized = true;
-}
-
-initializeFonts();
+const customFonts = {
+  Roboto: {
+    normal: 'Roboto-Regular.ttf',
+    bold: 'Roboto-Medium.ttf',
+    italics: 'Roboto-Italic.ttf',
+    bolditalics: 'Roboto-MediumItalic.ttf',
+  },
+  Arabic: {
+    normal: 'DroidKufi-Regular.ttf',
+    bold: 'NotoKufi-Regular.ttf',
+    italics: 'DroidKufi-Regular.ttf',
+    bolditalics: 'NotoKufi-Regular.ttf',
+  },
+};
 
 export function getArabicDefaultStyle() {
   return {
@@ -57,8 +44,6 @@ export function getArabicTableHeaderStyle() {
 }
 
 export function createArabicPdf(docDefinition: any): any {
-  initializeFonts();
-  
   const enhancedDocDefinition = {
     ...docDefinition,
     defaultStyle: {
@@ -85,7 +70,7 @@ export function createArabicPdf(docDefinition: any): any {
     },
   };
   
-  return (pdfMake as any).createPdf(enhancedDocDefinition);
+  return pdfMakeLib.createPdf(enhancedDocDefinition, undefined, customFonts, customVfs);
 }
 
 export function downloadArabicPdf(docDefinition: any, filename: string): void {
@@ -93,4 +78,4 @@ export function downloadArabicPdf(docDefinition: any, filename: string): void {
   pdf.download(filename);
 }
 
-export { pdfMake };
+export const pdfMake = pdfMakeLib;
