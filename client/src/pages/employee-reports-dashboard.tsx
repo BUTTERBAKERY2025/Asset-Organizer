@@ -807,16 +807,16 @@ export default function EmployeeReportsDashboardPage() {
         { text: "الصافي", style: "tableHeader" },
       ],
       ...salaryClosingData.map((emp, index) => [
-        { text: String(index + 1), alignment: "center" as const, font: "Roboto" },
+        { text: String(index + 1), alignment: "center" as const },
         { text: emp.employeeName, alignment: "right" as const },
         { text: emp.jobTitle, alignment: "right" as const },
-        { text: String(emp.presentDays), alignment: "center" as const, font: "Roboto" },
-        { text: String(emp.absentDays), alignment: "center" as const, font: "Roboto" },
-        { text: String(emp.totalHours), alignment: "center" as const, font: "Roboto" },
-        { text: formatNumber(emp.baseSalary), alignment: "center" as const, font: "Roboto" },
-        { text: formatNumber(emp.allowances), alignment: "center" as const, font: "Roboto" },
-        { text: emp.socialInsurance > 0 ? formatNumber(emp.socialInsurance) : "-", alignment: "center" as const, color: "red", font: "Roboto" },
-        { text: formatNumber(emp.netSalary), alignment: "center" as const, bold: true, font: "Roboto" },
+        { text: String(emp.presentDays), alignment: "center" as const },
+        { text: String(emp.absentDays), alignment: "center" as const },
+        { text: String(emp.totalHours), alignment: "center" as const },
+        { text: formatNumber(emp.baseSalary), alignment: "center" as const },
+        { text: formatNumber(emp.allowances), alignment: "center" as const },
+        { text: emp.socialInsurance > 0 ? formatNumber(emp.socialInsurance) : "-", alignment: "center" as const, color: "red" },
+        { text: formatNumber(emp.netSalary), alignment: "center" as const, bold: true },
       ]),
     ];
 
@@ -834,9 +834,8 @@ export default function EmployeeReportsDashboardPage() {
     const docDefinition: any = {
       pageOrientation: "landscape",
       content: [
-        { text: "تقرير إغلاق الرواتب الشهرية", style: "header", alignment: "center" },
-        { text: [{ text: `الفرع: ${getBranchName(salaryClosingBranch)} | الشهر: ` }, { text: salaryClosingMonth, font: "Roboto" }], alignment: "center", margin: [0, 0, 0, 10] },
-        { text: [{ text: `عدد الموظفين: ` }, { text: String(salaryClosingData.length), font: "Roboto" }, { text: ` | إجمالي الرواتب: ` }, { text: formatCurrency(totals.netSalary), font: "Roboto" }], alignment: "center", margin: [0, 0, 0, 20] },
+        { text: "Salary Closing Report - " + getBranchName(salaryClosingBranch), style: "header", alignment: "center" },
+        { text: "Month: " + salaryClosingMonth + " | Employees: " + salaryClosingData.length + " | Total: " + formatCurrency(totals.netSalary), alignment: "center", margin: [0, 0, 0, 20] },
         {
           table: {
             headerRows: 1,
@@ -851,11 +850,11 @@ export default function EmployeeReportsDashboardPage() {
             widths: ["*", "auto", "auto", "auto", "auto"],
             body: [
               [
-                { text: "الإجمالي", bold: true, alignment: "right" as const },
-                { text: formatCurrency(totals.baseSalary), alignment: "center" as const, font: "Roboto" },
-                { text: formatCurrency(totals.allowances), alignment: "center" as const, font: "Roboto" },
-                { text: formatCurrency(totals.socialInsurance), alignment: "center" as const, color: "red", font: "Roboto" },
-                { text: formatCurrency(totals.netSalary), alignment: "center" as const, bold: true, font: "Roboto" },
+                { text: "Total", bold: true, alignment: "right" as const },
+                { text: formatCurrency(totals.baseSalary), alignment: "center" as const },
+                { text: formatCurrency(totals.allowances), alignment: "center" as const },
+                { text: formatCurrency(totals.socialInsurance), alignment: "center" as const, color: "red" },
+                { text: formatCurrency(totals.netSalary), alignment: "center" as const, bold: true },
               ],
             ],
           },
