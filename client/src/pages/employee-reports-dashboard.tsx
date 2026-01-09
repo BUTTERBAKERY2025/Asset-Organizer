@@ -176,7 +176,7 @@ export default function EmployeeReportsDashboardPage() {
       const query = salarySearchQuery.toLowerCase().trim();
       result = result.filter(emp => 
         emp.employeeName.toLowerCase().includes(query) ||
-        emp.employeeNumber?.toLowerCase().includes(query) ||
+        (emp.employeeNumber?.toLowerCase()?.includes(query) ?? false) ||
         emp.jobTitle.toLowerCase().includes(query)
       );
     }
