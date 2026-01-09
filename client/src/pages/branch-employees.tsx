@@ -52,15 +52,7 @@ import {
 } from "lucide-react";
 import type { BranchEmployee, EmployeeSetting } from "@shared/schema";
 
-const JOB_TITLES = [
-  "كاشير", "مشرف", "مدير صالة", "معبأ طلبات", "بيكري", "بستري",
-  "ساندويتشات", "بيتزا", "باريستا", "واتر", "عامل", "أمين مستودع", "سائق", "حارس أمن"
-];
-
-const NATIONALITIES = [
-  "سعودي", "مصري", "سوري", "نيبالي", "بنجلاديشي", "فلبيني",
-  "بورمي", "هندي", "باكستاني", "يمني", "سوداني", "إندونيسي", "إثيوبي", "أخرى"
-];
+// تمت إزالة JOB_TITLES و NATIONALITIES - الآن يتم استخدام البيانات من قاعدة البيانات
 
 const STATUS_OPTIONS = [
   { value: "active", label: "نشط" },
@@ -181,23 +173,6 @@ export default function BranchEmployeesPage() {
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   
-  React.useEffect(() => {
-    const urlParams = new URLSearchParams(location.split('?')[1] || '');
-    const jobTitleParam = urlParams.get('jobTitle');
-    if (jobTitleParam) {
-      const decodedTitle = decodeURIComponent(jobTitleParam);
-      if (JOB_TITLES.includes(decodedTitle)) {
-        setSelectedJobTitle(decodedTitle);
-        setSearchQuery("");
-      } else {
-        setSearchQuery(decodedTitle);
-        setSelectedJobTitle("all");
-      }
-    } else {
-      setSelectedJobTitle("all");
-      setSearchQuery("");
-    }
-  }, [location]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<BranchEmployee | null>(null);
@@ -325,6 +300,26 @@ export default function BranchEmployeesPage() {
     });
     return grouped;
   }, [employeeSettingsData]);
+
+  // معالجة معلمة الوظيفة من الرابط
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(location.split('?')[1] || '');
+    const jobTitleParam = urlParams.get('jobTitle');
+    if (jobTitleParam) {
+      const decodedTitle = decodeURIComponent(jobTitleParam);
+      const jobTitlesFromDB = settingsByCategory.job_title?.filter(s => s.isActive).map(s => s.labelAr) || [];
+      if (jobTitlesFromDB.includes(decodedTitle)) {
+        setSelectedJobTitle(decodedTitle);
+        setSearchQuery("");
+      } else {
+        setSearchQuery(decodedTitle);
+        setSelectedJobTitle("all");
+      }
+    } else {
+      setSelectedJobTitle("all");
+      setSearchQuery("");
+    }
+  }, [location, settingsByCategory.job_title]);
 
   const createSettingMutation = useMutation({
     mutationFn: async (data: { category: string; value: string; labelAr: string; labelEn?: string }) => {
@@ -868,14 +863,14 @@ export default function BranchEmployeesPage() {
                             <SelectValue placeholder="اختر الوظيفة" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {(settingsByCategory.job_title?.filter(s => s.isActive) || []).length > 0 ? (
+                            {isLoadingSettings ? (
+                              <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                            ) : (settingsByCategory.job_title?.filter(s => s.isActive) || []).length > 0 ? (
                               settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
                                 <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
                               ))
                             ) : (
-                              JOB_TITLES.map((job) => (
-                                <SelectItem key={job} value={job}>{job}</SelectItem>
-                              ))
+                              <SelectItem value="" disabled>لا توجد وظائف - أضف من الإعدادات</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -896,14 +891,14 @@ export default function BranchEmployeesPage() {
                             <SelectValue placeholder="اختر الجنسية" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {(settingsByCategory.nationality?.filter(s => s.isActive) || []).length > 0 ? (
+                            {isLoadingSettings ? (
+                              <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                            ) : (settingsByCategory.nationality?.filter(s => s.isActive) || []).length > 0 ? (
                               settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
                                 <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
                               ))
                             ) : (
-                              NATIONALITIES.map((nat) => (
-                                <SelectItem key={nat} value={nat}>{nat}</SelectItem>
-                              ))
+                              <SelectItem value="" disabled>لا توجد جنسيات - أضف من الإعدادات</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -917,14 +912,14 @@ export default function BranchEmployeesPage() {
                             <SelectValue placeholder="اختر القسم" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {(settingsByCategory.department?.filter(s => s.isActive) || []).length > 0 ? (
+                            {isLoadingSettings ? (
+                              <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                            ) : (settingsByCategory.department?.filter(s => s.isActive) || []).length > 0 ? (
                               settingsByCategory.department?.filter(s => s.isActive).map((dept) => (
                                 <SelectItem key={dept.id} value={dept.labelAr}>{dept.labelAr}</SelectItem>
                               ))
                             ) : (
-                              ["مطبخ", "صالة", "خدمة توصيل", "إدارة", "محاسبة", "صيانة"].map((dept) => (
-                                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                              ))
+                              <SelectItem value="" disabled>لا توجد أقسام - أضف من الإعدادات</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -1192,15 +1187,9 @@ export default function BranchEmployeesPage() {
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الجنسيات</SelectItem>
-                {(settingsByCategory.nationality?.filter(s => s.isActive) || []).length > 0 ? (
-                  settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
-                    <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
-                  ))
-                ) : (
-                  NATIONALITIES.map((nat) => (
-                    <SelectItem key={nat} value={nat}>{nat}</SelectItem>
-                  ))
-                )}
+                {settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
+                  <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -1212,15 +1201,9 @@ export default function BranchEmployeesPage() {
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الوظائف</SelectItem>
-                {(settingsByCategory.job_title?.filter(s => s.isActive) || []).length > 0 ? (
-                  settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
-                    <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
-                  ))
-                ) : (
-                  JOB_TITLES.map((job) => (
-                    <SelectItem key={job} value={job}>{job}</SelectItem>
-                  ))
-                )}
+                {settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
+                  <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
