@@ -32,7 +32,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getQueryFn } from "@/lib/queryClient";
 import * as XLSX from "xlsx";
-import pdfMake from "pdfmake/build/pdfmake";
+import { downloadArabicPdf, getArabicDefaultStyle, getArabicTableHeaderStyle } from "@/lib/pdfmake-arabic";
 import {
   BarChart,
   Bar,
@@ -861,10 +861,10 @@ export default function EmployeeReportsDashboardPage() {
         header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
         tableHeader: { bold: true, fontSize: 9, fillColor: "#f3f4f6", alignment: "center" },
       },
-      defaultStyle: { font: "Roboto", fontSize: 8 },
+      defaultStyle: { fontSize: 8 },
     };
 
-    pdfMake.createPdf(docDefinition).download(`إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`);
+    downloadArabicPdf(docDefinition, `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`);
   };
 
   // ==================== NEW EXPORT FUNCTIONS ====================
@@ -922,9 +922,9 @@ export default function EmployeeReportsDashboardPage() {
         { table: { headerRows: 1, widths: ["*", "auto", "auto", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
       ],
       styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
-      defaultStyle: { font: "Roboto", fontSize: 9 },
+      defaultStyle: { fontSize: 9 },
     };
-    pdfMake.createPdf(docDefinition).download(`مقارنة_الفروع_${selectedMonth}.pdf`);
+    downloadArabicPdf(docDefinition, `مقارنة_الفروع_${selectedMonth}.pdf`);
   };
 
   const exportJobComparisonToExcel = () => {
@@ -979,9 +979,9 @@ export default function EmployeeReportsDashboardPage() {
         { table: { headerRows: 1, widths: ["*", "*", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
       ],
       styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
-      defaultStyle: { font: "Roboto", fontSize: 9 },
+      defaultStyle: { fontSize: 9 },
     };
-    pdfMake.createPdf(docDefinition).download(`مقارنة_الوظائف_${selectedMonth}.pdf`);
+    downloadArabicPdf(docDefinition, `مقارنة_الوظائف_${selectedMonth}.pdf`);
   };
 
   const exportSalariesTableToExcel = () => {
@@ -1044,9 +1044,9 @@ export default function EmployeeReportsDashboardPage() {
         { table: { headerRows: 1, widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
       ],
       styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
-      defaultStyle: { font: "Roboto", fontSize: 9 },
+      defaultStyle: { fontSize: 9 },
     };
-    pdfMake.createPdf(docDefinition).download(`جدول_الرواتب_${selectedMonth}.pdf`);
+    downloadArabicPdf(docDefinition, `جدول_الرواتب_${selectedMonth}.pdf`);
   };
 
   const exportAnalyticsToExcel = () => {
@@ -1180,9 +1180,9 @@ export default function EmployeeReportsDashboardPage() {
         subheader: { fontSize: 14, bold: true },
         tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" },
       },
-      defaultStyle: { font: "Roboto", fontSize: 10 },
+      defaultStyle: { fontSize: 10 },
     };
-    pdfMake.createPdf(docDefinition).download(`مؤشرات_الأداء_${selectedMonth}.pdf`);
+    downloadArabicPdf(docDefinition, `مؤشرات_الأداء_${selectedMonth}.pdf`);
   };
 
   // ==================== NEW ANALYTICS DATA ====================
@@ -4929,7 +4929,7 @@ export default function EmployeeReportsDashboardPage() {
                     ],
                     styles: { header: { fontSize: 18, bold: true } }
                   };
-                  pdfMake.createPdf(docDefinition).download(`health_certificates_${selectedMonth}.pdf`);
+                  downloadArabicPdf(docDefinition, `health_certificates_${selectedMonth}.pdf`);
                 }} data-testid="button-export-health-pdf">
                   <FileText className="w-4 h-4 ml-1" />
                   PDF
@@ -5264,7 +5264,7 @@ export default function EmployeeReportsDashboardPage() {
                     ],
                     styles: { header: { fontSize: 18, bold: true }, subheader: { fontSize: 14, bold: true } }
                   };
-                  pdfMake.createPdf(docDefinition).download(`comparisons_report_${selectedMonth}.pdf`);
+                  downloadArabicPdf(docDefinition, `comparisons_report_${selectedMonth}.pdf`);
                 }} data-testid="button-export-comparisons-pdf">
                   <FileText className="w-4 h-4 ml-1" />
                   PDF
