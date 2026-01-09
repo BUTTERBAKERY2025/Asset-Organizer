@@ -868,9 +868,15 @@ export default function BranchEmployeesPage() {
                             <SelectValue placeholder="اختر الوظيفة" />
                           </SelectTrigger>
                           <SelectContent>
-                            {JOB_TITLES.map((job) => (
-                              <SelectItem key={job} value={job}>{job}</SelectItem>
-                            ))}
+                            {(settingsByCategory.job_title?.filter(s => s.isActive) || []).length > 0 ? (
+                              settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
+                                <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
+                              ))
+                            ) : (
+                              JOB_TITLES.map((job) => (
+                                <SelectItem key={job} value={job}>{job}</SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -890,9 +896,15 @@ export default function BranchEmployeesPage() {
                             <SelectValue placeholder="اختر الجنسية" />
                           </SelectTrigger>
                           <SelectContent>
-                            {NATIONALITIES.map((nat) => (
-                              <SelectItem key={nat} value={nat}>{nat}</SelectItem>
-                            ))}
+                            {(settingsByCategory.nationality?.filter(s => s.isActive) || []).length > 0 ? (
+                              settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
+                                <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
+                              ))
+                            ) : (
+                              NATIONALITIES.map((nat) => (
+                                <SelectItem key={nat} value={nat}>{nat}</SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -900,7 +912,22 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>القسم</Label>
-                        <Input {...form.register("department")} placeholder="مطبخ، صالة، إلخ" data-testid="input-department" />
+                        <Select value={form.watch("department") || ""} onValueChange={(v) => form.setValue("department", v)}>
+                          <SelectTrigger data-testid="select-department">
+                            <SelectValue placeholder="اختر القسم" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(settingsByCategory.department?.filter(s => s.isActive) || []).length > 0 ? (
+                              settingsByCategory.department?.filter(s => s.isActive).map((dept) => (
+                                <SelectItem key={dept.id} value={dept.labelAr}>{dept.labelAr}</SelectItem>
+                              ))
+                            ) : (
+                              ["مطبخ", "صالة", "خدمة توصيل", "إدارة", "محاسبة", "صيانة"].map((dept) => (
+                                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
                         <Label>تاريخ التعيين</Label>
@@ -1165,9 +1192,15 @@ export default function BranchEmployeesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">جميع الجنسيات</SelectItem>
-                {NATIONALITIES.map((nat) => (
-                  <SelectItem key={nat} value={nat}>{nat}</SelectItem>
-                ))}
+                {(settingsByCategory.nationality?.filter(s => s.isActive) || []).length > 0 ? (
+                  settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
+                    <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
+                  ))
+                ) : (
+                  NATIONALITIES.map((nat) => (
+                    <SelectItem key={nat} value={nat}>{nat}</SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -1179,9 +1212,15 @@ export default function BranchEmployeesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">جميع الوظائف</SelectItem>
-                {JOB_TITLES.map((job) => (
-                  <SelectItem key={job} value={job}>{job}</SelectItem>
-                ))}
+                {(settingsByCategory.job_title?.filter(s => s.isActive) || []).length > 0 ? (
+                  settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
+                    <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
+                  ))
+                ) : (
+                  JOB_TITLES.map((job) => (
+                    <SelectItem key={job} value={job}>{job}</SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
