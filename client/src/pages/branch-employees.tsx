@@ -29,7 +29,6 @@ import { z } from "zod";
 import { useReactToPrint } from "react-to-print";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
-import pdfMake from "pdfmake/build/pdfmake";
 import {
   Users,
   ChevronLeft,
@@ -824,54 +823,183 @@ export default function BranchEmployeesPage() {
   };
 
   const exportToPDF = () => {
-    const tableBody = [
-      [
-        { text: "م", style: "tableHeader" },
-        { text: "الاسم", style: "tableHeader" },
-        { text: "الفرع", style: "tableHeader" },
-        { text: "الوظيفة", style: "tableHeader" },
-        { text: "الجنسية", style: "tableHeader" },
-        { text: "الراتب", style: "tableHeader" },
-        { text: "التأمينات", style: "tableHeader" },
-        { text: "صافي الراتب", style: "tableHeader" },
-        { text: "الحالة", style: "tableHeader" },
-      ],
-      ...filteredEmployees.map((emp: BranchEmployee, index: number) => [
-        { text: String(index + 1), alignment: "center" as const },
-        { text: emp.employeeName, alignment: "right" as const },
-        { text: getBranchName(emp.branchId), alignment: "right" as const },
-        { text: emp.jobTitle, alignment: "right" as const },
-        { text: emp.nationality, alignment: "right" as const },
-        { text: formatNumber(emp.salary), alignment: "center" as const },
-        { text: emp.nationality === "سعودي" ? formatNumber(emp.socialInsuranceDeduction || 0) : "-", alignment: "center" as const, color: emp.socialInsuranceDeduction ? "red" : "gray" },
-        { text: formatNumber(emp.totalSalary || emp.salary), alignment: "center" as const },
-        { text: getStatusLabel(emp.status), alignment: "center" as const },
-      ]),
-    ];
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: "خطأ",
+        description: "يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const docDefinition: any = {
-      pageOrientation: "landscape",
-      content: [
-        { text: "تقرير موظفي الفروع", style: "header", alignment: "center" },
-        { text: `التاريخ: ${new Date().toLocaleDateString('en-US')}`, alignment: "center", margin: [0, 0, 0, 10] },
-        { text: `إجمالي الموظفين: ${filteredEmployees.length} | إجمالي الرواتب: ${formatCurrency(stats?.totalSalaries)}`, alignment: "center", margin: [0, 0, 0, 20] },
-        {
-          table: {
-            headerRows: 1,
-            widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
-            body: tableBody,
-          },
-          layout: "lightHorizontalLines",
-        },
-      ],
-      styles: {
-        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
-        tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" },
-      },
-      defaultStyle: { font: "Roboto", fontSize: 9 },
-    };
+    const currentDate = new Date().toLocaleDateString('en-US');
+    const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
 
-    pdfMake.createPdf(docDefinition).download(`موظفي_الفروع_${new Date().toISOString().split('T')[0]}.pdf`);
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تقرير موظفي الفروع - ${currentDate}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', sans-serif;
+      direction: rtl;
+      padding: 20px;
+      background: white;
+      color: #333;
+      font-size: 11px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #d4a853;
+      padding-bottom: 15px;
+    }
+    .header .logo { max-height: 60px; margin-bottom: 10px; }
+    .header h1 { font-size: 20px; color: #333; margin-bottom: 5px; }
+    .header .date { color: #666; font-size: 12px; }
+    .summary {
+      display: flex;
+      justify-content: space-around;
+      background: #f9f9f9;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .summary-item { text-align: center; }
+    .summary-item .label { color: #666; font-size: 11px; }
+    .summary-item .value { font-size: 16px; font-weight: bold; color: #d4a853; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px 6px; text-align: right; }
+    th { background: #f5f5f5; font-weight: 600; color: #333; font-size: 10px; }
+    tr:nth-child(even) { background: #fafafa; }
+    .amount { font-weight: bold; color: #2e7d32; }
+    .deduction { color: #ef4444; }
+    .status-active { color: #22c55e; }
+    .status-inactive { color: #ef4444; }
+    .status-terminated { color: #6b7280; }
+    .status-on_leave { color: #f59e0b; }
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 15px;
+      border-top: 1px solid #ddd;
+      color: #888;
+      font-size: 10px;
+    }
+    .print-btn {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: #d4a853;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .print-btn:hover { background: #c49843; }
+    @media print {
+      body { padding: 10px; }
+      .no-print { display: none; }
+      table { font-size: 9px; }
+    }
+  </style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">طباعة / حفظ PDF</button>
+  
+  <div class="header">
+    <img src="${logoUrl}" alt="باتر بيكري" class="logo" onerror="this.style.display='none'" />
+    <h1>تقرير موظفي الفروع</h1>
+    <div class="date">التاريخ: ${currentDate}</div>
+  </div>
+
+  <div class="summary">
+    <div class="summary-item">
+      <div class="label">إجمالي الموظفين</div>
+      <div class="value">${formatNumber(filteredEmployees.length)}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">إجمالي الرواتب</div>
+      <div class="value">${formatCurrency(stats?.totalSalaries)}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">عدد الجنسيات</div>
+      <div class="value">${formatNumber(stats?.byNationality?.length || 0)}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">عدد الوظائف</div>
+      <div class="value">${formatNumber(stats?.byJobTitle?.length || 0)}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>م</th>
+        <th>الرقم الوظيفي</th>
+        <th>الاسم</th>
+        <th>الفرع</th>
+        <th>الوظيفة</th>
+        <th>الجنسية</th>
+        <th>الراتب الأساسي</th>
+        <th>بدل السكن</th>
+        <th>بدل المواصلات</th>
+        <th>التأمينات</th>
+        <th>صافي الراتب</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filteredEmployees.map((emp: BranchEmployee, index: number) => `
+        <tr>
+          <td>${formatNumber(index + 1)}</td>
+          <td>${emp.employeeNumber || "--"}</td>
+          <td>${emp.employeeName}</td>
+          <td>${getBranchName(emp.branchId)}</td>
+          <td>${emp.jobTitle}</td>
+          <td>${emp.nationality}</td>
+          <td class="amount">${formatNumber(emp.salary)}</td>
+          <td>${formatNumber(emp.housingAllowance || 0)}</td>
+          <td>${formatNumber(emp.transportAllowance || 0)}</td>
+          <td class="deduction">${emp.nationality === "سعودي" ? formatNumber(emp.socialInsuranceDeduction || 0) : "-"}</td>
+          <td class="amount">${formatNumber(emp.totalSalary || emp.salary)}</td>
+          <td class="status-${emp.status}">${getStatusLabel(emp.status)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+    <tfoot>
+      <tr style="background: #f5f5f5; font-weight: bold;">
+        <td colspan="6">الإجمالي</td>
+        <td class="amount">${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.salary || 0), 0))}</td>
+        <td>${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.housingAllowance || 0), 0))}</td>
+        <td>${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.transportAllowance || 0), 0))}</td>
+        <td class="deduction">${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.socialInsuranceDeduction || 0), 0))}</td>
+        <td class="amount">${formatCurrency(stats?.totalSalaries)}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">
+    <p>تم إنشاء هذا التقرير بواسطة نظام إدارة المشروعات - باتر بيكري</p>
+    <p>${new Date().toLocaleString('en-GB')}</p>
+  </div>
+</body>
+</html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   return (
