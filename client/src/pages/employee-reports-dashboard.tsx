@@ -108,6 +108,12 @@ export default function EmployeeReportsDashboardPage() {
   const [showSalaryClosingDialog, setShowSalaryClosingDialog] = useState(false);
   const [salaryClosingBranch, setSalaryClosingBranch] = useState<string>("");
   const [salaryClosingMonth, setSalaryClosingMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [salarySearchQuery, setSalarySearchQuery] = useState<string>("");
+  const [salaryMinFilter, setSalaryMinFilter] = useState<string>("");
+  const [salaryMaxFilter, setSalaryMaxFilter] = useState<string>("");
+  const [salaryNationalityFilter, setSalaryNationalityFilter] = useState<string>("all");
+  const [salarySortField, setSalarySortField] = useState<string>("employeeName");
+  const [salarySortOrder, setSalarySortOrder] = useState<"asc" | "desc">("asc");
 
   const { data: branches } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/branches"],
@@ -160,6 +166,58 @@ export default function EmployeeReportsDashboardPage() {
       employeeIds: new Set(filteredEmployees.map(emp => emp.id.toString())),
     };
   }, [filteredEmployees]);
+
+  // Filtered and sorted employees for salary tab
+  const salaryFilteredEmployees = useMemo(() => {
+    let result = [...filteredEmployees];
+    
+    // Apply search filter
+    if (salarySearchQuery.trim()) {
+      const query = salarySearchQuery.toLowerCase().trim();
+      result = result.filter(emp => 
+        emp.employeeName.toLowerCase().includes(query) ||
+        emp.employeeNumber?.toLowerCase().includes(query) ||
+        emp.jobTitle.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply nationality filter
+    if (salaryNationalityFilter !== "all") {
+      result = result.filter(emp => emp.nationality === salaryNationalityFilter);
+    }
+    
+    // Apply salary range filter
+    const minSalary = salaryMinFilter ? parseFloat(salaryMinFilter) : 0;
+    const maxSalary = salaryMaxFilter ? parseFloat(salaryMaxFilter) : Infinity;
+    result = result.filter(emp => {
+      const salary = emp.totalSalary || 0;
+      return salary >= minSalary && salary <= maxSalary;
+    });
+    
+    // Apply sorting
+    result.sort((a, b) => {
+      let aVal: any, bVal: any;
+      switch (salarySortField) {
+        case "employeeName": aVal = a.employeeName; bVal = b.employeeName; break;
+        case "salary": aVal = a.salary || 0; bVal = b.salary || 0; break;
+        case "totalSalary": aVal = a.totalSalary || 0; bVal = b.totalSalary || 0; break;
+        case "branchId": aVal = getBranchName(a.branchId); bVal = getBranchName(b.branchId); break;
+        case "jobTitle": aVal = a.jobTitle; bVal = b.jobTitle; break;
+        default: aVal = a.employeeName; bVal = b.employeeName;
+      }
+      if (typeof aVal === "string") {
+        return salarySortOrder === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return salarySortOrder === "asc" ? aVal - bVal : bVal - aVal;
+    });
+    
+    return result;
+  }, [filteredEmployees, salarySearchQuery, salaryNationalityFilter, salaryMinFilter, salaryMaxFilter, salarySortField, salarySortOrder, getBranchName]);
+
+  const uniqueNationalities = useMemo(() => {
+    if (!employees) return [];
+    return Array.from(new Set(employees.map(emp => emp.nationality))).sort();
+  }, [employees]);
 
   const filteredAttendance = useMemo(() => {
     if (!attendanceRecords) return [];
@@ -3771,13 +3829,316 @@ export default function EmployeeReportsDashboardPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="salaries" className="space-y-4">
+            <TabsContent value="salaries" className="space-y-6">
+              {/* Salary KPI Cards */}
+              {(() => {
+                const salaryStats = filteredEmployees.reduce((acc, emp) => {
+                  const housing = emp.housingAllowance || 0;
+                  const transport = emp.transportAllowance || 0;
+                  const food = emp.foodAllowance || 0;
+                  const other = emp.otherAllowances || 0;
+                  const storedIns = emp.socialInsuranceDeduction || 0;
+                  const insurance = emp.nationality === "سعودي" 
+                    ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975))
+                    : 0;
+                  
+                  acc.totalBasic += (emp.salary || 0);
+                  acc.totalHousing += housing;
+                  acc.totalTransport += transport;
+                  acc.totalFood += food;
+                  acc.totalOther += other;
+                  acc.totalAllowances += housing + transport + food + other;
+                  acc.totalInsurance += insurance;
+                  acc.totalNet += (emp.totalSalary || 0);
+                  acc.count++;
+                  return acc;
+                }, { totalBasic: 0, totalHousing: 0, totalTransport: 0, totalFood: 0, totalOther: 0, totalAllowances: 0, totalInsurance: 0, totalNet: 0, count: 0 });
+
+                const avgSalary = salaryStats.count > 0 ? Math.round(salaryStats.totalNet / salaryStats.count) : 0;
+                const costPerEmployee = salaryStats.count > 0 ? Math.round((salaryStats.totalBasic + salaryStats.totalAllowances) / salaryStats.count) : 0;
+
+                // Salary distribution by branch
+                const salaryByBranch = filteredEmployees.reduce((acc, emp) => {
+                  const branchName = getBranchName(emp.branchId);
+                  if (!acc[branchName]) {
+                    acc[branchName] = { name: branchName, basic: 0, allowances: 0, insurance: 0, net: 0, count: 0 };
+                  }
+                  const housing = emp.housingAllowance || 0;
+                  const transport = emp.transportAllowance || 0;
+                  const food = emp.foodAllowance || 0;
+                  const other = emp.otherAllowances || 0;
+                  const storedIns = emp.socialInsuranceDeduction || 0;
+                  const insurance = emp.nationality === "سعودي" 
+                    ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975))
+                    : 0;
+                  acc[branchName].basic += (emp.salary || 0);
+                  acc[branchName].allowances += housing + transport + food + other;
+                  acc[branchName].insurance += insurance;
+                  acc[branchName].net += (emp.totalSalary || 0);
+                  acc[branchName].count++;
+                  return acc;
+                }, {} as Record<string, { name: string; basic: number; allowances: number; insurance: number; net: number; count: number }>);
+                const branchSalaryChartData = Object.values(salaryByBranch).sort((a, b) => b.net - a.net);
+
+                // Salary ranges distribution
+                const salaryRanges = [
+                  { range: "أقل من 2,000", min: 0, max: 2000, count: 0 },
+                  { range: "2,000 - 4,000", min: 2000, max: 4000, count: 0 },
+                  { range: "4,000 - 6,000", min: 4000, max: 6000, count: 0 },
+                  { range: "6,000 - 8,000", min: 6000, max: 8000, count: 0 },
+                  { range: "8,000 - 10,000", min: 8000, max: 10000, count: 0 },
+                  { range: "أكثر من 10,000", min: 10000, max: Infinity, count: 0 },
+                ];
+                filteredEmployees.forEach(emp => {
+                  const salary = emp.totalSalary || 0;
+                  const range = salaryRanges.find(r => salary >= r.min && salary < r.max);
+                  if (range) range.count++;
+                });
+
+                // Allowances breakdown
+                const allowancesBreakdown = [
+                  { name: "بدل سكن", value: salaryStats.totalHousing, color: "#f59e0b" },
+                  { name: "بدل مواصلات", value: salaryStats.totalTransport, color: "#3b82f6" },
+                  { name: "بدل طعام", value: salaryStats.totalFood, color: "#10b981" },
+                  { name: "بدلات أخرى", value: salaryStats.totalOther, color: "#8b5cf6" },
+                ].filter(a => a.value > 0);
+
+                return (
+                  <>
+                    {/* KPI Cards Row */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                        <CardContent className="pt-4">
+                          <div className="text-center">
+                            <DollarSign className="w-6 h-6 mx-auto text-green-600 mb-1" />
+                            <p className="text-xs text-green-600">إجمالي الرواتب</p>
+                            <p className="text-lg font-bold text-green-800">{formatCurrency(salaryStats.totalNet)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                        <CardContent className="pt-4">
+                          <div className="text-center">
+                            <Wallet className="w-6 h-6 mx-auto text-blue-600 mb-1" />
+                            <p className="text-xs text-blue-600">الرواتب الأساسية</p>
+                            <p className="text-lg font-bold text-blue-800">{formatCurrency(salaryStats.totalBasic)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                        <CardContent className="pt-4">
+                          <div className="text-center">
+                            <TrendingUp className="w-6 h-6 mx-auto text-amber-600 mb-1" />
+                            <p className="text-xs text-amber-600">إجمالي البدلات</p>
+                            <p className="text-lg font-bold text-amber-800">{formatCurrency(salaryStats.totalAllowances)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                        <CardContent className="pt-4">
+                          <div className="text-center">
+                            <Shield className="w-6 h-6 mx-auto text-red-600 mb-1" />
+                            <p className="text-xs text-red-600">التأمينات الاجتماعية</p>
+                            <p className="text-lg font-bold text-red-800">{formatCurrency(salaryStats.totalInsurance)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                        <CardContent className="pt-4">
+                          <div className="text-center">
+                            <Users className="w-6 h-6 mx-auto text-purple-600 mb-1" />
+                            <p className="text-xs text-purple-600">متوسط الراتب</p>
+                            <p className="text-lg font-bold text-purple-800">{formatCurrency(avgSalary)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+                        <CardContent className="pt-4">
+                          <div className="text-center">
+                            <BarChart3 className="w-6 h-6 mx-auto text-teal-600 mb-1" />
+                            <p className="text-xs text-teal-600">تكلفة الموظف</p>
+                            <p className="text-lg font-bold text-teal-800">{formatCurrency(costPerEmployee)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Charts Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Salary by Branch Chart */}
+                      <Card>
+                        <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+                          <CardTitle className="flex items-center gap-2 text-green-800">
+                            <Building2 className="w-5 h-5" />
+                            توزيع الرواتب حسب الفرع
+                          </CardTitle>
+                          <CardDescription>إجمالي الرواتب والبدلات لكل فرع</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                          <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={branchSalaryChartData} layout="vertical">
+                              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                              <XAxis type="number" tickFormatter={(v) => formatNumber(v)} />
+                              <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} />
+                              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                              <Legend />
+                              <Bar dataKey="basic" stackId="a" fill="#3b82f6" name="الأساسي" radius={[0, 0, 0, 0]} />
+                              <Bar dataKey="allowances" stackId="a" fill="#f59e0b" name="البدلات" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+
+                      {/* Salary Ranges Chart */}
+                      <Card>
+                        <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
+                          <CardTitle className="flex items-center gap-2 text-purple-800">
+                            <BarChart3 className="w-5 h-5" />
+                            توزيع نطاقات الرواتب
+                          </CardTitle>
+                          <CardDescription>عدد الموظفين في كل نطاق</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                          <div className="space-y-3">
+                            {salaryRanges.map((range, index) => {
+                              const maxCount = Math.max(...salaryRanges.map(r => r.count), 1);
+                              const percent = Math.round((range.count / maxCount) * 100);
+                              const colors = ["bg-blue-400", "bg-green-400", "bg-yellow-400", "bg-orange-400", "bg-red-400", "bg-purple-400"];
+                              return (
+                                <div key={range.range}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-sm font-medium text-gray-700">{range.range} ريال</span>
+                                    <span className="text-sm font-bold text-gray-900">{range.count} موظف</span>
+                                  </div>
+                                  <div className="w-full bg-gray-100 rounded-full h-5 overflow-hidden">
+                                    <div 
+                                      className={`h-full ${colors[index]} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                                      style={{ width: `${percent}%` }}
+                                    >
+                                      {percent >= 20 && <span className="text-xs font-medium text-white">{range.count}</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Allowances Breakdown + Branch Summary */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Allowances Pie Chart */}
+                      <Card>
+                        <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
+                          <CardTitle className="flex items-center gap-2 text-amber-800">
+                            <PieChartIcon className="w-5 h-5" />
+                            توزيع البدلات
+                          </CardTitle>
+                          <CardDescription>نسبة كل نوع من البدلات</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                          {allowancesBreakdown.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">لا توجد بدلات مسجلة</div>
+                          ) : (
+                            <div className="flex items-center gap-6">
+                              <div style={{ width: 180, height: 180 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={allowancesBreakdown}
+                                      cx="50%"
+                                      cy="50%"
+                                      outerRadius={70}
+                                      innerRadius={45}
+                                      dataKey="value"
+                                      paddingAngle={3}
+                                    >
+                                      {allowancesBreakdown.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="#fff" strokeWidth={2} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                              <div className="flex-1 space-y-2">
+                                {allowancesBreakdown.map((item) => {
+                                  const percent = salaryStats.totalAllowances > 0 
+                                    ? Math.round((item.value / salaryStats.totalAllowances) * 100) 
+                                    : 0;
+                                  return (
+                                    <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                                        <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-sm font-bold text-gray-900">{formatCurrency(item.value)}</span>
+                                        <span className="text-xs text-gray-500 w-10">{percent}%</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {/* Branch Summary Table */}
+                      <Card>
+                        <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
+                          <CardTitle className="flex items-center gap-2 text-blue-800">
+                            <Building2 className="w-5 h-5" />
+                            ملخص الرواتب حسب الفرع
+                          </CardTitle>
+                          <CardDescription>إجماليات كل فرع</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-4">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right">الفرع</TableHead>
+                                <TableHead className="text-center">الموظفين</TableHead>
+                                <TableHead className="text-center">الأساسي</TableHead>
+                                <TableHead className="text-center">البدلات</TableHead>
+                                <TableHead className="text-center">الصافي</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {branchSalaryChartData.map((branch) => (
+                                <TableRow key={branch.name}>
+                                  <TableCell className="font-medium">{branch.name}</TableCell>
+                                  <TableCell className="text-center">{branch.count}</TableCell>
+                                  <TableCell className="text-center text-sm">{formatCurrency(branch.basic)}</TableCell>
+                                  <TableCell className="text-center text-sm">{formatCurrency(branch.allowances)}</TableCell>
+                                  <TableCell className="text-center font-bold text-green-700">{formatCurrency(branch.net)}</TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow className="bg-gray-50 font-bold">
+                                <TableCell>الإجمالي</TableCell>
+                                <TableCell className="text-center">{salaryStats.count}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(salaryStats.totalBasic)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(salaryStats.totalAllowances)}</TableCell>
+                                <TableCell className="text-center text-green-700">{formatCurrency(salaryStats.totalNet)}</TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* Detailed Salary Table */}
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                      <CardTitle>تقرير الرواتب التفصيلي</CardTitle>
-                      <CardDescription>بيانات الرواتب والبدلات لجميع الموظفين</CardDescription>
+                      <CardTitle>جدول الرواتب التفصيلي</CardTitle>
+                      <CardDescription>بيانات الرواتب والبدلات المفصلة لجميع الموظفين</CardDescription>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={exportSalariesTableToExcel} data-testid="button-export-salaries-excel">
@@ -3790,45 +4151,193 @@ export default function EmployeeReportsDashboardPage() {
                       </Button>
                     </div>
                   </div>
+                  {/* Filter Bar */}
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                      {/* Search */}
+                      <div className="lg:col-span-2">
+                        <Label className="text-xs text-gray-500 mb-1 block">بحث</Label>
+                        <Input
+                          placeholder="ابحث بالاسم أو رقم الموظف أو الوظيفة..."
+                          value={salarySearchQuery}
+                          onChange={(e) => setSalarySearchQuery(e.target.value)}
+                          className="h-9"
+                          data-testid="input-salary-search"
+                        />
+                      </div>
+                      {/* Nationality Filter */}
+                      <div>
+                        <Label className="text-xs text-gray-500 mb-1 block">الجنسية</Label>
+                        <Select value={salaryNationalityFilter} onValueChange={setSalaryNationalityFilter}>
+                          <SelectTrigger className="h-9" data-testid="select-salary-nationality">
+                            <SelectValue placeholder="الكل" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">جميع الجنسيات</SelectItem>
+                            {uniqueNationalities.map(nat => (
+                              <SelectItem key={nat} value={nat}>{nat}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Salary Range */}
+                      <div>
+                        <Label className="text-xs text-gray-500 mb-1 block">نطاق الراتب (من)</Label>
+                        <Input
+                          type="number"
+                          placeholder="الحد الأدنى"
+                          value={salaryMinFilter}
+                          onChange={(e) => setSalaryMinFilter(e.target.value)}
+                          className="h-9"
+                          data-testid="input-salary-min"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500 mb-1 block">نطاق الراتب (إلى)</Label>
+                        <Input
+                          type="number"
+                          placeholder="الحد الأقصى"
+                          value={salaryMaxFilter}
+                          onChange={(e) => setSalaryMaxFilter(e.target.value)}
+                          className="h-9"
+                          data-testid="input-salary-max"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                      <div className="flex items-center gap-4">
+                        <Label className="text-xs text-gray-500">ترتيب حسب:</Label>
+                        <Select value={salarySortField} onValueChange={setSalarySortField}>
+                          <SelectTrigger className="h-8 w-[140px]" data-testid="select-salary-sort">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="employeeName">الاسم</SelectItem>
+                            <SelectItem value="salary">الراتب الأساسي</SelectItem>
+                            <SelectItem value="totalSalary">صافي الراتب</SelectItem>
+                            <SelectItem value="branchId">الفرع</SelectItem>
+                            <SelectItem value="jobTitle">الوظيفة</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8"
+                          onClick={() => setSalarySortOrder(prev => prev === "asc" ? "desc" : "asc")}
+                        >
+                          {salarySortOrder === "asc" ? "تصاعدي ↑" : "تنازلي ↓"}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-white">
+                          {salaryFilteredEmployees.length} من {filteredEmployees.length} موظف
+                        </Badge>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            setSalarySearchQuery("");
+                            setSalaryNationalityFilter("all");
+                            setSalaryMinFilter("");
+                            setSalaryMaxFilter("");
+                            setSalarySortField("employeeName");
+                            setSalarySortOrder("asc");
+                          }}
+                        >
+                          إعادة تعيين
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">م</TableHead>
-                        <TableHead className="text-right">الموظف</TableHead>
-                        <TableHead className="text-right">الفرع</TableHead>
-                        <TableHead className="text-right">الوظيفة</TableHead>
-                        <TableHead className="text-center">الراتب الأساسي</TableHead>
-                        <TableHead className="text-center">البدلات</TableHead>
-                        <TableHead className="text-center">التأمينات</TableHead>
-                        <TableHead className="text-center">صافي الراتب</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredEmployees.map((emp, index) => {
-                        const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
-                        const storedIns = emp.socialInsuranceDeduction || 0;
-                        const insurance = emp.nationality === "سعودي" 
-                          ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975))
-                          : 0;
-                        return (
-                          <TableRow key={emp.id}>
-                            <TableCell>{index + 1}</TableCell>
-                            <TableCell className="font-medium">{emp.employeeName}</TableCell>
-                            <TableCell>{getBranchName(emp.branchId)}</TableCell>
-                            <TableCell>{emp.jobTitle}</TableCell>
-                            <TableCell className="text-center">{formatCurrency(emp.salary)}</TableCell>
-                            <TableCell className="text-center">{formatCurrency(allowances)}</TableCell>
-                            <TableCell className="text-center text-red-600">
-                              {insurance > 0 ? `- ${formatCurrency(insurance)}` : "-"}
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="text-right w-10">م</TableHead>
+                          <TableHead className="text-right">رقم الموظف</TableHead>
+                          <TableHead className="text-right">الموظف</TableHead>
+                          <TableHead className="text-right">الفرع</TableHead>
+                          <TableHead className="text-right">الوظيفة</TableHead>
+                          <TableHead className="text-right">الجنسية</TableHead>
+                          <TableHead className="text-center bg-blue-50">الأساسي</TableHead>
+                          <TableHead className="text-center bg-amber-50">بدل سكن</TableHead>
+                          <TableHead className="text-center bg-amber-50">بدل مواصلات</TableHead>
+                          <TableHead className="text-center bg-amber-50">بدل طعام</TableHead>
+                          <TableHead className="text-center bg-amber-50">بدلات أخرى</TableHead>
+                          <TableHead className="text-center bg-red-50">التأمينات</TableHead>
+                          <TableHead className="text-center bg-green-50 font-bold">الصافي</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {salaryFilteredEmployees.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={13} className="text-center py-8 text-gray-500">
+                              لا توجد نتائج مطابقة للبحث
                             </TableCell>
-                            <TableCell className="text-center font-bold">{formatCurrency(emp.totalSalary)}</TableCell>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        ) : (
+                          salaryFilteredEmployees.map((emp, index) => {
+                            const storedIns = emp.socialInsuranceDeduction || 0;
+                            const insurance = emp.nationality === "سعودي" 
+                              ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975))
+                              : 0;
+                            return (
+                              <TableRow key={emp.id} className="hover:bg-gray-50">
+                                <TableCell className="text-center">{index + 1}</TableCell>
+                                <TableCell className="text-amber-600 font-mono text-sm">{emp.employeeNumber || "-"}</TableCell>
+                                <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                                <TableCell>{getBranchName(emp.branchId)}</TableCell>
+                                <TableCell>{emp.jobTitle}</TableCell>
+                                <TableCell>
+                                  <Badge variant={emp.nationality === "سعودي" ? "default" : "outline"} className={emp.nationality === "سعودي" ? "bg-green-100 text-green-800" : ""}>
+                                    {emp.nationality}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center bg-blue-50/50">{formatCurrency(emp.salary)}</TableCell>
+                                <TableCell className="text-center bg-amber-50/50">{emp.housingAllowance ? formatCurrency(emp.housingAllowance) : "-"}</TableCell>
+                                <TableCell className="text-center bg-amber-50/50">{emp.transportAllowance ? formatCurrency(emp.transportAllowance) : "-"}</TableCell>
+                                <TableCell className="text-center bg-amber-50/50">{emp.foodAllowance ? formatCurrency(emp.foodAllowance) : "-"}</TableCell>
+                                <TableCell className="text-center bg-amber-50/50">{emp.otherAllowances ? formatCurrency(emp.otherAllowances) : "-"}</TableCell>
+                                <TableCell className="text-center bg-red-50/50 text-red-600">
+                                  {insurance > 0 ? `- ${formatCurrency(insurance)}` : "-"}
+                                </TableCell>
+                                <TableCell className="text-center bg-green-50/50 font-bold text-green-700">{formatCurrency(emp.totalSalary)}</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {/* Table Summary */}
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-500">إجمالي الموظفين (المعروضين)</p>
+                        <p className="font-bold text-lg">{salaryFilteredEmployees.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">إجمالي الرواتب الأساسية</p>
+                        <p className="font-bold text-lg text-blue-700">
+                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.salary || 0), 0))}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">إجمالي البدلات</p>
+                        <p className="font-bold text-lg text-amber-700">
+                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.housingAllowance || 0) + (e.transportAllowance || 0) + (e.foodAllowance || 0) + (e.otherAllowances || 0), 0))}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">صافي الرواتب المستحقة</p>
+                        <p className="font-bold text-lg text-green-700">
+                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.totalSalary || 0), 0))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
