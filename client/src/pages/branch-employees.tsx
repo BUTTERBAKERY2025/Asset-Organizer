@@ -436,7 +436,14 @@ export default function BranchEmployeesPage() {
   });
 
   // استخدام useWatch لتحسين الأداء - مراقبة الحقول المطلوبة فقط
+  const watchedBranchId = useWatch({ control: form.control, name: "branchId" });
+  const watchedStatus = useWatch({ control: form.control, name: "status" });
+  const watchedJobTitle = useWatch({ control: form.control, name: "jobTitle" });
   const watchedNationality = useWatch({ control: form.control, name: "nationality" });
+  const watchedDepartment = useWatch({ control: form.control, name: "department" });
+  const watchedHealthCertificate = useWatch({ control: form.control, name: "healthCertificate" });
+  const watchedBankName = useWatch({ control: form.control, name: "bankName" });
+  const watchedContractType = useWatch({ control: form.control, name: "contractType" });
   const watchedSalary = useWatch({ control: form.control, name: "salary" });
   const watchedHousingAllowance = useWatch({ control: form.control, name: "housingAllowance" });
   const watchedTransportAllowance = useWatch({ control: form.control, name: "transportAllowance" });
@@ -829,20 +836,26 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>الفرع *</Label>
-                        <Select value={form.watch("branchId")} onValueChange={(v) => form.setValue("branchId", v)}>
+                        <Select value={watchedBranchId} onValueChange={(v) => form.setValue("branchId", v)}>
                           <SelectTrigger data-testid="select-branch">
                             <SelectValue placeholder="اختر الفرع" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {branches?.map((b: { id: string; name: string }) => (
-                              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                            ))}
+                            {!branches ? (
+                              <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                            ) : branches.length > 0 ? (
+                              branches.map((b: { id: string; name: string }) => (
+                                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="" disabled>لا توجد فروع</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label>الحالة</Label>
-                        <Select value={form.watch("status")} onValueChange={(v) => form.setValue("status", v)}>
+                        <Select value={watchedStatus} onValueChange={(v) => form.setValue("status", v)}>
                           <SelectTrigger data-testid="select-status">
                             <SelectValue placeholder="اختر الحالة" />
                           </SelectTrigger>
@@ -867,7 +880,7 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>الوظيفة *</Label>
-                        <Select value={form.watch("jobTitle")} onValueChange={(v) => form.setValue("jobTitle", v)}>
+                        <Select value={watchedJobTitle} onValueChange={(v) => form.setValue("jobTitle", v)}>
                           <SelectTrigger data-testid="select-job">
                             <SelectValue placeholder="اختر الوظيفة" />
                           </SelectTrigger>
@@ -887,7 +900,7 @@ export default function BranchEmployeesPage() {
                       <div className="space-y-2">
                         <Label>الجنسية *</Label>
                         <Select 
-                          value={form.watch("nationality")} 
+                          value={watchedNationality} 
                           onValueChange={(v) => {
                             form.setValue("nationality", v);
                             // مسح خصم التأمينات إذا تم تغيير الجنسية من سعودي
@@ -916,7 +929,7 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>القسم</Label>
-                        <Select value={form.watch("department") || ""} onValueChange={(v) => form.setValue("department", v)}>
+                        <Select value={watchedDepartment || ""} onValueChange={(v) => form.setValue("department", v)}>
                           <SelectTrigger data-testid="select-department">
                             <SelectValue placeholder="اختر القسم" />
                           </SelectTrigger>
@@ -1021,7 +1034,7 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>حالة الشهادة الصحية</Label>
-                        <Select value={form.watch("healthCertificate")} onValueChange={(v) => form.setValue("healthCertificate", v)}>
+                        <Select value={watchedHealthCertificate} onValueChange={(v) => form.setValue("healthCertificate", v)}>
                           <SelectTrigger data-testid="select-health-cert">
                             <SelectValue placeholder="اختر الحالة" />
                           </SelectTrigger>
@@ -1077,16 +1090,52 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>اسم البنك</Label>
-                        <Input {...form.register("bankName")} placeholder="مثال: البنك الأهلي" data-testid="input-bank-name" />
+                        <Select value={watchedBankName || ""} onValueChange={(v) => form.setValue("bankName", v)}>
+                          <SelectTrigger data-testid="select-bank">
+                            <SelectValue placeholder="اختر البنك" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {isLoadingSettings ? (
+                              <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                            ) : (settingsByCategory.bank?.filter(s => s.isActive) || []).length > 0 ? (
+                              settingsByCategory.bank?.filter(s => s.isActive).map((bank) => (
+                                <SelectItem key={bank.id} value={bank.labelAr}>{bank.labelAr}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="" disabled>لا توجد بنوك - أضف من الإعدادات</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
                         <Label>رقم الحساب البنكي (IBAN)</Label>
                         <Input {...form.register("bankAccountNumber")} placeholder="SAxxxxxxxxxxxxxxxxxx" dir="ltr" data-testid="input-iban" />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>ملاحظات</Label>
-                      <Input {...form.register("notes")} placeholder="ملاحظات إضافية" data-testid="input-notes" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>نوع العقد</Label>
+                        <Select value={watchedContractType || ""} onValueChange={(v) => form.setValue("contractType", v)}>
+                          <SelectTrigger data-testid="select-contract-type">
+                            <SelectValue placeholder="اختر نوع العقد" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {isLoadingSettings ? (
+                              <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                            ) : (settingsByCategory.contract_type?.filter(s => s.isActive) || []).length > 0 ? (
+                              settingsByCategory.contract_type?.filter(s => s.isActive).map((ct) => (
+                                <SelectItem key={ct.id} value={ct.labelAr}>{ct.labelAr}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="" disabled>لا توجد أنواع عقود - أضف من الإعدادات</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>ملاحظات</Label>
+                        <Input {...form.register("notes")} placeholder="ملاحظات إضافية" data-testid="input-notes" />
+                      </div>
                     </div>
                   </TabsContent>
                 </Tabs>
