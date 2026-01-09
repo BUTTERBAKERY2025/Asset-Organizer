@@ -284,6 +284,9 @@ import {
   orgJobRoles,
   type OrgJobRole,
   type InsertOrgJobRole,
+  employeeSettings,
+  type EmployeeSetting,
+  type InsertEmployeeSetting,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
@@ -833,6 +836,14 @@ export interface IStorage {
   createOrgJobRole(role: InsertOrgJobRole): Promise<OrgJobRole>;
   updateOrgJobRole(id: number, role: Partial<InsertOrgJobRole>): Promise<OrgJobRole | undefined>;
   deleteOrgJobRole(id: number): Promise<boolean>;
+
+  // Employee Settings - إعدادات بيانات الموظفين
+  getAllEmployeeSettings(): Promise<EmployeeSetting[]>;
+  getEmployeeSettingsByCategory(category: string): Promise<EmployeeSetting[]>;
+  getEmployeeSetting(id: number): Promise<EmployeeSetting | undefined>;
+  createEmployeeSetting(setting: InsertEmployeeSetting): Promise<EmployeeSetting>;
+  updateEmployeeSetting(id: number, setting: Partial<InsertEmployeeSetting>): Promise<EmployeeSetting | undefined>;
+  deleteEmployeeSetting(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6746,6 +6757,49 @@ export class DatabaseStorage implements IStorage {
     const [deleted] = await db.update(orgJobRoles)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(orgJobRoles.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  // Employee Settings - إعدادات بيانات الموظفين
+  async getAllEmployeeSettings(): Promise<EmployeeSetting[]> {
+    return await db.select().from(employeeSettings)
+      .where(eq(employeeSettings.isActive, true))
+      .orderBy(employeeSettings.category, employeeSettings.orderIndex);
+  }
+
+  async getEmployeeSettingsByCategory(category: string): Promise<EmployeeSetting[]> {
+    return await db.select().from(employeeSettings)
+      .where(and(
+        eq(employeeSettings.category, category),
+        eq(employeeSettings.isActive, true)
+      ))
+      .orderBy(employeeSettings.orderIndex);
+  }
+
+  async getEmployeeSetting(id: number): Promise<EmployeeSetting | undefined> {
+    const [setting] = await db.select().from(employeeSettings).where(eq(employeeSettings.id, id));
+    return setting || undefined;
+  }
+
+  async createEmployeeSetting(setting: InsertEmployeeSetting): Promise<EmployeeSetting> {
+    const [created] = await db.insert(employeeSettings).values(setting).returning();
+    return created;
+  }
+
+  async updateEmployeeSetting(id: number, setting: Partial<InsertEmployeeSetting>): Promise<EmployeeSetting | undefined> {
+    const updateData: any = { ...setting, updatedAt: new Date() };
+    const [updated] = await db.update(employeeSettings)
+      .set(updateData)
+      .where(eq(employeeSettings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteEmployeeSetting(id: number): Promise<boolean> {
+    const [deleted] = await db.update(employeeSettings)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(employeeSettings.id, id))
       .returning();
     return !!deleted;
   }

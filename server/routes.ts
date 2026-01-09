@@ -10015,5 +10015,85 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Employee Settings - إعدادات بيانات الموظفين ====================
+  
+  // Get all employee settings
+  app.get("/api/employee-settings", isAuthenticated, async (req, res) => {
+    try {
+      const { category } = req.query;
+      if (category && typeof category === 'string') {
+        const settings = await storage.getEmployeeSettingsByCategory(category);
+        return res.json(settings);
+      }
+      const settings = await storage.getAllEmployeeSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("Error getting employee settings:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات الموظفين" });
+    }
+  });
+
+  // Get single employee setting
+  app.get("/api/employee-settings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const setting = await storage.getEmployeeSetting(id);
+      if (!setting) {
+        return res.status(404).json({ error: "الإعداد غير موجود" });
+      }
+      res.json(setting);
+    } catch (error) {
+      console.error("Error getting employee setting:", error);
+      res.status(500).json({ error: "فشل في جلب الإعداد" });
+    }
+  });
+
+  // Create employee setting
+  app.post("/api/employee-settings", isAuthenticated, async (req, res) => {
+    try {
+      const setting = await storage.createEmployeeSetting(req.body);
+      res.status(201).json(setting);
+    } catch (error) {
+      console.error("Error creating employee setting:", error);
+      res.status(500).json({ error: "فشل في إنشاء الإعداد" });
+    }
+  });
+
+  // Update employee setting
+  app.put("/api/employee-settings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const setting = await storage.updateEmployeeSetting(id, req.body);
+      if (!setting) {
+        return res.status(404).json({ error: "الإعداد غير موجود" });
+      }
+      res.json(setting);
+    } catch (error) {
+      console.error("Error updating employee setting:", error);
+      res.status(500).json({ error: "فشل في تحديث الإعداد" });
+    }
+  });
+
+  // Delete employee setting (soft delete)
+  app.delete("/api/employee-settings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      const deleted = await storage.deleteEmployeeSetting(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "الإعداد غير موجود" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting employee setting:", error);
+      res.status(500).json({ error: "فشل في حذف الإعداد" });
+    }
+  });
+
   return httpServer;
 }
