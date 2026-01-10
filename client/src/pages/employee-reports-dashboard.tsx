@@ -264,10 +264,13 @@ export default function EmployeeReportsDashboardPage() {
         return sum + Math.round(baseSalary * 0.0975);
       }, 0);
     
-    const attendanceCount = allBranchMonthAttendance.length;
-    const presentCount = allBranchMonthAttendance.filter(r => r.status === "present").length;
-    const absentCount = allBranchMonthAttendance.filter(r => r.status === "absent").length;
-    const lateCount = allBranchMonthAttendance.filter(r => r.status === "late").length;
+    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all") 
+      ? filteredAttendance 
+      : allBranchMonthAttendance;
+    const attendanceCount = attendanceData.length;
+    const presentCount = attendanceData.filter(r => r.status === "present").length;
+    const absentCount = attendanceData.filter(r => r.status === "absent").length;
+    const lateCount = attendanceData.filter(r => r.status === "late").length;
     const attendanceRate = attendanceCount > 0 ? Math.round((presentCount / attendanceCount) * 100) : 0;
 
     return {
@@ -282,7 +285,7 @@ export default function EmployeeReportsDashboardPage() {
       lateCount,
       attendanceRate,
     };
-  }, [filteredEmployees, allBranchMonthAttendance]);
+  }, [filteredEmployees, allBranchMonthAttendance, filteredAttendance, selectedJobTitle, selectedEmployee]);
 
   const employeeLookupByRecord = useMemo(() => {
     if (!filteredEmployees) return new Map<string, number>();
@@ -382,28 +385,47 @@ export default function EmployeeReportsDashboardPage() {
   const previousMonthStats = useMemo(() => {
     if (!employees || !attendanceRecords) return null;
     const currentDate = new Date(selectedMonth + "-01");
-    currentDate.setMonth(currentDate.getMonth() - 1);
-    const prevMonth = currentDate.toISOString().slice(0, 7);
+    const prevMonthDate = new Date(currentDate);
+    prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+    const prevMonth = prevMonthDate.toISOString().slice(0, 7);
     const prevMonthStart = `${prevMonth}-01`;
     const prevMonthEnd = `${prevMonth}-31`;
+    const prevMonthLastDay = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 0);
+    
+    const prevMonthEmployees = employees.filter(emp => {
+      if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
+      if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
+      if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+      if (emp.hireDate && new Date(emp.hireDate) > prevMonthLastDay) return false;
+      if (emp.status !== "active" && emp.status !== "terminated" && emp.status !== "resigned") return false;
+      return true;
+    });
+    
+    const prevMonthEmployeeIds = new Set(prevMonthEmployees.map(emp => emp.id));
     
     const prevAttendance = attendanceRecords.filter(rec => {
       if (selectedBranch !== "all" && rec.branchId !== selectedBranch) return false;
-      return rec.attendanceDate >= prevMonthStart && rec.attendanceDate <= prevMonthEnd;
+      if (rec.attendanceDate < prevMonthStart || rec.attendanceDate > prevMonthEnd) return false;
+      if (selectedJobTitle !== "all" || selectedEmployee !== "all") {
+        const matchesByBranchEmployeeId = rec.branchEmployeeId && prevMonthEmployeeIds.has(rec.branchEmployeeId);
+        const matchesByEmployeeId = prevMonthEmployeeIds.has(parseInt(rec.employeeId) || 0);
+        if (!matchesByBranchEmployeeId && !matchesByEmployeeId) return false;
+      }
+      return true;
     });
     
     const prevPresentCount = prevAttendance.filter(r => r.status === "present").length;
     const prevTotalAttendance = prevAttendance.length;
     const prevAttendanceRate = prevTotalAttendance > 0 ? Math.round((prevPresentCount / prevTotalAttendance) * 100) : 0;
     
-    const prevTotalSalaries = filteredEmployees.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
+    const prevTotalSalaries = prevMonthEmployees.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
     
     return {
       attendanceRate: prevAttendanceRate,
       totalSalaries: prevTotalSalaries,
-      totalEmployees: filteredEmployees.length,
+      totalEmployees: prevMonthEmployees.length,
     };
-  }, [employees, attendanceRecords, selectedMonth, selectedBranch, filteredEmployees]);
+  }, [employees, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee]);
 
   const getChangeIndicator = (current: number, previous: number | undefined) => {
     if (!previous || previous === 0) return { change: 0, isPositive: true };
@@ -416,13 +438,30 @@ export default function EmployeeReportsDashboardPage() {
     const monthStart = `${selectedMonth}-01`;
     const monthEnd = `${selectedMonth}-31`;
     
-    return branches.map(branch => {
-      const branchEmps = employees.filter(emp => emp.branchId === branch.id && emp.status === "active");
-      const branchAttendance = attendanceRecords.filter(rec => 
-        rec.branchId === branch.id && 
-        rec.attendanceDate >= monthStart && 
-        rec.attendanceDate <= monthEnd
-      );
+    const branchesToProcess = selectedBranch !== "all" 
+      ? branches.filter(b => b.id === selectedBranch)
+      : branches;
+    
+    return branchesToProcess.map(branch => {
+      const branchEmps = employees.filter(emp => {
+        if (emp.branchId !== branch.id) return false;
+        if (emp.status !== "active") return false;
+        if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
+        if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+        return true;
+      });
+      
+      const branchEmployeeIds = new Set(branchEmps.map(e => e.id));
+      const branchAttendance = attendanceRecords.filter(rec => {
+        if (rec.branchId !== branch.id) return false;
+        if (rec.attendanceDate < monthStart || rec.attendanceDate > monthEnd) return false;
+        if (selectedJobTitle !== "all" || selectedEmployee !== "all") {
+          const matchesByBranchEmployeeId = rec.branchEmployeeId && branchEmployeeIds.has(rec.branchEmployeeId);
+          const matchesByEmployeeId = branchEmployeeIds.has(parseInt(rec.employeeId) || 0);
+          if (!matchesByBranchEmployeeId && !matchesByEmployeeId) return false;
+        }
+        return true;
+      });
       
       const employeeCount = branchEmps.length;
       const saudiCount = branchEmps.filter(emp => emp.nationality === "سعودي").length;
@@ -465,7 +504,7 @@ export default function EmployeeReportsDashboardPage() {
         totalHours: Math.round(totalHours),
       };
     }).filter(b => b.employeeCount > 0);
-  }, [employees, branches, attendanceRecords, selectedMonth]);
+  }, [employees, branches, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee]);
 
   const jobComparisonData = useMemo(() => {
     if (!employees || !branches || !attendanceRecords) return [];
@@ -482,7 +521,13 @@ export default function EmployeeReportsDashboardPage() {
       totalRecords: number;
     }>>();
     
-    employees.filter(emp => emp.status === "active").forEach(emp => {
+    employees.filter(emp => {
+      if (emp.status !== "active") return false;
+      if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
+      if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
+      if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+      return true;
+    }).forEach(emp => {
       if (!jobBranchMap.has(emp.jobTitle)) {
         jobBranchMap.set(emp.jobTitle, new Map());
       }
@@ -572,7 +617,7 @@ export default function EmployeeReportsDashboardPage() {
     });
     
     return results.sort((a, b) => b.salaryVariance - a.salaryVariance);
-  }, [employees, branches, attendanceRecords, selectedMonth, getBranchName]);
+  }, [employees, branches, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, getBranchName]);
 
   const topEmployeesBySalary = useMemo(() => {
     return [...filteredEmployees]
@@ -1137,6 +1182,261 @@ export default function EmployeeReportsDashboardPage() {
       console.error("Error exporting KPIs PDF:", error);
     }
   };
+
+  // ==================== ENHANCED KPI METRICS ====================
+
+  // 1. مؤشرات الأداء المقارنة - اتجاه الرواتب على مدار 6 أشهر
+  const salaryTrends = useMemo(() => {
+    const trends = [];
+    const baseDate = new Date(selectedMonth + "-01");
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(baseDate);
+      date.setMonth(date.getMonth() - i);
+      const monthKey = date.toISOString().slice(0, 7);
+      const monthName = date.toLocaleDateString('ar-SA', { month: 'short', year: 'numeric' });
+      
+      const monthEmployees = employees?.filter(emp => {
+        if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
+        if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
+        if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+        const hireDate = emp.hireDate ? new Date(emp.hireDate) : null;
+        if (hireDate && hireDate > date) return false;
+        return true;
+      }) || [];
+      
+      const totalSalary = monthEmployees.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
+      const avgSalary = monthEmployees.length > 0 ? Math.round(totalSalary / monthEmployees.length) : 0;
+      
+      trends.push({
+        month: monthName,
+        monthKey,
+        totalSalary,
+        avgSalary,
+        employeeCount: monthEmployees.length,
+      });
+    }
+    return trends;
+  }, [employees, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee]);
+
+  // 2. مؤشرات الإنتاجية
+  const productivityMetrics = useMemo(() => {
+    const totalSalary = overviewStats.totalSalaries;
+    const employeeCount = overviewStats.totalEmployees;
+    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all") 
+      ? filteredAttendance 
+      : allBranchMonthAttendance;
+    const totalHours = attendanceData.reduce((sum, r) => sum + (Number(r.workingHours) || 0), 0);
+    
+    const avgCostPerEmployee = employeeCount > 0 ? Math.round(totalSalary / employeeCount) : 0;
+    const avgHoursPerEmployee = employeeCount > 0 ? Math.round((totalHours / employeeCount) * 10) / 10 : 0;
+    const costPerHour = totalHours > 0 ? Math.round(totalSalary / totalHours) : 0;
+    
+    const branchProductivity = branchComparisonData.map(branch => ({
+      branchName: branch.branchName,
+      avgCost: branch.avgSalary,
+      totalHours: branch.totalHours,
+      costPerHour: branch.totalHours > 0 ? Math.round(branch.totalSalary / branch.totalHours) : 0,
+      attendanceRate: branch.attendanceRate,
+    }));
+    
+    return {
+      avgCostPerEmployee,
+      avgHoursPerEmployee,
+      costPerHour,
+      totalWorkingHours: Math.round(totalHours),
+      branchProductivity,
+    };
+  }, [overviewStats, allBranchMonthAttendance, filteredAttendance, branchComparisonData, selectedJobTitle, selectedEmployee]);
+
+  // 3. مؤشرات الدوران الوظيفي
+  const turnoverMetrics = useMemo(() => {
+    const currentDate = new Date(selectedMonth + "-01");
+    const monthStart = `${selectedMonth}-01`;
+    const monthEnd = `${selectedMonth}-31`;
+    const oneMonthAgo = new Date(currentDate);
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    
+    const newEmployees = filteredEmployees.filter(emp => {
+      if (!emp.hireDate) return false;
+      return emp.hireDate >= monthStart && emp.hireDate <= monthEnd;
+    });
+    
+    const terminatedEmployees = filteredEmployees.filter(emp => {
+      return emp.status === "terminated" || emp.status === "resigned";
+    });
+    
+    const activeEmployees = filteredEmployees.filter(emp => emp.status === "active");
+    const totalEmployees = filteredEmployees.length;
+    const stabilityRate = totalEmployees > 0 
+      ? Math.round((activeEmployees.length / totalEmployees) * 100) 
+      : 0;
+    
+    const turnoverRate = totalEmployees > 0 
+      ? Math.round((terminatedEmployees.length / totalEmployees) * 100) 
+      : 0;
+    
+    const avgTenure = activeEmployees.length > 0
+      ? Math.round(activeEmployees.reduce((sum, emp) => {
+          if (!emp.hireDate) return sum;
+          const hireDate = new Date(emp.hireDate);
+          const months = (currentDate.getFullYear() - hireDate.getFullYear()) * 12 + 
+                        (currentDate.getMonth() - hireDate.getMonth());
+          return sum + Math.max(0, months);
+        }, 0) / activeEmployees.length)
+      : 0;
+    
+    return {
+      newEmployees: newEmployees.length,
+      newEmployeesList: newEmployees.slice(0, 5),
+      terminatedEmployees: terminatedEmployees.length,
+      terminatedList: terminatedEmployees.slice(0, 5),
+      activeEmployees: activeEmployees.length,
+      stabilityRate,
+      turnoverRate,
+      avgTenureMonths: avgTenure,
+    };
+  }, [filteredEmployees, selectedMonth]);
+
+  // 4. مؤشرات التكاليف
+  const costAnalysis = useMemo(() => {
+    const baseSalaries = filteredEmployees.reduce((sum, emp) => sum + (emp.salary || 0), 0);
+    const totalAllowances = filteredEmployees.reduce((sum, emp) => 
+      sum + (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + 
+      (emp.foodAllowance || 0) + (emp.otherAllowances || 0), 0);
+    const totalInsurance = overviewStats.totalInsurance;
+    const totalCost = overviewStats.totalSalaries;
+    
+    const allowancePercentage = totalCost > 0 ? Math.round((totalAllowances / totalCost) * 100) : 0;
+    const insurancePercentage = totalCost > 0 ? Math.round((totalInsurance / totalCost) * 100) : 0;
+    
+    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all") 
+      ? filteredAttendance 
+      : allBranchMonthAttendance;
+    const totalOvertimeHours = attendanceData.reduce((sum, r) => {
+      const hours = Number(r.workingHours) || 0;
+      return sum + Math.max(0, hours - 8);
+    }, 0);
+    const overtimeCost = Math.round(totalOvertimeHours * 50);
+    
+    const costByJobTitle = new Map<string, { count: number; totalCost: number }>();
+    filteredEmployees.forEach(emp => {
+      const current = costByJobTitle.get(emp.jobTitle) || { count: 0, totalCost: 0 };
+      current.count++;
+      current.totalCost += (emp.totalSalary || emp.salary || 0);
+      costByJobTitle.set(emp.jobTitle, current);
+    });
+    
+    const costDistribution = Array.from(costByJobTitle.entries())
+      .map(([jobTitle, data]) => ({
+        jobTitle,
+        count: data.count,
+        totalCost: data.totalCost,
+        avgCost: Math.round(data.totalCost / data.count),
+        percentage: totalCost > 0 ? Math.round((data.totalCost / totalCost) * 100) : 0,
+      }))
+      .sort((a, b) => b.totalCost - a.totalCost)
+      .slice(0, 10);
+    
+    return {
+      baseSalaries,
+      totalAllowances,
+      totalInsurance,
+      totalCost,
+      allowancePercentage,
+      insurancePercentage,
+      overtimeHours: Math.round(totalOvertimeHours),
+      overtimeCost,
+      costDistribution,
+    };
+  }, [filteredEmployees, overviewStats, allBranchMonthAttendance, filteredAttendance, selectedJobTitle, selectedEmployee]);
+
+  // 5. تنبيهات ذكية
+  const smartAlerts = useMemo(() => {
+    const alerts: { type: "warning" | "danger" | "info"; title: string; message: string; count: number }[] = [];
+    
+    const highSalaryThreshold = 30000;
+    const highSalaryEmployees = filteredEmployees.filter(emp => (emp.totalSalary || emp.salary || 0) > highSalaryThreshold);
+    if (highSalaryEmployees.length > 0) {
+      alerts.push({
+        type: "warning",
+        title: "موظفين برواتب مرتفعة",
+        message: `${highSalaryEmployees.length} موظف براتب أعلى من ${formatNumber(highSalaryThreshold)} ريال`,
+        count: highSalaryEmployees.length,
+      });
+    }
+    
+    const lowAttendanceBranches = branchComparisonData.filter(b => b.attendanceRate < 70);
+    if (lowAttendanceBranches.length > 0) {
+      alerts.push({
+        type: "danger",
+        title: "فروع بنسبة حضور منخفضة",
+        message: `${lowAttendanceBranches.length} فرع بنسبة حضور أقل من 70%: ${lowAttendanceBranches.map(b => b.branchName).join(", ")}`,
+        count: lowAttendanceBranches.length,
+      });
+    }
+    
+    const noAttendanceEmployees = filteredEmployees.filter(emp => {
+      const attendance = attendanceByEmployee.get(emp.id);
+      return !attendance || attendance.total === 0;
+    });
+    if (noAttendanceEmployees.length > 0) {
+      alerts.push({
+        type: "danger",
+        title: "موظفين بدون سجل حضور",
+        message: `${noAttendanceEmployees.length} موظف ليس لديهم أي سجل حضور هذا الشهر`,
+        count: noAttendanceEmployees.length,
+      });
+    }
+    
+    const expiredIqama = filteredEmployees.filter(emp => {
+      if (!emp.iqamaExpiry || emp.nationality === "سعودي") return false;
+      return new Date(emp.iqamaExpiry) < new Date();
+    });
+    if (expiredIqama.length > 0) {
+      alerts.push({
+        type: "danger",
+        title: "إقامات منتهية",
+        message: `${expiredIqama.length} موظف إقامتهم منتهية الصلاحية`,
+        count: expiredIqama.length,
+      });
+    }
+    
+    const lowSaudization = branchComparisonData.filter(b => b.saudiPercentage < 15);
+    if (lowSaudization.length > 0) {
+      alerts.push({
+        type: "warning",
+        title: "فروع بنسبة سعودة منخفضة",
+        message: `${lowSaudization.length} فرع بنسبة سعودة أقل من 15%`,
+        count: lowSaudization.length,
+      });
+    }
+    
+    return alerts;
+  }, [filteredEmployees, branchComparisonData, attendanceByEmployee]);
+
+  // 6. توزيع الموظفين حسب سنوات الخبرة
+  const experienceDistribution = useMemo(() => {
+    const currentDate = new Date(selectedMonth + "-01");
+    const distribution = { "0-1 سنة": 0, "1-3 سنوات": 0, "3-5 سنوات": 0, "5-10 سنوات": 0, "+10 سنوات": 0 };
+    
+    filteredEmployees.forEach(emp => {
+      if (!emp.hireDate) {
+        distribution["0-1 سنة"]++;
+        return;
+      }
+      const hireDate = new Date(emp.hireDate);
+      const years = (currentDate.getFullYear() - hireDate.getFullYear());
+      
+      if (years < 1) distribution["0-1 سنة"]++;
+      else if (years < 3) distribution["1-3 سنوات"]++;
+      else if (years < 5) distribution["3-5 سنوات"]++;
+      else if (years < 10) distribution["5-10 سنوات"]++;
+      else distribution["+10 سنوات"]++;
+    });
+    
+    return Object.entries(distribution).map(([name, value]) => ({ name, value }));
+  }, [filteredEmployees, selectedMonth]);
 
   // ==================== NEW ANALYTICS DATA ====================
 
@@ -4835,6 +5135,300 @@ export default function EmployeeReportsDashboardPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* ==================== ENHANCED KPI SECTIONS ==================== */}
+
+              {/* 1. مؤشرات الأداء المقارنة - مقارنة الشهر الحالي بالسابق */}
+              <Card data-testid="card-comparative-metrics">
+                <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
+                  <CardTitle className="flex items-center gap-2 text-indigo-800">
+                    <TrendingUp className="w-5 h-5" />
+                    مؤشرات الأداء المقارنة
+                  </CardTitle>
+                  <CardDescription>مقارنة الشهر الحالي بالشهر السابق</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-blue-700">{formatNumber(overviewStats.totalEmployees)}</p>
+                      <p className="text-xs text-blue-600">إجمالي الموظفين</p>
+                      {previousMonthStats && (
+                        <div className={`text-xs mt-1 flex items-center justify-center gap-1 ${getChangeIndicator(overviewStats.totalEmployees, previousMonthStats.totalEmployees).isPositive ? "text-green-600" : "text-red-600"}`}>
+                          {getChangeIndicator(overviewStats.totalEmployees, previousMonthStats.totalEmployees).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
+                          {getChangeIndicator(overviewStats.totalEmployees, previousMonthStats.totalEmployees).change}%
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-green-700">{overviewStats.attendanceRate}%</p>
+                      <p className="text-xs text-green-600">نسبة الحضور</p>
+                      {previousMonthStats && (
+                        <div className={`text-xs mt-1 flex items-center justify-center gap-1 ${getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? "text-green-600" : "text-red-600"}`}>
+                          {getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
+                          {getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).change}%
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-amber-700">{formatCurrency(overviewStats.totalSalaries)}</p>
+                      <p className="text-xs text-amber-600">إجمالي الرواتب</p>
+                      {previousMonthStats && (
+                        <div className={`text-xs mt-1 flex items-center justify-center gap-1 ${getChangeIndicator(overviewStats.totalSalaries, previousMonthStats.totalSalaries).isPositive ? "text-green-600" : "text-red-600"}`}>
+                          {getChangeIndicator(overviewStats.totalSalaries, previousMonthStats.totalSalaries).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
+                          {getChangeIndicator(overviewStats.totalSalaries, previousMonthStats.totalSalaries).change}%
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-purple-700">{formatCurrency(productivityMetrics.avgCostPerEmployee)}</p>
+                      <p className="text-xs text-purple-600">متوسط تكلفة الموظف</p>
+                    </div>
+                  </div>
+
+                  {/* Salary Trend Chart (6 Months) */}
+                  <div className="mt-4">
+                    <h4 className="font-medium text-gray-700 mb-3">اتجاه الرواتب خلال 6 أشهر</h4>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={salaryTrends}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                        <YAxis tickFormatter={(value) => formatNumber(value)} />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                        <Legend />
+                        <Line type="monotone" dataKey="totalSalary" stroke="#f59e0b" name="إجمالي الرواتب" strokeWidth={2} />
+                        <Line type="monotone" dataKey="avgSalary" stroke="#10b981" name="متوسط الراتب" strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 2. مؤشرات الإنتاجية */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card data-testid="card-productivity-metrics">
+                  <CardHeader className="bg-gradient-to-r from-cyan-50 to-teal-50 border-b">
+                    <CardTitle className="flex items-center gap-2 text-cyan-800">
+                      <Clock className="w-5 h-5" />
+                      مؤشرات الإنتاجية
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-cyan-700">{formatNumber(productivityMetrics.totalWorkingHours)}</p>
+                        <p className="text-xs text-cyan-600">إجمالي ساعات العمل</p>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-teal-700">{productivityMetrics.avgHoursPerEmployee}</p>
+                        <p className="text-xs text-teal-600">متوسط ساعات/موظف</p>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-blue-700">{formatCurrency(productivityMetrics.costPerHour)}</p>
+                        <p className="text-xs text-blue-600">تكلفة الساعة</p>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-indigo-700">{formatCurrency(productivityMetrics.avgCostPerEmployee)}</p>
+                        <p className="text-xs text-indigo-600">تكلفة الموظف الشهرية</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 3. مؤشرات الدوران الوظيفي */}
+                <Card data-testid="card-turnover-metrics">
+                  <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
+                    <CardTitle className="flex items-center gap-2 text-orange-800">
+                      <RefreshCw className="w-5 h-5" />
+                      مؤشرات الدوران الوظيفي
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-green-700">{turnoverMetrics.newEmployees}</p>
+                        <p className="text-xs text-green-600">موظفين جدد هذا الشهر</p>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-red-700">{turnoverMetrics.terminatedEmployees}</p>
+                        <p className="text-xs text-red-600">مستقيلين/منتهية عقودهم</p>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-blue-700">{turnoverMetrics.stabilityRate}%</p>
+                        <p className="text-xs text-blue-600">معدل الاستقرار</p>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-purple-700">{turnoverMetrics.avgTenureMonths}</p>
+                        <p className="text-xs text-purple-600">متوسط مدة الخدمة (شهر)</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* 4. مؤشرات التكاليف */}
+              <Card data-testid="card-cost-analysis">
+                <CardHeader className="bg-gradient-to-r from-emerald-50 to-green-50 border-b">
+                  <CardTitle className="flex items-center gap-2 text-emerald-800">
+                    <DollarSign className="w-5 h-5" />
+                    تحليل التكاليف
+                  </CardTitle>
+                  <CardDescription>توزيع تكاليف الموظفين</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg text-center">
+                      <p className="text-xl font-bold text-green-700">{formatCurrency(costAnalysis.baseSalaries)}</p>
+                      <p className="text-xs text-green-600">الرواتب الأساسية</p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
+                      <p className="text-xl font-bold text-blue-700">{formatCurrency(costAnalysis.totalAllowances)}</p>
+                      <p className="text-xs text-blue-600">البدلات ({costAnalysis.allowancePercentage}%)</p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg text-center">
+                      <p className="text-xl font-bold text-purple-700">{formatCurrency(costAnalysis.totalInsurance)}</p>
+                      <p className="text-xs text-purple-600">التأمينات ({costAnalysis.insurancePercentage}%)</p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg text-center">
+                      <p className="text-xl font-bold text-orange-700">{formatCurrency(costAnalysis.overtimeCost)}</p>
+                      <p className="text-xs text-orange-600">العمل الإضافي ({costAnalysis.overtimeHours} ساعة)</p>
+                    </div>
+                  </div>
+
+                  {/* Cost Distribution by Job Title */}
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-3">توزيع التكاليف حسب الوظيفة</h4>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {costAnalysis.costDistribution.map((item, index) => (
+                        <div key={item.jobTitle} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
+                          <span className="w-6 h-6 flex items-center justify-center bg-amber-100 text-amber-700 rounded-full text-xs font-bold">
+                            {index + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{item.jobTitle}</p>
+                            <p className="text-xs text-gray-500">{item.count} موظف - متوسط: {formatCurrency(item.avgCost)}</p>
+                          </div>
+                          <div className="text-left">
+                            <p className="font-bold text-sm">{formatCurrency(item.totalCost)}</p>
+                            <Badge className="bg-gray-100 text-gray-800">{item.percentage}%</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 5. رسوم بيانية إضافية */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* مقارنة الحضور بين الفروع */}
+                <Card data-testid="card-branch-attendance-comparison">
+                  <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b">
+                    <CardTitle className="flex items-center gap-2 text-violet-800">
+                      <BarChart3 className="w-5 h-5" />
+                      مقارنة الحضور بين الفروع
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={branchComparisonData.slice(0, 8)}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" tick={{ fontSize: 9 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="attendanceRate" fill="#8b5cf6" name="نسبة الحضور %" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* توزيع الموظفين حسب سنوات الخبرة */}
+                <Card data-testid="card-experience-distribution">
+                  <CardHeader className="bg-gradient-to-r from-pink-50 to-rose-50 border-b">
+                    <CardTitle className="flex items-center gap-2 text-pink-800">
+                      <CalendarDays className="w-5 h-5" />
+                      توزيع الموظفين حسب سنوات الخبرة
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={experienceDistribution}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={70}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {experienceDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* 6. التنبيهات الذكية */}
+              <Card data-testid="card-smart-alerts">
+                <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b">
+                  <CardTitle className="flex items-center gap-2 text-red-800">
+                    <AlertCircle className="w-5 h-5" />
+                    التنبيهات الذكية
+                  </CardTitle>
+                  <CardDescription>تنبيهات تحتاج انتباهك</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  {smartAlerts.length === 0 ? (
+                    <div className="text-center py-8 text-green-600">
+                      <CheckCircle className="w-12 h-12 mx-auto mb-2" />
+                      <p className="font-medium">لا توجد تنبيهات حالياً</p>
+                      <p className="text-sm text-gray-500">جميع المؤشرات ضمن المعدل الطبيعي</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {smartAlerts.map((alert, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-start gap-3 p-3 rounded-lg ${
+                            alert.type === "danger" ? "bg-red-50 border border-red-200" :
+                            alert.type === "warning" ? "bg-yellow-50 border border-yellow-200" :
+                            "bg-blue-50 border border-blue-200"
+                          }`}
+                        >
+                          <div className={`p-2 rounded-full ${
+                            alert.type === "danger" ? "bg-red-100" :
+                            alert.type === "warning" ? "bg-yellow-100" :
+                            "bg-blue-100"
+                          }`}>
+                            <AlertCircle className={`w-5 h-5 ${
+                              alert.type === "danger" ? "text-red-600" :
+                              alert.type === "warning" ? "text-yellow-600" :
+                              "text-blue-600"
+                            }`} />
+                          </div>
+                          <div className="flex-1">
+                            <p className={`font-medium ${
+                              alert.type === "danger" ? "text-red-800" :
+                              alert.type === "warning" ? "text-yellow-800" :
+                              "text-blue-800"
+                            }`}>{alert.title}</p>
+                            <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
+                          </div>
+                          <Badge className={
+                            alert.type === "danger" ? "bg-red-100 text-red-800" :
+                            alert.type === "warning" ? "bg-yellow-100 text-yellow-800" :
+                            "bg-blue-100 text-blue-800"
+                          }>{alert.count}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Health Certificates Tab */}
