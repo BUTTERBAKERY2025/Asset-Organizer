@@ -169,21 +169,21 @@ export default function MarketingTeamPage() {
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold" data-testid="page-title">فريق التسويق</h1>
+              <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">فريق التسويق</h1>
               <p className="text-sm text-muted-foreground">إدارة أعضاء فريق التسويق ومهامهم</p>
             </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-member">
+              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-member">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة عضو
               </Button>
@@ -196,6 +196,7 @@ export default function MarketingTeamPage() {
                 <div className="space-y-2">
                   <Label>الاسم *</Label>
                   <Input
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="اسم العضو"
@@ -205,7 +206,7 @@ export default function MarketingTeamPage() {
                 <div className="space-y-2">
                   <Label>الدور الوظيفي</Label>
                   <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v })}>
-                    <SelectTrigger data-testid="select-member-role">
+                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-member-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -220,6 +221,7 @@ export default function MarketingTeamPage() {
                 <div className="space-y-2">
                   <Label>البريد الإلكتروني</Label>
                   <Input
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -230,6 +232,7 @@ export default function MarketingTeamPage() {
                 <div className="space-y-2">
                   <Label>رقم الهاتف</Label>
                   <Input
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="05xxxxxxxx"
@@ -237,10 +240,10 @@ export default function MarketingTeamPage() {
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  <Button type="button" variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsAddDialogOpen(false)}>
                     إلغاء
                   </Button>
-                  <Button type="submit" disabled={createMemberMutation.isPending} data-testid="button-submit-member">
+                  <Button type="submit" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" disabled={createMemberMutation.isPending} data-testid="button-submit-member">
                     {createMemberMutation.isPending ? "جاري الحفظ..." : "حفظ"}
                   </Button>
                 </div>
@@ -315,7 +318,7 @@ export default function MarketingTeamPage() {
             <CardContent className="p-8 text-center">
               <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">لا يوجد أعضاء في الفريق</p>
-              <Button className="mt-4" onClick={() => setIsAddDialogOpen(true)}>
+              <Button className="mt-4 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsAddDialogOpen(true)}>
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة عضو جديد
               </Button>
@@ -342,7 +345,7 @@ export default function MarketingTeamPage() {
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" data-testid={`button-member-menu-${member.id}`}>
+                        <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid={`button-member-menu-${member.id}`}>
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>

@@ -250,29 +250,29 @@ export default function CashierShiftPerformance() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/targets-dashboard">
-              <Button variant="ghost" size="icon" data-testid="button-back">
+              <Button variant="ghost" size="icon" data-testid="button-back" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0">
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-[#8B4513]" data-testid="text-page-title">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#8B4513]" data-testid="text-page-title">
                 تتبع أداء الكاشير بالشفتات
               </h1>
-              <p className="text-muted-foreground">مراقبة الأهداف والأداء لكل كاشير حسب الشفت</p>
+              <p className="text-muted-foreground text-sm sm:text-base">مراقبة الأهداف والأداء لكل كاشير حسب الشفت</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleRefresh} data-testid="button-refresh">
+            <Button variant="outline" onClick={handleRefresh} data-testid="button-refresh" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
               <RefreshCw className="h-4 w-4 ml-2" />
               تحديث
             </Button>
             <Dialog open={showTargetDialog} onOpenChange={setShowTargetDialog}>
               <DialogTrigger asChild>
-                <Button data-testid="button-add-target">
+                <Button data-testid="button-add-target" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                   <Plus className="h-4 w-4 ml-2" />
                   إضافة هدف جديد
                 </Button>
@@ -286,7 +286,7 @@ export default function CashierShiftPerformance() {
                   <div className="grid gap-2">
                     <Label>الفرع</Label>
                     <Select value={newTarget.branchId} onValueChange={(v) => setNewTarget({...newTarget, branchId: v, cashierId: ""})}>
-                      <SelectTrigger data-testid="select-branch">
+                      <SelectTrigger data-testid="select-branch" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
@@ -303,7 +303,7 @@ export default function CashierShiftPerformance() {
                       onValueChange={(v) => setNewTarget({...newTarget, cashierId: v})}
                       disabled={!newTarget.branchId}
                     >
-                      <SelectTrigger data-testid="select-cashier-id">
+                      <SelectTrigger data-testid="select-cashier-id" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue placeholder={newTarget.branchId ? "اختر الكاشير" : "اختر الفرع أولاً"} />
                       </SelectTrigger>
                       <SelectContent>
@@ -322,7 +322,7 @@ export default function CashierShiftPerformance() {
                   <div className="grid gap-2">
                     <Label>نوع الشفت</Label>
                     <Select value={newTarget.shiftType} onValueChange={(v) => setNewTarget({...newTarget, shiftType: v})}>
-                      <SelectTrigger data-testid="select-shift-type">
+                      <SelectTrigger data-testid="select-shift-type" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -335,7 +335,7 @@ export default function CashierShiftPerformance() {
                   <div className="grid gap-2">
                     <Label>دور الكاشير</Label>
                     <Select value={newTarget.cashierRole} onValueChange={(v) => setNewTarget({...newTarget, cashierRole: v})}>
-                      <SelectTrigger data-testid="select-cashier-role">
+                      <SelectTrigger data-testid="select-cashier-role" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -352,6 +352,7 @@ export default function CashierShiftPerformance() {
                       value={newTarget.targetAmount} 
                       onChange={(e) => setNewTarget({...newTarget, targetAmount: Number(e.target.value)})}
                       data-testid="input-target-amount"
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -361,6 +362,7 @@ export default function CashierShiftPerformance() {
                       value={newTarget.targetTransactions} 
                       onChange={(e) => setNewTarget({...newTarget, targetTransactions: Number(e.target.value)})}
                       data-testid="input-target-transactions"
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -370,11 +372,12 @@ export default function CashierShiftPerformance() {
                       value={newTarget.targetTicketValue} 
                       onChange={(e) => setNewTarget({...newTarget, targetTicketValue: Number(e.target.value)})}
                       data-testid="input-target-ticket-value"
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowTargetDialog(false)} data-testid="button-cancel">
+                  <Button variant="outline" onClick={() => setShowTargetDialog(false)} data-testid="button-cancel" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                     إلغاء
                   </Button>
                   <Button 
@@ -384,6 +387,7 @@ export default function CashierShiftPerformance() {
                     })} 
                     disabled={createTargetMutation.isPending || !newTarget.branchId || !newTarget.cashierId || !newTarget.targetAmount}
                     data-testid="button-save-target"
+                    className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   >
                     {createTargetMutation.isPending ? "جاري الحفظ..." : "حفظ الهدف"}
                   </Button>
@@ -393,21 +397,21 @@ export default function CashierShiftPerformance() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 mb-6">
+        <div className="flex flex-wrap gap-3 sm:gap-4 mb-6">
           <div className="flex items-center gap-2">
-            <Label>التاريخ:</Label>
+            <Label className="text-sm">التاريخ:</Label>
             <Input 
               type="date" 
               value={selectedDate} 
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-44"
+              className="w-36 sm:w-44 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
               data-testid="input-date"
             />
           </div>
           <div className="flex items-center gap-2">
-            <Label>الفرع:</Label>
+            <Label className="text-sm">الفرع:</Label>
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-44" data-testid="select-filter-branch">
+              <SelectTrigger className="w-36 sm:w-44 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-filter-branch">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -419,9 +423,9 @@ export default function CashierShiftPerformance() {
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <Label>الشفت:</Label>
+            <Label className="text-sm">الشفت:</Label>
             <Select value={selectedShift} onValueChange={setSelectedShift}>
-              <SelectTrigger className="w-44" data-testid="select-filter-shift">
+              <SelectTrigger className="w-36 sm:w-44 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-filter-shift">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -434,7 +438,7 @@ export default function CashierShiftPerformance() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card data-testid="card-total-target">
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">

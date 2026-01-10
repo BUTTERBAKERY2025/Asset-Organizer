@@ -288,44 +288,44 @@ export default function AdvancedProductionOrderDetailsPage() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-6" dir="rtl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/advanced-production-orders">
-              <Button variant="ghost" size="icon" className="hover:bg-amber-50">
+              <Button variant="ghost" size="icon" className="hover:bg-amber-50 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-10 sm:w-10 sm:min-h-0 sm:min-w-0">
                 <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-gray-900" data-testid="order-title">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900" data-testid="order-title">
                   {order.title || order.orderNumber}
                 </h1>
                 <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0`}>
                   {statusConfig.label}
                 </Badge>
               </div>
-              <p className="text-gray-500 mt-1 flex items-center gap-2">
+              <p className="text-gray-500 mt-1 flex items-center gap-2 text-xs sm:text-sm">
                 <FileText className="h-4 w-4" />
                 رقم الأمر: {order.orderNumber}
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="btn-print">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => handlePrint()} data-testid="btn-print">
               <Printer className="h-4 w-4 ml-2" />
               طباعة
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToPdf} data-testid="btn-pdf">
+            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportToPdf} data-testid="btn-pdf">
               <Download className="h-4 w-4 ml-2" />
               PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="btn-excel">
+            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportToExcel} data-testid="btn-excel">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               Excel
             </Button>
             <Link href={`/advanced-production-orders/${id}/edit`}>
-              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700" data-testid="btn-edit">
+              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-edit">
                 <Edit className="h-4 w-4 ml-2" />
                 تعديل
               </Button>
@@ -342,8 +342,8 @@ export default function AdvancedProductionOrderDetailsPage() {
                   <CardTitle className="text-lg">تفاصيل الأمر</CardTitle>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <CardContent className="p-3 sm:p-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-gray-500">نوع الأمر</p>
                     <Badge className={typeConfig.color}>{typeConfig.label}</Badge>

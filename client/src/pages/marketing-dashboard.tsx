@@ -290,7 +290,7 @@ export default function MarketingDashboardPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold text-foreground" data-testid="page-title">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="page-title">
             لوحة تحكم التسويق
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -299,23 +299,23 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* Primary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {statsCards.map((stat, index) => (
             <Card 
               key={index} 
               className={stat.color}
               data-testid={`stat-card-${index}`}
             >
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 {isLoading ? (
                   <Skeleton className="h-16" />
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-lg ${stat.iconBg} flex items-center justify-center`}>
-                      <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg ${stat.iconBg} flex items-center justify-center`}>
+                      <stat.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.iconColor}`} />
                     </div>
                     <div>
-                      <div className={`text-2xl font-bold ${stat.valueColor}`} data-testid={`stat-value-${index}`}>
+                      <div className={`text-lg sm:text-2xl font-bold ${stat.valueColor}`} data-testid={`stat-value-${index}`}>
                         {stat.value}
                       </div>
                       <div className="text-xs text-muted-foreground">{stat.title}</div>
@@ -329,23 +329,23 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* Secondary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {secondaryStats.map((stat, index) => (
             <Card 
               key={index} 
               className={stat.color}
               data-testid={`secondary-stat-card-${index}`}
             >
-              <CardContent className="p-3">
+              <CardContent className="p-3 sm:p-4">
                 {isLoading ? (
                   <Skeleton className="h-12" />
                 ) : (
                   <div className="flex items-center gap-2">
-                    <div className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center`}>
-                      <stat.icon className={`w-4 h-4 ${stat.iconColor}`} />
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg ${stat.iconBg} flex items-center justify-center`}>
+                      <stat.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${stat.iconColor}`} />
                     </div>
                     <div>
-                      <div className={`text-lg font-bold ${stat.valueColor}`}>
+                      <div className={`text-base sm:text-lg font-bold ${stat.valueColor}`}>
                         {stat.value}
                       </div>
                       <div className="text-xs text-muted-foreground">{stat.title}</div>
@@ -359,17 +359,17 @@ export default function MarketingDashboardPage() {
 
         {/* Quick Access */}
         <div>
-          <h2 className="text-lg font-semibold mb-3">الوصول السريع</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <h2 className="text-base sm:text-lg font-semibold mb-3">الوصول السريع</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {quickAccessCards.map((card, index) => (
               <Link key={index} href={card.href}>
                 <Card 
                   className="group hover:shadow-md transition-all duration-200 cursor-pointer border hover:border-primary/30 h-full"
                   data-testid={`quick-access-${card.href.replace('/marketing-', '')}`}
                 >
-                  <CardContent className="p-3">
+                  <CardContent className="p-3 sm:p-4">
                     <div className="flex flex-col items-center text-center gap-2">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${card.color} transition-transform group-hover:scale-105`}>
+                      <div className={`w-11 h-11 min-h-[44px] min-w-[44px] sm:w-10 sm:h-10 sm:min-h-0 sm:min-w-0 rounded-lg flex items-center justify-center ${card.color} transition-transform group-hover:scale-105`}>
                         <card.icon className="w-5 h-5 text-white" />
                       </div>
                       <div>

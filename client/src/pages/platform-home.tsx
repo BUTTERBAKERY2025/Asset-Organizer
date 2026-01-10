@@ -125,8 +125,8 @@ function QuickActionButton({
 }) {
   return (
     <Link href={href}>
-      <Button variant="outline" className="h-auto py-3 px-4 flex flex-col items-center gap-2 hover:border-primary/50 transition-all">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
+      <Button variant="outline" className="h-auto py-3 px-4 flex flex-col items-center gap-2 hover:border-primary/50 transition-all min-h-[44px]">
+        <div className={`w-10 h-10 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center ${color}`}>
           <Icon className="w-5 h-5 text-white" />
         </div>
         <span className="text-xs font-medium">{label}</span>
@@ -342,12 +342,12 @@ export default function PlatformHomePage() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-6" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-6">
+      <div className="space-y-6 p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-4 sm:p-6">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <GreetingIcon className={`w-8 h-8 ${greeting.color}`} />
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+              <GreetingIcon className={`w-6 h-6 sm:w-8 sm:h-8 ${greeting.color}`} />
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
                 {greeting.text}{user?.firstName ? `, ${user.firstName}` : ""}
               </h1>
             </div>
@@ -455,7 +455,7 @@ export default function PlatformHomePage() {
               </CardHeader>
               <CardContent>
                 <Link href="/login">
-                  <Button className="w-full" data-testid="button-login-home">
+                  <Button className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-login-home">
                     <ChevronLeft className="w-4 h-4 ml-2" />
                     تسجيل الدخول
                   </Button>

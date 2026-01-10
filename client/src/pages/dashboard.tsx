@@ -100,51 +100,51 @@ export default function DashboardPage() {
     <Layout>
       <div className="flex flex-col space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة الأصول</h1>
-          <p className="text-muted-foreground mt-1">ملخص شامل لأصول جميع الفروع</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة الأصول</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">ملخص شامل لأصول جميع الفروع</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card data-testid="card-total-items">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">إجمالي الأصناف</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">إجمالي الأصناف</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalItems}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold">{stats.totalItems}</div>
               <p className="text-xs text-muted-foreground">صنف في جميع الفروع</p>
             </CardContent>
           </Card>
 
           <Card data-testid="card-total-value">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">إجمالي القيمة</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">إجمالي القيمة</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalValue.toLocaleString('en-US')} ريال</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold">{stats.totalValue.toLocaleString('en-US')} ريال</div>
               <p className="text-xs text-muted-foreground">القيمة الإجمالية للأصول</p>
             </CardContent>
           </Card>
 
           <Card data-testid="card-total-branches">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">عدد الفروع</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">عدد الفروع</CardTitle>
               <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalBranches}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold">{stats.totalBranches}</div>
               <p className="text-xs text-muted-foreground">فرع مسجل في النظام</p>
             </CardContent>
           </Card>
 
           <Card data-testid="card-needs-attention">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">تحتاج متابعة</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">تحتاج متابعة</CardTitle>
               <AlertTriangle className="h-4 w-4 text-orange-500" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-500">{stats.needsAttention}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold text-orange-500">{stats.needsAttention}</div>
               <p className="text-xs text-muted-foreground">صنف يحتاج صيانة/تالف/مفقود</p>
             </CardContent>
           </Card>

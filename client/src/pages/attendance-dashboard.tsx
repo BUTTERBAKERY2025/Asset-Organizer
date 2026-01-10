@@ -164,18 +164,19 @@ export default function AttendanceDashboardPage() {
   return (
     <Layout>
       <div className="container mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
+              className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
               onClick={() => navigate("/operations")}
               data-testid="btn-back"
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold" data-testid="text-page-title">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">
                 إدارة موظفي الفروع الشاملة
               </h1>
               <p className="text-muted-foreground">
@@ -191,7 +192,7 @@ export default function AttendanceDashboardPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {todayStats.map((stat, index) => (
                 <Card key={index} className="text-center">
                   <CardContent className="pt-6">
@@ -205,7 +206,7 @@ export default function AttendanceDashboardPage() {
 
             <div>
               <h2 className="text-lg font-semibold mb-3">الإجراءات السريعة</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {quickActions.map((action, index) => (
                   <Card
                     key={index}
@@ -240,7 +241,7 @@ export default function AttendanceDashboardPage() {
 
             <div>
               <h2 className="text-lg font-semibold mb-3">الإدارة والتقارير</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {managementCards.map((card, index) => (
                   <Card
                     key={index}
@@ -269,7 +270,7 @@ export default function AttendanceDashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                   <div>
                     <h4 className="font-semibold mb-2">1. إعداد الورديات</h4>
                     <ul className="space-y-1 text-muted-foreground">

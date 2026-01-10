@@ -154,18 +154,18 @@ export default function BackupsPage() {
     <Layout>
       <div className="flex flex-col space-y-6">
         <SettingsBreadcrumb currentPage="النسخ الاحتياطية" currentIcon={HardDrive} />
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
               النسخ الاحتياطية
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               إدارة النسخ الاحتياطية لقاعدة البيانات
             </p>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-create-backup">
+              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" data-testid="button-create-backup">
                 <Plus className="w-4 h-4 ml-2" />
                 إنشاء نسخة احتياطية
               </Button>
@@ -179,21 +179,22 @@ export default function BackupsPage() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="backup-name">اسم النسخة (اختياري)</Label>
+                  <Label htmlFor="backup-name" className="text-sm sm:text-base">اسم النسخة (اختياري)</Label>
                   <Input
                     id="backup-name"
                     value={backupName}
                     onChange={(e) => setBackupName(e.target.value)}
                     placeholder="مثال: نسخة قبل التحديث"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     data-testid="input-backup-name"
                   />
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+              <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+                <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" onClick={() => setIsCreateDialogOpen(false)}>
                   إلغاء
                 </Button>
-                <Button onClick={handleCreate} disabled={createMutation.isPending} data-testid="button-confirm-backup">
+                <Button onClick={handleCreate} disabled={createMutation.isPending} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" data-testid="button-confirm-backup">
                   {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
                   إنشاء النسخة
                 </Button>
@@ -202,34 +203,34 @@ export default function BackupsPage() {
           </Dialog>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">إجمالي النسخ</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">إجمالي النسخ</CardTitle>
               <Database className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{backups.length}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-xl sm:text-2xl font-bold">{backups.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">النسخ الناجحة</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">النسخ الناجحة</CardTitle>
               <CheckCircle className="h-4 w-4 text-green-500" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-xl sm:text-2xl font-bold">
                 {backups.filter(b => b.status === "completed").length}
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">آخر نسخة</CardTitle>
+          <Card className="col-span-2 lg:col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">آخر نسخة</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-sm">
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-xs sm:text-sm">
                 {backups.length > 0 ? formatDate(backups[0].createdAt) : "لا توجد نسخ"}
               </div>
             </CardContent>
@@ -237,13 +238,13 @@ export default function BackupsPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <HardDrive className="w-5 h-5" />
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <HardDrive className="w-4 h-4 sm:w-5 sm:h-5" />
                 قائمة النسخ الاحتياطية
               </CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <ExportButtons
                   data={backups}
                   columns={exportColumns}
@@ -253,16 +254,16 @@ export default function BackupsPage() {
                   sheetName="النسخ الاحتياطية"
                   disabled={isLoading}
                 />
-                <Badge variant="outline" data-testid="badge-total-backups">
+                <Badge variant="outline" className="text-xs" data-testid="badge-total-backups">
                   إجمالي: {backups.length} نسخة احتياطية
                 </Badge>
               </div>
             </div>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm mt-2">
               جميع النسخ الاحتياطية المحفوظة في النظام
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -300,6 +301,7 @@ export default function BackupsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                           onClick={() => {
                             setSelectedBackup(backup);
                             setIsDeleteDialogOpen(true);

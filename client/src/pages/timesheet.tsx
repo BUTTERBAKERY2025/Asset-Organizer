@@ -480,18 +480,19 @@ export default function TimesheetPage() {
   return (
     <Layout>
       <div className="container mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
+              className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
               onClick={() => navigate("/attendance-dashboard")}
               data-testid="btn-back"
             >
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold" data-testid="text-page-title">تقارير التايم شيت</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">تقارير التايم شيت</h1>
               <p className="text-muted-foreground">إنشاء وإدارة تقارير الدوام مع التوقيعات الإلكترونية</p>
             </div>
           </div>
@@ -525,11 +526,11 @@ export default function TimesheetPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>الفرع</Label>
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                      <SelectTrigger data-testid="select-branch">
+                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -544,7 +545,7 @@ export default function TimesheetPage() {
                   <div className="space-y-2">
                     <Label>الموظف</Label>
                     <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                      <SelectTrigger data-testid="select-employee">
+                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-employee">
                         <SelectValue placeholder="اختر الموظف" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -560,7 +561,7 @@ export default function TimesheetPage() {
                   <div className="space-y-2">
                     <Label>الشهر</Label>
                     <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                      <SelectTrigger data-testid="select-month">
+                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
                         <SelectValue placeholder="اختر الشهر" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -581,7 +582,7 @@ export default function TimesheetPage() {
                 <Button 
                   onClick={handleGenerateReport} 
                   disabled={isGenerating || !selectedEmployee}
-                  className="w-full gap-2"
+                  className="w-full gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   data-testid="btn-generate-timesheet"
                 >
                   {isGenerating ? (
@@ -623,7 +624,7 @@ export default function TimesheetPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                       <div className="p-4 bg-muted rounded-lg text-center">
                         <div className="text-2xl font-bold">{selectedReport.totalScheduledDays}</div>
                         <div className="text-sm text-muted-foreground">أيام العمل</div>
@@ -643,22 +644,22 @@ export default function TimesheetPage() {
                     </div>
 
                     <div className="flex gap-2 mb-6">
-                      <Button variant="outline" onClick={exportToExcel} className="gap-2" data-testid="btn-export-excel">
+                      <Button variant="outline" onClick={exportToExcel} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-export-excel">
                         <Download className="w-4 h-4" />
                         تصدير Excel
                       </Button>
-                      <Button variant="outline" onClick={printReport} className="gap-2" data-testid="btn-print">
+                      <Button variant="outline" onClick={printReport} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-print">
                         <Printer className="w-4 h-4" />
                         طباعة
                       </Button>
                       {(selectedReport.status === "pending" || selectedReport.status === "pending_employee_signature") && (
-                        <Button onClick={() => handleOpenSignature("employee", selectedReport)} className="gap-2" data-testid="btn-sign-employee">
+                        <Button onClick={() => handleOpenSignature("employee", selectedReport)} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-sign-employee">
                           <Pen className="w-4 h-4" />
                           توقيع الموظف
                         </Button>
                       )}
                       {selectedReport.status === "pending_manager_signature" && (
-                        <Button onClick={() => handleOpenSignature("manager", selectedReport)} className="gap-2" data-testid="btn-sign-manager">
+                        <Button onClick={() => handleOpenSignature("manager", selectedReport)} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-sign-manager">
                           <Pen className="w-4 h-4" />
                           توقيع المدير
                         </Button>
@@ -720,7 +721,7 @@ export default function TimesheetPage() {
                     </div>
 
                     {/* Signatures Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-lg">توقيع الموظف</CardTitle>

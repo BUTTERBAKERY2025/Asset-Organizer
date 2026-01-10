@@ -497,67 +497,67 @@ export default function RBACManagementPage() {
     <Layout>
       <div className="space-y-6">
         <SettingsBreadcrumb currentPage="الأدوار والصلاحيات" currentIcon={Shield} />
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>
-            <p className="text-muted-foreground">نظام التحكم بالوصول المبني على الأدوار (RBAC)</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">نظام التحكم بالوصول المبني على الأدوار (RBAC)</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">الأقسام</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">الأقسام</CardTitle>
               <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-departments-count">{departments.length}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-xl sm:text-2xl font-bold" data-testid="text-departments-count">{departments.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">الأدوار</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">الأدوار</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-roles-count">{roles.length}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-xl sm:text-2xl font-bold" data-testid="text-roles-count">{roles.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">الصلاحيات</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">الصلاحيات</CardTitle>
               <Key className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-permissions-count">{allPermissions.length}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-xl sm:text-2xl font-bold" data-testid="text-permissions-count">{allPermissions.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">الوحدات</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">الوحدات</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-modules-count">{Object.keys(permissionsByModule).length}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-xl sm:text-2xl font-bold" data-testid="text-modules-count">{Object.keys(permissionsByModule).length}</div>
             </CardContent>
           </Card>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="users" data-testid="tab-users">المستخدمين</TabsTrigger>
-            <TabsTrigger value="roles" data-testid="tab-roles">الأدوار</TabsTrigger>
-            <TabsTrigger value="departments" data-testid="tab-departments">الأقسام</TabsTrigger>
-            <TabsTrigger value="permissions" data-testid="tab-permissions">الصلاحيات</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+            <TabsTrigger value="users" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-users">المستخدمين</TabsTrigger>
+            <TabsTrigger value="roles" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-roles">الأدوار</TabsTrigger>
+            <TabsTrigger value="departments" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-departments">الأقسام</TabsTrigger>
+            <TabsTrigger value="permissions" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-permissions">الصلاحيات</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle>المستخدمين وتعييناتهم</CardTitle>
-                <CardDescription>إدارة تعيينات المستخدمين للأدوار والفروع</CardDescription>
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="text-base sm:text-lg">المستخدمين وتعييناتهم</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">إدارة تعيينات المستخدمين للأدوار والفروع</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
                 {usersLoading ? (
                   <div className="flex justify-center p-4">
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -595,6 +595,7 @@ export default function RBACManagementPage() {
                             <Button
                               variant="outline"
                               size="sm"
+                              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs sm:text-sm"
                               onClick={() => {
                                 setSelectedUser(user);
                                 setIsUserAssignmentDialogOpen(true);
@@ -603,7 +604,8 @@ export default function RBACManagementPage() {
                               data-testid={`button-manage-user-${user.id}`}
                             >
                               <UserPlus className="h-4 w-4 ml-2" />
-                              إدارة التعيينات
+                              <span className="hidden sm:inline">إدارة التعيينات</span>
+                              <span className="sm:hidden">إدارة</span>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -617,14 +619,15 @@ export default function RBACManagementPage() {
 
           <TabsContent value="roles" className="space-y-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 md:p-6">
                 <div>
-                  <CardTitle>الأدوار الوظيفية</CardTitle>
-                  <CardDescription>إدارة أدوار المستخدمين وصلاحياتهم في النظام</CardDescription>
+                  <CardTitle className="text-base sm:text-lg">الأدوار الوظيفية</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">إدارة أدوار المستخدمين وصلاحياتهم في النظام</CardDescription>
                 </div>
                 <Button
                   onClick={() => setIsRoleDialogOpen(true)}
                   disabled={!isAdmin}
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto"
                   data-testid="button-add-role"
                 >
                   <Shield className="h-4 w-4 ml-2" />
@@ -663,6 +666,7 @@ export default function RBACManagementPage() {
                             <Button
                               variant="outline"
                               size="sm"
+                              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs sm:text-sm"
                               onClick={() => {
                                 setSelectedRole(role);
                                 setIsPermissionMatrixOpen(true);
@@ -670,7 +674,8 @@ export default function RBACManagementPage() {
                               data-testid={`button-manage-permissions-${role.id}`}
                             >
                               <Key className="h-4 w-4 ml-2" />
-                              إدارة الصلاحيات
+                              <span className="hidden sm:inline">إدارة الصلاحيات</span>
+                              <span className="sm:hidden">صلاحيات</span>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -684,9 +689,9 @@ export default function RBACManagementPage() {
 
           <TabsContent value="departments" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle>الأقسام</CardTitle>
-                <CardDescription>الأقسام الرئيسية في المنظمة</CardDescription>
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="text-base sm:text-lg">الأقسام</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">الأقسام الرئيسية في المنظمة</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>

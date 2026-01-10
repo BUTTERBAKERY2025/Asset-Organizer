@@ -269,36 +269,39 @@ export default function SecurityManagementPage() {
           currentIcon={Shield}
         />
         
-        <div className="flex items-center gap-3 mb-6">
-          <Shield className="h-8 w-8 text-amber-600" />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 sm:mb-6">
+          <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-security-page-title">إدارة الأمان</h1>
-            <p className="text-muted-foreground" data-testid="text-security-page-description">إدارة إعدادات الأمان والجلسات والتنبيهات</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-security-page-title">إدارة الأمان</h1>
+            <p className="text-sm sm:text-base text-muted-foreground" data-testid="text-security-page-description">إدارة إعدادات الأمان والجلسات والتنبيهات</p>
           </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="settings" className="flex items-center gap-2" data-testid="tab-security-settings">
-              <Key className="h-4 w-4" />
-              الإعدادات
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-6 h-auto">
+            <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-security-settings">
+              <Key className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">الإعدادات</span>
+              <span className="sm:hidden">إعدادات</span>
             </TabsTrigger>
-            <TabsTrigger value="sessions" className="flex items-center gap-2" data-testid="tab-security-sessions">
-              <Monitor className="h-4 w-4" />
+            <TabsTrigger value="sessions" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-security-sessions">
+              <Monitor className="h-3 w-3 sm:h-4 sm:w-4" />
               الجلسات
             </TabsTrigger>
-            <TabsTrigger value="alerts" className="flex items-center gap-2" data-testid="tab-security-alerts">
-              <AlertTriangle className="h-4 w-4" />
-              التنبيهات
+            <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-security-alerts">
+              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">التنبيهات</span>
+              <span className="sm:hidden">تنبيه</span>
               {alerts && alerts.filter(a => !a.isResolved).length > 0 && (
-                <Badge variant="destructive" className="mr-1" data-testid="badge-unresolved-alerts-count">
+                <Badge variant="destructive" className="mr-1 text-[10px] sm:text-xs" data-testid="badge-unresolved-alerts-count">
                   {alerts.filter(a => !a.isResolved).length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="templates" className="flex items-center gap-2" data-testid="tab-role-templates">
-              <FileText className="h-4 w-4" />
-              قوالب الأدوار
+            <TabsTrigger value="templates" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-role-templates">
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">قوالب الأدوار</span>
+              <span className="sm:hidden">قوالب</span>
             </TabsTrigger>
           </TabsList>
 
@@ -369,9 +372,9 @@ export default function SecurityManagementPage() {
 
                     {securitySettings?.ipRestrictionEnabled && (
                       <div className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="font-medium">قائمة IP المسموحة</p>
-                          <Button size="sm" onClick={() => setShowIpDialog(true)} data-testid="button-add-ip">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                          <p className="font-medium text-sm sm:text-base">قائمة IP المسموحة</p>
+                          <Button size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" onClick={() => setShowIpDialog(true)} data-testid="button-add-ip">
                             إضافة IP
                           </Button>
                         </div>
@@ -411,9 +414,9 @@ export default function SecurityManagementPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label>مهلة الجلسة (بالدقائق)</Label>
+                        <Label className="text-sm sm:text-base">مهلة الجلسة (بالدقائق)</Label>
                         <Input
                           type="number"
                           min={5}
@@ -423,6 +426,7 @@ export default function SecurityManagementPage() {
                             updateSettingsMutation.mutate({ sessionTimeout: parseInt(e.target.value) || 480 })
                           }
                           disabled={updateSettingsMutation.isPending}
+                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                           data-testid="input-session-timeout"
                         />
                         <p className="text-xs text-muted-foreground">
@@ -430,7 +434,7 @@ export default function SecurityManagementPage() {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label>الحد الأقصى للجلسات المتزامنة</Label>
+                        <Label className="text-sm sm:text-base">الحد الأقصى للجلسات المتزامنة</Label>
                         <Input
                           type="number"
                           min={1}
@@ -440,6 +444,7 @@ export default function SecurityManagementPage() {
                             updateSettingsMutation.mutate({ maxConcurrentSessions: parseInt(e.target.value) || 3 })
                           }
                           disabled={updateSettingsMutation.isPending}
+                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                           data-testid="input-max-sessions"
                         />
                         <p className="text-xs text-muted-foreground">
@@ -462,7 +467,7 @@ export default function SecurityManagementPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label>صلاحية كلمة المرور (بالأيام)</Label>
+                      <Label className="text-sm sm:text-base">صلاحية كلمة المرور (بالأيام)</Label>
                       <Input
                         type="number"
                         min={0}
@@ -472,6 +477,7 @@ export default function SecurityManagementPage() {
                           updateSettingsMutation.mutate({ passwordExpiryDays: parseInt(e.target.value) || 90 })
                         }
                         disabled={updateSettingsMutation.isPending}
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         data-testid="input-password-expiry"
                       />
                       <p className="text-xs text-muted-foreground">
@@ -530,11 +536,11 @@ export default function SecurityManagementPage() {
 
           <TabsContent value="sessions">
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <CardTitle>الجلسات النشطة</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-base sm:text-lg">الجلسات النشطة</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm">
                       عرض وإدارة جميع الجلسات النشطة لحسابك
                     </CardDescription>
                   </div>
@@ -542,6 +548,7 @@ export default function SecurityManagementPage() {
                     <Button 
                       variant="destructive" 
                       size="sm"
+                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto"
                       onClick={() => invalidateAllSessionsMutation.mutate()}
                       disabled={invalidateAllSessionsMutation.isPending}
                       data-testid="button-invalidate-all-sessions"

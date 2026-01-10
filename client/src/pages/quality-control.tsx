@@ -111,14 +111,14 @@ export default function QualityControlPage() {
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">مراقبة الجودة</h1>
-            <p className="text-muted-foreground">فحوصات الجودة والمعايير</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">مراقبة الجودة</h1>
+            <p className="text-sm text-muted-foreground">فحوصات الجودة والمعايير</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-check">
+              <Button data-testid="button-add-check" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                 <Plus className="w-4 h-4 ml-2" />
                 فحص جديد
               </Button>
@@ -133,7 +133,7 @@ export default function QualityControlPage() {
                   <div>
                     <Label>الفرع *</Label>
                     <Select value={formData.branchId} onValueChange={v => setFormData({ ...formData, branchId: v })}>
-                      <SelectTrigger data-testid="select-branch">
+                      <SelectTrigger data-testid="select-branch" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
@@ -146,7 +146,7 @@ export default function QualityControlPage() {
                   <div>
                     <Label>نوع الفحص *</Label>
                     <Select value={formData.checkType} onValueChange={v => setFormData({ ...formData, checkType: v })}>
-                      <SelectTrigger data-testid="select-check-type">
+                      <SelectTrigger data-testid="select-check-type" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue placeholder="اختر النوع" />
                       </SelectTrigger>
                       <SelectContent>
@@ -164,6 +164,7 @@ export default function QualityControlPage() {
                       type="date"
                       value={formData.checkDate}
                       onChange={e => setFormData({ ...formData, checkDate: e.target.value })}
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     />
                   </div>
                   <div>
@@ -172,13 +173,14 @@ export default function QualityControlPage() {
                       type="time"
                       value={formData.checkTime}
                       onChange={e => setFormData({ ...formData, checkTime: e.target.value })}
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     />
                   </div>
                 </div>
                 <div>
                   <Label>النتيجة *</Label>
                   <Select value={formData.result} onValueChange={v => setFormData({ ...formData, result: v })}>
-                    <SelectTrigger data-testid="select-result">
+                    <SelectTrigger data-testid="select-result" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                       <SelectValue placeholder="اختر النتيجة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -198,6 +200,7 @@ export default function QualityControlPage() {
                       value={formData.score}
                       onChange={e => setFormData({ ...formData, score: e.target.value })}
                       placeholder="مثال: 85"
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     />
                   </div>
                   {formData.checkType === 'temperature' && (
@@ -209,6 +212,7 @@ export default function QualityControlPage() {
                         value={formData.temperature}
                         onChange={e => setFormData({ ...formData, temperature: e.target.value })}
                         placeholder="مثال: 25.5"
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                       />
                     </div>
                   )}
@@ -220,6 +224,7 @@ export default function QualityControlPage() {
                     onChange={e => setFormData({ ...formData, checkedBy: e.target.value })}
                     placeholder="اسم الفاحص"
                     data-testid="input-checked-by"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                   />
                 </div>
                 {formData.result === 'failed' || formData.result === 'needs_improvement' ? (
@@ -254,11 +259,12 @@ export default function QualityControlPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={resetForm}>إلغاء</Button>
+                <Button variant="outline" onClick={resetForm} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
                 <Button 
                   onClick={handleSubmit} 
                   disabled={!formData.branchId || !formData.checkType || !formData.result || !formData.checkedBy}
                   data-testid="button-save-check"
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                 >
                   تسجيل الفحص
                 </Button>
@@ -267,50 +273,50 @@ export default function QualityControlPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <ClipboardCheck className="w-6 h-6 text-blue-600" />
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold">{checks?.length || 0}</div>
-                <div className="text-sm text-muted-foreground">إجمالي الفحوصات</div>
+                <div className="text-xl sm:text-2xl font-bold">{checks?.length || 0}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">إجمالي الفحوصات</div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-green-600">{passedCount}</div>
-                <div className="text-sm text-muted-foreground">ناجح</div>
+                <div className="text-xl sm:text-2xl font-bold text-green-600">{passedCount}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">ناجح</div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <XCircle className="w-6 h-6 text-red-600" />
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-red-600">{failedCount}</div>
-                <div className="text-sm text-muted-foreground">فاشل</div>
+                <div className="text-xl sm:text-2xl font-bold text-red-600">{failedCount}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">فاشل</div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1 sm:max-w-sm">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="بحث..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="pr-10"
+              className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
               data-testid="input-search"
             />
           </div>
@@ -327,7 +333,7 @@ export default function QualityControlPage() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <ClipboardCheck className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">لا توجد فحوصات</p>
-              <Button variant="outline" className="mt-4" onClick={() => setIsDialogOpen(true)}>
+              <Button variant="outline" className="mt-4 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsDialogOpen(true)}>
                 تسجيل أول فحص
               </Button>
             </CardContent>

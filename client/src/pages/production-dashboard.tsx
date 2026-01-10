@@ -269,16 +269,20 @@ export default function ProductionDashboardPage() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-6" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3" data-testid="page-title">
-              <Factory className="h-8 w-8 text-amber-600" />
-              لوحة الإنتاج
-            </h1>
-            <p className="text-gray-600 mt-1">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
+              <Factory className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900" data-testid="page-title">
+                لوحة الإنتاج
+              </h1>
+              <p className="text-gray-600 text-xs sm:text-sm">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Auto-refresh toggle */}
             <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
               <Switch
@@ -302,12 +306,12 @@ export default function ProductionDashboardPage() {
               {formatLastUpdated()}
             </span>
             
-            <Button variant="outline" size="sm" onClick={handleRefresh} data-testid="btn-refresh">
+            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={handleRefresh} data-testid="btn-refresh">
               <RefreshCw className={`h-4 w-4 ml-2 ${dailyLoading ? 'animate-spin' : ''}`} />
               تحديث
             </Button>
             <Link href="/advanced-production-orders/new">
-              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700" data-testid="btn-new-order">
+              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-new-order">
                 <Plus className="h-4 w-4 ml-2" />
                 أمر إنتاج جديد
               </Button>
@@ -317,12 +321,12 @@ export default function ProductionDashboardPage() {
 
         {/* Branch and Date Filters */}
         <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
-          <CardContent className="p-4">
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="space-y-2 min-w-[180px]">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-wrap items-end gap-3 sm:gap-4">
+              <div className="space-y-2 min-w-[160px] sm:min-w-[180px]">
                 <Label className="text-amber-800">الفرع</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="bg-white border-amber-200">
+                  <SelectTrigger className="bg-white border-amber-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                     <SelectValue placeholder="كل الفروع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -339,7 +343,7 @@ export default function ProductionDashboardPage() {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-[160px] bg-white border-amber-200"
+                  className="w-[140px] sm:w-[160px] bg-white border-amber-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                 />
               </div>
               <div className="text-sm text-amber-700">
@@ -350,9 +354,9 @@ export default function ProductionDashboardPage() {
         </Card>
 
         {/* Daily Production Performance */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           <Card className="border-r-4 border-r-green-500 bg-gradient-to-br from-green-50 to-white" data-testid="card-daily-qty">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">إنتاج اليوم</p>
@@ -379,7 +383,7 @@ export default function ProductionDashboardPage() {
           </Card>
 
           <Card className="border-r-4 border-r-amber-500 bg-gradient-to-br from-amber-50 to-white" data-testid="card-daily-batches">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">دفعات اليوم</p>
@@ -406,7 +410,7 @@ export default function ProductionDashboardPage() {
           </Card>
 
           <Card className="border-r-4 border-r-blue-500 bg-gradient-to-br from-blue-50 to-white" data-testid="card-display">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">بار العرض</p>
@@ -425,7 +429,7 @@ export default function ProductionDashboardPage() {
           </Card>
 
           <Card className="border-r-4 border-r-cyan-500 bg-gradient-to-br from-cyan-50 to-white" data-testid="card-storage">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">التخزين</p>
@@ -446,7 +450,7 @@ export default function ProductionDashboardPage() {
           </Card>
 
           <Card className="border-r-4 border-r-purple-500 bg-gradient-to-br from-purple-50 to-white" data-testid="card-active-orders">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">أوامر نشطة</p>

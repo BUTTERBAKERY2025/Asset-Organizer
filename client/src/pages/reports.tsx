@@ -244,14 +244,14 @@ export default function ReportsPage() {
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">تقارير الأصول والمعدات</h1>
-            <p className="text-muted-foreground">تقارير شاملة ومتطورة لجميع أصول ومعدات الفروع</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">تقارير الأصول والمعدات</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">تقارير شاملة ومتطورة لجميع أصول ومعدات الفروع</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-40" data-testid="select-branch-filter">
+              <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch-filter">
                 <MapPin className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="جميع الفروع" />
               </SelectTrigger>
@@ -265,7 +265,7 @@ export default function ReportsPage() {
               </SelectContent>
             </Select>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-40" data-testid="select-category-filter">
+              <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-category-filter">
                 <Layers className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="جميع التصنيفات" />
               </SelectTrigger>
@@ -278,13 +278,13 @@ export default function ReportsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={() => handlePrint()} data-testid="button-print">
-              <Printer className="w-4 h-4 ml-2" />
-              طباعة
+            <Button variant="outline" onClick={() => handlePrint()} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-print">
+              <Printer className="w-4 h-4 sm:ml-2" />
+              <span className="hidden sm:inline">طباعة</span>
             </Button>
-            <Button onClick={() => exportToExcel("full")} data-testid="button-export-excel">
-              <FileSpreadsheet className="w-4 h-4 ml-2" />
-              تصدير شامل
+            <Button onClick={() => exportToExcel("full")} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
+              <FileSpreadsheet className="w-4 h-4 sm:ml-2" />
+              <span className="hidden sm:inline">تصدير شامل</span>
             </Button>
           </div>
         </div>
@@ -295,74 +295,74 @@ export default function ReportsPage() {
             subtitle={`إجمالي ${overallStats.total} أصل - القيمة: ${overallStats.totalValue.toLocaleString()} ر.س`}
           />
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-              <CardContent className="pt-4">
+              <CardContent className="p-3 sm:pt-4">
                 <div className="flex items-center justify-between">
-                  <Package className="w-8 h-8 text-amber-600" />
+                  <Package className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
                   <div className="text-left">
                     <p className="text-xs text-amber-600">إجمالي الأصول</p>
-                    <p className="text-2xl font-bold text-amber-800">{overallStats.total}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-amber-800">{overallStats.total}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-              <CardContent className="pt-4">
+              <CardContent className="p-3 sm:pt-4">
                 <div className="flex items-center justify-between">
-                  <CheckCircle2 className="w-8 h-8 text-green-600" />
+                  <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
                   <div className="text-left">
                     <p className="text-xs text-green-600">حالة جيدة</p>
-                    <p className="text-2xl font-bold text-green-800">{overallStats.good}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-green-800">{overallStats.good}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-              <CardContent className="pt-4">
+              <CardContent className="p-3 sm:pt-4">
                 <div className="flex items-center justify-between">
-                  <Wrench className="w-8 h-8 text-yellow-600" />
+                  <Wrench className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
                   <div className="text-left">
                     <p className="text-xs text-yellow-600">تحتاج صيانة</p>
-                    <p className="text-2xl font-bold text-yellow-800">{overallStats.maintenance}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-yellow-800">{overallStats.maintenance}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-              <CardContent className="pt-4">
+              <CardContent className="p-3 sm:pt-4">
                 <div className="flex items-center justify-between">
-                  <XCircle className="w-8 h-8 text-red-600" />
+                  <XCircle className="w-6 h-6 sm:w-8 sm:h-8 text-red-600" />
                   <div className="text-left">
                     <p className="text-xs text-red-600">تالف/مفقود</p>
-                    <p className="text-2xl font-bold text-red-800">{overallStats.damaged + overallStats.missing}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-red-800">{overallStats.damaged + overallStats.missing}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-              <CardContent className="pt-4">
+              <CardContent className="p-3 sm:pt-4">
                 <div className="flex items-center justify-between">
-                  <DollarSign className="w-8 h-8 text-blue-600" />
+                  <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
                   <div className="text-left">
                     <p className="text-xs text-blue-600">القيمة الإجمالية</p>
-                    <p className="text-lg font-bold text-blue-800">{overallStats.totalValue.toLocaleString()}</p>
+                    <p className="text-base sm:text-lg font-bold text-blue-800">{overallStats.totalValue.toLocaleString()}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-              <CardContent className="pt-4">
+              <CardContent className="p-3 sm:pt-4">
                 <div className="flex items-center justify-between">
-                  <Camera className="w-8 h-8 text-purple-600" />
+                  <Camera className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
                   <div className="text-left">
                     <p className="text-xs text-purple-600">مع صور</p>
-                    <p className="text-2xl font-bold text-purple-800">{overallStats.withImages}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-purple-800">{overallStats.withImages}</p>
                   </div>
                 </div>
               </CardContent>

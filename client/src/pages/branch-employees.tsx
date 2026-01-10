@@ -1623,27 +1623,27 @@ export default function BranchEmployeesPage() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">موظفي الفروع</h1>
-              <p className="text-gray-500">إدارة بيانات الموظفين والرواتب والمستندات</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">موظفي الفروع</h1>
+              <p className="text-gray-500 text-sm sm:text-base">إدارة بيانات الموظفين والرواتب والمستندات</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="button-export-excel">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportToExcel} data-testid="button-export-excel">
               <FileSpreadsheet className="w-4 h-4 ml-2" />
               Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToPDF} data-testid="button-export-pdf">
+            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportToPDF} data-testid="button-export-pdf">
               <Download className="w-4 h-4 ml-2" />
               PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="button-print">
+            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => handlePrint()} data-testid="button-print">
               <Printer className="w-4 h-4 ml-2" />
               طباعة
             </Button>
@@ -1655,11 +1655,11 @@ export default function BranchEmployeesPage() {
               onChange={handleFileSelect}
               data-testid="input-import-file"
             />
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="button-import">
+            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => fileInputRef.current?.click()} data-testid="button-import">
               <Upload className="w-4 h-4 ml-2" />
               استيراد
             </Button>
-            <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
+            <Button className="bg-teal-600 hover:bg-teal-700 text-white h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
               <Network className="w-4 h-4 ml-2" />
               الهيكل الوظيفي
             </Button>
@@ -1671,7 +1671,7 @@ export default function BranchEmployeesPage() {
               }
             }}>
               <DialogTrigger asChild>
-                <Button className="bg-amber-600 hover:bg-amber-700" data-testid="button-add-employee">
+                <Button className="bg-amber-600 hover:bg-amber-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-employee">
                   <Plus className="w-4 h-4 ml-2" />
                   إضافة موظف
                 </Button>
@@ -2013,7 +2013,7 @@ export default function BranchEmployeesPage() {
 
         {/* Main Tabs */}
         <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
-          <TabsList className="grid grid-cols-3 w-[450px]">
+          <TabsList className="grid grid-cols-3 w-full max-w-[450px]">
             <TabsTrigger value="employees" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               الموظفين
@@ -2028,8 +2028,8 @@ export default function BranchEmployeesPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="employees" className="space-y-6 mt-6">
-        <div className="grid grid-cols-4 gap-4">
+          <TabsContent value="employees" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -2084,11 +2084,11 @@ export default function BranchEmployeesPage() {
           </Card>
         </div>
 
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <Building className="w-4 h-4 text-gray-500" />
+            <Building className="w-4 h-4 text-gray-500 hidden sm:block" />
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48" data-testid="filter-branch">
+              <SelectTrigger className="w-40 sm:w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="filter-branch">
                 <SelectValue placeholder="جميع الفروع" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -2100,9 +2100,9 @@ export default function BranchEmployeesPage() {
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-gray-500" />
+            <Globe className="w-4 h-4 text-gray-500 hidden sm:block" />
             <Select value={selectedNationality} onValueChange={setSelectedNationality}>
-              <SelectTrigger className="w-40" data-testid="filter-nationality">
+              <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="filter-nationality">
                 <SelectValue placeholder="جميع الجنسيات" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -2114,9 +2114,9 @@ export default function BranchEmployeesPage() {
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <Briefcase className="w-4 h-4 text-gray-500" />
+            <Briefcase className="w-4 h-4 text-gray-500 hidden sm:block" />
             <Select value={selectedJobTitle} onValueChange={setSelectedJobTitle}>
-              <SelectTrigger className="w-40" data-testid="filter-job">
+              <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="filter-job">
                 <SelectValue placeholder="جميع الوظائف" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -2128,9 +2128,9 @@ export default function BranchEmployeesPage() {
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-gray-500" />
+            <Users className="w-4 h-4 text-gray-500 hidden sm:block" />
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="w-36" data-testid="filter-status">
+              <SelectTrigger className="w-32 sm:w-36 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="filter-status">
                 <SelectValue placeholder="جميع الحالات" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -2142,19 +2142,19 @@ export default function BranchEmployeesPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="بحث بالاسم أو الرقم الوظيفي..."
-              className="pr-10"
+              className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
               data-testid="input-search"
             />
           </div>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2" data-testid="btn-advanced-filters">
+              <Button variant="outline" className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-advanced-filters">
                 <Filter className="w-4 h-4" />
                 فلترة متقدمة
                 {(salaryMin !== undefined || salaryMax !== undefined || hireDateFrom || hireDateTo) && (
@@ -2221,7 +2221,7 @@ export default function BranchEmployeesPage() {
             </PopoverContent>
           </Popover>
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="text-red-600" data-testid="btn-reset-all-filters">
+            <Button variant="ghost" onClick={resetFilters} className="text-red-600 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-reset-all-filters">
               <X className="w-4 h-4 ml-1" />
               مسح جميع الفلاتر
             </Button>
@@ -2276,18 +2276,18 @@ export default function BranchEmployeesPage() {
                       <TableCell>{getHealthBadge(emp.healthCertificate || "none")}</TableCell>
                       <TableCell>{getStatusBadge(emp.status)}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="ghost" onClick={() => handleViewDetails(emp)} data-testid={`button-view-${emp.id}`} title="عرض التفاصيل">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => handleViewDetails(emp)} data-testid={`button-view-${emp.id}`} title="عرض التفاصيل">
                             <Eye className="w-4 h-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleEdit(emp)} data-testid={`button-edit-${emp.id}`} title="تعديل">
+                          <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => handleEdit(emp)} data-testid={`button-edit-${emp.id}`} title="تعديل">
                             <Edit className="w-4 h-4" />
                           </Button>
                           {user?.role === "admin" && (
                             <Button
-                              size="sm"
                               variant="ghost"
-                              className="text-red-600 hover:text-red-700"
+                              size="icon"
+                              className="text-red-600 hover:text-red-700 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                               onClick={() => handleDeleteClick(emp)}
                               data-testid={`button-delete-${emp.id}`}
                               title="حذف (مدير النظام فقط)"
@@ -2309,7 +2309,7 @@ export default function BranchEmployeesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
-                    <SelectTrigger className="w-24" data-testid="select-page-size">
+                    <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-page-size">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2321,7 +2321,8 @@ export default function BranchEmployeesPage() {
                   </Select>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
+                    className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                     disabled={currentPage <= 1}
                     onClick={() => setCurrentPage(currentPage - 1)}
                     data-testid="btn-prev-page"
@@ -2331,7 +2332,8 @@ export default function BranchEmployeesPage() {
                   <span className="text-sm">صفحة {formatNumber(currentPage)} من {formatNumber(totalPages)}</span>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
+                    className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                     disabled={currentPage >= totalPages}
                     onClick={() => setCurrentPage(currentPage + 1)}
                     data-testid="btn-next-page"
@@ -2346,7 +2348,7 @@ export default function BranchEmployeesPage() {
         </div>
 
         {stats && (stats.byNationality?.length > 0 || stats.byJobTitle?.length > 0) && (
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

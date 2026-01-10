@@ -265,24 +265,24 @@ export default function ConstructionDashboardPage() {
   return (
     <Layout>
       <div className="space-y-6" dir="rtl" ref={printRef}>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">لوحة تحكم المشاريع الإنشائية</h1>
-            <p className="text-muted-foreground">نظرة عامة شاملة على جميع المشاريع والإحصائيات والمقارنات</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">لوحة تحكم المشاريع الإنشائية</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">نظرة عامة شاملة على جميع المشاريع والإحصائيات والمقارنات</p>
           </div>
           <div className="flex gap-2 print:hidden">
-            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
+            <Button variant="outline" onClick={exportToExcel} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
               <FileSpreadsheet className="w-4 h-4 ml-2" />
               تصدير Excel
             </Button>
-            <Button variant="outline" onClick={() => handlePrint()} data-testid="button-print">
+            <Button variant="outline" onClick={() => handlePrint()} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-print">
               <Printer className="w-4 h-4 ml-2" />
               طباعة
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card data-testid="card-total-projects" className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-amber-800">إجمالي المشاريع</CardTitle>
@@ -350,7 +350,7 @@ export default function ConstructionDashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
           <Card data-testid="card-work-items">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">بنود العمل</CardTitle>

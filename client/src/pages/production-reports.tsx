@@ -341,17 +341,17 @@ export default function ProductionReportsPage() {
 
   return (
     <Layout>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="space-y-4 p-3 sm:p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" data-testid="btn-back">
+              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-10 sm:w-10 sm:min-h-0 sm:min-w-0" data-testid="btn-back">
                 <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">التقارير الشاملة للإنتاج</h1>
-              <p className="text-sm text-gray-500">جميع تقارير الإنتاج والتحليلات</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">التقارير الشاملة للإنتاج</h1>
+              <p className="text-xs sm:text-sm text-gray-500">جميع تقارير الإنتاج والتحليلات</p>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -361,7 +361,7 @@ export default function ProductionReportsPage() {
               onClick={() => refetch()}
               disabled={isLoading}
               data-testid="btn-refresh"
-              className="h-8"
+              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
             >
               <RefreshCw className={`h-4 w-4 ml-1 ${isLoading ? 'animate-spin' : ''}`} />
               تحديث
@@ -430,12 +430,12 @@ export default function ProductionReportsPage() {
         </Card>
 
         <Card className="border-amber-200">
-          <CardContent className="p-3">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-gray-500" />
                 <Select value={selectedBranch || "all"} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-[140px] h-8 text-sm" data-testid="select-branch">
+                  <SelectTrigger className="w-[140px] h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -453,7 +453,7 @@ export default function ProductionReportsPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-[130px] h-8 text-sm"
+                  className="w-[130px] h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
                   data-testid="input-start-date"
                 />
                 <span className="text-gray-400">-</span>
@@ -461,18 +461,18 @@ export default function ProductionReportsPage() {
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-[130px] h-8 text-sm"
+                  className="w-[130px] h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
                   data-testid="input-end-date"
                 />
               </div>
 
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 {DATE_PRESETS.slice(0, 4).map((preset, i) => (
                   <Button
                     key={i}
                     variant="ghost"
                     size="sm"
-                    className="h-7 text-xs px-2"
+                    className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs px-2"
                     onClick={() => applyDatePreset(preset)}
                     data-testid={`btn-preset-${i}`}
                   >
@@ -481,11 +481,11 @@ export default function ProductionReportsPage() {
                 ))}
               </div>
 
-              <div className="flex gap-1 mr-auto">
+              <div className="flex gap-1 mr-auto flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs"
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs"
                   onClick={() => exportToExcel("all")}
                   disabled={isExporting !== null || !reportData}
                   data-testid="btn-export-excel"
@@ -496,7 +496,7 @@ export default function ProductionReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs"
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs"
                   onClick={exportToPDF}
                   disabled={isExporting !== null || !reportData}
                   data-testid="btn-export-pdf"
@@ -507,7 +507,7 @@ export default function ProductionReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs"
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs"
                   onClick={() => exportToCSV("summary")}
                   disabled={isExporting !== null || !reportData}
                   data-testid="btn-export-csv"

@@ -489,24 +489,25 @@ export default function ShiftManagementPage() {
   return (
     <Layout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
+              className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
               onClick={() => navigate("/attendance-dashboard")}
               data-testid="btn-back"
             >
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-primary" data-testid="page-title">جدولة الدوام</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary" data-testid="page-title">جدولة الدوام</h1>
               <p className="text-muted-foreground mt-1">إنشاء وإدارة جداول دوام الموظفين للفروع</p>
             </div>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48" data-testid="select-branch">
+              <SelectTrigger className="w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
@@ -559,13 +560,13 @@ export default function ShiftManagementPage() {
                       </CardDescription>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} data-testid="btn-prev-week">
+                      <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} data-testid="btn-prev-week">
                         <ChevronRight className="w-4 h-4" />
                       </Button>
-                      <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 6 }))} data-testid="btn-current-week">
+                      <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 6 }))} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-current-week">
                         هذا الأسبوع
                       </Button>
-                      <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-next-week">
+                      <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-next-week">
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
                     </div>
@@ -574,7 +575,7 @@ export default function ShiftManagementPage() {
                 <CardContent>
                   <div className="flex gap-2 mb-4 items-center">
                     <Select value={selectedShiftProfile} onValueChange={setSelectedShiftProfile}>
-                      <SelectTrigger className="w-48" data-testid="select-shift-profile">
+                      <SelectTrigger className="w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-shift-profile">
                         <Clock className="w-4 h-4 ml-2" />
                         <SelectValue placeholder="اختر الوردية" />
                       </SelectTrigger>
@@ -594,12 +595,12 @@ export default function ShiftManagementPage() {
                         )}
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2" data-testid="btn-apply-default">
+                    <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-apply-default">
                       <Users className="w-4 h-4" />
                       تطبيق على الجميع
                     </Button>
                     {hasUnsavedChanges && (
-                      <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2" data-testid="btn-save-schedule">
+                      <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-save-schedule">
                         <Save className="w-4 h-4" />
                         {saveSchedulesMutation.isPending ? "جاري الحفظ..." : "حفظ الجدول"}
                       </Button>
@@ -843,7 +844,7 @@ export default function ShiftManagementPage() {
             </TabsContent>
 
             <TabsContent value="reports" className="space-y-4 mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -876,7 +877,7 @@ export default function ShiftManagementPage() {
                           }, 0)}
                         </span>
                       </div>
-                      <Button variant="outline" className="w-full gap-2" onClick={exportWeeklyReport} disabled={isExporting} data-testid="btn-export-weekly">
+                      <Button variant="outline" className="w-full gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportWeeklyReport} disabled={isExporting} data-testid="btn-export-weekly">
                         {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                         {isExporting ? "جاري التصدير..." : "تصدير التقرير"}
                       </Button>
@@ -1122,7 +1123,7 @@ function ShiftProfilesSettings({ branchId, branchName }: { branchId: string; bra
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {profiles.map((profile, index) => (
             <Card key={profile.shiftCode} className={!profile.isActive ? "opacity-50" : ""}>
               <CardHeader className="pb-3">

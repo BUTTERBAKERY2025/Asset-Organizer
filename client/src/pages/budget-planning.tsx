@@ -274,10 +274,10 @@ export default function BudgetPlanningPage() {
   return (
     <Layout>
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">تخطيط الميزانية وتحليل الفروقات</h1>
-            <p className="text-gray-600 mt-1">توزيع الميزانية على التصنيفات ومقارنة التكلفة الفعلية بالمخططة</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">تخطيط الميزانية وتحليل الفروقات</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">توزيع الميزانية على التصنيفات ومقارنة التكلفة الفعلية بالمخططة</p>
           </div>
         </div>
 
@@ -289,7 +289,7 @@ export default function BudgetPlanningPage() {
           </TabsList>
 
           <TabsContent value="overview">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-8">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">إجمالي الميزانيات</CardTitle>
@@ -425,7 +425,7 @@ export default function BudgetPlanningPage() {
                   value={selectedProjectId?.toString() || ""} 
                   onValueChange={(val) => setSelectedProjectId(parseInt(val))}
                 >
-                  <SelectTrigger className="w-full md:w-[400px]" data-testid="select-project">
+                  <SelectTrigger className="w-full md:w-[400px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-project">
                     <SelectValue placeholder="اختر مشروع..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -441,7 +441,7 @@ export default function BudgetPlanningPage() {
 
             {selectedProject && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
                   <Card>
                     <CardContent className="pt-6">
                       <div className="text-sm text-gray-500">ميزانية المشروع</div>
@@ -477,17 +477,17 @@ export default function BudgetPlanningPage() {
                       <CardDescription>حدد المبلغ المخصص لكل تصنيف من أعمال البناء</CardDescription>
                     </div>
                     {canEdit && !isEditingBudget && (
-                      <Button onClick={startEditingBudget} data-testid="button-edit-budget">
+                      <Button onClick={startEditingBudget} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-edit-budget">
                         <Pencil className="ml-2 h-4 w-4" />
                         تعديل التوزيع
                       </Button>
                     )}
                     {isEditingBudget && (
                       <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setIsEditingBudget(false)}>
+                        <Button variant="outline" onClick={() => setIsEditingBudget(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                           إلغاء
                         </Button>
-                        <Button onClick={handleSaveBudgetAllocations} disabled={upsertMutation.isPending}>
+                        <Button onClick={handleSaveBudgetAllocations} disabled={upsertMutation.isPending} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                           {upsertMutation.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
                           حفظ
                         </Button>

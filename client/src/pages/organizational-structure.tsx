@@ -288,11 +288,11 @@ function CollapsibleOrgChart({
   return (
     <div>
       <div className="flex justify-end gap-2 mb-4">
-        <Button variant="outline" size="sm" onClick={expandAll} className="text-xs gap-1">
+        <Button variant="outline" size="sm" onClick={expandAll} className="text-xs gap-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
           <Maximize2 className="h-3 w-3" />
           توسيع الكل
         </Button>
-        <Button variant="outline" size="sm" onClick={collapseAll} className="text-xs gap-1">
+        <Button variant="outline" size="sm" onClick={collapseAll} className="text-xs gap-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
           <ZoomOut className="h-3 w-3" />
           طي الكل
         </Button>
@@ -441,12 +441,12 @@ function RoleDetailsDialog({
 
         <div className="mt-4 pt-4 border-t flex justify-between items-center">
           <Link href={`/branch-employees?jobTitle=${encodeURIComponent(role.titleAr)}`}>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
               <Users className="h-4 w-4" />
               عرض الموظفين
             </Button>
           </Link>
-          <Button onClick={onClose} size="sm" className="bg-green-600 hover:bg-green-700">
+          <Button onClick={onClose} size="sm" className="bg-green-600 hover:bg-green-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
             إغلاق
           </Button>
         </div>
@@ -557,6 +557,7 @@ function RoleFormDialog({
                     onChange={(e) => setFormData({ ...formData, titleAr: e.target.value })}
                     placeholder="مدير الفرع"
                     required
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                   />
                 </div>
                 <div className="space-y-2">
@@ -567,6 +568,7 @@ function RoleFormDialog({
                     placeholder="Branch Manager"
                     required
                     dir="ltr"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                   />
                 </div>
               </div>
@@ -600,7 +602,7 @@ function RoleFormDialog({
                     value={formData.parentId || "__none__"}
                     onValueChange={(v) => setFormData({ ...formData, parentId: v === "__none__" ? "" : v })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                       <SelectValue placeholder="بدون" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -619,6 +621,7 @@ function RoleFormDialog({
                     onChange={(e) => setFormData({ ...formData, level: e.target.value })}
                     min="1"
                     max="10"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                   />
                 </div>
                 <div className="space-y-2">
@@ -627,7 +630,7 @@ function RoleFormDialog({
                     value={formData.color}
                     onValueChange={(v) => setFormData({ ...formData, color: v })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -691,10 +694,10 @@ function RoleFormDialog({
           </Tabs>
 
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
               إلغاء
             </Button>
-            <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700 min-w-[100px]">
+            <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700 min-w-[100px] h-11 min-h-[44px] sm:h-9 sm:min-h-0">
               {isLoading && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
               {role ? "حفظ" : "إضافة"}
             </Button>
@@ -820,13 +823,13 @@ export default function OrganizationalStructurePage() {
           <div className="flex items-center justify-between mb-6 print:hidden">
             <div className="flex items-center gap-4">
               <Link href="/branch-employees">
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                   <ArrowLeft className="h-4 w-4" />
                   العودة
                 </Button>
               </Link>
               <div>
-                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
                   <Network className="h-6 w-6 text-green-600" />
                   الهيكل الوظيفي
                 </h1>
@@ -835,15 +838,15 @@ export default function OrganizationalStructurePage() {
             </div>
             
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                 <Printer className="h-4 w-4" />
                 طباعة
               </Button>
-              <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2">
+              <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                 <FileSpreadsheet className="h-4 w-4" />
                 تصدير
               </Button>
-              <Button type="button" size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2" data-testid="button-add-role">
+              <Button type="button" size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-role">
                 <Plus className="h-4 w-4" />
                 إضافة وظيفة
               </Button>
@@ -869,7 +872,7 @@ export default function OrganizationalStructurePage() {
                   </div>
                   <h3 className="text-xl font-bold text-gray-800 mb-2">لا توجد وظائف</h3>
                   <p className="text-gray-500 mb-6">ابدأ بإضافة الوظيفة الأولى</p>
-                  <Button onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2">
+                  <Button onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                     <Plus className="h-4 w-4" />
                     إضافة أول وظيفة
                   </Button>
@@ -878,7 +881,7 @@ export default function OrganizationalStructurePage() {
             ) : (
               <div className="space-y-4">
                 {/* Statistics Row */}
-                <div className="grid grid-cols-4 gap-3 print:hidden">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
                   <Card className="bg-gradient-to-br from-green-500 to-teal-500 text-white shadow-lg">
                     <CardContent className="p-3">
                       <div className="flex items-center gap-3">

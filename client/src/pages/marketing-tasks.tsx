@@ -156,21 +156,21 @@ export default function MarketingTasksPage() {
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold" data-testid="page-title">مهام التسويق</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="page-title">مهام التسويق</h1>
               <p className="text-sm text-muted-foreground">متابعة المهام والأنشطة التسويقية</p>
             </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-task">
+              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-task">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة مهمة
               </Button>
@@ -253,19 +253,19 @@ export default function MarketingTasksPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {TASK_STATUSES.map((status) => {
             const count = tasksByStatus[status.value as keyof typeof tasksByStatus]?.length || 0;
             const StatusIcon = status.icon;
             return (
               <Card key={status.value} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter(status.value)}>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <StatusIcon className="w-5 h-5" />
-                      <span className="font-medium">{status.label}</span>
+                      <StatusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="text-sm sm:text-base font-medium">{status.label}</span>
                     </div>
-                    <Badge variant="secondary" className="text-lg px-3">
+                    <Badge variant="secondary" className="text-base sm:text-lg px-2 sm:px-3">
                       {count}
                     </Badge>
                   </div>
@@ -275,13 +275,13 @@ export default function MarketingTasksPage() {
           })}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4" />
             <span className="text-sm font-medium">تصفية:</span>
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40" data-testid="select-status-filter">
+            <SelectTrigger className="w-full sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -303,10 +303,10 @@ export default function MarketingTasksPage() {
           </div>
         ) : tasks.length === 0 ? (
           <Card>
-            <CardContent className="p-8 text-center">
+            <CardContent className="p-6 sm:p-8 text-center">
               <CheckCircle2 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">لا توجد مهام</p>
-              <Button className="mt-4" onClick={() => setIsAddDialogOpen(true)}>
+              <Button className="mt-4 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsAddDialogOpen(true)}>
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة مهمة جديدة
               </Button>

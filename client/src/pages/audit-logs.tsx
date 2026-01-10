@@ -110,30 +110,30 @@ export default function AuditLogsPage() {
     <Layout>
       <div className="flex flex-col space-y-6">
         <SettingsBreadcrumb currentPage="سجل التدقيق" currentIcon={History} />
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
               سجل التدقيق
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               متابعة جميع العمليات والتغييرات في النظام
             </p>
           </div>
-          <Button onClick={() => refetch()} variant="outline" data-testid="button-refresh-logs">
+          <Button onClick={() => refetch()} variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" data-testid="button-refresh-logs">
             <RefreshCw className="w-4 h-4 ml-2" />
             تحديث
           </Button>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="w-5 h-5" />
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
               البحث والتصفية
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -142,13 +142,13 @@ export default function AuditLogsPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    className="pr-10"
+                    className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     data-testid="input-search-logs"
                   />
                 </div>
               </div>
               <Select value={selectedModule} onValueChange={setSelectedModule}>
-                <SelectTrigger className="w-[200px]" data-testid="select-module-filter">
+                <SelectTrigger className="w-full sm:w-[200px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-module-filter">
                   <SelectValue placeholder="اختر القسم" />
                 </SelectTrigger>
                 <SelectContent>
@@ -159,7 +159,7 @@ export default function AuditLogsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={handleSearch} disabled={isSearching} data-testid="button-search">
+              <Button onClick={handleSearch} disabled={isSearching} className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 w-full sm:w-auto" data-testid="button-search">
                 {isSearching ? (
                   <Loader2 className="w-4 h-4 animate-spin ml-2" />
                 ) : (
@@ -172,11 +172,11 @@ export default function AuditLogsPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 md:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
               سجل العمليات
-              <Badge variant="secondary" className="mr-2">{logs.length} سجل</Badge>
+              <Badge variant="secondary" className="mr-2 text-xs">{logs.length} سجل</Badge>
             </CardTitle>
             <ExportButtons
               data={logs}

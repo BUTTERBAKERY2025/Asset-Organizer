@@ -160,16 +160,16 @@ export default function MarketingAlertsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-100 p-6" dir="rtl">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/marketing">
-              <Button variant="outline" size="sm" className="gap-2" data-testid="button-back">
+              <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2" data-testid="button-back">
                 <ArrowRight className="h-4 w-4" />
                 العودة للتسويق
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2" data-testid="text-page-title">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2" data-testid="text-page-title">
                 التنبيهات
                 {unreadCount > 0 && (
                   <span className="bg-red-500 text-white text-sm px-2 py-1 rounded-full">
@@ -183,7 +183,7 @@ export default function MarketingAlertsPage() {
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-pink-500 hover:bg-pink-600 gap-2" data-testid="button-add-alert">
+              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-pink-500 hover:bg-pink-600 gap-2" data-testid="button-add-alert">
                 <Plus className="h-4 w-4" />
                 إنشاء تنبيه
               </Button>
@@ -196,6 +196,7 @@ export default function MarketingAlertsPage() {
                 <div>
                   <Label>العنوان</Label>
                   <Input
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     placeholder="عنوان التنبيه"
@@ -208,7 +209,7 @@ export default function MarketingAlertsPage() {
                     value={formData.alertType}
                     onValueChange={(value) => setFormData({ ...formData, alertType: value })}
                   >
-                    <SelectTrigger data-testid="select-alert-type">
+                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-alert-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -224,7 +225,7 @@ export default function MarketingAlertsPage() {
                     value={formData.priority}
                     onValueChange={(value) => setFormData({ ...formData, priority: value })}
                   >
-                    <SelectTrigger data-testid="select-priority">
+                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-priority">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -247,6 +248,7 @@ export default function MarketingAlertsPage() {
                 <div>
                   <Label>تاريخ الانتهاء (اختياري)</Label>
                   <Input
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     type="datetime-local"
                     value={formData.expiresAt}
                     onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
@@ -256,7 +258,7 @@ export default function MarketingAlertsPage() {
                 <Button
                   onClick={() => createAlertMutation.mutate(formData)}
                   disabled={!formData.title || !formData.message || createAlertMutation.isPending}
-                  className="w-full bg-pink-500 hover:bg-pink-600"
+                  className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-pink-500 hover:bg-pink-600"
                   data-testid="button-submit-alert"
                 >
                   {createAlertMutation.isPending ? "جاري الإنشاء..." : "إنشاء التنبيه"}
@@ -266,12 +268,12 @@ export default function MarketingAlertsPage() {
           </Dialog>
         </div>
 
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-wrap gap-4 mb-6">
           <Select
             value={filterPriority || "all"}
             onValueChange={(value) => setFilterPriority(value === "all" ? null : value)}
           >
-            <SelectTrigger className="w-48 bg-white" data-testid="select-filter-priority">
+            <SelectTrigger className="w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0 bg-white" data-testid="select-filter-priority">
               <SelectValue placeholder="جميع الأولويات" />
             </SelectTrigger>
             <SelectContent>
@@ -285,7 +287,7 @@ export default function MarketingAlertsPage() {
           <Button
             variant={showUnreadOnly ? "default" : "outline"}
             onClick={() => setShowUnreadOnly(!showUnreadOnly)}
-            className={showUnreadOnly ? "bg-pink-500 hover:bg-pink-600" : ""}
+            className={`h-11 min-h-[44px] sm:h-9 sm:min-h-0 ${showUnreadOnly ? "bg-pink-500 hover:bg-pink-600" : ""}`}
             data-testid="button-filter-unread"
           >
             غير المقروءة فقط
@@ -330,7 +332,7 @@ export default function MarketingAlertsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => markAsReadMutation.mutate(alert.id)}
-                            className="text-gray-500 hover:text-gray-700"
+                            className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-gray-500 hover:text-gray-700"
                             data-testid={`button-mark-read-${alert.id}`}
                           >
                             <Eye className="h-4 w-4 ml-1" />
@@ -342,7 +344,7 @@ export default function MarketingAlertsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => acknowledgeMutation.mutate(alert.id)}
-                            className="text-green-500 hover:text-green-700"
+                            className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-green-500 hover:text-green-700"
                             data-testid={`button-acknowledge-${alert.id}`}
                           >
                             <Check className="h-4 w-4 ml-1" />

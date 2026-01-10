@@ -220,11 +220,11 @@ export default function ConstructionProjectsPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">المشاريع الإنشائية</h1>
-            <p className="text-muted-foreground">إدارة ومتابعة مشاريع البناء والتجديد</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">المشاريع الإنشائية</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">إدارة ومتابعة مشاريع البناء والتجديد</p>
           </div>
           {canCreateProject && (
-            <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-project">
+            <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" data-testid="button-add-project">
               <Plus className="w-4 h-4 ml-2" />
               إضافة مشروع
             </Button>
@@ -238,12 +238,12 @@ export default function ConstructionProjectsPage() {
               placeholder="البحث في المشاريع..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
+              className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
               data-testid="input-search-projects"
             />
           </div>
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-branch-filter">
+            <SelectTrigger className="w-full sm:w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch-filter">
               <SelectValue placeholder="جميع الفروع" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -254,7 +254,7 @@ export default function ConstructionProjectsPage() {
             </SelectContent>
           </Select>
           <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
+            <SelectTrigger className="w-full sm:w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
               <SelectValue placeholder="جميع الحالات" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -317,13 +317,13 @@ export default function ConstructionProjectsPage() {
 
                   <div className="flex items-center gap-2 pt-2 border-t">
                     <Link href={`/construction-projects/${project.id}`}>
-                      <Button variant="outline" size="sm" data-testid={`button-view-project-${project.id}`}>
+                      <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid={`button-view-project-${project.id}`}>
                         <Eye className="w-4 h-4 ml-1" />
                         عرض
                       </Button>
                     </Link>
                     {canEditProject && (
-                      <Button variant="outline" size="sm" onClick={() => openEditDialog(project)} data-testid={`button-edit-project-${project.id}`}>
+                      <Button variant="outline" size="sm" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => openEditDialog(project)} data-testid={`button-edit-project-${project.id}`}>
                         <Pencil className="w-4 h-4" />
                       </Button>
                     )}
@@ -331,6 +331,7 @@ export default function ConstructionProjectsPage() {
                       <Button 
                         variant="outline" 
                         size="sm" 
+                        className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                         onClick={() => { setSelectedProject(project); setIsDeleteDialogOpen(true); }}
                         data-testid={`button-delete-project-${project.id}`}
                       >

@@ -173,11 +173,11 @@ export default function AdvancedProductionOrdersPage() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-6" dir="rtl">
-        <div className="flex flex-col gap-4">
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/production-dashboard">
-              <Button variant="ghost" size="sm" className="gap-1 hover:text-amber-600" data-testid="btn-back-dashboard">
+              <Button variant="ghost" size="sm" className="gap-1 hover:text-amber-600 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-back-dashboard">
                 <ArrowRight className="h-4 w-4" />
                 لوحة الإنتاج
               </Button>
@@ -186,29 +186,29 @@ export default function AdvancedProductionOrdersPage() {
             <span className="text-foreground">أوامر الإنتاج</span>
           </div>
           
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
-                <ClipboardList className="h-6 w-6 text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                <ClipboardList className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">أوامر الإنتاج</h1>
-                <p className="text-muted-foreground text-sm">إدارة ومتابعة جميع أوامر الإنتاج اليومية والأسبوعية</p>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="text-page-title">أوامر الإنتاج</h1>
+                <p className="text-muted-foreground text-xs sm:text-sm">إدارة ومتابعة جميع أوامر الإنتاج اليومية والأسبوعية</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') })} data-testid="btn-refresh">
+              <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') })} data-testid="btn-refresh">
                 <RefreshCw className="h-4 w-4 ml-2" />
                 تحديث
               </Button>
               <Link href="/ai-production-planner">
-                <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50" data-testid="btn-ai-planner">
+                <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-ai-planner">
                   <Brain className="h-4 w-4 ml-2" />
                   المخطط الذكي
                 </Button>
               </Link>
               <Link href="/advanced-production-orders/new">
-                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700" data-testid="button-new-order">
+                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-new-order">
                   <Plus className="w-4 h-4 ml-2" />
                   أمر جديد
                 </Button>
@@ -217,44 +217,44 @@ export default function AdvancedProductionOrdersPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-3 sm:p-4 text-center">
               <ClipboardList className="w-6 h-6 mx-auto mb-2 text-blue-600" />
               <p className="text-2xl font-bold text-blue-700" data-testid="stat-total">{stats?.total || 0}</p>
               <p className="text-xs text-blue-600">إجمالي الأوامر</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-3 sm:p-4 text-center">
               <FileText className="w-6 h-6 mx-auto mb-2 text-gray-600" />
               <p className="text-2xl font-bold text-gray-700" data-testid="stat-draft">{stats?.draft || 0}</p>
               <p className="text-xs text-gray-600">مسودة</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-3 sm:p-4 text-center">
               <Clock className="w-6 h-6 mx-auto mb-2 text-yellow-600" />
               <p className="text-2xl font-bold text-yellow-700" data-testid="stat-pending">{stats?.pending || 0}</p>
               <p className="text-xs text-yellow-600">قيد الانتظار</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-3 sm:p-4 text-center">
               <Play className="w-6 h-6 mx-auto mb-2 text-purple-600" />
               <p className="text-2xl font-bold text-purple-700" data-testid="stat-in-progress">{stats?.inProgress || 0}</p>
               <p className="text-xs text-purple-600">قيد التنفيذ</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-3 sm:p-4 text-center">
               <CheckCircle className="w-6 h-6 mx-auto mb-2 text-green-600" />
               <p className="text-2xl font-bold text-green-700" data-testid="stat-completed">{stats?.completed || 0}</p>
               <p className="text-xs text-green-600">مكتمل</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-3 sm:p-4 text-center">
               <DollarSign className="w-6 h-6 mx-auto mb-2 text-amber-600" />
               <p className="text-lg font-bold text-amber-700" data-testid="stat-cost">{formatCurrency(stats?.totalEstimatedCost || 0)}</p>
               <p className="text-xs text-amber-600">التكلفة المتوقعة</p>
@@ -275,19 +275,19 @@ export default function AdvancedProductionOrdersPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="relative lg:col-span-2">
                 <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
                   placeholder="بحث بالرقم أو العنوان..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-10 bg-gray-50 border-gray-200 focus:bg-white"
+                  className="pr-10 bg-gray-50 border-gray-200 focus:bg-white h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                   data-testid="input-search"
                 />
               </div>
               <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-branch">
+                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                   <Building2 className="h-4 w-4 ml-2 text-muted-foreground" />
                   <SelectValue placeholder="الفرع" />
                 </SelectTrigger>
@@ -301,7 +301,7 @@ export default function AdvancedProductionOrdersPage() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-status">
+                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status">
                   <SelectValue placeholder="الحالة" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -314,7 +314,7 @@ export default function AdvancedProductionOrdersPage() {
                 </SelectContent>
               </Select>
               <Select value={orderTypeFilter} onValueChange={setOrderTypeFilter}>
-                <SelectTrigger className="bg-gray-50 border-gray-200" data-testid="select-order-type">
+                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-order-type">
                   <SelectValue placeholder="نوع الأمر" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -451,18 +451,18 @@ export default function AdvancedProductionOrdersPage() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Link href={`/advanced-production-orders/${order.id}`}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-amber-100 hover:text-amber-700" data-testid={`button-view-${order.id}`}>
+                              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 hover:bg-amber-100 hover:text-amber-700" data-testid={`button-view-${order.id}`}>
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
                             <Link href={`/advanced-production-orders/${order.id}/edit`}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-100 hover:text-blue-700" data-testid={`button-edit-${order.id}`}>
+                              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 hover:bg-blue-100 hover:text-blue-700" data-testid={`button-edit-${order.id}`}>
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </Link>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-red-100 hover:text-red-700" data-testid={`button-delete-${order.id}`}>
+                                <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 hover:bg-red-100 hover:text-red-700" data-testid={`button-delete-${order.id}`}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>

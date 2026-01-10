@@ -604,7 +604,7 @@ export default function ConstructionProjectDetailPage() {
                 value={projectId.toString()}
                 onValueChange={(value) => navigate(`/construction-projects/${value}`)}
               >
-                <SelectTrigger className="w-full max-w-md" data-testid="select-project">
+                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 w-full max-w-md" data-testid="select-project">
                   <SelectValue placeholder="اختر مشروع" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -617,7 +617,7 @@ export default function ConstructionProjectDetailPage() {
               </Select>
             </div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-foreground">{project.title}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{project.title}</h1>
               {getStatusBadge(project.status)}
             </div>
             <div className="flex items-center gap-2 text-muted-foreground mt-2">
@@ -629,13 +629,13 @@ export default function ConstructionProjectDetailPage() {
             )}
           </div>
           {canEdit && (
-            <Button onClick={() => { setNewProgress(project.progressPercent || 0); setIsUpdateProgressOpen(true); }} data-testid="button-update-progress">
+            <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => { setNewProgress(project.progressPercent || 0); setIsUpdateProgressOpen(true); }} data-testid="button-update-progress">
               تحديث نسبة التقدم
             </Button>
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">الميزانية المخططة</CardTitle>

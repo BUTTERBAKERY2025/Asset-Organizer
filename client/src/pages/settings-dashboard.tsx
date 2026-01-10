@@ -486,53 +486,53 @@ export default function SettingsDashboardPage() {
   return (
     <Layout>
       <div className="container mx-auto py-6 px-4 max-w-7xl" dir="rtl">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-3 bg-primary/10 rounded-xl">
-              <Settings className="w-7 h-7 text-primary" />
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
+            <div className="p-2 sm:p-3 bg-primary/10 rounded-xl w-fit">
+              <Settings className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold" data-testid="text-page-title">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">
                 إعدادات النظام
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 إدارة جميع إعدادات ومحتويات النظام من مكان واحد
               </p>
             </div>
           </div>
         </div>
 
-        <div className="relative mb-8">
+        <div className="relative mb-6 sm:mb-8">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             placeholder="ابحث في الإعدادات..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-10 h-12 text-lg"
+            className="pr-10 h-11 min-h-[44px] sm:h-12 sm:min-h-0 text-base sm:text-lg"
             data-testid="input-search-settings"
           />
         </div>
 
         {visibleQuickActions.length > 0 && !searchQuery && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" data-testid="text-quick-actions-title">
-              <Zap className="w-5 h-5 text-amber-500" />
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2" data-testid="text-quick-actions-title">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
               إجراءات سريعة
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
               {visibleQuickActions.map((action) => (
                 <Link key={action.id} href={action.path}>
                   <Card
-                    className="cursor-pointer hover:border-primary hover:shadow-md transition-all group h-full"
+                    className="cursor-pointer hover:border-primary hover:shadow-md transition-all group h-full min-h-[80px]"
                     data-testid={`card-quick-${action.id}`}
                   >
-                    <CardContent className="p-3 flex flex-col items-center text-center gap-2">
+                    <CardContent className="p-2 sm:p-3 flex flex-col items-center text-center gap-1 sm:gap-2">
                       <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
-                        <action.icon className="w-5 h-5 text-primary" />
+                        <action.icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium text-sm">{action.title}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="font-medium text-xs sm:text-sm">{action.title}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
                           {action.description}
                         </p>
                       </div>
@@ -553,44 +553,44 @@ export default function SettingsDashboardPage() {
 
             return (
               <Card key={section.id} data-testid={`section-${section.id}`}>
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 ${section.color} rounded-lg`}>
-                      <section.icon className="w-5 h-5 text-white" />
+                <CardHeader className="pb-3 sm:pb-4 p-3 sm:p-4 md:p-6">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`p-1.5 sm:p-2 ${section.color} rounded-lg`}>
+                      <section.icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">{section.title}</CardTitle>
-                      <CardDescription>{section.description}</CardDescription>
+                      <CardTitle className="text-base sm:text-lg">{section.title}</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">{section.description}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
                     {visibleItems.map((item) => (
                       <Link key={item.id} href={item.path}>
                         <div
-                          className="p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary cursor-pointer transition-all group"
+                          className="p-3 sm:p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary cursor-pointer transition-all group min-h-[64px]"
                           data-testid={`link-${item.id}`}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="p-2 bg-muted rounded-lg group-hover:bg-primary/10 transition-colors">
-                              <item.icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          <div className="flex items-start gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-muted rounded-lg group-hover:bg-primary/10 transition-colors">
+                              <item.icon className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="font-medium">{item.title}</span>
+                              <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
+                                <span className="font-medium text-sm sm:text-base">{item.title}</span>
                                 {item.badge && (
-                                  <Badge variant={item.badgeVariant || "secondary"} className="text-xs">
+                                  <Badge variant={item.badgeVariant || "secondary"} className="text-[10px] sm:text-xs">
                                     {item.badge}
                                   </Badge>
                                 )}
                                 {item.adminOnly && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="outline" className="text-[10px] sm:text-xs">
                                     مدير
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2">
+                              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
                                 {item.description}
                               </p>
                             </div>

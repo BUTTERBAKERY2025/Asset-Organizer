@@ -499,21 +499,21 @@ export default function TargetsPlanning() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
-              <Target className="h-8 w-8" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">
+              <Target className="h-6 w-6 sm:h-8 sm:w-8" />
               تخطيط الأهداف الشهرية
             </h1>
-            <p className="text-amber-700 mt-1">تحديد وتوزيع الأهداف على الفروع والأيام</p>
+            <p className="text-sm sm:text-base text-amber-700 mt-1">تحديد وتوزيع الأهداف على الفروع والأيام</p>
           </div>
           
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <Label>السنة:</Label>
+              <Label className="hidden sm:inline">السنة:</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-24" data-testid="select-year">
+                <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -524,9 +524,9 @@ export default function TargetsPlanning() {
               </Select>
             </div>
             <div className="flex items-center gap-2">
-              <Label>الشهر:</Label>
+              <Label className="hidden sm:inline">الشهر:</Label>
               <Select value={selectedMonthNum} onValueChange={setSelectedMonthNum}>
-                <SelectTrigger className="w-28" data-testid="select-month">
+                <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -537,58 +537,58 @@ export default function TargetsPlanning() {
               </Select>
             </div>
             
-            <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="button-export-excel">
-              <FileSpreadsheet className="h-4 w-4 ml-2" />
-              Excel
+            <Button variant="outline" onClick={exportToExcel} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
+              <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
+              <span className="hidden sm:inline">Excel</span>
             </Button>
             
-            <Button variant="outline" size="sm" onClick={exportToPDF} data-testid="button-export-pdf">
-              <FileText className="h-4 w-4 ml-2" />
-              PDF
+            <Button variant="outline" onClick={exportToPDF} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-pdf">
+              <FileText className="h-4 w-4 sm:ml-2" />
+              <span className="hidden sm:inline">PDF</span>
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-            <CardContent className="p-4">
-              <div className="text-sm opacity-90">إجمالي الأهداف</div>
-              <div className="text-2xl font-bold font-mono">{formatCurrency(totalTarget)}</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xs sm:text-sm opacity-90">إجمالي الأهداف</div>
+              <div className="text-lg sm:text-2xl font-bold font-mono">{formatCurrency(totalTarget)}</div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
-            <CardContent className="p-4">
-              <div className="text-sm opacity-90">الفروع المستهدفة</div>
-              <div className="text-2xl font-bold">{targets.length} / {branches.length}</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xs sm:text-sm opacity-90">الفروع المستهدفة</div>
+              <div className="text-lg sm:text-2xl font-bold">{targets.length} / {branches.length}</div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-to-br from-green-500 to-emerald-500 text-white">
-            <CardContent className="p-4">
-              <div className="text-sm opacity-90">أهداف نشطة</div>
-              <div className="text-2xl font-bold">{targets.filter(t => t.status === 'active').length}</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xs sm:text-sm opacity-90">أهداف نشطة</div>
+              <div className="text-lg sm:text-2xl font-bold">{targets.filter(t => t.status === 'active').length}</div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-            <CardContent className="p-4">
-              <div className="text-sm opacity-90">فروع بدون أهداف</div>
-              <div className="text-2xl font-bold">{branchesWithoutTargets.length}</div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="text-xs sm:text-sm opacity-90">فروع بدون أهداف</div>
+              <div className="text-lg sm:text-2xl font-bold">{branchesWithoutTargets.length}</div>
             </CardContent>
           </Card>
         </div>
 
         <Card className="border-amber-200 bg-amber-50/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <span className="font-medium text-amber-900">إجراءات سريعة:</span>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+              <span className="font-medium text-amber-900 text-sm sm:text-base">إجراءات سريعة:</span>
               
               <Dialog open={showNewTargetDialog} onOpenChange={setShowNewTargetDialog}>
                 <DialogTrigger asChild>
-                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700" data-testid="button-add-target">
-                    <Plus className="h-4 w-4 ml-2" />
-                    هدف لفرع واحد
+                  <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-amber-600 hover:bg-amber-700" data-testid="button-add-target">
+                    <Plus className="h-4 w-4 sm:ml-2" />
+                    <span className="hidden sm:inline">هدف لفرع واحد</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-md" dir="rtl">
@@ -604,7 +604,7 @@ export default function TargetsPlanning() {
                         value={newTarget.branchId}
                         onValueChange={(v) => setNewTarget({ ...newTarget, branchId: v })}
                       >
-                        <SelectTrigger data-testid="select-branch">
+                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                           <SelectValue placeholder="اختر الفرع" />
                         </SelectTrigger>
                         <SelectContent>
@@ -622,7 +622,7 @@ export default function TargetsPlanning() {
                           value={newTarget.yearMonth.split('-')[0]}
                           onValueChange={(v) => setNewTarget({ ...newTarget, yearMonth: `${v}-${newTarget.yearMonth.split('-')[1]}` })}
                         >
-                          <SelectTrigger className="w-24">
+                          <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -635,7 +635,7 @@ export default function TargetsPlanning() {
                           value={newTarget.yearMonth.split('-')[1]}
                           onValueChange={(v) => setNewTarget({ ...newTarget, yearMonth: `${newTarget.yearMonth.split('-')[0]}-${v}` })}
                         >
-                          <SelectTrigger className="w-28">
+                          <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -654,6 +654,7 @@ export default function TargetsPlanning() {
                         value={newTarget.targetAmount}
                         onChange={(e) => setNewTarget({ ...newTarget, targetAmount: e.target.value })}
                         placeholder="مثال: 500000"
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         data-testid="input-target-amount"
                       />
                     </div>
@@ -664,7 +665,7 @@ export default function TargetsPlanning() {
                         value={newTarget.profileId?.toString() || "default"}
                         onValueChange={(v) => setNewTarget({ ...newTarget, profileId: v === "default" ? null : parseInt(v) })}
                       >
-                        <SelectTrigger data-testid="select-profile">
+                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-profile">
                           <SelectValue placeholder="اختر ملف التوزيع" />
                         </SelectTrigger>
                         <SelectContent>
@@ -687,10 +688,11 @@ export default function TargetsPlanning() {
                   </div>
                   
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowNewTargetDialog(false)}>إلغاء</Button>
+                    <Button variant="outline" onClick={() => setShowNewTargetDialog(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
                     <Button 
                       onClick={() => createTargetMutation.mutate(newTarget)}
                       disabled={!newTarget.branchId || !newTarget.targetAmount || createTargetMutation.isPending}
+                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                       data-testid="button-save-target"
                     >
                       {createTargetMutation.isPending ? "جاري الحفظ..." : "حفظ"}
@@ -701,9 +703,9 @@ export default function TargetsPlanning() {
 
               <Dialog open={showBulkCreateDialog} onOpenChange={setShowBulkCreateDialog}>
                 <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" data-testid="button-bulk-create">
-                    <Zap className="h-4 w-4 ml-2" />
-                    أهداف لعدة فروع
+                  <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-bulk-create">
+                    <Zap className="h-4 w-4 sm:ml-2" />
+                    <span className="hidden sm:inline">أهداف لعدة فروع</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl" dir="rtl">
@@ -752,7 +754,7 @@ export default function TargetsPlanning() {
                             {bulkTargets.useCustomAmounts && isSelected && (
                               <Input
                                 type="number"
-                                className="w-32"
+                                className="w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                                 placeholder="الهدف"
                                 value={bulkTargets.customAmounts[branch.id] || ""}
                                 onChange={(e) => setBulkTargets(prev => ({
@@ -782,6 +784,7 @@ export default function TargetsPlanning() {
                           value={bulkTargets.targetAmount}
                           onChange={(e) => setBulkTargets(prev => ({ ...prev, targetAmount: e.target.value }))}
                           placeholder="مثال: 500000"
+                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         />
                       </div>
                     )}
@@ -792,7 +795,7 @@ export default function TargetsPlanning() {
                         value={bulkTargets.profileId?.toString() || "default"}
                         onValueChange={(v) => setBulkTargets(prev => ({ ...prev, profileId: v === "default" ? null : parseInt(v) }))}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                           <SelectValue placeholder="الملف الافتراضي" />
                         </SelectTrigger>
                         <SelectContent>
@@ -806,10 +809,11 @@ export default function TargetsPlanning() {
                   </div>
                   
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowBulkCreateDialog(false)}>إلغاء</Button>
+                    <Button variant="outline" onClick={() => setShowBulkCreateDialog(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
                     <Button 
                       onClick={() => bulkCreateMutation.mutate()}
                       disabled={bulkTargets.selectedBranches.length === 0 || bulkCreateMutation.isPending}
+                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                     >
                       {bulkCreateMutation.isPending ? "جاري الإنشاء..." : `إنشاء ${bulkTargets.selectedBranches.length} هدف`}
                     </Button>
@@ -819,9 +823,9 @@ export default function TargetsPlanning() {
 
               <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
                 <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" data-testid="button-copy-from-month">
-                    <Copy className="h-4 w-4 ml-2" />
-                    نسخ من شهر سابق
+                  <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-copy-from-month">
+                    <Copy className="h-4 w-4 sm:ml-2" />
+                    <span className="hidden sm:inline">نسخ من شهر سابق</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-md" dir="rtl">
@@ -838,7 +842,7 @@ export default function TargetsPlanning() {
                           value={copyFromMonth.split('-')[0]}
                           onValueChange={(v) => setCopyFromMonth(`${v}-${copyFromMonth.split('-')[1]}`)}
                         >
-                          <SelectTrigger className="w-24">
+                          <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -851,7 +855,7 @@ export default function TargetsPlanning() {
                           value={copyFromMonth.split('-')[1]}
                           onValueChange={(v) => setCopyFromMonth(`${copyFromMonth.split('-')[0]}-${v}`)}
                         >
-                          <SelectTrigger className="w-28">
+                          <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -877,24 +881,24 @@ export default function TargetsPlanning() {
                       <p className="text-gray-500 text-center py-4">لا توجد أهداف في هذا الشهر</p>
                     )}
                     
-                    <div className="grid grid-cols-4 gap-2">
-                      <Button variant="outline" size="sm" onClick={() => copyFromPreviousMonthMutation.mutate(0)}>نسخ كما هي</Button>
-                      <Button variant="outline" size="sm" onClick={() => copyFromPreviousMonthMutation.mutate(5)}>+5%</Button>
-                      <Button variant="outline" size="sm" onClick={() => copyFromPreviousMonthMutation.mutate(10)}>+10%</Button>
-                      <Button variant="outline" size="sm" onClick={() => copyFromPreviousMonthMutation.mutate(15)}>+15%</Button>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(0)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">نسخ كما هي</Button>
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(5)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">+5%</Button>
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(10)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">+10%</Button>
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(15)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">+15%</Button>
                     </div>
                   </div>
                   
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowCopyDialog(false)}>إلغاء</Button>
+                    <Button variant="outline" onClick={() => setShowCopyDialog(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
               
               <Link href="/targets-dashboard">
-                <Button size="sm" variant="outline">
-                  <TrendingUp className="h-4 w-4 ml-2" />
-                  لوحة الأداء
+                <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+                  <TrendingUp className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">لوحة الأداء</span>
                 </Button>
               </Link>
             </div>
@@ -928,9 +932,9 @@ export default function TargetsPlanning() {
                       {filteredTargets.length} هدف
                     </Badge>
                   </CardTitle>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <Select value={filterBranch} onValueChange={setFilterBranch}>
-                      <SelectTrigger className="w-40">
+                      <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue placeholder="تصفية بالفرع" />
                       </SelectTrigger>
                       <SelectContent>
@@ -941,7 +945,7 @@ export default function TargetsPlanning() {
                       </SelectContent>
                     </Select>
                     <Select value={filterStatus} onValueChange={setFilterStatus}>
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-28 sm:w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                         <SelectValue placeholder="الحالة" />
                       </SelectTrigger>
                       <SelectContent>

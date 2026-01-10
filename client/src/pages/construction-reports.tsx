@@ -561,10 +561,10 @@ export default function ConstructionReportsPage() {
       <div className="space-y-6" dir="rtl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">تقارير المشاريع الإنشائية</h1>
+            <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-page-title">تقارير المشاريع الإنشائية</h1>
             <p className="text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <ExportButtons
               data={projectsExportData}
               columns={exportColumns}
@@ -573,11 +573,11 @@ export default function ConstructionReportsPage() {
               subtitle={selectedBranch !== "all" ? branchMap[selectedBranch] : "جميع الفروع"}
               sheetName="المشاريع"
             />
-            <Button variant="outline" onClick={() => handlePrint()} data-testid="button-print">
+            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => handlePrint()} data-testid="button-print">
               <Printer className="w-4 h-4 ml-2" />
               طباعة
             </Button>
-            <Button onClick={exportToExcel} data-testid="button-export-excel">
+            <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportToExcel} data-testid="button-export-excel">
               <FileSpreadsheet className="w-4 h-4 ml-2" />
               تصدير Excel
             </Button>
@@ -616,7 +616,7 @@ export default function ConstructionReportsPage() {
                     placeholder="البحث في البنود..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pr-10"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 pr-10"
                     data-testid="input-search"
                   />
                 </div>
@@ -625,7 +625,7 @@ export default function ConstructionReportsPage() {
                   <div className="space-y-2">
                     <Label>الفرع</Label>
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                      <SelectTrigger data-testid="select-branch-filter">
+                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch-filter">
                         <SelectValue placeholder="جميع الفروع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -642,7 +642,7 @@ export default function ConstructionReportsPage() {
                   <div className="space-y-2">
                     <Label>الفئة</Label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger data-testid="select-category-filter">
+                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-category-filter">
                         <SelectValue placeholder="جميع الفئات" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -659,7 +659,7 @@ export default function ConstructionReportsPage() {
                   <div className="space-y-2">
                     <Label>المقاول</Label>
                     <Select value={selectedContractor} onValueChange={setSelectedContractor}>
-                      <SelectTrigger data-testid="select-contractor-filter">
+                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-contractor-filter">
                         <SelectValue placeholder="جميع المقاولين" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -676,7 +676,7 @@ export default function ConstructionReportsPage() {
                   <div className="space-y-2">
                     <Label>حالة البند</Label>
                     <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                      <SelectTrigger data-testid="select-status-filter">
+                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
                         <SelectValue placeholder="جميع الحالات" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">

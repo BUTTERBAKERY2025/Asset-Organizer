@@ -463,13 +463,13 @@ export default function InventoryPage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6 print:space-y-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
-            <p className="text-muted-foreground mt-1">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2" onClick={handlePrint} data-testid="button-print">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={handlePrint} data-testid="button-print">
               <Printer className="w-4 h-4" />
               <span>طباعة</span>
             </Button>
@@ -481,18 +481,18 @@ export default function InventoryPage() {
               subtitle={`تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`}
               sheetName="المخزون"
             />
-            <Button className="gap-2" onClick={handleExport} data-testid="button-export">
+            <Button className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={handleExport} data-testid="button-export">
               <Download className="w-4 h-4" />
               <span>تصدير Excel</span>
             </Button>
-            <Button className="gap-2" onClick={() => setIsImportDialogOpen(true)} data-testid="button-import">
+            <Button className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsImportDialogOpen(true)} data-testid="button-import">
               <Upload className="w-4 h-4" />
               <span>استيراد Excel</span>
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 print:hidden">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="pb-2">
               <CardDescription>إجمالي الأصول</CardDescription>

@@ -645,19 +645,19 @@ export default function DailyProductionPage() {
     <Layout>
       <div className="space-y-6" dir="rtl">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
-              <Factory className="w-6 h-6 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
+              <Factory className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">الإنتاج الفعلي اليومي</h1>
-              <p className="text-muted-foreground">تسجيل ومتابعة دفعات الإنتاج على مدار اليوم</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="text-page-title">الإنتاج الفعلي اليومي</h1>
+              <p className="text-sm text-muted-foreground">تسجيل ومتابعة دفعات الإنتاج على مدار اليوم</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -676,7 +676,7 @@ export default function DailyProductionPage() {
           <div className="space-y-2 min-w-[200px]">
             <Label>الفرع *</Label>
             <Select value={branchId} onValueChange={setBranchId}>
-              <SelectTrigger data-testid="select-branch">
+              <SelectTrigger data-testid="select-branch" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -692,14 +692,14 @@ export default function DailyProductionPage() {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-[160px]"
+              className="w-[160px] h-11 min-h-[44px] sm:h-10 sm:min-h-0"
               data-testid="input-date"
             />
           </div>
           <div className="space-y-2">
             <Label>الوردية</Label>
             <Select value={selectedShift} onValueChange={setSelectedShift}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[140px] h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                 <SelectValue placeholder="الوردية" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -730,16 +730,16 @@ export default function DailyProductionPage() {
               <Badge variant="secondary" className="text-xs">كل دقيقة</Badge>
             )}
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetchBatches()} data-testid="btn-refresh">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetchBatches()} data-testid="btn-refresh" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
               <RefreshCw className="h-4 w-4 ml-2" />
               تحديث
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToExcel} disabled={!batches?.length} data-testid="btn-export">
+            <Button variant="outline" size="sm" onClick={exportToExcel} disabled={!batches?.length} data-testid="btn-export" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-print">
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-print" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
               <Printer className="h-4 w-4 ml-2" />
               طباعة
             </Button>
@@ -748,14 +748,14 @@ export default function DailyProductionPage() {
 
         {/* Stats Cards with Comparison */}
         {branchId && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <Card className="border-r-4 border-r-amber-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">إجمالي الدفعات</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الدفعات</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
+                      <p className="text-xl sm:text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
                       {prevStats && (
                         <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
                           {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -764,17 +764,17 @@ export default function DailyProductionPage() {
                       )}
                     </div>
                   </div>
-                  <Package className="h-8 w-8 text-amber-500 opacity-50" />
+                  <Package className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-green-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">إجمالي الكميات</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الكميات</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
+                      <p className="text-xl sm:text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
                       {prevStats && (
                         <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
                           {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -783,31 +783,31 @@ export default function DailyProductionPage() {
                       )}
                     </div>
                   </div>
-                  <TrendingUp className="h-8 w-8 text-green-500 opacity-50" />
+                  <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-blue-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">بار العرض</p>
-                    <p className="text-2xl font-bold text-blue-700">{stats?.byDestination?.display_bar || 0}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">بار العرض</p>
+                    <p className="text-xl sm:text-2xl font-bold text-blue-700">{stats?.byDestination?.display_bar || 0}</p>
                   </div>
-                  <ShoppingCart className="h-8 w-8 text-blue-500 opacity-50" />
+                  <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-cyan-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">التخزين</p>
-                    <p className="text-2xl font-bold text-cyan-700">
+                    <p className="text-xs sm:text-sm text-muted-foreground">التخزين</p>
+                    <p className="text-xl sm:text-2xl font-bold text-cyan-700">
                       {(stats?.byDestination?.freezer || 0) + (stats?.byDestination?.refrigerator || 0)}
                     </p>
                   </div>
-                  <Snowflake className="h-8 w-8 text-cyan-500 opacity-50" />
+                  <Snowflake className="h-6 w-6 sm:h-8 sm:w-8 text-cyan-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
@@ -870,7 +870,7 @@ export default function DailyProductionPage() {
                           placeholder="ابحث عن منتج..."
                           value={productSearch}
                           onChange={(e) => setProductSearch(e.target.value)}
-                          className="pr-10"
+                          className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         />
                       </div>
                       <Select value={productName} onValueChange={(val) => {
@@ -878,7 +878,7 @@ export default function DailyProductionPage() {
                         const prod = products?.find(p => p.name === val);
                         if (prod?.category) setProductCategory(prod.category);
                       }}>
-                        <SelectTrigger data-testid="select-product">
+                        <SelectTrigger data-testid="select-product" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                           <SelectValue placeholder="اختر المنتج" />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px] overflow-y-auto">
@@ -894,13 +894,14 @@ export default function DailyProductionPage() {
                         value={productName}
                         onChange={(e) => setProductName(e.target.value)}
                         data-testid="input-product-name"
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                       />
                     </div>
 
                     <div className="space-y-2">
                       <Label>الفئة</Label>
                       <Select value={productCategory} onValueChange={setProductCategory}>
-                        <SelectTrigger data-testid="select-category">
+                        <SelectTrigger data-testid="select-category" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
                           <SelectValue placeholder="اختر الفئة" />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
@@ -924,6 +925,7 @@ export default function DailyProductionPage() {
                         placeholder="أدخل الكمية"
                         ref={quantityInputRef}
                         data-testid="input-quantity"
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                       />
                       <div className="flex flex-wrap gap-1">
                         {QUICK_QUANTITIES.map((q) => (
@@ -932,7 +934,7 @@ export default function DailyProductionPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-7 px-2 text-xs"
+                            className="h-10 min-h-[40px] sm:h-7 sm:min-h-0 px-3 sm:px-2 text-sm sm:text-xs"
                             onClick={() => setQuantity(q.toString())}
                           >
                             {q}
@@ -978,7 +980,7 @@ export default function DailyProductionPage() {
 
                     <Button
                       type="submit"
-                      className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
+                      className="w-full h-11 min-h-[44px] sm:h-10 sm:min-h-0 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
                       disabled={createMutation.isPending || !branchId}
                       data-testid="btn-submit"
                     >
@@ -1029,12 +1031,12 @@ export default function DailyProductionPage() {
                           placeholder="بحث في الدفعات..."
                           value={batchSearch}
                           onChange={(e) => { setBatchSearch(e.target.value); setCurrentPage(1); }}
-                          className="h-9"
+                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                           data-testid="input-batch-search"
                         />
                       </div>
                       <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-[140px] h-9" data-testid="select-filter-category">
+                        <SelectTrigger className="w-[140px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-filter-category">
                           <SelectValue placeholder="الفئة" />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
@@ -1045,7 +1047,7 @@ export default function DailyProductionPage() {
                         </SelectContent>
                       </Select>
                       <Select value={filterDestination} onValueChange={(v) => { setFilterDestination(v); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-[140px] h-9" data-testid="select-filter-destination">
+                        <SelectTrigger className="w-[140px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-filter-destination">
                           <SelectValue placeholder="الوجهة" />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
@@ -1059,7 +1061,7 @@ export default function DailyProductionPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-9"
+                          className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                           onClick={() => {
                             setBatchSearch("");
                             setFilterCategory("all");
@@ -1072,7 +1074,7 @@ export default function DailyProductionPage() {
                           مسح
                         </Button>
                       )}
-                      <Badge variant="secondary" className="h-9 px-3 flex items-center">
+                      <Badge variant="secondary" className="h-11 sm:h-9 px-3 flex items-center">
                         {filteredBatches.length} نتيجة
                       </Badge>
                     </div>

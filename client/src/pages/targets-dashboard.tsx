@@ -472,21 +472,21 @@ export default function TargetsDashboard() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-3">
-              <TrendingUp className="h-8 w-8" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">
+              <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8" />
               لوحة الأداء والأهداف
             </h1>
-            <p className="text-amber-700 mt-1">متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع</p>
+            <p className="text-sm sm:text-base text-amber-700 mt-1">متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع</p>
           </div>
           
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
             <div className="flex items-center gap-2">
-              <Label>السنة:</Label>
+              <Label className="hidden sm:inline">السنة:</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-24" data-testid="select-year">
+                <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -497,9 +497,9 @@ export default function TargetsDashboard() {
               </Select>
             </div>
             <div className="flex items-center gap-2">
-              <Label>الشهر:</Label>
+              <Label className="hidden sm:inline">الشهر:</Label>
               <Select value={selectedMonthNum} onValueChange={setSelectedMonthNum}>
-                <SelectTrigger className="w-28" data-testid="select-month">
+                <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -510,79 +510,79 @@ export default function TargetsDashboard() {
               </Select>
             </div>
             
-            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
-              <FileSpreadsheet className="h-4 w-4 ml-2" />
-              تصدير Excel
+            <Button variant="outline" onClick={exportToExcel} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
+              <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
+              <span className="hidden sm:inline">تصدير Excel</span>
             </Button>
             
-            <Button variant="outline" onClick={exportToPDF} data-testid="button-export-pdf">
-              <FileText className="h-4 w-4 ml-2" />
-              طباعة PDF
+            <Button variant="outline" onClick={exportToPDF} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-pdf">
+              <FileText className="h-4 w-4 sm:ml-2" />
+              <span className="hidden sm:inline">طباعة PDF</span>
             </Button>
             
             <Link href="/targets-planning">
-              <Button variant="outline" data-testid="button-goto-planning">
-                <Target className="h-4 w-4 ml-2" />
-                تخطيط الأهداف
+              <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-goto-planning">
+                <Target className="h-4 w-4 sm:ml-2" />
+                <span className="hidden sm:inline">تخطيط الأهداف</span>
               </Button>
             </Link>
             
             <Link href="/cashier-shift-performance">
-              <Button variant="default" className="bg-amber-600 hover:bg-amber-700" data-testid="button-goto-shift-performance">
-                <Users className="h-4 w-4 ml-2" />
-                أداء الشفتات
+              <Button variant="default" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-amber-600 hover:bg-amber-700" data-testid="button-goto-shift-performance">
+                <Users className="h-4 w-4 sm:ml-2" />
+                <span className="hidden sm:inline">أداء الشفتات</span>
               </Button>
             </Link>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Target className="h-5 w-5" />
+            <CardHeader className="pb-2 p-3 sm:p-4">
+              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
+                <Target className="h-4 w-4 sm:h-5 sm:w-5" />
                 إجمالي الهدف
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold font-mono">{formatCurrency(totalTarget)}</div>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <div className="text-xl sm:text-3xl font-bold font-mono">{formatCurrency(totalTarget)}</div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-green-500 to-emerald-500 text-white">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
+            <CardHeader className="pb-2 p-3 sm:p-4">
+              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                 إجمالي المحقق
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold font-mono">{formatCurrency(totalAchieved)}</div>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <div className="text-xl sm:text-3xl font-bold font-mono">{formatCurrency(totalAchieved)}</div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Award className="h-5 w-5" />
+            <CardHeader className="pb-2 p-3 sm:p-4">
+              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
+                <Award className="h-4 w-4 sm:h-5 sm:w-5" />
                 نسبة التحقيق
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{overallPercent.toFixed(1)}%</div>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <div className="text-xl sm:text-3xl font-bold">{overallPercent.toFixed(1)}%</div>
               <Progress value={Math.min(overallPercent, 100)} className="mt-2 bg-white/30" />
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
+            <CardHeader className="pb-2 p-3 sm:p-4">
+              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
+                <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
                 عدد الفروع
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{leaderboard?.branches.length || 0}</div>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <div className="text-xl sm:text-3xl font-bold">{leaderboard?.branches.length || 0}</div>
             </CardContent>
           </Card>
         </div>

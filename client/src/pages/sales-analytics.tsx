@@ -336,27 +336,26 @@ export default function SalesAnalytics() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-6" dir="rtl">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                <BarChart3 className="h-8 w-8 text-amber-600" />
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
+                <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
                 تحليلات المبيعات
               </h1>
-              <p className="text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
+              <p className="text-sm sm:text-base text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" className="bg-white/80">
                 <Clock className="h-3 w-3 ml-1" />
                 آخر تحديث: {formatLastUpdated(lastUpdated)}
               </Badge>
               <Button 
                 variant={autoRefresh ? "default" : "outline"} 
-                size="sm" 
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                className={autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}
+                className={`h-11 min-h-[44px] sm:h-9 sm:min-h-0 ${autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}`}
                 data-testid="button-auto-refresh"
               >
                 <RefreshCw className={`h-4 w-4 ml-1 ${autoRefresh ? "animate-spin" : ""}`} />
@@ -375,7 +374,7 @@ export default function SalesAnalytics() {
             <CardContent>
               <div className="flex flex-wrap gap-3 items-center">
                 <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="w-28" data-testid="select-year">
+                  <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
                     <SelectValue placeholder="السنة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -386,7 +385,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="w-32" data-testid="select-month">
+                  <SelectTrigger className="w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
                     <SelectValue placeholder="الشهر" />
                   </SelectTrigger>
                   <SelectContent>
@@ -397,7 +396,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-40" data-testid="select-branch">
+                  <SelectTrigger className="w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -409,7 +408,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={journalStatus} onValueChange={setJournalStatus}>
-                  <SelectTrigger className="w-40" data-testid="select-journal-status">
+                  <SelectTrigger className="w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-journal-status">
                     <SelectValue placeholder="حالة اليومية" />
                   </SelectTrigger>
                   <SelectContent>
@@ -422,7 +421,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={discrepancyType} onValueChange={setDiscrepancyType}>
-                  <SelectTrigger className="w-44" data-testid="select-discrepancy-type">
+                  <SelectTrigger className="w-44 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-discrepancy-type">
                     <SelectValue placeholder="نوع العجز/الزيادة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -433,7 +432,7 @@ export default function SalesAnalytics() {
                   </SelectContent>
                 </Select>
 
-                <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="button-refresh">
+                <Button variant="outline" onClick={handleRefresh} className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 p-0" data-testid="button-refresh">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 
@@ -451,53 +450,53 @@ export default function SalesAnalytics() {
             </CardContent>
           </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">إجمالي المبيعات</p>
-                  <p className="text-2xl font-bold text-gray-900" data-testid="text-total-sales">
+                  <p className="text-xs sm:text-sm text-gray-500">إجمالي المبيعات</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900" data-testid="text-total-sales">
                     {formatCurrency(totalActualSales)}
                   </p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-amber-600" />
+                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                  <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">الهدف الشهري</p>
-                  <p className="text-2xl font-bold text-gray-900" data-testid="text-total-target">
+                  <p className="text-xs sm:text-sm text-gray-500">الهدف الشهري</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900" data-testid="text-total-target">
                     {formatCurrency(totalTargetAmount)}
                   </p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Target className="h-6 w-6 text-blue-600" />
+                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Target className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">نسبة التحقيق</p>
-                  <p className="text-2xl font-bold text-gray-900" data-testid="text-achievement-percent">
+                  <p className="text-xs sm:text-sm text-gray-500">نسبة التحقيق</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900" data-testid="text-achievement-percent">
                     {formatPercent(overallAchievement)}
                   </p>
                   <Progress value={Math.min(overallAchievement, 100)} className="mt-2 h-2" />
                 </div>
-                <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
+                <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center ${
                   overallAchievement >= 100 ? "bg-green-100" : overallAchievement >= 80 ? "bg-amber-100" : "bg-red-100"
                 }`}>
-                  <Award className={`h-6 w-6 ${
+                  <Award className={`h-5 w-5 sm:h-6 sm:w-6 ${
                     overallAchievement >= 100 ? "text-green-600" : overallAchievement >= 80 ? "text-amber-600" : "text-red-600"
                   }`} />
                 </div>
@@ -506,21 +505,21 @@ export default function SalesAnalytics() {
           </Card>
 
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">الفارق</p>
-                  <p className={`text-2xl font-bold ${totalVariance >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-variance">
+                  <p className="text-xs sm:text-sm text-gray-500">الفارق</p>
+                  <p className={`text-lg sm:text-2xl font-bold ${totalVariance >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-variance">
                     {formatCurrency(totalVariance)}
                   </p>
                 </div>
-                <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
+                <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center ${
                   totalVariance >= 0 ? "bg-green-100" : "bg-red-100"
                 }`}>
                   {totalVariance >= 0 ? (
-                    <ArrowUp className="h-6 w-6 text-green-600" />
+                    <ArrowUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
                   ) : (
-                    <ArrowDown className="h-6 w-6 text-red-600" />
+                    <ArrowDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" />
                   )}
                 </div>
               </div>

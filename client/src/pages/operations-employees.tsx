@@ -288,9 +288,9 @@ export default function OperationsEmployeesPage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
               موظفي التشغيل
             </h1>
             <p className="text-muted-foreground mt-1">إدارة موظفي الفروع وتعيين المهام والصلاحيات</p>
@@ -298,7 +298,7 @@ export default function OperationsEmployeesPage() {
           {canCreate && (
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button data-testid="button-add-employee">
+                <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-employee">
                   <Plus className="w-4 h-4 ml-2" />
                   إضافة موظف
                 </Button>
@@ -313,6 +313,7 @@ export default function OperationsEmployeesPage() {
                     <div className="space-y-2">
                       <Label>الاسم الأول *</Label>
                       <Input
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         value={newEmployee.firstName}
                         onChange={(e) => setNewEmployee({ ...newEmployee, firstName: e.target.value })}
                         data-testid="input-first-name"
@@ -321,6 +322,7 @@ export default function OperationsEmployeesPage() {
                     <div className="space-y-2">
                       <Label>اسم العائلة *</Label>
                       <Input
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         value={newEmployee.lastName}
                         onChange={(e) => setNewEmployee({ ...newEmployee, lastName: e.target.value })}
                         data-testid="input-last-name"
@@ -331,6 +333,7 @@ export default function OperationsEmployeesPage() {
                     <div className="space-y-2">
                       <Label>اسم المستخدم *</Label>
                       <Input
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         value={newEmployee.username}
                         onChange={(e) => setNewEmployee({ ...newEmployee, username: e.target.value })}
                         data-testid="input-username"
@@ -339,6 +342,7 @@ export default function OperationsEmployeesPage() {
                     <div className="space-y-2">
                       <Label>كلمة المرور *</Label>
                       <Input
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         type="password"
                         value={newEmployee.password}
                         onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })}
@@ -350,6 +354,7 @@ export default function OperationsEmployeesPage() {
                     <div className="space-y-2">
                       <Label>رقم الجوال</Label>
                       <Input
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         value={newEmployee.phone}
                         onChange={(e) => setNewEmployee({ ...newEmployee, phone: e.target.value })}
                         placeholder="05xxxxxxxx"
@@ -359,6 +364,7 @@ export default function OperationsEmployeesPage() {
                     <div className="space-y-2">
                       <Label>البريد الإلكتروني</Label>
                       <Input
+                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                         type="email"
                         value={newEmployee.email}
                         onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
@@ -373,7 +379,7 @@ export default function OperationsEmployeesPage() {
                         value={newEmployee.branchId}
                         onValueChange={(v) => setNewEmployee({ ...newEmployee, branchId: v })}
                       >
-                        <SelectTrigger data-testid="select-branch">
+                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                           <SelectValue placeholder="اختر الفرع" />
                         </SelectTrigger>
                         <SelectContent>
@@ -391,7 +397,7 @@ export default function OperationsEmployeesPage() {
                         value={newEmployee.jobTitle}
                         onValueChange={(v) => setNewEmployee({ ...newEmployee, jobTitle: v })}
                       >
-                        <SelectTrigger data-testid="select-job-title">
+                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-job-title">
                           <SelectValue placeholder="اختر الوظيفة" />
                         </SelectTrigger>
                         <SelectContent>
@@ -405,10 +411,10 @@ export default function OperationsEmployeesPage() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    <Button type="button" variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsAddDialogOpen(false)}>
                       إلغاء
                     </Button>
-                    <Button type="submit" disabled={createEmployeeMutation.isPending} data-testid="button-submit-employee">
+                    <Button type="submit" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" disabled={createEmployeeMutation.isPending} data-testid="button-submit-employee">
                       {createEmployeeMutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
                       إضافة
                     </Button>
@@ -442,6 +448,7 @@ export default function OperationsEmployeesPage() {
             <div className="flex flex-wrap gap-4 mb-6">
               <div className="flex-1 min-w-[200px]">
                 <Input
+                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                   placeholder="بحث بالاسم أو رقم الجوال..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -449,7 +456,7 @@ export default function OperationsEmployeesPage() {
                 />
               </div>
               <Select value={filterBranch} onValueChange={setFilterBranch}>
-                <SelectTrigger className="w-40" data-testid="filter-branch">
+                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 w-40" data-testid="filter-branch">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -462,7 +469,7 @@ export default function OperationsEmployeesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterJobTitle} onValueChange={setFilterJobTitle}>
-                <SelectTrigger className="w-40" data-testid="filter-job">
+                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 w-40" data-testid="filter-job">
                   <SelectValue placeholder="جميع الوظائف" />
                 </SelectTrigger>
                 <SelectContent>
@@ -475,7 +482,7 @@ export default function OperationsEmployeesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32" data-testid="filter-status">
+                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 w-32" data-testid="filter-status">
                   <SelectValue placeholder="الحالة" />
                 </SelectTrigger>
                 <SelectContent>

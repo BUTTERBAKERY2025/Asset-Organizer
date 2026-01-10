@@ -117,14 +117,14 @@ export default function BranchesPage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-branches-title">إدارة الفروع</h1>
-            <p className="text-muted-foreground mt-1">إضافة ومتابعة فروع المخبز</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-branches-title">إدارة الفروع</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">إضافة ومتابعة فروع المخبز</p>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2" data-testid="button-add-branch">
+              <Button className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-branch">
                 <Plus className="w-4 h-4" />
                 <span>إضافة فرع جديد</span>
               </Button>
@@ -140,6 +140,7 @@ export default function BranchesPage() {
                   <Input
                     {...form.register("id")}
                     placeholder="مثال: jeddah"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     data-testid="input-branch-id"
                   />
                   {form.formState.errors.id && (
@@ -153,6 +154,7 @@ export default function BranchesPage() {
                   <Input
                     {...form.register("name")}
                     placeholder="مثال: فرع جدة"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     data-testid="input-branch-name"
                   />
                   {form.formState.errors.name && (
@@ -161,7 +163,7 @@ export default function BranchesPage() {
                 </div>
 
                 <DialogFooter>
-                  <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-branch">
+                  <Button type="submit" disabled={createMutation.isPending} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-submit-branch">
                     {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
                     إضافة الفرع
                   </Button>

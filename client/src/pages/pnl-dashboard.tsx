@@ -1177,58 +1177,60 @@ export default function PnLDashboard() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-background p-6" dir="rtl">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+      <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Button
                 variant="ghost"
-                size="icon"
                 onClick={() => navigate("/attendance-dashboard")}
-                className="rounded-full hover:bg-muted"
+                className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 rounded-full hover:bg-muted p-0"
                 data-testid="button-back"
               >
                 <ChevronLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-                  <BarChart3 className="h-8 w-8 text-primary" />
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2 sm:gap-3">
+                  <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
                   لوحة الأرباح والخسائر (P&L)
                 </h1>
-                <p className="text-muted-foreground mt-1">تحليل الأداء المالي للفروع</p>
+                <p className="text-sm sm:text-base text-muted-foreground mt-1">تحليل الأداء المالي للفروع</p>
               </div>
             </div>
             {selectedPeriodId && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button
                   variant="outline"
                   onClick={() => importSalesMutation.mutate(selectedPeriodId)}
                   disabled={importSalesMutation.isPending}
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   data-testid="button-import-sales"
                 >
                   {importSalesMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                    <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
                   ) : (
-                    <Download className="h-4 w-4 ml-2" />
+                    <Download className="h-4 w-4 sm:ml-2" />
                   )}
-                  استيراد من الكاشير
+                  <span className="hidden sm:inline">استيراد من الكاشير</span>
                 </Button>
                 <Button
                   onClick={() => calculateMetricsMutation.mutate(selectedPeriodId)}
                   disabled={calculateMetricsMutation.isPending}
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   data-testid="button-calculate-metrics"
                 >
                   {calculateMetricsMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                    <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
                   ) : (
-                    <Calculator className="h-4 w-4 ml-2" />
+                    <Calculator className="h-4 w-4 sm:ml-2" />
                   )}
-                  حساب المؤشرات
+                  <span className="hidden sm:inline">حساب المؤشرات</span>
                 </Button>
                 {completePnL?.metrics && (
                   <>
                     <Button
                       variant="outline"
+                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                       onClick={() => {
                         if (selectedBranch && completePnL) {
                           const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
@@ -1246,11 +1248,12 @@ export default function PnLDashboard() {
                       }}
                       data-testid="button-export-pdf"
                     >
-                      <Printer className="h-4 w-4 ml-2" />
-                      PDF
+                      <Printer className="h-4 w-4 sm:ml-2" />
+                      <span className="hidden sm:inline">PDF</span>
                     </Button>
                     <Button
                       variant="outline"
+                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                       onClick={() => {
                         if (selectedBranch && completePnL) {
                           const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
@@ -1267,18 +1270,19 @@ export default function PnLDashboard() {
                       }}
                       data-testid="button-export-excel"
                     >
-                      <FileSpreadsheet className="h-4 w-4 ml-2" />
-                      Excel
+                      <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
+                      <span className="hidden sm:inline">Excel</span>
                     </Button>
                   </>
                 )}
                 <Button
                   variant="outline"
                   onClick={generatePnLExcelTemplate}
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   data-testid="button-download-template"
                 >
-                  <Download className="h-4 w-4 ml-2" />
-                  قالب الاستيراد
+                  <Download className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">قالب الاستيراد</span>
                 </Button>
                 <div className="relative">
                   <input
@@ -1291,13 +1295,14 @@ export default function PnLDashboard() {
                   <Button
                     variant="outline"
                     disabled={importExcelMutation.isPending}
+                    className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   >
                     {importExcelMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                      <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
                     ) : (
-                      <Upload className="h-4 w-4 ml-2" />
+                      <Upload className="h-4 w-4 sm:ml-2" />
                     )}
-                    استيراد Excel
+                    <span className="hidden sm:inline">استيراد Excel</span>
                   </Button>
                 </div>
               </div>
@@ -1311,10 +1316,10 @@ export default function PnLDashboard() {
               اختيار الفترة المالية
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <CardContent className="p-3 sm:p-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <div>
-                <Label>الفرع</Label>
+                <Label className="text-xs sm:text-sm">الفرع</Label>
                 <Select
                   value={selectedBranchId}
                   onValueChange={(value) => {
@@ -1322,7 +1327,7 @@ export default function PnLDashboard() {
                     handleSelectPeriod(value, selectedYear, selectedMonth);
                   }}
                 >
-                  <SelectTrigger data-testid="select-branch">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1336,7 +1341,7 @@ export default function PnLDashboard() {
               </div>
 
               <div>
-                <Label>السنة</Label>
+                <Label className="text-xs sm:text-sm">السنة</Label>
                 <Select
                   value={selectedYear.toString()}
                   onValueChange={(value) => {
@@ -1345,7 +1350,7 @@ export default function PnLDashboard() {
                     handleSelectPeriod(selectedBranchId, year, selectedMonth);
                   }}
                 >
-                  <SelectTrigger data-testid="select-year">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1359,7 +1364,7 @@ export default function PnLDashboard() {
               </div>
 
               <div>
-                <Label>الشهر</Label>
+                <Label className="text-xs sm:text-sm">الشهر</Label>
                 <Select
                   value={selectedMonth.toString()}
                   onValueChange={(value) => {
@@ -1368,7 +1373,7 @@ export default function PnLDashboard() {
                     handleSelectPeriod(selectedBranchId, selectedYear, month);
                   }}
                 >
-                  <SelectTrigger data-testid="select-month">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1385,35 +1390,36 @@ export default function PnLDashboard() {
                 <Button
                   onClick={handleCreateOrLoadPeriod}
                   disabled={!selectedBranchId || createPeriodMutation.isPending}
-                  className="w-full"
+                  className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   data-testid="button-load-period"
                 >
                   {createPeriodMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                    <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
                   ) : (
-                    <Plus className="h-4 w-4 ml-2" />
+                    <Plus className="h-4 w-4 sm:ml-2" />
                   )}
-                  تحميل / إنشاء الفترة
+                  <span className="hidden sm:inline">تحميل / إنشاء الفترة</span>
+                  <span className="sm:hidden">تحميل</span>
                 </Button>
               </div>
             </div>
 
             {selectedPeriodId && selectedBranch && (
-              <div className="mt-4 p-3 bg-primary/5 rounded-lg flex items-center justify-between">
-                <span className="text-sm">
+              <div className="mt-4 p-3 bg-primary/5 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <span className="text-xs sm:text-sm">
                   الفترة الحالية: <strong>{selectedBranch.name}</strong> - {MONTHS_AR[selectedMonth - 1]} {selectedYear}
                 </span>
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={() => {
                     loadExistingData();
                     setShowDataEntry(true);
                   }}
+                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   data-testid="button-enter-data"
                 >
-                  <FileText className="h-4 w-4 ml-2" />
-                  إدخال البيانات
+                  <FileText className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">إدخال البيانات</span>
                 </Button>
               </div>
             )}

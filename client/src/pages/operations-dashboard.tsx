@@ -63,9 +63,9 @@ export default function OperationsDashboardPage() {
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-xl font-bold text-foreground">لوحة تحكم التشغيل</h1>
-              <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-7 w-7 p-0">
-                <RefreshCw className="w-3.5 h-3.5" />
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">لوحة تحكم التشغيل</h1>
+              <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 p-0">
+                <RefreshCw className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">نظرة عامة على عمليات الإنتاج والتشغيل اليومية</p>
@@ -74,7 +74,7 @@ export default function OperationsDashboardPage() {
           <div className="flex flex-wrap items-center gap-2">
             {quickActions.map((action, i) => (
               <Link key={i} href={action.href}>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" data-testid={`quick-${i}`}>
+                <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-1.5 text-xs" data-testid={`quick-${i}`}>
                   <Plus className="w-3 h-3" />
                   {action.label}
                 </Button>
@@ -83,7 +83,7 @@ export default function OperationsDashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <Card className="bg-blue-50/50 border-blue-100">
             <CardContent className="p-3">
               {isLoading ? <Skeleton className="h-12" /> : (

@@ -298,10 +298,10 @@ export default function ContractsPage() {
   return (
     <Layout>
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">إدارة العقود</h1>
-            <p className="text-gray-500 mt-1">إدارة عقود المقاولين والموردين</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">إدارة العقود</h1>
+            <p className="text-sm sm:text-base text-gray-500 mt-1">إدارة عقود المقاولين والموردين</p>
           </div>
           {canCreateContract && (
             <Button
@@ -309,7 +309,7 @@ export default function ContractsPage() {
                 form.reset();
                 setIsAddOpen(true);
               }}
-              className="bg-butter-gold hover:bg-butter-gold/90"
+              className="bg-butter-gold hover:bg-butter-gold/90 h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto"
               data-testid="button-add-contract"
             >
               <Plus className="ml-2 h-4 w-4" />
@@ -318,7 +318,7 @@ export default function ContractsPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -382,7 +382,7 @@ export default function ContractsPage() {
               <div className="flex-1 min-w-[200px]">
                 <Label>تصفية حسب الحالة</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger data-testid="select-status-filter">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
                     <SelectValue placeholder="جميع الحالات" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -398,7 +398,7 @@ export default function ContractsPage() {
               <div className="flex-1 min-w-[200px]">
                 <Label>تصفية حسب المشروع</Label>
                 <Select value={projectFilter} onValueChange={setProjectFilter}>
-                  <SelectTrigger data-testid="select-project-filter">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-project-filter">
                     <SelectValue placeholder="جميع المشاريع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -501,6 +501,7 @@ export default function ContractsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                                 onClick={() => navigate(`/contracts/${contract.id}`)}
                                 data-testid={`button-view-contract-${contract.id}`}
                               >
@@ -510,6 +511,7 @@ export default function ContractsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                                   onClick={() => openEditDialog(contract)}
                                   data-testid={`button-edit-contract-${contract.id}`}
                                 >
@@ -520,6 +522,7 @@ export default function ContractsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
                                   onClick={() => {
                                     setSelectedContract(contract);
                                     setIsDeleteOpen(true);

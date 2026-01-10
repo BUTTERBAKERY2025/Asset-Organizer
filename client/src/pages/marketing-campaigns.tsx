@@ -273,17 +273,17 @@ export default function MarketingCampaignsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">الحملات التسويقية</h1>
-              <p className="text-muted-foreground">إدارة ومتابعة الحملات التسويقية</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">الحملات التسويقية</h1>
+              <p className="text-sm text-muted-foreground">إدارة ومتابعة الحملات التسويقية</p>
             </div>
           </div>
           {canEdit && (
-            <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-campaign">
+            <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-campaign">
               <Plus className="w-4 h-4 ml-2" />
               إضافة حملة جديدة
             </Button>
@@ -297,12 +297,12 @@ export default function MarketingCampaignsPage() {
               placeholder="البحث في الحملات..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
+              className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
               data-testid="input-search-campaigns"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
+            <SelectTrigger className="w-full sm:w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
               <SelectValue placeholder="جميع الحالات" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -315,7 +315,7 @@ export default function MarketingCampaignsPage() {
             </SelectContent>
           </Select>
           <Select value={objectiveFilter} onValueChange={setObjectiveFilter}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-objective-filter">
+            <SelectTrigger className="w-full sm:w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-objective-filter">
               <SelectValue placeholder="جميع الأهداف" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -328,7 +328,7 @@ export default function MarketingCampaignsPage() {
             </SelectContent>
           </Select>
           <Select value={seasonFilter} onValueChange={setSeasonFilter}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-season-filter">
+            <SelectTrigger className="w-full sm:w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-season-filter">
               <SelectValue placeholder="جميع المواسم" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">

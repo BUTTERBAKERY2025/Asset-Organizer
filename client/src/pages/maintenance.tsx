@@ -138,24 +138,24 @@ export default function MaintenancePage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-maintenance-title">تقرير الصيانة</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-maintenance-title">تقرير الصيانة</h1>
             <p className="text-muted-foreground mt-1">الأصناف التي تحتاج صيانة أو تالفة أو مفقودة</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handlePrint()} className="gap-2" data-testid="button-print-maintenance">
+            <Button variant="outline" onClick={() => handlePrint()} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-print-maintenance">
               <Printer className="w-4 h-4" />
               <span>طباعة</span>
             </Button>
-            <Button variant="outline" onClick={handleExport} className="gap-2" data-testid="button-export-maintenance">
+            <Button variant="outline" onClick={handleExport} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-maintenance">
               <Download className="w-4 h-4" />
               <span>تصدير Excel</span>
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card data-testid="card-maintenance-count">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">تحتاج صيانة</CardTitle>
@@ -203,9 +203,9 @@ export default function MaintenancePage() {
             <CardDescription>إجمالي {problemItems.length} صنف يحتاج متابعة</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-full md:w-[200px]" data-testid="select-branch-filter-maintenance">
+                <SelectTrigger className="w-full sm:w-[200px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch-filter-maintenance">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -217,7 +217,7 @@ export default function MaintenancePage() {
               </Select>
 
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="w-full md:w-[200px]" data-testid="select-status-filter-maintenance">
+                <SelectTrigger className="w-full sm:w-[200px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter-maintenance">
                   <SelectValue placeholder="جميع الحالات" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">

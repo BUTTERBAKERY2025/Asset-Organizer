@@ -645,18 +645,18 @@ export default function DisplayBarWastePage() {
 
   return (
     <Layout>
-      <div className="space-y-5" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="space-y-5 p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <Package className="w-5 h-5 text-primary" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
+              <Package className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
               بار العرض والهالك
             </h1>
             <p className="text-sm text-muted-foreground">إدارة استلام الإنتاج ومتابعة الهالك اليومي</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-40 h-9" data-testid="select-branch">
+              <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="الفرع" />
               </SelectTrigger>
@@ -671,14 +671,14 @@ export default function DisplayBarWastePage() {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-40 h-9"
+              className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
               data-testid="input-date"
             />
           </div>
         </div>
 
         {/* Stats Cards - Basic */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-blue-50/50 border-blue-100">
             <CardContent className="p-3">
               <div className="flex items-center gap-3">
@@ -747,7 +747,7 @@ export default function DisplayBarWastePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {/* Daily Waste */}
                 <div className="bg-white rounded-lg p-3 border shadow-sm">
                   <div className="text-xs text-muted-foreground mb-1">هالك اليوم</div>
@@ -834,7 +834,7 @@ export default function DisplayBarWastePage() {
                   />
                   <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
                     <DialogTrigger asChild>
-                      <Button size="sm" className="gap-1" data-testid="btn-add-receipt">
+                      <Button size="sm" className="gap-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-add-receipt">
                         <Plus className="w-4 h-4" />
                         استلام جديد
                       </Button>
@@ -919,7 +919,7 @@ export default function DisplayBarWastePage() {
                                     onChange={(e) => setReceiptForm(f => ({ ...f, quantity: e.target.value }))}
                                     placeholder="الكمية"
                                     data-testid="input-quantity-receipt"
-                                    className="h-10 text-center text-lg font-semibold"
+                                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-center text-lg font-semibold"
                                   />
                                 </div>
                                 <div>
@@ -929,13 +929,13 @@ export default function DisplayBarWastePage() {
                                     onChange={(e) => setReceiptForm(f => ({ ...f, notes: e.target.value }))}
                                     placeholder="اختياري"
                                     data-testid="input-notes-receipt"
-                                    className="h-10"
+                                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                                   />
                                 </div>
                               </div>
                               <Button 
                                 onClick={handleReceiptSubmit} 
-                                className="w-full gap-2 h-11" 
+                                className="w-full gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" 
                                 disabled={createReceiptMutation.isPending || !receiptForm.productId || !receiptForm.quantity || !receiptBranch}
                               >
                                 {createReceiptMutation.isPending ? (
@@ -1024,7 +1024,7 @@ export default function DisplayBarWastePage() {
                   />
                   <Dialog open={showWasteDialog} onOpenChange={setShowWasteDialog}>
                     <DialogTrigger asChild>
-                      <Button size="sm" variant="destructive" className="gap-1" data-testid="btn-add-waste">
+                      <Button size="sm" variant="destructive" className="gap-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-add-waste">
                         <AlertTriangle className="w-4 h-4" />
                         تقرير هالك جديد
                       </Button>
@@ -1126,7 +1126,7 @@ export default function DisplayBarWastePage() {
                                 )}
                               </div>
                             </div>
-                            <Button onClick={handleAddWasteItem} className="w-full" disabled={addWasteItemMutation.isPending}>
+                            <Button onClick={handleAddWasteItem} className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0" disabled={addWasteItemMutation.isPending}>
                               {addWasteItemMutation.isPending ? "جاري الإضافة..." : "إضافة الصنف التالف"}
                             </Button>
                             <Button
@@ -1207,7 +1207,7 @@ export default function DisplayBarWastePage() {
                               <span className="text-xs text-muted-foreground mr-2">({order.totalQuantity} وحدة)</span>
                             </td>
                             <td className="p-3">
-                              <Button size="sm" variant="ghost" className="gap-1" onClick={(e) => { e.stopPropagation(); setSelectedReceiptOrder(order); setShowReceiptDetailDialog(true); }}>
+                              <Button size="sm" variant="ghost" className="gap-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={(e) => { e.stopPropagation(); setSelectedReceiptOrder(order); setShowReceiptDetailDialog(true); }}>
                                 <Eye className="w-4 h-4" />
                                 عرض
                               </Button>
@@ -1391,7 +1391,7 @@ export default function DisplayBarWastePage() {
                   </span>
                   <div className="flex items-center gap-2">
                     <Select value={wasteBranch} onValueChange={setWasteBranch}>
-                      <SelectTrigger className="w-40 h-9" data-testid="select-waste-branch">
+                      <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-waste-branch">
                         <Building2 className="w-4 h-4 ml-2" />
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
@@ -1402,7 +1402,7 @@ export default function DisplayBarWastePage() {
                       </SelectContent>
                     </Select>
                     <Select value={wasteShift} onValueChange={setWasteShift}>
-                      <SelectTrigger className="w-44 h-9" data-testid="select-waste-shift">
+                      <SelectTrigger className="w-40 sm:w-44 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-waste-shift">
                         <Clock className="w-4 h-4 ml-2" />
                         <SelectValue placeholder="الوردية" />
                       </SelectTrigger>
@@ -1536,7 +1536,7 @@ export default function DisplayBarWastePage() {
                                 value={entry.wasteReason}
                                 onValueChange={(val) => handleWasteEntryChange(entry.productId, "wasteReason", val)}
                               >
-                                <SelectTrigger className="h-8 text-xs">
+                                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -1676,7 +1676,7 @@ export default function DisplayBarWastePage() {
                     />
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <Button onClick={addUnlistedProduct} disabled={!unlistedProductId} className="flex-1">
+                    <Button onClick={addUnlistedProduct} disabled={!unlistedProductId} className="flex-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
                       إضافة الصنف
                     </Button>
                     <Button variant="outline" onClick={() => setShowAddUnlistedProduct(false)}>

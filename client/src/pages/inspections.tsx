@@ -177,15 +177,15 @@ export default function InspectionsPage() {
   return (
     <Layout>
       <div className="flex flex-col space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
               جدولة الفحص الدوري
             </h1>
             <p className="text-muted-foreground mt-1">إدارة مواعيد فحص الأصول وتتبع التنبيهات</p>
           </div>
           <Select value={filterBranch} onValueChange={setFilterBranch}>
-            <SelectTrigger className="w-[200px]" data-testid="select-filter-branch">
+            <SelectTrigger className="w-full sm:w-[200px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-filter-branch">
               <SelectValue placeholder="اختر الفرع" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -197,7 +197,7 @@ export default function InspectionsPage() {
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="bg-red-50/50 border-red-200">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
@@ -271,7 +271,8 @@ export default function InspectionsPage() {
                         </TableCell>
                         <TableCell>
                           <Button 
-                            size="sm" 
+                            size="sm"
+                            className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                             onClick={() => handleMarkInspected(item)}
                             disabled={updateItemMutation.isPending}
                             data-testid={`button-mark-inspected-${item.id}`}
@@ -329,6 +330,7 @@ export default function InspectionsPage() {
                           <Button 
                             size="sm" 
                             variant="outline"
+                            className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                             onClick={() => {
                               setSelectedItem(item);
                               setIntervalDays(String(item.inspectionIntervalDays || 30));
@@ -380,6 +382,7 @@ export default function InspectionsPage() {
                       <TableCell>
                         <Button 
                           size="sm"
+                          className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                           onClick={() => {
                             setSelectedItem(item);
                             setIntervalDays("30");
@@ -416,6 +419,7 @@ export default function InspectionsPage() {
                 value={intervalDays}
                 onChange={(e) => setIntervalDays(e.target.value)}
                 placeholder="30"
+                className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                 data-testid="input-interval-days"
               />
               <p className="text-sm text-muted-foreground">

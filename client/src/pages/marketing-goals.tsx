@@ -167,23 +167,23 @@ export default function MarketingGoalsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-100 p-6" dir="rtl">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/marketing">
-              <Button variant="outline" size="sm" className="gap-2" data-testid="button-back">
+              <Button variant="outline" size="sm" className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-back">
                 <ArrowRight className="h-4 w-4" />
                 العودة للتسويق
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-800" data-testid="text-page-title">أهداف الحملات</h1>
-              <p className="text-gray-600">إدارة وتتبع أهداف الحملات التسويقية</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800" data-testid="text-page-title">أهداف الحملات</h1>
+              <p className="text-sm text-gray-600">إدارة وتتبع أهداف الحملات التسويقية</p>
             </div>
           </div>
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-pink-500 hover:bg-pink-600 gap-2" data-testid="button-add-goal">
+              <Button className="bg-pink-500 hover:bg-pink-600 gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-goal">
                 <Plus className="h-4 w-4" />
                 إضافة هدف
               </Button>
@@ -199,7 +199,7 @@ export default function MarketingGoalsPage() {
                     value={formData.campaignId.toString()}
                     onValueChange={(value) => setFormData({ ...formData, campaignId: parseInt(value) })}
                   >
-                    <SelectTrigger data-testid="select-campaign">
+                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-campaign">
                       <SelectValue placeholder="اختر الحملة" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -217,7 +217,7 @@ export default function MarketingGoalsPage() {
                     value={formData.goalType}
                     onValueChange={(value) => setFormData({ ...formData, goalType: value })}
                   >
-                    <SelectTrigger data-testid="select-goal-type">
+                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-goal-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -232,6 +232,7 @@ export default function MarketingGoalsPage() {
                     <Label>القيمة المستهدفة</Label>
                     <Input
                       type="number"
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                       value={formData.targetValue}
                       onChange={(e) => setFormData({ ...formData, targetValue: parseInt(e.target.value) || 0 })}
                       data-testid="input-target-value"
@@ -241,6 +242,7 @@ export default function MarketingGoalsPage() {
                     <Label>القيمة الحالية</Label>
                     <Input
                       type="number"
+                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                       value={formData.currentValue}
                       onChange={(e) => setFormData({ ...formData, currentValue: parseInt(e.target.value) || 0 })}
                       data-testid="input-current-value"
@@ -250,6 +252,7 @@ export default function MarketingGoalsPage() {
                 <div>
                   <Label>وحدة القياس</Label>
                   <Input
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     value={formData.metric}
                     onChange={(e) => setFormData({ ...formData, metric: e.target.value })}
                     placeholder="مثال: عدد، نسبة، ريال"
@@ -260,6 +263,7 @@ export default function MarketingGoalsPage() {
                   <Label>الموعد النهائي</Label>
                   <Input
                     type="date"
+                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
                     value={formData.deadline}
                     onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                     data-testid="input-deadline"
@@ -268,7 +272,7 @@ export default function MarketingGoalsPage() {
                 <Button
                   onClick={() => createGoalMutation.mutate(formData)}
                   disabled={!formData.campaignId || createGoalMutation.isPending}
-                  className="w-full bg-pink-500 hover:bg-pink-600"
+                  className="w-full bg-pink-500 hover:bg-pink-600 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
                   data-testid="button-submit-goal"
                 >
                   {createGoalMutation.isPending ? "جاري الإنشاء..." : "إنشاء الهدف"}
@@ -283,7 +287,7 @@ export default function MarketingGoalsPage() {
             value={selectedCampaignId?.toString() || "all"}
             onValueChange={(value) => setSelectedCampaignId(value === "all" ? null : parseInt(value))}
           >
-            <SelectTrigger className="w-64 bg-white" data-testid="select-filter-campaign">
+            <SelectTrigger className="w-full sm:w-64 bg-white h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-filter-campaign">
               <SelectValue placeholder="جميع الحملات" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -297,7 +301,7 @@ export default function MarketingGoalsPage() {
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {goals.map((goal) => (
             <Card key={goal.id} className="hover:shadow-lg transition-shadow" data-testid={`card-goal-${goal.id}`}>
               <CardHeader className="pb-2">
@@ -357,10 +361,10 @@ export default function MarketingGoalsPage() {
         </div>
 
         {goals.length === 0 && (
-          <Card className="p-12 text-center">
-            <Award className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">لا توجد أهداف</h3>
-            <p className="text-gray-500">قم بإضافة أهداف لتتبع أداء الحملات التسويقية</p>
+          <Card className="p-6 sm:p-12 text-center">
+            <Award className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">لا توجد أهداف</h3>
+            <p className="text-sm sm:text-base text-gray-500">قم بإضافة أهداف لتتبع أداء الحملات التسويقية</p>
           </Card>
         )}
       </div>
