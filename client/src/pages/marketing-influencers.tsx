@@ -62,6 +62,8 @@ import {
   Calendar,
   MessageSquare,
   ArrowRight,
+  ExternalLink,
+  Building,
 } from "lucide-react";
 import { Link } from "wouter";
 import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact, InfluencerPayment, CampaignExpense, MarketingCampaign } from "@shared/schema";
@@ -85,17 +87,24 @@ interface InfluencerFormData {
   nameAr: string;
   email: string;
   phone: string;
+  accountUrl: string;
+  coverageUrl: string;
   specialty: string;
   platforms: string[];
   contentTypes: string[];
   followerCount: number;
+  followerCountText: string;
   engagementRate: number;
+  viewRating: number;
   avgViews: number;
   pricePerPost: number;
   pricePerStory: number;
   pricePerVideo: number;
   city: string;
   region: string;
+  bankAccountNumber: string;
+  bankAccountHolder: string;
+  bankName: string;
   bestCollaborationTimes: string;
   notes: string;
   isActive: boolean;
@@ -106,17 +115,24 @@ const defaultFormData: InfluencerFormData = {
   nameAr: "",
   email: "",
   phone: "",
+  accountUrl: "",
+  coverageUrl: "",
   specialty: "",
   platforms: [],
   contentTypes: [],
   followerCount: 0,
+  followerCountText: "",
   engagementRate: 0,
+  viewRating: 0,
   avgViews: 0,
   pricePerPost: 0,
   pricePerStory: 0,
   pricePerVideo: 0,
   city: "",
   region: "",
+  bankAccountNumber: "",
+  bankAccountHolder: "",
+  bankName: "",
   bestCollaborationTimes: "",
   notes: "",
   isActive: true,
@@ -259,16 +275,23 @@ export default function MarketingInfluencersPage() {
         nameAr: data.nameAr || null,
         email: data.email || null,
         phone: data.phone || null,
+        accountUrl: data.accountUrl || null,
+        coverageUrl: data.coverageUrl || null,
         platforms: data.platforms.length > 0 ? data.platforms : null,
         contentTypes: data.contentTypes.length > 0 ? data.contentTypes : null,
+        followerCountText: data.followerCountText || null,
         pricePerPost: data.pricePerPost || null,
         pricePerStory: data.pricePerStory || null,
         pricePerVideo: data.pricePerVideo || null,
         city: data.city || null,
         region: data.region || null,
+        bankAccountNumber: data.bankAccountNumber || null,
+        bankAccountHolder: data.bankAccountHolder || null,
+        bankName: data.bankName || null,
         bestCollaborationTimes: data.bestCollaborationTimes || null,
         notes: data.notes || null,
         engagementRate: data.engagementRate || null,
+        viewRating: data.viewRating || null,
       };
       const res = await fetch("/api/marketing/influencers", {
         method: "POST",
@@ -297,16 +320,23 @@ export default function MarketingInfluencersPage() {
         nameAr: influencerData.nameAr || null,
         email: influencerData.email || null,
         phone: influencerData.phone || null,
+        accountUrl: influencerData.accountUrl || null,
+        coverageUrl: influencerData.coverageUrl || null,
         platforms: influencerData.platforms.length > 0 ? influencerData.platforms : null,
         contentTypes: influencerData.contentTypes.length > 0 ? influencerData.contentTypes : null,
+        followerCountText: influencerData.followerCountText || null,
         pricePerPost: influencerData.pricePerPost || null,
         pricePerStory: influencerData.pricePerStory || null,
         pricePerVideo: influencerData.pricePerVideo || null,
         city: influencerData.city || null,
         region: influencerData.region || null,
+        bankAccountNumber: influencerData.bankAccountNumber || null,
+        bankAccountHolder: influencerData.bankAccountHolder || null,
+        bankName: influencerData.bankName || null,
         bestCollaborationTimes: influencerData.bestCollaborationTimes || null,
         notes: influencerData.notes || null,
         engagementRate: influencerData.engagementRate || null,
+        viewRating: influencerData.viewRating || null,
       };
       const res = await fetch(`/api/marketing/influencers/${id}`, {
         method: "PATCH",
@@ -360,17 +390,24 @@ export default function MarketingInfluencersPage() {
       nameAr: influencer.nameAr || "",
       email: influencer.email || "",
       phone: influencer.phone || "",
+      accountUrl: influencer.accountUrl || "",
+      coverageUrl: influencer.coverageUrl || "",
       specialty: influencer.specialty,
       platforms: influencer.platforms || [],
       contentTypes: influencer.contentTypes || [],
       followerCount: influencer.followerCount || 0,
+      followerCountText: influencer.followerCountText || "",
       engagementRate: influencer.engagementRate || 0,
+      viewRating: influencer.viewRating || 0,
       avgViews: influencer.avgViews || 0,
       pricePerPost: influencer.pricePerPost || 0,
       pricePerStory: influencer.pricePerStory || 0,
       pricePerVideo: influencer.pricePerVideo || 0,
       city: influencer.city || "",
       region: influencer.region || "",
+      bankAccountNumber: influencer.bankAccountNumber || "",
+      bankAccountHolder: influencer.bankAccountHolder || "",
+      bankName: influencer.bankName || "",
       bestCollaborationTimes: influencer.bestCollaborationTimes || "",
       notes: influencer.notes || "",
       isActive: influencer.isActive,
@@ -477,6 +514,29 @@ export default function MarketingInfluencersPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>رابط الحساب</Label>
+          <Input
+            value={formData.accountUrl}
+            onChange={(e) => setFormData({ ...formData, accountUrl: e.target.value })}
+            placeholder="https://instagram.com/..."
+            dir="ltr"
+            data-testid="input-influencer-account-url"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>رابط التغطية</Label>
+          <Input
+            value={formData.coverageUrl}
+            onChange={(e) => setFormData({ ...formData, coverageUrl: e.target.value })}
+            placeholder="https://..."
+            dir="ltr"
+            data-testid="input-influencer-coverage-url"
+          />
+        </div>
+      </div>
+
       <div className="space-y-2">
         <Label>التخصص *</Label>
         <Select
@@ -534,7 +594,7 @@ export default function MarketingInfluencersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="space-y-2">
           <Label>عدد المتابعين</Label>
           <Input
@@ -567,6 +627,17 @@ export default function MarketingInfluencersPage() {
             placeholder="0"
             dir="ltr"
             data-testid="input-influencer-views"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>تقييم المشاهدات</Label>
+          <Input
+            type="number"
+            value={formData.viewRating}
+            onChange={(e) => setFormData({ ...formData, viewRating: parseInt(e.target.value) || 0 })}
+            placeholder="0-100"
+            dir="ltr"
+            data-testid="input-influencer-view-rating"
           />
         </div>
       </div>
@@ -625,6 +696,40 @@ export default function MarketingInfluencersPage() {
             placeholder="منطقة الرياض"
             data-testid="input-influencer-region"
           />
+        </div>
+      </div>
+
+      <div className="border-t pt-4 mt-4">
+        <h4 className="font-medium mb-3">المعلومات البنكية</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>اسم البنك</Label>
+            <Input
+              value={formData.bankName}
+              onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+              placeholder="البنك الأهلي"
+              data-testid="input-influencer-bank-name"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>رقم الحساب البنكي</Label>
+            <Input
+              value={formData.bankAccountNumber}
+              onChange={(e) => setFormData({ ...formData, bankAccountNumber: e.target.value })}
+              placeholder="SA..."
+              dir="ltr"
+              data-testid="input-influencer-bank-account"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>اسم صاحب الحساب</Label>
+            <Input
+              value={formData.bankAccountHolder}
+              onChange={(e) => setFormData({ ...formData, bankAccountHolder: e.target.value })}
+              placeholder="الاسم الكامل"
+              data-testid="input-influencer-bank-holder"
+            />
+          </div>
         </div>
       </div>
 
@@ -995,7 +1100,7 @@ export default function MarketingInfluencersPage() {
                       <p className="text-sm text-muted-foreground">المتابعين</p>
                       <p className="font-medium flex items-center gap-1">
                         <Users className="w-4 h-4" />
-                        {formatFollowerCount(selectedInfluencer.followerCount)}
+                        {selectedInfluencer.followerCountText || formatFollowerCount(selectedInfluencer.followerCount)}
                       </p>
                     </div>
                     <div className="space-y-1">
@@ -1010,10 +1115,50 @@ export default function MarketingInfluencersPage() {
                       <p className="font-medium">{formatFollowerCount(selectedInfluencer.avgViews)}</p>
                     </div>
                     <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">تقييم المشاهدات</p>
+                      <p className="font-medium">{selectedInfluencer.viewRating || "-"}</p>
+                    </div>
+                    <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">التقييم</p>
                       {renderStars(selectedInfluencer.rating)}
                     </div>
                   </div>
+
+                  {(selectedInfluencer.accountUrl || selectedInfluencer.coverageUrl) && (
+                    <div className="border-t pt-4 space-y-2">
+                      <h4 className="font-medium">الروابط</h4>
+                      <div className="space-y-1 text-sm">
+                        {selectedInfluencer.accountUrl && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">رابط الحساب:</span>
+                            <a 
+                              href={selectedInfluencer.accountUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline truncate max-w-[200px]"
+                              dir="ltr"
+                            >
+                              {selectedInfluencer.accountUrl}
+                            </a>
+                          </div>
+                        )}
+                        {selectedInfluencer.coverageUrl && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">رابط التغطية:</span>
+                            <a 
+                              href={selectedInfluencer.coverageUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline truncate max-w-[200px]"
+                              dir="ltr"
+                            >
+                              {selectedInfluencer.coverageUrl}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="border-t pt-4 space-y-2">
                     <h4 className="font-medium">الأسعار</h4>
@@ -1090,6 +1235,32 @@ export default function MarketingInfluencersPage() {
                     <div className="border-t pt-4 space-y-2">
                       <h4 className="font-medium">أفضل أوقات التعاون</h4>
                       <p className="text-sm text-muted-foreground">{selectedInfluencer.bestCollaborationTimes}</p>
+                    </div>
+                  )}
+
+                  {(selectedInfluencer.bankName || selectedInfluencer.bankAccountNumber || selectedInfluencer.bankAccountHolder) && (
+                    <div className="border-t pt-4 space-y-2">
+                      <h4 className="font-medium">المعلومات البنكية</h4>
+                      <div className="grid grid-cols-1 gap-2 text-sm">
+                        {selectedInfluencer.bankName && (
+                          <div>
+                            <span className="text-muted-foreground">البنك:</span>{" "}
+                            <span className="font-medium">{selectedInfluencer.bankName}</span>
+                          </div>
+                        )}
+                        {selectedInfluencer.bankAccountNumber && (
+                          <div>
+                            <span className="text-muted-foreground">رقم الحساب:</span>{" "}
+                            <span className="font-medium" dir="ltr">{selectedInfluencer.bankAccountNumber}</span>
+                          </div>
+                        )}
+                        {selectedInfluencer.bankAccountHolder && (
+                          <div>
+                            <span className="text-muted-foreground">صاحب الحساب:</span>{" "}
+                            <span className="font-medium">{selectedInfluencer.bankAccountHolder}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
