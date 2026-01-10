@@ -133,50 +133,34 @@ export function getPdfFooterStyles(): string {
       page-break-before: always;
     }
     
-    .summary-section {
-      page-break-before: always;
-      padding-top: 20px;
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
     }
     
-    .summary-title {
-      font-size: 18px;
+    .summary-table th,
+    .summary-table td {
+      border: 1px solid #ddd;
+      padding: 8px 10px;
+      font-size: 11px;
+    }
+    
+    .summary-table th {
+      background-color: #f59e0b;
+      color: white;
       font-weight: bold;
-      color: #92400e;
-      text-align: center;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #f59e0b;
-    }
-    
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-      margin: 20px 0;
-    }
-    
-    .summary-card {
-      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-      border: 1px solid #f59e0b;
-      border-radius: 10px;
-      padding: 20px;
       text-align: center;
     }
     
-    .summary-card-value {
-      font-size: 28px;
+    .summary-table td {
+      text-align: center;
       font-weight: bold;
-      color: #92400e;
-    }
-    
-    .summary-card-label {
-      font-size: 12px;
-      color: #78350f;
-      margin-top: 5px;
+      background-color: #fffbeb;
     }
     
     .signature-section {
-      margin-top: 40px;
+      margin-top: 30px;
       display: flex;
       flex-direction: row-reverse;
       justify-content: space-between;
@@ -215,27 +199,30 @@ export function getPdfFooterHtml(printedBy: string, printedAt: string): string {
 }
 
 export function getSummaryHtml(title: string, items: Array<{label: string; value: string}>): string {
-  const cards = items.map(item => `
-    <div class="summary-card">
-      <div class="summary-card-value">${item.value}</div>
-      <div class="summary-card-label">${item.label}</div>
-    </div>
-  `).join('');
+  const headerCells = items.map(item => `<th>${item.label}</th>`).join('');
+  const valueCells = items.map(item => `<td>${item.value}</td>`).join('');
 
   return `
-  <div class="summary-section">
-    <div class="summary-title">${title}</div>
-    <div class="summary-grid">${cards}</div>
-    
-    <div class="signature-section">
-      <div class="signature-box">
-        <div class="signature-line"></div>
-        <div class="signature-label">توقيع المسؤول</div>
-      </div>
-      <div class="signature-box">
-        <div class="signature-line"></div>
-        <div class="signature-label">توقيع المدير</div>
-      </div>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th colspan="${items.length}" style="background-color: #92400e;">${title}</th>
+      </tr>
+      <tr>${headerCells}</tr>
+    </thead>
+    <tbody>
+      <tr>${valueCells}</tr>
+    </tbody>
+  </table>
+  
+  <div class="signature-section">
+    <div class="signature-box">
+      <div class="signature-line"></div>
+      <div class="signature-label">توقيع المسؤول</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line"></div>
+      <div class="signature-label">توقيع المدير</div>
     </div>
   </div>`;
 }
