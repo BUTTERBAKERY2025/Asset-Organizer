@@ -6,11 +6,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const fonts = {
-  Cairo: {
-    normal: path.join(__dirname, "fonts", "Cairo-Regular.ttf"),
-    bold: path.join(__dirname, "fonts", "Cairo-Regular.ttf"),
-    italics: path.join(__dirname, "fonts", "Cairo-Regular.ttf"),
-    bolditalics: path.join(__dirname, "fonts", "Cairo-Regular.ttf"),
+  Amiri: {
+    normal: path.join(__dirname, "fonts", "Amiri-Regular.ttf"),
+    bold: path.join(__dirname, "fonts", "Amiri-Regular.ttf"),
+    italics: path.join(__dirname, "fonts", "Amiri-Regular.ttf"),
+    bolditalics: path.join(__dirname, "fonts", "Amiri-Regular.ttf"),
   },
 };
 
@@ -125,7 +125,7 @@ export function generateSalaryClosingPdf(data: SalaryClosingPdfData): Promise<Bu
           tableHeader: { bold: true, fontSize: 9, fillColor: "#f3f4f6", alignment: "center" },
         },
         defaultStyle: {
-          font: "Cairo",
+          font: "Amiri",
           fontSize: 8,
         },
       };
