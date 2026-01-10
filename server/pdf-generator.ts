@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import { getPdfHeaderHtml, getPdfHeaderStyles } from "./pdf-assets";
 
 export interface SalaryClosingEmployee {
   employeeName: string;
@@ -71,19 +72,13 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       font-size: 10px;
     }
     
-    .header {
+    ${getPdfHeaderStyles()}
+    
+    .info-row {
       text-align: center;
-      margin-bottom: 20px;
-    }
-    
-    .header h1 {
-      font-size: 18px;
-      margin-bottom: 10px;
-    }
-    
-    .header .info {
-      font-size: 12px;
+      font-size: 11px;
       color: #666;
+      margin-bottom: 15px;
     }
     
     table {
@@ -118,11 +113,8 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقرير إغلاق الرواتب الشهرية</h1>
-    <div class="info">الفرع: ${data.branchName} | الشهر: ${data.month}</div>
-    <div class="info">عدد الموظفين: ${data.employees.length} | إجمالي الرواتب: ${formatNumber(totals.netSalary)} ريال</div>
-  </div>
+  ${getPdfHeaderHtml('تقرير إغلاق الرواتب الشهرية', `الفرع: ${data.branchName} | الشهر: ${data.month}`)}
+  <div class="info-row">عدد الموظفين: ${data.employees.length} | إجمالي الرواتب: ${formatNumber(totals.netSalary)} ريال</div>
   
   <table>
     <thead>
@@ -222,9 +214,7 @@ export async function generateBranchComparisonPdf(data: BranchComparisonPdfData)
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 20px; margin-bottom: 10px; }
-    .header .info { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
     th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
@@ -232,10 +222,7 @@ export async function generateBranchComparisonPdf(data: BranchComparisonPdfData)
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقرير مقارنة الفروع</h1>
-    <div class="info">الشهر: ${data.month}</div>
-  </div>
+  ${getPdfHeaderHtml('تقرير مقارنة الفروع', `الشهر: ${data.month}`)}
   <table>
     <thead>
       <tr>
@@ -300,9 +287,7 @@ export async function generateJobComparisonPdf(data: JobComparisonPdfData): Prom
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 20px; margin-bottom: 10px; }
-    .header .info { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
     th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
@@ -310,10 +295,7 @@ export async function generateJobComparisonPdf(data: JobComparisonPdfData): Prom
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقرير مقارنة الوظائف عبر الفروع</h1>
-    <div class="info">الشهر: ${data.month}</div>
-  </div>
+  ${getPdfHeaderHtml('تقرير مقارنة الوظائف عبر الفروع', `الشهر: ${data.month}`)}
   <table>
     <thead>
       <tr>
@@ -368,9 +350,7 @@ export async function generateSalariesTablePdf(data: SalaryTablePdfData): Promis
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 20px; margin-bottom: 10px; }
-    .header .info { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
     th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
@@ -378,10 +358,7 @@ export async function generateSalariesTablePdf(data: SalaryTablePdfData): Promis
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>جدول الرواتب التفصيلي</h1>
-    <div class="info">الشهر: ${data.month} | عدد الموظفين: ${data.employees.length}</div>
-  </div>
+  ${getPdfHeaderHtml('جدول الرواتب التفصيلي', `الشهر: ${data.month} | عدد الموظفين: ${data.employees.length}`)}
   <table>
     <thead>
       <tr>
@@ -437,9 +414,7 @@ export async function generateKPIsPdf(data: KPIsPdfData): Promise<Buffer> {
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 12px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 22px; margin-bottom: 10px; }
-    .header .info { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }
     .kpi-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; text-align: center; }
     .kpi-value { font-size: 24px; font-weight: bold; color: #1e40af; }
@@ -452,10 +427,7 @@ export async function generateKPIsPdf(data: KPIsPdfData): Promise<Buffer> {
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقرير مؤشرات الأداء الرئيسية</h1>
-    <div class="info">الشهر: ${data.month}</div>
-  </div>
+  ${getPdfHeaderHtml('تقرير مؤشرات الأداء الرئيسية', `الشهر: ${data.month}`)}
   
   <div class="kpi-grid">
     <div class="kpi-card">
@@ -530,9 +502,7 @@ export async function generateHealthCertificatesPdf(data: HealthCertificatePdfDa
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 12px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 22px; margin-bottom: 10px; }
-    .header .info { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     .compliance { text-align: center; font-size: 18px; margin: 15px 0; padding: 10px; background: #f0fdf4; border-radius: 8px; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 11px; }
@@ -541,10 +511,7 @@ export async function generateHealthCertificatesPdf(data: HealthCertificatePdfDa
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقرير الشهادات الصحية</h1>
-    <div class="info">الشهر: ${data.month}</div>
-  </div>
+  ${getPdfHeaderHtml('تقرير الشهادات الصحية', `الشهر: ${data.month}`)}
   
   <div class="compliance">نسبة الامتثال: <strong>${data.complianceRate}%</strong></div>
   
@@ -616,9 +583,7 @@ export async function generateComparisonsPdf(data: ComparisonsPdfData): Promise<
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 12px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 22px; margin-bottom: 10px; }
-    .header .info { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     h2 { font-size: 16px; margin: 25px 0 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 11px; }
@@ -627,10 +592,7 @@ export async function generateComparisonsPdf(data: ComparisonsPdfData): Promise<
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقرير المقارنات الشامل</h1>
-    <div class="info">الشهر: ${data.month}</div>
-  </div>
+  ${getPdfHeaderHtml('تقرير المقارنات الشامل', `الشهر: ${data.month}`)}
   
   <h2>مقارنة الفروع</h2>
   <table>
@@ -718,9 +680,7 @@ export async function generateMarketingReportPdf(data: MarketingReportPdfData): 
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
-    .header { text-align: center; margin-bottom: 15px; }
-    .header h1 { font-size: 20px; margin-bottom: 5px; }
-    .header .info { font-size: 12px; color: #666; }
+    ${getPdfHeaderStyles()}
     .filters { font-size: 10px; color: #888; margin-bottom: 15px; text-align: center; font-style: italic; }
     .section { margin: 20px 0; }
     .section h2 { font-size: 14px; color: #d946ef; margin-bottom: 10px; border-bottom: 2px solid #f0abfc; padding-bottom: 5px; }
@@ -735,10 +695,7 @@ export async function generateMarketingReportPdf(data: MarketingReportPdfData): 
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقرير أداء التسويق الشامل</h1>
-    <div class="info">تاريخ التقرير: ${data.date}</div>
-  </div>
+  ${getPdfHeaderHtml('تقرير أداء التسويق الشامل', `تاريخ التقرير: ${data.date}`)}
   ${data.filtersText ? `<div class="filters">الفلاتر المطبقة: ${data.filtersText}</div>` : ''}
   
   <div class="summary-grid">
@@ -808,9 +765,7 @@ export async function generateProductionReportPdf(data: ProductionReportPdfData)
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 30px; font-size: 12px; }
-    .header { text-align: center; margin-bottom: 30px; }
-    .header h1 { font-size: 24px; margin-bottom: 10px; }
-    .header .info { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     h2 { font-size: 16px; margin: 20px 0 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 10px 8px; font-size: 12px; }
@@ -818,10 +773,7 @@ export async function generateProductionReportPdf(data: ProductionReportPdfData)
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>تقارير الإنتاج الشاملة</h1>
-    <div class="info">الفترة: ${data.startDate} - ${data.endDate}</div>
-  </div>
+  ${getPdfHeaderHtml('تقارير الإنتاج الشاملة', `الفترة: ${data.startDate} - ${data.endDate}`)}
   
   <h2>ملخص الإنتاج</h2>
   <table>
@@ -882,9 +834,7 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 25px; font-size: 11px; }
-    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #f59e0b; padding-bottom: 15px; }
-    .header h1 { font-size: 22px; margin-bottom: 5px; color: #92400e; }
-    .header .order-num { font-size: 14px; color: #666; }
+    ${getPdfHeaderStyles()}
     .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
     .info-item { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 10px; }
     .info-label { font-size: 10px; color: #92400e; }
@@ -901,10 +851,7 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>${data.title || 'أمر إنتاج'}</h1>
-    <div class="order-num">رقم الأمر: ${data.orderNumber}</div>
-  </div>
+  ${getPdfHeaderHtml(data.title || 'أمر إنتاج', `رقم الأمر: ${data.orderNumber}`)}
   
   <div class="info-grid">
     <div class="info-item"><div class="info-label">الحالة</div><div class="info-value">${data.status}</div></div>
