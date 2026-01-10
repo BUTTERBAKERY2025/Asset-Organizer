@@ -64,6 +64,14 @@ import {
   ArrowRight,
   ExternalLink,
   Building,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  CheckCircle,
+  XCircle,
+  TrendingUp,
+  BarChart3,
 } from "lucide-react";
 import { Link } from "wouter";
 import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact, InfluencerPayment, CampaignExpense, MarketingCampaign } from "@shared/schema";
@@ -154,12 +162,18 @@ export default function MarketingInfluencersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [specialtyFilter, setSpecialtyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
+  const [regionFilter, setRegionFilter] = useState<string>("all");
+  const [followerRangeFilter, setFollowerRangeFilter] = useState<string>("all");
+  const [bankInfoFilter, setBankInfoFilter] = useState<string>("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [selectedInfluencer, setSelectedInfluencer] = useState<MarketingInfluencer | null>(null);
   const [formData, setFormData] = useState<InfluencerFormData>(defaultFormData);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -376,12 +390,107 @@ export default function MarketingInfluencersPage() {
 
   const filteredInfluencers = influencers.filter((influencer) => {
     const searchLower = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = 
       influencer.name.toLowerCase().includes(searchLower) ||
       influencer.nameAr?.toLowerCase().includes(searchLower) ||
-      influencer.email?.toLowerCase().includes(searchLower)
-    );
+      influencer.email?.toLowerCase().includes(searchLower) ||
+      influencer.phone?.includes(searchLower);
+    
+    const matchesSpecialty = specialtyFilter === "all" || 
+      influencer.specialty === specialtyFilter;
+    
+    const matchesStatus = statusFilter === "all" || 
+      (statusFilter === "active" ? influencer.isActive : !influencer.isActive);
+    
+    const matchesPlatform = platformFilter === "all" || 
+      (influencer.platforms && influencer.platforms.includes(platformFilter));
+    
+    const matchesRegion = regionFilter === "all" || 
+      influencer.region?.toLowerCase().includes(regionFilter.toLowerCase());
+    
+    const matchesFollowerRange = (() => {
+      if (followerRangeFilter === "all") return true;
+      const count = influencer.followerCount || 0;
+      switch (followerRangeFilter) {
+        case "micro": return count < 10000;
+        case "small": return count >= 10000 && count < 50000;
+        case "medium": return count >= 50000 && count < 100000;
+        case "large": return count >= 100000 && count < 500000;
+        case "mega": return count >= 500000;
+        default: return true;
+      }
+    })();
+    
+    const matchesBankInfo = (() => {
+      if (bankInfoFilter === "all") return true;
+      const hasBankInfo = !!(influencer.bankAccountNumber && influencer.bankName);
+      return bankInfoFilter === "complete" ? hasBankInfo : !hasBankInfo;
+    })();
+    
+    return matchesSearch && matchesSpecialty && matchesStatus && matchesPlatform && matchesRegion && matchesFollowerRange && matchesBankInfo;
   });
+
+  const uniqueRegions = Array.from(new Set(influencers.map(i => i.region).filter((r): r is string => Boolean(r))));
+
+  const kpiStats = {
+    totalInfluencers: filteredInfluencers.length,
+    activeInfluencers: filteredInfluencers.filter(i => i.isActive).length,
+    avgFollowers: filteredInfluencers.length > 0 
+      ? Math.round(filteredInfluencers.reduce((sum, i) => sum + (i.followerCount || 0), 0) / filteredInfluencers.length)
+      : 0,
+    avgEngagement: filteredInfluencers.length > 0
+      ? (filteredInfluencers.reduce((sum, i) => sum + (i.engagementRate || 0), 0) / filteredInfluencers.length).toFixed(1)
+      : "0",
+    withBankInfo: filteredInfluencers.filter(i => i.bankAccountNumber && i.bankName).length,
+    totalFollowers: filteredInfluencers.reduce((sum, i) => sum + (i.followerCount || 0), 0),
+  };
+
+  const exportToExcel = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch("/api/marketing/influencers/export/excel");
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `influencers-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({ title: "تم تصدير البيانات بنجاح" });
+    } catch (error) {
+      toast({ title: "حدث خطأ", description: "فشل في تصدير البيانات", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportToPdf = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch("/api/marketing/influencers/export/pdf");
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `influencers-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({ title: "تم تصدير التقرير بنجاح" });
+    } catch (error) {
+      toast({ title: "حدث خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const hasBankInfo = (influencer: MarketingInfluencer) => 
+    !!(influencer.bankAccountNumber && influencer.bankName);
 
   const openEditDialog = (influencer: MarketingInfluencer) => {
     setSelectedInfluencer(influencer);
@@ -797,55 +906,208 @@ export default function MarketingInfluencersPage() {
               <p className="text-muted-foreground">إدارة ومتابعة المؤثرين والبلوجرز</p>
             </div>
           </div>
-          {canEdit && (
+          <div className="flex items-center gap-2">
             <Button
-              onClick={() => {
-                setFormData(defaultFormData);
-                setSelectedInfluencer(null);
-                setIsAddDialogOpen(true);
-              }}
-              data-testid="button-add-influencer"
+              variant="outline"
+              onClick={exportToExcel}
+              disabled={isExporting}
+              data-testid="button-export-excel"
             >
-              <Plus className="w-4 h-4 ml-2" />
-              إضافة مؤثر جديد
+              {isExporting ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <FileSpreadsheet className="w-4 h-4 ml-2" />}
+              تصدير Excel
             </Button>
-          )}
+            <Button
+              variant="outline"
+              onClick={exportToPdf}
+              disabled={isExporting}
+              data-testid="button-export-pdf"
+            >
+              {isExporting ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <FileText className="w-4 h-4 ml-2" />}
+              تصدير PDF
+            </Button>
+            {canEdit && (
+              <Button
+                onClick={() => {
+                  setFormData(defaultFormData);
+                  setSelectedInfluencer(null);
+                  setIsAddDialogOpen(true);
+                }}
+                data-testid="button-add-influencer"
+              >
+                <Plus className="w-4 h-4 ml-2" />
+                إضافة مؤثر جديد
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="البحث بالاسم..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
-              data-testid="input-search-influencers"
-            />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">إجمالي المؤثرين</p>
+                  <p className="text-2xl font-bold">{kpiStats.totalInfluencers}</p>
+                </div>
+                <Users className="w-8 h-8 text-primary opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">المؤثرين النشطين</p>
+                  <p className="text-2xl font-bold text-green-600">{kpiStats.activeInfluencers}</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-500 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">متوسط المتابعين</p>
+                  <p className="text-2xl font-bold">{formatFollowerCount(kpiStats.avgFollowers)}</p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-blue-500 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">إجمالي المتابعين</p>
+                  <p className="text-2xl font-bold">{formatFollowerCount(kpiStats.totalFollowers)}</p>
+                </div>
+                <BarChart3 className="w-8 h-8 text-purple-500 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">متوسط التفاعل</p>
+                  <p className="text-2xl font-bold">{kpiStats.avgEngagement}%</p>
+                </div>
+                <Activity className="w-8 h-8 text-orange-500 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">معلومات بنكية</p>
+                  <p className="text-2xl font-bold">{kpiStats.withBankInfo}</p>
+                </div>
+                <Building className="w-8 h-8 text-amber-500 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="البحث بالاسم أو الهاتف..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-10"
+                data-testid="input-search-influencers"
+              />
+            </div>
+            <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
+              <SelectTrigger className="w-full sm:w-40" data-testid="select-specialty-filter">
+                <SelectValue placeholder="التخصص" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60 overflow-y-auto">
+                <SelectItem value="all">جميع التخصصات</SelectItem>
+                {INFLUENCER_SPECIALTIES.map((specialty) => (
+                  <SelectItem key={specialty} value={specialty}>
+                    {INFLUENCER_SPECIALTY_LABELS[specialty]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-32" data-testid="select-status-filter">
+                <SelectValue placeholder="الحالة" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60 overflow-y-auto">
+                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="active">نشط</SelectItem>
+                <SelectItem value="inactive">غير نشط</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              data-testid="button-toggle-filters"
+            >
+              <Filter className="w-4 h-4 ml-2" />
+              {showAdvancedFilters ? "إخفاء الفلاتر" : "فلاتر متقدمة"}
+            </Button>
           </div>
-          <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-specialty-filter">
-              <SelectValue placeholder="جميع التخصصات" />
-            </SelectTrigger>
-            <SelectContent className="max-h-60 overflow-y-auto">
-              <SelectItem value="all">جميع التخصصات</SelectItem>
-              {INFLUENCER_SPECIALTIES.map((specialty) => (
-                <SelectItem key={specialty} value={specialty}>
-                  {INFLUENCER_SPECIALTY_LABELS[specialty]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
-              <SelectValue placeholder="جميع الحالات" />
-            </SelectTrigger>
-            <SelectContent className="max-h-60 overflow-y-auto">
-              <SelectItem value="all">جميع الحالات</SelectItem>
-              <SelectItem value="active">نشط</SelectItem>
-              <SelectItem value="inactive">غير نشط</SelectItem>
-            </SelectContent>
-          </Select>
+
+          {showAdvancedFilters && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg border">
+              <Select value={platformFilter} onValueChange={setPlatformFilter}>
+                <SelectTrigger data-testid="select-platform-filter">
+                  <SelectValue placeholder="المنصة" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 overflow-y-auto">
+                  <SelectItem value="all">جميع المنصات</SelectItem>
+                  {INFLUENCER_PLATFORMS.map((platform) => (
+                    <SelectItem key={platform} value={platform}>
+                      {INFLUENCER_PLATFORM_LABELS[platform]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={regionFilter} onValueChange={setRegionFilter}>
+                <SelectTrigger data-testid="select-region-filter">
+                  <SelectValue placeholder="المنطقة" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 overflow-y-auto">
+                  <SelectItem value="all">جميع المناطق</SelectItem>
+                  {uniqueRegions.map((region) => (
+                    <SelectItem key={region} value={region || ""}>
+                      {region}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={followerRangeFilter} onValueChange={setFollowerRangeFilter}>
+                <SelectTrigger data-testid="select-followers-filter">
+                  <SelectValue placeholder="عدد المتابعين" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 overflow-y-auto">
+                  <SelectItem value="all">جميع الفئات</SelectItem>
+                  <SelectItem value="micro">مايكرو (&lt;10K)</SelectItem>
+                  <SelectItem value="small">صغير (10K-50K)</SelectItem>
+                  <SelectItem value="medium">متوسط (50K-100K)</SelectItem>
+                  <SelectItem value="large">كبير (100K-500K)</SelectItem>
+                  <SelectItem value="mega">ضخم (&gt;500K)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={bankInfoFilter} onValueChange={setBankInfoFilter}>
+                <SelectTrigger data-testid="select-bank-filter">
+                  <SelectValue placeholder="المعلومات البنكية" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 overflow-y-auto">
+                  <SelectItem value="all">الكل</SelectItem>
+                  <SelectItem value="complete">مكتملة</SelectItem>
+                  <SelectItem value="incomplete">غير مكتملة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -870,6 +1132,7 @@ export default function MarketingInfluencersPage() {
                     <TableHead className="text-right">التفاعل</TableHead>
                     <TableHead className="text-right">التقييم</TableHead>
                     <TableHead className="text-right">التواصل</TableHead>
+                    <TableHead className="text-right">البنك</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
@@ -955,6 +1218,19 @@ export default function MarketingInfluencersPage() {
                           )}
                           {!influencer.email && !influencer.phone && <span>-</span>}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {influencer.bankAccountNumber && influencer.bankName ? (
+                          <div className="flex items-center gap-1">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <span className="text-xs text-muted-foreground truncate max-w-[80px]">{influencer.bankName}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <XCircle className="w-4 h-4 text-amber-500" />
+                            <span className="text-xs">غير مكتمل</span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={influencer.isActive ? "default" : "secondary"}>

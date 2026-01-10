@@ -966,7 +966,7 @@ interface PdfOptions {
   printedBy?: string;
 }
 
-async function generatePdfFromHtml(html: string, options: PdfOptions = {}): Promise<Buffer> {
+export async function generatePdfFromHtml(html: string, options: PdfOptions = {}): Promise<Buffer> {
   const { landscape = false, printedBy = 'النظام' } = options;
   const printedAt = formatPrintDate();
   

@@ -8024,6 +8024,169 @@ export async function registerRoutes(
     }
   });
 
+  // Export Influencers to Excel
+  app.get("/api/marketing/influencers/export/excel", isAuthenticated, async (req: any, res) => {
+    try {
+      const influencers = await storage.getAllMarketingInfluencers({});
+      
+      const XLSX = await import("xlsx");
+      const worksheetData = influencers.map((inf) => ({
+        "الاسم": inf.name,
+        "الاسم العربي": inf.nameAr || "",
+        "رقم الهاتف": inf.phone || "",
+        "البريد": inf.email || "",
+        "رابط الحساب": inf.accountUrl || "",
+        "رابط التغطية": inf.coverageUrl || "",
+        "التخصص": inf.specialty,
+        "المنصات": (inf.platforms || []).join(", "),
+        "عدد المتابعين": inf.followerCount || 0,
+        "المتابعين (نص)": inf.followerCountText || "",
+        "تقييم المشاهدات": inf.viewRating || "",
+        "معدل التفاعل %": inf.engagementRate || "",
+        "المنطقة": inf.region || "",
+        "المدينة": inf.city || "",
+        "البنك": inf.bankName || "",
+        "رقم الحساب البنكي": inf.bankAccountNumber || "",
+        "صاحب الحساب": inf.bankAccountHolder || "",
+        "الحالة": inf.isActive ? "نشط" : "غير نشط",
+        "ملاحظات": inf.notes || "",
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "المؤثرين");
+      
+      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=influencers-${new Date().toISOString().split('T')[0]}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      console.error("Error exporting influencers to Excel:", error);
+      res.status(500).json({ error: "فشل في تصدير البيانات" });
+    }
+  });
+
+  // Export Influencers to PDF
+  app.get("/api/marketing/influencers/export/pdf", isAuthenticated, async (req: any, res) => {
+    try {
+      const influencers = await storage.getAllMarketingInfluencers({});
+      const { generatePdfFromHtml } = await import("./pdf-generator");
+      const { getLogoDataUrl } = await import("./pdf-assets");
+      const logoBase64 = getLogoDataUrl();
+      
+      const totalInfluencers = influencers.length;
+      const activeInfluencers = influencers.filter(i => i.isActive).length;
+      const totalFollowers = influencers.reduce((sum, i) => sum + (i.followerCount || 0), 0);
+      const avgFollowers = totalInfluencers > 0 ? Math.round(totalFollowers / totalInfluencers) : 0;
+      const withBankInfo = influencers.filter(i => i.bankAccountNumber && i.bankName).length;
+
+      const formatNumber = (num: number) => new Intl.NumberFormat("en-US").format(num);
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; direction: rtl; font-size: 10px; }
+            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #D4AF37; padding-bottom: 15px; }
+            .logo { width: 120px; height: auto; }
+            .title { font-size: 18px; font-weight: bold; color: #333; }
+            .subtitle { font-size: 12px; color: #666; }
+            .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+            .summary-card { background: #f8f9fa; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid #ddd; }
+            .summary-value { font-size: 16px; font-weight: bold; color: #D4AF37; }
+            .summary-label { font-size: 9px; color: #666; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th { background: #D4AF37; color: white; padding: 8px 4px; font-size: 9px; text-align: right; }
+            td { padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 8px; text-align: right; }
+            tr:nth-child(even) { background: #f9f9f9; }
+            .status-active { color: #22c55e; font-weight: bold; }
+            .status-inactive { color: #ef4444; }
+            .bank-complete { color: #22c55e; }
+            .bank-incomplete { color: #f59e0b; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="title">تقرير المؤثرين والبلوجرز</div>
+              <div class="subtitle">تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</div>
+            </div>
+            <img src="${logoBase64}" class="logo" alt="Butter Logo">
+          </div>
+
+          <div class="summary">
+            <div class="summary-card">
+              <div class="summary-value">${formatNumber(totalInfluencers)}</div>
+              <div class="summary-label">إجمالي المؤثرين</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-value">${formatNumber(activeInfluencers)}</div>
+              <div class="summary-label">المؤثرين النشطين</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-value">${formatNumber(totalFollowers)}</div>
+              <div class="summary-label">إجمالي المتابعين</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-value">${formatNumber(avgFollowers)}</div>
+              <div class="summary-label">متوسط المتابعين</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-value">${formatNumber(withBankInfo)}</div>
+              <div class="summary-label">معلومات بنكية مكتملة</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الاسم</th>
+                <th>الهاتف</th>
+                <th>المنصة</th>
+                <th>المتابعين</th>
+                <th>التقييم</th>
+                <th>المنطقة</th>
+                <th>البنك</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${influencers.map((inf, idx) => `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td>${inf.name}</td>
+                  <td style="direction: ltr; text-align: left;">${inf.phone || '-'}</td>
+                  <td>${(inf.platforms || []).join(', ') || '-'}</td>
+                  <td>${inf.followerCountText || formatNumber(inf.followerCount || 0)}</td>
+                  <td>${inf.viewRating || '-'}</td>
+                  <td>${inf.region || '-'}</td>
+                  <td class="${inf.bankAccountNumber && inf.bankName ? 'bank-complete' : 'bank-incomplete'}">${inf.bankAccountNumber && inf.bankName ? '✓' : '✗'}</td>
+                  <td class="${inf.isActive ? 'status-active' : 'status-inactive'}">${inf.isActive ? 'نشط' : 'غير نشط'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+
+      const pdfBuffer = await generatePdfFromHtml(htmlContent, { landscape: true });
+      
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=influencers-report-${new Date().toISOString().split('T')[0]}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error exporting influencers to PDF:", error);
+      res.status(500).json({ error: "فشل في تصدير التقرير" });
+    }
+  });
+
   // Influencer Campaign Links - روابط المؤثرين بالحملات
   app.get("/api/marketing/influencer-links", isAuthenticated, async (req: any, res) => {
     try {
