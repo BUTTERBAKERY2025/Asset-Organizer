@@ -9,7 +9,10 @@ import {
   generateSalariesTablePdf, type SalaryTablePdfData,
   generateKPIsPdf, type KPIsPdfData,
   generateHealthCertificatesPdf, type HealthCertificatePdfData,
-  generateComparisonsPdf, type ComparisonsPdfData
+  generateComparisonsPdf, type ComparisonsPdfData,
+  generateMarketingReportPdf, type MarketingReportPdfData,
+  generateProductionReportPdf, type ProductionReportPdfData,
+  generateProductionOrderPdf, type ProductionOrderPdfData
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema } from "@shared/schema";
 import { z } from "zod";
@@ -10579,6 +10582,48 @@ export async function registerRoutes(
       res.send(pdfBuffer);
     } catch (error) {
       console.error("Error generating comparisons PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for marketing report
+  app.post("/api/pdf/marketing-report", isAuthenticated, async (req, res) => {
+    try {
+      const data: MarketingReportPdfData = req.body;
+      const pdfBuffer = await generateMarketingReportPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=marketing_report_${data.date}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating marketing report PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for production report
+  app.post("/api/pdf/production-report", isAuthenticated, async (req, res) => {
+    try {
+      const data: ProductionReportPdfData = req.body;
+      const pdfBuffer = await generateProductionReportPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=production_report_${data.startDate}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating production report PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for production order
+  app.post("/api/pdf/production-order", isAuthenticated, async (req, res) => {
+    try {
+      const data: ProductionOrderPdfData = req.body;
+      const pdfBuffer = await generateProductionOrderPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=production_order_${data.orderNumber}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating production order PDF:", error);
       res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
     }
   });

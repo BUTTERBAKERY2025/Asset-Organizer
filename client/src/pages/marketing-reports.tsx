@@ -330,97 +330,56 @@ export default function MarketingReportsPage() {
   };
 
   const exportReportToPdf = async () => {
-    const { downloadArabicPdf } = await import("@/lib/pdfmake-arabic");
-
     const activeFiltersText = getActiveFiltersDescription();
-    const today = new Date().toLocaleDateString('ar-SA');
+    const today = new Date().toISOString().split('T')[0];
 
-    const docDefinition: any = {
-      pageOrientation: 'landscape',
-      content: [
-        { text: 'تقرير أداء التسويق الشامل', style: 'header', alignment: 'center' },
-        { text: `تاريخ التقرير: ${today}`, style: 'subheader', alignment: 'center', margin: [0, 5, 0, 10] },
-        activeFiltersText ? { text: `الفلاتر المطبقة: ${activeFiltersText}`, style: 'filters', margin: [0, 0, 0, 15] } : {},
-        { text: 'ملخص الأداء', style: 'sectionHeader', margin: [0, 10, 0, 5] },
-        {
-          table: {
-            headerRows: 1,
-            widths: ['*', '*', '*', '*'],
-            body: [
-              ['إجمالي الحملات', 'إجمالي الميزانية', 'المصروف', 'نسبة الاستخدام'],
-              [
-                stats.totalCampaigns.toString(),
-                formatCurrency(stats.totalBudget),
-                formatCurrency(stats.spentBudget),
-                stats.budgetUtilization + '%'
-              ]
-            ]
+    try {
+      const response = await fetch("/api/pdf/marketing-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          date: today,
+          filtersText: activeFiltersText,
+          stats: {
+            totalCampaigns: stats.totalCampaigns,
+            totalBudget: stats.totalBudget,
+            spentBudget: stats.spentBudget,
+            budgetUtilization: stats.budgetUtilization,
           },
-          layout: 'lightHorizontalLines'
-        },
-        { text: 'الحملات', style: 'sectionHeader', margin: [0, 20, 0, 5] },
-        {
-          table: {
-            headerRows: 1,
-            widths: ['*', '*', '*', '*', '*'],
-            body: [
-              ['اسم الحملة', 'الحالة', 'الميزانية', 'المصروف', 'المتبقي'],
-              ...filteredCampaigns.slice(0, 20).map(c => [
-                c.nameAr || c.name,
-                CAMPAIGN_STATUS_LABELS[c.status as keyof typeof CAMPAIGN_STATUS_LABELS] || c.status,
-                formatCurrency(c.totalBudget || 0),
-                formatCurrency(c.spentBudget || 0),
-                formatCurrency((c.totalBudget || 0) - (c.spentBudget || 0))
-              ])
-            ]
-          },
-          layout: 'lightHorizontalLines'
-        },
-        { text: 'المصروفات', style: 'sectionHeader', margin: [0, 20, 0, 5] },
-        {
-          table: {
-            headerRows: 1,
-            widths: ['*', '*', '*', '*', '*'],
-            body: [
-              ['الوصف', 'الفئة', 'المبلغ', 'الحالة', 'التاريخ'],
-              ...filteredExpenses.slice(0, 30).map(e => [
-                e.description,
-                CAMPAIGN_EXPENSE_CATEGORY_LABELS[e.category] || e.category,
-                formatCurrency(e.amount),
-                CAMPAIGN_EXPENSE_STATUS_LABELS[e.status] || e.status,
-                e.expenseDate
-              ])
-            ]
-          },
-          layout: 'lightHorizontalLines'
-        },
-        { text: 'المؤثرين', style: 'sectionHeader', margin: [0, 20, 0, 5] },
-        {
-          table: {
-            headerRows: 1,
-            widths: ['*', '*', '*', '*'],
-            body: [
-              ['اسم المؤثر', 'التخصص', 'عدد المتابعين', 'الحالة'],
-              ...filteredInfluencers.slice(0, 20).map(i => [
-                i.nameAr || i.name,
-                INFLUENCER_SPECIALTY_LABELS[i.specialty as keyof typeof INFLUENCER_SPECIALTY_LABELS] || i.specialty,
-                formatNumber(i.followerCount || 0),
-                i.isActive ? 'نشط' : 'غير نشط'
-              ])
-            ]
-          },
-          layout: 'lightHorizontalLines'
-        }
-      ],
-      styles: {
-        header: { fontSize: 18, bold: true },
-        subheader: { fontSize: 12, color: '#666' },
-        filters: { fontSize: 10, color: '#888', italics: true },
-        sectionHeader: { fontSize: 14, bold: true, color: '#d946ef' }
-      }
-    };
-
-    downloadArabicPdf(docDefinition, `تقرير_التسويق_${new Date().toISOString().split('T')[0]}.pdf`);
+          campaigns: filteredCampaigns.slice(0, 20).map(c => ({
+            name: c.nameAr || c.name,
+            status: CAMPAIGN_STATUS_LABELS[c.status as keyof typeof CAMPAIGN_STATUS_LABELS] || c.status,
+            budget: c.totalBudget || 0,
+            spent: c.spentBudget || 0,
+            remaining: (c.totalBudget || 0) - (c.spentBudget || 0),
+          })),
+          expenses: filteredExpenses.slice(0, 30).map(e => ({
+            description: e.description,
+            category: CAMPAIGN_EXPENSE_CATEGORY_LABELS[e.category] || e.category,
+            amount: e.amount,
+            status: CAMPAIGN_EXPENSE_STATUS_LABELS[e.status] || e.status,
+            date: e.expenseDate,
+          })),
+          influencers: filteredInfluencers.slice(0, 20).map(i => ({
+            name: i.nameAr || i.name,
+            specialty: INFLUENCER_SPECIALTY_LABELS[i.specialty as keyof typeof INFLUENCER_SPECIALTY_LABELS] || i.specialty,
+            followers: i.followerCount || 0,
+            status: i.isActive ? 'نشط' : 'غير نشط',
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `تقرير_التسويق_${today}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting marketing report PDF:", error);
+    }
   };
 
   const getActiveFiltersDescription = () => {

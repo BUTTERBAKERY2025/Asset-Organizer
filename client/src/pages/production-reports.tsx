@@ -312,33 +312,26 @@ export default function ProductionReportsPage() {
   const exportToPDF = useCallback(async () => {
     setIsExporting("pdf");
     try {
-      const { downloadArabicPdf } = await import("@/lib/pdfmake-arabic");
-
-      const docDefinition: any = {
-        content: [
-          { text: "تقارير الإنتاج الشاملة", style: "header", alignment: "right" },
-          { text: `الفترة: ${startDate} - ${endDate}`, alignment: "right", margin: [0, 10, 0, 20] },
-          { text: "ملخص الإنتاج", style: "subheader", alignment: "right" },
-          {
-            table: {
-              widths: ["*", "*"],
-              body: [
-                [{ text: "القيمة", alignment: "center" }, { text: "البند", alignment: "center" }],
-                [reportData?.dailySummary.totalBatches || 0, "إجمالي الدفعات"],
-                [reportData?.dailySummary.totalQuantity || 0, "إجمالي الكمية"],
-                [`${reportData?.targetComparison.completionRate?.toFixed(1) || 0}%`, "نسبة الإنجاز"],
-              ],
-            },
-            margin: [0, 10, 0, 20],
-          },
-        ],
-        styles: {
-          header: { fontSize: 18, bold: true },
-          subheader: { fontSize: 14, bold: true, margin: [0, 10, 0, 5] },
-        },
-      };
-
-      downloadArabicPdf(docDefinition, `تقارير_الإنتاج_${startDate}.pdf`);
+      const response = await fetch("/api/pdf/production-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          startDate,
+          endDate,
+          totalBatches: reportData?.dailySummary.totalBatches || 0,
+          totalQuantity: reportData?.dailySummary.totalQuantity || 0,
+          completionRate: reportData?.targetComparison.completionRate || 0,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `تقارير_الإنتاج_${startDate}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("PDF export error:", error);
     } finally {

@@ -664,6 +664,283 @@ export async function generateComparisonsPdf(data: ComparisonsPdfData): Promise<
   return await generatePdfFromHtml(html, false);
 }
 
+// Marketing Report PDF
+export interface MarketingReportPdfData {
+  date: string;
+  filtersText: string;
+  stats: {
+    totalCampaigns: number;
+    totalBudget: number;
+    spentBudget: number;
+    budgetUtilization: number;
+  };
+  campaigns: Array<{ name: string; status: string; budget: number; spent: number; remaining: number }>;
+  expenses: Array<{ description: string; category: string; amount: number; status: string; date: string }>;
+  influencers: Array<{ name: string; specialty: string; followers: number; status: string }>;
+}
+
+export async function generateMarketingReportPdf(data: MarketingReportPdfData): Promise<Buffer> {
+  const campaignRows = data.campaigns.map(c => `
+    <tr>
+      <td style="text-align: right;">${c.name}</td>
+      <td style="text-align: center;">${c.status}</td>
+      <td style="text-align: center;">${formatNumber(c.budget)}</td>
+      <td style="text-align: center;">${formatNumber(c.spent)}</td>
+      <td style="text-align: center;">${formatNumber(c.remaining)}</td>
+    </tr>
+  `).join('');
+
+  const expenseRows = data.expenses.map(e => `
+    <tr>
+      <td style="text-align: right;">${e.description}</td>
+      <td style="text-align: center;">${e.category}</td>
+      <td style="text-align: center;">${formatNumber(e.amount)}</td>
+      <td style="text-align: center;">${e.status}</td>
+      <td style="text-align: center;">${e.date}</td>
+    </tr>
+  `).join('');
+
+  const influencerRows = data.influencers.map(i => `
+    <tr>
+      <td style="text-align: right;">${i.name}</td>
+      <td style="text-align: center;">${i.specialty}</td>
+      <td style="text-align: center;">${formatNumber(i.followers)}</td>
+      <td style="text-align: center;">${i.status}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
+    .header { text-align: center; margin-bottom: 15px; }
+    .header h1 { font-size: 20px; margin-bottom: 5px; }
+    .header .info { font-size: 12px; color: #666; }
+    .filters { font-size: 10px; color: #888; margin-bottom: 15px; text-align: center; font-style: italic; }
+    .section { margin: 20px 0; }
+    .section h2 { font-size: 14px; color: #d946ef; margin-bottom: 10px; border-bottom: 2px solid #f0abfc; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    th, td { border: 1px solid #ddd; padding: 6px 4px; font-size: 9px; }
+    th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    .summary-card { background: #fdf4ff; border: 1px solid #f0abfc; border-radius: 8px; padding: 10px; text-align: center; }
+    .summary-value { font-size: 16px; font-weight: bold; color: #a21caf; }
+    .summary-label { font-size: 10px; color: #86198f; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>تقرير أداء التسويق الشامل</h1>
+    <div class="info">تاريخ التقرير: ${data.date}</div>
+  </div>
+  ${data.filtersText ? `<div class="filters">الفلاتر المطبقة: ${data.filtersText}</div>` : ''}
+  
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-value">${data.stats.totalCampaigns}</div>
+      <div class="summary-label">إجمالي الحملات</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${formatNumber(data.stats.totalBudget)}</div>
+      <div class="summary-label">إجمالي الميزانية</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${formatNumber(data.stats.spentBudget)}</div>
+      <div class="summary-label">المصروف</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${data.stats.budgetUtilization}%</div>
+      <div class="summary-label">نسبة الاستخدام</div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>الحملات</h2>
+    <table>
+      <thead><tr><th>اسم الحملة</th><th>الحالة</th><th>الميزانية</th><th>المصروف</th><th>المتبقي</th></tr></thead>
+      <tbody>${campaignRows}</tbody>
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>المصروفات</h2>
+    <table>
+      <thead><tr><th>الوصف</th><th>الفئة</th><th>المبلغ</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+      <tbody>${expenseRows}</tbody>
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>المؤثرين</h2>
+    <table>
+      <thead><tr><th>اسم المؤثر</th><th>التخصص</th><th>عدد المتابعين</th><th>الحالة</th></tr></thead>
+      <tbody>${influencerRows}</tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+
+  return await generatePdfFromHtml(html, true);
+}
+
+// Production Reports PDF
+export interface ProductionReportPdfData {
+  startDate: string;
+  endDate: string;
+  totalBatches: number;
+  totalQuantity: number;
+  completionRate: number;
+}
+
+export async function generateProductionReportPdf(data: ProductionReportPdfData): Promise<Buffer> {
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 30px; font-size: 12px; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .header h1 { font-size: 24px; margin-bottom: 10px; }
+    .header .info { font-size: 14px; color: #666; }
+    h2 { font-size: 16px; margin: 20px 0 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 10px 8px; font-size: 12px; }
+    th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>تقارير الإنتاج الشاملة</h1>
+    <div class="info">الفترة: ${data.startDate} - ${data.endDate}</div>
+  </div>
+  
+  <h2>ملخص الإنتاج</h2>
+  <table>
+    <thead><tr><th>البند</th><th>القيمة</th></tr></thead>
+    <tbody>
+      <tr><td>إجمالي الدفعات</td><td style="text-align: center;">${data.totalBatches}</td></tr>
+      <tr><td>إجمالي الكمية</td><td style="text-align: center;">${formatNumber(data.totalQuantity)}</td></tr>
+      <tr><td>نسبة الإنجاز</td><td style="text-align: center;">${data.completionRate.toFixed(1)}%</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>`;
+
+  return await generatePdfFromHtml(html, false);
+}
+
+// Production Order PDF
+export interface ProductionOrderPdfData {
+  orderNumber: string;
+  title: string;
+  status: string;
+  priority: string;
+  orderType: string;
+  branchName: string;
+  targetDate: string;
+  notes: string;
+  estimatedCost: number;
+  actualCost: number;
+  items: Array<{
+    productName: string;
+    category: string;
+    targetQuantity: number;
+    producedQuantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+}
+
+export async function generateProductionOrderPdf(data: ProductionOrderPdfData): Promise<Buffer> {
+  const itemRows = data.items.map((item, index) => `
+    <tr>
+      <td style="text-align: center;">${index + 1}</td>
+      <td style="text-align: right;">${item.productName}</td>
+      <td style="text-align: center;">${item.category}</td>
+      <td style="text-align: center;">${item.targetQuantity}</td>
+      <td style="text-align: center;">${item.producedQuantity}</td>
+      <td style="text-align: center;">${formatNumber(item.unitPrice)}</td>
+      <td style="text-align: center;">${formatNumber(item.total)}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 25px; font-size: 11px; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #f59e0b; padding-bottom: 15px; }
+    .header h1 { font-size: 22px; margin-bottom: 5px; color: #92400e; }
+    .header .order-num { font-size: 14px; color: #666; }
+    .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    .info-item { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 10px; }
+    .info-label { font-size: 10px; color: #92400e; }
+    .info-value { font-size: 12px; font-weight: bold; color: #78350f; }
+    h2 { font-size: 14px; margin: 15px 0 10px; color: #92400e; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
+    th { background-color: #fef3c7; font-weight: bold; text-align: center; }
+    tr:nth-child(even) { background-color: #fffbeb; }
+    .costs { display: flex; justify-content: space-around; margin-top: 20px; padding: 15px; background: #f0fdf4; border-radius: 8px; }
+    .cost-item { text-align: center; }
+    .cost-label { font-size: 11px; color: #166534; }
+    .cost-value { font-size: 16px; font-weight: bold; color: #15803d; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>${data.title || 'أمر إنتاج'}</h1>
+    <div class="order-num">رقم الأمر: ${data.orderNumber}</div>
+  </div>
+  
+  <div class="info-grid">
+    <div class="info-item"><div class="info-label">الحالة</div><div class="info-value">${data.status}</div></div>
+    <div class="info-item"><div class="info-label">الأولوية</div><div class="info-value">${data.priority}</div></div>
+    <div class="info-item"><div class="info-label">النوع</div><div class="info-value">${data.orderType}</div></div>
+    <div class="info-item"><div class="info-label">الفرع</div><div class="info-value">${data.branchName}</div></div>
+    <div class="info-item"><div class="info-label">تاريخ التسليم</div><div class="info-value">${data.targetDate}</div></div>
+    <div class="info-item"><div class="info-label">ملاحظات</div><div class="info-value">${data.notes || '-'}</div></div>
+  </div>
+  
+  <h2>بنود الأمر</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>المنتج</th>
+        <th>الفئة</th>
+        <th>الكمية المطلوبة</th>
+        <th>الكمية المنتجة</th>
+        <th>سعر الوحدة</th>
+        <th>الإجمالي</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  
+  <div class="costs">
+    <div class="cost-item"><div class="cost-label">التكلفة المقدرة</div><div class="cost-value">${formatNumber(data.estimatedCost)} ريال</div></div>
+    <div class="cost-item"><div class="cost-label">التكلفة الفعلية</div><div class="cost-value">${formatNumber(data.actualCost)} ريال</div></div>
+  </div>
+</body>
+</html>`;
+
+  return await generatePdfFromHtml(html, false);
+}
+
 async function generatePdfFromHtml(html: string, landscape: boolean): Promise<Buffer> {
   console.log("[PDF] Starting Puppeteer with @sparticuz/chromium...");
   

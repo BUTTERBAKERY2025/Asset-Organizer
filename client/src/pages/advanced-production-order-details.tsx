@@ -19,7 +19,6 @@ import { ar } from "date-fns/locale";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
-import { downloadArabicPdf } from "@/lib/pdfmake-arabic";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
   draft: { label: "مسودة", color: "text-gray-700", bgColor: "bg-gray-100" },
@@ -197,89 +196,47 @@ export default function AdvancedProductionOrderDetailsPage() {
     XLSX.writeFile(wb, `امر_انتاج_${order.orderNumber}.xlsx`);
   };
 
-  const exportToPdf = () => {
+  const exportToPdf = async () => {
     if (!orderData) return;
     const { order, items } = orderData;
 
-    const docDefinition: any = {
-      pageOrientation: "portrait",
-      pageSize: "A4",
-      content: [
-        { text: `أمر إنتاج: ${order.orderNumber}`, style: "header", alignment: "right" },
-        { text: order.title || "", style: "subheader", alignment: "right" },
-        { text: " ", margin: [0, 10, 0, 10] },
-        {
-          columns: [
-            {
-              width: "*",
-              stack: [
-                { text: `الحالة: ${STATUS_CONFIG[order.status]?.label || order.status}`, alignment: "right" },
-                { text: `النوع: ${ORDER_TYPE_CONFIG[order.orderType]?.label || order.orderType}`, alignment: "right" },
-                { text: `الأولوية: ${PRIORITY_CONFIG[order.priority]?.label || order.priority}`, alignment: "right" },
-              ]
-            },
-            {
-              width: "*",
-              stack: [
-                { text: `تاريخ البدء: ${formatDate(order.startDate)}`, alignment: "right" },
-                { text: `تاريخ الانتهاء: ${formatDate(order.endDate)}`, alignment: "right" },
-                { text: `نسبة الإنجاز: ${order.completionPercentage || 0}%`, alignment: "right" },
-              ]
-            }
-          ]
-        },
-        { text: " ", margin: [0, 10, 0, 10] },
-        {
-          columns: [
-            { text: `الفرع المصدر: ${getBranchName(order.sourceBranchId)}`, alignment: "right" },
-            { text: `الفرع المستهدف: ${getBranchName(order.targetBranchId)}`, alignment: "right" },
-          ]
-        },
-        { text: " ", margin: [0, 15, 0, 5] },
-        { text: "منتجات الأمر", style: "sectionHeader", alignment: "right" },
-        {
-          table: {
-            headerRows: 1,
-            widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto"],
-            body: [
-              [
-                { text: "الإجمالي", alignment: "right", bold: true },
-                { text: "سعر الوحدة", alignment: "right", bold: true },
-                { text: "الكمية المنتجة", alignment: "right", bold: true },
-                { text: "الكمية المطلوبة", alignment: "right", bold: true },
-                { text: "الفئة", alignment: "right", bold: true },
-                { text: "المنتج", alignment: "right", bold: true },
-                { text: "#", alignment: "right", bold: true },
-              ],
-              ...items.map((item: OrderItem, index: number) => [
-                { text: formatCurrency((item.targetQuantity || 0) * (item.unitPrice || 0)), alignment: "right" },
-                { text: formatCurrency(item.unitPrice), alignment: "right" },
-                { text: `${item.producedQuantity || 0}`, alignment: "right" },
-                { text: `${item.targetQuantity}`, alignment: "right" },
-                { text: item.category || 'عام', alignment: "right" },
-                { text: item.productName, alignment: "right" },
-                { text: `${index + 1}`, alignment: "right" },
-              ])
-            ]
-          }
-        },
-        { text: " ", margin: [0, 15, 0, 5] },
-        {
-          columns: [
-            { text: `التكلفة المقدرة: ${formatCurrency(order.estimatedCost || 0)}`, alignment: "right" },
-            { text: `التكلفة الفعلية: ${formatCurrency(order.actualCost || 0)}`, alignment: "right" },
-          ]
-        }
-      ],
-      styles: {
-        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
-        subheader: { fontSize: 14, margin: [0, 0, 0, 5] },
-        sectionHeader: { fontSize: 14, bold: true, margin: [0, 0, 0, 10] },
-      },
-      defaultStyle: {}
-    };
-
-    downloadArabicPdf(docDefinition, `امر_انتاج_${order.orderNumber}.pdf`);
+    try {
+      const response = await fetch("/api/pdf/production-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          orderNumber: order.orderNumber,
+          title: order.title || '',
+          status: STATUS_CONFIG[order.status]?.label || order.status,
+          priority: PRIORITY_CONFIG[order.priority]?.label || order.priority,
+          orderType: ORDER_TYPE_CONFIG[order.orderType]?.label || order.orderType,
+          branchName: getBranchName(order.sourceBranchId),
+          targetDate: formatDate(order.endDate),
+          notes: order.notes || '',
+          estimatedCost: order.estimatedCost || 0,
+          actualCost: order.actualCost || 0,
+          items: items.map((item: OrderItem, index: number) => ({
+            productName: item.productName,
+            category: item.category || 'عام',
+            targetQuantity: item.targetQuantity || 0,
+            producedQuantity: item.producedQuantity || 0,
+            unitPrice: item.unitPrice || 0,
+            total: (item.targetQuantity || 0) * (item.unitPrice || 0),
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `امر_انتاج_${order.orderNumber}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting production order PDF:", error);
+    }
   };
 
   if (isLoading) {
