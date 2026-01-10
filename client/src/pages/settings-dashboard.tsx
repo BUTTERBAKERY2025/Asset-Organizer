@@ -426,14 +426,6 @@ const quickActions: SettingItem[] = [
     adminOnly: true,
   },
   {
-    id: "quick-users",
-    title: "المستخدمين",
-    description: "إدارة الحسابات",
-    icon: Users,
-    path: "/users",
-    adminOnly: true,
-  },
-  {
     id: "quick-branches",
     title: "الفروع",
     description: "إدارة الفروع",
