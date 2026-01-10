@@ -712,6 +712,23 @@ export default function UsersPage() {
                             {group.label}
                           </TableCell>
                         </TableRow>
+                        <TableRow className="bg-amber-50/50 sticky top-0">
+                          <TableCell className="text-right font-semibold text-xs text-gray-600">الوحدة</TableCell>
+                          {selectedUser?.role === "viewer" ? (
+                            <TableCell className="text-center font-semibold text-xs text-gray-600">
+                              {ACTION_LABELS["view"]}
+                            </TableCell>
+                          ) : (
+                            MODULE_ACTIONS.map(action => (
+                              <TableCell key={action} className="text-center font-semibold text-xs text-gray-600">
+                                {ACTION_LABELS[action]}
+                              </TableCell>
+                            ))
+                          )}
+                          {selectedUser?.role !== "viewer" && (
+                            <TableCell className="text-center font-semibold text-xs text-gray-600">الكل</TableCell>
+                          )}
+                        </TableRow>
                         {group.modules.map(module => {
                           const currentActions = permissionState[module] || [];
                           const allSelected = MODULE_ACTIONS.every(a => currentActions.includes(a));
