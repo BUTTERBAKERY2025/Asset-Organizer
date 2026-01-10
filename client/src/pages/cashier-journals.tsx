@@ -71,7 +71,7 @@ export default function CashierJournalsPage() {
   });
 
   const { data: userPermissions } = useQuery<{ module: string; actions: string[] }[]>({
-    queryKey: ["/api/rbac/my-permissions"],
+    queryKey: ["/api/my-permissions"],
     enabled: !!user,
   });
 
