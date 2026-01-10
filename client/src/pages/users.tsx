@@ -293,6 +293,137 @@ export default function UsersPage() {
     });
   };
 
+  const toggleAllForAction = (action: string) => {
+    setPermissionState(prev => {
+      const allModules = MODULE_GROUPS.flatMap(g => g.modules);
+      const allHaveAction = allModules.every(m => (prev[m] || []).includes(action));
+      
+      const newState = { ...prev };
+      for (const module of allModules) {
+        const currentActions = newState[module] || [];
+        if (allHaveAction) {
+          newState[module] = currentActions.filter(a => a !== action);
+        } else {
+          if (!currentActions.includes(action)) {
+            newState[module] = [...currentActions, action];
+          }
+        }
+      }
+      return newState;
+    });
+  };
+
+  const toggleAllForCategory = (modules: string[]) => {
+    setPermissionState(prev => {
+      const allSelected = modules.every(m => 
+        MODULE_ACTIONS.every(a => (prev[m] || []).includes(a))
+      );
+      
+      const newState = { ...prev };
+      for (const module of modules) {
+        if (allSelected) {
+          newState[module] = [];
+        } else {
+          newState[module] = [...MODULE_ACTIONS];
+        }
+      }
+      return newState;
+    });
+  };
+
+  const getPermissionCount = () => {
+    let count = 0;
+    for (const actions of Object.values(permissionState)) {
+      count += actions.length;
+    }
+    return count;
+  };
+
+  const ROLE_TEMPLATES = [
+    { id: "cashier", label: "كاشير", icon: "💰" },
+    { id: "supervisor", label: "مشرف", icon: "👨‍💼" },
+    { id: "branch_manager", label: "مدير فرع", icon: "🏪" },
+    { id: "production_manager", label: "مدير إنتاج", icon: "🏭" },
+    { id: "viewer", label: "مشاهد فقط", icon: "👁️" },
+    { id: "employee", label: "موظف عادي", icon: "👤" },
+  ];
+
+  const applyCustomTemplate = (templateId: string) => {
+    const templates: Record<string, { module: string; actions: string[] }[]> = {
+      cashier: [
+        { module: "cashier_journal", actions: ["view", "view_list", "view_details", "create", "edit", "submit", "sign", "print"] },
+        { module: "cashier_performance", actions: ["view", "view_list", "view_details"] },
+        { module: "dashboard", actions: ["view"] },
+        { module: "platform_home", actions: ["view"] },
+      ],
+      supervisor: [
+        { module: "dashboard", actions: ["view", "export"] },
+        { module: "platform_home", actions: ["view"] },
+        { module: "cashier_journal", actions: ["view", "view_list", "view_details", "approve", "reject", "print", "export"] },
+        { module: "cashier_performance", actions: ["view", "view_list", "view_details", "export"] },
+        { module: "operations", actions: ["view", "create", "edit"] },
+        { module: "production", actions: ["view"] },
+        { module: "shifts", actions: ["view", "create", "edit"] },
+        { module: "quality_control", actions: ["view"] },
+        { module: "inventory", actions: ["view"] },
+      ],
+      branch_manager: [
+        { module: "dashboard", actions: ["view", "export", "print"] },
+        { module: "platform_home", actions: ["view"] },
+        { module: "cashier_journal", actions: ["view", "view_list", "view_details", "create", "edit", "approve", "reject", "reopen", "print", "export", "sign", "view_signatures"] },
+        { module: "cashier_performance", actions: ["view", "view_list", "view_details", "export", "print"] },
+        { module: "operations", actions: ["view", "create", "edit", "delete"] },
+        { module: "production", actions: ["view", "create", "edit"] },
+        { module: "shifts", actions: ["view", "create", "edit", "delete"] },
+        { module: "quality_control", actions: ["view", "create", "edit"] },
+        { module: "inventory", actions: ["view", "create", "edit"] },
+        { module: "asset_transfers", actions: ["view", "create", "edit", "approve"] },
+        { module: "branch_employees", actions: ["view", "create", "edit"] },
+        { module: "employee_reports", actions: ["view", "export", "print"] },
+        { module: "reports", actions: ["view", "export", "print"] },
+      ],
+      production_manager: [
+        { module: "dashboard", actions: ["view", "export"] },
+        { module: "platform_home", actions: ["view"] },
+        { module: "production", actions: ["view", "create", "edit", "delete", "approve"] },
+        { module: "daily_production", actions: ["view", "create", "edit", "delete"] },
+        { module: "advanced_production", actions: ["view", "create", "edit", "delete"] },
+        { module: "quality_control", actions: ["view", "create", "edit", "delete"] },
+        { module: "products", actions: ["view", "create", "edit"] },
+        { module: "operations", actions: ["view"] },
+        { module: "inventory", actions: ["view"] },
+        { module: "shifts", actions: ["view", "create", "edit", "delete"] },
+      ],
+      viewer: MODULE_GROUPS.flatMap(g => g.modules).filter(m => m !== "users").map(module => ({
+        module,
+        actions: ["view"],
+      })),
+      employee: [
+        { module: "dashboard", actions: ["view", "export"] },
+        { module: "platform_home", actions: ["view"] },
+        { module: "inventory", actions: ["view", "create", "edit", "export"] },
+        { module: "asset_transfers", actions: ["view", "create", "edit", "export"] },
+        { module: "reports", actions: ["view", "export"] },
+      ],
+    };
+    
+    const template = templates[templateId];
+    if (!template) return;
+    
+    const newState: PermissionState = {};
+    for (const perm of template) {
+      newState[perm.module] = [...perm.actions];
+    }
+    setPermissionState(newState);
+    setAppliedTemplate(templateId);
+    
+    const templateInfo = ROLE_TEMPLATES.find(t => t.id === templateId);
+    toast({
+      title: "تم تطبيق القالب",
+      description: `تم تطبيق صلاحيات ${templateInfo?.label || templateId}`,
+    });
+  };
+
   const applyRoleTemplate = () => {
     if (!selectedUser) return;
     
@@ -654,31 +785,43 @@ export default function UsersPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  {selectedUser?.role === "viewer" && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-blue-800 text-sm">
-                      <Eye className="w-4 h-4 inline-block ml-2" />
-                      المشاهد يمكنه العرض فقط. حدد الوحدات التي يستطيع مشاهدتها.
-                    </div>
-                  )}
-                  {selectedUser?.role === "employee" && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-sm">
-                      <UserCog className="w-4 h-4 inline-block ml-2" />
-                      الموظف لديه صلاحيات مخصصة حسب الاختيار أدناه.
-                    </div>
-                  )}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    {selectedUser?.role === "viewer" && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-blue-800 text-sm">
+                        <Eye className="w-4 h-4 inline-block ml-2" />
+                        المشاهد يمكنه العرض فقط. حدد الوحدات التي يستطيع مشاهدتها.
+                      </div>
+                    )}
+                    {selectedUser?.role === "employee" && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-sm">
+                        <UserCog className="w-4 h-4 inline-block ml-2" />
+                        الموظف لديه صلاحيات مخصصة حسب الاختيار أدناه.
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">
+                    {getPermissionCount()} صلاحية محددة
+                  </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={applyRoleTemplate}
-                  className="mr-4"
-                  data-testid="button-apply-template"
-                >
-                  <Wand2 className="w-4 h-4 ml-2" />
-                  تطبيق القالب الافتراضي
-                </Button>
+                
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-sm text-muted-foreground ml-2">قوالب جاهزة:</span>
+                  {ROLE_TEMPLATES.map(template => (
+                    <Button
+                      key={template.id}
+                      variant={appliedTemplate === template.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => applyCustomTemplate(template.id)}
+                      className="text-xs"
+                      data-testid={`button-template-${template.id}`}
+                    >
+                      <span className="ml-1">{template.icon}</span>
+                      {template.label}
+                    </Button>
+                  ))}
+                </div>
               </div>
               <div className="rounded-md border">
                 <Table>
@@ -690,11 +833,23 @@ export default function UsersPage() {
                           {ACTION_LABELS["view"]}
                         </TableHead>
                       ) : (
-                        MODULE_ACTIONS.map(action => (
-                          <TableHead key={action} className="text-center w-20">
-                            {ACTION_LABELS[action]}
-                          </TableHead>
-                        ))
+                        MODULE_ACTIONS.map(action => {
+                          const allModules = MODULE_GROUPS.flatMap(g => g.modules);
+                          const allHaveAction = allModules.every(m => (permissionState[m] || []).includes(action));
+                          return (
+                            <TableHead key={action} className="text-center w-20">
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-xs">{ACTION_LABELS[action]}</span>
+                                <Checkbox
+                                  checked={allHaveAction}
+                                  onCheckedChange={() => toggleAllForAction(action)}
+                                  className="h-3 w-3"
+                                  data-testid={`checkbox-all-${action}`}
+                                />
+                              </div>
+                            </TableHead>
+                          );
+                        })
                       )}
                       {selectedUser?.role !== "viewer" && (
                         <TableHead className="text-center w-20">الكل</TableHead>
@@ -709,7 +864,22 @@ export default function UsersPage() {
                             colSpan={selectedUser?.role === "viewer" ? 2 : MODULE_ACTIONS.length + 2} 
                             className="font-bold text-primary py-2"
                           >
-                            {group.label}
+                            <div className="flex items-center gap-3">
+                              {selectedUser?.role !== "viewer" && (
+                                <Checkbox
+                                  checked={group.modules.every(m => 
+                                    MODULE_ACTIONS.every(a => (permissionState[m] || []).includes(a))
+                                  )}
+                                  onCheckedChange={() => toggleAllForCategory(group.modules)}
+                                  className="h-4 w-4"
+                                  data-testid={`checkbox-category-${group.label}`}
+                                />
+                              )}
+                              <span>{group.label}</span>
+                              <span className="text-xs text-muted-foreground font-normal">
+                                ({group.modules.reduce((sum, m) => sum + (permissionState[m] || []).length, 0)} صلاحية)
+                              </span>
+                            </div>
                           </TableCell>
                         </TableRow>
                         <TableRow className="bg-amber-50/50 sticky top-0">
