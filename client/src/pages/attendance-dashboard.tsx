@@ -22,6 +22,7 @@ import {
   CalendarClock,
   ListChecks,
   Loader2,
+  TrendingUp,
 } from "lucide-react";
 
 interface QuickAction {
@@ -90,6 +91,14 @@ export default function AttendanceDashboardPage() {
       icon: <BarChart3 className="w-6 h-6" />,
       href: "/employee-reports",
       color: "bg-teal-500",
+      badge: "جديد",
+    },
+    {
+      title: "الأرباح والخسائر",
+      description: "تحليل مالي شامل للإيرادات والمصروفات",
+      icon: <TrendingUp className="w-6 h-6" />,
+      href: "/pnl-dashboard",
+      color: "bg-indigo-500",
       badge: "جديد",
     },
   ];
