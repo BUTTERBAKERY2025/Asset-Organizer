@@ -426,8 +426,8 @@ export function getActiveBranchFilter(req: any): string | null {
     // But if admin has selected a specific branch, filter by it
     return req.session?.activeBranchId || null;
   }
-  // Regular users must have an active branch to see data
-  return req.session?.activeBranchId || null;
+  // Regular users: use session activeBranchId, or fall back to user's default branch
+  return req.session?.activeBranchId || user?.branchId || null;
 }
 
 // Check if user can access/write to a specific branch
