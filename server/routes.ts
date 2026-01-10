@@ -10791,5 +10791,338 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== P&L (Profit & Loss) Dashboard Routes ====================
+
+  // Get all financial periods with optional filters
+  app.get("/api/financials/periods", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, year, month } = req.query;
+      const filters: { branchId?: string; year?: number; month?: number } = {};
+      if (branchId) filters.branchId = branchId as string;
+      if (year) filters.year = parseInt(year as string);
+      if (month) filters.month = parseInt(month as string);
+      const periods = await storage.getAllFinancialPeriods(filters);
+      res.json(periods);
+    } catch (error) {
+      console.error("Error fetching financial periods:", error);
+      res.status(500).json({ error: "فشل في جلب الفترات المالية" });
+    }
+  });
+
+  // Get a single financial period
+  app.get("/api/financials/periods/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const period = await storage.getFinancialPeriod(id);
+      if (!period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+      res.json(period);
+    } catch (error) {
+      console.error("Error fetching financial period:", error);
+      res.status(500).json({ error: "فشل في جلب الفترة المالية" });
+    }
+  });
+
+  // Get complete P&L data for a period
+  app.get("/api/financials/periods/:id/complete", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = await storage.getCompletePnLData(id);
+      if (!data.period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching complete P&L data:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الأرباح والخسائر" });
+    }
+  });
+
+  // Create a new financial period
+  app.post("/api/financials/periods", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, month, year, targetRevenue, targetGrossMargin, targetNetMargin, notes } = req.body;
+      
+      // Check if period already exists
+      const existing = await storage.getFinancialPeriodByBranchAndDate(branchId, year, month);
+      if (existing) {
+        return res.status(400).json({ error: "الفترة المالية موجودة بالفعل لهذا الفرع" });
+      }
+
+      const period = await storage.createFinancialPeriod({
+        branchId,
+        month,
+        year,
+        periodType: "monthly",
+        targetRevenue: targetRevenue || 0,
+        targetGrossMargin: targetGrossMargin || 0,
+        targetNetMargin: targetNetMargin || 0,
+        notes,
+        status: "draft",
+        createdBy: (req as any).user?.id,
+      });
+      res.status(201).json(period);
+    } catch (error) {
+      console.error("Error creating financial period:", error);
+      res.status(500).json({ error: "فشل في إنشاء الفترة المالية" });
+    }
+  });
+
+  // Update a financial period
+  app.put("/api/financials/periods/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const period = await storage.updateFinancialPeriod(id, req.body);
+      if (!period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+      res.json(period);
+    } catch (error) {
+      console.error("Error updating financial period:", error);
+      res.status(500).json({ error: "فشل في تحديث الفترة المالية" });
+    }
+  });
+
+  // Delete a financial period
+  app.delete("/api/financials/periods/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteFinancialPeriod(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting financial period:", error);
+      res.status(500).json({ error: "فشل في حذف الفترة المالية" });
+    }
+  });
+
+  // Bulk update sales data for a period
+  app.post("/api/financials/periods/:id/sales", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const { salesData } = req.body;
+      
+      // Delete existing sales and insert new ones
+      await storage.deleteFinancialSalesByPeriod(periodId);
+      const sales = await storage.bulkCreateFinancialSales(
+        salesData.map((s: any) => ({ ...s, periodId }))
+      );
+      res.json(sales);
+    } catch (error) {
+      console.error("Error updating sales data:", error);
+      res.status(500).json({ error: "فشل في تحديث بيانات المبيعات" });
+    }
+  });
+
+  // Bulk update COGS data for a period
+  app.post("/api/financials/periods/:id/cogs", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const { cogsData } = req.body;
+      
+      await storage.deleteFinancialCOGSByPeriod(periodId);
+      const cogs = await storage.bulkCreateFinancialCOGS(
+        cogsData.map((c: any) => ({ ...c, periodId }))
+      );
+      res.json(cogs);
+    } catch (error) {
+      console.error("Error updating COGS data:", error);
+      res.status(500).json({ error: "فشل في تحديث بيانات التكاليف" });
+    }
+  });
+
+  // Bulk update operating expenses for a period
+  app.post("/api/financials/periods/:id/operating-expenses", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const { expensesData } = req.body;
+      
+      await storage.deleteFinancialOperatingExpensesByPeriod(periodId);
+      const expenses = await storage.bulkCreateFinancialOperatingExpenses(
+        expensesData.map((e: any) => ({ ...e, periodId }))
+      );
+      res.json(expenses);
+    } catch (error) {
+      console.error("Error updating operating expenses:", error);
+      res.status(500).json({ error: "فشل في تحديث المصروفات التشغيلية" });
+    }
+  });
+
+  // Bulk update fixed costs for a period
+  app.post("/api/financials/periods/:id/fixed-costs", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const { costsData } = req.body;
+      
+      await storage.deleteFinancialFixedCostsByPeriod(periodId);
+      const costs = await storage.bulkCreateFinancialFixedCosts(
+        costsData.map((c: any) => ({ ...c, periodId }))
+      );
+      res.json(costs);
+    } catch (error) {
+      console.error("Error updating fixed costs:", error);
+      res.status(500).json({ error: "فشل في تحديث التكاليف الثابتة" });
+    }
+  });
+
+  // Calculate and save metrics for a period
+  app.post("/api/financials/periods/:id/calculate-metrics", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const data = await storage.getCompletePnLData(periodId);
+      
+      if (!data.period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+
+      // Calculate totals
+      const totalRevenue = data.sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+      const totalCOGS = data.cogs.reduce((sum, c) => sum + (c.amount || 0), 0);
+      const totalWaste = data.cogs.reduce((sum, c) => sum + (c.wasteAmount || 0), 0);
+      const totalOperatingExpenses = data.operatingExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const totalFixedCosts = data.fixedCosts.reduce((sum, c) => sum + (c.amount || 0), 0);
+      const totalInvoices = data.sales.reduce((sum, s) => sum + (s.invoiceCount || 0), 0);
+
+      // Calculate profits and margins
+      const grossProfit = totalRevenue - totalCOGS;
+      const netProfit = grossProfit - totalOperatingExpenses - totalFixedCosts;
+      const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+      const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+      // Calculate ratios
+      const salaryExpense = data.operatingExpenses.find(e => e.expenseType === "salaries")?.amount || 0;
+      const rentCost = data.fixedCosts.find(c => c.costType === "rent")?.amount || 0;
+      const salaryToSalesPct = totalRevenue > 0 ? (salaryExpense / totalRevenue) * 100 : 0;
+      const rentToRevenuePct = totalRevenue > 0 ? (rentCost / totalRevenue) * 100 : 0;
+      const wastePct = totalCOGS > 0 ? (totalWaste / totalCOGS) * 100 : 0;
+
+      // Calculate break-even (simplified: Fixed Costs / Gross Margin %)
+      const breakEvenSales = grossMarginPct > 0 ? (totalFixedCosts + totalOperatingExpenses) / (grossMarginPct / 100) : 0;
+
+      // Average invoice value
+      const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+
+      // Determine rating
+      let rating = "average";
+      const ratingReasons: string[] = [];
+      const recommendations: string[] = [];
+
+      if (netMarginPct >= 15) {
+        rating = "excellent";
+        ratingReasons.push("هامش ربح صافي ممتاز (أعلى من 15%)");
+      } else if (netMarginPct >= 8) {
+        rating = "good";
+        ratingReasons.push("هامش ربح صافي جيد (8-15%)");
+      } else if (netMarginPct >= 3) {
+        rating = "average";
+        ratingReasons.push("هامش ربح صافي متوسط (3-8%)");
+        recommendations.push("راجع تكاليف التشغيل لتحسين الربحية");
+      } else {
+        rating = "poor";
+        ratingReasons.push("هامش ربح صافي ضعيف (أقل من 3%)");
+        recommendations.push("يجب مراجعة هيكل التكاليف بشكل عاجل");
+      }
+
+      // Additional rating factors
+      if (salaryToSalesPct > 35) {
+        ratingReasons.push("نسبة الرواتب للمبيعات مرتفعة");
+        recommendations.push("دراسة إمكانية تحسين إنتاجية الموظفين");
+      }
+      if (wastePct > 5) {
+        ratingReasons.push("نسبة الهدر مرتفعة");
+        recommendations.push("تطبيق نظام مراقبة المخزون وتقليل الهدر");
+      }
+      if (rentToRevenuePct > 15) {
+        ratingReasons.push("نسبة الإيجار للإيرادات مرتفعة");
+        recommendations.push("مراجعة جدوى موقع الفرع");
+      }
+
+      // Save metrics
+      const metrics = await storage.upsertFinancialMetrics(periodId, {
+        periodId,
+        totalRevenue,
+        totalCOGS,
+        totalOperatingExpenses,
+        totalFixedCosts,
+        grossProfit,
+        netProfit,
+        grossMarginPct,
+        netMarginPct,
+        breakEvenSales,
+        salaryToSalesPct,
+        rentToRevenuePct,
+        wastePct,
+        invoiceCount: totalInvoices,
+        avgInvoiceValue,
+        rating,
+        ratingReasons,
+        recommendations,
+      });
+
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error calculating metrics:", error);
+      res.status(500).json({ error: "فشل في حساب المؤشرات" });
+    }
+  });
+
+  // Get branch ranking
+  app.get("/api/financials/ranking", isAuthenticated, async (req, res) => {
+    try {
+      const { year, month, metric } = req.query;
+      const yearNum = parseInt(year as string) || new Date().getFullYear();
+      const monthNum = parseInt(month as string) || new Date().getMonth() + 1;
+      const metricType = (metric as 'profit' | 'revenue' | 'margin') || 'profit';
+      
+      const ranking = await storage.getBranchRanking(yearNum, monthNum, metricType);
+      
+      // Enrich with branch names
+      const branches = await storage.getAllBranches();
+      const branchMap = new Map(branches.map(b => [b.id, b.name]));
+      
+      const enrichedRanking = ranking.map((r, index) => ({
+        ...r,
+        branchName: branchMap.get(r.branchId) || r.branchId,
+        rank: index + 1,
+      }));
+      
+      res.json(enrichedRanking);
+    } catch (error) {
+      console.error("Error fetching branch ranking:", error);
+      res.status(500).json({ error: "فشل في جلب ترتيب الفروع" });
+    }
+  });
+
+  // Get or create period for branch/date combination
+  app.post("/api/financials/periods/get-or-create", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, year, month } = req.body;
+      
+      let period = await storage.getFinancialPeriodByBranchAndDate(branchId, year, month);
+      
+      if (!period) {
+        period = await storage.createFinancialPeriod({
+          branchId,
+          month,
+          year,
+          periodType: "monthly",
+          targetRevenue: 0,
+          targetGrossMargin: 0,
+          targetNetMargin: 0,
+          status: "draft",
+          createdBy: (req as any).user?.id,
+        });
+      }
+      
+      res.json(period);
+    } catch (error) {
+      console.error("Error getting or creating period:", error);
+      res.status(500).json({ error: "فشل في جلب أو إنشاء الفترة المالية" });
+    }
+  });
+
   return httpServer;
 }
