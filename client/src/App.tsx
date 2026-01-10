@@ -7,7 +7,7 @@ import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
-import { ProtectedRoute, PublicOnlyRoute } from "@/components/protected-route";
+import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
 import NotFound from "@/pages/not-found";
 import PlatformHomePage from "@/pages/platform-home";
 import DashboardPage from "@/pages/dashboard";
@@ -75,16 +75,24 @@ import OrganizationalStructurePage from "@/pages/organizational-structure";
 import EmployeeReportsDashboardPage from "@/pages/employee-reports-dashboard";
 import PnLDashboardPage from "@/pages/pnl-dashboard";
 import SecurityManagementPage from "@/pages/security-management";
+import type { SystemModule } from "@shared/schema";
 
-function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
+function ModulePage({ component: Component, module }: { component: React.ComponentType; module: SystemModule }) {
   return (
-    <ProtectedRoute>
+    <ModuleProtectedRoute module={module}>
       <Component />
-    </ProtectedRoute>
+    </ModuleProtectedRoute>
   );
 }
 
-function AdminPage({ component: Component }: { component: React.ComponentType }) {
+function AdminPage({ component: Component, module }: { component: React.ComponentType; module?: SystemModule }) {
+  if (module) {
+    return (
+      <ModuleProtectedRoute module={module} requiredRole="admin">
+        <Component />
+      </ModuleProtectedRoute>
+    );
+  }
   return (
     <ProtectedRoute requiredRole="admin">
       <Component />
@@ -103,72 +111,89 @@ function Router() {
           </PublicOnlyRoute>
         )}
       </Route>
-      <Route path="/dashboard">{() => <ProtectedPage component={DashboardPage} />}</Route>
-      <Route path="/inventory">{() => <ProtectedPage component={InventoryPage} />}</Route>
-      <Route path="/manage">{() => <ProtectedPage component={ManagePage} />}</Route>
-      <Route path="/branches">{() => <ProtectedPage component={BranchesPage} />}</Route>
-      <Route path="/maintenance">{() => <ProtectedPage component={MaintenancePage} />}</Route>
-      <Route path="/inspections">{() => <ProtectedPage component={InspectionsPage} />}</Route>
-      <Route path="/users">{() => <AdminPage component={UsersPage} />}</Route>
-      <Route path="/construction-projects">{() => <ProtectedPage component={ConstructionProjectsPage} />}</Route>
-      <Route path="/construction-projects/:id">{() => <ProtectedPage component={ConstructionProjectDetailPage} />}</Route>
-      <Route path="/contractors">{() => <ProtectedPage component={ContractorsPage} />}</Route>
-      <Route path="/construction-dashboard">{() => <ProtectedPage component={ConstructionDashboardPage} />}</Route>
-      <Route path="/construction-reports">{() => <ProtectedPage component={ConstructionReportsPage} />}</Route>
-      <Route path="/contracts">{() => <ProtectedPage component={ContractsPage} />}</Route>
-      <Route path="/payment-requests">{() => <ProtectedPage component={PaymentRequestsPage} />}</Route>
-      <Route path="/budget-planning">{() => <ProtectedPage component={BudgetPlanningPage} />}</Route>
-      <Route path="/asset-transfers">{() => <ProtectedPage component={AssetTransfersPage} />}</Route>
-      <Route path="/reports">{() => <ProtectedPage component={ReportsPage} />}</Route>
-      <Route path="/audit-logs">{() => <AdminPage component={AuditLogsPage} />}</Route>
-      <Route path="/backups">{() => <AdminPage component={BackupsPage} />}</Route>
-      <Route path="/integrations">{() => <AdminPage component={IntegrationsPage} />}</Route>
-      <Route path="/operations">{() => <ProtectedPage component={OperationsDashboardPage} />}</Route>
-      <Route path="/operations-reports">{() => <ProtectedPage component={OperationsReportsDashboardPage} />}</Route>
-      <Route path="/products">{() => <ProtectedPage component={ProductsPage} />}</Route>
-      <Route path="/production">{() => <ProtectedPage component={ProductionPage} />}</Route>
-      <Route path="/quality-control">{() => <ProtectedPage component={QualityControlPage} />}</Route>
-      <Route path="/cashier-journals">{() => <ProtectedPage component={CashierJournalsPage} />}</Route>
-      <Route path="/cashier-journals/new">{() => <ProtectedPage component={CashierJournalFormPage} />}</Route>
-      <Route path="/cashier-journals/:id">{() => <ProtectedPage component={CashierJournalFormPage} />}</Route>
-      <Route path="/operations-employees">{() => <ProtectedPage component={OperationsEmployeesPage} />}</Route>
-      <Route path="/targets-planning">{() => <ProtectedPage component={TargetsPlanningPage} />}</Route>
-      <Route path="/targets-dashboard">{() => <ProtectedPage component={TargetsDashboardPage} />}</Route>
-      <Route path="/incentives-management">{() => <ProtectedPage component={IncentivesManagementPage} />}</Route>
-      <Route path="/sales-analytics">{() => <ProtectedPage component={SalesAnalyticsPage} />}</Route>
-      <Route path="/display-bar-waste">{() => <ProtectedPage component={DisplayBarWastePage} />}</Route>
-      <Route path="/production-dashboard">{() => <ProtectedPage component={ProductionDashboardPage} />}</Route>
-      <Route path="/advanced-production-orders">{() => <ProtectedPage component={AdvancedProductionOrdersPage} />}</Route>
-      <Route path="/advanced-production-orders/new">{() => <ProtectedPage component={AdvancedProductionOrderFormPage} />}</Route>
-      <Route path="/advanced-production-orders/:id">{() => <ProtectedPage component={AdvancedProductionOrderDetailsPage} />}</Route>
-      <Route path="/advanced-production-orders/:id/edit">{() => <ProtectedPage component={AdvancedProductionOrderFormPage} />}</Route>
-      <Route path="/ai-production-planner">{() => <ProtectedPage component={AdvancedProductionPlannerPage} />}</Route>
-      <Route path="/sales-data-uploads">{() => <ProtectedPage component={SalesDataUploadsPage} />}</Route>
-      <Route path="/daily-production">{() => <ProtectedPage component={DailyProductionPage} />}</Route>
-      <Route path="/production-reports">{() => <ProtectedPage component={ProductionReportsPage} />}</Route>
-      <Route path="/rbac-management">{() => <AdminPage component={RBACManagementPage} />}</Route>
-      <Route path="/cashier-shift-performance">{() => <ProtectedPage component={CashierShiftPerformancePage} />}</Route>
-      <Route path="/marketing">{() => <ProtectedPage component={MarketingDashboardPage} />}</Route>
-      <Route path="/marketing-campaigns">{() => <ProtectedPage component={MarketingCampaignsPage} />}</Route>
-      <Route path="/marketing-influencers">{() => <ProtectedPage component={MarketingInfluencersPage} />}</Route>
-      <Route path="/marketing-calendar">{() => <ProtectedPage component={MarketingCalendarPage} />}</Route>
-      <Route path="/marketing-tasks">{() => <ProtectedPage component={MarketingTasksPage} />}</Route>
-      <Route path="/marketing-reports">{() => <ProtectedPage component={MarketingReportsPage} />}</Route>
-      <Route path="/marketing-team">{() => <ProtectedPage component={MarketingTeamPage} />}</Route>
-      <Route path="/marketing-goals">{() => <ProtectedPage component={MarketingGoalsPage} />}</Route>
-      <Route path="/marketing-assets">{() => <ProtectedPage component={MarketingAssetsPage} />}</Route>
-      <Route path="/marketing-alerts">{() => <ProtectedPage component={MarketingAlertsPage} />}</Route>
-      <Route path="/marketing-expenses">{() => <ProtectedPage component={MarketingExpensesPage} />}</Route>
-      <Route path="/settings">{() => <ProtectedPage component={SettingsDashboardPage} />}</Route>
-      <Route path="/attendance-dashboard">{() => <ProtectedPage component={AttendanceDashboardPage} />}</Route>
-      <Route path="/shift-management">{() => <ProtectedPage component={ShiftManagementPage} />}</Route>
-      <Route path="/attendance-check">{() => <ProtectedPage component={AttendanceCheckPage} />}</Route>
-      <Route path="/branch-employees">{() => <ProtectedPage component={BranchEmployeesPage} />}</Route>
-      <Route path="/timesheet">{() => <ProtectedPage component={TimesheetPage} />}</Route>
-      <Route path="/organizational-structure">{() => <ProtectedPage component={OrganizationalStructurePage} />}</Route>
-      <Route path="/employee-reports">{() => <ProtectedPage component={EmployeeReportsDashboardPage} />}</Route>
-      <Route path="/pnl-dashboard">{() => <ProtectedPage component={PnLDashboardPage} />}</Route>
-      <Route path="/security-management">{() => <ProtectedPage component={SecurityManagementPage} />}</Route>
+      
+      {/* HR - الموارد البشرية */}
+      <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
+      <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>
+      <Route path="/attendance-dashboard">{() => <ModulePage component={AttendanceDashboardPage} module="shifts" />}</Route>
+      <Route path="/shift-management">{() => <ModulePage component={ShiftManagementPage} module="shifts" />}</Route>
+      <Route path="/attendance-check">{() => <ModulePage component={AttendanceCheckPage} module="shifts" />}</Route>
+      <Route path="/timesheet">{() => <ModulePage component={TimesheetPage} module="shifts" />}</Route>
+      <Route path="/employee-reports">{() => <ModulePage component={EmployeeReportsDashboardPage} module="employee_reports" />}</Route>
+      
+      {/* Production - الإنتاج */}
+      <Route path="/production-dashboard">{() => <ModulePage component={ProductionDashboardPage} module="production" />}</Route>
+      <Route path="/advanced-production-orders">{() => <ModulePage component={AdvancedProductionOrdersPage} module="production" />}</Route>
+      <Route path="/advanced-production-orders/new">{() => <ModulePage component={AdvancedProductionOrderFormPage} module="production" />}</Route>
+      <Route path="/advanced-production-orders/:id">{() => <ModulePage component={AdvancedProductionOrderDetailsPage} module="production" />}</Route>
+      <Route path="/advanced-production-orders/:id/edit">{() => <ModulePage component={AdvancedProductionOrderFormPage} module="production" />}</Route>
+      <Route path="/daily-production">{() => <ModulePage component={DailyProductionPage} module="daily_production" />}</Route>
+      <Route path="/ai-production-planner">{() => <ModulePage component={AdvancedProductionPlannerPage} module="production" />}</Route>
+      <Route path="/sales-data-uploads">{() => <ModulePage component={SalesDataUploadsPage} module="production" />}</Route>
+      <Route path="/production-reports">{() => <ModulePage component={ProductionReportsPage} module="production" />}</Route>
+      <Route path="/production">{() => <ModulePage component={ProductionPage} module="production" />}</Route>
+      
+      {/* Operations - التشغيل */}
+      <Route path="/operations">{() => <ModulePage component={OperationsDashboardPage} module="operations" />}</Route>
+      <Route path="/products">{() => <ModulePage component={ProductsPage} module="products" />}</Route>
+      <Route path="/quality-control">{() => <ModulePage component={QualityControlPage} module="quality_control" />}</Route>
+      <Route path="/display-bar-waste">{() => <ModulePage component={DisplayBarWastePage} module="waste_tracking" />}</Route>
+      <Route path="/operations-employees">{() => <ModulePage component={OperationsEmployeesPage} module="operations" />}</Route>
+      <Route path="/operations-reports">{() => <ModulePage component={OperationsReportsDashboardPage} module="operations" />}</Route>
+      
+      {/* Sales - المبيعات والكاشير */}
+      <Route path="/cashier-journals">{() => <ModulePage component={CashierJournalsPage} module="cashier_journal" />}</Route>
+      <Route path="/cashier-journals/new">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
+      <Route path="/cashier-journals/:id">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
+      <Route path="/sales-analytics">{() => <ModulePage component={SalesAnalyticsPage} module="sales_analytics" />}</Route>
+      <Route path="/targets-planning">{() => <ModulePage component={TargetsPlanningPage} module="targets_planning" />}</Route>
+      <Route path="/targets-dashboard">{() => <ModulePage component={TargetsDashboardPage} module="targets" />}</Route>
+      <Route path="/cashier-shift-performance">{() => <ModulePage component={CashierShiftPerformancePage} module="cashier_performance" />}</Route>
+      <Route path="/incentives-management">{() => <ModulePage component={IncentivesManagementPage} module="incentives" />}</Route>
+      <Route path="/pnl-dashboard">{() => <ModulePage component={PnLDashboardPage} module="pnl_dashboard" />}</Route>
+      
+      {/* Assets - الأصول والجرد */}
+      <Route path="/dashboard">{() => <ModulePage component={DashboardPage} module="inventory" />}</Route>
+      <Route path="/inventory">{() => <ModulePage component={InventoryPage} module="inventory" />}</Route>
+      <Route path="/manage">{() => <ModulePage component={ManagePage} module="inventory" />}</Route>
+      <Route path="/asset-transfers">{() => <ModulePage component={AssetTransfersPage} module="asset_transfers" />}</Route>
+      <Route path="/branches">{() => <ModulePage component={BranchesPage} module="branches" />}</Route>
+      <Route path="/inspections">{() => <ModulePage component={InspectionsPage} module="inspections" />}</Route>
+      <Route path="/maintenance">{() => <ModulePage component={MaintenancePage} module="maintenance" />}</Route>
+      <Route path="/reports">{() => <ModulePage component={ReportsPage} module="reports" />}</Route>
+      
+      {/* Construction - المشاريع والإنشاءات */}
+      <Route path="/construction-projects">{() => <ModulePage component={ConstructionProjectsPage} module="construction_projects" />}</Route>
+      <Route path="/construction-projects/:id">{() => <ModulePage component={ConstructionProjectDetailPage} module="construction_projects" />}</Route>
+      <Route path="/construction-dashboard">{() => <ModulePage component={ConstructionDashboardPage} module="construction_projects" />}</Route>
+      <Route path="/contractors">{() => <ModulePage component={ContractorsPage} module="contractors" />}</Route>
+      <Route path="/contracts">{() => <ModulePage component={ContractsPage} module="contracts" />}</Route>
+      <Route path="/payment-requests">{() => <ModulePage component={PaymentRequestsPage} module="payment_requests" />}</Route>
+      <Route path="/budget-planning">{() => <ModulePage component={BudgetPlanningPage} module="budget_planning" />}</Route>
+      <Route path="/construction-reports">{() => <ModulePage component={ConstructionReportsPage} module="reports" />}</Route>
+      
+      {/* Marketing - التسويق */}
+      <Route path="/marketing">{() => <ModulePage component={MarketingDashboardPage} module="marketing" />}</Route>
+      <Route path="/marketing-campaigns">{() => <ModulePage component={MarketingCampaignsPage} module="marketing_campaigns" />}</Route>
+      <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
+      <Route path="/marketing-calendar">{() => <ModulePage component={MarketingCalendarPage} module="marketing" />}</Route>
+      <Route path="/marketing-tasks">{() => <ModulePage component={MarketingTasksPage} module="marketing_tasks" />}</Route>
+      <Route path="/marketing-reports">{() => <ModulePage component={MarketingReportsPage} module="marketing" />}</Route>
+      <Route path="/marketing-team">{() => <ModulePage component={MarketingTeamPage} module="marketing" />}</Route>
+      <Route path="/marketing-goals">{() => <ModulePage component={MarketingGoalsPage} module="marketing_goals" />}</Route>
+      <Route path="/marketing-assets">{() => <ModulePage component={MarketingAssetsPage} module="marketing" />}</Route>
+      <Route path="/marketing-alerts">{() => <ModulePage component={MarketingAlertsPage} module="marketing" />}</Route>
+      <Route path="/marketing-expenses">{() => <ModulePage component={MarketingExpensesPage} module="marketing" />}</Route>
+      
+      {/* Settings & System - الإعدادات والنظام */}
+      <Route path="/settings">{() => <ModulePage component={SettingsDashboardPage} module="settings" />}</Route>
+      <Route path="/security-management">{() => <AdminPage component={SecurityManagementPage} module="rbac_management" />}</Route>
+      <Route path="/users">{() => <AdminPage component={UsersPage} module="users" />}</Route>
+      <Route path="/rbac-management">{() => <AdminPage component={RBACManagementPage} module="rbac_management" />}</Route>
+      <Route path="/integrations">{() => <AdminPage component={IntegrationsPage} module="integrations" />}</Route>
+      <Route path="/audit-logs">{() => <AdminPage component={AuditLogsPage} module="audit_logs" />}</Route>
+      <Route path="/backups">{() => <AdminPage component={BackupsPage} module="backups" />}</Route>
+      
       <Route component={NotFound} />
     </Switch>
   );
