@@ -206,7 +206,7 @@ export default function RBACManagementPage() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/dashboard";
+        window.location.href = "/";
       }, 1000);
     }
   }, [authLoading, permsLoading, isAuthenticated, hasUsersViewPermission, toast]);

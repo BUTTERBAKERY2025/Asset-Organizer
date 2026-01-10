@@ -76,7 +76,7 @@ export default function UsersPage() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/dashboard";
+        window.location.href = "/";
       }, 1000);
     }
   }, [authLoading, isAuthenticated, isAdmin, toast]);
