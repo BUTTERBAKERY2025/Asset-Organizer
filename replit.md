@@ -111,6 +111,26 @@ The system employs a modern web architecture with a React-based frontend and a N
 - Trusted device management
 - Security violation alerts with severity levels
 
+**Security API Endpoints:**
+- `GET /api/security/users/:userId/settings` - Get user security settings
+- `PATCH /api/security/users/:userId/settings` - Update user security settings
+- `GET /api/security/users/:userId/locked` - Check if user is locked
+- `GET /api/security/sessions` - Get current user's active sessions
+- `GET /api/security/users/:userId/sessions` - Get user's sessions (admin)
+- `DELETE /api/security/sessions/:sessionId` - Invalidate a session
+- `DELETE /api/security/users/:userId/sessions` - Invalidate all user sessions
+- `GET /api/security/alerts` - Get security violation alerts
+- `GET /api/security/alerts/unresolved-count` - Get unresolved alert count
+- `PATCH /api/security/alerts/:id/resolve` - Resolve a security alert
+- `GET /api/security/permission-logs` - Get permission check logs
+- `GET /api/security/users/:userId/denied-permissions` - Get denied permissions summary
+- `GET /api/rbac/role-templates` - Get all role templates
+- `GET /api/rbac/role-templates/:id` - Get role template by ID
+- `POST /api/rbac/role-templates` - Create role template
+- `PATCH /api/rbac/role-templates/:id` - Update role template
+- `DELETE /api/rbac/role-templates/:id` - Delete role template
+- `POST /api/rbac/roles/:roleId/apply-template/:templateId` - Apply template to role
+
 - **P&L Dashboard Enhancements**: Added advanced financial KPIs to `financial_metrics` table:
   - `ebitda` - Earnings Before Interest, Taxes, Depreciation, and Amortization
   - `ebitda_margin_pct` - EBITDA as percentage of revenue

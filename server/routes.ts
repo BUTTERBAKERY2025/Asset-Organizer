@@ -7093,6 +7093,458 @@ export async function registerRoutes(
   });
 
   // ==========================================
+  // Security Settings API - إعدادات الأمان
+  // ==========================================
+
+  // Get user security settings
+  app.get("/api/security/users/:userId/settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const { userId } = req.params;
+      
+      // Only admins or the user themselves can view security settings
+      if (currentUser.id !== userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "غير مصرح لك بعرض هذه الإعدادات" });
+      }
+      
+      const settings = await storage.getUserSecuritySettings(userId);
+      res.json(settings || { userId, twoFactorEnabled: false });
+    } catch (error) {
+      console.error("Error fetching user security settings:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات الأمان" });
+    }
+  });
+
+  // Update user security settings
+  app.patch("/api/security/users/:userId/settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const { userId } = req.params;
+      
+      // Only admins or the user themselves can update security settings
+      if (currentUser.id !== userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "غير مصرح لك بتعديل هذه الإعدادات" });
+      }
+      
+      // Validate using Zod schema with strict type checking
+      const securitySettingsUpdateSchema = z.object({
+        twoFactorEnabled: z.boolean().optional(),
+        ipWhitelist: z.array(z.string()).nullable().optional(),
+        ipRestrictionEnabled: z.boolean().optional(),
+        sessionTimeout: z.number().min(5).max(1440).optional(), // 5 mins to 24 hours
+        maxConcurrentSessions: z.number().min(1).max(10).optional(),
+        passwordExpiryDays: z.number().min(0).max(365).optional(),
+        forcePasswordChange: z.boolean().optional(),
+      });
+      
+      const parseResult = securitySettingsUpdateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.issues });
+      }
+      
+      const settings = await storage.upsertUserSecuritySettings(userId, parseResult.data);
+      
+      // Audit log for security settings update
+      await storage.createSystemAuditLog({
+        module: 'security',
+        action: 'update_security_settings',
+        userId: currentUser.id,
+        targetId: userId,
+        description: `تحديث إعدادات الأمان للمستخدم`,
+        details: JSON.stringify({ updatedFields: Object.keys(parseResult.data) }),
+        ipAddress: req.ip,
+      });
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating user security settings:", error);
+      res.status(500).json({ error: "فشل في تحديث إعدادات الأمان" });
+    }
+  });
+
+  // Check if user is locked (requires authentication, admin only or self-check)
+  app.get("/api/security/users/:userId/locked", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const { userId } = req.params;
+      
+      // Only admins or the user themselves can check lock status
+      if (currentUser.id !== userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "غير مصرح لك بالاطلاع على هذه المعلومات" });
+      }
+      
+      const isLocked = await storage.isUserLocked(userId);
+      res.json({ isLocked });
+    } catch (error) {
+      console.error("Error checking if user is locked:", error);
+      res.status(500).json({ error: "فشل في التحقق من حالة القفل" });
+    }
+  });
+
+  // ==========================================
+  // User Sessions API - جلسات المستخدمين
+  // ==========================================
+
+  // Get current user's active sessions
+  app.get("/api/security/sessions", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const sessions = await storage.getUserSessions(currentUser.id);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching user sessions:", error);
+      res.status(500).json({ error: "فشل في جلب الجلسات" });
+    }
+  });
+
+  // Get specific user's sessions (admin only)
+  app.get("/api/security/users/:userId/sessions", isAuthenticated, requirePermission("users", "view"), async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const sessions = await storage.getUserSessions(userId);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching user sessions:", error);
+      res.status(500).json({ error: "فشل في جلب الجلسات" });
+    }
+  });
+
+  // Invalidate a session (user can only invalidate their own sessions, admins can invalidate any)
+  app.delete("/api/security/sessions/:sessionId", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const { sessionId } = req.params;
+      
+      // Get all user sessions to verify ownership
+      const userSessions = await storage.getUserSessions(currentUser.id);
+      const isOwner = userSessions.some(s => s.sessionId === sessionId);
+      
+      // Only the session owner or an admin can invalidate the session
+      if (!isOwner && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "غير مصرح لك بإنهاء هذه الجلسة" });
+      }
+      
+      await storage.invalidateSession(sessionId);
+      
+      // Audit log for session invalidation
+      await storage.createSystemAuditLog({
+        module: 'security',
+        action: 'invalidate_session',
+        userId: currentUser.id,
+        targetId: sessionId,
+        description: `إنهاء جلسة`,
+        ipAddress: req.ip,
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error invalidating session:", error);
+      res.status(500).json({ error: "فشل في إنهاء الجلسة" });
+    }
+  });
+
+  // Invalidate all user sessions (logout everywhere)
+  app.delete("/api/security/users/:userId/sessions", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const { userId } = req.params;
+      
+      // Only admins or the user themselves can invalidate all sessions
+      if (currentUser.id !== userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "غير مصرح لك بإنهاء هذه الجلسات" });
+      }
+      
+      await storage.invalidateAllUserSessions(userId);
+      
+      // Audit log for invalidating all sessions
+      await storage.createSystemAuditLog({
+        module: 'security',
+        action: 'invalidate_all_sessions',
+        userId: currentUser.id,
+        targetId: userId,
+        description: `إنهاء جميع جلسات المستخدم`,
+        ipAddress: req.ip,
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error invalidating all user sessions:", error);
+      res.status(500).json({ error: "فشل في إنهاء الجلسات" });
+    }
+  });
+
+  // ==========================================
+  // Security Alerts API - تنبيهات الأمان
+  // ==========================================
+
+  // Get all security alerts
+  app.get("/api/security/alerts", isAuthenticated, requirePermission("rbac_management", "view"), async (req: any, res) => {
+    try {
+      const { userId, violationType, isResolved } = req.query;
+      const filters: any = {};
+      if (userId) filters.userId = userId;
+      if (violationType) filters.violationType = violationType;
+      if (isResolved !== undefined) filters.isResolved = isResolved === 'true';
+      
+      const alerts = await storage.getAllSecurityAlerts(filters);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching security alerts:", error);
+      res.status(500).json({ error: "فشل في جلب التنبيهات" });
+    }
+  });
+
+  // Get unresolved alert count
+  app.get("/api/security/alerts/unresolved-count", isAuthenticated, requirePermission("rbac_management", "view"), async (req, res) => {
+    try {
+      const count = await storage.getUnresolvedAlertCount();
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unresolved alert count:", error);
+      res.status(500).json({ error: "فشل في جلب عدد التنبيهات" });
+    }
+  });
+
+  // Resolve a security alert
+  app.patch("/api/security/alerts/:id/resolve", isAuthenticated, requirePermission("rbac_management", "edit"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const id = parseInt(req.params.id);
+      const { notes } = req.body;
+      
+      const alert = await storage.resolveSecurityAlert(id, currentUser.id, notes);
+      if (!alert) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      
+      // Audit log for resolving security alert
+      await storage.createSystemAuditLog({
+        module: 'security',
+        action: 'resolve_security_alert',
+        userId: currentUser.id,
+        targetId: String(id),
+        description: `حل تنبيه أمان`,
+        details: notes ? JSON.stringify({ notes }) : undefined,
+        ipAddress: req.ip,
+      });
+      
+      res.json(alert);
+    } catch (error) {
+      console.error("Error resolving security alert:", error);
+      res.status(500).json({ error: "فشل في حل التنبيه" });
+    }
+  });
+
+  // ==========================================
+  // Permission Check Logs API - سجل فحص الصلاحيات
+  // ==========================================
+
+  // Get permission check logs
+  app.get("/api/security/permission-logs", isAuthenticated, requirePermission("rbac_management", "view"), async (req: any, res) => {
+    try {
+      const { userId, module, allowed, limit } = req.query;
+      const filters: any = {};
+      if (userId) filters.userId = userId;
+      if (module) filters.module = module;
+      if (allowed !== undefined) filters.allowed = allowed === 'true';
+      if (limit) filters.limit = parseInt(limit);
+      
+      const logs = await storage.getPermissionCheckLogs(filters);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching permission check logs:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الصلاحيات" });
+    }
+  });
+
+  // Get denied permissions summary for a user
+  app.get("/api/security/users/:userId/denied-permissions", isAuthenticated, requirePermission("rbac_management", "view"), async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const summary = await storage.getDeniedPermissionsSummary(userId);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching denied permissions summary:", error);
+      res.status(500).json({ error: "فشل في جلب ملخص الصلاحيات المرفوضة" });
+    }
+  });
+
+  // ==========================================
+  // Role Templates API - قوالب الأدوار
+  // ==========================================
+
+  // Get all role templates
+  app.get("/api/rbac/role-templates", isAuthenticated, requirePermission("rbac_management", "view"), async (req, res) => {
+    try {
+      const templates = await storage.getAllRoleTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching role templates:", error);
+      res.status(500).json({ error: "فشل في جلب قوالب الأدوار" });
+    }
+  });
+
+  // Get role template by ID
+  app.get("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const template = await storage.getRoleTemplate(id);
+      if (!template) {
+        return res.status(404).json({ error: "القالب غير موجود" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching role template:", error);
+      res.status(500).json({ error: "فشل في جلب القالب" });
+    }
+  });
+
+  // Create role template
+  app.post("/api/rbac/role-templates", isAuthenticated, requirePermission("rbac_management", "create"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      
+      // Validate using Zod schema
+      const roleTemplateCreateSchema = z.object({
+        name: z.string().min(1).max(100),
+        slug: z.string().min(1).max(50).regex(/^[a-z0-9_-]+$/),
+        description: z.string().max(500).nullable().optional(),
+        permissions: z.array(z.object({
+          module: z.string(),
+          actions: z.array(z.string())
+        })),
+        departmentId: z.number().nullable().optional(),
+      });
+      
+      const parseResult = roleTemplateCreateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.issues });
+      }
+      
+      const templateData = { 
+        ...parseResult.data, 
+        createdBy: currentUser.id 
+      };
+      const template = await storage.createRoleTemplate(templateData);
+      
+      // Audit log for creating role template
+      await storage.createSystemAuditLog({
+        module: 'rbac_management',
+        action: 'create_role_template',
+        userId: currentUser.id,
+        targetId: String(template.id),
+        description: `إنشاء قالب دور: ${template.name}`,
+        ipAddress: req.ip,
+      });
+      
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating role template:", error);
+      res.status(500).json({ error: "فشل في إنشاء القالب" });
+    }
+  });
+
+  // Update role template
+  app.patch("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Validate using Zod schema
+      const roleTemplateUpdateSchema = z.object({
+        name: z.string().min(1).max(100).optional(),
+        slug: z.string().min(1).max(50).regex(/^[a-z0-9_-]+$/).optional(),
+        description: z.string().max(500).nullable().optional(),
+        permissions: z.array(z.object({
+          module: z.string(),
+          actions: z.array(z.string())
+        })).optional(),
+        departmentId: z.number().nullable().optional(),
+      });
+      
+      const parseResult = roleTemplateUpdateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.issues });
+      }
+      
+      const template = await storage.updateRoleTemplate(id, parseResult.data);
+      if (!template) {
+        return res.status(404).json({ error: "القالب غير موجود" });
+      }
+      
+      // Audit log for updating role template
+      await storage.createSystemAuditLog({
+        module: 'rbac_management',
+        action: 'update_role_template',
+        userId: (req as any).currentUser.id,
+        targetId: String(id),
+        description: `تحديث قالب دور: ${template.name}`,
+        details: JSON.stringify({ updatedFields: Object.keys(parseResult.data) }),
+        ipAddress: req.ip,
+      });
+      
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating role template:", error);
+      res.status(500).json({ error: "فشل في تحديث القالب" });
+    }
+  });
+
+  // Delete role template
+  app.delete("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "delete"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const id = parseInt(req.params.id);
+      
+      // Get template before deletion for audit
+      const template = await storage.getRoleTemplate(id);
+      
+      await storage.deleteRoleTemplate(id);
+      
+      // Audit log for deleting role template
+      await storage.createSystemAuditLog({
+        module: 'rbac_management',
+        action: 'delete_role_template',
+        userId: currentUser.id,
+        targetId: String(id),
+        description: `حذف قالب دور${template ? ': ' + template.name : ''}`,
+        ipAddress: req.ip,
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting role template:", error);
+      res.status(500).json({ error: "فشل في حذف القالب" });
+    }
+  });
+
+  // Apply role template to a role
+  app.post("/api/rbac/roles/:roleId/apply-template/:templateId", isAuthenticated, requirePermission("rbac_management", "edit"), async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const roleId = parseInt(req.params.roleId);
+      const templateId = parseInt(req.params.templateId);
+      
+      await storage.applyRoleTemplate(roleId, templateId);
+      
+      // Audit log for applying role template
+      await storage.createSystemAuditLog({
+        module: 'rbac_management',
+        action: 'apply_role_template',
+        userId: currentUser.id,
+        targetId: String(roleId),
+        description: `تطبيق قالب رقم ${templateId} على الدور رقم ${roleId}`,
+        details: JSON.stringify({ templateId }),
+        ipAddress: req.ip,
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error applying role template:", error);
+      res.status(500).json({ error: "فشل في تطبيق القالب" });
+    }
+  });
+
+  // ==========================================
   // Cashier Shift Targets API - أهداف الكاشير للشفت
   // ==========================================
 

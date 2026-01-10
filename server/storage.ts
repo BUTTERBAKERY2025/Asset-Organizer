@@ -312,6 +312,21 @@ import {
   type InsertFinancialFixedCost,
   type FinancialMetrics,
   type InsertFinancialMetrics,
+  userSecuritySettings,
+  userSessions,
+  securityViolationAlerts,
+  permissionCheckLogs,
+  roleTemplates,
+  type UserSecuritySettings,
+  type InsertUserSecuritySettings,
+  type UserSession,
+  type InsertUserSession,
+  type SecurityViolationAlert,
+  type InsertSecurityViolationAlert,
+  type PermissionCheckLog,
+  type InsertPermissionCheckLog,
+  type RoleTemplate,
+  type InsertRoleTemplate,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -5186,6 +5201,246 @@ export class DatabaseStorage implements IStorage {
     }
     
     return true;
+  }
+
+  // ==========================================
+  // User Security Settings - إعدادات أمان المستخدم
+  // ==========================================
+
+  async getUserSecuritySettings(userId: string): Promise<UserSecuritySettings | undefined> {
+    const [settings] = await db.select().from(userSecuritySettings).where(eq(userSecuritySettings.userId, userId));
+    return settings;
+  }
+
+  async createUserSecuritySettings(settings: InsertUserSecuritySettings): Promise<UserSecuritySettings> {
+    const [created] = await db.insert(userSecuritySettings).values(settings).returning();
+    return created;
+  }
+
+  async updateUserSecuritySettings(userId: string, settings: Partial<InsertUserSecuritySettings>): Promise<UserSecuritySettings | undefined> {
+    const { trustedDevices, ...rest } = settings;
+    const updateData: any = { ...rest, updatedAt: new Date() };
+    if (trustedDevices !== undefined) {
+      updateData.trustedDevices = trustedDevices;
+    }
+    const [updated] = await db.update(userSecuritySettings)
+      .set(updateData)
+      .where(eq(userSecuritySettings.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async upsertUserSecuritySettings(userId: string, settings: Partial<InsertUserSecuritySettings>): Promise<UserSecuritySettings> {
+    const existing = await this.getUserSecuritySettings(userId);
+    if (existing) {
+      return (await this.updateUserSecuritySettings(userId, settings))!;
+    }
+    return await this.createUserSecuritySettings({ userId, ...settings } as InsertUserSecuritySettings);
+  }
+
+  async recordFailedLogin(userId: string): Promise<void> {
+    const settings = await this.getUserSecuritySettings(userId);
+    const attempts = (settings?.failedLoginAttempts || 0) + 1;
+    const lockUntil = attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null; // Lock for 30 mins after 5 attempts
+    await this.upsertUserSecuritySettings(userId, { failedLoginAttempts: attempts, lockedUntil: lockUntil });
+  }
+
+  async recordSuccessfulLogin(userId: string, ip?: string, device?: string): Promise<void> {
+    await this.upsertUserSecuritySettings(userId, {
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      lastLoginAt: new Date(),
+      lastLoginIp: ip || null,
+      lastLoginDevice: device || null,
+    });
+  }
+
+  async isUserLocked(userId: string): Promise<boolean> {
+    const settings = await this.getUserSecuritySettings(userId);
+    if (!settings?.lockedUntil) return false;
+    return new Date(settings.lockedUntil) > new Date();
+  }
+
+  // ==========================================
+  // User Sessions - جلسات المستخدمين
+  // ==========================================
+
+  async getUserSessions(userId: string): Promise<UserSession[]> {
+    return await db.select().from(userSessions)
+      .where(and(eq(userSessions.userId, userId), eq(userSessions.isActive, true)))
+      .orderBy(desc(userSessions.lastActivityAt));
+  }
+
+  async createUserSession(session: InsertUserSession): Promise<UserSession> {
+    const [created] = await db.insert(userSessions).values(session).returning();
+    return created;
+  }
+
+  async updateSessionActivity(sessionId: string): Promise<void> {
+    await db.update(userSessions)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(userSessions.sessionId, sessionId));
+  }
+
+  async invalidateSession(sessionId: string): Promise<void> {
+    await db.update(userSessions)
+      .set({ isActive: false })
+      .where(eq(userSessions.sessionId, sessionId));
+  }
+
+  async invalidateAllUserSessions(userId: string): Promise<void> {
+    await db.update(userSessions)
+      .set({ isActive: false })
+      .where(eq(userSessions.userId, userId));
+  }
+
+  async getActiveSessionCount(userId: string): Promise<number> {
+    const sessions = await db.select().from(userSessions)
+      .where(and(eq(userSessions.userId, userId), eq(userSessions.isActive, true)));
+    return sessions.length;
+  }
+
+  async cleanupExpiredSessions(): Promise<number> {
+    const result = await db.delete(userSessions)
+      .where(lte(userSessions.expiresAt, new Date()))
+      .returning();
+    return result.length;
+  }
+
+  // ==========================================
+  // Security Violation Alerts - تنبيهات الانتهاكات
+  // ==========================================
+
+  async getAllSecurityAlerts(filters?: { userId?: string; violationType?: string; isResolved?: boolean }): Promise<SecurityViolationAlert[]> {
+    const conditions = [];
+    if (filters?.userId) conditions.push(eq(securityViolationAlerts.userId, filters.userId));
+    if (filters?.violationType) conditions.push(eq(securityViolationAlerts.violationType, filters.violationType));
+    if (filters?.isResolved !== undefined) conditions.push(eq(securityViolationAlerts.isResolved, filters.isResolved));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(securityViolationAlerts).where(and(...conditions)).orderBy(desc(securityViolationAlerts.createdAt));
+    }
+    return await db.select().from(securityViolationAlerts).orderBy(desc(securityViolationAlerts.createdAt));
+  }
+
+  async createSecurityAlert(alert: InsertSecurityViolationAlert): Promise<SecurityViolationAlert> {
+    const [created] = await db.insert(securityViolationAlerts).values(alert).returning();
+    return created;
+  }
+
+  async resolveSecurityAlert(id: number, resolvedBy: string, notes?: string): Promise<SecurityViolationAlert | undefined> {
+    const [updated] = await db.update(securityViolationAlerts)
+      .set({ isResolved: true, resolvedBy, resolvedAt: new Date(), resolutionNotes: notes })
+      .where(eq(securityViolationAlerts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getUnresolvedAlertCount(): Promise<number> {
+    const alerts = await db.select().from(securityViolationAlerts).where(eq(securityViolationAlerts.isResolved, false));
+    return alerts.length;
+  }
+
+  // ==========================================
+  // Permission Check Logs - سجل فحص الصلاحيات
+  // ==========================================
+
+  async logPermissionCheck(log: InsertPermissionCheckLog): Promise<PermissionCheckLog> {
+    const [created] = await db.insert(permissionCheckLogs).values(log).returning();
+    return created;
+  }
+
+  async getPermissionCheckLogs(filters?: { userId?: string; module?: string; allowed?: boolean; limit?: number }): Promise<PermissionCheckLog[]> {
+    const conditions = [];
+    if (filters?.userId) conditions.push(eq(permissionCheckLogs.userId, filters.userId));
+    if (filters?.module) conditions.push(eq(permissionCheckLogs.module, filters.module));
+    if (filters?.allowed !== undefined) conditions.push(eq(permissionCheckLogs.allowed, filters.allowed));
+    
+    let query = db.select().from(permissionCheckLogs);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+    const results = await query.orderBy(desc(permissionCheckLogs.createdAt)).limit(filters?.limit || 1000);
+    return results;
+  }
+
+  async getDeniedPermissionsSummary(userId: string): Promise<{ module: string; action: string; count: number }[]> {
+    const logs = await db.select().from(permissionCheckLogs)
+      .where(and(eq(permissionCheckLogs.userId, userId), eq(permissionCheckLogs.allowed, false)));
+    
+    const summary = new Map<string, number>();
+    for (const log of logs) {
+      const key = `${log.module}:${log.action}`;
+      summary.set(key, (summary.get(key) || 0) + 1);
+    }
+    
+    return Array.from(summary.entries()).map(([key, count]) => {
+      const [module, action] = key.split(':');
+      return { module, action, count };
+    }).sort((a, b) => b.count - a.count);
+  }
+
+  // ==========================================
+  // Role Templates - قوالب الأدوار
+  // ==========================================
+
+  async getAllRoleTemplates(): Promise<RoleTemplate[]> {
+    return await db.select().from(roleTemplates).orderBy(roleTemplates.name);
+  }
+
+  async getRoleTemplate(id: number): Promise<RoleTemplate | undefined> {
+    const [template] = await db.select().from(roleTemplates).where(eq(roleTemplates.id, id));
+    return template;
+  }
+
+  async getRoleTemplateBySlug(slug: string): Promise<RoleTemplate | undefined> {
+    const [template] = await db.select().from(roleTemplates).where(eq(roleTemplates.slug, slug));
+    return template;
+  }
+
+  async createRoleTemplate(template: InsertRoleTemplate): Promise<RoleTemplate> {
+    const [created] = await db.insert(roleTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateRoleTemplate(id: number, template: Partial<InsertRoleTemplate>): Promise<RoleTemplate | undefined> {
+    const { permissions, ...rest } = template;
+    const updateData: any = { ...rest, updatedAt: new Date() };
+    if (permissions !== undefined) {
+      updateData.permissions = permissions;
+    }
+    const [updated] = await db.update(roleTemplates)
+      .set(updateData)
+      .where(eq(roleTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteRoleTemplate(id: number): Promise<boolean> {
+    await db.delete(roleTemplates).where(eq(roleTemplates.id, id));
+    return true;
+  }
+
+  async applyRoleTemplate(roleId: number, templateId: number): Promise<void> {
+    const template = await this.getRoleTemplate(templateId);
+    if (!template) throw new Error("Template not found");
+    
+    // Clear existing role permissions
+    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+    
+    // Get all permissions
+    const allPermissions = await this.getAllPermissions();
+    
+    // Apply template permissions
+    const templatePerms = template.permissions as Array<{ module: string; actions: string[] }>;
+    for (const perm of templatePerms) {
+      for (const action of perm.actions) {
+        const permission = allPermissions.find(p => p.module === perm.module && p.action === action);
+        if (permission) {
+          await this.addRolePermission({ roleId, permissionId: permission.id });
+        }
+      }
+    }
   }
 
   // ==========================================
