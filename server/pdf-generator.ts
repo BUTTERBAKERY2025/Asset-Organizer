@@ -1,4 +1,5 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 export interface SalaryClosingEmployee {
   employeeName: string;
@@ -156,15 +157,20 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
 </html>
   `;
 
+  console.log("[PDF] Starting Puppeteer with @sparticuz/chromium...");
+  
   const browser = await puppeteer.launch({
+    args: chromium.args,
+    executablePath: await chromium.executablePath(),
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
 
   try {
+    console.log("[PDF] Browser launched, creating page...");
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
     
+    console.log("[PDF] Generating PDF...");
     const pdfBuffer = await page.pdf({
       format: 'A4',
       landscape: true,
@@ -172,8 +178,10 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
     });
 
+    console.log("[PDF] PDF generated successfully, size:", pdfBuffer.length);
     return Buffer.from(pdfBuffer);
   } finally {
     await browser.close();
+    console.log("[PDF] Browser closed");
   }
 }
