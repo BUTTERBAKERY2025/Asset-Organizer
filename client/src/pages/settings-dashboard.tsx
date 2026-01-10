@@ -33,6 +33,12 @@ import {
   ChevronLeft,
   Star,
   Zap,
+  UserCheck,
+  CalendarDays,
+  Receipt,
+  PieChart,
+  Upload,
+  Briefcase,
 } from "lucide-react";
 
 interface SettingItem {
@@ -58,9 +64,9 @@ interface SettingSection {
 
 const settingsSections: SettingSection[] = [
   {
-    id: "security",
-    title: "الأمان والحماية",
-    description: "إعدادات الأمان والجلسات والتنبيهات",
+    id: "security-governance",
+    title: "الأمان والحوكمة",
+    description: "إدارة الأمان والمستخدمين والصلاحيات",
     icon: Shield,
     color: "bg-red-500",
     items: [
@@ -76,49 +82,89 @@ const settingsSections: SettingSection[] = [
         keywords: ["أمان", "حماية", "2FA", "جلسات", "security"],
       },
       {
-        id: "audit",
-        title: "سجل التدقيق",
-        description: "تتبع جميع العمليات والتغييرات",
-        icon: History,
-        path: "/audit-logs",
-        adminOnly: true,
-        keywords: ["تدقيق", "سجل", "تتبع", "audit"],
-      },
-    ],
-  },
-  {
-    id: "identity",
-    title: "المستخدمين والصلاحيات",
-    description: "إدارة المستخدمين والأدوار والصلاحيات",
-    icon: Users,
-    color: "bg-blue-500",
-    items: [
-      {
         id: "users",
         title: "إدارة المستخدمين",
         description: "إضافة وتعديل وحذف المستخدمين",
         icon: Users,
         path: "/users",
         adminOnly: true,
-        keywords: ["مستخدم", "موظف", "حساب"],
+        keywords: ["مستخدم", "موظف", "حساب", "user"],
       },
       {
         id: "rbac",
-        title: "إدارة الصلاحيات المتقدمة",
+        title: "الصلاحيات والأدوار",
         description: "الأدوار والأقسام والصلاحيات التفصيلية",
         icon: KeyRound,
         path: "/rbac-management",
         badge: "RBAC",
-        badgeVariant: "default",
+        badgeVariant: "secondary",
         adminOnly: true,
-        keywords: ["صلاحيات", "أدوار", "أقسام", "permissions"],
+        keywords: ["صلاحيات", "أدوار", "أقسام", "permissions", "roles"],
+      },
+      {
+        id: "audit",
+        title: "سجل التدقيق",
+        description: "تتبع جميع العمليات والتغييرات",
+        icon: History,
+        path: "/audit-logs",
+        adminOnly: true,
+        keywords: ["تدقيق", "سجل", "تتبع", "audit", "logs"],
       },
     ],
   },
   {
-    id: "branches",
+    id: "hr",
+    title: "الموارد البشرية",
+    description: "إدارة الموظفين والهيكل التنظيمي والحضور",
+    icon: UserCheck,
+    color: "bg-teal-500",
+    items: [
+      {
+        id: "branch-employees",
+        title: "موظفو الفروع",
+        description: "إدارة بيانات موظفي جميع الفروع",
+        icon: UserCog,
+        path: "/branch-employees",
+        keywords: ["موظف", "فرع", "عامل", "employee"],
+      },
+      {
+        id: "org-structure",
+        title: "الهيكل التنظيمي",
+        description: "عرض وإدارة الهيكل التنظيمي للشركة",
+        icon: Briefcase,
+        path: "/organizational-structure",
+        keywords: ["هيكل", "تنظيم", "إدارة", "organization"],
+      },
+      {
+        id: "attendance",
+        title: "الحضور والانصراف",
+        description: "متابعة سجلات حضور الموظفين",
+        icon: Clock,
+        path: "/attendance-dashboard",
+        keywords: ["حضور", "انصراف", "دوام", "attendance"],
+      },
+      {
+        id: "timesheet",
+        title: "كشوف الدوام",
+        description: "إدارة وتوقيع كشوف الدوام",
+        icon: CalendarDays,
+        path: "/timesheet",
+        keywords: ["كشف", "دوام", "ساعات", "timesheet"],
+      },
+      {
+        id: "employee-reports",
+        title: "تقارير الموظفين",
+        description: "تقارير الأداء والحضور والإحصائيات",
+        icon: FileText,
+        path: "/employee-reports",
+        keywords: ["تقرير", "موظف", "أداء", "reports"],
+      },
+    ],
+  },
+  {
+    id: "branches-operations",
     title: "الفروع والتشغيل",
-    description: "إدارة الفروع والورديات والموظفين",
+    description: "إدارة الفروع والورديات والمنتجات",
     icon: Building2,
     color: "bg-amber-500",
     items: [
@@ -128,23 +174,15 @@ const settingsSections: SettingSection[] = [
         description: "إضافة وتعديل فروع الشركة",
         icon: Store,
         path: "/branches",
-        keywords: ["فرع", "موقع", "branch"],
+        keywords: ["فرع", "موقع", "branch", "location"],
       },
       {
         id: "shifts",
         title: "الورديات",
-        description: "جدولة الورديات وتعيين الموظفين",
+        description: "جدولة الورديات وتعيين المناوبات",
         icon: Clock,
         path: "/shifts",
-        keywords: ["وردية", "شفت", "دوام"],
-      },
-      {
-        id: "employees",
-        title: "موظفو التشغيل",
-        description: "إدارة موظفي العمليات والإنتاج",
-        icon: UserCog,
-        path: "/operations-employees",
-        keywords: ["موظف", "عامل", "تشغيل"],
+        keywords: ["وردية", "شفت", "دوام", "shift"],
       },
       {
         id: "products",
@@ -152,215 +190,120 @@ const settingsSections: SettingSection[] = [
         description: "إدارة قائمة المنتجات والأصناف",
         icon: Boxes,
         path: "/products",
-        keywords: ["منتج", "صنف", "بضاعة"],
-      },
-    ],
-  },
-  {
-    id: "hr",
-    title: "الموارد البشرية",
-    description: "الهيكل التنظيمي والموظفين والتحويلات",
-    icon: Users,
-    color: "bg-teal-500",
-    items: [
-      {
-        id: "branch-employees",
-        title: "موظفو الفروع",
-        description: "إدارة موظفي الفروع وبياناتهم",
-        icon: UserCog,
-        path: "/branch-employees",
-        keywords: ["موظف", "فرع", "عامل"],
-      },
-      {
-        id: "org-structure",
-        title: "الهيكل التنظيمي",
-        description: "عرض الهيكل التنظيمي للشركة",
-        icon: Building2,
-        path: "/organizational-structure",
-        keywords: ["هيكل", "تنظيم", "إدارة"],
-      },
-      {
-        id: "employee-reports",
-        title: "تقارير الموظفين",
-        description: "تقارير الحضور والأداء",
-        icon: FileText,
-        path: "/employee-reports",
-        keywords: ["تقرير", "حضور", "أداء"],
-      },
-      {
-        id: "attendance",
-        title: "الحضور والانصراف",
-        description: "متابعة حضور الموظفين",
-        icon: Clock,
-        path: "/attendance-dashboard",
-        keywords: ["حضور", "انصراف", "دوام"],
-      },
-      {
-        id: "timesheet",
-        title: "كشوف الدوام",
-        description: "إدارة كشوف دوام الموظفين",
-        icon: ClipboardList,
-        path: "/timesheet",
-        keywords: ["كشف", "دوام", "ساعات"],
+        keywords: ["منتج", "صنف", "بضاعة", "product"],
       },
     ],
   },
   {
     id: "finance",
-    title: "المالية والكاشير",
-    description: "الأرباح والخسائر ويوميات الكاشير",
+    title: "المالية والمبيعات",
+    description: "الأرباح والخسائر ويوميات الكاشير والتحليلات",
     icon: Wallet,
     color: "bg-emerald-500",
     items: [
       {
         id: "pnl-dashboard",
         title: "لوحة الأرباح والخسائر",
-        description: "تتبع الإيرادات والمصروفات",
+        description: "تتبع الإيرادات والمصروفات والهوامش",
         icon: TrendingUp,
         path: "/pnl-dashboard",
         badge: "P&L",
         badgeVariant: "default",
-        keywords: ["أرباح", "خسائر", "مالية", "P&L"],
+        keywords: ["أرباح", "خسائر", "مالية", "P&L", "profit"],
       },
       {
         id: "cashier-journal",
         title: "يومية الكاشير",
-        description: "تسجيل المبيعات اليومية",
-        icon: Wallet,
+        description: "تسجيل المبيعات والمقبوضات اليومية",
+        icon: Receipt,
         path: "/cashier-journal",
-        keywords: ["كاشير", "يومية", "مبيعات"],
+        keywords: ["كاشير", "يومية", "مبيعات", "cashier"],
       },
       {
         id: "cashier-performance",
         title: "أداء الكاشير",
-        description: "تتبع أداء موظفي الكاشير",
+        description: "تقييم ومتابعة أداء موظفي الكاشير",
         icon: BarChart3,
         path: "/cashier-shift-performance",
-        keywords: ["كاشير", "أداء", "مبيعات"],
+        keywords: ["كاشير", "أداء", "تقييم", "performance"],
+      },
+      {
+        id: "sales-analytics",
+        title: "تحليلات المبيعات",
+        description: "تحليل وإحصائيات بيانات المبيعات",
+        icon: PieChart,
+        path: "/sales-analytics",
+        keywords: ["مبيعات", "تحليل", "analytics", "sales"],
+      },
+      {
+        id: "sales-uploads",
+        title: "استيراد بيانات المبيعات",
+        description: "رفع واستيراد بيانات المبيعات من ملفات",
+        icon: Upload,
+        path: "/sales-data-uploads",
+        keywords: ["رفع", "استيراد", "upload", "import"],
       },
     ],
   },
   {
-    id: "targets",
+    id: "targets-incentives",
     title: "الأهداف والحوافز",
-    description: "تخطيط الأهداف وإدارة الحوافز",
+    description: "تخطيط الأهداف ومتابعة الإنجاز والمكافآت",
     icon: Target,
     color: "bg-green-500",
     items: [
       {
         id: "targets-planning",
         title: "تخطيط الأهداف",
-        description: "وضع أهداف المبيعات والإنتاج",
+        description: "وضع أهداف المبيعات والإنتاج للفروع",
         icon: Target,
         path: "/targets-planning",
-        keywords: ["هدف", "خطة", "target"],
+        keywords: ["هدف", "خطة", "target", "plan"],
       },
       {
         id: "targets-dashboard",
-        title: "لوحة الأهداف",
-        description: "متابعة تحقيق الأهداف",
+        title: "لوحة متابعة الأهداف",
+        description: "متابعة تحقيق الأهداف والإنجازات",
         icon: BarChart3,
         path: "/targets-dashboard",
-        keywords: ["أداء", "متابعة", "إنجاز"],
+        keywords: ["أداء", "متابعة", "إنجاز", "progress"],
       },
       {
         id: "incentives",
         title: "إدارة الحوافز",
-        description: "نظام المكافآت والحوافز",
+        description: "نظام المكافآت والحوافز والعمولات",
         icon: TrendingUp,
         path: "/incentives-management",
-        keywords: ["حافز", "مكافأة", "عمولة"],
-      },
-    ],
-  },
-  {
-    id: "reports",
-    title: "التقارير والبيانات",
-    description: "التقارير والتحليلات وإدارة البيانات",
-    icon: FileText,
-    color: "bg-purple-500",
-    items: [
-      {
-        id: "reports",
-        title: "التقارير العامة",
-        description: "تقارير شاملة للنظام",
-        icon: FileText,
-        path: "/reports",
-        keywords: ["تقرير", "report", "إحصائيات"],
-      },
-      {
-        id: "sales-analytics",
-        title: "تحليلات المبيعات",
-        description: "تحليل بيانات المبيعات",
-        icon: BarChart3,
-        path: "/sales-analytics",
-        keywords: ["مبيعات", "تحليل", "analytics"],
-      },
-      {
-        id: "sales-uploads",
-        title: "رفع بيانات المبيعات",
-        description: "استيراد بيانات المبيعات من ملفات",
-        icon: Database,
-        path: "/sales-data-uploads",
-        keywords: ["رفع", "استيراد", "upload"],
-      },
-    ],
-  },
-  {
-    id: "system",
-    title: "النظام والتكاملات",
-    description: "النسخ الاحتياطي والتكاملات الخارجية",
-    icon: Settings,
-    color: "bg-slate-500",
-    items: [
-      {
-        id: "backups",
-        title: "النسخ الاحتياطي",
-        description: "إدارة النسخ الاحتياطية",
-        icon: HardDrive,
-        path: "/backups",
-        badge: "مهم",
-        badgeVariant: "destructive",
-        adminOnly: true,
-        keywords: ["نسخة", "backup", "حفظ"],
-      },
-      {
-        id: "integrations",
-        title: "التكاملات",
-        description: "ربط الأنظمة الخارجية",
-        icon: LinkIcon,
-        path: "/integrations",
-        adminOnly: true,
-        keywords: ["تكامل", "ربط", "API"],
+        keywords: ["حافز", "مكافأة", "عمولة", "incentive", "bonus"],
       },
     ],
   },
   {
     id: "construction",
-    title: "إدارة الإنشاءات",
-    description: "المشاريع والمقاولين والعقود",
+    title: "المشاريع والإنشاءات",
+    description: "إدارة المشاريع والمقاولين والميزانيات",
     icon: Hammer,
     color: "bg-orange-500",
     items: [
       {
         id: "construction-dashboard",
-        title: "لوحة الإنشاءات",
-        description: "نظرة عامة على المشاريع",
+        title: "لوحة المشاريع",
+        description: "نظرة عامة على جميع المشاريع",
         icon: ClipboardList,
         path: "/construction-dashboard",
-        keywords: ["إنشاءات", "مشاريع", "بناء"],
+        keywords: ["إنشاءات", "مشاريع", "بناء", "construction"],
       },
       {
         id: "contractors",
-        title: "المقاولين",
-        description: "إدارة المقاولين والموردين",
+        title: "المقاولين والموردين",
+        description: "إدارة قائمة المقاولين والموردين",
         icon: Users,
         path: "/contractors",
-        keywords: ["مقاول", "مورد", "contractor"],
+        keywords: ["مقاول", "مورد", "contractor", "supplier"],
       },
       {
         id: "contracts",
-        title: "العقود",
+        title: "العقود والاتفاقيات",
         description: "إدارة العقود والاتفاقيات",
         icon: FileCheck,
         path: "/contracts",
@@ -372,22 +315,22 @@ const settingsSections: SettingSection[] = [
         description: "إدارة ميزانيات المشاريع",
         icon: Wallet,
         path: "/budget-planning",
-        keywords: ["ميزانية", "budget", "تكلفة"],
+        keywords: ["ميزانية", "budget", "تكلفة", "cost"],
       },
       {
         id: "payments",
         title: "طلبات الصرف",
-        description: "إدارة المدفوعات والصرف",
+        description: "إدارة المدفوعات وطلبات الصرف",
         icon: ArrowRightLeft,
         path: "/payment-requests",
-        keywords: ["صرف", "دفع", "payment"],
+        keywords: ["صرف", "دفع", "payment", "disbursement"],
       },
     ],
   },
   {
     id: "marketing",
     title: "التسويق",
-    description: "الحملات والمؤثرين والمحتوى",
+    description: "الحملات التسويقية والمؤثرين والفريق",
     icon: Megaphone,
     color: "bg-pink-500",
     items: [
@@ -401,11 +344,11 @@ const settingsSections: SettingSection[] = [
       },
       {
         id: "campaigns",
-        title: "الحملات",
-        description: "إدارة الحملات التسويقية",
+        title: "الحملات التسويقية",
+        description: "إنشاء وإدارة الحملات الإعلانية",
         icon: Zap,
         path: "/marketing-campaigns",
-        keywords: ["حملة", "campaign", "إعلان"],
+        keywords: ["حملة", "campaign", "إعلان", "ads"],
       },
       {
         id: "influencers",
@@ -413,7 +356,7 @@ const settingsSections: SettingSection[] = [
         description: "إدارة المؤثرين والشراكات",
         icon: Star,
         path: "/marketing-influencers",
-        keywords: ["مؤثر", "influencer", "شراكة"],
+        keywords: ["مؤثر", "influencer", "شراكة", "partnership"],
       },
       {
         id: "marketing-team",
@@ -421,7 +364,53 @@ const settingsSections: SettingSection[] = [
         description: "إدارة أعضاء فريق التسويق",
         icon: Users,
         path: "/marketing-team",
-        keywords: ["فريق", "team", "أعضاء"],
+        keywords: ["فريق", "team", "أعضاء", "members"],
+      },
+    ],
+  },
+  {
+    id: "reports",
+    title: "التقارير",
+    description: "التقارير العامة والإحصائيات",
+    icon: FileText,
+    color: "bg-purple-500",
+    items: [
+      {
+        id: "reports",
+        title: "التقارير العامة",
+        description: "تقارير شاملة لجميع أقسام النظام",
+        icon: FileText,
+        path: "/reports",
+        keywords: ["تقرير", "report", "إحصائيات", "statistics"],
+      },
+    ],
+  },
+  {
+    id: "system",
+    title: "إعدادات النظام",
+    description: "النسخ الاحتياطي والتكاملات الخارجية",
+    icon: Settings,
+    color: "bg-slate-500",
+    items: [
+      {
+        id: "backups",
+        title: "النسخ الاحتياطي",
+        description: "إنشاء وإدارة النسخ الاحتياطية",
+        icon: HardDrive,
+        path: "/backups",
+        badge: "مهم",
+        badgeVariant: "destructive",
+        adminOnly: true,
+        keywords: ["نسخة", "backup", "حفظ", "restore"],
+      },
+      {
+        id: "integrations",
+        title: "التكاملات الخارجية",
+        description: "ربط الأنظمة والخدمات الخارجية",
+        icon: LinkIcon,
+        path: "/integrations",
+        adminOnly: true,
+        keywords: ["تكامل", "ربط", "API", "integration"],
       },
     ],
   },
@@ -430,45 +419,45 @@ const settingsSections: SettingSection[] = [
 const quickActions: SettingItem[] = [
   {
     id: "quick-security",
-    title: "إعدادات الأمان",
-    description: "2FA وقيود IP والجلسات",
+    title: "الأمان",
+    description: "إعدادات الحماية",
     icon: Shield,
     path: "/security-management",
     adminOnly: true,
   },
   {
     id: "quick-users",
-    title: "إدارة المستخدمين",
-    description: "إضافة وتعديل المستخدمين",
+    title: "المستخدمين",
+    description: "إدارة الحسابات",
     icon: Users,
     path: "/users",
     adminOnly: true,
   },
   {
-    id: "quick-pnl",
-    title: "الأرباح والخسائر",
-    description: "لوحة P&L المالية",
-    icon: TrendingUp,
-    path: "/pnl-dashboard",
-  },
-  {
     id: "quick-branches",
     title: "الفروع",
-    description: "إدارة فروع الشركة",
-    icon: Building2,
+    description: "إدارة الفروع",
+    icon: Store,
     path: "/branches",
   },
   {
     id: "quick-employees",
     title: "الموظفين",
-    description: "إدارة موظفي الفروع",
+    description: "بيانات الموظفين",
     icon: UserCog,
     path: "/branch-employees",
   },
   {
+    id: "quick-pnl",
+    title: "P&L",
+    description: "الأرباح والخسائر",
+    icon: TrendingUp,
+    path: "/pnl-dashboard",
+  },
+  {
     id: "quick-backup",
     title: "النسخ الاحتياطي",
-    description: "إدارة النسخ الاحتياطية",
+    description: "حفظ البيانات",
     icon: HardDrive,
     path: "/backups",
     adminOnly: true,
@@ -504,11 +493,11 @@ export default function SettingsDashboardPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto py-6 px-4 max-w-7xl">
+      <div className="container mx-auto py-6 px-4 max-w-7xl" dir="rtl">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Settings className="w-6 h-6 text-primary" />
+            <div className="p-3 bg-primary/10 rounded-xl">
+              <Settings className="w-7 h-7 text-primary" />
             </div>
             <div>
               <h1 className="text-2xl font-bold" data-testid="text-page-title">
@@ -534,28 +523,27 @@ export default function SettingsDashboardPage() {
 
         {visibleQuickActions.length > 0 && !searchQuery && (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" data-testid="text-quick-actions-title">
               <Zap className="w-5 h-5 text-amber-500" />
               إجراءات سريعة
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
               {visibleQuickActions.map((action) => (
                 <Link key={action.id} href={action.path}>
                   <Card
-                    className="cursor-pointer hover:border-primary hover:shadow-md transition-all group"
+                    className="cursor-pointer hover:border-primary hover:shadow-md transition-all group h-full"
                     data-testid={`card-quick-${action.id}`}
                   >
-                    <CardContent className="p-4 flex items-center gap-3">
+                    <CardContent className="p-3 flex flex-col items-center text-center gap-2">
                       <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
                         <action.icon className="w-5 h-5 text-primary" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{action.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">
+                      <div>
+                        <p className="font-medium text-sm">{action.title}</p>
+                        <p className="text-xs text-muted-foreground">
                           {action.description}
                         </p>
                       </div>
-                      <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     </CardContent>
                   </Card>
                 </Link>
@@ -597,7 +585,7 @@ export default function SettingsDashboardPage() {
                               <item.icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="font-medium">{item.title}</span>
                                 {item.badge && (
                                   <Badge variant={item.badgeVariant || "secondary"} className="text-xs">
@@ -610,11 +598,11 @@ export default function SettingsDashboardPage() {
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-sm text-muted-foreground line-clamp-2">
                                 {item.description}
                               </p>
                             </div>
-                            <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors mt-1" />
+                            <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors mt-1 flex-shrink-0" />
                           </div>
                         </div>
                       </Link>
@@ -627,7 +615,7 @@ export default function SettingsDashboardPage() {
         </div>
 
         {filteredSections.length === 0 && searchQuery && (
-          <div className="text-center py-12">
+          <div className="text-center py-12" data-testid="container-no-results">
             <Search className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-lg text-muted-foreground">
               لا توجد نتائج لـ "{searchQuery}"
