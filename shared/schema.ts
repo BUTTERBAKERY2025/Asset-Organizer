@@ -489,12 +489,14 @@ export const SYSTEM_MODULES = [
   "dashboard",
   "platform_home",
   "settings",
+  "command_center",
   
   // المخزون والأصول
   "inventory",
   "asset_transfers",
   "inspections",
   "maintenance",
+  "inventory_reports",
   
   // الإنتاج والتشغيل
   "production",
@@ -504,11 +506,14 @@ export const SYSTEM_MODULES = [
   "products",
   "operations",
   "ai_production_planner",
+  "production_reports",
+  "operations_reports",
   
   // الورديات والحضور
   "shifts",
   "attendance",
   "timesheet",
+  "employee_schedules",
   
   // الموظفين والموارد البشرية
   "users",
@@ -517,6 +522,8 @@ export const SYSTEM_MODULES = [
   "organizational_structure",
   "employee_reports",
   "employee_transfers",
+  "employee_documents",
+  "salary_management",
   
   // المالية
   "cashier_journal",
@@ -525,16 +532,19 @@ export const SYSTEM_MODULES = [
   "incentives",
   "sales_analytics",
   "sales_uploads",
+  "financial_reports",
   
   // الأهداف والأداء
   "targets",
   "targets_planning",
   "waste_tracking",
+  "performance_kpis",
   
   // مشاريع الإنشاء
   "construction_projects",
   "construction_work_items",
   "construction_reports",
+  "construction_dashboard",
   "contractors",
   "contracts",
   "budget_planning",
@@ -553,12 +563,15 @@ export const SYSTEM_MODULES = [
   "marketing_reports",
   "marketing_team",
   
-  // إدارة النظام
+  // إدارة النظام والأمان
   "rbac_management",
+  "security_management",
   "audit_logs",
   "backups",
   "integrations",
   "reports",
+  "notifications_management",
+  "system_settings",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -575,6 +588,9 @@ export const MODULE_ACTIONS = [
   "sign",
   "notify",
   "change_status",
+  "import",
+  "assign",
+  "archive",
 ] as const;
 
 export type ModuleAction = (typeof MODULE_ACTIONS)[number];
@@ -608,12 +624,14 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   dashboard: "لوحة التحكم",
   platform_home: "الصفحة الرئيسية",
   settings: "الإعدادات",
+  command_center: "مركز القيادة",
   
   // المخزون والأصول
   inventory: "المخزون والأصول",
   asset_transfers: "تحويلات الأصول",
   inspections: "التفتيش والجرد",
   maintenance: "الصيانة",
+  inventory_reports: "تقارير المخزون",
   
   // الإنتاج والتشغيل
   production: "الإنتاج",
@@ -623,11 +641,14 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   products: "المنتجات",
   operations: "التشغيل",
   ai_production_planner: "مخطط الإنتاج الذكي",
+  production_reports: "تقارير الإنتاج",
+  operations_reports: "تقارير التشغيل",
   
   // الورديات والحضور
   shifts: "الورديات",
   attendance: "الحضور والانصراف",
   timesheet: "كشوف الدوام",
+  employee_schedules: "جداول الموظفين",
   
   // الموظفين والموارد البشرية
   users: "إدارة المستخدمين",
@@ -636,6 +657,8 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   organizational_structure: "الهيكل التنظيمي",
   employee_reports: "تقارير الموظفين",
   employee_transfers: "تحويلات الموظفين",
+  employee_documents: "مستندات الموظفين",
+  salary_management: "إدارة الرواتب",
   
   // المالية
   cashier_journal: "يومية الكاشير",
@@ -644,16 +667,19 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   incentives: "الحوافز",
   sales_analytics: "تحليلات المبيعات",
   sales_uploads: "رفع بيانات المبيعات",
+  financial_reports: "التقارير المالية",
   
   // الأهداف والأداء
   targets: "الأهداف",
   targets_planning: "تخطيط الأهداف",
   waste_tracking: "تتبع الهدر",
+  performance_kpis: "مؤشرات الأداء",
   
   // مشاريع الإنشاء
   construction_projects: "مشاريع الإنشاءات",
   construction_work_items: "بنود الأعمال",
   construction_reports: "تقارير المشاريع",
+  construction_dashboard: "لوحة الإنشاءات",
   contractors: "المقاولين",
   contracts: "العقود",
   budget_planning: "تخطيط الميزانية",
@@ -672,12 +698,15 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   marketing_reports: "تقارير التسويق",
   marketing_team: "فريق التسويق",
   
-  // إدارة النظام
+  // إدارة النظام والأمان
   rbac_management: "إدارة الصلاحيات",
+  security_management: "إدارة الأمان",
   audit_logs: "سجلات التدقيق",
   backups: "النسخ الاحتياطية",
   integrations: "التكاملات",
   reports: "التقارير",
+  notifications_management: "إدارة الإشعارات",
+  system_settings: "إعدادات النظام",
 };
 
 // Action labels for UI display (Arabic)
@@ -692,17 +721,20 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   sign: "توقيع",
   notify: "إشعارات",
   change_status: "تغيير الحالة",
+  import: "استيراد",
+  assign: "تكليف",
+  archive: "أرشفة",
 };
 
 // Module groups for UI organization
 export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   {
     label: "الأساسية",
-    modules: ["dashboard", "platform_home", "settings"],
+    modules: ["dashboard", "platform_home", "settings", "command_center"],
   },
   {
     label: "المخزون والأصول",
-    modules: ["inventory", "asset_transfers", "inspections", "maintenance"],
+    modules: ["inventory", "asset_transfers", "inspections", "maintenance", "inventory_reports"],
   },
   {
     label: "الإنتاج والتشغيل",
@@ -714,11 +746,13 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "products",
       "operations",
       "ai_production_planner",
+      "production_reports",
+      "operations_reports",
     ],
   },
   {
     label: "الورديات والحضور",
-    modules: ["shifts", "attendance", "timesheet"],
+    modules: ["shifts", "attendance", "timesheet", "employee_schedules"],
   },
   {
     label: "الموظفين والموارد البشرية",
@@ -729,6 +763,8 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "organizational_structure",
       "employee_reports",
       "employee_transfers",
+      "employee_documents",
+      "salary_management",
     ],
   },
   {
@@ -740,11 +776,12 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "incentives",
       "sales_analytics",
       "sales_uploads",
+      "financial_reports",
     ],
   },
   {
     label: "الأهداف والأداء",
-    modules: ["targets", "targets_planning", "waste_tracking"],
+    modules: ["targets", "targets_planning", "waste_tracking", "performance_kpis"],
   },
   {
     label: "مشاريع الإنشاء",
@@ -752,6 +789,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "construction_projects",
       "construction_work_items",
       "construction_reports",
+      "construction_dashboard",
       "contractors",
       "contracts",
       "budget_planning",
@@ -775,8 +813,8 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
     ],
   },
   {
-    label: "إدارة النظام",
-    modules: ["rbac_management", "audit_logs", "backups", "integrations", "reports"],
+    label: "إدارة النظام والأمان",
+    modules: ["rbac_management", "security_management", "audit_logs", "backups", "integrations", "reports", "notifications_management", "system_settings"],
   },
 ];
 
