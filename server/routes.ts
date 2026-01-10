@@ -7955,76 +7955,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "معرف غير صالح" });
-      }
-      const influencer = await storage.getMarketingInfluencer(id);
-      if (!influencer) {
-        return res.status(404).json({ error: "المؤثر غير موجود" });
-      }
-      res.json(influencer);
-    } catch (error) {
-      console.error("Error fetching influencer:", error);
-      res.status(500).json({ error: "فشل في جلب المؤثر" });
-    }
-  });
-
-  app.post("/api/marketing/influencers", isAuthenticated, async (req: any, res) => {
-    try {
-      const validatedData = insertMarketingInfluencerSchema.parse(req.body);
-      const influencer = await storage.createMarketingInfluencer(validatedData);
-      res.status(201).json(influencer);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
-      }
-      console.error("Error creating influencer:", error);
-      res.status(500).json({ error: "فشل في إنشاء المؤثر" });
-    }
-  });
-
-  app.patch("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "معرف غير صالح" });
-      }
-      const partialData = insertMarketingInfluencerSchema.partial().parse(req.body);
-      const influencer = await storage.updateMarketingInfluencer(id, partialData);
-      if (!influencer) {
-        return res.status(404).json({ error: "المؤثر غير موجود" });
-      }
-      res.json(influencer);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
-      }
-      console.error("Error updating influencer:", error);
-      res.status(500).json({ error: "فشل في تحديث المؤثر" });
-    }
-  });
-
-  app.delete("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "معرف غير صالح" });
-      }
-      const success = await storage.deleteMarketingInfluencer(id);
-      if (!success) {
-        return res.status(404).json({ error: "المؤثر غير موجود" });
-      }
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting influencer:", error);
-      res.status(500).json({ error: "فشل في حذف المؤثر" });
-    }
-  });
-
-  // Export Influencers to Excel
+  // Export Influencers to Excel - MUST be before /:id route
   app.get("/api/marketing/influencers/export/excel", isAuthenticated, async (req: any, res) => {
     try {
       const influencers = await storage.getAllMarketingInfluencers({});
@@ -8067,7 +7998,7 @@ export async function registerRoutes(
     }
   });
 
-  // Export Influencers to PDF
+  // Export Influencers to PDF - MUST be before /:id route
   app.get("/api/marketing/influencers/export/pdf", isAuthenticated, async (req: any, res) => {
     try {
       const influencers = await storage.getAllMarketingInfluencers({});
@@ -8184,6 +8115,75 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error exporting influencers to PDF:", error);
       res.status(500).json({ error: "فشل في تصدير التقرير" });
+    }
+  });
+
+  app.get("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const influencer = await storage.getMarketingInfluencer(id);
+      if (!influencer) {
+        return res.status(404).json({ error: "المؤثر غير موجود" });
+      }
+      res.json(influencer);
+    } catch (error) {
+      console.error("Error fetching influencer:", error);
+      res.status(500).json({ error: "فشل في جلب المؤثر" });
+    }
+  });
+
+  app.post("/api/marketing/influencers", isAuthenticated, async (req: any, res) => {
+    try {
+      const validatedData = insertMarketingInfluencerSchema.parse(req.body);
+      const influencer = await storage.createMarketingInfluencer(validatedData);
+      res.status(201).json(influencer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating influencer:", error);
+      res.status(500).json({ error: "فشل في إنشاء المؤثر" });
+    }
+  });
+
+  app.patch("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const partialData = insertMarketingInfluencerSchema.partial().parse(req.body);
+      const influencer = await storage.updateMarketingInfluencer(id, partialData);
+      if (!influencer) {
+        return res.status(404).json({ error: "المؤثر غير موجود" });
+      }
+      res.json(influencer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating influencer:", error);
+      res.status(500).json({ error: "فشل في تحديث المؤثر" });
+    }
+  });
+
+  app.delete("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteMarketingInfluencer(id);
+      if (!success) {
+        return res.status(404).json({ error: "المؤثر غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting influencer:", error);
+      res.status(500).json({ error: "فشل في حذف المؤثر" });
     }
   });
 
