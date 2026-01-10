@@ -302,82 +302,84 @@ export default function CashierJournalsPage() {
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-primary" data-testid="page-title">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary" data-testid="page-title">
               يومية مبيعات الكاشير
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground text-sm mt-1 hidden sm:block">
               متابعة وإدارة يوميات المبيعات والتسويات النقدية
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handlePrintList} className="gap-2" data-testid="button-print-list">
+            <Button variant="outline" onClick={handlePrintList} className="gap-2 h-11 sm:h-9 min-h-[44px] sm:min-h-0 text-sm px-3 sm:px-4" data-testid="button-print-list">
               <Printer className="w-4 h-4" />
-              طباعة القائمة
+              <span className="hidden sm:inline">طباعة القائمة</span>
+              <span className="sm:hidden">طباعة</span>
             </Button>
             <Link href="/cashier-journals/new">
-              <Button className="gap-2" data-testid="button-new-journal">
+              <Button className="gap-2 h-11 sm:h-9 min-h-[44px] sm:min-h-0 text-sm px-3 sm:px-4" data-testid="button-new-journal">
                 <Plus className="w-4 h-4" />
-                يومية جديدة
+                <span className="hidden sm:inline">يومية جديدة</span>
+                <span className="sm:hidden">جديدة</span>
               </Button>
             </Link>
           </div>
         </div>
 
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-100">
-                    <DollarSign className="w-5 h-5 text-blue-600" />
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-blue-100">
+                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">إجمالي المبيعات</p>
-                    <p className="text-xl font-bold" data-testid="stat-total-sales">{formatCurrency(stats.totalSales)}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">إجمالي المبيعات</p>
+                    <p className="text-base sm:text-xl font-bold truncate" data-testid="stat-total-sales">{formatCurrency(stats.totalSales)}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-red-100">
-                    <TrendingDown className="w-5 h-5 text-red-600" />
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-red-100">
+                    <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">إجمالي العجز</p>
-                    <p className="text-xl font-bold text-red-600" data-testid="stat-shortage">{formatCurrency(stats.shortageAmount)}</p>
-                    <p className="text-xs text-muted-foreground">{stats.totalShortages} حالة</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-100">
-                    <TrendingUp className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">إجمالي الزيادة</p>
-                    <p className="text-xl font-bold text-amber-600" data-testid="stat-surplus">{formatCurrency(stats.surplusAmount)}</p>
-                    <p className="text-xs text-muted-foreground">{stats.totalSurpluses} حالة</p>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">إجمالي العجز</p>
+                    <p className="text-base sm:text-xl font-bold text-red-600 truncate" data-testid="stat-shortage">{formatCurrency(stats.shortageAmount)}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalShortages} حالة</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-green-100">
-                    <Users className="w-5 h-5 text-green-600" />
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-amber-100">
+                    <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">متوسط الفاتورة</p>
-                    <p className="text-xl font-bold" data-testid="stat-average-ticket">{formatCurrency(stats.averageTicket)}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">إجمالي الزيادة</p>
+                    <p className="text-base sm:text-xl font-bold text-amber-600 truncate" data-testid="stat-surplus">{formatCurrency(stats.surplusAmount)}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalSurpluses} حالة</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-green-100">
+                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">متوسط الفاتورة</p>
+                    <p className="text-base sm:text-xl font-bold truncate" data-testid="stat-average-ticket">{formatCurrency(stats.averageTicket)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -386,17 +388,27 @@ export default function CashierJournalsPage() {
         )}
 
         <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-              <div>
-                <CardTitle>قائمة اليوميات</CardTitle>
-                <CardDescription>
-                  إجمالي: {filteredJournals?.length || 0} يومية
-                </CardDescription>
+          <CardHeader className="p-3 sm:p-6">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base sm:text-lg">قائمة اليوميات</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    إجمالي: {filteredJournals?.length || 0} يومية
+                  </CardDescription>
+                </div>
+                <ExportButtons
+                  data={filteredJournals || []}
+                  columns={exportColumns}
+                  fileName={`يوميات-الكاشير-${new Date().toISOString().split('T')[0]}`}
+                  title="تقرير يوميات الكاشير"
+                  subtitle={`الفترة: ${branchFilter !== 'all' ? getBranchName(branchFilter) : 'جميع الفروع'}`}
+                  sheetName="يوميات الكاشير"
+                />
               </div>
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 <Select value={cashierFilter} onValueChange={setCashierFilter} disabled={!canViewAllCashiers && dropdownCashiers.length <= 1}>
-                  <SelectTrigger className="w-36" data-testid="select-cashier">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-cashier">
                     <SelectValue placeholder="الكاشير" />
                   </SelectTrigger>
                   <SelectContent>
@@ -412,7 +424,7 @@ export default function CashierJournalsPage() {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-36"
+                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
                   placeholder="من تاريخ"
                   data-testid="input-date-from"
                 />
@@ -420,12 +432,12 @@ export default function CashierJournalsPage() {
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="w-36"
+                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
                   placeholder="إلى تاريخ"
                   data-testid="input-date-to"
                 />
                 <Select value={branchFilter} onValueChange={setBranchFilter}>
-                  <SelectTrigger className="w-36" data-testid="select-branch">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -438,7 +450,7 @@ export default function CashierJournalsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-32" data-testid="select-status">
+                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-status">
                     <SelectValue placeholder="الحالة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -449,44 +461,36 @@ export default function CashierJournalsPage() {
                     <SelectItem value="rejected">مرفوض</SelectItem>
                   </SelectContent>
                 </Select>
-                <ExportButtons
-                  data={filteredJournals || []}
-                  columns={exportColumns}
-                  fileName={`يوميات-الكاشير-${new Date().toISOString().split('T')[0]}`}
-                  title="تقرير يوميات الكاشير"
-                  subtitle={`الفترة: ${branchFilter !== 'all' ? getBranchName(branchFilter) : 'جميع الفروع'}`}
-                  sheetName="يوميات الكاشير"
-                />
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
             {isLoading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-20 w-full" />
+                  <Skeleton key={i} className="h-16 sm:h-20 w-full" />
                 ))}
               </div>
             ) : filteredJournals?.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Wallet className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد يوميات مطابقة للبحث</p>
+              <div className="text-center py-8 sm:py-12 text-muted-foreground">
+                <Wallet className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
+                <p className="text-sm sm:text-base">لا توجد يوميات مطابقة للبحث</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="rounded-md border overflow-x-auto">
+                <div className="rounded-md border overflow-x-auto -mx-3 sm:mx-0">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
-                        <TableHead className="text-right w-28">التاريخ</TableHead>
-                        <TableHead className="text-right">الكاشير</TableHead>
-                        <TableHead className="text-right">الفرع</TableHead>
-                        <TableHead className="text-center w-20">الوردية</TableHead>
-                        <TableHead className="text-left w-28">المبيعات</TableHead>
-                        <TableHead className="text-left w-24">العملاء</TableHead>
-                        <TableHead className="text-center w-28">الفرق</TableHead>
-                        <TableHead className="text-center w-24">الحالة</TableHead>
-                        <TableHead className="text-center w-24">الإجراءات</TableHead>
+                        <TableHead className="text-right w-24 sm:w-28 text-xs sm:text-sm">التاريخ</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm">الكاشير</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm hidden md:table-cell">الفرع</TableHead>
+                        <TableHead className="text-center w-16 sm:w-20 text-xs sm:text-sm hidden lg:table-cell">الوردية</TableHead>
+                        <TableHead className="text-left w-24 sm:w-28 text-xs sm:text-sm">المبيعات</TableHead>
+                        <TableHead className="text-left w-20 sm:w-24 text-xs sm:text-sm hidden xl:table-cell">العملاء</TableHead>
+                        <TableHead className="text-center w-24 sm:w-28 text-xs sm:text-sm hidden sm:table-cell">الفرق</TableHead>
+                        <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">الحالة</TableHead>
+                        <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">الإجراءات</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -501,40 +505,40 @@ export default function CashierJournalsPage() {
                             className="hover:bg-muted/30 cursor-pointer"
                             data-testid={`journal-row-${journal.id}`}
                           >
-                            <TableCell className="text-sm font-medium">
+                            <TableCell className="text-xs sm:text-sm font-medium py-2 sm:py-3">
                               {journal.journalDate}
                             </TableCell>
-                            <TableCell className="font-medium">
-                              {journal.cashierName}
+                            <TableCell className="font-medium text-xs sm:text-sm py-2 sm:py-3">
+                              <span className="line-clamp-1">{journal.cashierName}</span>
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
+                            <TableCell className="text-xs sm:text-sm text-muted-foreground hidden md:table-cell py-2 sm:py-3">
                               {getBranchName(journal.branchId)}
                             </TableCell>
-                            <TableCell className="text-center text-sm">
+                            <TableCell className="text-center text-xs sm:text-sm hidden lg:table-cell py-2 sm:py-3">
                               {journal.shiftType === "morning" ? "صباحي" : journal.shiftType === "evening" ? "مسائي" : "ليلي"}
                             </TableCell>
-                            <TableCell className="text-left font-medium">
+                            <TableCell className="text-left font-medium text-xs sm:text-sm py-2 sm:py-3">
                               {formatCurrency(journal.totalSales)}
                             </TableCell>
-                            <TableCell className="text-left text-sm">
+                            <TableCell className="text-left text-xs sm:text-sm hidden xl:table-cell py-2 sm:py-3">
                               {journal.customerCount || 0}
                             </TableCell>
-                            <TableCell className="text-center">
-                              <div className={`flex items-center justify-center gap-1 text-xs ${discrepancy?.color}`}>
+                            <TableCell className="text-center hidden sm:table-cell py-2 sm:py-3">
+                              <div className={`flex items-center justify-center gap-1 text-[10px] sm:text-xs ${discrepancy?.color}`}>
                                 <DiscrepancyIcon className="w-3 h-3" />
                                 <span>{formatCurrency(Math.abs(journal.discrepancyAmount || 0))}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant={status?.variant || "secondary"} className="text-xs">
+                            <TableCell className="text-center py-2 sm:py-3">
+                              <Badge variant={status?.variant || "secondary"} className="text-[10px] sm:text-xs px-1.5 sm:px-2">
                                 {status?.label}
                               </Badge>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center gap-1">
+                            <TableCell className="py-2 sm:py-3">
+                              <div className="flex items-center justify-center gap-0.5 sm:gap-1">
                                 <Link href={`/cashier-journals/${journal.id}`}>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-view-${journal.id}`}>
-                                    <Eye className="w-3.5 h-3.5" />
+                                  <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" data-testid={`button-view-${journal.id}`}>
+                                    <Eye className="w-5 h-5 sm:w-4 sm:h-4" />
                                   </Button>
                                 </Link>
                                 {journal.status === "submitted" && (
@@ -542,20 +546,20 @@ export default function CashierJournalsPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                                       onClick={() => approveMutation.mutate(journal.id)}
                                       data-testid={`button-approve-${journal.id}`}
                                     >
-                                      <CheckCircle className="w-3.5 h-3.5" />
+                                      <CheckCircle className="w-5 h-5 sm:w-4 sm:h-4" />
                                     </Button>
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                       onClick={() => rejectMutation.mutate({ id: journal.id })}
                                       data-testid={`button-reject-${journal.id}`}
                                     >
-                                      <XCircle className="w-3.5 h-3.5" />
+                                      <XCircle className="w-5 h-5 sm:w-4 sm:h-4" />
                                     </Button>
                                   </>
                                 )}

@@ -377,10 +377,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="md:hidden h-14 border-b border-border bg-card flex items-center px-3 justify-between sticky top-0 z-50">
+        <header className="md:hidden h-14 border-b border-border bg-card flex items-center px-2 sm:px-3 justify-between sticky top-0 z-50 safe-area-inset-top">
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9">
+              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px]">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
