@@ -70,6 +70,15 @@ export default function CashierJournalsPage() {
     queryKey: ["/api/branches"],
   });
 
+  const { data: userPermissions } = useQuery<{ module: string; actions: string[] }[]>({
+    queryKey: ["/api/rbac/my-permissions"],
+    enabled: !!user,
+  });
+
+  const journalPerms = userPermissions?.find(p => p.module === 'cashier_journal');
+  const isManager = user?.role === 'admin' || journalPerms?.actions.includes('approve');
+  const canViewAllCashiers = isManager;
+
   const filteredBranches = branches?.filter(branch => {
     if (user?.role === "admin") return true;
     return user?.branchId === branch.id;
@@ -80,6 +89,17 @@ export default function CashierJournalsPage() {
       setBranchFilter(user.branchId);
     }
   }, [user, branchFilter]);
+
+  useEffect(() => {
+    if (!canViewAllCashiers && user && cashierFilter === "all") {
+      const userName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}`.trim()
+        : user.username;
+      if (userName) {
+        setCashierFilter(userName);
+      }
+    }
+  }, [canViewAllCashiers, user, cashierFilter]);
 
   const { data: stats } = useQuery<{
     totalJournals: number;
@@ -137,9 +157,7 @@ export default function CashierJournalsPage() {
     const matchesDateFrom = !dateFrom || journalDate >= new Date(dateFrom);
     const matchesDateTo = !dateTo || journalDate <= new Date(dateTo);
     
-    const matchesUser = user?.role === "admin" || journal.cashierId === user?.id;
-    
-    return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy && matchesCashier && matchesDateFrom && matchesDateTo && matchesUser;
+    return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy && matchesCashier && matchesDateFrom && matchesDateTo;
   });
 
   useEffect(() => {
@@ -372,12 +390,12 @@ export default function CashierJournalsPage() {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2 items-center">
-                <Select value={cashierFilter} onValueChange={setCashierFilter}>
+                <Select value={cashierFilter} onValueChange={setCashierFilter} disabled={!canViewAllCashiers && uniqueCashiers.length <= 1}>
                   <SelectTrigger className="w-36" data-testid="select-cashier">
                     <SelectValue placeholder="الكاشير" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الكاشيرين</SelectItem>
+                    {canViewAllCashiers && <SelectItem value="all">جميع الكاشيرين</SelectItem>}
                     {uniqueCashiers.map((name) => (
                       <SelectItem key={name} value={name}>
                         {name}
