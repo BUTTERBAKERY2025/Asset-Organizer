@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTriangle, Building, Plus, Calculator, BarChart3, PieChart, RefreshCw, FileText, ArrowUp, ArrowDown, Minus, Target, Wallet, Receipt, ShoppingCart, Users, Home, Lightbulb, Package, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTriangle, Building, Plus, Calculator, BarChart3, PieChart, RefreshCw, FileText, ArrowUp, ArrowDown, Minus, Target, Wallet, Receipt, ShoppingCart, Users, Home, Lightbulb, Package, Trash2, ChevronDown, ChevronUp, ChevronLeft } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart } from "recharts";
 import { useToast } from "@/hooks/use-toast";
 
@@ -169,6 +171,7 @@ interface BranchRanking {
 }
 
 export default function PnLDashboard() {
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
@@ -452,30 +455,42 @@ export default function PnLDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-              <BarChart3 className="h-8 w-8 text-primary" />
-              لوحة الأرباح والخسائر (P&L)
-            </h1>
-            <p className="text-muted-foreground mt-1">تحليل الأداء المالي للفروع</p>
+    <Layout>
+      <div className="min-h-screen bg-background p-6" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/attendance-dashboard")}
+                className="rounded-full hover:bg-muted"
+                data-testid="button-back"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <div>
+                <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+                  <BarChart3 className="h-8 w-8 text-primary" />
+                  لوحة الأرباح والخسائر (P&L)
+                </h1>
+                <p className="text-muted-foreground mt-1">تحليل الأداء المالي للفروع</p>
+              </div>
+            </div>
+            {selectedPeriodId && (
+              <Button
+                onClick={() => calculateMetricsMutation.mutate(selectedPeriodId)}
+                disabled={calculateMetricsMutation.isPending}
+              >
+                {calculateMetricsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <Calculator className="h-4 w-4 ml-2" />
+                )}
+                إعادة حساب المؤشرات
+              </Button>
+            )}
           </div>
-          {selectedPeriodId && (
-            <Button
-              onClick={() => calculateMetricsMutation.mutate(selectedPeriodId)}
-              disabled={calculateMetricsMutation.isPending}
-            >
-              {calculateMetricsMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin ml-2" />
-              ) : (
-                <Calculator className="h-4 w-4 ml-2" />
-              )}
-              إعادة حساب المؤشرات
-            </Button>
-          )}
-        </div>
 
         <Card>
           <CardHeader>
@@ -1401,7 +1416,8 @@ export default function PnLDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
