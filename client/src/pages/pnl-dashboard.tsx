@@ -381,6 +381,243 @@ function exportPnLToExcel(
   XLSX.writeFile(wb, `تقرير_الأرباح_والخسائر_${branchName}_${period}.xlsx`);
 }
 
+function generatePnLExcelTemplate() {
+  const wb = XLSX.utils.book_new();
+
+  // Sales Sheet
+  const salesHeaders = [
+    ["بيانات المبيعات - P&L Template"],
+    [""],
+    ["القناة", "المبلغ", "عدد الفواتير"],
+    ["نقدي", "", ""],
+    ["بطاقة", "", ""],
+    ["تطبيقات التوصيل", "", ""],
+    ["عملاء شركات", "", ""],
+  ];
+  const wsSales = XLSX.utils.aoa_to_sheet(salesHeaders);
+  wsSales["!cols"] = [{ wch: 25 }, { wch: 20 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, wsSales, "المبيعات");
+
+  // COGS Sheet
+  const cogsHeaders = [
+    ["تكلفة البضاعة المباعة - P&L Template"],
+    [""],
+    ["البند", "المبلغ", "الهدر"],
+    ["مواد خام", "", ""],
+    ["تكاليف إنتاج", "", ""],
+    ["تغليف", "", ""],
+    ["هدر", "", ""],
+  ];
+  const wsCogs = XLSX.utils.aoa_to_sheet(cogsHeaders);
+  wsCogs["!cols"] = [{ wch: 25 }, { wch: 20 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, wsCogs, "تكاليف المبيعات");
+
+  // Operating Expenses Sheet
+  const opexHeaders = [
+    ["المصروفات التشغيلية - P&L Template"],
+    [""],
+    ["البند", "المبلغ"],
+    ["رواتب وأجور", ""],
+    ["مرافق (كهرباء، ماء)", ""],
+    ["صيانة", ""],
+    ["تسويق", ""],
+    ["مستلزمات", ""],
+    ["أخرى", ""],
+  ];
+  const wsOpex = XLSX.utils.aoa_to_sheet(opexHeaders);
+  wsOpex["!cols"] = [{ wch: 25 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, wsOpex, "المصروفات التشغيلية");
+
+  // Fixed Costs Sheet
+  const fixedHeaders = [
+    ["التكاليف الثابتة - P&L Template"],
+    [""],
+    ["البند", "المبلغ"],
+    ["إيجار", ""],
+    ["رخص وتصاريح", ""],
+    ["تأمين", ""],
+    ["ضرائب", ""],
+    ["إهلاك", ""],
+  ];
+  const wsFixed = XLSX.utils.aoa_to_sheet(fixedHeaders);
+  wsFixed["!cols"] = [{ wch: 25 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, wsFixed, "التكاليف الثابتة");
+
+  // Instructions Sheet
+  const instructions = [
+    ["تعليمات استخدام قالب P&L"],
+    [""],
+    ["1. قم بتعبئة البيانات في كل ورقة حسب الفئة"],
+    ["2. أدخل المبالغ بالأرقام فقط (بدون ريال أو فواصل)"],
+    ["3. لا تقم بتغيير أسماء الأوراق أو الأعمدة"],
+    ["4. بعد الانتهاء، احفظ الملف وارفعه في النظام"],
+    [""],
+    ["ملاحظات:"],
+    ["- المبيعات: أدخل إجمالي المبيعات لكل قناة مع عدد الفواتير"],
+    ["- تكاليف المبيعات: أدخل تكاليف المواد والإنتاج مع قيمة الهدر"],
+    ["- المصروفات التشغيلية: أدخل المصروفات المتغيرة"],
+    ["- التكاليف الثابتة: أدخل التكاليف الثابتة الشهرية"],
+  ];
+  const wsInstructions = XLSX.utils.aoa_to_sheet(instructions);
+  wsInstructions["!cols"] = [{ wch: 60 }];
+  XLSX.utils.book_append_sheet(wb, wsInstructions, "تعليمات");
+
+  XLSX.writeFile(wb, "قالب_بيانات_PnL.xlsx");
+}
+
+interface ParseResult {
+  sales: Array<{ channel: string; totalAmount: number; invoiceCount: number }>;
+  cogs: Array<{ itemType: string; amount: number; wasteAmount: number }>;
+  operatingExpenses: Array<{ expenseType: string; amount: number }>;
+  fixedCosts: Array<{ costType: string; amount: number }>;
+  unmappedLabels: { sheet: string; labels: string[] }[];
+}
+
+function parseExcelPnLData(workbook: XLSX.WorkBook): ParseResult {
+  const channelMap: Record<string, string> = {
+    "نقدي": "cash",
+    "بطاقة": "card",
+    "تطبيقات التوصيل": "delivery_apps",
+    "عملاء شركات": "corporate",
+  };
+  const cogsMap: Record<string, string> = {
+    "مواد خام": "raw_materials",
+    "تكاليف إنتاج": "production",
+    "تغليف": "packaging",
+    "هدر": "waste",
+  };
+  const opexMap: Record<string, string> = {
+    "رواتب وأجور": "salaries",
+    "مرافق (كهرباء، ماء)": "utilities",
+    "صيانة": "maintenance",
+    "تسويق": "marketing",
+    "مستلزمات": "supplies",
+    "أخرى": "other",
+  };
+  const fixedMap: Record<string, string> = {
+    "إيجار": "rent",
+    "رخص وتصاريح": "licenses",
+    "تأمين": "insurance",
+    "ضرائب": "taxes",
+    "إهلاك": "depreciation",
+  };
+
+  const sales: Array<{ channel: string; totalAmount: number; invoiceCount: number }> = [];
+  const cogs: Array<{ itemType: string; amount: number; wasteAmount: number }> = [];
+  const operatingExpenses: Array<{ expenseType: string; amount: number }> = [];
+  const fixedCosts: Array<{ costType: string; amount: number }> = [];
+  const unmappedLabels: { sheet: string; labels: string[] }[] = [];
+
+  // Parse Sales
+  const salesSheet = workbook.Sheets["المبيعات"];
+  if (salesSheet) {
+    const data = XLSX.utils.sheet_to_json<any>(salesSheet, { range: 2 });
+    const unmapped: string[] = [];
+    data.forEach((row: any) => {
+      const label = row["القناة"];
+      if (!label) return;
+      const channel = channelMap[label];
+      if (channel) {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        const count = parseInt(row["عدد الفواتير"]) || 0;
+        if (amount > 0) {
+          sales.push({ channel, totalAmount: amount, invoiceCount: count });
+        }
+      } else {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        if (amount > 0) {
+          unmapped.push(label);
+        }
+      }
+    });
+    if (unmapped.length > 0) {
+      unmappedLabels.push({ sheet: "المبيعات", labels: unmapped });
+    }
+  }
+
+  // Parse COGS
+  const cogsSheet = workbook.Sheets["تكاليف المبيعات"];
+  if (cogsSheet) {
+    const data = XLSX.utils.sheet_to_json<any>(cogsSheet, { range: 2 });
+    const unmapped: string[] = [];
+    data.forEach((row: any) => {
+      const label = row["البند"];
+      if (!label) return;
+      const itemType = cogsMap[label];
+      if (itemType) {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        const waste = parseFloat(row["الهدر"]) || 0;
+        if (amount > 0 || waste > 0) {
+          cogs.push({ itemType, amount, wasteAmount: waste });
+        }
+      } else {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        const waste = parseFloat(row["الهدر"]) || 0;
+        if (amount > 0 || waste > 0) {
+          unmapped.push(label);
+        }
+      }
+    });
+    if (unmapped.length > 0) {
+      unmappedLabels.push({ sheet: "تكاليف المبيعات", labels: unmapped });
+    }
+  }
+
+  // Parse Operating Expenses
+  const opexSheet = workbook.Sheets["المصروفات التشغيلية"];
+  if (opexSheet) {
+    const data = XLSX.utils.sheet_to_json<any>(opexSheet, { range: 2 });
+    const unmapped: string[] = [];
+    data.forEach((row: any) => {
+      const label = row["البند"];
+      if (!label) return;
+      const expenseType = opexMap[label];
+      if (expenseType) {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        if (amount > 0) {
+          operatingExpenses.push({ expenseType, amount });
+        }
+      } else {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        if (amount > 0) {
+          unmapped.push(label);
+        }
+      }
+    });
+    if (unmapped.length > 0) {
+      unmappedLabels.push({ sheet: "المصروفات التشغيلية", labels: unmapped });
+    }
+  }
+
+  // Parse Fixed Costs
+  const fixedSheet = workbook.Sheets["التكاليف الثابتة"];
+  if (fixedSheet) {
+    const data = XLSX.utils.sheet_to_json<any>(fixedSheet, { range: 2 });
+    const unmapped: string[] = [];
+    data.forEach((row: any) => {
+      const label = row["البند"];
+      if (!label) return;
+      const costType = fixedMap[label];
+      if (costType) {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        if (amount > 0) {
+          fixedCosts.push({ costType, amount });
+        }
+      } else {
+        const amount = parseFloat(row["المبلغ"]) || 0;
+        if (amount > 0) {
+          unmapped.push(label);
+        }
+      }
+    });
+    if (unmapped.length > 0) {
+      unmappedLabels.push({ sheet: "التكاليف الثابتة", labels: unmapped });
+    }
+  }
+
+  return { sales, cogs, operatingExpenses, fixedCosts, unmappedLabels };
+}
+
 interface Branch {
   id: string;
   name: string;
@@ -734,6 +971,85 @@ export default function PnLDashboard() {
     enabled: !!selectedPeriodId && !!completePnL?.metrics,
   });
 
+  // Import Excel data
+  const importExcelMutation = useMutation({
+    mutationFn: async (data: { periodId: number; excelData: any }) => {
+      const res = await fetch(`/api/financials/periods/${data.periodId}/import-excel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data.excelData),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to import Excel data");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      refetchPnL();
+      queryClient.invalidateQueries({ queryKey: ["/api/financials/ranking"] });
+      toast({ 
+        title: "تم استيراد البيانات بنجاح", 
+        description: `تم استيراد ${data.imported.sales} مبيعات، ${data.imported.cogs} تكاليف، ${data.imported.operatingExpenses} مصروفات، ${data.imported.fixedCosts} تكاليف ثابتة` 
+      });
+      setShowDataEntry(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "فشل في استيراد البيانات من الملف", variant: "destructive" });
+    },
+  });
+
+  const handleExcelImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedPeriodId) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const parsedData = parseExcelPnLData(workbook);
+        
+        // Check for unmapped labels - abort if any found
+        if (parsedData.unmappedLabels.length > 0) {
+          const errorDetails = parsedData.unmappedLabels
+            .map(u => `${u.sheet}: ${u.labels.join(", ")}`)
+            .join("\n");
+          toast({ 
+            title: "تم العثور على بنود غير معرّفة في الملف", 
+            description: `يرجى تصحيح البنود التالية:\n${errorDetails}`,
+            variant: "destructive",
+            duration: 10000,
+          });
+          return;
+        }
+        
+        if (parsedData.sales.length === 0 && parsedData.cogs.length === 0 && 
+            parsedData.operatingExpenses.length === 0 && parsedData.fixedCosts.length === 0) {
+          toast({ title: "الملف فارغ أو غير صالح", variant: "destructive" });
+          return;
+        }
+
+        importExcelMutation.mutate({
+          periodId: selectedPeriodId,
+          excelData: {
+            sales: parsedData.sales.map(s => ({
+              ...s,
+              date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`,
+            })),
+            cogs: parsedData.cogs,
+            operatingExpenses: parsedData.operatingExpenses,
+            fixedCosts: parsedData.fixedCosts,
+          },
+        });
+      } catch (error) {
+        toast({ title: "خطأ في قراءة الملف", variant: "destructive" });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = "";
+  };
+
   const handleSelectPeriod = (branchId: string, year: number, month: number) => {
     const existingPeriod = periods.find(
       p => p.branchId === branchId && p.year === year && p.month === month
@@ -956,6 +1272,34 @@ export default function PnLDashboard() {
                     </Button>
                   </>
                 )}
+                <Button
+                  variant="outline"
+                  onClick={generatePnLExcelTemplate}
+                  data-testid="button-download-template"
+                >
+                  <Download className="h-4 w-4 ml-2" />
+                  قالب الاستيراد
+                </Button>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleExcelImport}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    data-testid="input-import-excel"
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={importExcelMutation.isPending}
+                  >
+                    {importExcelMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                    ) : (
+                      <Upload className="h-4 w-4 ml-2" />
+                    )}
+                    استيراد Excel
+                  </Button>
+                </div>
               </div>
             )}
           </div>

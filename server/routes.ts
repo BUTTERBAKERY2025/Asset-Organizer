@@ -11010,9 +11010,9 @@ export async function registerRoutes(
       const operatingProfit = grossProfit - totalOperatingExpenses;
       const operatingMarginPct = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
 
-      // EBITDA = Operating Profit + Depreciation + Amortization (simplified: Net Profit + Fixed Costs)
-      // In bakery context: EBITDA ≈ Operating Profit + Rent + Licenses (approximation)
-      const depreciation = data.fixedCosts.find(c => c.costType === "subscriptions")?.amount || 0;
+      // EBITDA = Operating Profit + Depreciation + Amortization
+      // In bakery context: EBITDA ≈ Operating Profit + Rent + Depreciation
+      const depreciation = data.fixedCosts.find(c => c.costType === "depreciation")?.amount || 0;
       const ebitda = operatingProfit + rentCost + depreciation;
       const ebitdaMarginPct = totalRevenue > 0 ? (ebitda / totalRevenue) * 100 : 0;
 
@@ -11103,6 +11103,193 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error calculating metrics:", error);
       res.status(500).json({ error: "فشل في حساب المؤشرات" });
+    }
+  });
+
+  // Import all P&L data from Excel file and calculate metrics
+  app.post("/api/financials/periods/:id/import-excel", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const { sales, cogs, operatingExpenses, fixedCosts } = req.body;
+      
+      // Verify period exists
+      const period = await storage.getFinancialPeriod(periodId);
+      if (!period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+
+      // Validate that at least some data was parsed
+      const totalItems = (sales?.length || 0) + (cogs?.length || 0) + 
+                        (operatingExpenses?.length || 0) + (fixedCosts?.length || 0);
+      if (totalItems === 0) {
+        return res.status(400).json({ error: "لم يتم العثور على بيانات صالحة في الملف" });
+      }
+
+      // Clear existing data
+      await storage.deleteFinancialSalesByPeriod(periodId);
+      await storage.deleteFinancialCOGSByPeriod(periodId);
+      await storage.deleteFinancialOperatingExpensesByPeriod(periodId);
+      await storage.deleteFinancialFixedCostsByPeriod(periodId);
+
+      // Import sales
+      if (sales && sales.length > 0) {
+        await storage.bulkCreateFinancialSales(
+          sales.map((s: any) => ({ ...s, periodId }))
+        );
+      }
+
+      // Import COGS
+      if (cogs && cogs.length > 0) {
+        await storage.bulkCreateFinancialCOGS(
+          cogs.map((c: any) => ({ ...c, periodId }))
+        );
+      }
+
+      // Import Operating Expenses
+      if (operatingExpenses && operatingExpenses.length > 0) {
+        await storage.bulkCreateFinancialOperatingExpenses(
+          operatingExpenses.map((e: any) => ({ ...e, periodId }))
+        );
+      }
+
+      // Import Fixed Costs
+      if (fixedCosts && fixedCosts.length > 0) {
+        await storage.bulkCreateFinancialFixedCosts(
+          fixedCosts.map((c: any) => ({ ...c, periodId }))
+        );
+      }
+
+      // Now calculate metrics automatically
+      const data = await storage.getCompletePnLData(periodId);
+      
+      if (!data.period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+      
+      // Calculate totals
+      const totalRevenue = data.sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+      const totalCOGS = data.cogs.reduce((sum, c) => sum + (c.amount || 0), 0);
+      const totalWaste = data.cogs.reduce((sum, c) => sum + (c.wasteAmount || 0), 0);
+      const totalOperatingExpenses = data.operatingExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const totalFixedCosts = data.fixedCosts.reduce((sum, c) => sum + (c.amount || 0), 0);
+      const totalInvoices = data.sales.reduce((sum, s) => sum + (s.invoiceCount || 0), 0);
+
+      // Calculate profits and margins
+      const grossProfit = totalRevenue - totalCOGS;
+      const netProfit = grossProfit - totalOperatingExpenses - totalFixedCosts;
+      const grossMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+      const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+      // Calculate ratios
+      const salaryExpense = data.operatingExpenses.find(e => e.expenseType === "salaries")?.amount || 0;
+      const rentCost = data.fixedCosts.find(c => c.costType === "rent")?.amount || 0;
+      const salaryToSalesPct = totalRevenue > 0 ? (salaryExpense / totalRevenue) * 100 : 0;
+      const rentToRevenuePct = totalRevenue > 0 ? (rentCost / totalRevenue) * 100 : 0;
+      const wastePct = totalCOGS > 0 ? (totalWaste / totalCOGS) * 100 : 0;
+
+      // Calculate break-even
+      const breakEvenSales = grossMarginPct > 0 ? (totalFixedCosts + totalOperatingExpenses) / (grossMarginPct / 100) : 0;
+      const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+
+      // Calculate new KPIs
+      const operatingProfit = grossProfit - totalOperatingExpenses;
+      const operatingMarginPct = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
+      const depreciation = data.fixedCosts.find(c => c.costType === "depreciation")?.amount || 0;
+      const ebitda = operatingProfit + rentCost + depreciation;
+      const ebitdaMarginPct = totalRevenue > 0 ? (ebitda / totalRevenue) * 100 : 0;
+      const contributionMargin = totalRevenue - totalCOGS;
+      const contributionMarginPct = totalRevenue > 0 ? (contributionMargin / totalRevenue) * 100 : 0;
+
+      let employeeCount = 0;
+      try {
+        const employees = await storage.getBranchEmployeesByBranch(data.period.branchId);
+        employeeCount = employees.filter(e => e.status === "active").length;
+      } catch (e) {
+        console.log("Could not get employee count:", e);
+      }
+      const revenuePerEmployee = employeeCount > 0 ? totalRevenue / employeeCount : 0;
+      const laborProductivity = employeeCount > 0 && salaryExpense > 0 
+        ? (grossProfit / salaryExpense) * 100 
+        : 0;
+
+      // Determine rating
+      let rating = "average";
+      const ratingReasons: string[] = [];
+      const recommendations: string[] = [];
+
+      if (netMarginPct >= 15) {
+        rating = "excellent";
+        ratingReasons.push("هامش ربح صافي ممتاز (أعلى من 15%)");
+      } else if (netMarginPct >= 8) {
+        rating = "good";
+        ratingReasons.push("هامش ربح صافي جيد (8-15%)");
+      } else if (netMarginPct >= 3) {
+        rating = "average";
+        ratingReasons.push("هامش ربح صافي متوسط (3-8%)");
+        recommendations.push("راجع تكاليف التشغيل لتحسين الربحية");
+      } else {
+        rating = "poor";
+        ratingReasons.push("هامش ربح صافي ضعيف (أقل من 3%)");
+        recommendations.push("يجب مراجعة هيكل التكاليف بشكل عاجل");
+      }
+
+      if (salaryToSalesPct > 35) {
+        ratingReasons.push("نسبة الرواتب للمبيعات مرتفعة");
+        recommendations.push("دراسة إمكانية تحسين إنتاجية الموظفين");
+      }
+      if (wastePct > 5) {
+        ratingReasons.push("نسبة الهدر مرتفعة");
+        recommendations.push("تطبيق نظام مراقبة المخزون وتقليل الهدر");
+      }
+      if (rentToRevenuePct > 15) {
+        ratingReasons.push("نسبة الإيجار للإيرادات مرتفعة");
+        recommendations.push("مراجعة جدوى موقع الفرع");
+      }
+
+      // Save metrics
+      const metrics = await storage.upsertFinancialMetrics(periodId, {
+        periodId,
+        totalRevenue,
+        totalCOGS,
+        totalOperatingExpenses,
+        totalFixedCosts,
+        grossProfit,
+        netProfit,
+        grossMarginPct,
+        netMarginPct,
+        breakEvenSales,
+        salaryToSalesPct,
+        rentToRevenuePct,
+        wastePct,
+        invoiceCount: totalInvoices,
+        avgInvoiceValue,
+        ebitda,
+        ebitdaMarginPct,
+        contributionMargin,
+        contributionMarginPct,
+        laborProductivity,
+        revenuePerEmployee,
+        employeeCount,
+        operatingProfit,
+        operatingMarginPct,
+        rating,
+        ratingReasons,
+        recommendations,
+      });
+
+      res.json({ 
+        success: true, 
+        metrics,
+        imported: {
+          sales: sales?.length || 0,
+          cogs: cogs?.length || 0,
+          operatingExpenses: operatingExpenses?.length || 0,
+          fixedCosts: fixedCosts?.length || 0,
+        }
+      });
+    } catch (error) {
+      console.error("Error importing Excel data:", error);
+      res.status(500).json({ error: "فشل في استيراد البيانات من الملف" });
     }
   });
 
