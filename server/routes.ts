@@ -2,7 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
-import { generateSalaryClosingPdf, type SalaryClosingPdfData } from "./pdf-generator";
+import { 
+  generateSalaryClosingPdf, type SalaryClosingPdfData,
+  generateBranchComparisonPdf, type BranchComparisonPdfData,
+  generateJobComparisonPdf, type JobComparisonPdfData,
+  generateSalariesTablePdf, type SalaryTablePdfData,
+  generateKPIsPdf, type KPIsPdfData,
+  generateHealthCertificatesPdf, type HealthCertificatePdfData,
+  generateComparisonsPdf, type ComparisonsPdfData
+} from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
@@ -10469,6 +10477,108 @@ export async function registerRoutes(
       res.send(pdfBuffer);
     } catch (error) {
       console.error("Error generating salary closing PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for branch comparison report
+  app.post("/api/pdf/branch-comparison", isAuthenticated, async (req, res) => {
+    try {
+      const data: BranchComparisonPdfData = req.body;
+      if (!data.month || !data.branches || !Array.isArray(data.branches)) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateBranchComparisonPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=branch_comparison_${data.month}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating branch comparison PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for job comparison report
+  app.post("/api/pdf/job-comparison", isAuthenticated, async (req, res) => {
+    try {
+      const data: JobComparisonPdfData = req.body;
+      if (!data.month || !data.jobs || !Array.isArray(data.jobs)) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateJobComparisonPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=job_comparison_${data.month}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating job comparison PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for salaries table report
+  app.post("/api/pdf/salaries-table", isAuthenticated, async (req, res) => {
+    try {
+      const data: SalaryTablePdfData = req.body;
+      if (!data.month || !data.employees || !Array.isArray(data.employees)) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateSalariesTablePdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=salaries_table_${data.month}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating salaries table PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for KPIs report
+  app.post("/api/pdf/kpis", isAuthenticated, async (req, res) => {
+    try {
+      const data: KPIsPdfData = req.body;
+      if (!data.month) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateKPIsPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=kpis_${data.month}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating KPIs PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for health certificates report
+  app.post("/api/pdf/health-certificates", isAuthenticated, async (req, res) => {
+    try {
+      const data: HealthCertificatePdfData = req.body;
+      if (!data.month || !data.employees || !Array.isArray(data.employees)) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateHealthCertificatesPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=health_certificates_${data.month}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating health certificates PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for comparisons report
+  app.post("/api/pdf/comparisons", isAuthenticated, async (req, res) => {
+    try {
+      const data: ComparisonsPdfData = req.body;
+      if (!data.month) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateComparisonsPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=comparisons_${data.month}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating comparisons PDF:", error);
       res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
     }
   });
