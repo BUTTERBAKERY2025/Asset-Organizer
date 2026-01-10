@@ -90,17 +90,6 @@ export default function CashierJournalsPage() {
     }
   }, [user, branchFilter]);
 
-  useEffect(() => {
-    if (!canViewAllCashiers && user && cashierFilter === "all") {
-      const userName = user.firstName && user.lastName 
-        ? `${user.firstName} ${user.lastName}`.trim()
-        : user.username;
-      if (userName) {
-        setCashierFilter(userName);
-      }
-    }
-  }, [canViewAllCashiers, user, cashierFilter]);
-
   const { data: stats } = useQuery<{
     totalJournals: number;
     totalSales: number;
@@ -143,6 +132,12 @@ export default function CashierJournalsPage() {
   };
 
   const uniqueCashiers = journals ? [...new Set(journals.map(j => j.cashierName))].filter(Boolean).sort() : [];
+
+  useEffect(() => {
+    if (userPermissions !== undefined && !canViewAllCashiers && cashierFilter === "all" && uniqueCashiers.length > 0) {
+      setCashierFilter(uniqueCashiers[0]);
+    }
+  }, [userPermissions, canViewAllCashiers, cashierFilter, uniqueCashiers]);
 
   const filteredJournals = journals?.filter((journal) => {
     const matchesSearch =
