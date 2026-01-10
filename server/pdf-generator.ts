@@ -29,7 +29,12 @@ export interface SalaryClosingPdfData {
 }
 
 function formatNumber(num: number): string {
+  if (isNaN(num) || !isFinite(num)) return '0';
   return new Intl.NumberFormat("en-US").format(num);
+}
+
+function safeAverage(sum: number, count: number): number {
+  return count > 0 ? sum / count : 0;
 }
 
 export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Promise<Buffer> {
@@ -161,7 +166,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     { label: 'إجمالي البدلات', value: formatNumber(totals.allowances) + ' ريال' },
     { label: 'إجمالي التأمينات', value: formatNumber(totals.socialInsurance) + ' ريال' },
     { label: 'صافي الرواتب', value: formatNumber(totals.netSalary) + ' ريال' },
-    { label: 'متوسط الراتب', value: formatNumber(Math.round(totals.netSalary / data.employees.length)) + ' ريال' },
+    { label: 'متوسط الراتب', value: formatNumber(Math.round(safeAverage(totals.netSalary, data.employees.length))) + ' ريال' },
   ])}
 </body>
 </html>
@@ -235,7 +240,7 @@ export async function generateBranchComparisonPdf(data: BranchComparisonPdfData)
     { label: 'عدد الفروع', value: formatNumber(data.branches.length) },
     { label: 'إجمالي الموظفين', value: formatNumber(data.branches.reduce((sum, b) => sum + b.employeeCount, 0)) },
     { label: 'إجمالي الرواتب', value: formatNumber(data.branches.reduce((sum, b) => sum + b.totalSalary, 0)) + ' ريال' },
-    { label: 'متوسط نسبة الحضور', value: (data.branches.reduce((sum, b) => sum + b.attendanceRate, 0) / data.branches.length).toFixed(1) + '%' },
+    { label: 'متوسط نسبة الحضور', value: safeAverage(data.branches.reduce((sum, b) => sum + b.attendanceRate, 0), data.branches.length).toFixed(1) + '%' },
   ])}
 </body>
 </html>`;
@@ -313,7 +318,7 @@ export async function generateJobComparisonPdf(data: JobComparisonPdfData): Prom
   ${getSummaryHtml('ملخص مقارنة الوظائف', [
     { label: 'عدد الوظائف', value: formatNumber(data.jobs.length) },
     { label: 'إجمالي الموظفين', value: formatNumber(data.jobs.reduce((sum, j) => sum + j.branches.reduce((s, b) => s + b.count, 0), 0)) },
-    { label: 'متوسط الرواتب العام', value: formatNumber(Math.round(data.jobs.reduce((sum, j) => sum + j.avgSalary, 0) / data.jobs.length)) + ' ريال' },
+    { label: 'متوسط الرواتب العام', value: formatNumber(Math.round(safeAverage(data.jobs.reduce((sum, j) => sum + j.avgSalary, 0), data.jobs.length))) + ' ريال' },
   ])}
 </body>
 </html>`;
@@ -659,7 +664,7 @@ export async function generateComparisonsPdf(data: ComparisonsPdfData): Promise<
     { label: 'عدد الفروع', value: formatNumber(data.branchStats.length) },
     { label: 'إجمالي الموظفين', value: formatNumber(data.branchStats.reduce((s, b) => s + b.employeeCount, 0)) },
     { label: 'عدد الجنسيات', value: formatNumber(data.nationalityStats.length) },
-    { label: 'متوسط الرواتب العام', value: formatNumber(Math.round(data.branchStats.reduce((s, b) => s + b.avgSalary, 0) / data.branchStats.length)) + ' ريال' },
+    { label: 'متوسط الرواتب العام', value: formatNumber(Math.round(safeAverage(data.branchStats.reduce((s, b) => s + b.avgSalary, 0), data.branchStats.length))) + ' ريال' },
   ])}
 </body>
 </html>`;
