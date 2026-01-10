@@ -3989,3 +3989,231 @@ export const transferHistory = pgTable("transfer_history", {
   index("idx_history_transfer").on(table.transferId),
   index("idx_history_event").on(table.eventType),
 ]);
+
+// ==================== P&L (Profit & Loss) Dashboard Tables ====================
+
+// Financial Periods - الفترات المالية
+export const financialPeriods = pgTable("financial_periods", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull().default("monthly"),
+  month: integer("month").notNull(),
+  year: integer("year").notNull(),
+  targetRevenue: real("target_revenue").default(0),
+  targetGrossMargin: real("target_gross_margin").default(0),
+  targetNetMargin: real("target_net_margin").default(0),
+  status: text("status").default("draft"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_periods_branch").on(table.branchId),
+  index("idx_financial_periods_date").on(table.year, table.month),
+]);
+
+export const insertFinancialPeriodSchema = createInsertSchema(financialPeriods).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FinancialPeriod = typeof financialPeriods.$inferSelect;
+export type InsertFinancialPeriod = z.infer<typeof insertFinancialPeriodSchema>;
+
+// Sales Channels Enum
+export const SALES_CHANNELS = ["cash", "card", "delivery_apps", "online", "other"] as const;
+export type SalesChannel = typeof SALES_CHANNELS[number];
+
+// Financial Sales - المبيعات المالية
+export const financialSales = pgTable("financial_sales", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  category: text("category"),
+  shift: text("shift"),
+  totalAmount: real("total_amount").notNull().default(0),
+  invoiceCount: integer("invoice_count").default(0),
+  avgInvoiceValue: real("avg_invoice_value").default(0),
+  date: text("date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_sales_period").on(table.periodId),
+  index("idx_financial_sales_channel").on(table.channel),
+]);
+
+export const insertFinancialSalesSchema = createInsertSchema(financialSales).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialSales = typeof financialSales.$inferSelect;
+export type InsertFinancialSales = z.infer<typeof insertFinancialSalesSchema>;
+
+// COGS Item Types Enum
+export const COGS_ITEM_TYPES = ["raw_materials", "production", "packaging", "waste", "delivery", "other"] as const;
+export type COGSItemType = typeof COGS_ITEM_TYPES[number];
+
+// Financial COGS (Cost of Goods Sold) - تكلفة البضائع المباعة
+export const financialCOGS = pgTable("financial_cogs", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  itemType: text("item_type").notNull(),
+  amount: real("amount").notNull().default(0),
+  wasteAmount: real("waste_amount").default(0),
+  wastePct: real("waste_pct").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_cogs_period").on(table.periodId),
+  index("idx_financial_cogs_type").on(table.itemType),
+]);
+
+export const insertFinancialCOGSSchema = createInsertSchema(financialCOGS).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialCOGS = typeof financialCOGS.$inferSelect;
+export type InsertFinancialCOGS = z.infer<typeof insertFinancialCOGSSchema>;
+
+// Operating Expense Types Enum
+export const OPERATING_EXPENSE_TYPES = [
+  "salaries", "insurance", "electricity", "water", "internet", 
+  "cleaning", "maintenance", "marketing", "supplies", "other"
+] as const;
+export type OperatingExpenseType = typeof OPERATING_EXPENSE_TYPES[number];
+
+// Financial Operating Expenses - المصروفات التشغيلية
+export const financialOperatingExpenses = pgTable("financial_operating_expenses", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  expenseType: text("expense_type").notNull(),
+  amount: real("amount").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_opex_period").on(table.periodId),
+  index("idx_financial_opex_type").on(table.expenseType),
+]);
+
+export const insertFinancialOperatingExpenseSchema = createInsertSchema(financialOperatingExpenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialOperatingExpense = typeof financialOperatingExpenses.$inferSelect;
+export type InsertFinancialOperatingExpense = z.infer<typeof insertFinancialOperatingExpenseSchema>;
+
+// Fixed Cost Types Enum
+export const FIXED_COST_TYPES = [
+  "rent", "licenses", "taxes", "zakat", "subscriptions", "insurance", "other"
+] as const;
+export type FixedCostType = typeof FIXED_COST_TYPES[number];
+
+// Financial Fixed Costs - التكاليف الثابتة
+export const financialFixedCosts = pgTable("financial_fixed_costs", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  costType: text("cost_type").notNull(),
+  amount: real("amount").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_fixed_period").on(table.periodId),
+  index("idx_financial_fixed_type").on(table.costType),
+]);
+
+export const insertFinancialFixedCostSchema = createInsertSchema(financialFixedCosts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinancialFixedCost = typeof financialFixedCosts.$inferSelect;
+export type InsertFinancialFixedCost = z.infer<typeof insertFinancialFixedCostSchema>;
+
+// Branch Performance Rating
+export const PERFORMANCE_RATINGS = ["excellent", "good", "average", "poor"] as const;
+export type PerformanceRating = typeof PERFORMANCE_RATINGS[number];
+
+// Financial Metrics Cache - تخزين المؤشرات المالية
+export const financialMetrics = pgTable("financial_metrics", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => financialPeriods.id, { onDelete: "cascade" }),
+  totalRevenue: real("total_revenue").default(0),
+  totalCOGS: real("total_cogs").default(0),
+  totalOperatingExpenses: real("total_operating_expenses").default(0),
+  totalFixedCosts: real("total_fixed_costs").default(0),
+  grossProfit: real("gross_profit").default(0),
+  netProfit: real("net_profit").default(0),
+  grossMarginPct: real("gross_margin_pct").default(0),
+  netMarginPct: real("net_margin_pct").default(0),
+  breakEvenSales: real("break_even_sales").default(0),
+  salaryToSalesPct: real("salary_to_sales_pct").default(0),
+  rentToRevenuePct: real("rent_to_revenue_pct").default(0),
+  wastePct: real("waste_pct").default(0),
+  invoiceCount: integer("invoice_count").default(0),
+  avgInvoiceValue: real("avg_invoice_value").default(0),
+  rating: text("rating").default("average"),
+  ratingReasons: jsonb("rating_reasons"),
+  recommendations: jsonb("recommendations"),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_metrics_period").on(table.periodId),
+  index("idx_financial_metrics_rating").on(table.rating),
+]);
+
+export const insertFinancialMetricsSchema = createInsertSchema(financialMetrics).omit({
+  id: true,
+  calculatedAt: true,
+});
+
+export type FinancialMetrics = typeof financialMetrics.$inferSelect;
+export type InsertFinancialMetrics = z.infer<typeof insertFinancialMetricsSchema>;
+
+// P&L Arabic Labels
+export const PNL_LABELS = {
+  channels: {
+    cash: "نقدي",
+    card: "شبكة",
+    delivery_apps: "تطبيقات التوصيل",
+    online: "أونلاين",
+    other: "أخرى",
+  },
+  cogs: {
+    raw_materials: "المواد الخام",
+    production: "الإنتاج",
+    packaging: "التعبئة والتغليف",
+    waste: "الهدر والفاقد",
+    delivery: "النقل والتوصيل",
+    other: "أخرى",
+  },
+  opex: {
+    salaries: "الرواتب",
+    insurance: "التأمينات",
+    electricity: "الكهرباء",
+    water: "المياه",
+    internet: "الإنترنت والاتصالات",
+    cleaning: "مواد النظافة",
+    maintenance: "الصيانة",
+    marketing: "التسويق",
+    supplies: "المستلزمات",
+    other: "مصروفات أخرى",
+  },
+  fixed: {
+    rent: "الإيجار",
+    licenses: "رسوم التراخيص",
+    taxes: "الضرائب",
+    zakat: "الزكاة",
+    subscriptions: "الاشتراكات الشهرية",
+    insurance: "التأمين",
+    other: "أخرى",
+  },
+  ratings: {
+    excellent: { label: "ممتاز", color: "#22c55e", icon: "🟢" },
+    good: { label: "جيد", color: "#eab308", icon: "🟡" },
+    average: { label: "متوسط", color: "#f97316", icon: "🟠" },
+    poor: { label: "ضعيف", color: "#ef4444", icon: "🔴" },
+  },
+} as const;

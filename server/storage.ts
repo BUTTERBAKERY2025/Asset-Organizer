@@ -294,6 +294,24 @@ import {
   type InsertEmployeeTransferRequest,
   type TransferApprovalStep,
   type InsertTransferApprovalStep,
+  financialPeriods,
+  financialSales,
+  financialCOGS,
+  financialOperatingExpenses,
+  financialFixedCosts,
+  financialMetrics,
+  type FinancialPeriod,
+  type InsertFinancialPeriod,
+  type FinancialSales,
+  type InsertFinancialSales,
+  type FinancialCOGS,
+  type InsertFinancialCOGS,
+  type FinancialOperatingExpense,
+  type InsertFinancialOperatingExpense,
+  type FinancialFixedCost,
+  type InsertFinancialFixedCost,
+  type FinancialMetrics,
+  type InsertFinancialMetrics,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -6940,6 +6958,253 @@ export class DatabaseStorage implements IStorage {
       .values(entry)
       .returning();
     return created;
+  }
+
+  // ==================== P&L (Profit & Loss) Dashboard Methods ====================
+
+  // Financial Periods
+  async getAllFinancialPeriods(filters?: { branchId?: string; year?: number; month?: number }): Promise<FinancialPeriod[]> {
+    const conditions: any[] = [];
+    if (filters?.branchId) conditions.push(eq(financialPeriods.branchId, filters.branchId));
+    if (filters?.year) conditions.push(eq(financialPeriods.year, filters.year));
+    if (filters?.month) conditions.push(eq(financialPeriods.month, filters.month));
+
+    if (conditions.length > 0) {
+      return await db.select().from(financialPeriods)
+        .where(and(...conditions))
+        .orderBy(desc(financialPeriods.year), desc(financialPeriods.month));
+    }
+    return await db.select().from(financialPeriods)
+      .orderBy(desc(financialPeriods.year), desc(financialPeriods.month));
+  }
+
+  async getFinancialPeriod(id: number): Promise<FinancialPeriod | undefined> {
+    const [period] = await db.select().from(financialPeriods)
+      .where(eq(financialPeriods.id, id));
+    return period || undefined;
+  }
+
+  async getFinancialPeriodByBranchAndDate(branchId: string, year: number, month: number): Promise<FinancialPeriod | undefined> {
+    const [period] = await db.select().from(financialPeriods)
+      .where(and(
+        eq(financialPeriods.branchId, branchId),
+        eq(financialPeriods.year, year),
+        eq(financialPeriods.month, month)
+      ));
+    return period || undefined;
+  }
+
+  async createFinancialPeriod(period: InsertFinancialPeriod): Promise<FinancialPeriod> {
+    const [created] = await db.insert(financialPeriods)
+      .values(period)
+      .returning();
+    return created;
+  }
+
+  async updateFinancialPeriod(id: number, period: Partial<InsertFinancialPeriod>): Promise<FinancialPeriod | undefined> {
+    const [updated] = await db.update(financialPeriods)
+      .set({ ...period, updatedAt: new Date() })
+      .where(eq(financialPeriods.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteFinancialPeriod(id: number): Promise<boolean> {
+    const [deleted] = await db.delete(financialPeriods)
+      .where(eq(financialPeriods.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  // Financial Sales
+  async getFinancialSalesByPeriod(periodId: number): Promise<FinancialSales[]> {
+    return await db.select().from(financialSales)
+      .where(eq(financialSales.periodId, periodId));
+  }
+
+  async createFinancialSales(sales: InsertFinancialSales): Promise<FinancialSales> {
+    const [created] = await db.insert(financialSales)
+      .values(sales)
+      .returning();
+    return created;
+  }
+
+  async bulkCreateFinancialSales(salesList: InsertFinancialSales[]): Promise<FinancialSales[]> {
+    if (salesList.length === 0) return [];
+    return await db.insert(financialSales)
+      .values(salesList)
+      .returning();
+  }
+
+  async deleteFinancialSalesByPeriod(periodId: number): Promise<boolean> {
+    await db.delete(financialSales)
+      .where(eq(financialSales.periodId, periodId));
+    return true;
+  }
+
+  // Financial COGS
+  async getFinancialCOGSByPeriod(periodId: number): Promise<FinancialCOGS[]> {
+    return await db.select().from(financialCOGS)
+      .where(eq(financialCOGS.periodId, periodId));
+  }
+
+  async createFinancialCOGS(cogs: InsertFinancialCOGS): Promise<FinancialCOGS> {
+    const [created] = await db.insert(financialCOGS)
+      .values(cogs)
+      .returning();
+    return created;
+  }
+
+  async bulkCreateFinancialCOGS(cogsList: InsertFinancialCOGS[]): Promise<FinancialCOGS[]> {
+    if (cogsList.length === 0) return [];
+    return await db.insert(financialCOGS)
+      .values(cogsList)
+      .returning();
+  }
+
+  async deleteFinancialCOGSByPeriod(periodId: number): Promise<boolean> {
+    await db.delete(financialCOGS)
+      .where(eq(financialCOGS.periodId, periodId));
+    return true;
+  }
+
+  // Financial Operating Expenses
+  async getFinancialOperatingExpensesByPeriod(periodId: number): Promise<FinancialOperatingExpense[]> {
+    return await db.select().from(financialOperatingExpenses)
+      .where(eq(financialOperatingExpenses.periodId, periodId));
+  }
+
+  async createFinancialOperatingExpense(expense: InsertFinancialOperatingExpense): Promise<FinancialOperatingExpense> {
+    const [created] = await db.insert(financialOperatingExpenses)
+      .values(expense)
+      .returning();
+    return created;
+  }
+
+  async bulkCreateFinancialOperatingExpenses(expensesList: InsertFinancialOperatingExpense[]): Promise<FinancialOperatingExpense[]> {
+    if (expensesList.length === 0) return [];
+    return await db.insert(financialOperatingExpenses)
+      .values(expensesList)
+      .returning();
+  }
+
+  async deleteFinancialOperatingExpensesByPeriod(periodId: number): Promise<boolean> {
+    await db.delete(financialOperatingExpenses)
+      .where(eq(financialOperatingExpenses.periodId, periodId));
+    return true;
+  }
+
+  // Financial Fixed Costs
+  async getFinancialFixedCostsByPeriod(periodId: number): Promise<FinancialFixedCost[]> {
+    return await db.select().from(financialFixedCosts)
+      .where(eq(financialFixedCosts.periodId, periodId));
+  }
+
+  async createFinancialFixedCost(cost: InsertFinancialFixedCost): Promise<FinancialFixedCost> {
+    const [created] = await db.insert(financialFixedCosts)
+      .values(cost)
+      .returning();
+    return created;
+  }
+
+  async bulkCreateFinancialFixedCosts(costsList: InsertFinancialFixedCost[]): Promise<FinancialFixedCost[]> {
+    if (costsList.length === 0) return [];
+    return await db.insert(financialFixedCosts)
+      .values(costsList)
+      .returning();
+  }
+
+  async deleteFinancialFixedCostsByPeriod(periodId: number): Promise<boolean> {
+    await db.delete(financialFixedCosts)
+      .where(eq(financialFixedCosts.periodId, periodId));
+    return true;
+  }
+
+  // Financial Metrics
+  async getFinancialMetricsByPeriod(periodId: number): Promise<FinancialMetrics | undefined> {
+    const [metrics] = await db.select().from(financialMetrics)
+      .where(eq(financialMetrics.periodId, periodId));
+    return metrics || undefined;
+  }
+
+  async createFinancialMetrics(metrics: InsertFinancialMetrics): Promise<FinancialMetrics> {
+    const [created] = await db.insert(financialMetrics)
+      .values(metrics)
+      .returning();
+    return created;
+  }
+
+  async updateFinancialMetrics(periodId: number, metrics: Partial<InsertFinancialMetrics>): Promise<FinancialMetrics | undefined> {
+    const [updated] = await db.update(financialMetrics)
+      .set({ ...metrics, calculatedAt: new Date() })
+      .where(eq(financialMetrics.periodId, periodId))
+      .returning();
+    return updated || undefined;
+  }
+
+  async upsertFinancialMetrics(periodId: number, metrics: InsertFinancialMetrics): Promise<FinancialMetrics> {
+    const existing = await this.getFinancialMetricsByPeriod(periodId);
+    if (existing) {
+      const updated = await this.updateFinancialMetrics(periodId, metrics);
+      return updated!;
+    }
+    return await this.createFinancialMetrics({ ...metrics, periodId });
+  }
+
+  // Get complete P&L data for a period
+  async getCompletePnLData(periodId: number): Promise<{
+    period: FinancialPeriod | undefined;
+    sales: FinancialSales[];
+    cogs: FinancialCOGS[];
+    operatingExpenses: FinancialOperatingExpense[];
+    fixedCosts: FinancialFixedCost[];
+    metrics: FinancialMetrics | undefined;
+  }> {
+    const [period, sales, cogs, operatingExpenses, fixedCosts, metrics] = await Promise.all([
+      this.getFinancialPeriod(periodId),
+      this.getFinancialSalesByPeriod(periodId),
+      this.getFinancialCOGSByPeriod(periodId),
+      this.getFinancialOperatingExpensesByPeriod(periodId),
+      this.getFinancialFixedCostsByPeriod(periodId),
+      this.getFinancialMetricsByPeriod(periodId),
+    ]);
+    return { period, sales, cogs, operatingExpenses, fixedCosts, metrics };
+  }
+
+  // Get branch ranking by metric
+  async getBranchRanking(year: number, month: number, metric: 'profit' | 'revenue' | 'margin'): Promise<Array<{
+    branchId: string;
+    periodId: number;
+    value: number;
+  }>> {
+    const periods = await db.select().from(financialPeriods)
+      .where(and(
+        eq(financialPeriods.year, year),
+        eq(financialPeriods.month, month)
+      ));
+
+    const rankings: Array<{ branchId: string; periodId: number; value: number }> = [];
+
+    for (const period of periods) {
+      const metrics = await this.getFinancialMetricsByPeriod(period.id);
+      if (metrics) {
+        let value = 0;
+        switch (metric) {
+          case 'profit':
+            value = metrics.netProfit || 0;
+            break;
+          case 'revenue':
+            value = metrics.totalRevenue || 0;
+            break;
+          case 'margin':
+            value = metrics.netMarginPct || 0;
+            break;
+        }
+        rankings.push({ branchId: period.branchId, periodId: period.id, value });
+      }
+    }
+
+    return rankings.sort((a, b) => b.value - a.value);
   }
 }
 
