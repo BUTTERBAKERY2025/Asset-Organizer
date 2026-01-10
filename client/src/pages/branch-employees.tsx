@@ -1663,10 +1663,6 @@ export default function BranchEmployeesPage() {
               <Network className="w-4 h-4 ml-2" />
               الهيكل الوظيفي
             </Button>
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => navigate("/pnl-dashboard")} data-testid="button-pnl-dashboard">
-              <TrendingUp className="w-4 h-4 ml-2" />
-              الأرباح والخسائر
-            </Button>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) {
