@@ -100,7 +100,7 @@ export default function DashboardPage() {
     <Layout>
       <div className="flex flex-col space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة التحكم</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة الأصول</h1>
           <p className="text-muted-foreground mt-1">ملخص شامل لأصول جميع الفروع</p>
         </div>
 
