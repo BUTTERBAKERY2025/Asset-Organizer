@@ -30,7 +30,8 @@ if (process.env.NODE_ENV === "production") {
   }));
 }
 
-app.use("/attached_assets", express.static(path.resolve(process.cwd(), "attached_assets")));
+// SECURITY: attached_assets is NOT served statically to prevent data exposure
+// Files should be served through authenticated API endpoints instead
 
 declare module "http" {
   interface IncomingMessage {
@@ -74,8 +75,13 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      // SECURITY: Only log response body in development, and never log sensitive endpoints
+      const sensitiveEndpoints = ['/api/auth', '/api/login', '/api/users', '/api/my-permissions', '/api/security'];
+      const isSensitive = sensitiveEndpoints.some(ep => path.startsWith(ep));
+      if (process.env.NODE_ENV !== "production" && capturedJsonResponse && !isSensitive) {
+        const responseStr = JSON.stringify(capturedJsonResponse);
+        // Truncate long responses
+        logLine += ` :: ${responseStr.length > 200 ? responseStr.substring(0, 200) + '...' : responseStr}`;
       }
 
       log(logLine);

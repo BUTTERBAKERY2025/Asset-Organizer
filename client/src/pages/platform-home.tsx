@@ -295,14 +295,17 @@ export default function PlatformHomePage() {
     },
   ];
 
-  const quickActions = [
-    { icon: Users, label: "إضافة موظف", href: "/branch-employees", color: "bg-teal-500" },
-    { icon: ClipboardEdit, label: "أمر إنتاج", href: "/advanced-production-orders", color: "bg-blue-500" },
-    { icon: Wallet, label: "يومية كاشير", href: "/cashier-journals", color: "bg-emerald-500" },
-    { icon: UserCheck, label: "تسجيل حضور", href: "/attendance-check", color: "bg-purple-500" },
-    { icon: Boxes, label: "جرد الأصول", href: "/inventory", color: "bg-amber-500" },
-    { icon: FileBarChart, label: "التقارير", href: "/reports", color: "bg-indigo-500" },
+  const allQuickActions: { icon: React.ComponentType<{ className?: string }>; label: string; href: string; color: string; module: SystemModule }[] = [
+    { icon: Users, label: "إضافة موظف", href: "/branch-employees", color: "bg-teal-500", module: "branch_employees" },
+    { icon: ClipboardEdit, label: "أمر إنتاج", href: "/advanced-production-orders", color: "bg-blue-500", module: "production" },
+    { icon: Wallet, label: "يومية كاشير", href: "/cashier-journals", color: "bg-emerald-500", module: "cashier_journal" },
+    { icon: UserCheck, label: "تسجيل حضور", href: "/attendance-check", color: "bg-purple-500", module: "shifts" },
+    { icon: Boxes, label: "جرد الأصول", href: "/inventory", color: "bg-amber-500", module: "inventory" },
+    { icon: FileBarChart, label: "التقارير", href: "/reports", color: "bg-indigo-500", module: "reports" },
   ];
+
+  // Filter quick actions by permissions
+  const quickActions = allQuickActions.filter(action => canView(action.module));
 
   const accessibleModules = modules.filter(module => {
     if (!module.module) return true;
@@ -372,38 +375,46 @@ export default function PlatformHomePage() {
 
         {isAuthenticated && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <QuickStat
-              title="الفروع"
-              value={branchesCount || 0}
-              icon={Building2}
-              color="bg-amber-500"
-              href="/branches"
-            />
-            <QuickStat
-              title="الموظفين"
-              value={employeesCount || 0}
-              icon={Users}
-              color="bg-teal-500"
-              href="/branch-employees"
-            />
-            <QuickStat
-              title="أوامر الإنتاج اليوم"
-              value={stats?.productionOrders || 0}
-              icon={ClipboardList}
-              color="bg-blue-500"
-              href="/advanced-production-orders"
-            />
-            <QuickStat
-              title="مبيعات اليوم"
-              value={stats?.todaySales ? `${stats.todaySales.toLocaleString()} ر.س` : "0 ر.س"}
-              icon={Receipt}
-              color="bg-emerald-500"
-              href="/cashier-journals"
-            />
+            {canView("branches") && (
+              <QuickStat
+                title="الفروع"
+                value={branchesCount || 0}
+                icon={Building2}
+                color="bg-amber-500"
+                href="/branches"
+              />
+            )}
+            {canView("branch_employees") && (
+              <QuickStat
+                title="الموظفين"
+                value={employeesCount || 0}
+                icon={Users}
+                color="bg-teal-500"
+                href="/branch-employees"
+              />
+            )}
+            {canView("production") && (
+              <QuickStat
+                title="أوامر الإنتاج اليوم"
+                value={stats?.productionOrders || 0}
+                icon={ClipboardList}
+                color="bg-blue-500"
+                href="/advanced-production-orders"
+              />
+            )}
+            {canView("cashier_journal") && (
+              <QuickStat
+                title="مبيعات اليوم"
+                value={stats?.todaySales ? `${stats.todaySales.toLocaleString()} ر.س` : "0 ر.س"}
+                icon={Receipt}
+                color="bg-emerald-500"
+                href="/cashier-journals"
+              />
+            )}
           </div>
         )}
 
-        {isAuthenticated && (
+        {isAuthenticated && quickActions.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
