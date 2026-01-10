@@ -98,8 +98,8 @@ interface FinancialPeriod {
 interface FinancialSales {
   id: number;
   periodId: number;
-  salesDate: string;
-  salesChannel: string;
+  date: string;
+  channel: string;
   totalAmount: number;
   invoiceCount: number;
 }
@@ -107,8 +107,8 @@ interface FinancialSales {
 interface FinancialCOGS {
   id: number;
   periodId: number;
-  category: string;
-  description?: string;
+  itemType: string;
+  notes?: string;
   amount: number;
   wasteAmount?: number;
 }
@@ -117,7 +117,7 @@ interface FinancialOperatingExpense {
   id: number;
   periodId: number;
   expenseType: string;
-  description?: string;
+  notes?: string;
   amount: number;
 }
 
@@ -125,9 +125,8 @@ interface FinancialFixedCost {
   id: number;
   periodId: number;
   costType: string;
-  description?: string;
+  notes?: string;
   amount: number;
-  isMonthly: boolean;
 }
 
 interface FinancialMetrics {
@@ -183,10 +182,10 @@ export default function PnLDashboard() {
   const [showDataEntry, setShowDataEntry] = useState(false);
   const [rankingMetric, setRankingMetric] = useState<"profit" | "revenue" | "margin">("profit");
   
-  const [salesEntries, setSalesEntries] = useState<Array<{ salesChannel: string; totalAmount: number; invoiceCount: number }>>([]);
-  const [cogsEntries, setCogsEntries] = useState<Array<{ category: string; description: string; amount: number; wasteAmount: number }>>([]);
-  const [operatingExpensesEntries, setOperatingExpensesEntries] = useState<Array<{ expenseType: string; description: string; amount: number }>>([]);
-  const [fixedCostsEntries, setFixedCostsEntries] = useState<Array<{ costType: string; description: string; amount: number }>>([]);
+  const [salesEntries, setSalesEntries] = useState<Array<{ channel: string; totalAmount: number; invoiceCount: number }>>([]);
+  const [cogsEntries, setCogsEntries] = useState<Array<{ itemType: string; notes: string; amount: number; wasteAmount: number }>>([]);
+  const [operatingExpensesEntries, setOperatingExpensesEntries] = useState<Array<{ expenseType: string; notes: string; amount: number }>>([]);
+  const [fixedCostsEntries, setFixedCostsEntries] = useState<Array<{ costType: string; notes: string; amount: number }>>([]);
 
   const { data: branches = [], isLoading: loadingBranches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -359,7 +358,7 @@ export default function PnLDashboard() {
           periodId: selectedPeriodId, 
           salesData: salesEntries.map(s => ({
             ...s,
-            salesDate: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`,
+            date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`,
           }))
         });
       }
@@ -383,24 +382,24 @@ export default function PnLDashboard() {
   const loadExistingData = () => {
     if (completePnL) {
       setSalesEntries(completePnL.sales.map(s => ({
-        salesChannel: s.salesChannel,
+        channel: s.channel,
         totalAmount: s.totalAmount,
         invoiceCount: s.invoiceCount,
       })));
       setCogsEntries(completePnL.cogs.map(c => ({
-        category: c.category,
-        description: c.description || "",
+        itemType: c.itemType,
+        notes: c.notes || "",
         amount: c.amount,
         wasteAmount: c.wasteAmount || 0,
       })));
       setOperatingExpensesEntries(completePnL.operatingExpenses.map(e => ({
         expenseType: e.expenseType,
-        description: e.description || "",
+        notes: e.notes || "",
         amount: e.amount,
       })));
       setFixedCostsEntries(completePnL.fixedCosts.map(c => ({
         costType: c.costType,
-        description: c.description || "",
+        notes: c.notes || "",
         amount: c.amount,
       })));
     }
@@ -412,8 +411,8 @@ export default function PnLDashboard() {
   const salesByChannelData = useMemo(() => {
     if (!completePnL?.sales) return [];
     const grouped = completePnL.sales.reduce((acc, s) => {
-      const channel = SALES_CHANNELS.find(c => c.id === s.salesChannel);
-      acc[s.salesChannel] = (acc[s.salesChannel] || 0) + s.totalAmount;
+      const channelInfo = SALES_CHANNELS.find(c => c.id === s.channel);
+      acc[s.channel] = (acc[s.channel] || 0) + s.totalAmount;
       return acc;
     }, {} as Record<string, number>);
     return Object.entries(grouped).map(([channel, amount], i) => ({
@@ -850,7 +849,7 @@ export default function PnLDashboard() {
                           {completePnL.sales.length > 0 ? (
                             completePnL.sales.map((sale, index) => (
                               <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                <span>{SALES_CHANNELS.find(c => c.id === sale.salesChannel)?.label || sale.salesChannel}</span>
+                                <span>{SALES_CHANNELS.find(c => c.id === sale.channel)?.label || sale.channel}</span>
                                 <div className="text-left">
                                   <div className="font-semibold">{formatCurrency(sale.totalAmount)}</div>
                                   <div className="text-xs text-muted-foreground">{sale.invoiceCount} فاتورة</div>
@@ -877,8 +876,8 @@ export default function PnLDashboard() {
                             completePnL.cogs.map((cog, index) => (
                               <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                 <div>
-                                  <span>{COGS_CATEGORIES.find(c => c.id === cog.category)?.label || cog.category}</span>
-                                  {cog.description && <p className="text-xs text-muted-foreground">{cog.description}</p>}
+                                  <span>{COGS_CATEGORIES.find(c => c.id === cog.itemType)?.label || cog.itemType}</span>
+                                  {cog.notes && <p className="text-xs text-muted-foreground">{cog.notes}</p>}
                                 </div>
                                 <div className="text-left">
                                   <div className="font-semibold">{formatCurrency(cog.amount)}</div>
@@ -909,7 +908,7 @@ export default function PnLDashboard() {
                               <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                 <div>
                                   <span>{OPERATING_EXPENSE_TYPES.find(e => e.id === expense.expenseType)?.label || expense.expenseType}</span>
-                                  {expense.description && <p className="text-xs text-muted-foreground">{expense.description}</p>}
+                                  {expense.notes && <p className="text-xs text-muted-foreground">{expense.notes}</p>}
                                 </div>
                                 <div className="font-semibold">{formatCurrency(expense.amount)}</div>
                               </div>
@@ -935,7 +934,7 @@ export default function PnLDashboard() {
                               <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                 <div>
                                   <span>{FIXED_COST_TYPES.find(c => c.id === cost.costType)?.label || cost.costType}</span>
-                                  {cost.description && <p className="text-xs text-muted-foreground">{cost.description}</p>}
+                                  {cost.notes && <p className="text-xs text-muted-foreground">{cost.notes}</p>}
                                 </div>
                                 <div className="font-semibold">{formatCurrency(cost.amount)}</div>
                               </div>
@@ -1116,10 +1115,10 @@ export default function PnLDashboard() {
                     {salesEntries.map((entry, index) => (
                       <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
                         <Select
-                          value={entry.salesChannel}
+                          value={entry.channel}
                           onValueChange={(v) => {
                             const updated = [...salesEntries];
-                            updated[index].salesChannel = v;
+                            updated[index].channel = v;
                             setSalesEntries(updated);
                           }}
                         >
@@ -1165,7 +1164,7 @@ export default function PnLDashboard() {
                     ))}
                     <Button
                       variant="outline"
-                      onClick={() => setSalesEntries([...salesEntries, { salesChannel: "", totalAmount: 0, invoiceCount: 0 }])}
+                      onClick={() => setSalesEntries([...salesEntries, { channel: "", totalAmount: 0, invoiceCount: 0 }])}
                     >
                       <Plus className="h-4 w-4 ml-2" />
                       إضافة مبيعات
@@ -1184,10 +1183,10 @@ export default function PnLDashboard() {
                     {cogsEntries.map((entry, index) => (
                       <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
                         <Select
-                          value={entry.category}
+                          value={entry.itemType}
                           onValueChange={(v) => {
                             const updated = [...cogsEntries];
-                            updated[index].category = v;
+                            updated[index].itemType = v;
                             setCogsEntries(updated);
                           }}
                         >
@@ -1202,10 +1201,10 @@ export default function PnLDashboard() {
                         </Select>
                         <Input
                           placeholder="الوصف"
-                          value={entry.description}
+                          value={entry.notes}
                           onChange={(e) => {
                             const updated = [...cogsEntries];
-                            updated[index].description = e.target.value;
+                            updated[index].notes = e.target.value;
                             setCogsEntries(updated);
                           }}
                           className="flex-1"
@@ -1243,7 +1242,7 @@ export default function PnLDashboard() {
                     ))}
                     <Button
                       variant="outline"
-                      onClick={() => setCogsEntries([...cogsEntries, { category: "", description: "", amount: 0, wasteAmount: 0 }])}
+                      onClick={() => setCogsEntries([...cogsEntries, { itemType: "", notes: "", amount: 0, wasteAmount: 0 }])}
                     >
                       <Plus className="h-4 w-4 ml-2" />
                       إضافة تكلفة
@@ -1280,10 +1279,10 @@ export default function PnLDashboard() {
                         </Select>
                         <Input
                           placeholder="الوصف"
-                          value={entry.description}
+                          value={entry.notes}
                           onChange={(e) => {
                             const updated = [...operatingExpensesEntries];
-                            updated[index].description = e.target.value;
+                            updated[index].notes = e.target.value;
                             setOperatingExpensesEntries(updated);
                           }}
                           className="flex-1"
@@ -1310,7 +1309,7 @@ export default function PnLDashboard() {
                     ))}
                     <Button
                       variant="outline"
-                      onClick={() => setOperatingExpensesEntries([...operatingExpensesEntries, { expenseType: "", description: "", amount: 0 }])}
+                      onClick={() => setOperatingExpensesEntries([...operatingExpensesEntries, { expenseType: "", notes: "", amount: 0 }])}
                     >
                       <Plus className="h-4 w-4 ml-2" />
                       إضافة مصروف
@@ -1347,10 +1346,10 @@ export default function PnLDashboard() {
                         </Select>
                         <Input
                           placeholder="الوصف"
-                          value={entry.description}
+                          value={entry.notes}
                           onChange={(e) => {
                             const updated = [...fixedCostsEntries];
-                            updated[index].description = e.target.value;
+                            updated[index].notes = e.target.value;
                             setFixedCostsEntries(updated);
                           }}
                           className="flex-1"
@@ -1377,7 +1376,7 @@ export default function PnLDashboard() {
                     ))}
                     <Button
                       variant="outline"
-                      onClick={() => setFixedCostsEntries([...fixedCostsEntries, { costType: "", description: "", amount: 0 }])}
+                      onClick={() => setFixedCostsEntries([...fixedCostsEntries, { costType: "", notes: "", amount: 0 }])}
                     >
                       <Plus className="h-4 w-4 ml-2" />
                       إضافة تكلفة ثابتة

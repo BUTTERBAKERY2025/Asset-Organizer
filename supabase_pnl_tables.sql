@@ -1,5 +1,6 @@
 -- P&L (Profit & Loss) Dashboard Tables
 -- Execute this SQL in Supabase SQL Editor before deploying
+-- IMPORTANT: Column names must match Drizzle ORM schema in shared/schema.ts
 
 -- Financial Periods - الفترات المالية
 CREATE TABLE IF NOT EXISTS financial_periods (
@@ -20,8 +21,11 @@ CREATE TABLE IF NOT EXISTS financial_periods (
 
 CREATE INDEX IF NOT EXISTS idx_financial_periods_branch ON financial_periods(branch_id);
 CREATE INDEX IF NOT EXISTS idx_financial_periods_date ON financial_periods(year, month);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_branch_period ON financial_periods(branch_id, year, month);
 
 -- Financial Sales - المبيعات المالية
+-- channel: sales channel (cash, card, delivery_apps, corporate)
+-- date: sales date (YYYY-MM-DD format)
 CREATE TABLE IF NOT EXISTS financial_sales (
   id SERIAL PRIMARY KEY,
   period_id INTEGER NOT NULL REFERENCES financial_periods(id) ON DELETE CASCADE,
@@ -40,6 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_financial_sales_period ON financial_sales(period_
 CREATE INDEX IF NOT EXISTS idx_financial_sales_channel ON financial_sales(channel);
 
 -- Financial COGS (Cost of Goods Sold) - تكلفة البضائع المباعة
+-- item_type: type of cost (raw_materials, production, packaging, waste)
 CREATE TABLE IF NOT EXISTS financial_cogs (
   id SERIAL PRIMARY KEY,
   period_id INTEGER NOT NULL REFERENCES financial_periods(id) ON DELETE CASCADE,
@@ -55,6 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_financial_cogs_period ON financial_cogs(period_id
 CREATE INDEX IF NOT EXISTS idx_financial_cogs_type ON financial_cogs(item_type);
 
 -- Financial Operating Expenses - المصروفات التشغيلية
+-- expense_type: type of expense (salaries, utilities, maintenance, marketing, supplies, other)
 CREATE TABLE IF NOT EXISTS financial_operating_expenses (
   id SERIAL PRIMARY KEY,
   period_id INTEGER NOT NULL REFERENCES financial_periods(id) ON DELETE CASCADE,
@@ -68,6 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_financial_opex_period ON financial_operating_expe
 CREATE INDEX IF NOT EXISTS idx_financial_opex_type ON financial_operating_expenses(expense_type);
 
 -- Financial Fixed Costs - التكاليف الثابتة
+-- cost_type: type of fixed cost (rent, licenses, insurance, taxes, depreciation)
 CREATE TABLE IF NOT EXISTS financial_fixed_costs (
   id SERIAL PRIMARY KEY,
   period_id INTEGER NOT NULL REFERENCES financial_periods(id) ON DELETE CASCADE,
@@ -106,6 +113,3 @@ CREATE TABLE IF NOT EXISTS financial_metrics (
 
 CREATE INDEX IF NOT EXISTS idx_financial_metrics_period ON financial_metrics(period_id);
 CREATE INDEX IF NOT EXISTS idx_financial_metrics_rating ON financial_metrics(rating);
-
--- Unique constraint to prevent duplicate periods per branch
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_branch_period ON financial_periods(branch_id, year, month);
