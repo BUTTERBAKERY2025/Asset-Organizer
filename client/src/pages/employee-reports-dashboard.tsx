@@ -867,37 +867,36 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `مقارنة_الفروع_${selectedMonth}.xlsx`);
   };
 
-  const exportBranchComparisonToPDF = () => {
+  const exportBranchComparisonToPDF = async () => {
     if (branchComparisonData.length === 0) return;
-    const tableBody = [
-      [
-        { text: "الفرع", style: "tableHeader" },
-        { text: "الموظفين", style: "tableHeader" },
-        { text: "السعودة %", style: "tableHeader" },
-        { text: "الرواتب", style: "tableHeader" },
-        { text: "الحضور %", style: "tableHeader" },
-        { text: "الساعات", style: "tableHeader" },
-      ],
-      ...branchComparisonData.map((branch) => [
-        { text: branch.branchName, alignment: "right" as const },
-        { text: String(branch.employeeCount), alignment: "center" as const, font: "Roboto" },
-        { text: `${branch.saudiPercentage}%`, alignment: "center" as const, font: "Roboto" },
-        { text: formatNumber(branch.totalSalary), alignment: "center" as const, font: "Roboto" },
-        { text: `${branch.attendanceRate}%`, alignment: "center" as const, font: "Roboto" },
-        { text: String(branch.totalHours), alignment: "center" as const, font: "Roboto" },
-      ]),
-    ];
-    const docDefinition: any = {
-      pageOrientation: "landscape",
-      content: [
-        { text: "تقرير مقارنة الفروع", style: "header", alignment: "center" },
-        { text: [{ text: "الشهر: " }, { text: selectedMonth, font: "Roboto" }], alignment: "center", margin: [0, 0, 0, 20] },
-        { table: { headerRows: 1, widths: ["*", "auto", "auto", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
-      ],
-      styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
-      defaultStyle: { fontSize: 9 },
-    };
-    downloadArabicPdf(docDefinition, `مقارنة_الفروع_${selectedMonth}.pdf`);
+    try {
+      const response = await fetch("/api/pdf/branch-comparison", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          month: selectedMonth,
+          branches: branchComparisonData.map((b) => ({
+            branchName: b.branchName,
+            employeeCount: b.employeeCount,
+            saudiPercentage: b.saudiPercentage,
+            totalSalary: b.totalSalary,
+            attendanceRate: b.attendanceRate,
+            totalHours: b.totalHours,
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `مقارنة_الفروع_${selectedMonth}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting branch comparison PDF:", error);
+    }
   };
 
   const exportJobComparisonToExcel = () => {
@@ -924,37 +923,37 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `مقارنة_الوظائف_${selectedMonth}.xlsx`);
   };
 
-  const exportJobComparisonToPDF = () => {
+  const exportJobComparisonToPDF = async () => {
     if (jobComparisonData.length === 0) return;
-    const tableBody: any[] = [[
-      { text: "الوظيفة", style: "tableHeader" },
-      { text: "الفرع", style: "tableHeader" },
-      { text: "العدد", style: "tableHeader" },
-      { text: "متوسط الراتب", style: "tableHeader" },
-      { text: "الفرق", style: "tableHeader" },
-    ]];
-    jobComparisonData.forEach((job) => {
-      job.branches.forEach((branch, idx) => {
-        tableBody.push([
-          { text: idx === 0 ? job.jobTitle : "", alignment: "right" as const },
-          { text: branch.branchName, alignment: "right" as const },
-          { text: String(branch.count), alignment: "center" as const, font: "Roboto" },
-          { text: formatNumber(branch.avgSalary), alignment: "center" as const, font: "Roboto" },
-          { text: formatNumber(branch.avgSalary - job.avgSalary), alignment: "center" as const, color: branch.avgSalary >= job.avgSalary ? "green" : "red", font: "Roboto" },
-        ]);
+    try {
+      const response = await fetch("/api/pdf/job-comparison", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          month: selectedMonth,
+          jobs: jobComparisonData.map((job) => ({
+            jobTitle: job.jobTitle,
+            avgSalary: job.avgSalary,
+            branches: job.branches.map((b) => ({
+              branchName: b.branchName,
+              count: b.count,
+              avgSalary: b.avgSalary,
+            })),
+          })),
+        }),
       });
-    });
-    const docDefinition: any = {
-      pageOrientation: "portrait",
-      content: [
-        { text: "تقرير مقارنة الوظائف عبر الفروع", style: "header", alignment: "center" },
-        { text: [{ text: "الشهر: " }, { text: selectedMonth, font: "Roboto" }], alignment: "center", margin: [0, 0, 0, 20] },
-        { table: { headerRows: 1, widths: ["*", "*", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
-      ],
-      styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
-      defaultStyle: { fontSize: 9 },
-    };
-    downloadArabicPdf(docDefinition, `مقارنة_الوظائف_${selectedMonth}.pdf`);
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `مقارنة_الوظائف_${selectedMonth}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting job comparison PDF:", error);
+    }
   };
 
   const exportSalariesTableToExcel = () => {
@@ -983,43 +982,40 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `جدول_الرواتب_التفصيلي_${selectedMonth}.xlsx`);
   };
 
-  const exportSalariesTableToPDF = () => {
+  const exportSalariesTableToPDF = async () => {
     if (filteredEmployees.length === 0) return;
-    const tableBody: any[] = [[
-      { text: "م", style: "tableHeader" },
-      { text: "الموظف", style: "tableHeader" },
-      { text: "الوظيفة", style: "tableHeader" },
-      { text: "الراتب", style: "tableHeader" },
-      { text: "البدلات", style: "tableHeader" },
-      { text: "التأمينات", style: "tableHeader" },
-      { text: "الصافي", style: "tableHeader" },
-    ]];
-    filteredEmployees.forEach((emp, index) => {
-      const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
-      const storedIns = emp.socialInsuranceDeduction || 0;
-      const insurance = emp.nationality === "سعودي" ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975)) : 0;
-      const netSalary = (emp.totalSalary || emp.salary || 0) - insurance;
-      tableBody.push([
-        { text: String(index + 1), alignment: "center" as const, font: "Roboto" },
-        { text: emp.employeeName, alignment: "right" as const },
-        { text: emp.jobTitle, alignment: "right" as const },
-        { text: formatNumber(emp.salary || 0), alignment: "center" as const, font: "Roboto" },
-        { text: formatNumber(allowances), alignment: "center" as const, font: "Roboto" },
-        { text: insurance > 0 ? formatNumber(insurance) : "-", alignment: "center" as const, color: "red", font: "Roboto" },
-        { text: formatNumber(netSalary), alignment: "center" as const, bold: true, font: "Roboto" },
-      ]);
-    });
-    const docDefinition: any = {
-      pageOrientation: "landscape",
-      content: [
-        { text: "جدول الرواتب التفصيلي", style: "header", alignment: "center" },
-        { text: [{ text: "الشهر: " }, { text: selectedMonth, font: "Roboto" }], alignment: "center", margin: [0, 0, 0, 20] },
-        { table: { headerRows: 1, widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto"], body: tableBody }, layout: "lightHorizontalLines" },
-      ],
-      styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }, tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" } },
-      defaultStyle: { fontSize: 9 },
-    };
-    downloadArabicPdf(docDefinition, `جدول_الرواتب_${selectedMonth}.pdf`);
+    try {
+      const employees = filteredEmployees.map((emp) => {
+        const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
+        const storedIns = emp.socialInsuranceDeduction || 0;
+        const insurance = emp.nationality === "سعودي" ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975)) : 0;
+        const netSalary = (emp.totalSalary || emp.salary || 0) - insurance;
+        return {
+          employeeName: emp.employeeName,
+          jobTitle: emp.jobTitle,
+          salary: emp.salary || 0,
+          allowances,
+          insurance,
+          netSalary,
+        };
+      });
+      const response = await fetch("/api/pdf/salaries-table", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ month: selectedMonth, employees }),
+      });
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `جدول_الرواتب_${selectedMonth}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting salaries table PDF:", error);
+    }
   };
 
   const exportAnalyticsToExcel = () => {
@@ -1109,53 +1105,38 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `مؤشرات_الأداء_${selectedMonth}.xlsx`);
   };
 
-  const exportKPIsToPDF = () => {
-    const docDefinition: any = {
-      pageOrientation: "portrait",
-      content: [
-        { text: "تقرير مؤشرات الأداء الرئيسية", style: "header", alignment: "center" },
-        { text: [{ text: "الشهر: " }, { text: selectedMonth, font: "Roboto" }], alignment: "center", margin: [0, 0, 0, 20] },
-        {
-          columns: [
-            { text: [{ text: "إجمالي الموظفين: " }, { text: formatNumber(overviewStats.totalEmployees), font: "Roboto" }], width: "*" },
-            { text: [{ text: "نسبة الحضور: " }, { text: `${overviewStats.attendanceRate}%`, font: "Roboto" }], width: "*" },
-          ],
-          margin: [0, 0, 0, 10],
-        },
-        {
-          columns: [
-            { text: [{ text: "إجمالي الرواتب: " }, { text: formatCurrency(overviewStats.totalSalaries), font: "Roboto" }], width: "*" },
-            { text: [{ text: "نسبة السعودة: " }, { text: `${overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%`, font: "Roboto" }], width: "*" },
-          ],
-          margin: [0, 0, 0, 10],
-        },
-        { text: [{ text: "إجمالي التأمينات الاجتماعية: " }, { text: formatCurrency(overviewStats.totalInsurance), font: "Roboto" }], margin: [0, 0, 0, 20] },
-        { text: "أعلى 10 موظفين راتباً", style: "subheader", margin: [0, 10, 0, 10] },
-        {
-          table: {
-            headerRows: 1,
-            widths: ["auto", "*", "auto", "auto"],
-            body: [
-              [{ text: "م", style: "tableHeader" }, { text: "الموظف", style: "tableHeader" }, { text: "الوظيفة", style: "tableHeader" }, { text: "الراتب", style: "tableHeader" }],
-              ...topEmployeesBySalary.map((emp, index) => [
-                { text: String(index + 1), alignment: "center" as const, font: "Roboto" },
-                { text: emp.employeeName, alignment: "right" as const },
-                { text: emp.jobTitle, alignment: "right" as const },
-                { text: formatNumber(emp.totalSalary || emp.salary), alignment: "center" as const, font: "Roboto" },
-              ]),
-            ],
-          },
-          layout: "lightHorizontalLines",
-        },
-      ],
-      styles: {
-        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
-        subheader: { fontSize: 14, bold: true },
-        tableHeader: { bold: true, fontSize: 10, fillColor: "#f3f4f6", alignment: "center" },
-      },
-      defaultStyle: { fontSize: 10 },
-    };
-    downloadArabicPdf(docDefinition, `مؤشرات_الأداء_${selectedMonth}.pdf`);
+  const exportKPIsToPDF = async () => {
+    try {
+      const saudiPercentage = overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0;
+      const response = await fetch("/api/pdf/kpis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          month: selectedMonth,
+          totalEmployees: overviewStats.totalEmployees,
+          attendanceRate: overviewStats.attendanceRate,
+          totalSalaries: overviewStats.totalSalaries,
+          saudiPercentage,
+          totalInsurance: overviewStats.totalInsurance,
+          topEmployees: topEmployeesBySalary.map((emp) => ({
+            employeeName: emp.employeeName,
+            jobTitle: emp.jobTitle,
+            salary: emp.totalSalary || emp.salary,
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `مؤشرات_الأداء_${selectedMonth}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting KPIs PDF:", error);
+    }
   };
 
   // ==================== NEW ANALYTICS DATA ====================
@@ -4877,32 +4858,35 @@ export default function EmployeeReportsDashboardPage() {
                   <FileSpreadsheet className="w-4 h-4 ml-1" />
                   Excel
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const docDefinition: any = {
-                    content: [
-                      { text: "تقرير الشهادات الصحية", style: "header", alignment: "center" },
-                      { text: [{ text: "الشهر: " }, { text: selectedMonth, font: "Roboto" }], alignment: "center", margin: [0, 5, 0, 15] },
-                      { text: [{ text: "نسبة الامتثال: " }, { text: `${healthCertificateAnalysis.complianceRate}%`, font: "Roboto" }], alignment: "center", margin: [0, 0, 0, 10] },
-                      {
-                        table: {
-                          headerRows: 1,
-                          widths: ["*", "*", "*", "*", "*"],
-                          body: [
-                            ["الموظف", "الفرع", "الوظيفة", "الحالة", "تاريخ الانتهاء"],
-                            ...healthCertificateAnalysis.needsRenewal.map(emp => [
-                              emp.employeeName,
-                              getBranchName(emp.branchId),
-                              emp.jobTitle,
-                              emp.healthCertificate === "valid" ? "صالحة" : emp.healthCertificate === "expired" ? "منتهية" : "لا توجد",
-                              { text: emp.healthCertificateExpiry || "--", font: "Roboto" }
-                            ])
-                          ]
-                        }
-                      }
-                    ],
-                    styles: { header: { fontSize: 18, bold: true } }
-                  };
-                  downloadArabicPdf(docDefinition, `health_certificates_${selectedMonth}.pdf`);
+                <Button variant="outline" size="sm" onClick={async () => {
+                  try {
+                    const response = await fetch("/api/pdf/health-certificates", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({
+                        month: selectedMonth,
+                        complianceRate: healthCertificateAnalysis.complianceRate,
+                        employees: healthCertificateAnalysis.needsRenewal.map(emp => ({
+                          employeeName: emp.employeeName,
+                          branchName: getBranchName(emp.branchId),
+                          jobTitle: emp.jobTitle,
+                          status: emp.healthCertificate === "valid" ? "صالحة" : emp.healthCertificate === "expired" ? "منتهية" : "لا توجد",
+                          expiryDate: emp.healthCertificateExpiry || "--",
+                        })),
+                      }),
+                    });
+                    if (!response.ok) throw new Error("Failed to generate PDF");
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `health_certificates_${selectedMonth}.pdf`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                  } catch (error) {
+                    console.error("Error exporting health certificates PDF:", error);
+                  }
                 }} data-testid="button-export-health-pdf">
                   <FileText className="w-4 h-4 ml-1" />
                   PDF
@@ -5202,42 +5186,41 @@ export default function EmployeeReportsDashboardPage() {
                   <FileSpreadsheet className="w-4 h-4 ml-1" />
                   Excel
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => {
+                <Button variant="outline" size="sm" onClick={async () => {
                   if (!comprehensiveComparisons) return;
-                  const docDefinition: any = {
-                    content: [
-                      { text: "تقرير المقارنات الشامل", style: "header", alignment: "center" },
-                      { text: [{ text: "الشهر: " }, { text: selectedMonth, font: "Roboto" }], alignment: "center", margin: [0, 5, 0, 15] },
-                      { text: "مقارنة الفروع", style: "subheader", margin: [0, 10, 0, 5] },
-                      {
-                        table: {
-                          headerRows: 1,
-                          widths: ["*", "auto", "auto", "auto", "auto"],
-                          body: [
-                            ["الفرع", "العدد", "المتوسط", "الأعلى", "الأقل"],
-                            ...comprehensiveComparisons.branchSalaryStats.map(b => [
-                              b.branchName, { text: b.employeeCount.toString(), font: "Roboto" }, { text: b.avgSalary.toString(), font: "Roboto" }, { text: b.maxSalary.toString(), font: "Roboto" }, { text: b.minSalary.toString(), font: "Roboto" }
-                            ])
-                          ]
-                        }
-                      },
-                      { text: "مقارنة الجنسيات", style: "subheader", margin: [0, 15, 0, 5] },
-                      {
-                        table: {
-                          headerRows: 1,
-                          widths: ["*", "auto", "auto", "auto"],
-                          body: [
-                            ["الجنسية", "العدد", "النسبة", "متوسط الراتب"],
-                            ...comprehensiveComparisons.nationalityStats.map(n => [
-                              n.nationality, { text: n.count.toString(), font: "Roboto" }, { text: `${n.percentage}%`, font: "Roboto" }, { text: n.avgSalary.toString(), font: "Roboto" }
-                            ])
-                          ]
-                        }
-                      }
-                    ],
-                    styles: { header: { fontSize: 18, bold: true }, subheader: { fontSize: 14, bold: true } }
-                  };
-                  downloadArabicPdf(docDefinition, `comparisons_report_${selectedMonth}.pdf`);
+                  try {
+                    const response = await fetch("/api/pdf/comparisons", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({
+                        month: selectedMonth,
+                        branchStats: comprehensiveComparisons.branchSalaryStats.map(b => ({
+                          branchName: b.branchName,
+                          employeeCount: b.employeeCount,
+                          avgSalary: b.avgSalary,
+                          maxSalary: b.maxSalary,
+                          minSalary: b.minSalary,
+                        })),
+                        nationalityStats: comprehensiveComparisons.nationalityStats.map(n => ({
+                          nationality: n.nationality,
+                          count: n.count,
+                          percentage: n.percentage,
+                          avgSalary: n.avgSalary,
+                        })),
+                      }),
+                    });
+                    if (!response.ok) throw new Error("Failed to generate PDF");
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `comparisons_report_${selectedMonth}.pdf`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                  } catch (error) {
+                    console.error("Error exporting comparisons PDF:", error);
+                  }
                 }} data-testid="button-export-comparisons-pdf">
                   <FileText className="w-4 h-4 ml-1" />
                   PDF
