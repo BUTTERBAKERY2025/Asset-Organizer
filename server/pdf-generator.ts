@@ -1,6 +1,8 @@
 import PdfPrinter from "pdfmake";
 import path from "path";
 import { fileURLToPath } from "url";
+// @ts-ignore
+import ArabicReshaper from "arabic-reshaper";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +17,16 @@ const fonts = {
 };
 
 const printer = new PdfPrinter(fonts);
+
+function shapeArabic(text: string): string {
+  if (!text) return text;
+  try {
+    const reshaped = ArabicReshaper.convertArabic(text);
+    return reshaped.split('').reverse().join('');
+  } catch (e) {
+    return text;
+  }
+}
 
 export interface SalaryClosingEmployee {
   employeeName: string;
@@ -57,21 +69,21 @@ export function generateSalaryClosingPdf(data: SalaryClosingPdfData): Promise<Bu
 
       const tableBody = [
         [
-          { text: "م", style: "tableHeader" },
-          { text: "الموظف", style: "tableHeader" },
-          { text: "الوظيفة", style: "tableHeader" },
-          { text: "الحضور", style: "tableHeader" },
-          { text: "الغياب", style: "tableHeader" },
-          { text: "الساعات", style: "tableHeader" },
-          { text: "الراتب", style: "tableHeader" },
-          { text: "البدلات", style: "tableHeader" },
-          { text: "التأمينات", style: "tableHeader" },
-          { text: "الصافي", style: "tableHeader" },
+          { text: shapeArabic("م"), style: "tableHeader" },
+          { text: shapeArabic("الموظف"), style: "tableHeader" },
+          { text: shapeArabic("الوظيفة"), style: "tableHeader" },
+          { text: shapeArabic("الحضور"), style: "tableHeader" },
+          { text: shapeArabic("الغياب"), style: "tableHeader" },
+          { text: shapeArabic("الساعات"), style: "tableHeader" },
+          { text: shapeArabic("الراتب"), style: "tableHeader" },
+          { text: shapeArabic("البدلات"), style: "tableHeader" },
+          { text: shapeArabic("التأمينات"), style: "tableHeader" },
+          { text: shapeArabic("الصافي"), style: "tableHeader" },
         ],
         ...data.employees.map((emp, index) => [
           { text: String(index + 1), alignment: "center" as const },
-          { text: emp.employeeName, alignment: "right" as const },
-          { text: emp.jobTitle, alignment: "right" as const },
+          { text: shapeArabic(emp.employeeName), alignment: "right" as const },
+          { text: shapeArabic(emp.jobTitle), alignment: "right" as const },
           { text: String(emp.presentDays), alignment: "center" as const },
           { text: String(emp.absentDays), alignment: "center" as const },
           { text: String(emp.totalHours), alignment: "center" as const },
@@ -85,14 +97,14 @@ export function generateSalaryClosingPdf(data: SalaryClosingPdfData): Promise<Bu
       const docDefinition: any = {
         pageOrientation: "landscape",
         content: [
-          { text: "تقرير إغلاق الرواتب الشهرية", style: "header", alignment: "center" },
+          { text: shapeArabic("تقرير إغلاق الرواتب الشهرية"), style: "header", alignment: "center" },
           {
-            text: `الفرع: ${data.branchName} | الشهر: ${data.month}`,
+            text: shapeArabic(`الفرع: ${data.branchName} | الشهر: ${data.month}`),
             alignment: "center",
             margin: [0, 0, 0, 10],
           },
           {
-            text: `عدد الموظفين: ${data.employees.length} | إجمالي الرواتب: ${formatCurrency(totals.netSalary)}`,
+            text: shapeArabic(`عدد الموظفين: ${data.employees.length} | إجمالي الرواتب: ${formatNumber(totals.netSalary)} ريال`),
             alignment: "center",
             margin: [0, 0, 0, 20],
           },
@@ -110,11 +122,11 @@ export function generateSalaryClosingPdf(data: SalaryClosingPdfData): Promise<Bu
               widths: ["*", "auto", "auto", "auto", "auto"],
               body: [
                 [
-                  { text: "الإجمالي", bold: true, alignment: "right" as const },
-                  { text: formatCurrency(totals.baseSalary), alignment: "center" as const },
-                  { text: formatCurrency(totals.allowances), alignment: "center" as const },
-                  { text: formatCurrency(totals.socialInsurance), alignment: "center" as const, color: "red" },
-                  { text: formatCurrency(totals.netSalary), alignment: "center" as const, bold: true },
+                  { text: shapeArabic("الإجمالي"), bold: true, alignment: "right" as const },
+                  { text: shapeArabic(`${formatNumber(totals.baseSalary)} ريال`), alignment: "center" as const },
+                  { text: shapeArabic(`${formatNumber(totals.allowances)} ريال`), alignment: "center" as const },
+                  { text: shapeArabic(`${formatNumber(totals.socialInsurance)} ريال`), alignment: "center" as const, color: "red" },
+                  { text: shapeArabic(`${formatNumber(totals.netSalary)} ريال`), alignment: "center" as const, bold: true },
                 ],
               ],
             },
