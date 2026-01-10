@@ -67,7 +67,7 @@ import {
 } from "lucide-react";
 import type { BranchEmployee, EmployeeSetting, EmployeeTransferRequest, Branch } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, XCircle, ArrowRight, History } from "lucide-react";
+import { CheckCircle, XCircle, ArrowRight, History, TrendingUp } from "lucide-react";
 
 // تمت إزالة JOB_TITLES و NATIONALITIES - الآن يتم استخدام البيانات من قاعدة البيانات
 
@@ -1662,6 +1662,10 @@ export default function BranchEmployeesPage() {
             <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
               <Network className="w-4 h-4 ml-2" />
               الهيكل الوظيفي
+            </Button>
+            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => navigate("/pnl-dashboard")} data-testid="button-pnl-dashboard">
+              <TrendingUp className="w-4 h-4 ml-2" />
+              الأرباح والخسائر
             </Button>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
