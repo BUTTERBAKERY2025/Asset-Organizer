@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
+import { generateSalaryClosingPdf, type SalaryClosingPdfData } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
@@ -10449,6 +10450,26 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting pending transfers for branch:", error);
       res.status(500).json({ error: "فشل في جلب طلبات النقل المعلقة" });
+    }
+  });
+
+  // PDF Generation endpoint for salary closing report
+  app.post("/api/pdf/salary-closing", isAuthenticated, async (req, res) => {
+    try {
+      const data: SalaryClosingPdfData = req.body;
+      
+      if (!data.branchName || !data.month || !data.employees || !Array.isArray(data.employees)) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+
+      const pdfBuffer = await generateSalaryClosingPdf(data);
+      
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=salary_closing_${data.month}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating salary closing PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
     }
   });
 

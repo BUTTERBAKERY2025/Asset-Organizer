@@ -785,7 +785,7 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.xlsx`);
   };
 
-  const exportSalaryClosingToPDF = () => {
+  const exportSalaryClosingToPDF = async () => {
     console.log("PDF export button clicked, data length:", salaryClosingData.length);
     if (salaryClosingData.length === 0) {
       console.log("No data to export");
@@ -793,85 +793,46 @@ export default function EmployeeReportsDashboardPage() {
       return;
     }
     
-    const tableBody = [
-      [
-        { text: "م", style: "tableHeader" },
-        { text: "الموظف", style: "tableHeader" },
-        { text: "الوظيفة", style: "tableHeader" },
-        { text: "الحضور", style: "tableHeader" },
-        { text: "الغياب", style: "tableHeader" },
-        { text: "الساعات", style: "tableHeader" },
-        { text: "الراتب", style: "tableHeader" },
-        { text: "البدلات", style: "tableHeader" },
-        { text: "التأمينات", style: "tableHeader" },
-        { text: "الصافي", style: "tableHeader" },
-      ],
-      ...salaryClosingData.map((emp, index) => [
-        { text: String(index + 1), alignment: "center" as const },
-        { text: emp.employeeName, alignment: "right" as const },
-        { text: emp.jobTitle, alignment: "right" as const },
-        { text: String(emp.presentDays), alignment: "center" as const },
-        { text: String(emp.absentDays), alignment: "center" as const },
-        { text: String(emp.totalHours), alignment: "center" as const },
-        { text: formatNumber(emp.baseSalary), alignment: "center" as const },
-        { text: formatNumber(emp.allowances), alignment: "center" as const },
-        { text: emp.socialInsurance > 0 ? formatNumber(emp.socialInsurance) : "-", alignment: "center" as const, color: "red" },
-        { text: formatNumber(emp.netSalary), alignment: "center" as const, bold: true },
-      ]),
-    ];
-
-    const totals = salaryClosingData.reduce((acc, emp) => ({
-      baseSalary: acc.baseSalary + emp.baseSalary,
-      allowances: acc.allowances + emp.allowances,
-      socialInsurance: acc.socialInsurance + emp.socialInsurance,
-      netSalary: acc.netSalary + emp.netSalary,
-    }), { baseSalary: 0, allowances: 0, socialInsurance: 0, netSalary: 0 });
-
-    const unlinkedWarning = salaryClosingUnlinkedCount > 0 
-      ? { text: `تحذير: ${salaryClosingUnlinkedCount} سجل حضور غير مرتبط (${salaryClosingUnlinkedSummary.presentRecords} سجل حضور، ${Math.round(salaryClosingUnlinkedSummary.totalHours * 10) / 10} ساعة) - غير مضمنة في هذا التقرير. راجع ملف Excel للتفاصيل والمراجعة.`, color: "orange", margin: [0, 15, 0, 0], fontSize: 9 }
-      : null;
-
-    const docDefinition: any = {
-      pageOrientation: "landscape",
-      content: [
-        { text: "Salary Closing Report - " + getBranchName(salaryClosingBranch), style: "header", alignment: "center" },
-        { text: "Month: " + salaryClosingMonth + " | Employees: " + salaryClosingData.length + " | Total: " + formatCurrency(totals.netSalary), alignment: "center", margin: [0, 0, 0, 20] },
-        {
-          table: {
-            headerRows: 1,
-            widths: ["auto", "*", "auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
-            body: tableBody,
-          },
-          layout: "lightHorizontalLines",
-        },
-        { text: "", margin: [0, 20, 0, 0] },
-        {
-          table: {
-            widths: ["*", "auto", "auto", "auto", "auto"],
-            body: [
-              [
-                { text: "Total", bold: true, alignment: "right" as const },
-                { text: formatCurrency(totals.baseSalary), alignment: "center" as const },
-                { text: formatCurrency(totals.allowances), alignment: "center" as const },
-                { text: formatCurrency(totals.socialInsurance), alignment: "center" as const, color: "red" },
-                { text: formatCurrency(totals.netSalary), alignment: "center" as const, bold: true },
-              ],
-            ],
-          },
-        },
-        ...(unlinkedWarning ? [unlinkedWarning] : []),
-      ],
-      styles: {
-        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
-        tableHeader: { bold: true, fontSize: 9, fillColor: "#f3f4f6", alignment: "center" },
-      },
-      defaultStyle: { fontSize: 8 },
-    };
-
     try {
-      console.log("Calling downloadArabicPdf...");
-      downloadArabicPdf(docDefinition, `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`);
-      console.log("downloadArabicPdf completed");
+      const requestData = {
+        branchName: getBranchName(salaryClosingBranch),
+        month: salaryClosingMonth,
+        employees: salaryClosingData.map(emp => ({
+          employeeName: emp.employeeName,
+          jobTitle: emp.jobTitle,
+          presentDays: emp.presentDays,
+          absentDays: emp.absentDays,
+          totalHours: emp.totalHours,
+          baseSalary: emp.baseSalary,
+          allowances: emp.allowances,
+          socialInsurance: emp.socialInsurance,
+          netSalary: emp.netSalary,
+        })),
+      };
+
+      const response = await fetch("/api/pdf/salary-closing", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        throw new Error("فشل في إنشاء ملف PDF");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      console.log("PDF download completed");
     } catch (error) {
       console.error("Error in exportSalaryClosingToPDF:", error);
       alert("خطأ في تصدير PDF: " + (error as Error).message);
