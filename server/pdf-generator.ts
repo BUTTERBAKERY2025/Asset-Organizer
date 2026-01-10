@@ -1,6 +1,14 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
-import { getPdfHeaderHtml, getPdfHeaderStyles } from "./pdf-assets";
+import { 
+  getPdfHeaderHtml, 
+  getPdfHeaderStyles, 
+  getPdfFooterStyles, 
+  getPdfFooterHtml, 
+  getSummaryHtml,
+  formatPrintDate,
+  type PdfMetadata 
+} from "./pdf-assets";
 
 export interface SalaryClosingEmployee {
   employeeName: string;
@@ -73,6 +81,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     }
     
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     
     .info-row {
       text-align: center;
@@ -145,37 +154,20 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       <td style="text-align: center;">${formatNumber(totals.netSalary)} ريال</td>
     </tr>
   </table>
+  
+  ${getSummaryHtml('ملخص إغلاق الرواتب', [
+    { label: 'إجمالي الموظفين', value: formatNumber(data.employees.length) },
+    { label: 'إجمالي الرواتب الأساسية', value: formatNumber(totals.baseSalary) + ' ريال' },
+    { label: 'إجمالي البدلات', value: formatNumber(totals.allowances) + ' ريال' },
+    { label: 'إجمالي التأمينات', value: formatNumber(totals.socialInsurance) + ' ريال' },
+    { label: 'صافي الرواتب', value: formatNumber(totals.netSalary) + ' ريال' },
+    { label: 'متوسط الراتب', value: formatNumber(Math.round(totals.netSalary / data.employees.length)) + ' ريال' },
+  ])}
 </body>
 </html>
   `;
 
-  console.log("[PDF] Starting Puppeteer with @sparticuz/chromium...");
-  
-  const browser = await puppeteer.launch({
-    args: chromium.args,
-    executablePath: await chromium.executablePath(),
-    headless: true,
-  });
-
-  try {
-    console.log("[PDF] Browser launched, creating page...");
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    
-    console.log("[PDF] Generating PDF...");
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      landscape: true,
-      printBackground: true,
-      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
-    });
-
-    console.log("[PDF] PDF generated successfully, size:", pdfBuffer.length);
-    return Buffer.from(pdfBuffer);
-  } finally {
-    await browser.close();
-    console.log("[PDF] Browser closed");
-  }
+  return await generatePdfFromHtml(html, { landscape: true });
 }
 
 export interface BranchComparisonData {
@@ -215,6 +207,7 @@ export async function generateBranchComparisonPdf(data: BranchComparisonPdfData)
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
     th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
@@ -237,10 +230,17 @@ export async function generateBranchComparisonPdf(data: BranchComparisonPdfData)
     </thead>
     <tbody>${rows}</tbody>
   </table>
+  
+  ${getSummaryHtml('ملخص مقارنة الفروع', [
+    { label: 'عدد الفروع', value: formatNumber(data.branches.length) },
+    { label: 'إجمالي الموظفين', value: formatNumber(data.branches.reduce((sum, b) => sum + b.employeeCount, 0)) },
+    { label: 'إجمالي الرواتب', value: formatNumber(data.branches.reduce((sum, b) => sum + b.totalSalary, 0)) + ' ريال' },
+    { label: 'متوسط نسبة الحضور', value: (data.branches.reduce((sum, b) => sum + b.attendanceRate, 0) / data.branches.length).toFixed(1) + '%' },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, true);
+  return await generatePdfFromHtml(html, { landscape: true });
 }
 
 export interface JobBranchData {
@@ -288,6 +288,7 @@ export async function generateJobComparisonPdf(data: JobComparisonPdfData): Prom
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
     th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
@@ -308,10 +309,16 @@ export async function generateJobComparisonPdf(data: JobComparisonPdfData): Prom
     </thead>
     <tbody>${rows.join('')}</tbody>
   </table>
+  
+  ${getSummaryHtml('ملخص مقارنة الوظائف', [
+    { label: 'عدد الوظائف', value: formatNumber(data.jobs.length) },
+    { label: 'إجمالي الموظفين', value: formatNumber(data.jobs.reduce((sum, j) => sum + j.branches.reduce((s, b) => s + b.count, 0), 0)) },
+    { label: 'متوسط الرواتب العام', value: formatNumber(Math.round(data.jobs.reduce((sum, j) => sum + j.avgSalary, 0) / data.jobs.length)) + ' ريال' },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, false);
+  return await generatePdfFromHtml(html, { landscape: false });
 }
 
 export interface SalaryTableEmployee {
@@ -351,6 +358,7 @@ export async function generateSalariesTablePdf(data: SalaryTablePdfData): Promis
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
     th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
@@ -373,10 +381,18 @@ export async function generateSalariesTablePdf(data: SalaryTablePdfData): Promis
     </thead>
     <tbody>${rows}</tbody>
   </table>
+  
+  ${getSummaryHtml('ملخص جدول الرواتب', [
+    { label: 'عدد الموظفين', value: formatNumber(data.employees.length) },
+    { label: 'إجمالي الرواتب', value: formatNumber(data.employees.reduce((s, e) => s + e.salary, 0)) + ' ريال' },
+    { label: 'إجمالي البدلات', value: formatNumber(data.employees.reduce((s, e) => s + e.allowances, 0)) + ' ريال' },
+    { label: 'إجمالي التأمينات', value: formatNumber(data.employees.reduce((s, e) => s + e.insurance, 0)) + ' ريال' },
+    { label: 'صافي الرواتب', value: formatNumber(data.employees.reduce((s, e) => s + e.netSalary, 0)) + ' ريال' },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, true);
+  return await generatePdfFromHtml(html, { landscape: true });
 }
 
 export interface TopEmployee {
@@ -415,6 +431,7 @@ export async function generateKPIsPdf(data: KPIsPdfData): Promise<Buffer> {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 12px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }
     .kpi-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; text-align: center; }
     .kpi-value { font-size: 24px; font-weight: bold; color: #1e40af; }
@@ -462,10 +479,18 @@ export async function generateKPIsPdf(data: KPIsPdfData): Promise<Buffer> {
     </thead>
     <tbody>${topRows}</tbody>
   </table>
+  
+  ${getSummaryHtml('ملخص مؤشرات الأداء', [
+    { label: 'إجمالي الموظفين', value: formatNumber(data.totalEmployees) },
+    { label: 'نسبة الحضور', value: data.attendanceRate + '%' },
+    { label: 'إجمالي الرواتب', value: formatNumber(data.totalSalaries) + ' ريال' },
+    { label: 'نسبة السعودة', value: data.saudiPercentage + '%' },
+    { label: 'إجمالي التأمينات', value: formatNumber(data.totalInsurance) + ' ريال' },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, false);
+  return await generatePdfFromHtml(html, { landscape: false });
 }
 
 export interface HealthCertificateEmployee {
@@ -503,6 +528,7 @@ export async function generateHealthCertificatesPdf(data: HealthCertificatePdfDa
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 12px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     .compliance { text-align: center; font-size: 18px; margin: 15px 0; padding: 10px; background: #f0fdf4; border-radius: 8px; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 11px; }
@@ -527,10 +553,17 @@ export async function generateHealthCertificatesPdf(data: HealthCertificatePdfDa
     </thead>
     <tbody>${rows}</tbody>
   </table>
+  
+  ${getSummaryHtml('ملخص الشهادات الصحية', [
+    { label: 'إجمالي الموظفين', value: formatNumber(data.employees.length) },
+    { label: 'نسبة الامتثال', value: data.complianceRate + '%' },
+    { label: 'الشهادات السارية', value: formatNumber(data.employees.filter(e => e.status === 'سارية' || e.status === 'active').length) },
+    { label: 'تحتاج تجديد', value: formatNumber(data.employees.filter(e => e.status !== 'سارية' && e.status !== 'active').length) },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, false);
+  return await generatePdfFromHtml(html, { landscape: false });
 }
 
 export interface BranchSalaryStat {
@@ -584,6 +617,7 @@ export async function generateComparisonsPdf(data: ComparisonsPdfData): Promise<
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 12px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     h2 { font-size: 16px; margin: 25px 0 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 11px; }
@@ -620,10 +654,17 @@ export async function generateComparisonsPdf(data: ComparisonsPdfData): Promise<
     </thead>
     <tbody>${natRows}</tbody>
   </table>
+  
+  ${getSummaryHtml('ملخص المقارنات', [
+    { label: 'عدد الفروع', value: formatNumber(data.branchStats.length) },
+    { label: 'إجمالي الموظفين', value: formatNumber(data.branchStats.reduce((s, b) => s + b.employeeCount, 0)) },
+    { label: 'عدد الجنسيات', value: formatNumber(data.nationalityStats.length) },
+    { label: 'متوسط الرواتب العام', value: formatNumber(Math.round(data.branchStats.reduce((s, b) => s + b.avgSalary, 0) / data.branchStats.length)) + ' ريال' },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, false);
+  return await generatePdfFromHtml(html, { landscape: false });
 }
 
 // Marketing Report PDF
@@ -681,6 +722,7 @@ export async function generateMarketingReportPdf(data: MarketingReportPdfData): 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     .filters { font-size: 10px; color: #888; margin-bottom: 15px; text-align: center; font-style: italic; }
     .section { margin: 20px 0; }
     .section h2 { font-size: 14px; color: #d946ef; margin-bottom: 10px; border-bottom: 2px solid #f0abfc; padding-bottom: 5px; }
@@ -688,32 +730,32 @@ export async function generateMarketingReportPdf(data: MarketingReportPdfData): 
     th, td { border: 1px solid #ddd; padding: 6px 4px; font-size: 9px; }
     th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
     tr:nth-child(even) { background-color: #f9f9f9; }
-    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
-    .summary-card { background: #fdf4ff; border: 1px solid #f0abfc; border-radius: 8px; padding: 10px; text-align: center; }
-    .summary-value { font-size: 16px; font-weight: bold; color: #a21caf; }
-    .summary-label { font-size: 10px; color: #86198f; }
+    .marketing-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    .marketing-summary-card { background: #fdf4ff; border: 1px solid #f0abfc; border-radius: 8px; padding: 10px; text-align: center; }
+    .marketing-summary-value { font-size: 16px; font-weight: bold; color: #a21caf; }
+    .marketing-summary-label { font-size: 10px; color: #86198f; }
   </style>
 </head>
 <body>
   ${getPdfHeaderHtml('تقرير أداء التسويق الشامل', `تاريخ التقرير: ${data.date}`)}
   ${data.filtersText ? `<div class="filters">الفلاتر المطبقة: ${data.filtersText}</div>` : ''}
   
-  <div class="summary-grid">
-    <div class="summary-card">
-      <div class="summary-value">${data.stats.totalCampaigns}</div>
-      <div class="summary-label">إجمالي الحملات</div>
+  <div class="marketing-summary-grid">
+    <div class="marketing-summary-card">
+      <div class="marketing-summary-value">${data.stats.totalCampaigns}</div>
+      <div class="marketing-summary-label">إجمالي الحملات</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-value">${formatNumber(data.stats.totalBudget)}</div>
-      <div class="summary-label">إجمالي الميزانية</div>
+    <div class="marketing-summary-card">
+      <div class="marketing-summary-value">${formatNumber(data.stats.totalBudget)}</div>
+      <div class="marketing-summary-label">إجمالي الميزانية</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-value">${formatNumber(data.stats.spentBudget)}</div>
-      <div class="summary-label">المصروف</div>
+    <div class="marketing-summary-card">
+      <div class="marketing-summary-value">${formatNumber(data.stats.spentBudget)}</div>
+      <div class="marketing-summary-label">المصروف</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-value">${data.stats.budgetUtilization}%</div>
-      <div class="summary-label">نسبة الاستخدام</div>
+    <div class="marketing-summary-card">
+      <div class="marketing-summary-value">${data.stats.budgetUtilization}%</div>
+      <div class="marketing-summary-label">نسبة الاستخدام</div>
     </div>
   </div>
   
@@ -740,10 +782,19 @@ export async function generateMarketingReportPdf(data: MarketingReportPdfData): 
       <tbody>${influencerRows}</tbody>
     </table>
   </div>
+  
+  ${getSummaryHtml('ملخص أداء التسويق', [
+    { label: 'عدد الحملات', value: formatNumber(data.stats.totalCampaigns) },
+    { label: 'إجمالي الميزانية', value: formatNumber(data.stats.totalBudget) + ' ريال' },
+    { label: 'المصروف الفعلي', value: formatNumber(data.stats.spentBudget) + ' ريال' },
+    { label: 'المتبقي', value: formatNumber(data.stats.totalBudget - data.stats.spentBudget) + ' ريال' },
+    { label: 'عدد المصروفات', value: formatNumber(data.expenses.length) },
+    { label: 'عدد المؤثرين', value: formatNumber(data.influencers.length) },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, true);
+  return await generatePdfFromHtml(html, { landscape: true });
 }
 
 // Production Reports PDF
@@ -766,6 +817,7 @@ export async function generateProductionReportPdf(data: ProductionReportPdfData)
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 30px; font-size: 12px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     h2 { font-size: 16px; margin: 20px 0 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 10px 8px; font-size: 12px; }
@@ -784,10 +836,16 @@ export async function generateProductionReportPdf(data: ProductionReportPdfData)
       <tr><td>نسبة الإنجاز</td><td style="text-align: center;">${data.completionRate.toFixed(1)}%</td></tr>
     </tbody>
   </table>
+  
+  ${getSummaryHtml('ملخص الإنتاج', [
+    { label: 'إجمالي الدفعات', value: formatNumber(data.totalBatches) },
+    { label: 'إجمالي الكمية', value: formatNumber(data.totalQuantity) },
+    { label: 'نسبة الإنجاز', value: data.completionRate.toFixed(1) + '%' },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, false);
+  return await generatePdfFromHtml(html, { landscape: false });
 }
 
 // Production Order PDF
@@ -835,6 +893,7 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 25px; font-size: 11px; }
     ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
     .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
     .info-item { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 10px; }
     .info-label { font-size: 10px; color: #92400e; }
@@ -882,13 +941,30 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
     <div class="cost-item"><div class="cost-label">التكلفة المقدرة</div><div class="cost-value">${formatNumber(data.estimatedCost)} ريال</div></div>
     <div class="cost-item"><div class="cost-label">التكلفة الفعلية</div><div class="cost-value">${formatNumber(data.actualCost)} ريال</div></div>
   </div>
+  
+  ${getSummaryHtml('ملخص أمر الإنتاج', [
+    { label: 'عدد البنود', value: formatNumber(data.items.length) },
+    { label: 'إجمالي الكمية المطلوبة', value: formatNumber(data.items.reduce((s, i) => s + i.targetQuantity, 0)) },
+    { label: 'إجمالي الكمية المنتجة', value: formatNumber(data.items.reduce((s, i) => s + i.producedQuantity, 0)) },
+    { label: 'التكلفة المقدرة', value: formatNumber(data.estimatedCost) + ' ريال' },
+    { label: 'التكلفة الفعلية', value: formatNumber(data.actualCost) + ' ريال' },
+    { label: 'الفرق', value: formatNumber(data.estimatedCost - data.actualCost) + ' ريال' },
+  ])}
 </body>
 </html>`;
 
-  return await generatePdfFromHtml(html, false);
+  return await generatePdfFromHtml(html, { landscape: false });
 }
 
-async function generatePdfFromHtml(html: string, landscape: boolean): Promise<Buffer> {
+interface PdfOptions {
+  landscape?: boolean;
+  printedBy?: string;
+}
+
+async function generatePdfFromHtml(html: string, options: PdfOptions = {}): Promise<Buffer> {
+  const { landscape = false, printedBy = 'النظام' } = options;
+  const printedAt = formatPrintDate();
+  
   console.log("[PDF] Starting Puppeteer with @sparticuz/chromium...");
   
   const browser = await puppeteer.launch({
@@ -907,7 +983,16 @@ async function generatePdfFromHtml(html: string, landscape: boolean): Promise<Bu
       format: 'A4',
       landscape,
       printBackground: true,
-      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+      margin: { top: '15mm', right: '10mm', bottom: '25mm', left: '10mm' },
+      displayHeaderFooter: true,
+      headerTemplate: '<div></div>',
+      footerTemplate: `
+        <div style="width: 100%; font-size: 9px; font-family: 'Cairo', Arial, sans-serif; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
+          <span style="flex: 1; text-align: right;">طُبع بواسطة: ${printedBy}</span>
+          <span style="flex: 1; text-align: center;">صفحة <span class="pageNumber"></span> من <span class="totalPages"></span></span>
+          <span style="flex: 1; text-align: left;">${printedAt}</span>
+        </div>
+      `
     });
 
     console.log("[PDF] PDF generated successfully, size:", pdfBuffer.length);
