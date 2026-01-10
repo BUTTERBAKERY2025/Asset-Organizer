@@ -292,39 +292,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <GlobalSearch />
             </div>
           )}
-          {isAuthenticated && availableBranches.length > 0 && (
-            <div className="mt-3 w-full">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                <MapPin className="h-3 w-3" />
-                <span>الفرع الحالي</span>
-              </div>
-              <Select
-                value={activeBranch?.id || ""}
-                onValueChange={handleBranchChange}
-                disabled={isSwitchingBranch}
-              >
-                <SelectTrigger className="w-full text-xs h-8" data-testid="select-active-branch">
-                  <SelectValue placeholder="اختر الفرع">
-                    {isSwitchingBranch ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        <span>جاري التبديل...</span>
-                      </div>
-                    ) : (
-                      activeBranch?.name || "اختر الفرع"
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {availableBranches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id} data-testid={`branch-option-${branch.id}`}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
