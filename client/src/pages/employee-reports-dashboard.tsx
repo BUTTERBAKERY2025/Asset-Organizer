@@ -32,7 +32,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getQueryFn } from "@/lib/queryClient";
 import * as XLSX from "xlsx";
-import { downloadArabicPdf, getArabicDefaultStyle, getArabicTableHeaderStyle } from "@/lib/pdfmake-arabic";
 import {
   BarChart,
   Bar,
