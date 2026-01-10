@@ -524,6 +524,10 @@ export const SYSTEM_MODULES = [
   "employee_transfers",
   "employee_documents",
   "salary_management",
+  "hr_management",
+  "employee_contracts",
+  "employee_leaves",
+  "employee_evaluations",
   
   // المالية
   "cashier_journal",
@@ -583,6 +587,11 @@ export const MODULE_ACTIONS = [
   "edit",
   "delete",
   "approve",
+  "reject",
+  "submit",
+  "cancel",
+  "confirm",
+  "review",
   "export",
   "print",
   "sign",
@@ -591,6 +600,12 @@ export const MODULE_ACTIONS = [
   "import",
   "assign",
   "archive",
+  "download",
+  "preview",
+  "lock",
+  "unlock",
+  "transfer",
+  "delegate",
 ] as const;
 
 export type ModuleAction = (typeof MODULE_ACTIONS)[number];
@@ -659,6 +674,10 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   employee_transfers: "تحويلات الموظفين",
   employee_documents: "مستندات الموظفين",
   salary_management: "إدارة الرواتب",
+  hr_management: "إدارة الموارد البشرية",
+  employee_contracts: "عقود الموظفين",
+  employee_leaves: "إجازات الموظفين",
+  employee_evaluations: "تقييم الموظفين",
   
   // المالية
   cashier_journal: "يومية الكاشير",
@@ -716,6 +735,11 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   edit: "تعديل",
   delete: "حذف",
   approve: "اعتماد",
+  reject: "رفض",
+  submit: "إرسال",
+  cancel: "إلغاء",
+  confirm: "تأكيد",
+  review: "مراجعة",
   export: "تصدير",
   print: "طباعة",
   sign: "توقيع",
@@ -724,6 +748,12 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   import: "استيراد",
   assign: "تكليف",
   archive: "أرشفة",
+  download: "تحميل",
+  preview: "معاينة",
+  lock: "قفل",
+  unlock: "فتح القفل",
+  transfer: "نقل",
+  delegate: "تفويض",
 };
 
 // Module groups for UI organization
@@ -765,6 +795,10 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "employee_transfers",
       "employee_documents",
       "salary_management",
+      "hr_management",
+      "employee_contracts",
+      "employee_leaves",
+      "employee_evaluations",
     ],
   },
   {
