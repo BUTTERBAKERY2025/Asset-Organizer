@@ -77,7 +77,19 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **`shared/schema.ts`**: Primary source of truth for database schema (TypeScript/Drizzle ORM)
 - **`database_schema.sql`**: Complete SQL reference file generated from schema.ts (94 tables)
 
-### Recent Schema Changes (2026-01-05)
+### Recent Schema Changes (2026-01-10)
+- **Marketing Influencers Enhancement**: Added new fields to `marketing_influencers` table:
+  - `account_url` - Social media account URL
+  - `coverage_url` - Coverage/collaboration URL
+  - `follower_count_text` - Original follower count text (e.g., "133k")
+  - `view_rating` - View rating (1-100)
+  - `bank_account_number` - Bank account number for payments
+  - `bank_account_holder` - Bank account holder name
+  - `bank_name` - Bank name
+- **Data Import**: Added Python script `scripts/import-influencers.py` for importing influencer data from Excel files
+- **Imported 83 influencers** from Riyadh region with full details including bank information and social media metrics
+
+### Previous Schema Changes (2026-01-05)
 - **Branch Employee Integration**: Added `linkedUserId` and `defaultScheduleTemplateId` to `branch_employees` table
 - **Attendance Integration**: Added `branchEmployeeId` foreign key to `attendance_records`, `employee_schedules`, and `timesheet_reports`
 - **API Endpoints**: 
