@@ -293,7 +293,7 @@ export default function AssetTransfersPage() {
           </div>
           <Dialog open={isCreateOpen} onOpenChange={(open) => { if (!open) resetCreateDialog(); else setIsCreateOpen(true); }}>
             <DialogTrigger asChild>
-              <Button className="bg-amber-600 hover:bg-amber-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-create-transfer">
+              <Button className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9" data-testid="button-create-transfer">
                 <Plus className="h-4 w-4 ml-2" />
                 طلب تحويل جديد
               </Button>
@@ -322,12 +322,12 @@ export default function AssetTransfersPage() {
                             value={assetSearch}
                             onChange={(e) => setAssetSearch(e.target.value)}
                             placeholder="ابحث بالاسم أو الرقم التسلسلي أو رمز الأصل..."
-                            className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                            className="pr-10 h-11 sm:h-10"
                             data-testid="input-asset-search"
                           />
                         </div>
                         <Select value={branchFilter} onValueChange={setBranchFilter}>
-                          <SelectTrigger className="w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch-filter">
+                          <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-branch-filter">
                             <SelectValue placeholder="كل الفروع" />
                           </SelectTrigger>
                           <SelectContent>
@@ -469,7 +469,7 @@ export default function AssetTransfersPage() {
                         <div className="flex-1">
                           <div className="text-xs text-gray-500 mb-1 text-center">إلى</div>
                           <Select value={newTransfer.toBranchId} onValueChange={(v) => setNewTransfer({ ...newTransfer, toBranchId: v })}>
-                            <SelectTrigger data-testid="select-to-branch" className="border-amber-300 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                            <SelectTrigger data-testid="select-to-branch" className="border-amber-300 h-11 sm:h-10">
                               <SelectValue placeholder="اختر الفرع المستلم" />
                             </SelectTrigger>
                             <SelectContent>
@@ -495,7 +495,7 @@ export default function AssetTransfersPage() {
                             max={selectedItem.quantity}
                             value={newTransfer.quantity}
                             onChange={(e) => setNewTransfer({ ...newTransfer, quantity: Math.min(parseInt(e.target.value) || 1, selectedItem.quantity) })}
-                            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                            className="h-11 sm:h-10"
                             data-testid="input-quantity"
                           />
                           <p className="text-xs text-gray-500">الحد الأقصى: {selectedItem.quantity.toLocaleString('en-US')}</p>
@@ -506,7 +506,7 @@ export default function AssetTransfersPage() {
                             value={newTransfer.reason}
                             onChange={(e) => setNewTransfer({ ...newTransfer, reason: e.target.value })}
                             placeholder="مثال: نقص في الفرع المستلم"
-                            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                            className="h-11 sm:h-10"
                             data-testid="input-reason"
                           />
                         </div>
@@ -528,12 +528,12 @@ export default function AssetTransfersPage() {
               </div>
 
               <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={resetCreateDialog} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
+                <Button variant="outline" onClick={resetCreateDialog} className="h-11 sm:h-9">إلغاء</Button>
                 {selectedItem && (
                   <Button 
                     onClick={handleCreateTransfer} 
                     disabled={createMutation.isPending || !newTransfer.toBranchId || !newTransfer.reason}
-                    className="bg-amber-600 hover:bg-amber-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                    className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9"
                     data-testid="button-submit-transfer"
                   >
                     {createMutation.isPending ? (
@@ -610,12 +610,12 @@ export default function AssetTransfersPage() {
                     placeholder="بحث..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pr-10 w-64 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="pr-10 w-64 h-11 sm:h-10"
                     data-testid="input-search"
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
+                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-status-filter">
                     <SelectValue placeholder="كل الحالات" />
                   </SelectTrigger>
                   <SelectContent>
@@ -765,7 +765,7 @@ export default function AssetTransfersPage() {
                 value={confirmData.receiverName}
                 onChange={(e) => setConfirmData({ ...confirmData, receiverName: e.target.value })}
                 placeholder="أدخل اسم المستلم"
-                className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                className="h-11 sm:h-10"
                 data-testid="input-receiver-name"
               />
             </div>

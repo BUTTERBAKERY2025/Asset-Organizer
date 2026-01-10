@@ -513,7 +513,7 @@ export default function TargetsPlanning() {
             <div className="flex items-center gap-2">
               <Label className="hidden sm:inline">السنة:</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
+                <SelectTrigger className="w-24 h-11 sm:h-10" data-testid="select-year">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -526,7 +526,7 @@ export default function TargetsPlanning() {
             <div className="flex items-center gap-2">
               <Label className="hidden sm:inline">الشهر:</Label>
               <Select value={selectedMonthNum} onValueChange={setSelectedMonthNum}>
-                <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
+                <SelectTrigger className="w-28 h-11 sm:h-10" data-testid="select-month">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -537,12 +537,12 @@ export default function TargetsPlanning() {
               </Select>
             </div>
             
-            <Button variant="outline" onClick={exportToExcel} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
+            <Button variant="outline" onClick={exportToExcel} className="h-11 sm:h-9" data-testid="button-export-excel">
               <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
               <span className="hidden sm:inline">Excel</span>
             </Button>
             
-            <Button variant="outline" onClick={exportToPDF} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-pdf">
+            <Button variant="outline" onClick={exportToPDF} className="h-11 sm:h-9" data-testid="button-export-pdf">
               <FileText className="h-4 w-4 sm:ml-2" />
               <span className="hidden sm:inline">PDF</span>
             </Button>
@@ -586,7 +586,7 @@ export default function TargetsPlanning() {
               
               <Dialog open={showNewTargetDialog} onOpenChange={setShowNewTargetDialog}>
                 <DialogTrigger asChild>
-                  <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-amber-600 hover:bg-amber-700" data-testid="button-add-target">
+                  <Button className="h-11 sm:h-9 bg-amber-600 hover:bg-amber-700" data-testid="button-add-target">
                     <Plus className="h-4 w-4 sm:ml-2" />
                     <span className="hidden sm:inline">هدف لفرع واحد</span>
                   </Button>
@@ -604,7 +604,7 @@ export default function TargetsPlanning() {
                         value={newTarget.branchId}
                         onValueChange={(v) => setNewTarget({ ...newTarget, branchId: v })}
                       >
-                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                        <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                           <SelectValue placeholder="اختر الفرع" />
                         </SelectTrigger>
                         <SelectContent>
@@ -622,7 +622,7 @@ export default function TargetsPlanning() {
                           value={newTarget.yearMonth.split('-')[0]}
                           onValueChange={(v) => setNewTarget({ ...newTarget, yearMonth: `${v}-${newTarget.yearMonth.split('-')[1]}` })}
                         >
-                          <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                          <SelectTrigger className="w-24 h-11 sm:h-10">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -635,7 +635,7 @@ export default function TargetsPlanning() {
                           value={newTarget.yearMonth.split('-')[1]}
                           onValueChange={(v) => setNewTarget({ ...newTarget, yearMonth: `${newTarget.yearMonth.split('-')[0]}-${v}` })}
                         >
-                          <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                          <SelectTrigger className="w-28 h-11 sm:h-10">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -654,7 +654,7 @@ export default function TargetsPlanning() {
                         value={newTarget.targetAmount}
                         onChange={(e) => setNewTarget({ ...newTarget, targetAmount: e.target.value })}
                         placeholder="مثال: 500000"
-                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="h-11 sm:h-10"
                         data-testid="input-target-amount"
                       />
                     </div>
@@ -665,7 +665,7 @@ export default function TargetsPlanning() {
                         value={newTarget.profileId?.toString() || "default"}
                         onValueChange={(v) => setNewTarget({ ...newTarget, profileId: v === "default" ? null : parseInt(v) })}
                       >
-                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-profile">
+                        <SelectTrigger className="h-11 sm:h-10" data-testid="select-profile">
                           <SelectValue placeholder="اختر ملف التوزيع" />
                         </SelectTrigger>
                         <SelectContent>
@@ -688,11 +688,11 @@ export default function TargetsPlanning() {
                   </div>
                   
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowNewTargetDialog(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
+                    <Button variant="outline" onClick={() => setShowNewTargetDialog(false)} className="h-11 sm:h-9">إلغاء</Button>
                     <Button 
                       onClick={() => createTargetMutation.mutate(newTarget)}
                       disabled={!newTarget.branchId || !newTarget.targetAmount || createTargetMutation.isPending}
-                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                      className="h-11 sm:h-9"
                       data-testid="button-save-target"
                     >
                       {createTargetMutation.isPending ? "جاري الحفظ..." : "حفظ"}
@@ -703,7 +703,7 @@ export default function TargetsPlanning() {
 
               <Dialog open={showBulkCreateDialog} onOpenChange={setShowBulkCreateDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-bulk-create">
+                  <Button variant="outline" className="h-11 sm:h-9" data-testid="button-bulk-create">
                     <Zap className="h-4 w-4 sm:ml-2" />
                     <span className="hidden sm:inline">أهداف لعدة فروع</span>
                   </Button>
@@ -754,7 +754,7 @@ export default function TargetsPlanning() {
                             {bulkTargets.useCustomAmounts && isSelected && (
                               <Input
                                 type="number"
-                                className="w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                                className="w-32 h-11 sm:h-10"
                                 placeholder="الهدف"
                                 value={bulkTargets.customAmounts[branch.id] || ""}
                                 onChange={(e) => setBulkTargets(prev => ({
@@ -784,7 +784,7 @@ export default function TargetsPlanning() {
                           value={bulkTargets.targetAmount}
                           onChange={(e) => setBulkTargets(prev => ({ ...prev, targetAmount: e.target.value }))}
                           placeholder="مثال: 500000"
-                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                          className="h-11 sm:h-10"
                         />
                       </div>
                     )}
@@ -795,7 +795,7 @@ export default function TargetsPlanning() {
                         value={bulkTargets.profileId?.toString() || "default"}
                         onValueChange={(v) => setBulkTargets(prev => ({ ...prev, profileId: v === "default" ? null : parseInt(v) }))}
                       >
-                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                        <SelectTrigger className="h-11 sm:h-10">
                           <SelectValue placeholder="الملف الافتراضي" />
                         </SelectTrigger>
                         <SelectContent>
@@ -809,11 +809,11 @@ export default function TargetsPlanning() {
                   </div>
                   
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowBulkCreateDialog(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
+                    <Button variant="outline" onClick={() => setShowBulkCreateDialog(false)} className="h-11 sm:h-9">إلغاء</Button>
                     <Button 
                       onClick={() => bulkCreateMutation.mutate()}
                       disabled={bulkTargets.selectedBranches.length === 0 || bulkCreateMutation.isPending}
-                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                      className="h-11 sm:h-9"
                     >
                       {bulkCreateMutation.isPending ? "جاري الإنشاء..." : `إنشاء ${bulkTargets.selectedBranches.length} هدف`}
                     </Button>
@@ -823,7 +823,7 @@ export default function TargetsPlanning() {
 
               <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-copy-from-month">
+                  <Button variant="outline" className="h-11 sm:h-9" data-testid="button-copy-from-month">
                     <Copy className="h-4 w-4 sm:ml-2" />
                     <span className="hidden sm:inline">نسخ من شهر سابق</span>
                   </Button>
@@ -842,7 +842,7 @@ export default function TargetsPlanning() {
                           value={copyFromMonth.split('-')[0]}
                           onValueChange={(v) => setCopyFromMonth(`${v}-${copyFromMonth.split('-')[1]}`)}
                         >
-                          <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                          <SelectTrigger className="w-24 h-11 sm:h-10">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -855,7 +855,7 @@ export default function TargetsPlanning() {
                           value={copyFromMonth.split('-')[1]}
                           onValueChange={(v) => setCopyFromMonth(`${copyFromMonth.split('-')[0]}-${v}`)}
                         >
-                          <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                          <SelectTrigger className="w-28 h-11 sm:h-10">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -882,21 +882,21 @@ export default function TargetsPlanning() {
                     )}
                     
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(0)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">نسخ كما هي</Button>
-                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(5)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">+5%</Button>
-                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(10)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">+10%</Button>
-                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(15)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">+15%</Button>
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(0)} className="h-11 sm:h-9">نسخ كما هي</Button>
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(5)} className="h-11 sm:h-9">+5%</Button>
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(10)} className="h-11 sm:h-9">+10%</Button>
+                      <Button variant="outline" onClick={() => copyFromPreviousMonthMutation.mutate(15)} className="h-11 sm:h-9">+15%</Button>
                     </div>
                   </div>
                   
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowCopyDialog(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
+                    <Button variant="outline" onClick={() => setShowCopyDialog(false)} className="h-11 sm:h-9">إلغاء</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
               
               <Link href="/targets-dashboard">
-                <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+                <Button variant="outline" className="h-11 sm:h-9">
                   <TrendingUp className="h-4 w-4 sm:ml-2" />
                   <span className="hidden sm:inline">لوحة الأداء</span>
                 </Button>
@@ -934,7 +934,7 @@ export default function TargetsPlanning() {
                   </CardTitle>
                   <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <Select value={filterBranch} onValueChange={setFilterBranch}>
-                      <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                      <SelectTrigger className="w-36 sm:w-40 h-11 sm:h-10">
                         <SelectValue placeholder="تصفية بالفرع" />
                       </SelectTrigger>
                       <SelectContent>
@@ -945,7 +945,7 @@ export default function TargetsPlanning() {
                       </SelectContent>
                     </Select>
                     <Select value={filterStatus} onValueChange={setFilterStatus}>
-                      <SelectTrigger className="w-28 sm:w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                      <SelectTrigger className="w-28 sm:w-32 h-11 sm:h-10">
                         <SelectValue placeholder="الحالة" />
                       </SelectTrigger>
                       <SelectContent>

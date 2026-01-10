@@ -1184,7 +1184,7 @@ export default function PnLDashboard() {
               <Button
                 variant="ghost"
                 onClick={() => navigate("/attendance-dashboard")}
-                className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 rounded-full hover:bg-muted p-0"
+                className="h-11 w-11 sm:h-8 sm:w-8 rounded-full hover:bg-muted p-0"
                 data-testid="button-back"
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -1203,7 +1203,7 @@ export default function PnLDashboard() {
                   variant="outline"
                   onClick={() => importSalesMutation.mutate(selectedPeriodId)}
                   disabled={importSalesMutation.isPending}
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="h-11 sm:h-9"
                   data-testid="button-import-sales"
                 >
                   {importSalesMutation.isPending ? (
@@ -1216,7 +1216,7 @@ export default function PnLDashboard() {
                 <Button
                   onClick={() => calculateMetricsMutation.mutate(selectedPeriodId)}
                   disabled={calculateMetricsMutation.isPending}
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="h-11 sm:h-9"
                   data-testid="button-calculate-metrics"
                 >
                   {calculateMetricsMutation.isPending ? (
@@ -1230,7 +1230,7 @@ export default function PnLDashboard() {
                   <>
                     <Button
                       variant="outline"
-                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                      className="h-11 sm:h-9"
                       onClick={() => {
                         if (selectedBranch && completePnL) {
                           const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
@@ -1253,7 +1253,7 @@ export default function PnLDashboard() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                      className="h-11 sm:h-9"
                       onClick={() => {
                         if (selectedBranch && completePnL) {
                           const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
@@ -1278,7 +1278,7 @@ export default function PnLDashboard() {
                 <Button
                   variant="outline"
                   onClick={generatePnLExcelTemplate}
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="h-11 sm:h-9"
                   data-testid="button-download-template"
                 >
                   <Download className="h-4 w-4 sm:ml-2" />
@@ -1295,7 +1295,7 @@ export default function PnLDashboard() {
                   <Button
                     variant="outline"
                     disabled={importExcelMutation.isPending}
-                    className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                    className="h-11 sm:h-9"
                   >
                     {importExcelMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
@@ -1327,7 +1327,7 @@ export default function PnLDashboard() {
                     handleSelectPeriod(value, selectedYear, selectedMonth);
                   }}
                 >
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1350,7 +1350,7 @@ export default function PnLDashboard() {
                     handleSelectPeriod(selectedBranchId, year, selectedMonth);
                   }}
                 >
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-year">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1373,7 +1373,7 @@ export default function PnLDashboard() {
                     handleSelectPeriod(selectedBranchId, selectedYear, month);
                   }}
                 >
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-month">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1390,7 +1390,7 @@ export default function PnLDashboard() {
                 <Button
                   onClick={handleCreateOrLoadPeriod}
                   disabled={!selectedBranchId || createPeriodMutation.isPending}
-                  className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="w-full h-11 sm:h-9"
                   data-testid="button-load-period"
                 >
                   {createPeriodMutation.isPending ? (
@@ -1415,7 +1415,7 @@ export default function PnLDashboard() {
                     loadExistingData();
                     setShowDataEntry(true);
                   }}
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="h-11 sm:h-9"
                   data-testid="button-enter-data"
                 >
                   <FileText className="h-4 w-4 sm:ml-2" />

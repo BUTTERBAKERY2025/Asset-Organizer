@@ -251,7 +251,7 @@ export default function ReportsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch-filter">
+              <SelectTrigger className="w-36 sm:w-40 h-11 sm:h-10" data-testid="select-branch-filter">
                 <MapPin className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="جميع الفروع" />
               </SelectTrigger>
@@ -265,7 +265,7 @@ export default function ReportsPage() {
               </SelectContent>
             </Select>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-category-filter">
+              <SelectTrigger className="w-36 sm:w-40 h-11 sm:h-10" data-testid="select-category-filter">
                 <Layers className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="جميع التصنيفات" />
               </SelectTrigger>
@@ -278,11 +278,11 @@ export default function ReportsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={() => handlePrint()} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-print">
+            <Button variant="outline" onClick={() => handlePrint()} className="h-11 sm:h-9" data-testid="button-print">
               <Printer className="w-4 h-4 sm:ml-2" />
               <span className="hidden sm:inline">طباعة</span>
             </Button>
-            <Button onClick={() => exportToExcel("full")} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
+            <Button onClick={() => exportToExcel("full")} className="h-11 sm:h-9" data-testid="button-export-excel">
               <FileSpreadsheet className="w-4 h-4 sm:ml-2" />
               <span className="hidden sm:inline">تصدير شامل</span>
             </Button>

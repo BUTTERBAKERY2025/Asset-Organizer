@@ -496,7 +496,7 @@ export default function UsersPage() {
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-user">
+              <Button className="h-11 sm:h-9" data-testid="button-add-user">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة مستخدم
               </Button>
@@ -514,7 +514,7 @@ export default function UsersPage() {
                       id="firstName"
                       value={newUser.firstName}
                       onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       data-testid="input-first-name"
                     />
                   </div>
@@ -524,7 +524,7 @@ export default function UsersPage() {
                       id="lastName"
                       value={newUser.lastName}
                       onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       data-testid="input-last-name"
                     />
                   </div>
@@ -537,7 +537,7 @@ export default function UsersPage() {
                     value={newUser.username}
                     onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                     placeholder="username"
-                    className="text-left h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="text-left h-11 sm:h-10"
                     dir="ltr"
                     required
                     data-testid="input-username"
@@ -551,7 +551,7 @@ export default function UsersPage() {
                     value={newUser.password}
                     onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                     placeholder="••••••••"
-                    className="text-left h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="text-left h-11 sm:h-10"
                     dir="ltr"
                     required
                     data-testid="input-password"
@@ -560,7 +560,7 @@ export default function UsersPage() {
                 <div className="space-y-2">
                   <Label htmlFor="role">الصلاحية</Label>
                   <Select value={newUser.role} onValueChange={(role) => setNewUser({ ...newUser, role })}>
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-role">
+                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -575,7 +575,7 @@ export default function UsersPage() {
                 <div className="space-y-2">
                   <Label htmlFor="branch">الفرع</Label>
                   <Select value={newUser.branchId || "none"} onValueChange={(branchId) => setNewUser({ ...newUser, branchId: branchId === "none" ? "" : branchId })}>
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                       <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>
                     <SelectContent>
@@ -588,7 +588,7 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="submit" className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0" disabled={createUserMutation.isPending} data-testid="button-submit-user">
+                <Button type="submit" className="w-full h-11 sm:h-9" disabled={createUserMutation.isPending} data-testid="button-submit-user">
                   {createUserMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 ml-2 animate-spin" />
@@ -699,7 +699,7 @@ export default function UsersPage() {
                             onValueChange={(role) => updateRoleMutation.mutate({ userId: user.id, role })}
                             disabled={user.id === currentUser?.id}
                           >
-                            <SelectTrigger className="w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid={`select-role-${user.id}`}>
+                            <SelectTrigger className="w-32 h-11 sm:h-10" data-testid={`select-role-${user.id}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -716,7 +716,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-amber-600 hover:text-amber-700 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                              className="text-amber-600 hover:text-amber-700 h-11 w-11 sm:h-8 sm:w-8"
                               onClick={() => openEditDialog(user)}
                               data-testid={`button-edit-${user.id}`}
                               title="تعديل البيانات"
@@ -726,7 +726,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-blue-600 hover:text-blue-700 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                              className="text-blue-600 hover:text-blue-700 h-11 w-11 sm:h-8 sm:w-8"
                               onClick={() => openPermissionsDialog(user)}
                               data-testid={`button-permissions-${user.id}`}
                               title="إدارة الصلاحيات"
@@ -736,7 +736,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-destructive hover:text-destructive h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                              className="text-destructive hover:text-destructive h-11 w-11 sm:h-8 sm:w-8"
                               onClick={() => deleteUserMutation.mutate(user.id)}
                               disabled={user.id === currentUser?.id || deleteUserMutation.isPending}
                               data-testid={`button-delete-${user.id}`}

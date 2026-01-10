@@ -306,12 +306,12 @@ export default function ProductionDashboardPage() {
               {formatLastUpdated()}
             </span>
             
-            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={handleRefresh} data-testid="btn-refresh">
+            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={handleRefresh} data-testid="btn-refresh">
               <RefreshCw className={`h-4 w-4 ml-2 ${dailyLoading ? 'animate-spin' : ''}`} />
               تحديث
             </Button>
             <Link href="/advanced-production-orders/new">
-              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-new-order">
+              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="btn-new-order">
                 <Plus className="h-4 w-4 ml-2" />
                 أمر إنتاج جديد
               </Button>
@@ -326,7 +326,7 @@ export default function ProductionDashboardPage() {
               <div className="space-y-2 min-w-[160px] sm:min-w-[180px]">
                 <Label className="text-amber-800">الفرع</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="bg-white border-amber-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                  <SelectTrigger className="bg-white border-amber-200 h-11 sm:h-10">
                     <SelectValue placeholder="كل الفروع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -343,7 +343,7 @@ export default function ProductionDashboardPage() {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-[140px] sm:w-[160px] bg-white border-amber-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                  className="w-[140px] sm:w-[160px] bg-white border-amber-200 h-11 sm:h-10"
                 />
               </div>
               <div className="text-sm text-amber-700">

@@ -170,7 +170,7 @@ export default function MarketingGoalsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/marketing">
-              <Button variant="outline" size="sm" className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-back">
+              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
                 <ArrowRight className="h-4 w-4" />
                 العودة للتسويق
               </Button>
@@ -183,7 +183,7 @@ export default function MarketingGoalsPage() {
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-pink-500 hover:bg-pink-600 gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-goal">
+              <Button className="bg-pink-500 hover:bg-pink-600 gap-2 h-11 sm:h-9" data-testid="button-add-goal">
                 <Plus className="h-4 w-4" />
                 إضافة هدف
               </Button>
@@ -199,7 +199,7 @@ export default function MarketingGoalsPage() {
                     value={formData.campaignId.toString()}
                     onValueChange={(value) => setFormData({ ...formData, campaignId: parseInt(value) })}
                   >
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-campaign">
+                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-campaign">
                       <SelectValue placeholder="اختر الحملة" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -217,7 +217,7 @@ export default function MarketingGoalsPage() {
                     value={formData.goalType}
                     onValueChange={(value) => setFormData({ ...formData, goalType: value })}
                   >
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-goal-type">
+                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-goal-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -232,7 +232,7 @@ export default function MarketingGoalsPage() {
                     <Label>القيمة المستهدفة</Label>
                     <Input
                       type="number"
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       value={formData.targetValue}
                       onChange={(e) => setFormData({ ...formData, targetValue: parseInt(e.target.value) || 0 })}
                       data-testid="input-target-value"
@@ -242,7 +242,7 @@ export default function MarketingGoalsPage() {
                     <Label>القيمة الحالية</Label>
                     <Input
                       type="number"
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       value={formData.currentValue}
                       onChange={(e) => setFormData({ ...formData, currentValue: parseInt(e.target.value) || 0 })}
                       data-testid="input-current-value"
@@ -252,7 +252,7 @@ export default function MarketingGoalsPage() {
                 <div>
                   <Label>وحدة القياس</Label>
                   <Input
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     value={formData.metric}
                     onChange={(e) => setFormData({ ...formData, metric: e.target.value })}
                     placeholder="مثال: عدد، نسبة، ريال"
@@ -263,7 +263,7 @@ export default function MarketingGoalsPage() {
                   <Label>الموعد النهائي</Label>
                   <Input
                     type="date"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     value={formData.deadline}
                     onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                     data-testid="input-deadline"
@@ -272,7 +272,7 @@ export default function MarketingGoalsPage() {
                 <Button
                   onClick={() => createGoalMutation.mutate(formData)}
                   disabled={!formData.campaignId || createGoalMutation.isPending}
-                  className="w-full bg-pink-500 hover:bg-pink-600 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="w-full bg-pink-500 hover:bg-pink-600 h-11 sm:h-9"
                   data-testid="button-submit-goal"
                 >
                   {createGoalMutation.isPending ? "جاري الإنشاء..." : "إنشاء الهدف"}
@@ -287,7 +287,7 @@ export default function MarketingGoalsPage() {
             value={selectedCampaignId?.toString() || "all"}
             onValueChange={(value) => setSelectedCampaignId(value === "all" ? null : parseInt(value))}
           >
-            <SelectTrigger className="w-full sm:w-64 bg-white h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-filter-campaign">
+            <SelectTrigger className="w-full sm:w-64 bg-white h-11 sm:h-10" data-testid="select-filter-campaign">
               <SelectValue placeholder="جميع الحملات" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">

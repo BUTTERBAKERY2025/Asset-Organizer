@@ -485,7 +485,7 @@ export default function TimesheetPage() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+              className="h-11 w-11 sm:h-8 sm:w-8"
               onClick={() => navigate("/attendance-dashboard")}
               data-testid="btn-back"
             >
@@ -530,7 +530,7 @@ export default function TimesheetPage() {
                   <div className="space-y-2">
                     <Label>الفرع</Label>
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -545,7 +545,7 @@ export default function TimesheetPage() {
                   <div className="space-y-2">
                     <Label>الموظف</Label>
                     <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-employee">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-employee">
                         <SelectValue placeholder="اختر الموظف" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -561,7 +561,7 @@ export default function TimesheetPage() {
                   <div className="space-y-2">
                     <Label>الشهر</Label>
                     <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-month">
                         <SelectValue placeholder="اختر الشهر" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -582,7 +582,7 @@ export default function TimesheetPage() {
                 <Button 
                   onClick={handleGenerateReport} 
                   disabled={isGenerating || !selectedEmployee}
-                  className="w-full gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="w-full gap-2 h-11 sm:h-9"
                   data-testid="btn-generate-timesheet"
                 >
                   {isGenerating ? (
@@ -644,22 +644,22 @@ export default function TimesheetPage() {
                     </div>
 
                     <div className="flex gap-2 mb-6">
-                      <Button variant="outline" onClick={exportToExcel} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-export-excel">
+                      <Button variant="outline" onClick={exportToExcel} className="gap-2 h-11 sm:h-9" data-testid="btn-export-excel">
                         <Download className="w-4 h-4" />
                         تصدير Excel
                       </Button>
-                      <Button variant="outline" onClick={printReport} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-print">
+                      <Button variant="outline" onClick={printReport} className="gap-2 h-11 sm:h-9" data-testid="btn-print">
                         <Printer className="w-4 h-4" />
                         طباعة
                       </Button>
                       {(selectedReport.status === "pending" || selectedReport.status === "pending_employee_signature") && (
-                        <Button onClick={() => handleOpenSignature("employee", selectedReport)} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-sign-employee">
+                        <Button onClick={() => handleOpenSignature("employee", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-employee">
                           <Pen className="w-4 h-4" />
                           توقيع الموظف
                         </Button>
                       )}
                       {selectedReport.status === "pending_manager_signature" && (
-                        <Button onClick={() => handleOpenSignature("manager", selectedReport)} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-sign-manager">
+                        <Button onClick={() => handleOpenSignature("manager", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-manager">
                           <Pen className="w-4 h-4" />
                           توقيع المدير
                         </Button>

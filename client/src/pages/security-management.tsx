@@ -279,16 +279,16 @@ export default function SecurityManagementPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-6 h-auto">
-            <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-security-settings">
+            <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-settings">
               <Key className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">الإعدادات</span>
               <span className="sm:hidden">إعدادات</span>
             </TabsTrigger>
-            <TabsTrigger value="sessions" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-security-sessions">
+            <TabsTrigger value="sessions" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-sessions">
               <Monitor className="h-3 w-3 sm:h-4 sm:w-4" />
               الجلسات
             </TabsTrigger>
-            <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-security-alerts">
+            <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-alerts">
               <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">التنبيهات</span>
               <span className="sm:hidden">تنبيه</span>
@@ -298,7 +298,7 @@ export default function SecurityManagementPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="templates" className="flex items-center gap-1 sm:gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-role-templates">
+            <TabsTrigger value="templates" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-role-templates">
               <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">قوالب الأدوار</span>
               <span className="sm:hidden">قوالب</span>
@@ -374,7 +374,7 @@ export default function SecurityManagementPage() {
                       <div className="border rounded-lg p-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                           <p className="font-medium text-sm sm:text-base">قائمة IP المسموحة</p>
-                          <Button size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" onClick={() => setShowIpDialog(true)} data-testid="button-add-ip">
+                          <Button size="sm" className="h-11 sm:h-9 w-full sm:w-auto" onClick={() => setShowIpDialog(true)} data-testid="button-add-ip">
                             إضافة IP
                           </Button>
                         </div>
@@ -426,7 +426,7 @@ export default function SecurityManagementPage() {
                             updateSettingsMutation.mutate({ sessionTimeout: parseInt(e.target.value) || 480 })
                           }
                           disabled={updateSettingsMutation.isPending}
-                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                          className="h-11 sm:h-10"
                           data-testid="input-session-timeout"
                         />
                         <p className="text-xs text-muted-foreground">
@@ -444,7 +444,7 @@ export default function SecurityManagementPage() {
                             updateSettingsMutation.mutate({ maxConcurrentSessions: parseInt(e.target.value) || 3 })
                           }
                           disabled={updateSettingsMutation.isPending}
-                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                          className="h-11 sm:h-10"
                           data-testid="input-max-sessions"
                         />
                         <p className="text-xs text-muted-foreground">
@@ -477,7 +477,7 @@ export default function SecurityManagementPage() {
                           updateSettingsMutation.mutate({ passwordExpiryDays: parseInt(e.target.value) || 90 })
                         }
                         disabled={updateSettingsMutation.isPending}
-                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="h-11 sm:h-10"
                         data-testid="input-password-expiry"
                       />
                       <p className="text-xs text-muted-foreground">
@@ -548,7 +548,7 @@ export default function SecurityManagementPage() {
                     <Button 
                       variant="destructive" 
                       size="sm"
-                      className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto"
+                      className="h-11 sm:h-9 w-full sm:w-auto"
                       onClick={() => invalidateAllSessionsMutation.mutate()}
                       disabled={invalidateAllSessionsMutation.isPending}
                       data-testid="button-invalidate-all-sessions"

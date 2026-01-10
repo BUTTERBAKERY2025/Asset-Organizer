@@ -361,7 +361,7 @@ export default function ProductionReportsPage() {
               onClick={() => refetch()}
               disabled={isLoading}
               data-testid="btn-refresh"
-              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+              className="h-11 sm:h-9"
             >
               <RefreshCw className={`h-4 w-4 ml-1 ${isLoading ? 'animate-spin' : ''}`} />
               تحديث
@@ -435,7 +435,7 @@ export default function ProductionReportsPage() {
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-gray-500" />
                 <Select value={selectedBranch || "all"} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-[140px] h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-branch">
+                  <SelectTrigger className="w-[140px] h-11 sm:h-10 text-sm" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -453,7 +453,7 @@ export default function ProductionReportsPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-[130px] h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
+                  className="w-[130px] h-11 sm:h-10 text-sm"
                   data-testid="input-start-date"
                 />
                 <span className="text-gray-400">-</span>
@@ -461,7 +461,7 @@ export default function ProductionReportsPage() {
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-[130px] h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
+                  className="w-[130px] h-11 sm:h-10 text-sm"
                   data-testid="input-end-date"
                 />
               </div>
@@ -472,7 +472,7 @@ export default function ProductionReportsPage() {
                     key={i}
                     variant="ghost"
                     size="sm"
-                    className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs px-2"
+                    className="h-11 sm:h-9 text-xs px-2"
                     onClick={() => applyDatePreset(preset)}
                     data-testid={`btn-preset-${i}`}
                   >
@@ -485,7 +485,7 @@ export default function ProductionReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs"
+                  className="h-11 sm:h-9 text-xs"
                   onClick={() => exportToExcel("all")}
                   disabled={isExporting !== null || !reportData}
                   data-testid="btn-export-excel"
@@ -496,7 +496,7 @@ export default function ProductionReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs"
+                  className="h-11 sm:h-9 text-xs"
                   onClick={exportToPDF}
                   disabled={isExporting !== null || !reportData}
                   data-testid="btn-export-pdf"
@@ -507,7 +507,7 @@ export default function ProductionReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs"
+                  className="h-11 sm:h-9 text-xs"
                   onClick={() => exportToCSV("summary")}
                   disabled={isExporting !== null || !reportData}
                   data-testid="btn-export-csv"

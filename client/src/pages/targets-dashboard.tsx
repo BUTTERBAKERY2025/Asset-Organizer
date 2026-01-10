@@ -486,7 +486,7 @@ export default function TargetsDashboard() {
             <div className="flex items-center gap-2">
               <Label className="hidden sm:inline">السنة:</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-24 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
+                <SelectTrigger className="w-24 h-11 sm:h-10" data-testid="select-year">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -499,7 +499,7 @@ export default function TargetsDashboard() {
             <div className="flex items-center gap-2">
               <Label className="hidden sm:inline">الشهر:</Label>
               <Select value={selectedMonthNum} onValueChange={setSelectedMonthNum}>
-                <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
+                <SelectTrigger className="w-28 h-11 sm:h-10" data-testid="select-month">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -510,25 +510,25 @@ export default function TargetsDashboard() {
               </Select>
             </div>
             
-            <Button variant="outline" onClick={exportToExcel} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
+            <Button variant="outline" onClick={exportToExcel} className="h-11 sm:h-9" data-testid="button-export-excel">
               <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
               <span className="hidden sm:inline">تصدير Excel</span>
             </Button>
             
-            <Button variant="outline" onClick={exportToPDF} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-pdf">
+            <Button variant="outline" onClick={exportToPDF} className="h-11 sm:h-9" data-testid="button-export-pdf">
               <FileText className="h-4 w-4 sm:ml-2" />
               <span className="hidden sm:inline">طباعة PDF</span>
             </Button>
             
             <Link href="/targets-planning">
-              <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-goto-planning">
+              <Button variant="outline" className="h-11 sm:h-9" data-testid="button-goto-planning">
                 <Target className="h-4 w-4 sm:ml-2" />
                 <span className="hidden sm:inline">تخطيط الأهداف</span>
               </Button>
             </Link>
             
             <Link href="/cashier-shift-performance">
-              <Button variant="default" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-amber-600 hover:bg-amber-700" data-testid="button-goto-shift-performance">
+              <Button variant="default" className="h-11 sm:h-9 bg-amber-600 hover:bg-amber-700" data-testid="button-goto-shift-performance">
                 <Users className="h-4 w-4 sm:ml-2" />
                 <span className="hidden sm:inline">أداء الشفتات</span>
               </Button>

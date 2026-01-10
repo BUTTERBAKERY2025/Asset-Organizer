@@ -168,7 +168,7 @@ export default function ProductionPage() {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-order" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+              <Button data-testid="button-add-order" className="h-11 sm:h-9">
                 <Plus className="w-4 h-4 ml-2" />
                 أمر إنتاج جديد
               </Button>
@@ -182,7 +182,7 @@ export default function ProductionPage() {
                 <div>
                   <Label>الفرع *</Label>
                   <Select value={formData.branchId} onValueChange={v => setFormData({ ...formData, branchId: v })}>
-                    <SelectTrigger data-testid="select-branch" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                    <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
                       <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>
                     <SelectContent>
@@ -195,7 +195,7 @@ export default function ProductionPage() {
                 <div>
                   <Label>المنتج *</Label>
                   <Select value={formData.productId} onValueChange={v => setFormData({ ...formData, productId: v })}>
-                    <SelectTrigger data-testid="select-product" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                    <SelectTrigger data-testid="select-product" className="h-11 sm:h-10">
                       <SelectValue placeholder="اختر المنتج" />
                     </SelectTrigger>
                     <SelectContent>
@@ -213,7 +213,7 @@ export default function ProductionPage() {
                     onChange={e => setFormData({ ...formData, targetQuantity: e.target.value })}
                     placeholder="مثال: 100"
                     data-testid="input-quantity"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -223,7 +223,7 @@ export default function ProductionPage() {
                       type="date"
                       value={formData.scheduledDate}
                       onChange={e => setFormData({ ...formData, scheduledDate: e.target.value })}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                     />
                   </div>
                   <div>
@@ -232,14 +232,14 @@ export default function ProductionPage() {
                       type="time"
                       value={formData.scheduledTime}
                       onChange={e => setFormData({ ...formData, scheduledTime: e.target.value })}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                     />
                   </div>
                 </div>
                 <div>
                   <Label>الأولوية</Label>
                   <Select value={formData.priority} onValueChange={v => setFormData({ ...formData, priority: v })}>
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                    <SelectTrigger className="h-11 sm:h-10">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -255,7 +255,7 @@ export default function ProductionPage() {
                     value={formData.assignedTo}
                     onChange={e => setFormData({ ...formData, assignedTo: e.target.value })}
                     placeholder="اسم الخباز"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                   />
                 </div>
                 <div>
@@ -268,12 +268,12 @@ export default function ProductionPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={resetForm} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
+                <Button variant="outline" onClick={resetForm} className="h-11 sm:h-9">إلغاء</Button>
                 <Button 
                   onClick={handleSubmit} 
                   disabled={!formData.branchId || !formData.productId || !formData.targetQuantity}
                   data-testid="button-save-order"
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="h-11 sm:h-9"
                 >
                   {editingOrder ? "تحديث" : "إنشاء"}
                 </Button>
@@ -289,7 +289,7 @@ export default function ProductionPage() {
               placeholder="بحث عن أمر إنتاج..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+              className="pr-10 h-11 sm:h-10"
               data-testid="input-search"
             />
           </div>
@@ -320,7 +320,7 @@ export default function ProductionPage() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Factory className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">لا توجد أوامر إنتاج</p>
-              <Button variant="outline" className="mt-4 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsDialogOpen(true)}>
+              <Button variant="outline" className="mt-4 h-11 sm:h-9" onClick={() => setIsDialogOpen(true)}>
                 إنشاء أول أمر إنتاج
               </Button>
             </CardContent>
@@ -389,7 +389,7 @@ export default function ProductionPage() {
                           variant="outline" 
                           size="sm" 
                           onClick={() => handleStatusChange(order, 'in_progress')}
-                          className="text-blue-600 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                          className="text-blue-600 h-11 sm:h-9"
                         >
                           <Play className="w-3 h-3 ml-1" />
                           بدء
@@ -400,13 +400,13 @@ export default function ProductionPage() {
                           variant="outline" 
                           size="sm" 
                           onClick={() => handleStatusChange(order, 'completed')}
-                          className="text-green-600 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                          className="text-green-600 h-11 sm:h-9"
                         >
                           <CheckCircle className="w-3 h-3 ml-1" />
                           إكمال
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" className="text-destructive h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => deleteMutation.mutate(order.id)}>
+                      <Button variant="outline" size="sm" className="text-destructive h-11 sm:h-9" onClick={() => deleteMutation.mutate(order.id)}>
                         <Trash2 className="w-3 h-3 ml-1" />
                         حذف
                       </Button>

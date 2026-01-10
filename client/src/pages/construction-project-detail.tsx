@@ -604,7 +604,7 @@ export default function ConstructionProjectDetailPage() {
                 value={projectId.toString()}
                 onValueChange={(value) => navigate(`/construction-projects/${value}`)}
               >
-                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 w-full max-w-md" data-testid="select-project">
+                <SelectTrigger className="h-11 sm:h-10 w-full max-w-md" data-testid="select-project">
                   <SelectValue placeholder="اختر مشروع" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -629,7 +629,7 @@ export default function ConstructionProjectDetailPage() {
             )}
           </div>
           {canEdit && (
-            <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => { setNewProgress(project.progressPercent || 0); setIsUpdateProgressOpen(true); }} data-testid="button-update-progress">
+            <Button className="h-11 sm:h-9" onClick={() => { setNewProgress(project.progressPercent || 0); setIsUpdateProgressOpen(true); }} data-testid="button-update-progress">
               تحديث نسبة التقدم
             </Button>
           )}

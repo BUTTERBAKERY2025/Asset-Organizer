@@ -159,7 +159,7 @@ export default function MarketingTasksPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -170,7 +170,7 @@ export default function MarketingTasksPage() {
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-task">
+              <Button className="h-11 sm:h-9" data-testid="button-add-task">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة مهمة
               </Button>
@@ -281,7 +281,7 @@ export default function MarketingTasksPage() {
             <span className="text-sm font-medium">تصفية:</span>
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
+            <SelectTrigger className="w-full sm:w-40 h-11 sm:h-10" data-testid="select-status-filter">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -306,7 +306,7 @@ export default function MarketingTasksPage() {
             <CardContent className="p-6 sm:p-8 text-center">
               <CheckCircle2 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">لا توجد مهام</p>
-              <Button className="mt-4 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsAddDialogOpen(true)}>
+              <Button className="mt-4 h-11 sm:h-9" onClick={() => setIsAddDialogOpen(true)}>
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة مهمة جديدة
               </Button>

@@ -119,7 +119,7 @@ export default function AuditLogsPage() {
               متابعة جميع العمليات والتغييرات في النظام
             </p>
           </div>
-          <Button onClick={() => refetch()} variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" data-testid="button-refresh-logs">
+          <Button onClick={() => refetch()} variant="outline" className="h-11 sm:h-9 w-full sm:w-auto" data-testid="button-refresh-logs">
             <RefreshCw className="w-4 h-4 ml-2" />
             تحديث
           </Button>
@@ -142,13 +142,13 @@ export default function AuditLogsPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="pr-10 h-11 sm:h-10"
                     data-testid="input-search-logs"
                   />
                 </div>
               </div>
               <Select value={selectedModule} onValueChange={setSelectedModule}>
-                <SelectTrigger className="w-full sm:w-[200px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-module-filter">
+                <SelectTrigger className="w-full sm:w-[200px] h-11 sm:h-10" data-testid="select-module-filter">
                   <SelectValue placeholder="اختر القسم" />
                 </SelectTrigger>
                 <SelectContent>
@@ -159,7 +159,7 @@ export default function AuditLogsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={handleSearch} disabled={isSearching} className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 w-full sm:w-auto" data-testid="button-search">
+              <Button onClick={handleSearch} disabled={isSearching} className="h-11 sm:h-10 w-full sm:w-auto" data-testid="button-search">
                 {isSearching ? (
                   <Loader2 className="w-4 h-4 animate-spin ml-2" />
                 ) : (

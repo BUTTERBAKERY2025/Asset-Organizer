@@ -200,7 +200,7 @@ export default function ContractorsPage() {
             <p className="text-sm sm:text-base text-muted-foreground">إدارة بيانات المقاولين والموردين</p>
           </div>
           {canEdit && (
-            <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto" data-testid="button-add-contractor">
+            <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} className="h-11 sm:h-9 w-full sm:w-auto" data-testid="button-add-contractor">
               <Plus className="w-4 h-4 ml-2" />
               إضافة مقاول
             </Button>
@@ -214,7 +214,7 @@ export default function ContractorsPage() {
               placeholder="البحث في المقاولين..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+              className="pr-10 h-11 sm:h-10"
               data-testid="input-search-contractors"
             />
           </div>
@@ -277,14 +277,14 @@ export default function ContractorsPage() {
                       {canEdit && (
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => openEditDialog(contractor)} data-testid={`button-edit-contractor-${contractor.id}`}>
+                            <Button variant="ghost" size="sm" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openEditDialog(contractor)} data-testid={`button-edit-contractor-${contractor.id}`}>
                               <Pencil className="w-4 h-4" />
                             </Button>
                             {isAdmin && (
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                className="h-11 w-11 sm:h-8 sm:w-8"
                                 onClick={() => { setSelectedContractor(contractor); setIsDeleteDialogOpen(true); }}
                                 data-testid={`button-delete-contractor-${contractor.id}`}
                               >

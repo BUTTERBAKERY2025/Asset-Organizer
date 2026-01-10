@@ -469,7 +469,7 @@ export default function InventoryPage() {
             <p className="text-muted-foreground mt-1 text-sm sm:text-base">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={handlePrint} data-testid="button-print">
+            <Button variant="outline" className="gap-2 h-11 sm:h-9" onClick={handlePrint} data-testid="button-print">
               <Printer className="w-4 h-4" />
               <span>طباعة</span>
             </Button>
@@ -481,11 +481,11 @@ export default function InventoryPage() {
               subtitle={`تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`}
               sheetName="المخزون"
             />
-            <Button className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={handleExport} data-testid="button-export">
+            <Button className="gap-2 h-11 sm:h-9" onClick={handleExport} data-testid="button-export">
               <Download className="w-4 h-4" />
               <span>تصدير Excel</span>
             </Button>
-            <Button className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsImportDialogOpen(true)} data-testid="button-import">
+            <Button className="gap-2 h-11 sm:h-9" onClick={() => setIsImportDialogOpen(true)} data-testid="button-import">
               <Upload className="w-4 h-4" />
               <span>استيراد Excel</span>
             </Button>

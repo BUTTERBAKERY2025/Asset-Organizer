@@ -421,7 +421,7 @@ export default function MarketingReportsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -431,11 +431,11 @@ export default function MarketingReportsPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={resetFilters} data-testid="button-reset-filters">
+            <Button variant="outline" className="h-11 sm:h-9" onClick={resetFilters} data-testid="button-reset-filters">
               <RefreshCw className="w-4 h-4 ml-2" />
               إعادة تعيين
             </Button>
-            <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-pink-500 hover:bg-pink-600" onClick={exportToExcel} data-testid="button-export">
+            <Button className="h-11 sm:h-9 bg-pink-500 hover:bg-pink-600" onClick={exportToExcel} data-testid="button-export">
               <Download className="w-4 h-4 ml-2" />
               تصدير Excel
             </Button>
@@ -464,7 +464,7 @@ export default function MarketingReportsPage() {
                       من تاريخ
                     </Label>
                     <Input
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       type="date"
                       value={filters.dateFrom}
                       onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
@@ -477,7 +477,7 @@ export default function MarketingReportsPage() {
                       إلى تاريخ
                     </Label>
                     <Input
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       type="date"
                       value={filters.dateTo}
                       onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
@@ -490,7 +490,7 @@ export default function MarketingReportsPage() {
                       الحملة
                     </Label>
                     <Select value={filters.campaignId} onValueChange={(v) => setFilters({...filters, campaignId: v})}>
-                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="filter-campaign">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="filter-campaign">
                         <SelectValue placeholder="جميع الحملات" />
                       </SelectTrigger>
                       <SelectContent>
@@ -509,7 +509,7 @@ export default function MarketingReportsPage() {
                       المؤثر
                     </Label>
                     <Select value={filters.influencerId} onValueChange={(v) => setFilters({...filters, influencerId: v})}>
-                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="filter-influencer">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="filter-influencer">
                         <SelectValue placeholder="جميع المؤثرين" />
                       </SelectTrigger>
                       <SelectContent>

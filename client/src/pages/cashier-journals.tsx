@@ -408,7 +408,7 @@ export default function CashierJournalsPage() {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 <Select value={cashierFilter} onValueChange={setCashierFilter} disabled={!canViewAllCashiers && dropdownCashiers.length <= 1}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-cashier">
+                  <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-cashier">
                     <SelectValue placeholder="الكاشير" />
                   </SelectTrigger>
                   <SelectContent>
@@ -424,7 +424,7 @@ export default function CashierJournalsPage() {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
+                  className="h-11 sm:h-10 text-sm"
                   placeholder="من تاريخ"
                   data-testid="input-date-from"
                 />
@@ -432,12 +432,12 @@ export default function CashierJournalsPage() {
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
+                  className="h-11 sm:h-10 text-sm"
                   placeholder="إلى تاريخ"
                   data-testid="input-date-to"
                 />
                 <Select value={branchFilter} onValueChange={setBranchFilter}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-branch">
+                  <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -450,7 +450,7 @@ export default function CashierJournalsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm" data-testid="select-status">
+                  <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-status">
                     <SelectValue placeholder="الحالة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -537,7 +537,7 @@ export default function CashierJournalsPage() {
                             <TableCell className="py-2 sm:py-3">
                               <div className="flex items-center justify-center gap-0.5 sm:gap-1">
                                 <Link href={`/cashier-journals/${journal.id}`}>
-                                  <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" data-testid={`button-view-${journal.id}`}>
+                                  <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid={`button-view-${journal.id}`}>
                                     <Eye className="w-5 h-5 sm:w-4 sm:h-4" />
                                   </Button>
                                 </Link>
@@ -546,7 +546,7 @@ export default function CashierJournalsPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      className="h-11 w-11 sm:h-8 sm:w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                       onClick={() => approveMutation.mutate(journal.id)}
                                       data-testid={`button-approve-${journal.id}`}
                                     >
@@ -555,7 +555,7 @@ export default function CashierJournalsPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      className="h-11 w-11 sm:h-8 sm:w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                       onClick={() => rejectMutation.mutate({ id: journal.id })}
                                       data-testid={`button-reject-${journal.id}`}
                                     >

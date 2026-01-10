@@ -509,7 +509,7 @@ export default function PaymentRequestsPage() {
               form.reset();
               setIsAddOpen(true);
             }}
-            className="bg-butter-gold hover:bg-butter-gold/90 w-full sm:w-auto h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+            className="bg-butter-gold hover:bg-butter-gold/90 w-full sm:w-auto h-11 sm:h-9"
             data-testid="button-add-request"
           >
             <Plus className="ml-2 h-4 w-4" />
@@ -619,7 +619,7 @@ export default function PaymentRequestsPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     data-testid="input-search"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
+                    className="h-11 sm:h-10 text-sm"
                   />
                 </div>
                 <div>
@@ -628,7 +628,7 @@ export default function PaymentRequestsPage() {
                     المشروع
                   </Label>
                   <Select value={projectFilter} onValueChange={setProjectFilter}>
-                    <SelectTrigger data-testid="select-project-filter" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm">
+                    <SelectTrigger data-testid="select-project-filter" className="h-11 sm:h-10 text-sm">
                       <SelectValue placeholder="جميع المشاريع" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -644,7 +644,7 @@ export default function PaymentRequestsPage() {
                 <div>
                   <Label className="mb-1.5 text-xs sm:text-sm">نوع الطلب</Label>
                   <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger data-testid="select-type-filter" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm">
+                    <SelectTrigger data-testid="select-type-filter" className="h-11 sm:h-10 text-sm">
                       <SelectValue placeholder="جميع الأنواع" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -670,7 +670,7 @@ export default function PaymentRequestsPage() {
                     value={dateFrom} 
                     onChange={(e) => setDateFrom(e.target.value)}
                     data-testid="input-date-from"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
+                    className="h-11 sm:h-10 text-sm"
                   />
                 </div>
                 <div className="col-span-1">
@@ -683,7 +683,7 @@ export default function PaymentRequestsPage() {
                     value={dateTo} 
                     onChange={(e) => setDateTo(e.target.value)}
                     data-testid="input-date-to"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-sm"
+                    className="h-11 sm:h-10 text-sm"
                   />
                 </div>
                 <Button 
@@ -696,7 +696,7 @@ export default function PaymentRequestsPage() {
                     setDateFrom("");
                     setDateTo("");
                   }}
-                  className="text-gray-500 h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs sm:text-sm col-span-2 sm:col-span-1"
+                  className="text-gray-500 h-11 sm:h-9 text-xs sm:text-sm col-span-2 sm:col-span-1"
                   data-testid="button-clear-filters"
                 >
                   <X className="ml-1 h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -711,7 +711,7 @@ export default function PaymentRequestsPage() {
                   onClick={handleDownloadPDF}
                   disabled={requestsByDate.length === 0}
                   data-testid="button-download-pdf"
-                  className="flex-1 sm:flex-none h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs sm:text-sm"
+                  className="flex-1 sm:flex-none h-11 sm:h-9 text-xs sm:text-sm"
                 >
                   <Download className="ml-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span className="hidden sm:inline">تحميل PDF</span>
@@ -723,7 +723,7 @@ export default function PaymentRequestsPage() {
                   onClick={handleSharePDF}
                   disabled={requestsByDate.length === 0}
                   data-testid="button-share-whatsapp"
-                  className="flex-1 sm:flex-none h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs sm:text-sm"
+                  className="flex-1 sm:flex-none h-11 sm:h-9 text-xs sm:text-sm"
                 >
                   <MessageCircle className="ml-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" />
                   <span className="hidden sm:inline">مشاركة واتساب</span>
@@ -934,7 +934,7 @@ export default function PaymentRequestsPage() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => approveMutation.mutate(request.id)}
-                                    className="text-green-600 hover:text-green-700 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                    className="text-green-600 hover:text-green-700 h-11 w-11 sm:h-8 sm:w-8"
                                     data-testid={`button-approve-${request.id}`}
                                   >
                                     <CheckCircle className="h-4 w-4" />
@@ -946,7 +946,7 @@ export default function PaymentRequestsPage() {
                                       setSelectedRequest(request);
                                       setIsRejectOpen(true);
                                     }}
-                                    className="text-red-600 hover:text-red-700 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                    className="text-red-600 hover:text-red-700 h-11 w-11 sm:h-8 sm:w-8"
                                     data-testid={`button-reject-${request.id}`}
                                   >
                                     <XCircle className="h-4 w-4" />
@@ -958,7 +958,7 @@ export default function PaymentRequestsPage() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => markPaidMutation.mutate(request.id)}
-                                  className="text-green-600 hover:text-green-700 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                  className="text-green-600 hover:text-green-700 h-11 w-11 sm:h-8 sm:w-8"
                                   data-testid={`button-paid-${request.id}`}
                                 >
                                   <DollarSign className="h-4 w-4" />
@@ -969,7 +969,7 @@ export default function PaymentRequestsPage() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => openEditDialog(request)}
-                                  className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                  className="h-11 w-11 sm:h-8 sm:w-8"
                                   data-testid={`button-edit-${request.id}`}
                                 >
                                   <Pencil className="h-4 w-4" />
@@ -983,7 +983,7 @@ export default function PaymentRequestsPage() {
                                     setSelectedRequest(request);
                                     setIsDeleteOpen(true);
                                   }}
-                                  className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                  className="h-11 w-11 sm:h-8 sm:w-8"
                                   data-testid={`button-delete-${request.id}`}
                                 >
                                   <Trash2 className="h-4 w-4 text-red-500" />
@@ -993,7 +993,7 @@ export default function PaymentRequestsPage() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => openDetailsModal(request)}
-                                className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                className="h-11 w-11 sm:h-8 sm:w-8"
                                 data-testid={`button-view-${request.id}`}
                               >
                                 <Eye className="h-4 w-4 text-gray-500" />

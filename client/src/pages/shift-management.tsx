@@ -494,7 +494,7 @@ export default function ShiftManagementPage() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+              className="h-11 w-11 sm:h-8 sm:w-8"
               onClick={() => navigate("/attendance-dashboard")}
               data-testid="btn-back"
             >
@@ -507,7 +507,7 @@ export default function ShiftManagementPage() {
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+              <SelectTrigger className="w-48 h-11 sm:h-10" data-testid="select-branch">
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
@@ -560,13 +560,13 @@ export default function ShiftManagementPage() {
                       </CardDescription>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} data-testid="btn-prev-week">
+                      <Button variant="outline" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} data-testid="btn-prev-week">
                         <ChevronRight className="w-4 h-4" />
                       </Button>
-                      <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 6 }))} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-current-week">
+                      <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 6 }))} className="h-11 sm:h-9" data-testid="btn-current-week">
                         هذا الأسبوع
                       </Button>
-                      <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-next-week">
+                      <Button variant="outline" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-next-week">
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
                     </div>
@@ -575,7 +575,7 @@ export default function ShiftManagementPage() {
                 <CardContent>
                   <div className="flex gap-2 mb-4 items-center">
                     <Select value={selectedShiftProfile} onValueChange={setSelectedShiftProfile}>
-                      <SelectTrigger className="w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-shift-profile">
+                      <SelectTrigger className="w-48 h-11 sm:h-10" data-testid="select-shift-profile">
                         <Clock className="w-4 h-4 ml-2" />
                         <SelectValue placeholder="اختر الوردية" />
                       </SelectTrigger>
@@ -595,12 +595,12 @@ export default function ShiftManagementPage() {
                         )}
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-apply-default">
+                    <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2 h-11 sm:h-9" data-testid="btn-apply-default">
                       <Users className="w-4 h-4" />
                       تطبيق على الجميع
                     </Button>
                     {hasUnsavedChanges && (
-                      <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-save-schedule">
+                      <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2 h-11 sm:h-9" data-testid="btn-save-schedule">
                         <Save className="w-4 h-4" />
                         {saveSchedulesMutation.isPending ? "جاري الحفظ..." : "حفظ الجدول"}
                       </Button>
@@ -877,7 +877,7 @@ export default function ShiftManagementPage() {
                           }, 0)}
                         </span>
                       </div>
-                      <Button variant="outline" className="w-full gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportWeeklyReport} disabled={isExporting} data-testid="btn-export-weekly">
+                      <Button variant="outline" className="w-full gap-2 h-11 sm:h-9" onClick={exportWeeklyReport} disabled={isExporting} data-testid="btn-export-weekly">
                         {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                         {isExporting ? "جاري التصدير..." : "تصدير التقرير"}
                       </Button>

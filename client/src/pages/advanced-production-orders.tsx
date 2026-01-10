@@ -177,7 +177,7 @@ export default function AdvancedProductionOrdersPage() {
         <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/production-dashboard">
-              <Button variant="ghost" size="sm" className="gap-1 hover:text-amber-600 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-back-dashboard">
+              <Button variant="ghost" size="sm" className="gap-1 hover:text-amber-600 h-11 sm:h-9" data-testid="btn-back-dashboard">
                 <ArrowRight className="h-4 w-4" />
                 لوحة الإنتاج
               </Button>
@@ -197,18 +197,18 @@ export default function AdvancedProductionOrdersPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') })} data-testid="btn-refresh">
+              <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') })} data-testid="btn-refresh">
                 <RefreshCw className="h-4 w-4 ml-2" />
                 تحديث
               </Button>
               <Link href="/ai-production-planner">
-                <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-ai-planner">
+                <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50 h-11 sm:h-9" data-testid="btn-ai-planner">
                   <Brain className="h-4 w-4 ml-2" />
                   المخطط الذكي
                 </Button>
               </Link>
               <Link href="/advanced-production-orders/new">
-                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-new-order">
+                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="button-new-order">
                   <Plus className="w-4 h-4 ml-2" />
                   أمر جديد
                 </Button>
@@ -282,12 +282,12 @@ export default function AdvancedProductionOrdersPage() {
                   placeholder="بحث بالرقم أو العنوان..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-10 bg-gray-50 border-gray-200 focus:bg-white h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                  className="pr-10 bg-gray-50 border-gray-200 focus:bg-white h-11 sm:h-10"
                   data-testid="input-search"
                 />
               </div>
               <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 sm:h-10" data-testid="select-branch">
                   <Building2 className="h-4 w-4 ml-2 text-muted-foreground" />
                   <SelectValue placeholder="الفرع" />
                 </SelectTrigger>
@@ -301,7 +301,7 @@ export default function AdvancedProductionOrdersPage() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status">
+                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 sm:h-10" data-testid="select-status">
                   <SelectValue placeholder="الحالة" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -314,7 +314,7 @@ export default function AdvancedProductionOrdersPage() {
                 </SelectContent>
               </Select>
               <Select value={orderTypeFilter} onValueChange={setOrderTypeFilter}>
-                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-order-type">
+                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 sm:h-10" data-testid="select-order-type">
                   <SelectValue placeholder="نوع الأمر" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -451,18 +451,18 @@ export default function AdvancedProductionOrdersPage() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Link href={`/advanced-production-orders/${order.id}`}>
-                              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 hover:bg-amber-100 hover:text-amber-700" data-testid={`button-view-${order.id}`}>
+                              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8 hover:bg-amber-100 hover:text-amber-700" data-testid={`button-view-${order.id}`}>
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
                             <Link href={`/advanced-production-orders/${order.id}/edit`}>
-                              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 hover:bg-blue-100 hover:text-blue-700" data-testid={`button-edit-${order.id}`}>
+                              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8 hover:bg-blue-100 hover:text-blue-700" data-testid={`button-edit-${order.id}`}>
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </Link>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 hover:bg-red-100 hover:text-red-700" data-testid={`button-delete-${order.id}`}>
+                                <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8 hover:bg-red-100 hover:text-red-700" data-testid={`button-delete-${order.id}`}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>

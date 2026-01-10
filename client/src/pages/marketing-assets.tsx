@@ -169,7 +169,7 @@ export default function MarketingAssetsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/marketing">
-              <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2" data-testid="button-back">
+              <Button variant="outline" size="sm" className="h-11 sm:h-9 gap-2" data-testid="button-back">
                 <ArrowRight className="h-4 w-4" />
                 العودة للتسويق
               </Button>
@@ -182,7 +182,7 @@ export default function MarketingAssetsPage() {
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-pink-500 hover:bg-pink-600 gap-2" data-testid="button-add-asset">
+              <Button className="h-11 sm:h-9 bg-pink-500 hover:bg-pink-600 gap-2" data-testid="button-add-asset">
                 <Plus className="h-4 w-4" />
                 إضافة أصل
               </Button>
@@ -195,7 +195,7 @@ export default function MarketingAssetsPage() {
                 <div>
                   <Label>اسم الأصل</Label>
                   <Input
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="مثال: بانر رمضان"
@@ -208,7 +208,7 @@ export default function MarketingAssetsPage() {
                     value={formData.assetType}
                     onValueChange={(value) => setFormData({ ...formData, assetType: value })}
                   >
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-asset-type">
+                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-asset-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -224,7 +224,7 @@ export default function MarketingAssetsPage() {
                     value={formData.campaignId?.toString() || "none"}
                     onValueChange={(value) => setFormData({ ...formData, campaignId: value === "none" ? null : parseInt(value) })}
                   >
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-campaign">
+                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-campaign">
                       <SelectValue placeholder="اختر الحملة" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -240,7 +240,7 @@ export default function MarketingAssetsPage() {
                 <div>
                   <Label>رابط الملف</Label>
                   <Input
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     value={formData.fileUrl || ""}
                     onChange={(e) => setFormData({ ...formData, fileUrl: e.target.value })}
                     placeholder="https://..."
@@ -259,7 +259,7 @@ export default function MarketingAssetsPage() {
                 <div>
                   <Label>الوسوم (مفصولة بفاصلة)</Label>
                   <Input
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     value={tagsInput}
                     onChange={(e) => handleTagsChange(e.target.value)}
                     placeholder="رمضان, عروض, صيف"
@@ -269,7 +269,7 @@ export default function MarketingAssetsPage() {
                 <Button
                   onClick={() => createAssetMutation.mutate(formData)}
                   disabled={!formData.name || createAssetMutation.isPending}
-                  className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-pink-500 hover:bg-pink-600"
+                  className="w-full h-11 sm:h-9 bg-pink-500 hover:bg-pink-600"
                   data-testid="button-submit-asset"
                 >
                   {createAssetMutation.isPending ? "جاري الإضافة..." : "إضافة الأصل"}
@@ -284,7 +284,7 @@ export default function MarketingAssetsPage() {
             value={filterType || "all"}
             onValueChange={(value) => setFilterType(value === "all" ? null : value)}
           >
-            <SelectTrigger className="w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0 bg-white" data-testid="select-filter-type">
+            <SelectTrigger className="w-48 h-11 sm:h-10 bg-white" data-testid="select-filter-type">
               <SelectValue placeholder="جميع الأنواع" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -299,7 +299,7 @@ export default function MarketingAssetsPage() {
             value={filterCampaignId?.toString() || "all"}
             onValueChange={(value) => setFilterCampaignId(value === "all" ? null : parseInt(value))}
           >
-            <SelectTrigger className="w-48 h-11 min-h-[44px] sm:h-10 sm:min-h-0 bg-white" data-testid="select-filter-campaign">
+            <SelectTrigger className="w-48 h-11 sm:h-10 bg-white" data-testid="select-filter-campaign">
               <SelectValue placeholder="جميع الحملات" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -353,7 +353,7 @@ export default function MarketingAssetsPage() {
                 <div className="flex gap-2 mt-3">
                   {asset.fileUrl && (
                     <a href={asset.fileUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline" size="sm" className="flex-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid={`button-view-${asset.id}`}>
+                      <Button variant="outline" size="sm" className="flex-1 h-11 sm:h-9" data-testid={`button-view-${asset.id}`}>
                         <Eye className="h-4 w-4" />
                       </Button>
                     </a>
@@ -362,7 +362,7 @@ export default function MarketingAssetsPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => deleteAssetMutation.mutate(asset.id)}
-                    className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                    className="h-11 sm:h-9 text-red-500 hover:text-red-700 hover:bg-red-50"
                     data-testid={`button-delete-${asset.id}`}
                   >
                     <Trash2 className="h-4 w-4" />

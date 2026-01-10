@@ -545,10 +545,10 @@ export default function RBACManagementPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
-            <TabsTrigger value="users" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-users">المستخدمين</TabsTrigger>
-            <TabsTrigger value="roles" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-roles">الأدوار</TabsTrigger>
-            <TabsTrigger value="departments" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-departments">الأقسام</TabsTrigger>
-            <TabsTrigger value="permissions" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0 text-xs sm:text-sm" data-testid="tab-permissions">الصلاحيات</TabsTrigger>
+            <TabsTrigger value="users" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-users">المستخدمين</TabsTrigger>
+            <TabsTrigger value="roles" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-roles">الأدوار</TabsTrigger>
+            <TabsTrigger value="departments" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-departments">الأقسام</TabsTrigger>
+            <TabsTrigger value="permissions" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-permissions">الصلاحيات</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">
@@ -595,7 +595,7 @@ export default function RBACManagementPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs sm:text-sm"
+                              className="h-11 sm:h-9 text-xs sm:text-sm"
                               onClick={() => {
                                 setSelectedUser(user);
                                 setIsUserAssignmentDialogOpen(true);
@@ -627,7 +627,7 @@ export default function RBACManagementPage() {
                 <Button
                   onClick={() => setIsRoleDialogOpen(true)}
                   disabled={!isAdmin}
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 w-full sm:w-auto"
+                  className="h-11 sm:h-9 w-full sm:w-auto"
                   data-testid="button-add-role"
                 >
                   <Shield className="h-4 w-4 ml-2" />
@@ -666,7 +666,7 @@ export default function RBACManagementPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 text-xs sm:text-sm"
+                              className="h-11 sm:h-9 text-xs sm:text-sm"
                               onClick={() => {
                                 setSelectedRole(role);
                                 setIsPermissionMatrixOpen(true);

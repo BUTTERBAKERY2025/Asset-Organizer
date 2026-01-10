@@ -124,7 +124,7 @@ export default function BranchesPage() {
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-branch">
+              <Button className="gap-2 h-11 sm:h-9" data-testid="button-add-branch">
                 <Plus className="w-4 h-4" />
                 <span>إضافة فرع جديد</span>
               </Button>
@@ -140,7 +140,7 @@ export default function BranchesPage() {
                   <Input
                     {...form.register("id")}
                     placeholder="مثال: jeddah"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     data-testid="input-branch-id"
                   />
                   {form.formState.errors.id && (
@@ -154,7 +154,7 @@ export default function BranchesPage() {
                   <Input
                     {...form.register("name")}
                     placeholder="مثال: فرع جدة"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     data-testid="input-branch-name"
                   />
                   {form.formState.errors.name && (
@@ -163,7 +163,7 @@ export default function BranchesPage() {
                 </div>
 
                 <DialogFooter>
-                  <Button type="submit" disabled={createMutation.isPending} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-submit-branch">
+                  <Button type="submit" disabled={createMutation.isPending} className="h-11 sm:h-9" data-testid="button-submit-branch">
                     {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
                     إضافة الفرع
                   </Button>

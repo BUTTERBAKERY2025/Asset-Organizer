@@ -312,20 +312,20 @@ export default function AdvancedProductionOrderDetailsPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => handlePrint()} data-testid="btn-print">
+            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => handlePrint()} data-testid="btn-print">
               <Printer className="h-4 w-4 ml-2" />
               طباعة
             </Button>
-            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportToPdf} data-testid="btn-pdf">
+            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={exportToPdf} data-testid="btn-pdf">
               <Download className="h-4 w-4 ml-2" />
               PDF
             </Button>
-            <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={exportToExcel} data-testid="btn-excel">
+            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={exportToExcel} data-testid="btn-excel">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               Excel
             </Button>
             <Link href={`/advanced-production-orders/${id}/edit`}>
-              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="btn-edit">
+              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="btn-edit">
                 <Edit className="h-4 w-4 ml-2" />
                 تعديل
               </Button>

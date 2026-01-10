@@ -64,7 +64,7 @@ export default function OperationsDashboardPage() {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">لوحة تحكم التشغيل</h1>
-              <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 p-0">
+              <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-11 w-11 sm:h-8 sm:w-8 p-0">
                 <RefreshCw className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
               </Button>
             </div>
@@ -74,7 +74,7 @@ export default function OperationsDashboardPage() {
           <div className="flex flex-wrap items-center gap-2">
             {quickActions.map((action, i) => (
               <Link key={i} href={action.href}>
-                <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-1.5 text-xs" data-testid={`quick-${i}`}>
+                <Button variant="outline" size="sm" className="h-11 sm:h-9 gap-1.5 text-xs" data-testid={`quick-${i}`}>
                   <Plus className="w-3 h-3" />
                   {action.label}
                 </Button>

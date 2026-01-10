@@ -812,7 +812,7 @@ export default function CashierJournalFormPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/cashier-journals">
-              <Button variant="ghost" size="sm" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
+              <Button variant="ghost" size="sm" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -823,7 +823,7 @@ export default function CashierJournalFormPage() {
             </div>
           </div>
           {isEdit && (
-            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-pdf">
+            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700 h-11 sm:h-9" data-testid="button-export-pdf">
               <FileDown className="w-4 h-4" />
               تصدير PDF
             </Button>
@@ -842,7 +842,7 @@ export default function CashierJournalFormPage() {
                   <div className="space-y-2">
                     <Label>الفرع *</Label>
                     <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -861,14 +861,14 @@ export default function CashierJournalFormPage() {
                       value={formData.journalDate}
                       onChange={(e) => setFormData({ ...formData, journalDate: e.target.value })}
                       disabled={isReadOnly}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       data-testid="input-date"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>الوردية *</Label>
                     <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-shift">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -885,7 +885,7 @@ export default function CashierJournalFormPage() {
                     <Input
                       value={formData.cashierName}
                       readOnly
-                      className="bg-muted cursor-not-allowed h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="bg-muted cursor-not-allowed h-11 sm:h-10"
                       placeholder="اسم الكاشير"
                       data-testid="input-cashier-name"
                     />
@@ -952,7 +952,7 @@ export default function CashierJournalFormPage() {
                     onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
                     placeholder="0.00"
                     disabled={isReadOnly}
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     data-testid="input-opening-balance"
                   />
                 </div>
@@ -966,7 +966,7 @@ export default function CashierJournalFormPage() {
                   <CardDescription>أدخل المبيعات لكل طريقة دفع</CardDescription>
                 </div>
                 {!isReadOnly && (
-                  <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={addPaymentBreakdown} data-testid="button-add-payment">
+                  <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={addPaymentBreakdown} data-testid="button-add-payment">
                     <Plus className="w-4 h-4 mr-1" />
                     إضافة
                   </Button>
@@ -985,7 +985,7 @@ export default function CashierJournalFormPage() {
                         onValueChange={(v) => updatePaymentBreakdown(index, "paymentMethod", v)}
                         disabled={isReadOnly}
                       >
-                        <SelectTrigger className="w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                        <SelectTrigger className="w-40 h-11 sm:h-10">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
@@ -1003,7 +1003,7 @@ export default function CashierJournalFormPage() {
                           value={breakdown.amount || ""}
                           onChange={(e) => updatePaymentBreakdown(index, "amount", parseFloat(e.target.value) || 0)}
                           disabled={isReadOnly}
-                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                          className="h-11 sm:h-10"
                           data-testid={`input-payment-amount-${index}`}
                         />
                       </div>
@@ -1014,12 +1014,12 @@ export default function CashierJournalFormPage() {
                           value={breakdown.transactionCount || ""}
                           onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
                           disabled={isReadOnly}
-                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                          className="h-11 sm:h-10"
                           data-testid={`input-payment-count-${index}`}
                         />
                       </div>
                       {paymentBreakdowns.length > 1 && !isReadOnly && (
-                        <Button variant="ghost" size="sm" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" onClick={() => removePaymentBreakdown(index)}>
+                        <Button variant="ghost" size="sm" className="h-11 w-11 sm:h-9 sm:w-9" onClick={() => removePaymentBreakdown(index)}>
                           <Trash2 className="w-4 h-4 text-red-500" />
                         </Button>
                       )}
@@ -1057,7 +1057,7 @@ export default function CashierJournalFormPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>المبيعات النقدية المتوقعة (ر.س)</Label>
-                    <Input type="number" value={formData.cashTotal.toFixed(2)} readOnly className="bg-muted text-lg font-bold h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="input-expected-cash" />
+                    <Input type="number" value={formData.cashTotal.toFixed(2)} readOnly className="bg-muted text-lg font-bold h-11 sm:h-10" data-testid="input-expected-cash" />
                     <p className="text-xs text-muted-foreground">تُحسب تلقائياً من تفصيل المبيعات النقدية</p>
                   </div>
                   <div className="space-y-2">
@@ -1066,7 +1066,7 @@ export default function CashierJournalFormPage() {
                       type="number"
                       value={formData.actualCashDrawer || ""}
                       onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
-                      className="text-lg font-bold h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="text-lg font-bold h-11 sm:h-10"
                       placeholder="0.00"
                       disabled={isReadOnly}
                       data-testid="input-actual-cash"
@@ -1260,7 +1260,7 @@ export default function CashierJournalFormPage() {
                     data-testid="canvas-signature"
                   />
                 </div>
-                <Button variant="outline" size="sm" onClick={clearSignature} className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-clear-signature">
+                <Button variant="outline" size="sm" onClick={clearSignature} className="w-full h-11 sm:h-9" data-testid="button-clear-signature">
                   مسح التوقيع
                 </Button>
               </CardContent>
@@ -1381,7 +1381,7 @@ export default function CashierJournalFormPage() {
               {!isReadOnly && (
                 <>
                   <Button
-                    className="w-full gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="w-full gap-2 h-11 sm:h-10"
                     onClick={handleSave}
                     disabled={createMutation.isPending || updateMutation.isPending || !canSave}
                     data-testid="button-save"
@@ -1392,7 +1392,7 @@ export default function CashierJournalFormPage() {
                   {isEdit && existingJournal?.status === "draft" && (
                     <Button
                       variant="default"
-                      className="w-full gap-2 bg-green-600 hover:bg-green-700 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="w-full gap-2 bg-green-600 hover:bg-green-700 h-11 sm:h-10"
                       onClick={handleSaveAndPost}
                       disabled={postMutation.isPending || updateMutation.isPending || !canSave}
                       data-testid="button-save-post"
@@ -1411,7 +1411,7 @@ export default function CashierJournalFormPage() {
               {isReadOnly && (
                 <Button
                   variant="outline"
-                  className="w-full gap-2 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                  className="w-full gap-2 h-11 sm:h-10"
                   onClick={() => setLocation("/cashier-journals")}
                   data-testid="button-back-list"
                 >

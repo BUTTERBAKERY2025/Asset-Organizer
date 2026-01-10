@@ -166,7 +166,7 @@ export default function MarketingCalendarPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -177,7 +177,7 @@ export default function MarketingCalendarPage() {
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-add-event">
+              <Button className="h-11 sm:h-9" data-testid="button-add-event">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة حدث
               </Button>
@@ -190,7 +190,7 @@ export default function MarketingCalendarPage() {
                 <div className="space-y-2">
                   <Label>عنوان الحدث *</Label>
                   <Input
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     placeholder="أدخل عنوان الحدث"
@@ -200,7 +200,7 @@ export default function MarketingCalendarPage() {
                 <div className="space-y-2">
                   <Label>نوع الحدث</Label>
                   <Select value={formData.eventType} onValueChange={(v) => setFormData({ ...formData, eventType: v })}>
-                    <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-event-type">
+                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-event-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
@@ -216,7 +216,7 @@ export default function MarketingCalendarPage() {
                   <div className="space-y-2">
                     <Label>تاريخ البداية *</Label>
                     <Input
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       type="date"
                       value={formData.startDate}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
@@ -226,7 +226,7 @@ export default function MarketingCalendarPage() {
                   <div className="space-y-2">
                     <Label>تاريخ النهاية</Label>
                     <Input
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       type="date"
                       value={formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
@@ -245,10 +245,10 @@ export default function MarketingCalendarPage() {
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsAddDialogOpen(false)}>
+                  <Button type="button" variant="outline" className="h-11 sm:h-9" onClick={() => setIsAddDialogOpen(false)}>
                     إلغاء
                   </Button>
-                  <Button type="submit" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" disabled={createEventMutation.isPending} data-testid="button-submit-event">
+                  <Button type="submit" className="h-11 sm:h-9" disabled={createEventMutation.isPending} data-testid="button-submit-event">
                     {createEventMutation.isPending ? "جاري الحفظ..." : "حفظ"}
                   </Button>
                 </div>
@@ -261,13 +261,13 @@ export default function MarketingCalendarPage() {
           <CardHeader className="pb-2">
             <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" onClick={goToNextMonth} data-testid="button-next-month">
+                <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToNextMonth} data-testid="button-next-month">
                   <ChevronRight className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" onClick={goToPrevMonth} data-testid="button-prev-month">
+                <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToPrevMonth} data-testid="button-prev-month">
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" size="sm" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={goToToday} data-testid="button-today">
+                <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={goToToday} data-testid="button-today">
                   اليوم
                 </Button>
               </div>

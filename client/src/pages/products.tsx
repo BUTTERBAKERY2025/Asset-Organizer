@@ -221,7 +221,7 @@ export default function ProductsPage() {
             />
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button data-testid="button-add-product" className="gap-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+                <Button data-testid="button-add-product" className="gap-1 h-11 sm:h-9">
                   <Plus className="w-4 h-4" />
                   إضافة منتج
                 </Button>
@@ -240,7 +240,7 @@ export default function ProductsPage() {
                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                         placeholder="مثال: كرواسون شوكولاته"
                         data-testid="input-product-name"
-                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="h-11 sm:h-10"
                       />
                     </div>
                     <div>
@@ -249,13 +249,13 @@ export default function ProductsPage() {
                         value={formData.sku}
                         onChange={e => setFormData({ ...formData, sku: e.target.value })}
                         placeholder="sk-1234"
-                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="h-11 sm:h-10"
                       />
                     </div>
                     <div>
                       <Label>الفئة *</Label>
                       <Select value={formData.category} onValueChange={v => setFormData({ ...formData, category: v })}>
-                        <SelectTrigger data-testid="select-category" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                        <SelectTrigger data-testid="select-category" className="h-11 sm:h-10">
                           <SelectValue placeholder="اختر الفئة" />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
@@ -268,7 +268,7 @@ export default function ProductsPage() {
                     <div>
                       <Label>الوحدة</Label>
                       <Select value={formData.unit} onValueChange={v => setFormData({ ...formData, unit: v })}>
-                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                        <SelectTrigger className="h-11 sm:h-10">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
@@ -281,7 +281,7 @@ export default function ProductsPage() {
                     <div>
                       <Label>نسبة الضريبة</Label>
                       <Select value={formData.vatRate} onValueChange={v => setFormData({ ...formData, vatRate: v })}>
-                        <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                        <SelectTrigger className="h-11 sm:h-10">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
@@ -300,7 +300,7 @@ export default function ProductsPage() {
                         value={formData.priceExclVat}
                         onChange={e => handlePriceExclVatChange(e.target.value)}
                         placeholder="0.00"
-                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="h-11 sm:h-10"
                       />
                     </div>
                     <div>
@@ -310,7 +310,7 @@ export default function ProductsPage() {
                         step="0.01"
                         value={formData.vatAmount}
                         readOnly
-                        className="bg-muted h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="bg-muted h-11 sm:h-10"
                       />
                     </div>
                     <div>
@@ -320,14 +320,14 @@ export default function ProductsPage() {
                         step="0.01"
                         value={formData.basePrice}
                         readOnly
-                        className="bg-muted font-semibold h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="bg-muted font-semibold h-11 sm:h-10"
                       />
                     </div>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={resetForm} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
-                  <Button onClick={handleSubmit} disabled={!formData.name || !formData.category} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+                  <Button variant="outline" onClick={resetForm} className="h-11 sm:h-9">إلغاء</Button>
+                  <Button onClick={handleSubmit} disabled={!formData.name || !formData.category} className="h-11 sm:h-9">
                     {editingProduct ? "حفظ التعديلات" : "إضافة المنتج"}
                   </Button>
                 </DialogFooter>
@@ -365,7 +365,7 @@ export default function ProductsPage() {
                   placeholder="البحث بالاسم أو رمز SKU..."
                   value={searchTerm}
                   onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                  className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                  className="pr-10 h-11 sm:h-10"
                   data-testid="input-search"
                 />
               </div>
@@ -374,7 +374,7 @@ export default function ProductsPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => { setSearchTerm(""); setCategoryFilter("all"); setCurrentPage(1); }}
-                  className="gap-1 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="gap-1 h-11 sm:h-9"
                 >
                   <X className="w-4 h-4" />
                   مسح الفلاتر
@@ -444,7 +444,7 @@ export default function ProductsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0"
+                                  className="h-11 w-11 sm:h-8 sm:w-8"
                                   onClick={() => handleEdit(product)}
                                   data-testid={`button-edit-${product.id}`}
                                 >
@@ -453,7 +453,7 @@ export default function ProductsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 text-destructive hover:text-destructive"
+                                  className="h-11 w-11 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
                                   onClick={() => deleteMutation.mutate(product.id)}
                                   data-testid={`button-delete-${product.id}`}
                                 >

@@ -322,18 +322,18 @@ export default function IncentivesManagement() {
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-36 sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                className="w-36 sm:w-40 h-11 sm:h-10"
                 data-testid="input-month-selector"
               />
             </div>
             
-            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel" className="h-11 sm:h-9">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               <span className="hidden sm:inline">تصدير Excel</span>
               <span className="sm:hidden">Excel</span>
             </Button>
             
-            <Button variant="outline" onClick={exportToPDF} data-testid="button-export-pdf" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+            <Button variant="outline" onClick={exportToPDF} data-testid="button-export-pdf" className="h-11 sm:h-9">
               <FileText className="h-4 w-4 ml-2" />
               <span className="hidden sm:inline">طباعة PDF</span>
               <span className="sm:hidden">PDF</span>
@@ -342,7 +342,7 @@ export default function IncentivesManagement() {
             <Button 
               onClick={() => calculateIncentivesMutation.mutate()}
               disabled={calculateIncentivesMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700 h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+              className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9"
               data-testid="button-calculate"
             >
               <Calculator className="h-4 w-4 ml-2" />
@@ -458,7 +458,7 @@ export default function IncentivesManagement() {
                 </div>
                 <Dialog open={showNewTierDialog} onOpenChange={setShowNewTierDialog}>
                   <DialogTrigger asChild>
-                    <Button data-testid="button-add-tier" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+                    <Button data-testid="button-add-tier" className="h-11 sm:h-9">
                       <Plus className="h-4 w-4 ml-2" />
                       إضافة مستوى
                     </Button>
@@ -476,7 +476,7 @@ export default function IncentivesManagement() {
                           onChange={(e) => setNewTier({ ...newTier, name: e.target.value })}
                           placeholder="مثال: المستوى الذهبي"
                           data-testid="input-tier-name"
-                          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                          className="h-11 sm:h-10"
                         />
                       </div>
                       
@@ -489,7 +489,7 @@ export default function IncentivesManagement() {
                             onChange={(e) => setNewTier({ ...newTier, minAchievementPercent: e.target.value })}
                             placeholder="80"
                             data-testid="input-min-percent"
-                            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                            className="h-11 sm:h-10"
                           />
                         </div>
                         <div>
@@ -500,7 +500,7 @@ export default function IncentivesManagement() {
                             onChange={(e) => setNewTier({ ...newTier, maxAchievementPercent: e.target.value })}
                             placeholder="99"
                             data-testid="input-max-percent"
-                            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                            className="h-11 sm:h-10"
                           />
                         </div>
                       </div>
@@ -511,7 +511,7 @@ export default function IncentivesManagement() {
                           value={newTier.rewardType}
                           onValueChange={(v) => setNewTier({ ...newTier, rewardType: v })}
                         >
-                          <SelectTrigger data-testid="select-reward-type" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                          <SelectTrigger data-testid="select-reward-type" className="h-11 sm:h-10">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -531,7 +531,7 @@ export default function IncentivesManagement() {
                             onChange={(e) => setNewTier({ ...newTier, fixedAmount: e.target.value })}
                             placeholder="500"
                             data-testid="input-fixed-amount"
-                            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                            className="h-11 sm:h-10"
                           />
                         </div>
                       )}
@@ -545,14 +545,14 @@ export default function IncentivesManagement() {
                             onChange={(e) => setNewTier({ ...newTier, percentageRate: e.target.value })}
                             placeholder="5"
                             data-testid="input-percentage-rate"
-                            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                            className="h-11 sm:h-10"
                           />
                         </div>
                       )}
                     </div>
                     
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setShowNewTierDialog(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
+                      <Button variant="outline" onClick={() => setShowNewTierDialog(false)} className="h-11 sm:h-9">إلغاء</Button>
                       <Button 
                         onClick={() => createTierMutation.mutate(newTier)}
                         disabled={!newTier.name || !newTier.minAchievementPercent || createTierMutation.isPending}

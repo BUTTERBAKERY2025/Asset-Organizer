@@ -118,7 +118,7 @@ export default function QualityControlPage() {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-check" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+              <Button data-testid="button-add-check" className="h-11 sm:h-9">
                 <Plus className="w-4 h-4 ml-2" />
                 فحص جديد
               </Button>
@@ -133,7 +133,7 @@ export default function QualityControlPage() {
                   <div>
                     <Label>الفرع *</Label>
                     <Select value={formData.branchId} onValueChange={v => setFormData({ ...formData, branchId: v })}>
-                      <SelectTrigger data-testid="select-branch" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                      <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
@@ -146,7 +146,7 @@ export default function QualityControlPage() {
                   <div>
                     <Label>نوع الفحص *</Label>
                     <Select value={formData.checkType} onValueChange={v => setFormData({ ...formData, checkType: v })}>
-                      <SelectTrigger data-testid="select-check-type" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                      <SelectTrigger data-testid="select-check-type" className="h-11 sm:h-10">
                         <SelectValue placeholder="اختر النوع" />
                       </SelectTrigger>
                       <SelectContent>
@@ -164,7 +164,7 @@ export default function QualityControlPage() {
                       type="date"
                       value={formData.checkDate}
                       onChange={e => setFormData({ ...formData, checkDate: e.target.value })}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                     />
                   </div>
                   <div>
@@ -173,14 +173,14 @@ export default function QualityControlPage() {
                       type="time"
                       value={formData.checkTime}
                       onChange={e => setFormData({ ...formData, checkTime: e.target.value })}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                     />
                   </div>
                 </div>
                 <div>
                   <Label>النتيجة *</Label>
                   <Select value={formData.result} onValueChange={v => setFormData({ ...formData, result: v })}>
-                    <SelectTrigger data-testid="select-result" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0">
+                    <SelectTrigger data-testid="select-result" className="h-11 sm:h-10">
                       <SelectValue placeholder="اختر النتيجة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -200,7 +200,7 @@ export default function QualityControlPage() {
                       value={formData.score}
                       onChange={e => setFormData({ ...formData, score: e.target.value })}
                       placeholder="مثال: 85"
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                     />
                   </div>
                   {formData.checkType === 'temperature' && (
@@ -212,7 +212,7 @@ export default function QualityControlPage() {
                         value={formData.temperature}
                         onChange={e => setFormData({ ...formData, temperature: e.target.value })}
                         placeholder="مثال: 25.5"
-                        className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                        className="h-11 sm:h-10"
                       />
                     </div>
                   )}
@@ -224,7 +224,7 @@ export default function QualityControlPage() {
                     onChange={e => setFormData({ ...formData, checkedBy: e.target.value })}
                     placeholder="اسم الفاحص"
                     data-testid="input-checked-by"
-                    className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                    className="h-11 sm:h-10"
                   />
                 </div>
                 {formData.result === 'failed' || formData.result === 'needs_improvement' ? (
@@ -259,12 +259,12 @@ export default function QualityControlPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={resetForm} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">إلغاء</Button>
+                <Button variant="outline" onClick={resetForm} className="h-11 sm:h-9">إلغاء</Button>
                 <Button 
                   onClick={handleSubmit} 
                   disabled={!formData.branchId || !formData.checkType || !formData.result || !formData.checkedBy}
                   data-testid="button-save-check"
-                  className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                  className="h-11 sm:h-9"
                 >
                   تسجيل الفحص
                 </Button>
@@ -316,7 +316,7 @@ export default function QualityControlPage() {
               placeholder="بحث..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+              className="pr-10 h-11 sm:h-10"
               data-testid="input-search"
             />
           </div>
@@ -333,7 +333,7 @@ export default function QualityControlPage() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <ClipboardCheck className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">لا توجد فحوصات</p>
-              <Button variant="outline" className="mt-4 h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => setIsDialogOpen(true)}>
+              <Button variant="outline" className="mt-4 h-11 sm:h-9" onClick={() => setIsDialogOpen(true)}>
                 تسجيل أول فحص
               </Button>
             </CardContent>

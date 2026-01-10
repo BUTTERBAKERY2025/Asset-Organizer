@@ -443,7 +443,7 @@ export default function AdvancedProductionOrderFormPage() {
           <div className="flex gap-2">
             {isEdit && (
               <Link href={`/advanced-production-orders/${id}`}>
-                <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-view">
+                <Button variant="outline" className="h-11 sm:h-9" data-testid="button-view">
                   عرض التفاصيل
                 </Button>
               </Link>
@@ -500,7 +500,7 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.title}
                       onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
                       placeholder="أدخل عنوان الأمر"
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       data-testid="input-title"
                     />
                   </div>
@@ -511,7 +511,7 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.orderType}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, orderType: value }))}
                     >
-                      <SelectTrigger id="orderType" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-order-type">
+                      <SelectTrigger id="orderType" className="h-11 sm:h-10" data-testid="select-order-type">
                         <SelectValue placeholder="اختر نوع الأمر" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -530,7 +530,7 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.branchId}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, branchId: value }))}
                     >
-                      <SelectTrigger id="branchId" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-source-branch">
+                      <SelectTrigger id="branchId" className="h-11 sm:h-10" data-testid="select-source-branch">
                         <SelectValue placeholder="اختر الفرع المصدر" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -549,7 +549,7 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.targetBranchId || "same_branch"}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, targetBranchId: value === "same_branch" ? "" : value }))}
                     >
-                      <SelectTrigger id="targetBranchId" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-target-branch">
+                      <SelectTrigger id="targetBranchId" className="h-11 sm:h-10" data-testid="select-target-branch">
                         <SelectValue placeholder="اختر الفرع المستهدف" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -569,7 +569,7 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.priority}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))}
                     >
-                      <SelectTrigger id="priority" className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-priority">
+                      <SelectTrigger id="priority" className="h-11 sm:h-10" data-testid="select-priority">
                         <SelectValue placeholder="اختر الأولوية" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -589,7 +589,7 @@ export default function AdvancedProductionOrderFormPage() {
                       type="date"
                       value={formData.startDate}
                       onChange={(e) => setFormData((prev) => ({ ...prev, startDate: e.target.value }))}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       data-testid="input-start-date"
                     />
                   </div>
@@ -602,7 +602,7 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.endDate}
                       onChange={(e) => setFormData((prev) => ({ ...prev, endDate: e.target.value }))}
                       min={formData.startDate}
-                      className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                      className="h-11 sm:h-10"
                       data-testid="input-end-date"
                     />
                   </div>

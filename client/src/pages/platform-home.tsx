@@ -455,7 +455,7 @@ export default function PlatformHomePage() {
               </CardHeader>
               <CardContent>
                 <Link href="/login">
-                  <Button className="w-full h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-login-home">
+                  <Button className="w-full h-11 sm:h-9" data-testid="button-login-home">
                     <ChevronLeft className="w-4 h-4 ml-2" />
                     تسجيل الدخول
                   </Button>

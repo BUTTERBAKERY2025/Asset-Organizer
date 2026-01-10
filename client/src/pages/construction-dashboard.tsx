@@ -271,11 +271,11 @@ export default function ConstructionDashboardPage() {
             <p className="text-sm sm:text-base text-muted-foreground">نظرة عامة شاملة على جميع المشاريع والإحصائيات والمقارنات</p>
           </div>
           <div className="flex gap-2 print:hidden">
-            <Button variant="outline" onClick={exportToExcel} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-export-excel">
+            <Button variant="outline" onClick={exportToExcel} className="h-11 sm:h-9" data-testid="button-export-excel">
               <FileSpreadsheet className="w-4 h-4 ml-2" />
               تصدير Excel
             </Button>
-            <Button variant="outline" onClick={() => handlePrint()} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-print">
+            <Button variant="outline" onClick={() => handlePrint()} className="h-11 sm:h-9" data-testid="button-print">
               <Printer className="w-4 h-4 ml-2" />
               طباعة
             </Button>

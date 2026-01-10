@@ -1516,32 +1516,32 @@ export default function OperationsReportsDashboardPage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Link href="/targets-dashboard">
-              <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2" data-testid="button-targets-dashboard">
+              <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-targets-dashboard">
                 <Trophy className="w-4 h-4 text-amber-600" />
                 لوحة الأهداف
               </Button>
             </Link>
             <Link href="/targets-planning">
-              <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2" data-testid="button-targets-planning">
+              <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-targets-planning">
                 <Target className="w-4 h-4 text-amber-600" />
                 تخطيط الأهداف
               </Button>
             </Link>
             <Link href="/incentives-management">
-              <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2" data-testid="button-incentives">
+              <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-incentives">
                 <Gift className="w-4 h-4 text-amber-600" />
                 الحوافز
               </Button>
             </Link>
-            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2" onClick={() => refetch()} data-testid="button-refresh">
+            <Button variant="outline" className="h-11 sm:h-9 gap-2" onClick={() => refetch()} data-testid="button-refresh">
               <RefreshCw className="w-4 h-4" />
               تحديث
             </Button>
-            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2" onClick={handleExportExcel} disabled={!report} data-testid="button-export-excel">
+            <Button variant="outline" className="h-11 sm:h-9 gap-2" onClick={handleExportExcel} disabled={!report} data-testid="button-export-excel">
               <Download className="w-4 h-4" />
               Excel
             </Button>
-            <Button className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 gap-2 bg-amber-600 hover:bg-amber-700" onClick={handleExportPDF} disabled={!report} data-testid="button-export-pdf">
+            <Button className="h-11 sm:h-9 gap-2 bg-amber-600 hover:bg-amber-700" onClick={handleExportPDF} disabled={!report} data-testid="button-export-pdf">
               <FileDown className="w-4 h-4" />
               PDF
             </Button>
@@ -1629,7 +1629,7 @@ export default function OperationsReportsDashboardPage() {
                     setActiveTab("overview");
                   }
                 }}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-report-type">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-report-type">
                     <SelectValue placeholder="اختر نوع التقرير" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1650,7 +1650,7 @@ export default function OperationsReportsDashboardPage() {
                   الفرع
                 </Label>
                 <Select value={filters.branchId || "all"} onValueChange={(v) => setFilters({ ...filters, branchId: v === "all" ? "" : v })}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1669,7 +1669,7 @@ export default function OperationsReportsDashboardPage() {
                   من تاريخ
                 </Label>
                 <Input
-                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                  className="h-11 sm:h-10"
                   type="date"
                   value={filters.startDate}
                   onChange={(e) => setFilters({ ...filters, startDate: e.target.value, periodType: "custom" })}
@@ -1682,7 +1682,7 @@ export default function OperationsReportsDashboardPage() {
                   إلى تاريخ
                 </Label>
                 <Input
-                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                  className="h-11 sm:h-10"
                   type="date"
                   value={filters.endDate}
                   onChange={(e) => setFilters({ ...filters, endDate: e.target.value, periodType: "custom" })}
@@ -1695,7 +1695,7 @@ export default function OperationsReportsDashboardPage() {
                   الوردية
                 </Label>
                 <Select value={filters.shiftType} onValueChange={(v: any) => setFilters({ ...filters, shiftType: v })}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-shift-type">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-shift-type">
                     <SelectValue placeholder="جميع الورديات" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1716,7 +1716,7 @@ export default function OperationsReportsDashboardPage() {
                   الكاشير
                 </Label>
                 <Select value={filters.cashierId || "all"} onValueChange={(v) => setFilters({ ...filters, cashierId: v === "all" ? "" : v })}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-cashier">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-cashier">
                     <SelectValue placeholder="جميع الكاشير" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1735,7 +1735,7 @@ export default function OperationsReportsDashboardPage() {
                   حالة اليومية
                 </Label>
                 <Select value={filters.journalStatus} onValueChange={(v: any) => setFilters({ ...filters, journalStatus: v })}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-journal-status">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-journal-status">
                     <SelectValue placeholder="جميع الحالات" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1754,7 +1754,7 @@ export default function OperationsReportsDashboardPage() {
                   حالة المطابقة
                 </Label>
                 <Select value={filters.discrepancyFilter} onValueChange={(v: any) => setFilters({ ...filters, discrepancyFilter: v })}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-discrepancy">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-discrepancy">
                     <SelectValue placeholder="الكل" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1771,7 +1771,7 @@ export default function OperationsReportsDashboardPage() {
                   فئة الدفع
                 </Label>
                 <Select value={filters.paymentCategory} onValueChange={(v: any) => setFilters({ ...filters, paymentCategory: v })}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-payment-category">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-payment-category">
                     <SelectValue placeholder="جميع الفئات" />
                   </SelectTrigger>
                   <SelectContent>

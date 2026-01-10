@@ -2488,7 +2488,7 @@ export default function EmployeeReportsDashboardPage() {
       <div className="p-6 space-y-6" dir="rtl" ref={printRef}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
+            <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div>
@@ -2499,7 +2499,7 @@ export default function EmployeeReportsDashboardPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button 
               variant="default" 
-              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-green-600 hover:bg-green-700"
+              className="h-11 sm:h-9 bg-green-600 hover:bg-green-700"
               onClick={() => setShowSalaryClosingDialog(true)}
               data-testid="button-salary-closing"
             >
@@ -2515,7 +2515,7 @@ export default function EmployeeReportsDashboardPage() {
               <div className="space-y-2">
                 <Label>الفرع</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -2529,7 +2529,7 @@ export default function EmployeeReportsDashboardPage() {
               <div className="space-y-2">
                 <Label>الشهر</Label>
                 <Input 
-                  className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                  className="h-11 sm:h-10"
                   type="month" 
                   value={selectedMonth} 
                   onChange={(e) => setSelectedMonth(e.target.value)}
@@ -2539,7 +2539,7 @@ export default function EmployeeReportsDashboardPage() {
               <div className="space-y-2">
                 <Label>الوظيفة</Label>
                 <Select value={selectedJobTitle} onValueChange={setSelectedJobTitle}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-job">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-job">
                     <SelectValue placeholder="جميع الوظائف" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -2553,7 +2553,7 @@ export default function EmployeeReportsDashboardPage() {
               <div className="space-y-2">
                 <Label>الموظف</Label>
                 <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                  <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-employee">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-employee">
                     <SelectValue placeholder="جميع الموظفين" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -2565,7 +2565,7 @@ export default function EmployeeReportsDashboardPage() {
                 </Select>
               </div>
               <div className="flex items-end">
-                <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={() => {
+                <Button variant="outline" className="h-11 sm:h-9" onClick={() => {
                   setSelectedBranch("all");
                   setSelectedJobTitle("all");
                   setSelectedEmployee("all");

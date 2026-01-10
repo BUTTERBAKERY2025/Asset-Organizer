@@ -652,7 +652,7 @@ export default function MarketingInfluencersPage() {
           value={formData.specialty}
           onValueChange={(value) => setFormData({ ...formData, specialty: value })}
         >
-          <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-influencer-specialty">
+          <SelectTrigger className="h-11 sm:h-10" data-testid="select-influencer-specialty">
             <SelectValue placeholder="اختر التخصص" />
           </SelectTrigger>
           <SelectContent className="max-h-60 overflow-y-auto">
@@ -895,7 +895,7 @@ export default function MarketingInfluencersPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -909,7 +909,7 @@ export default function MarketingInfluencersPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+              className="h-11 sm:h-9"
               onClick={exportToExcel}
               disabled={isExporting}
               data-testid="button-export-excel"
@@ -919,7 +919,7 @@ export default function MarketingInfluencersPage() {
             </Button>
             <Button
               variant="outline"
-              className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+              className="h-11 sm:h-9"
               onClick={exportToPdf}
               disabled={isExporting}
               data-testid="button-export-pdf"
@@ -929,7 +929,7 @@ export default function MarketingInfluencersPage() {
             </Button>
             {canEdit && (
               <Button
-                className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+                className="h-11 sm:h-9"
                 onClick={() => {
                   setFormData(defaultFormData);
                   setSelectedInfluencer(null);
@@ -1021,12 +1021,12 @@ export default function MarketingInfluencersPage() {
                 placeholder="البحث بالاسم أو الهاتف..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-10 h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+                className="pr-10 h-11 sm:h-10"
                 data-testid="input-search-influencers"
               />
             </div>
             <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
-              <SelectTrigger className="w-full sm:w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-specialty-filter">
+              <SelectTrigger className="w-full sm:w-40 h-11 sm:h-10" data-testid="select-specialty-filter">
                 <SelectValue placeholder="التخصص" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -1039,7 +1039,7 @@ export default function MarketingInfluencersPage() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-status-filter">
+              <SelectTrigger className="w-full sm:w-32 h-11 sm:h-10" data-testid="select-status-filter">
                 <SelectValue placeholder="الحالة" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
@@ -1050,7 +1050,7 @@ export default function MarketingInfluencersPage() {
             </Select>
             <Button
               variant="outline"
-              className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+              className="h-11 sm:h-10"
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               data-testid="button-toggle-filters"
             >
@@ -1062,7 +1062,7 @@ export default function MarketingInfluencersPage() {
           {showAdvancedFilters && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 p-3 sm:p-4 bg-muted/30 rounded-lg border">
               <Select value={platformFilter} onValueChange={setPlatformFilter}>
-                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-platform-filter">
+                <SelectTrigger className="h-11 sm:h-10" data-testid="select-platform-filter">
                   <SelectValue placeholder="المنصة" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -1075,7 +1075,7 @@ export default function MarketingInfluencersPage() {
                 </SelectContent>
               </Select>
               <Select value={regionFilter} onValueChange={setRegionFilter}>
-                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-region-filter">
+                <SelectTrigger className="h-11 sm:h-10" data-testid="select-region-filter">
                   <SelectValue placeholder="المنطقة" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -1088,7 +1088,7 @@ export default function MarketingInfluencersPage() {
                 </SelectContent>
               </Select>
               <Select value={followerRangeFilter} onValueChange={setFollowerRangeFilter}>
-                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-followers-filter">
+                <SelectTrigger className="h-11 sm:h-10" data-testid="select-followers-filter">
                   <SelectValue placeholder="عدد المتابعين" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -1101,7 +1101,7 @@ export default function MarketingInfluencersPage() {
                 </SelectContent>
               </Select>
               <Select value={bankInfoFilter} onValueChange={setBankInfoFilter}>
-                <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-bank-filter">
+                <SelectTrigger className="h-11 sm:h-10" data-testid="select-bank-filter">
                   <SelectValue placeholder="المعلومات البنكية" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">

@@ -425,7 +425,7 @@ export default function BudgetPlanningPage() {
                   value={selectedProjectId?.toString() || ""} 
                   onValueChange={(val) => setSelectedProjectId(parseInt(val))}
                 >
-                  <SelectTrigger className="w-full md:w-[400px] h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-project">
+                  <SelectTrigger className="w-full md:w-[400px] h-11 sm:h-10" data-testid="select-project">
                     <SelectValue placeholder="اختر مشروع..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -477,17 +477,17 @@ export default function BudgetPlanningPage() {
                       <CardDescription>حدد المبلغ المخصص لكل تصنيف من أعمال البناء</CardDescription>
                     </div>
                     {canEdit && !isEditingBudget && (
-                      <Button onClick={startEditingBudget} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" data-testid="button-edit-budget">
+                      <Button onClick={startEditingBudget} className="h-11 sm:h-9" data-testid="button-edit-budget">
                         <Pencil className="ml-2 h-4 w-4" />
                         تعديل التوزيع
                       </Button>
                     )}
                     {isEditingBudget && (
                       <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setIsEditingBudget(false)} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+                        <Button variant="outline" onClick={() => setIsEditingBudget(false)} className="h-11 sm:h-9">
                           إلغاء
                         </Button>
-                        <Button onClick={handleSaveBudgetAllocations} disabled={upsertMutation.isPending} className="h-11 min-h-[44px] sm:h-9 sm:min-h-0">
+                        <Button onClick={handleSaveBudgetAllocations} disabled={upsertMutation.isPending} className="h-11 sm:h-9">
                           {upsertMutation.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
                           حفظ
                         </Button>

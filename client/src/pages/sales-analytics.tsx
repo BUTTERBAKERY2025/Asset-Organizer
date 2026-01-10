@@ -355,7 +355,7 @@ export default function SalesAnalytics() {
               <Button 
                 variant={autoRefresh ? "default" : "outline"} 
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`h-11 min-h-[44px] sm:h-9 sm:min-h-0 ${autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}`}
+                className={`h-11 sm:h-9 ${autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}`}
                 data-testid="button-auto-refresh"
               >
                 <RefreshCw className={`h-4 w-4 ml-1 ${autoRefresh ? "animate-spin" : ""}`} />
@@ -374,7 +374,7 @@ export default function SalesAnalytics() {
             <CardContent>
               <div className="flex flex-wrap gap-3 items-center">
                 <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="w-28 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-year">
+                  <SelectTrigger className="w-28 h-11 sm:h-10" data-testid="select-year">
                     <SelectValue placeholder="السنة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -385,7 +385,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="w-32 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-month">
+                  <SelectTrigger className="w-32 h-11 sm:h-10" data-testid="select-month">
                     <SelectValue placeholder="الشهر" />
                   </SelectTrigger>
                   <SelectContent>
@@ -396,7 +396,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-branch">
+                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -408,7 +408,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={journalStatus} onValueChange={setJournalStatus}>
-                  <SelectTrigger className="w-40 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-journal-status">
+                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-journal-status">
                     <SelectValue placeholder="حالة اليومية" />
                   </SelectTrigger>
                   <SelectContent>
@@ -421,7 +421,7 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={discrepancyType} onValueChange={setDiscrepancyType}>
-                  <SelectTrigger className="w-44 h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-discrepancy-type">
+                  <SelectTrigger className="w-44 h-11 sm:h-10" data-testid="select-discrepancy-type">
                     <SelectValue placeholder="نوع العجز/الزيادة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -432,7 +432,7 @@ export default function SalesAnalytics() {
                   </SelectContent>
                 </Select>
 
-                <Button variant="outline" onClick={handleRefresh} className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 p-0" data-testid="button-refresh">
+                <Button variant="outline" onClick={handleRefresh} className="h-11 w-11 sm:h-8 sm:w-8 p-0" data-testid="button-refresh">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 

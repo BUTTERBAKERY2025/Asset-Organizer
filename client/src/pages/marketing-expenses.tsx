@@ -340,7 +340,7 @@ export default function MarketingExpensesPage() {
             value={formData.campaignId > 0 ? formData.campaignId.toString() : ""}
             onValueChange={(value) => setFormData({ ...formData, campaignId: parseInt(value) })}
           >
-            <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-expense-campaign">
+            <SelectTrigger className="h-11 sm:h-10" data-testid="select-expense-campaign">
               <SelectValue placeholder="اختر الحملة" />
             </SelectTrigger>
             <SelectContent>
@@ -358,7 +358,7 @@ export default function MarketingExpensesPage() {
             value={formData.category}
             onValueChange={(value) => setFormData({ ...formData, category: value })}
           >
-            <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-expense-category">
+            <SelectTrigger className="h-11 sm:h-10" data-testid="select-expense-category">
               <SelectValue placeholder="اختر الفئة" />
             </SelectTrigger>
             <SelectContent>
@@ -375,7 +375,7 @@ export default function MarketingExpensesPage() {
       <div className="space-y-2">
         <Label>الوصف *</Label>
         <Input
-          className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+          className="h-11 sm:h-10"
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           placeholder="وصف المصروف"
@@ -387,7 +387,7 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>المبلغ (ر.س) *</Label>
           <Input
-            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+            className="h-11 sm:h-10"
             type="number"
             step="0.01"
             value={formData.amount}
@@ -400,7 +400,7 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>التاريخ *</Label>
           <Input
-            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+            className="h-11 sm:h-10"
             type="date"
             value={formData.expenseDate}
             onChange={(e) => setFormData({ ...formData, expenseDate: e.target.value })}
@@ -414,7 +414,7 @@ export default function MarketingExpensesPage() {
             value={formData.status}
             onValueChange={(value) => setFormData({ ...formData, status: value })}
           >
-            <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-expense-status">
+            <SelectTrigger className="h-11 sm:h-10" data-testid="select-expense-status">
               <SelectValue placeholder="اختر الحالة" />
             </SelectTrigger>
             <SelectContent>
@@ -434,7 +434,7 @@ export default function MarketingExpensesPage() {
             value={formData.influencerId?.toString() || "none"}
             onValueChange={(value) => setFormData({ ...formData, influencerId: value === "none" ? null : parseInt(value) })}
           >
-            <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-expense-influencer">
+            <SelectTrigger className="h-11 sm:h-10" data-testid="select-expense-influencer">
               <SelectValue placeholder="اختر المؤثر" />
             </SelectTrigger>
             <SelectContent>
@@ -453,7 +453,7 @@ export default function MarketingExpensesPage() {
             value={formData.paymentMethod || undefined}
             onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
           >
-            <SelectTrigger className="h-11 min-h-[44px] sm:h-10 sm:min-h-0" data-testid="select-expense-payment-method">
+            <SelectTrigger className="h-11 sm:h-10" data-testid="select-expense-payment-method">
               <SelectValue placeholder="اختر طريقة الدفع" />
             </SelectTrigger>
             <SelectContent>
@@ -470,7 +470,7 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>المورد / الجهة المستفيدة</Label>
           <Input
-            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+            className="h-11 sm:h-10"
             value={formData.vendor || ""}
             onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
             placeholder="اسم المورد"
@@ -480,7 +480,7 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>رقم المرجع</Label>
           <Input
-            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+            className="h-11 sm:h-10"
             value={formData.referenceNumber || ""}
             onChange={(e) => setFormData({ ...formData, referenceNumber: e.target.value })}
             placeholder="رقم الحوالة أو الشيك"
@@ -491,7 +491,7 @@ export default function MarketingExpensesPage() {
         <div className="space-y-2">
           <Label>رقم الفاتورة</Label>
           <Input
-            className="h-11 min-h-[44px] sm:h-10 sm:min-h-0"
+            className="h-11 sm:h-10"
             value={formData.invoiceNumber || ""}
             onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
             placeholder="رقم الفاتورة"
@@ -514,7 +514,7 @@ export default function MarketingExpensesPage() {
       <DialogFooter>
         <Button
           type="submit"
-          className="h-11 min-h-[44px] sm:h-9 sm:min-h-0"
+          className="h-11 sm:h-9"
           disabled={createMutation.isPending || updateMutation.isPending}
           data-testid="button-submit-expense"
         >
@@ -533,7 +533,7 @@ export default function MarketingExpensesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -545,7 +545,7 @@ export default function MarketingExpensesPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="h-11 min-h-[44px] sm:h-9 sm:min-h-0" onClick={handleExportExcel} data-testid="button-export">
+            <Button variant="outline" className="h-11 sm:h-9" onClick={handleExportExcel} data-testid="button-export">
               <Download className="w-4 h-4 ml-2" />
               تصدير Excel
             </Button>
@@ -559,7 +559,7 @@ export default function MarketingExpensesPage() {
                   setSelectedExpense(null);
                   setIsAddDialogOpen(true);
                 }}
-                className="h-11 min-h-[44px] sm:h-9 sm:min-h-0 bg-pink-500 hover:bg-pink-600"
+                className="h-11 sm:h-9 bg-pink-500 hover:bg-pink-600"
                 data-testid="button-add-expense"
               >
                 <Plus className="w-4 h-4 ml-2" />
