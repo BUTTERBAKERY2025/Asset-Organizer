@@ -11005,6 +11005,34 @@ export async function registerRoutes(
       // Average invoice value
       const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
 
+      // Calculate new KPIs
+      // Operating Profit = Gross Profit - Operating Expenses
+      const operatingProfit = grossProfit - totalOperatingExpenses;
+      const operatingMarginPct = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
+
+      // EBITDA = Operating Profit + Depreciation + Amortization (simplified: Net Profit + Fixed Costs)
+      // In bakery context: EBITDA ≈ Operating Profit + Rent + Licenses (approximation)
+      const depreciation = data.fixedCosts.find(c => c.costType === "subscriptions")?.amount || 0;
+      const ebitda = operatingProfit + rentCost + depreciation;
+      const ebitdaMarginPct = totalRevenue > 0 ? (ebitda / totalRevenue) * 100 : 0;
+
+      // Contribution Margin = Revenue - Variable Costs (COGS is main variable cost)
+      const contributionMargin = totalRevenue - totalCOGS;
+      const contributionMarginPct = totalRevenue > 0 ? (contributionMargin / totalRevenue) * 100 : 0;
+
+      // Labor Productivity - get employee count from branch employees
+      let employeeCount = 0;
+      try {
+        const employees = await storage.getBranchEmployeesByBranch(data.period.branchId);
+        employeeCount = employees.filter(e => e.status === "active").length;
+      } catch (e) {
+        console.log("Could not get employee count:", e);
+      }
+      const revenuePerEmployee = employeeCount > 0 ? totalRevenue / employeeCount : 0;
+      const laborProductivity = employeeCount > 0 && salaryExpense > 0 
+        ? (grossProfit / salaryExpense) * 100 
+        : 0;
+
       // Determine rating
       let rating = "average";
       const ratingReasons: string[] = [];
@@ -11057,6 +11085,15 @@ export async function registerRoutes(
         wastePct,
         invoiceCount: totalInvoices,
         avgInvoiceValue,
+        ebitda,
+        ebitdaMarginPct,
+        contributionMargin,
+        contributionMarginPct,
+        laborProductivity,
+        revenuePerEmployee,
+        employeeCount,
+        operatingProfit,
+        operatingMarginPct,
         rating,
         ratingReasons,
         recommendations,
@@ -11121,6 +11158,240 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting or creating period:", error);
       res.status(500).json({ error: "فشل في جلب أو إنشاء الفترة المالية" });
+    }
+  });
+
+  // Auto-import sales data from cashier journals for a period
+  app.post("/api/financials/periods/:id/import-sales", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const period = await storage.getFinancialPeriod(periodId);
+      
+      if (!period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+
+      // Get all cashier journals for this branch and month
+      const startDate = `${period.year}-${String(period.month).padStart(2, '0')}-01`;
+      const endDate = `${period.year}-${String(period.month).padStart(2, '0')}-31`;
+      
+      const journals = await storage.getCashierSalesJournals({
+        branchId: period.branchId,
+        startDate,
+        endDate,
+        status: "approved",
+      });
+
+      // Aggregate sales by channel
+      let totalCash = 0;
+      let totalCard = 0;
+      let totalDelivery = 0;
+      let totalInvoices = 0;
+
+      for (const journal of journals) {
+        totalCash += journal.cashTotal || 0;
+        totalCard += journal.networkTotal || 0;
+        totalDelivery += journal.deliveryTotal || 0;
+        totalInvoices += journal.transactionCount || 0;
+      }
+
+      // Create sales entries
+      const salesData = [
+        { periodId, channel: "cash", totalAmount: totalCash, invoiceCount: Math.round(totalInvoices * 0.4), notes: "مستورد من سجل المبيعات" },
+        { periodId, channel: "card", totalAmount: totalCard, invoiceCount: Math.round(totalInvoices * 0.35), notes: "مستورد من سجل المبيعات" },
+        { periodId, channel: "delivery_apps", totalAmount: totalDelivery, invoiceCount: Math.round(totalInvoices * 0.25), notes: "مستورد من سجل المبيعات" },
+      ].filter(s => s.totalAmount > 0);
+
+      // Delete existing and insert new
+      await storage.deleteFinancialSalesByPeriod(periodId);
+      const sales = await storage.bulkCreateFinancialSales(salesData);
+
+      res.json({
+        success: true,
+        imported: {
+          journalsCount: journals.length,
+          totalRevenue: totalCash + totalCard + totalDelivery,
+          salesEntries: sales.length,
+        },
+        sales,
+      });
+    } catch (error) {
+      console.error("Error importing sales data:", error);
+      res.status(500).json({ error: "فشل في استيراد بيانات المبيعات" });
+    }
+  });
+
+  // Get aggregated cashier data for a period (preview before import)
+  app.get("/api/financials/periods/:id/cashier-summary", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const period = await storage.getFinancialPeriod(periodId);
+      
+      if (!period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+
+      const startDate = `${period.year}-${String(period.month).padStart(2, '0')}-01`;
+      const endDate = `${period.year}-${String(period.month).padStart(2, '0')}-31`;
+      
+      const journals = await storage.getCashierSalesJournals({
+        branchId: period.branchId,
+        startDate,
+        endDate,
+      });
+
+      // Daily breakdown
+      const dailyData: Record<string, { cash: number; card: number; delivery: number; total: number; invoices: number }> = {};
+      
+      for (const journal of journals) {
+        const date = journal.journalDate;
+        if (!dailyData[date]) {
+          dailyData[date] = { cash: 0, card: 0, delivery: 0, total: 0, invoices: 0 };
+        }
+        dailyData[date].cash += journal.cashTotal || 0;
+        dailyData[date].card += journal.networkTotal || 0;
+        dailyData[date].delivery += journal.deliveryTotal || 0;
+        dailyData[date].total += journal.totalSales || 0;
+        dailyData[date].invoices += journal.transactionCount || 0;
+      }
+
+      // Summary
+      const summary = {
+        totalCash: journals.reduce((sum, j) => sum + (j.cashTotal || 0), 0),
+        totalCard: journals.reduce((sum, j) => sum + (j.networkTotal || 0), 0),
+        totalDelivery: journals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0),
+        totalSales: journals.reduce((sum, j) => sum + (j.totalSales || 0), 0),
+        totalInvoices: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
+        journalsCount: journals.length,
+        daysWithData: Object.keys(dailyData).length,
+      };
+
+      res.json({
+        summary,
+        dailyBreakdown: Object.entries(dailyData)
+          .map(([date, data]) => ({ date, ...data }))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+      });
+    } catch (error) {
+      console.error("Error fetching cashier summary:", error);
+      res.status(500).json({ error: "فشل في جلب ملخص المبيعات" });
+    }
+  });
+
+  // Get salary data from branch employees for a period
+  app.get("/api/financials/periods/:id/salary-summary", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const period = await storage.getFinancialPeriod(periodId);
+      
+      if (!period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+
+      const employees = await storage.getBranchEmployeesByBranch(period.branchId);
+      
+      const totalBaseSalary = employees.reduce((sum: number, e: any) => sum + (e.basicSalary || 0), 0);
+      const totalAllowances = employees.reduce((sum: number, e: any) => 
+        sum + (e.housingAllowance || 0) + (e.transportAllowance || 0) + (e.otherAllowances || 0), 0);
+      const totalSalaries = totalBaseSalary + totalAllowances;
+
+      res.json({
+        employeesCount: employees.length,
+        totalBaseSalary,
+        totalAllowances,
+        totalSalaries,
+        breakdown: employees.map((e: any) => ({
+          id: e.id,
+          name: e.employeeName,
+          department: e.department,
+          baseSalary: e.basicSalary || 0,
+          allowances: (e.housingAllowance || 0) + (e.transportAllowance || 0) + (e.otherAllowances || 0),
+          total: (e.basicSalary || 0) + (e.housingAllowance || 0) + (e.transportAllowance || 0) + (e.otherAllowances || 0),
+        })),
+      });
+    } catch (error) {
+      console.error("Error fetching salary summary:", error);
+      res.status(500).json({ error: "فشل في جلب ملخص الرواتب" });
+    }
+  });
+
+  // Compare current period with previous periods
+  app.get("/api/financials/periods/:id/comparison", isAuthenticated, async (req, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const currentData = await storage.getCompletePnLData(periodId);
+      
+      if (!currentData.period) {
+        return res.status(404).json({ error: "الفترة المالية غير موجودة" });
+      }
+
+      // Get previous month
+      let prevMonth = currentData.period.month - 1;
+      let prevYear = currentData.period.year;
+      if (prevMonth < 1) {
+        prevMonth = 12;
+        prevYear -= 1;
+      }
+
+      const prevPeriod = await storage.getFinancialPeriodByBranchAndDate(
+        currentData.period.branchId, prevYear, prevMonth
+      );
+      
+      let previousData = null;
+      if (prevPeriod) {
+        const prevComplete = await storage.getCompletePnLData(prevPeriod.id);
+        if (prevComplete.metrics) {
+          previousData = prevComplete.metrics;
+        }
+      }
+
+      // Get same month last year
+      const lastYearPeriod = await storage.getFinancialPeriodByBranchAndDate(
+        currentData.period.branchId, currentData.period.year - 1, currentData.period.month
+      );
+      
+      let lastYearData = null;
+      if (lastYearPeriod) {
+        const lyComplete = await storage.getCompletePnLData(lastYearPeriod.id);
+        if (lyComplete.metrics) {
+          lastYearData = lyComplete.metrics;
+        }
+      }
+
+      const current = currentData.metrics;
+      
+      const comparison = {
+        current: current ? {
+          revenue: current.totalRevenue,
+          grossProfit: current.grossProfit,
+          netProfit: current.netProfit,
+          grossMargin: current.grossMarginPct,
+          netMargin: current.netMarginPct,
+        } : null,
+        previousMonth: previousData ? {
+          revenue: previousData.totalRevenue,
+          grossProfit: previousData.grossProfit,
+          netProfit: previousData.netProfit,
+          grossMargin: previousData.grossMarginPct,
+          netMargin: previousData.netMarginPct,
+          revenueChange: current && previousData.totalRevenue ? (((current.totalRevenue || 0) - (previousData.totalRevenue || 0)) / (previousData.totalRevenue || 1) * 100) : 0,
+          profitChange: current && previousData.netProfit ? (((current.netProfit || 0) - (previousData.netProfit || 0)) / Math.abs(previousData.netProfit || 1) * 100) : 0,
+        } : null,
+        lastYear: lastYearData ? {
+          revenue: lastYearData.totalRevenue,
+          grossProfit: lastYearData.grossProfit,
+          netProfit: lastYearData.netProfit,
+          grossMargin: lastYearData.grossMarginPct,
+          netMargin: lastYearData.netMarginPct,
+          revenueChange: current && lastYearData.totalRevenue ? (((current.totalRevenue || 0) - (lastYearData.totalRevenue || 0)) / (lastYearData.totalRevenue || 1) * 100) : 0,
+          profitChange: current && lastYearData.netProfit ? (((current.netProfit || 0) - (lastYearData.netProfit || 0)) / Math.abs(lastYearData.netProfit || 1) * 100) : 0,
+        } : null,
+      };
+
+      res.json(comparison);
+    } catch (error) {
+      console.error("Error fetching period comparison:", error);
+      res.status(500).json({ error: "فشل في جلب المقارنة" });
     }
   });
 

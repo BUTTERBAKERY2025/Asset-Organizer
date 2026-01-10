@@ -2501,6 +2501,22 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(cashierSalesJournals.journalDate));
   }
 
+  async getCashierSalesJournals(filters: { branchId?: string; startDate?: string; endDate?: string; status?: string }): Promise<CashierSalesJournal[]> {
+    const conditions: any[] = [];
+    if (filters.branchId) conditions.push(eq(cashierSalesJournals.branchId, filters.branchId));
+    if (filters.startDate) conditions.push(gte(cashierSalesJournals.journalDate, filters.startDate));
+    if (filters.endDate) conditions.push(lte(cashierSalesJournals.journalDate, filters.endDate));
+    if (filters.status) conditions.push(eq(cashierSalesJournals.status, filters.status));
+    
+    if (conditions.length === 0) {
+      return await db.select().from(cashierSalesJournals).orderBy(desc(cashierSalesJournals.journalDate));
+    }
+    
+    return await db.select().from(cashierSalesJournals)
+      .where(and(...conditions))
+      .orderBy(desc(cashierSalesJournals.journalDate));
+  }
+
   async getCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
     const [journal] = await db.select().from(cashierSalesJournals).where(eq(cashierSalesJournals.id, id));
     return journal || undefined;

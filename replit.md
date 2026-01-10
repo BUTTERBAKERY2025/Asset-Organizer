@@ -78,6 +78,24 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **`database_schema.sql`**: Complete SQL reference file generated from schema.ts (94 tables)
 
 ### Recent Schema Changes (2026-01-10)
+- **P&L Dashboard Enhancements**: Added advanced financial KPIs to `financial_metrics` table:
+  - `ebitda` - Earnings Before Interest, Taxes, Depreciation, and Amortization
+  - `ebitda_margin_pct` - EBITDA as percentage of revenue
+  - `contribution_margin` - Revenue minus variable costs (COGS)
+  - `contribution_margin_pct` - Contribution margin as percentage of revenue
+  - `labor_productivity` - Gross profit per salary expense ratio
+  - `revenue_per_employee` - Total revenue divided by number of active employees
+  - `employee_count` - Number of active employees in the branch
+  - `operating_profit` - Gross profit minus operating expenses
+  - `operating_margin_pct` - Operating profit as percentage of revenue
+- **SQL Migration File**: `supabase_pnl_new_kpis.sql` - Execute in Supabase SQL Editor before deploying
+- **Auto-Import Feature**: API endpoints for importing sales data from cashier journals:
+  - `POST /api/financials/periods/:id/import-sales` - Import sales from cashier journals
+  - `GET /api/financials/periods/:id/cashier-summary` - Preview cashier data before import
+  - `GET /api/financials/periods/:id/comparison` - Month-over-month and year-over-year comparisons
+- **PDF/Excel Export**: Professional reports with Butter Bakery branding (gold theme)
+- **Improved Data Entry UI**: Tabbed interface for Sales, COGS, OpEx, and Fixed Costs
+
 - **Marketing Influencers Enhancement**: Added new fields to `marketing_influencers` table:
   - `account_url` - Social media account URL
   - `coverage_url` - Coverage/collaboration URL
