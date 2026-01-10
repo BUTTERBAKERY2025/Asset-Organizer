@@ -567,15 +567,23 @@ export type SystemModule = (typeof SYSTEM_MODULES)[number];
 // Actions for each module
 export const MODULE_ACTIONS = [
   "view",
+  "view_list",
+  "view_details",
   "create",
   "edit",
   "delete",
+  "submit",
   "approve",
+  "reject",
+  "reopen",
   "export",
   "print",
   "sign",
+  "view_signatures",
+  "manage_attachments",
   "notify",
   "change_status",
+  "assign_reviewer",
 ] as const;
 
 export type ModuleAction = (typeof MODULE_ACTIONS)[number];
@@ -685,15 +693,23 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
 // Action labels for UI display (Arabic)
 export const ACTION_LABELS: Record<ModuleAction, string> = {
   view: "عرض",
+  view_list: "عرض القائمة",
+  view_details: "عرض التفاصيل",
   create: "إنشاء",
   edit: "تعديل",
   delete: "حذف",
+  submit: "إرسال",
   approve: "اعتماد",
+  reject: "رفض",
+  reopen: "إعادة فتح",
   export: "تصدير",
   print: "طباعة",
   sign: "توقيع",
+  view_signatures: "عرض التوقيعات",
+  manage_attachments: "إدارة المرفقات",
   notify: "إشعارات",
   change_status: "تغيير الحالة",
+  assign_reviewer: "تعيين مراجع",
 };
 
 // Module groups for UI organization
