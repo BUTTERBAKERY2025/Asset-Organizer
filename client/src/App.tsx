@@ -74,6 +74,7 @@ import BranchEmployeesPage from "@/pages/branch-employees";
 import OrganizationalStructurePage from "@/pages/organizational-structure";
 import EmployeeReportsDashboardPage from "@/pages/employee-reports-dashboard";
 import PnLDashboardPage from "@/pages/pnl-dashboard";
+import SecurityManagementPage from "@/pages/security-management";
 
 function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
   return (
@@ -167,6 +168,7 @@ function Router() {
       <Route path="/organizational-structure">{() => <ProtectedPage component={OrganizationalStructurePage} />}</Route>
       <Route path="/employee-reports">{() => <ProtectedPage component={EmployeeReportsDashboardPage} />}</Route>
       <Route path="/pnl-dashboard">{() => <ProtectedPage component={PnLDashboardPage} />}</Route>
+      <Route path="/security-management">{() => <ProtectedPage component={SecurityManagementPage} />}</Route>
       <Route component={NotFound} />
     </Switch>
   );
