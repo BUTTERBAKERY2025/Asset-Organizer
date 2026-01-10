@@ -75,15 +75,8 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      // SECURITY: Only log response body in development, and never log sensitive endpoints
-      const sensitiveEndpoints = ['/api/auth', '/api/login', '/api/users', '/api/my-permissions', '/api/security'];
-      const isSensitive = sensitiveEndpoints.some(ep => path.startsWith(ep));
-      if (process.env.NODE_ENV !== "production" && capturedJsonResponse && !isSensitive) {
-        const responseStr = JSON.stringify(capturedJsonResponse);
-        // Truncate long responses
-        logLine += ` :: ${responseStr.length > 200 ? responseStr.substring(0, 200) + '...' : responseStr}`;
-      }
-
+      // SECURITY: Never log response bodies - they may contain sensitive data
+      // Only log request metadata (method, path, status, duration)
       log(logLine);
     }
   });
