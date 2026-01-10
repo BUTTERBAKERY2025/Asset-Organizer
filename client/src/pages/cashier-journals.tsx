@@ -132,12 +132,22 @@ export default function CashierJournalsPage() {
   };
 
   const uniqueCashiers = journals ? [...new Set(journals.map(j => j.cashierName))].filter(Boolean).sort() : [];
+  
+  // Get current user's display name for dropdown
+  const currentUserName = user?.firstName && user?.lastName 
+    ? `${user.firstName} ${user.lastName}`.trim() 
+    : user?.username || "";
+
+  // For non-managers, ensure their name appears in dropdown even if no journals exist
+  const dropdownCashiers = canViewAllCashiers 
+    ? uniqueCashiers 
+    : (uniqueCashiers.length > 0 ? uniqueCashiers : (currentUserName ? [currentUserName] : []));
 
   useEffect(() => {
-    if (userPermissions !== undefined && !canViewAllCashiers && cashierFilter === "all" && uniqueCashiers.length > 0) {
-      setCashierFilter(uniqueCashiers[0]);
+    if (userPermissions !== undefined && !canViewAllCashiers && cashierFilter === "all" && dropdownCashiers.length > 0) {
+      setCashierFilter(dropdownCashiers[0]);
     }
-  }, [userPermissions, canViewAllCashiers, cashierFilter, uniqueCashiers]);
+  }, [userPermissions, canViewAllCashiers, cashierFilter, dropdownCashiers]);
 
   const filteredJournals = journals?.filter((journal) => {
     const matchesSearch =
@@ -385,13 +395,13 @@ export default function CashierJournalsPage() {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2 items-center">
-                <Select value={cashierFilter} onValueChange={setCashierFilter} disabled={!canViewAllCashiers && uniqueCashiers.length <= 1}>
+                <Select value={cashierFilter} onValueChange={setCashierFilter} disabled={!canViewAllCashiers && dropdownCashiers.length <= 1}>
                   <SelectTrigger className="w-36" data-testid="select-cashier">
                     <SelectValue placeholder="الكاشير" />
                   </SelectTrigger>
                   <SelectContent>
                     {canViewAllCashiers && <SelectItem value="all">جميع الكاشيرين</SelectItem>}
-                    {uniqueCashiers.map((name) => (
+                    {dropdownCashiers.map((name) => (
                       <SelectItem key={name} value={name}>
                         {name}
                       </SelectItem>

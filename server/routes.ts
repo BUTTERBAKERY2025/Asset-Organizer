@@ -2431,7 +2431,11 @@ export async function registerRoutes(
           journals = journals.filter(j => j.branchId === activeBranch);
         } else {
           // Cashier sees only their own journals in their branch
-          journals = journals.filter(j => j.branchId === activeBranch && j.cashierId === user.id);
+          // Coerce to strings for reliable comparison (handles numeric vs string IDs)
+          const userId = String(user.id);
+          journals = journals.filter(j => 
+            j.branchId === activeBranch && String(j.cashierId) === userId
+          );
         }
       } else if (branchId) {
         // Admin can filter by specific branch if provided
@@ -2830,11 +2834,66 @@ export async function registerRoutes(
   });
 
   // Get cashier journal stats
-  app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+  app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
     try {
       const { branchId } = req.query;
-      const stats = await storage.getCashierJournalStats(branchId as string | undefined);
-      res.json(stats);
+      const user = req.currentUser;
+      const activeBranch = getActiveBranchFilter(req);
+      
+      // Get all journals first
+      let journals = await storage.getAllCashierJournals();
+      
+      // Apply same filtering as the main journals endpoint
+      if (user?.role !== "admin") {
+        if (!activeBranch) {
+          return res.json({
+            totalJournals: 0,
+            totalSales: 0,
+            totalShortages: 0,
+            totalSurpluses: 0,
+            shortageAmount: 0,
+            surplusAmount: 0,
+            averageTicket: 0,
+          });
+        }
+        
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find((p: any) => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve');
+        
+        if (isManager) {
+          journals = journals.filter(j => j.branchId === activeBranch);
+        } else {
+          // Cashier sees only their own journals
+          // Coerce to strings for reliable comparison (handles numeric vs string IDs)
+          const userId = String(user.id);
+          journals = journals.filter(j => 
+            j.branchId === activeBranch && String(j.cashierId) === userId
+          );
+        }
+      } else if (branchId) {
+        journals = journals.filter(j => j.branchId === branchId);
+      }
+      
+      // Calculate stats from filtered journals
+      const totalJournals = journals.length;
+      const totalSales = journals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+      const shortages = journals.filter(j => j.discrepancyStatus === 'shortage');
+      const surpluses = journals.filter(j => j.discrepancyStatus === 'surplus');
+      const shortageAmount = shortages.reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0);
+      const surplusAmount = surpluses.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+      const totalCustomers = journals.reduce((sum, j) => sum + (j.customerCount || 0), 0);
+      const averageTicket = totalCustomers > 0 ? totalSales / totalCustomers : 0;
+      
+      res.json({
+        totalJournals,
+        totalSales,
+        totalShortages: shortages.length,
+        totalSurpluses: surpluses.length,
+        shortageAmount,
+        surplusAmount,
+        averageTicket,
+      });
     } catch (error) {
       console.error("Error fetching cashier journal stats:", error);
       res.status(500).json({ error: "Failed to fetch cashier journal stats" });
