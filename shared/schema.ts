@@ -483,25 +483,82 @@ export const insertContractPaymentSchema = createInsertSchema(
 export type ContractPayment = typeof contractPayments.$inferSelect;
 export type InsertContractPayment = z.infer<typeof insertContractPaymentSchema>;
 
-// System Modules for permissions
+// System Modules for permissions - جميع وحدات النظام
 export const SYSTEM_MODULES = [
+  // الأساسية
   "dashboard",
+  "platform_home",
+  "settings",
+  
+  // المخزون والأصول
   "inventory",
   "asset_transfers",
+  "inspections",
+  "maintenance",
+  
+  // الإنتاج والتشغيل
+  "production",
+  "daily_production",
+  "advanced_production",
+  "quality_control",
+  "products",
+  "operations",
+  "ai_production_planner",
+  
+  // الورديات والحضور
+  "shifts",
+  "attendance",
+  "timesheet",
+  
+  // الموظفين والموارد البشرية
+  "users",
+  "branch_employees",
+  "branches",
+  "organizational_structure",
+  "employee_reports",
+  "employee_transfers",
+  
+  // المالية
+  "cashier_journal",
+  "cashier_performance",
+  "pnl_dashboard",
+  "incentives",
+  "sales_analytics",
+  "sales_uploads",
+  
+  // الأهداف والأداء
+  "targets",
+  "targets_planning",
+  "waste_tracking",
+  
+  // مشاريع الإنشاء
   "construction_projects",
   "construction_work_items",
+  "construction_reports",
   "contractors",
   "contracts",
   "budget_planning",
   "payment_requests",
-  "users",
-  "reports",
-  "operations",
-  "production",
-  "shifts",
-  "quality_control",
-  "cashier_journal",
+  
+  // التسويق
   "marketing",
+  "marketing_campaigns",
+  "marketing_influencers",
+  "marketing_tasks",
+  "marketing_goals",
+  "marketing_calendar",
+  "marketing_alerts",
+  "marketing_assets",
+  "marketing_expenses",
+  "marketing_reports",
+  "marketing_team",
+  
+  // إدارة النظام
+  "rbac_management",
+  "audit_logs",
+  "backups",
+  "integrations",
+  "reports",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -547,23 +604,80 @@ export type InsertUserPermission = z.infer<typeof insertUserPermissionSchema>;
 
 // Module labels for UI display (Arabic)
 export const MODULE_LABELS: Record<SystemModule, string> = {
+  // الأساسية
   dashboard: "لوحة التحكم",
+  platform_home: "الصفحة الرئيسية",
+  settings: "الإعدادات",
+  
+  // المخزون والأصول
   inventory: "المخزون والأصول",
   asset_transfers: "تحويلات الأصول",
+  inspections: "التفتيش والجرد",
+  maintenance: "الصيانة",
+  
+  // الإنتاج والتشغيل
+  production: "الإنتاج",
+  daily_production: "الإنتاج اليومي",
+  advanced_production: "أوامر الإنتاج المتقدمة",
+  quality_control: "مراقبة الجودة",
+  products: "المنتجات",
+  operations: "التشغيل",
+  ai_production_planner: "مخطط الإنتاج الذكي",
+  
+  // الورديات والحضور
+  shifts: "الورديات",
+  attendance: "الحضور والانصراف",
+  timesheet: "كشوف الدوام",
+  
+  // الموظفين والموارد البشرية
+  users: "إدارة المستخدمين",
+  branch_employees: "موظفي الفروع",
+  branches: "الفروع",
+  organizational_structure: "الهيكل التنظيمي",
+  employee_reports: "تقارير الموظفين",
+  employee_transfers: "تحويلات الموظفين",
+  
+  // المالية
+  cashier_journal: "يومية الكاشير",
+  cashier_performance: "أداء الكاشير",
+  pnl_dashboard: "لوحة الأرباح والخسائر",
+  incentives: "الحوافز",
+  sales_analytics: "تحليلات المبيعات",
+  sales_uploads: "رفع بيانات المبيعات",
+  
+  // الأهداف والأداء
+  targets: "الأهداف",
+  targets_planning: "تخطيط الأهداف",
+  waste_tracking: "تتبع الهدر",
+  
+  // مشاريع الإنشاء
   construction_projects: "مشاريع الإنشاءات",
   construction_work_items: "بنود الأعمال",
+  construction_reports: "تقارير المشاريع",
   contractors: "المقاولين",
   contracts: "العقود",
   budget_planning: "تخطيط الميزانية",
   payment_requests: "طلبات الصرف",
-  users: "إدارة المستخدمين",
-  reports: "التقارير",
-  operations: "التشغيل",
-  production: "الإنتاج",
-  shifts: "الورديات",
-  quality_control: "مراقبة الجودة",
-  cashier_journal: "يومية الكاشير",
+  
+  // التسويق
   marketing: "التسويق",
+  marketing_campaigns: "الحملات التسويقية",
+  marketing_influencers: "المؤثرين",
+  marketing_tasks: "مهام التسويق",
+  marketing_goals: "أهداف التسويق",
+  marketing_calendar: "تقويم التسويق",
+  marketing_alerts: "تنبيهات التسويق",
+  marketing_assets: "أصول التسويق",
+  marketing_expenses: "مصروفات التسويق",
+  marketing_reports: "تقارير التسويق",
+  marketing_team: "فريق التسويق",
+  
+  // إدارة النظام
+  rbac_management: "إدارة الصلاحيات",
+  audit_logs: "سجلات التدقيق",
+  backups: "النسخ الاحتياطية",
+  integrations: "التكاملات",
+  reports: "التقارير",
 };
 
 // Action labels for UI display (Arabic)
@@ -584,32 +698,86 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
 export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   {
     label: "الأساسية",
-    modules: ["dashboard", "inventory", "asset_transfers", "reports"],
+    modules: ["dashboard", "platform_home", "settings"],
   },
   {
-    label: "التشغيل",
+    label: "المخزون والأصول",
+    modules: ["inventory", "asset_transfers", "inspections", "maintenance"],
+  },
+  {
+    label: "الإنتاج والتشغيل",
     modules: [
-      "operations",
       "production",
-      "shifts",
+      "daily_production",
+      "advanced_production",
       "quality_control",
-      "cashier_journal",
+      "products",
+      "operations",
+      "ai_production_planner",
     ],
   },
   {
-    label: "إدارة الإنشاءات",
+    label: "الورديات والحضور",
+    modules: ["shifts", "attendance", "timesheet"],
+  },
+  {
+    label: "الموظفين والموارد البشرية",
+    modules: [
+      "users",
+      "branch_employees",
+      "branches",
+      "organizational_structure",
+      "employee_reports",
+      "employee_transfers",
+    ],
+  },
+  {
+    label: "المالية والكاشير",
+    modules: [
+      "cashier_journal",
+      "cashier_performance",
+      "pnl_dashboard",
+      "incentives",
+      "sales_analytics",
+      "sales_uploads",
+    ],
+  },
+  {
+    label: "الأهداف والأداء",
+    modules: ["targets", "targets_planning", "waste_tracking"],
+  },
+  {
+    label: "مشاريع الإنشاء",
     modules: [
       "construction_projects",
       "construction_work_items",
+      "construction_reports",
       "contractors",
+      "contracts",
+      "budget_planning",
+      "payment_requests",
     ],
   },
   {
-    label: "المالية والعقود",
-    modules: ["contracts", "budget_planning", "payment_requests"],
+    label: "التسويق",
+    modules: [
+      "marketing",
+      "marketing_campaigns",
+      "marketing_influencers",
+      "marketing_tasks",
+      "marketing_goals",
+      "marketing_calendar",
+      "marketing_alerts",
+      "marketing_assets",
+      "marketing_expenses",
+      "marketing_reports",
+      "marketing_team",
+    ],
   },
-  { label: "التسويق", modules: ["marketing"] },
-  { label: "إدارة النظام", modules: ["users"] },
+  {
+    label: "إدارة النظام",
+    modules: ["rbac_management", "audit_logs", "backups", "integrations", "reports"],
+  },
 ];
 
 // Role permission templates - قوالب الصلاحيات الافتراضية لكل دور
@@ -2539,6 +2707,155 @@ export const insertUserBranchAccessSchema = createInsertSchema(userBranchAccess)
 
 export type UserBranchAccess = typeof userBranchAccess.$inferSelect;
 export type InsertUserBranchAccess = z.infer<typeof insertUserBranchAccessSchema>;
+
+// ==================== نظام الأمان المتقدم ====================
+
+// User Security Settings - إعدادات أمان المستخدم
+export const userSecuritySettings = pgTable("user_security_settings", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+  twoFactorSecret: text("two_factor_secret"), // Secret for TOTP
+  twoFactorBackupCodes: text("two_factor_backup_codes").array(), // Backup codes
+  ipWhitelist: text("ip_whitelist").array(), // قائمة IP المسموحة
+  ipRestrictionEnabled: boolean("ip_restriction_enabled").default(false).notNull(),
+  sessionTimeout: integer("session_timeout").default(480), // مهلة الجلسة بالدقائق (8 ساعات افتراضي)
+  maxConcurrentSessions: integer("max_concurrent_sessions").default(3), // الحد الأقصى للجلسات المتزامنة
+  passwordChangedAt: timestamp("password_changed_at"),
+  passwordExpiryDays: integer("password_expiry_days").default(90), // صلاحية كلمة المرور
+  forcePasswordChange: boolean("force_password_change").default(false).notNull(),
+  failedLoginAttempts: integer("failed_login_attempts").default(0).notNull(),
+  lockedUntil: timestamp("locked_until"), // قفل الحساب حتى
+  lastLoginAt: timestamp("last_login_at"),
+  lastLoginIp: text("last_login_ip"),
+  lastLoginDevice: text("last_login_device"),
+  trustedDevices: jsonb("trusted_devices").$type<{ deviceId: string; name: string; addedAt: string }[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserSecuritySettingsSchema = createInsertSchema(userSecuritySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserSecuritySettings = typeof userSecuritySettings.$inferSelect;
+export type InsertUserSecuritySettings = z.infer<typeof insertUserSecuritySettingsSchema>;
+
+// User Sessions - جلسات المستخدمين النشطة
+export const userSessions = pgTable("user_sessions", {
+  id: serial("id").primaryKey(),
+  sessionId: varchar("session_id", { length: 255 }).unique().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  deviceInfo: jsonb("device_info").$type<{ browser: string; os: string; device: string }>(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("idx_user_sessions_user_id").on(table.userId),
+  sessionIdIdx: index("idx_user_sessions_session_id").on(table.sessionId),
+}));
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+
+// Security Violation Alerts - تنبيهات الانتهاكات الأمنية
+export const securityViolationAlerts = pgTable("security_violation_alerts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  violationType: varchar("violation_type", { length: 50 }).notNull(), // unauthorized_access, failed_login, ip_blocked, session_hijack, permission_denied
+  severity: varchar("severity", { length: 20 }).notNull().default("warning"), // info, warning, critical
+  module: varchar("module", { length: 100 }), // الوحدة المستهدفة
+  action: varchar("action", { length: 50 }), // الإجراء المحاول
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  details: jsonb("details").$type<Record<string, any>>(), // تفاصيل إضافية
+  isResolved: boolean("is_resolved").default(false).notNull(),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("idx_security_violations_user_id").on(table.userId),
+  typeIdx: index("idx_security_violations_type").on(table.violationType),
+  createdAtIdx: index("idx_security_violations_created_at").on(table.createdAt),
+}));
+
+export const insertSecurityViolationAlertSchema = createInsertSchema(securityViolationAlerts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SecurityViolationAlert = typeof securityViolationAlerts.$inferSelect;
+export type InsertSecurityViolationAlert = z.infer<typeof insertSecurityViolationAlertSchema>;
+
+// Permission Check Logs - سجل فحص الصلاحيات (لتتبع كل عملية تحقق)
+export const permissionCheckLogs = pgTable("permission_check_logs", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  module: varchar("module", { length: 100 }).notNull(),
+  action: varchar("action", { length: 50 }).notNull(),
+  resourceId: text("resource_id"), // معرف المورد المستهدف (مثل: projectId, inventoryId)
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  allowed: boolean("allowed").notNull(), // هل تم السماح؟
+  denialReason: text("denial_reason"), // سبب الرفض إن وجد
+  ipAddress: text("ip_address"),
+  requestPath: text("request_path"), // مسار الطلب
+  requestMethod: varchar("request_method", { length: 10 }), // GET, POST, PUT, DELETE
+  responseTime: integer("response_time"), // وقت الاستجابة بالميلي ثانية
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("idx_perm_check_logs_user_id").on(table.userId),
+  moduleIdx: index("idx_perm_check_logs_module").on(table.module),
+  createdAtIdx: index("idx_perm_check_logs_created_at").on(table.createdAt),
+}));
+
+export const insertPermissionCheckLogSchema = createInsertSchema(permissionCheckLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PermissionCheckLog = typeof permissionCheckLogs.$inferSelect;
+export type InsertPermissionCheckLog = z.infer<typeof insertPermissionCheckLogSchema>;
+
+// Role Templates - قوالب الأدوار الجاهزة
+export const roleTemplates = pgTable("role_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: varchar("slug", { length: 50 }).unique().notNull(),
+  description: text("description"),
+  permissions: jsonb("permissions").$type<{ module: string; actions: string[] }[]>().notNull(),
+  departmentId: integer("department_id").references(() => departments.id, { onDelete: "set null" }),
+  isSystemDefault: boolean("is_system_default").default(false).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRoleTemplateSchema = createInsertSchema(roleTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type RoleTemplate = typeof roleTemplates.$inferSelect;
+export type InsertRoleTemplate = z.infer<typeof insertRoleTemplateSchema>;
 
 // ==========================================
 // نظام أهداف الشفت والكاشير - Shift & Cashier Targets

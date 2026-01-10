@@ -78,6 +78,39 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **`database_schema.sql`**: Complete SQL reference file generated from schema.ts (94 tables)
 
 ### Recent Schema Changes (2026-01-10)
+
+#### RBAC Security Enhancement (NEW)
+**SQL Migration Files** (Execute in order in Supabase SQL Editor):
+1. `supabase_rbac_security_enhancement.sql` - Creates security tables
+2. `supabase_seed_permissions.sql` - Seeds all permissions (200+ permissions)
+
+**New Security Tables:**
+- `user_security_settings` - 2FA, IP whitelist, session timeout, password policies
+- `user_sessions` - Active session tracking with device info
+- `security_violation_alerts` - Unauthorized access attempt logging
+- `permission_check_logs` - Audit trail for all permission checks
+- `role_templates` - Pre-built role permission templates
+
+**Expanded SYSTEM_MODULES** (from 17 to 50+ modules):
+- Core: dashboard, platform_home, settings
+- Inventory: inventory, asset_transfers, inspections, maintenance
+- Production: production, daily_production, advanced_production, quality_control, products, operations
+- HR: users, branch_employees, branches, organizational_structure, employee_reports, employee_transfers
+- Finance: cashier_journal, cashier_performance, pnl_dashboard, incentives, sales_analytics
+- Targets: targets, targets_planning, waste_tracking
+- Construction: construction_projects, construction_work_items, contractors, contracts, budget_planning, payment_requests
+- Marketing: marketing, marketing_campaigns, marketing_influencers, marketing_tasks, marketing_goals, etc.
+- System: rbac_management, audit_logs, backups, integrations, reports
+
+**Security Features:**
+- Two-Factor Authentication (2FA) support
+- IP whitelist restrictions
+- Session management with concurrent session limits
+- Password expiry policies
+- Failed login attempt tracking and account lockout
+- Trusted device management
+- Security violation alerts with severity levels
+
 - **P&L Dashboard Enhancements**: Added advanced financial KPIs to `financial_metrics` table:
   - `ebitda` - Earnings Before Interest, Taxes, Depreciation, and Amortization
   - `ebitda_margin_pct` - EBITDA as percentage of revenue
