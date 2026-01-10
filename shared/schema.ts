@@ -3027,17 +3027,25 @@ export const marketingInfluencers = pgTable("marketing_influencers", {
   email: text("email"),
   phone: text("phone"),
   profileImageUrl: text("profile_image_url"),
+  accountUrl: text("account_url"), // رابط الحساب
+  coverageUrl: text("coverage_url"), // رابط التغطية
   specialty: text("specialty").notNull(), // from INFLUENCER_SPECIALTIES
   platforms: text("platforms").array(), // from INFLUENCER_PLATFORMS
   contentTypes: text("content_types").array(), // from INFLUENCER_CONTENT_TYPES
   followerCount: integer("follower_count").default(0),
+  followerCountText: text("follower_count_text"), // النص الأصلي للمتابعين مثل 133k
   engagementRate: real("engagement_rate"), // percentage
+  viewRating: integer("view_rating"), // تقييم المشاهدات (1-100)
   avgViews: integer("avg_views").default(0),
   pricePerPost: real("price_per_post"),
   pricePerStory: real("price_per_story"),
   pricePerVideo: real("price_per_video"),
   city: text("city"),
   region: text("region"),
+  // Bank Information - معلومات بنكية
+  bankAccountNumber: text("bank_account_number"),
+  bankAccountHolder: text("bank_account_holder"),
+  bankName: text("bank_name"),
   socialHandles: jsonb("social_handles"), // { instagram: "@handle", tiktok: "@handle", ... }
   bestCollaborationTimes: text("best_collaboration_times"), // description of best times
   notes: text("notes"),
