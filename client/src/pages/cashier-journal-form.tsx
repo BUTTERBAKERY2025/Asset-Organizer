@@ -363,7 +363,7 @@ export default function CashierJournalFormPage() {
 
     const data = {
       ...formData,
-      paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0),
+      paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0 || (b.terminalAmount && b.terminalAmount > 0)),
       signatureData,
       signerName: formData.cashierName,
     };
@@ -421,7 +421,7 @@ export default function CashierJournalFormPage() {
     if (isEdit) {
       const data = {
         ...formData,
-        paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0),
+        paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0 || (b.terminalAmount && b.terminalAmount > 0)),
       };
       await updateMutation.mutateAsync(data);
     }
