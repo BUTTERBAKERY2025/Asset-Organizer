@@ -1169,9 +1169,7 @@ export default function TargetsPlanning() {
                           size="sm"
                           onClick={() => {
                             const selectedTarget = targets.find(t => t.id === selectedTargetId);
-                            const branchName = selectedTarget ? getBranchName(selectedTarget.branchId) : 'غير معروف';
-                            const dayNames = ['الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعة', 'السبت'];
-                            
+                            const branchId = selectedTarget?.branchId || '';
                             const dayNamesEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                             
                             const tableBody = [
@@ -1209,7 +1207,7 @@ export default function TargetsPlanning() {
                               pageOrientation: 'portrait' as const,
                               content: [
                                 { text: 'Daily Target Distribution Report', style: 'header', alignment: 'center' },
-                                { text: `Branch: ${branchName}`, style: 'subheader', alignment: 'center', margin: [0, 5, 0, 5] },
+                                { text: `Branch: ${branchId}`, style: 'subheader', alignment: 'center', margin: [0, 5, 0, 5] },
                                 { text: `Month: ${selectedTarget?.yearMonth || ''}`, alignment: 'center', margin: [0, 0, 0, 10] },
                                 {
                                   style: 'statsTable',
@@ -1252,7 +1250,7 @@ export default function TargetsPlanning() {
                               defaultStyle: { font: 'Roboto', alignment: 'center' as const }
                             };
                             
-                            downloadArabicPdf(docDefinition, `توزيع_${branchName}_${selectedTarget?.yearMonth || 'monthly'}.pdf`);
+                            downloadArabicPdf(docDefinition, `distribution_${branchId}_${selectedTarget?.yearMonth || 'monthly'}.pdf`);
                           }}
                           className="min-h-[44px]"
                           data-testid="btn-export-allocations-pdf"
