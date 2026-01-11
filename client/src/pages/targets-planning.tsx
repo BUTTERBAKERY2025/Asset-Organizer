@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Target, Plus, Calendar, TrendingUp, Building2, Settings, Play, Edit, Trash2, Copy, Lock, Unlock, FileSpreadsheet, FileText, CheckCircle, RefreshCw, Zap, PenLine, Save, X } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
+import { downloadArabicPdf } from "@/lib/pdfmake-arabic";
 import type { Branch, BranchMonthlyTarget, TargetWeightProfile, TargetDailyAllocation, SeasonHoliday } from "@shared/schema";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { TablePagination } from "@/components/ui/pagination";
@@ -1129,6 +1130,7 @@ export default function TargetsPlanning() {
                         </SelectContent>
                       </Select>
                       {allocations.length > 0 && (
+                        <>
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -1160,8 +1162,103 @@ export default function TargetsPlanning() {
                           data-testid="btn-export-allocations"
                         >
                           <FileSpreadsheet className="h-4 w-4 ml-2" />
-                          تصدير Excel
+                          Excel
                         </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            const selectedTarget = targets.find(t => t.id === selectedTargetId);
+                            const branchName = selectedTarget ? getBranchName(selectedTarget.branchId) : 'غير معروف';
+                            const dayNames = ['الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                            
+                            const tableBody = [
+                              [
+                                { text: 'التاريخ', style: 'tableHeader' },
+                                { text: 'اليوم', style: 'tableHeader' },
+                                { text: 'الهدف اليومي', style: 'tableHeader' },
+                                { text: 'النسبة %', style: 'tableHeader' },
+                                { text: 'ويكند', style: 'tableHeader' },
+                                { text: 'نهاية الشهر', style: 'tableHeader' },
+                              ],
+                              ...allocations.map(alloc => {
+                                const date = new Date(alloc.targetDate);
+                                const isWeekend = date.getDay() === 4 || date.getDay() === 5 || date.getDay() === 6;
+                                const isEndOfMonth = date.getDate() >= 27;
+                                return [
+                                  new Date(alloc.targetDate).toLocaleDateString('en-GB'),
+                                  dayNames[date.getDay()],
+                                  { text: alloc.dailyTarget.toLocaleString('en-US'), alignment: 'center' },
+                                  { text: alloc.weightPercent.toFixed(2) + '%', alignment: 'center' },
+                                  { text: isWeekend ? 'نعم' : '-', alignment: 'center' },
+                                  { text: isEndOfMonth ? 'نعم' : '-', alignment: 'center' },
+                                ];
+                              })
+                            ];
+                            
+                            const totalTarget = allocations.reduce((sum, a) => sum + a.dailyTarget, 0);
+                            const weekendDays = allocations.filter(a => {
+                              const d = new Date(a.targetDate);
+                              return d.getDay() === 4 || d.getDay() === 5 || d.getDay() === 6;
+                            });
+                            const endOfMonthDays = allocations.filter(a => new Date(a.targetDate).getDate() >= 27);
+                            
+                            const docDefinition = {
+                              pageOrientation: 'portrait' as const,
+                              content: [
+                                { text: 'التوزيع اليومي للاهداف', style: 'header', alignment: 'center' },
+                                { text: `الفرع: ${branchName}`, style: 'subheader', alignment: 'center', margin: [0, 5, 0, 5] },
+                                { text: `الشهر: ${selectedTarget?.yearMonth || ''}`, alignment: 'center', margin: [0, 0, 0, 10] },
+                                {
+                                  style: 'statsTable',
+                                  table: {
+                                    widths: ['*', '*', '*', '*'],
+                                    body: [
+                                      [
+                                        { text: 'اجمالي الهدف', alignment: 'center', bold: true },
+                                        { text: 'ايام الويكند', alignment: 'center', bold: true },
+                                        { text: 'نهاية الشهر', alignment: 'center', bold: true },
+                                        { text: 'عدد الايام', alignment: 'center', bold: true },
+                                      ],
+                                      [
+                                        { text: totalTarget.toLocaleString('en-US') + ' ر.س', alignment: 'center' },
+                                        { text: weekendDays.length + ' يوم', alignment: 'center' },
+                                        { text: endOfMonthDays.length + ' يوم', alignment: 'center' },
+                                        { text: allocations.length + ' يوم', alignment: 'center' },
+                                      ]
+                                    ]
+                                  },
+                                  margin: [0, 0, 0, 15]
+                                },
+                                {
+                                  style: 'dataTable',
+                                  table: {
+                                    headerRows: 1,
+                                    widths: ['auto', 'auto', '*', 'auto', 'auto', 'auto'],
+                                    body: tableBody
+                                  }
+                                },
+                                { text: `تاريخ التصدير: ${new Date().toLocaleDateString('en-GB')}`, alignment: 'center', margin: [0, 15, 0, 0], fontSize: 8, color: 'gray' }
+                              ],
+                              styles: {
+                                header: { fontSize: 16, bold: true, margin: [0, 0, 0, 10] },
+                                subheader: { fontSize: 12, bold: true },
+                                tableHeader: { bold: true, fontSize: 9, fillColor: '#d4a853', color: 'white', alignment: 'center' },
+                                dataTable: { fontSize: 8 },
+                                statsTable: { fontSize: 9 }
+                              },
+                              defaultStyle: { font: 'Roboto', alignment: 'right' as const }
+                            };
+                            
+                            downloadArabicPdf(docDefinition, `توزيع_${branchName}_${selectedTarget?.yearMonth || 'monthly'}.pdf`);
+                          }}
+                          className="min-h-[44px]"
+                          data-testid="btn-export-allocations-pdf"
+                        >
+                          <FileText className="h-4 w-4 ml-2" />
+                          PDF
+                        </Button>
+                        </>
                       )}
                     </div>
                   )}
