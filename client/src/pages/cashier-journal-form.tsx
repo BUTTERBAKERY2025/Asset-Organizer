@@ -751,6 +751,8 @@ export default function CashierJournalFormPage() {
       mada: "مدى",
       apple_pay: "Apple Pay",
       stc_pay: "STC Pay",
+      visa: "فيزا",
+      mastercard: "ماستركارد",
       hunger_station: "هنقرستيشن",
       toyou: "ToYou",
       jahez: "جاهز",
@@ -760,6 +762,9 @@ export default function CashierJournalFormPage() {
       talabat: "طلبات",
       other: "أخرى",
     };
+
+    // Bank reconciliation summary for PDF
+    const bankSummary = getBankReconciliationSummary();
 
     const formatDateTime = (dateVal: string | Date | null | undefined) => {
       if (!dateVal) return '-';
@@ -876,6 +881,49 @@ export default function CashierJournalFormPage() {
             <div class="status">${discrepancy === 0 ? 'مطابق ✓' : discrepancy < 0 ? 'عجز مُسجّل على الكاشير' : 'فائض مُسجّل'}</div>
           </div>
         </div>
+        
+        ${bankSummary.bankPayments.length > 0 ? `
+        <div class="section">
+          <div class="section-title">🏦 مطابقة البنك (POS vs Terminal)</div>
+          <div class="recon-box">
+            <div class="recon-row"><span>إجمالي POS (الكاشير)</span><span>${bankSummary.totalPosAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>إجمالي التيرمنال</span><span>${bankSummary.totalTerminalAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row" style="border-top: 1px solid #ddd; padding-top: 6px; margin-top: 4px;">
+              <span style="font-weight:bold;">الفرق</span>
+              <span style="font-weight:bold; color: ${bankSummary.type === 'shortage' ? '#c62828' : bankSummary.type === 'surplus' ? '#2e7d32' : '#333'};">
+                ${bankSummary.discrepancy >= 0 ? '+' : ''}${bankSummary.discrepancy.toLocaleString('en', {minimumFractionDigits: 2})} ر.س
+              </span>
+            </div>
+          </div>
+          
+          ${bankSummary.bankPayments.length > 0 ? `
+          <div style="margin-top: 8px;">
+            <div style="font-size: 9px; color: #666; margin-bottom: 4px;">تفاصيل طرق الدفع البنكية:</div>
+            ${bankSummary.bankPayments.map(p => {
+              const posAmt = p.posAmount || p.amount || 0;
+              const termAmt = p.terminalAmount || 0;
+              const diff = termAmt - posAmt;
+              const diffStatus = diff > 0.5 ? 'surplus' : diff < -0.5 ? 'shortage' : 'balanced';
+              return `
+              <div style="display: flex; justify-content: space-between; padding: 3px 8px; font-size: 9px; background: ${diffStatus === 'surplus' ? '#e8f5e9' : diffStatus === 'shortage' ? '#ffebee' : '#f5f5f5'}; margin-bottom: 2px; border-radius: 3px;">
+                <span>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span>
+                <span>POS: ${posAmt.toLocaleString('en', {minimumFractionDigits: 2})} | تيرمنال: ${termAmt.toLocaleString('en', {minimumFractionDigits: 2})} | 
+                  <span style="font-weight:bold; color: ${diffStatus === 'shortage' ? '#c62828' : diffStatus === 'surplus' ? '#2e7d32' : '#666'};">
+                    (${diff >= 0 ? '+' : ''}${diff.toFixed(2)})
+                  </span>
+                </span>
+              </div>`;
+            }).join('')}
+          </div>
+          ` : ''}
+          
+          <div class="diff-display ${bankSummary.type === 'balanced' ? 'balanced' : bankSummary.type === 'shortage' ? 'shortage' : 'surplus'}" style="margin-top: 8px;">
+            <div class="status" style="font-size: 10px;">
+              ${bankSummary.type === 'surplus' ? '⬆️ زيادة في التيرمنال' : bankSummary.type === 'shortage' ? '⬇️ عجز في التيرمنال' : '✓ متطابق'}
+            </div>
+          </div>
+        </div>
+        ` : ''}
       </div>
       
       <div>
@@ -885,7 +933,7 @@ export default function CashierJournalFormPage() {
           <div class="category-header cash"><span>💵 نقدي</span><span>${categoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           
           <div class="category-header cards"><span>💳 بطاقات وشبكة</span><span>${categoryTotals.cards.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay'].includes(p.paymentMethod)).map(p => `
+          ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay', 'visa', 'mastercard'].includes(p.paymentMethod)).map(p => `
           <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           `).join('')}
           
