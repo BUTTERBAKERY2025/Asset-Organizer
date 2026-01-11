@@ -1043,7 +1043,7 @@ export default function CashierJournalFormPage() {
                     <Label className="text-base sm:text-lg font-semibold">إجمالي المبيعات (ر.س) *</Label>
                     <Input
                       type="number"
-                      value={formData.totalSales || ""}
+                      value={formData.totalSales ?? ""}
                       onChange={(e) => setFormData({ ...formData, totalSales: parseFloat(e.target.value) || 0 })}
                       className="text-lg sm:text-xl font-bold h-12 sm:h-14 min-h-[48px]"
                       placeholder="0.00"
@@ -1058,7 +1058,7 @@ export default function CashierJournalFormPage() {
                     </Label>
                     <Input
                       type="number"
-                      value={formData.transactionCount || ""}
+                      value={formData.transactionCount ?? ""}
                       onChange={(e) => setFormData({ ...formData, transactionCount: parseInt(e.target.value) || 0 })}
                       className="h-12 sm:h-14 min-h-[48px]"
                       placeholder="0"
@@ -1082,7 +1082,7 @@ export default function CashierJournalFormPage() {
                   <Label>رصيد سابق للدرج (عهدة)</Label>
                   <Input
                     type="number"
-                    value={formData.openingBalance || ""}
+                    value={formData.openingBalance ?? ""}
                     onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
                     placeholder="0.00"
                     disabled={isReadOnly}
@@ -1152,7 +1152,7 @@ export default function CashierJournalFormPage() {
                           <Input
                             type="number"
                             placeholder={isBank ? "مبلغ الكاشير (POS)" : "المبلغ"}
-                            value={breakdown.amount || ""}
+                            value={breakdown.amount ?? ""}
                             onChange={(e) => {
                               const val = parseFloat(e.target.value) || 0;
                               // Use atomic update for bank payments to set both amount and posAmount
@@ -1171,7 +1171,7 @@ export default function CashierJournalFormPage() {
                           <Input
                             type="number"
                             placeholder="عدد"
-                            value={breakdown.transactionCount || ""}
+                            value={breakdown.transactionCount ?? ""}
                             onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
                             disabled={isReadOnly}
                             className="h-11 sm:h-10"
@@ -1213,7 +1213,7 @@ export default function CashierJournalFormPage() {
                               <Input
                                 type="number"
                                 placeholder="0.00"
-                                value={breakdown.terminalAmount || ""}
+                                value={breakdown.terminalAmount ?? ""}
                                 onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseFloat(e.target.value) || 0)}
                                 disabled={isReadOnly}
                                 className="h-10 bg-white"
@@ -1225,7 +1225,7 @@ export default function CashierJournalFormPage() {
                               <Input
                                 type="number"
                                 placeholder="0"
-                                value={breakdown.terminalTransactionCount || ""}
+                                value={breakdown.terminalTransactionCount ?? ""}
                                 onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseInt(e.target.value) || 0)}
                                 disabled={isReadOnly}
                                 className="h-10 bg-white"
@@ -1380,7 +1380,7 @@ export default function CashierJournalFormPage() {
                     <Label>الرصيد الفعلي في الصندوق (ر.س) *</Label>
                     <Input
                       type="number"
-                      value={formData.actualCashDrawer || ""}
+                      value={formData.actualCashDrawer ?? ""}
                       onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
                       className="text-lg font-bold h-11 sm:h-10"
                       placeholder="0.00"
