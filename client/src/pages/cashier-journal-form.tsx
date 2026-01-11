@@ -884,6 +884,12 @@ export default function CashierJournalFormPage() {
     const cashierSigData = savedCashierSig?.signatureData || currentCanvasSignature;
     const supervisorSig = existingJournal?.signatures?.find(s => s.signatureType === 'supervisor');
 
+    // Compact PDF - all data on single A4 page
+    const totalTerminal = bankSummary.totalTerminalAmount || 0;
+    const actualCash = formData.actualCashDrawer || 0;
+    const totalActualCollected = actualCash + totalTerminal;
+    const netVariance = totalActualCollected - netSales;
+
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -894,253 +900,198 @@ export default function CashierJournalFormPage() {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4; margin: 10mm; }
+    @page { size: A4; margin: 6mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; background: white; color: #333; font-size: 11px; padding: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .container { max-width: 100%; }
-    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 8px; margin-bottom: 10px; }
-    .header .logo { max-height: 35px; }
-    .header .title { font-size: 16px; font-weight: bold; }
-    .header .info { font-size: 10px; color: #666; }
-    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-    .section { margin-bottom: 10px; }
-    .section-title { font-size: 11px; font-weight: bold; color: #333; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid #ddd; }
-    .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-size: 10px; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #333; font-size: 9px; line-height: 1.2; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #d4a853; padding-bottom: 4px; margin-bottom: 6px; }
+    .header .title { font-size: 13px; font-weight: bold; }
+    .header .info { font-size: 8px; color: #666; }
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .section { margin-bottom: 6px; page-break-inside: avoid; }
+    .section-title { font-size: 9px; font-weight: bold; color: #333; margin-bottom: 3px; padding: 2px 4px; background: #f5f5f5; border-right: 3px solid #d4a853; }
+    .row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid #f0f0f0; font-size: 8px; }
     .row .label { color: #666; }
     .row .value { font-weight: bold; }
-    .row .value.big { font-size: 14px; color: #333; }
-    .category-header { background: #f5f5f5; padding: 5px 8px; border-radius: 4px; margin: 6px 0 4px 0; display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; }
-    .category-header.cash { background: #e8f5e9; }
-    .category-header.cards { background: #fff3e0; }
-    .category-header.apps { background: #fce4ec; }
-    .sub-row { display: flex; justify-content: space-between; padding: 2px 12px; font-size: 9px; color: #666; }
-    .recon-box { background: #fafafa; padding: 8px; border-radius: 6px; margin-top: 8px; }
-    .recon-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 10px; }
-    .diff-display { text-align: center; padding: 8px; margin-top: 6px; border-radius: 6px; }
-    .diff-display.shortage { background: #ffebee; }
-    .diff-display.surplus { background: #e8f5e9; }
-    .diff-display.balanced { background: #e8f5e9; }
-    .diff-display .amount { font-size: 18px; font-weight: bold; }
-    .diff-display .amount.negative { color: #c62828; }
-    .diff-display .amount.positive { color: #2e7d32; }
-    .diff-display .status { font-size: 11px; font-weight: bold; margin-top: 4px; }
-    .signature-section { margin-top: 15px; padding-top: 10px; border-top: 2px solid #d4a853; }
-    .sig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-    .sig-box { text-align: center; padding: 8px; border: 1px solid #ddd; border-radius: 6px; min-height: 80px; }
-    .sig-box .role { font-size: 10px; font-weight: bold; color: #666; margin-bottom: 5px; }
-    .sig-box .sig-img { max-width: 100px; max-height: 40px; margin: 5px auto; display: block; }
-    .sig-box .name { font-size: 10px; font-weight: bold; margin-top: 5px; }
-    .sig-box .placeholder { height: 40px; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 9px; }
-    .footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .row .value.big { font-size: 11px; color: #333; }
+    .cat-row { display: flex; justify-content: space-between; padding: 2px 4px; font-size: 8px; font-weight: bold; border-radius: 2px; margin: 2px 0; }
+    .cat-row.cash { background: #e8f5e9; }
+    .cat-row.cards { background: #fff3e0; }
+    .cat-row.apps { background: #fce4ec; }
+    .sub-row { display: flex; justify-content: space-between; padding: 1px 8px; font-size: 7px; color: #666; }
+    .box { background: #fafafa; padding: 4px; border-radius: 3px; margin-top: 3px; }
+    .box-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 8px; }
+    .variance-box { text-align: center; padding: 4px; border-radius: 4px; margin-top: 4px; }
+    .variance-box.shortage { background: #ffebee; }
+    .variance-box.surplus { background: #e8f5e9; }
+    .variance-box.balanced { background: #e8f5e9; }
+    .variance-box .amount { font-size: 12px; font-weight: bold; }
+    .variance-box .amount.negative { color: #c62828; }
+    .variance-box .amount.positive { color: #2e7d32; }
+    .variance-box .status { font-size: 8px; font-weight: bold; }
+    .final-summary { background: linear-gradient(135deg, #fef9e7 0%, #fcf3cf 100%); border: 2px solid #d4a853; border-radius: 6px; padding: 8px; margin: 6px 0; }
+    .final-summary .title { font-size: 10px; font-weight: bold; text-align: center; margin-bottom: 4px; color: #333; }
+    .final-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+    .final-item { padding: 4px; background: white; border-radius: 4px; }
+    .final-item .label { font-size: 7px; color: #666; }
+    .final-item .value { font-size: 11px; font-weight: bold; }
+    .sig-section { margin-top: 6px; padding-top: 4px; border-top: 1px solid #d4a853; }
+    .sig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .sig-box { text-align: center; padding: 4px; border: 1px solid #ddd; border-radius: 4px; min-height: 50px; }
+    .sig-box .role { font-size: 8px; font-weight: bold; color: #666; }
+    .sig-box .sig-img { max-width: 60px; max-height: 25px; margin: 2px auto; display: block; }
+    .sig-box .name { font-size: 8px; font-weight: bold; }
+    .sig-box .placeholder { height: 25px; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 7px; }
+    .footer { margin-top: 4px; padding-top: 3px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 7px; color: #666; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #d4a853; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 11px; z-index: 100; }
-    .loading-msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px; z-index: 200; }
-    @media print { .print-btn, .loading-msg { display: none !important; } }
+    .bank-detail { display: flex; justify-content: space-between; padding: 1px 4px; font-size: 7px; margin: 1px 0; border-radius: 2px; }
+    @media print { .print-btn { display: none !important; } }
   </style>
 </head>
 <body>
-  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
-  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة</button>
-  <script>
-    document.fonts.ready.then(function() {
-      document.getElementById('loadingMsg').style.display = 'none';
-      document.getElementById('printBtn').style.display = 'block';
-    });
-    setTimeout(function() {
-      document.getElementById('loadingMsg').style.display = 'none';
-      document.getElementById('printBtn').style.display = 'block';
-    }, 1500);
-  </script>
+  <button class="print-btn" onclick="window.print()">طباعة</button>
   
-  <div class="container">
-    <div class="header">
-      <div>
-        <div class="title">ملخص يومية الكاشير</div>
-        <div class="info">${branchName} | ${SHIFT_LABELS[formData.shiftType] || formData.shiftType} | ${formatDate(formData.journalDate)}</div>
+  <div class="header">
+    <div>
+      <div class="title">ملخص يومية الكاشير #${existingJournal?.id || '-'}</div>
+      <div class="info">${branchName} | ${SHIFT_LABELS[formData.shiftType] || formData.shiftType} | ${formatDate(formData.journalDate)}</div>
+    </div>
+    <div style="text-align:left;font-size:8px;">
+      <div>الكاشير: <strong>${formData.cashierName}</strong></div>
+    </div>
+  </div>
+  
+  <!-- Final Summary Banner -->
+  <div class="final-summary">
+    <div class="title">📊 ملخص التسوية النهائي</div>
+    <div class="final-grid">
+      <div class="final-item">
+        <div class="label">صافي المبيعات</div>
+        <div class="value">${netSales.toLocaleString('en', {minimumFractionDigits: 2})}</div>
       </div>
-      <div style="text-align:left;">
-        <div style="font-size:10px;color:#666;">رقم اليومية</div>
-        <div style="font-size:14px;font-weight:bold;">#${existingJournal?.id || '-'}</div>
+      <div class="final-item">
+        <div class="label">إجمالي المحصّل (نقد+بنك)</div>
+        <div class="value" style="color:#2e7d32;">${totalActualCollected.toLocaleString('en', {minimumFractionDigits: 2})}</div>
+      </div>
+      <div class="final-item">
+        <div class="label">الفارق الإجمالي</div>
+        <div class="value" style="color:${netVariance >= 0 ? '#2e7d32' : '#c62828'};">${netVariance >= 0 ? '+' : ''}${netVariance.toLocaleString('en', {minimumFractionDigits: 2})}</div>
       </div>
     </div>
-    
-    <div class="main-grid">
-      <div>
-        <div class="section">
-          <div class="section-title">ملخص المبيعات</div>
-          <div class="row"><span class="label">إجمالي المبيعات</span><span class="value big">${formData.totalSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          ${returnData.hasReturn && returnData.returnAmount > 0 ? `
-          <div class="row" style="background: #ffebee; padding: 4px 8px; border-radius: 4px; margin: 4px 0;">
-            <span class="label" style="color: #c62828;">🔄 المرتجع</span>
-            <span class="value" style="color: #c62828; font-weight: bold;">-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span>
-          </div>
-          <div class="row" style="border-top: 2px solid #ddd; padding-top: 6px;">
-            <span class="label" style="font-weight: bold;">صافي المبيعات</span>
-            <span class="value big" style="color: #2e7d32;">${netSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span>
-          </div>
-          ` : ''}
-          <div class="row"><span class="label">عدد الفواتير</span><span class="value">${formData.transactionCount}</span></div>
-          <div class="row"><span class="label">عدد العملاء</span><span class="value">${formData.customerCount}</span></div>
-          <div class="row"><span class="label">متوسط الفاتورة</span><span class="value">${averageTicket.toFixed(2)} ر.س</span></div>
-        </div>
-        
-        <div class="section">
-          <div class="section-title">تسوية النقدي</div>
-          <div class="recon-box">
-            <div class="recon-row"><span>رصيد الافتتاح</span><span>${formData.openingBalance.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>المبيعات النقدية</span><span>${categoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            ${returnData.hasReturn && returnData.returnPaymentMethod === 'cash' && returnData.returnAmount > 0 ? `
-            <div class="recon-row" style="color: #c62828;"><span>المرتجع النقدي</span><span>-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row" style="font-weight: bold; border-top: 1px solid #ddd; padding-top: 4px;"><span>صافي النقد المتوقع</span><span>${adjustedCategoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            ` : ''}
-            <div class="recon-row"><span>المتوقع في الصندوق</span><span>${expectedCash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>الفعلي في الصندوق</span><span>${formData.actualCashDrawer.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          </div>
-          <div class="diff-display ${discrepancy === 0 ? 'balanced' : discrepancy < 0 ? 'shortage' : 'surplus'}">
-            <div class="amount ${discrepancy < 0 ? 'negative' : discrepancy > 0 ? 'positive' : ''}">${discrepancy.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</div>
-            <div class="status">${discrepancy === 0 ? 'مطابق ✓' : discrepancy < 0 ? 'عجز مُسجّل على الكاشير' : 'فائض مُسجّل'}</div>
-          </div>
-        </div>
-        
-        ${bankSummary.bankPayments.length > 0 ? `
-        <div class="section">
-          <div class="section-title">🏦 مطابقة البنك (POS vs Terminal)</div>
-          <div class="recon-box">
-            <div class="recon-row"><span>إجمالي POS (الكاشير)</span><span>${bankSummary.totalPosAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>إجمالي التيرمنال</span><span>${bankSummary.totalTerminalAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row" style="border-top: 1px solid #ddd; padding-top: 6px; margin-top: 4px;">
-              <span style="font-weight:bold;">الفرق</span>
-              <span style="font-weight:bold; color: ${bankSummary.type === 'shortage' ? '#c62828' : bankSummary.type === 'surplus' ? '#2e7d32' : '#333'};">
-                ${bankSummary.discrepancy >= 0 ? '+' : ''}${bankSummary.discrepancy.toLocaleString('en', {minimumFractionDigits: 2})} ر.س
-              </span>
-            </div>
-          </div>
-          
-          ${bankSummary.bankPayments.length > 0 ? `
-          <div style="margin-top: 8px;">
-            <div style="font-size: 9px; color: #666; margin-bottom: 4px;">تفاصيل طرق الدفع البنكية:</div>
-            ${bankSummary.bankPayments.map(p => {
-              const posAmt = p.posAmount || p.amount || 0;
-              const termAmt = p.terminalAmount || 0;
-              const diff = termAmt - posAmt;
-              const diffStatus = diff > 0.5 ? 'surplus' : diff < -0.5 ? 'shortage' : 'balanced';
-              return `
-              <div style="display: flex; justify-content: space-between; padding: 3px 8px; font-size: 9px; background: ${diffStatus === 'surplus' ? '#e8f5e9' : diffStatus === 'shortage' ? '#ffebee' : '#f5f5f5'}; margin-bottom: 2px; border-radius: 3px;">
-                <span>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span>
-                <span>POS: ${posAmt.toLocaleString('en', {minimumFractionDigits: 2})} | تيرمنال: ${termAmt.toLocaleString('en', {minimumFractionDigits: 2})} | 
-                  <span style="font-weight:bold; color: ${diffStatus === 'shortage' ? '#c62828' : diffStatus === 'surplus' ? '#2e7d32' : '#666'};">
-                    (${diff >= 0 ? '+' : ''}${diff.toFixed(2)})
-                  </span>
-                </span>
-              </div>`;
-            }).join('')}
-          </div>
-          ` : ''}
-          
-          <div class="diff-display ${bankSummary.type === 'balanced' ? 'balanced' : bankSummary.type === 'shortage' ? 'shortage' : 'surplus'}" style="margin-top: 8px;">
-            <div class="status" style="font-size: 10px;">
-              ${bankSummary.type === 'surplus' ? '⬆️ زيادة في التيرمنال' : bankSummary.type === 'shortage' ? '⬇️ عجز في التيرمنال' : '✓ متطابق'}
-            </div>
-          </div>
-        </div>
+    ${returnData.hasReturn && returnData.returnAmount > 0 ? `<div style="font-size:7px;text-align:center;color:#c62828;margin-top:3px;">شامل مرتجع: -${returnData.returnAmount.toFixed(2)} ر.س (${PAYMENT_METHOD_LABELS[returnData.returnPaymentMethod] || returnData.returnPaymentMethod})</div>` : ''}
+  </div>
+  
+  <div class="main-grid">
+    <!-- Left Column -->
+    <div>
+      <div class="section">
+        <div class="section-title">ملخص المبيعات</div>
+        <div class="row"><span class="label">إجمالي المبيعات</span><span class="value big">${formData.totalSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+        ${returnData.hasReturn && returnData.returnAmount > 0 ? `
+        <div class="row" style="color:#c62828;"><span class="label">المرتجع</span><span class="value">-${returnData.returnAmount.toFixed(2)} ر.س</span></div>
+        <div class="row" style="border-top:1px solid #ddd;"><span class="label"><strong>صافي</strong></span><span class="value big" style="color:#2e7d32;">${netSales.toFixed(2)} ر.س</span></div>
         ` : ''}
-        
-        ${(() => {
-          const totalTerminal = bankSummary.totalTerminalAmount || 0;
-          const actualCash = formData.actualCashDrawer || 0;
-          const totalActualCollected = actualCash + totalTerminal;
-          // Use NET sales (after returns) for comparison
-          const netSalesForRecon = netSales;
-          const netVariance = totalActualCollected - netSalesForRecon;
-          
-          if (totalTerminal > 0 || actualCash > 0) {
-            return `
-        <div class="section">
-          <div class="section-title">📊 ملخص التسوية الشاملة</div>
-          <div class="recon-box" style="background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);">
-            <div style="font-size: 9px; color: #666; margin-bottom: 6px;">ما تم تحصيله فعلياً:</div>
-            <div class="recon-row"><span>النقد الفعلي في الصندوق</span><span>${actualCash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>إجمالي التيرمنال البنكي</span><span>${totalTerminal.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row" style="border-top: 2px solid #d4a853; padding-top: 6px; margin-top: 4px; font-weight: bold; font-size: 12px;">
-              <span>إجمالي المُحصّل</span>
-              <span style="color: #2e7d32;">${totalActualCollected.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span>
-            </div>
-            ${returnData.hasReturn && returnData.returnAmount > 0 ? `
-            <div class="recon-row" style="margin-top: 8px;"><span>إجمالي المبيعات الأصلي</span><span>${formData.totalSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row" style="color: #c62828;"><span>المرتجع</span><span>-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row" style="font-weight: bold;"><span>صافي المبيعات</span><span>${netSalesForRecon.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            ` : `
-            <div class="recon-row" style="margin-top: 8px;"><span>إجمالي المبيعات</span><span>${netSalesForRecon.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            `}
-            <div class="recon-row" style="border-top: 1px solid #ddd; padding-top: 4px;">
-              <span style="font-weight: bold;">الفارق الإجمالي</span>
-              <span style="font-weight: bold; color: ${netVariance >= 0 ? '#2e7d32' : '#c62828'};">
-                ${netVariance >= 0 ? '+' : ''}${netVariance.toLocaleString('en', {minimumFractionDigits: 2})} ر.س
-              </span>
-            </div>
-          </div>
-        </div>
-            `;
-          }
-          return '';
-        })()}
+        <div class="row"><span class="label">عدد الفواتير</span><span class="value">${formData.transactionCount}</span></div>
+        <div class="row"><span class="label">متوسط الفاتورة</span><span class="value">${averageTicket.toFixed(2)} ر.س</span></div>
       </div>
       
-      <div>
-        ${returnData.hasReturn && returnData.returnAmount > 0 ? `
-        <div class="section">
-          <div class="section-title" style="color: #c62828;">🔄 تفاصيل المرتجع</div>
-          <div class="recon-box" style="background: #ffebee; border: 1px solid #ffcdd2;">
-            <div class="recon-row"><span>مبلغ المرتجع</span><span style="color: #c62828; font-weight: bold;">-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>طريقة الاسترداد</span><span>${PAYMENT_METHOD_LABELS[returnData.returnPaymentMethod] || returnData.returnPaymentMethod}</span></div>
-            ${returnData.returnReference ? `<div class="recon-row"><span>رقم الفاتورة</span><span>${returnData.returnReference}</span></div>` : ''}
-            ${returnData.returnReason ? `<div class="recon-row"><span>السبب</span><span>${returnData.returnReason}</span></div>` : ''}
+      <div class="section">
+        <div class="section-title">💵 تسوية الصندوق النقدي</div>
+        <div class="box">
+          <div class="box-row"><span>النقدية المتوقعة</span><span>${adjustedCategoryTotals.cash.toFixed(2)} ر.س</span></div>
+          <div class="box-row"><span>الفعلي في الصندوق</span><span>${formData.actualCashDrawer.toFixed(2)} ر.س</span></div>
+        </div>
+        <div class="variance-box ${discrepancy === 0 ? 'balanced' : discrepancy < 0 ? 'shortage' : 'surplus'}">
+          <div class="amount ${discrepancy < 0 ? 'negative' : discrepancy > 0 ? 'positive' : ''}">${discrepancy >= 0 ? '+' : ''}${discrepancy.toFixed(2)} ر.س</div>
+          <div class="status">${discrepancy === 0 ? 'مطابق ✓' : discrepancy < 0 ? 'عجز' : 'فائض'}</div>
+        </div>
+      </div>
+      
+      ${bankSummary.bankPayments.length > 0 ? `
+      <div class="section">
+        <div class="section-title">🏦 مطابقة البنك</div>
+        <div class="box">
+          <div class="box-row"><span>POS</span><span>${bankSummary.totalPosAmount.toFixed(2)} ر.س</span></div>
+          <div class="box-row"><span>التيرمنال</span><span>${bankSummary.totalTerminalAmount.toFixed(2)} ر.س</span></div>
+          <div class="box-row" style="border-top:1px solid #ddd;font-weight:bold;">
+            <span>الفرق</span>
+            <span style="color:${bankSummary.type === 'shortage' ? '#c62828' : bankSummary.type === 'surplus' ? '#2e7d32' : '#333'};">
+              ${bankSummary.discrepancy >= 0 ? '+' : ''}${bankSummary.discrepancy.toFixed(2)} ر.س
+            </span>
           </div>
         </div>
+        <div style="margin-top:2px;">
+          ${bankSummary.bankPayments.map(p => {
+            const posAmt = p.posAmount || p.amount || 0;
+            const termAmt = p.terminalAmount || 0;
+            const diff = termAmt - posAmt;
+            const bg = diff > 0.5 ? '#e8f5e9' : diff < -0.5 ? '#ffebee' : '#f5f5f5';
+            return `<div class="bank-detail" style="background:${bg};"><span>${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>POS:${posAmt.toFixed(0)} | T:${termAmt.toFixed(0)} | <strong style="color:${diff < 0 ? '#c62828' : '#2e7d32'};">${diff >= 0 ? '+' : ''}${diff.toFixed(0)}</strong></span></div>`;
+          }).join('')}
+        </div>
+      </div>
+      ` : ''}
+    </div>
+    
+    <!-- Right Column -->
+    <div>
+      <div class="section">
+        <div class="section-title">تصنيف المبيعات</div>
+        <div class="cat-row cash"><span>💵 نقدي</span><span>${categoryTotals.cash.toFixed(2)} ر.س</span></div>
+        
+        <div class="cat-row cards"><span>💳 بطاقات</span><span>${categoryTotals.cards.toFixed(2)} ر.س</span></div>
+        ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay', 'visa', 'mastercard'].includes(p.paymentMethod)).map(p => `
+        <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toFixed(2)}</span></div>
+        `).join('')}
+        
+        ${categoryTotals.apps > 0 ? `
+        <div class="cat-row apps"><span>🚗 توصيل</span><span>${categoryTotals.apps.toFixed(2)} ر.س</span></div>
+        ${paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'].includes(p.paymentMethod)).map(p => `
+        <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toFixed(2)}</span></div>
+        `).join('')}
         ` : ''}
-        
-        <div class="section">
-          <div class="section-title">تصنيف المبيعات</div>
-          
-          <div class="category-header cash"><span>💵 نقدي</span><span>${categoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          
-          <div class="category-header cards"><span>💳 بطاقات وشبكة</span><span>${categoryTotals.cards.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay', 'visa', 'mastercard'].includes(p.paymentMethod)).map(p => `
-          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          `).join('')}
-          
-          <div class="category-header apps"><span>🚗 تطبيقات التوصيل</span><span>${categoryTotals.apps.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          ${paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'].includes(p.paymentMethod)).map(p => `
-          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          `).join('')}
-        </div>
-        
-        ${formData.notes ? `<div class="section"><div class="section-title">ملاحظات</div><div style="font-size:10px;color:#666;padding:5px;background:#fffbeb;border-radius:4px;">${formData.notes}</div></div>` : ''}
       </div>
-    </div>
-    
-    <div class="signature-section">
-      <div style="font-size:11px;font-weight:bold;margin-bottom:8px;text-align:center;">التوقيعات والاعتماد</div>
-      <div class="sig-grid">
-        <div class="sig-box">
-          <div class="role">توقيع الكاشير</div>
-          ${cashierSigData ? `<img class="sig-img" src="${cashierSigData}" />` : '<div class="placeholder">لم يوقع بعد</div>'}
-          <div class="name">${formData.cashierName}</div>
-        </div>
-        <div class="sig-box">
-          <div class="role">توقيع المشرف</div>
-          ${supervisorSig?.signatureData ? `<img class="sig-img" src="${supervisorSig.signatureData}" /><div class="name">${supervisorSig.signerName}</div>` : '<div class="placeholder">لم يوقع بعد</div><div class="name">________________</div>'}
-        </div>
-        <div class="sig-box">
-          <div class="role">اعتماد المدير</div>
-          ${existingJournal?.approvedBy ? `<div class="name" style="margin-top:15px;">${existingJournal.approvedBy}</div><div style="font-size:8px;color:#666;">${formatDateTime(existingJournal?.approvedAt)}</div>` : '<div class="placeholder">لم يُعتمد بعد</div><div class="name">________________</div>'}
+      
+      ${returnData.hasReturn && returnData.returnAmount > 0 ? `
+      <div class="section">
+        <div class="section-title" style="color:#c62828;">🔄 المرتجع</div>
+        <div class="box" style="background:#ffebee;">
+          <div class="box-row"><span>المبلغ</span><span style="color:#c62828;font-weight:bold;">-${returnData.returnAmount.toFixed(2)} ر.س</span></div>
+          <div class="box-row"><span>الطريقة</span><span>${PAYMENT_METHOD_LABELS[returnData.returnPaymentMethod] || returnData.returnPaymentMethod}</span></div>
+          ${returnData.returnReference ? `<div class="box-row"><span>المرجع</span><span>${returnData.returnReference}</span></div>` : ''}
         </div>
       </div>
+      ` : ''}
+      
+      ${formData.notes ? `
+      <div class="section">
+        <div class="section-title">ملاحظات</div>
+        <div style="font-size:7px;color:#666;padding:3px;background:#fffbeb;border-radius:2px;">${formData.notes}</div>
+      </div>
+      ` : ''}
     </div>
-    
-    <div class="footer">
-      <span>بتر بيكري - Butter Bakery</span>
-      <span>تم الإنشاء: ${new Date().toLocaleDateString('en-GB')}</span>
+  </div>
+  
+  <div class="sig-section">
+    <div class="sig-grid">
+      <div class="sig-box">
+        <div class="role">توقيع الكاشير</div>
+        ${cashierSigData ? `<img class="sig-img" src="${cashierSigData}" />` : '<div class="placeholder">-</div>'}
+        <div class="name">${formData.cashierName}</div>
+      </div>
+      <div class="sig-box">
+        <div class="role">المشرف</div>
+        ${supervisorSig?.signatureData ? `<img class="sig-img" src="${supervisorSig.signatureData}" /><div class="name">${supervisorSig.signerName}</div>` : '<div class="placeholder">-</div><div class="name">________</div>'}
+      </div>
+      <div class="sig-box">
+        <div class="role">المدير</div>
+        ${existingJournal?.approvedBy ? `<div class="name" style="margin-top:8px;">${existingJournal.approvedBy}</div>` : '<div class="placeholder">-</div><div class="name">________</div>'}
+      </div>
     </div>
+  </div>
+  
+  <div class="footer">
+    <span>بتر بيكري - Butter Bakery</span>
+    <span>${new Date().toLocaleDateString('en-GB')}</span>
   </div>
 </body>
 </html>`;
