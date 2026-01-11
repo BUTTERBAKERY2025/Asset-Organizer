@@ -2987,9 +2987,6 @@ export async function registerRoutes(
       const { branchId, startDate, endDate, status } = req.query;
       const user = req.user;
       
-      // Build query conditions
-      let query = db.select().from(branchDailyClosures);
-      
       // For non-admins, filter by their branch
       const effectiveBranchId = user.role !== 'admin' ? user.branchId : branchId;
       
@@ -3010,44 +3007,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get single branch daily closure with details
-  app.get("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      
-      const [closure] = await db.select()
-        .from(branchDailyClosures)
-        .where(eq(branchDailyClosures.id, id));
-      
-      if (!closure) {
-        return res.status(404).json({ error: "Closure not found" });
-      }
-      
-      // Get payment breakdowns
-      const payments = await db.select()
-        .from(branchDailyClosurePayments)
-        .where(eq(branchDailyClosurePayments.closureId, id));
-      
-      // Get linked journals
-      const linkedJournals = await db.select({
-        journal: cashierSalesJournals,
-      })
-        .from(branchDailyClosureJournals)
-        .innerJoin(cashierSalesJournals, eq(branchDailyClosureJournals.journalId, cashierSalesJournals.id))
-        .where(eq(branchDailyClosureJournals.closureId, id));
-      
-      res.json({
-        ...closure,
-        payments,
-        journals: linkedJournals.map(lj => lj.journal),
-      });
-    } catch (error) {
-      console.error("Error fetching branch daily closure:", error);
-      res.status(500).json({ error: "Failed to fetch branch daily closure" });
-    }
-  });
-
   // Get journals for a specific date and branch (for creating closure)
+  // IMPORTANT: This must be defined BEFORE /:id to avoid "journals-preview" being matched as an ID
   app.get("/api/branch-daily-closures/journals-preview", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId, date } = req.query;
@@ -3153,6 +3114,43 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching journals preview:", error);
       res.status(500).json({ error: "Failed to fetch journals preview" });
+    }
+  });
+
+  // Get single branch daily closure with details
+  app.get("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      
+      const [closure] = await db.select()
+        .from(branchDailyClosures)
+        .where(eq(branchDailyClosures.id, id));
+      
+      if (!closure) {
+        return res.status(404).json({ error: "Closure not found" });
+      }
+      
+      // Get payment breakdowns
+      const payments = await db.select()
+        .from(branchDailyClosurePayments)
+        .where(eq(branchDailyClosurePayments.closureId, id));
+      
+      // Get linked journals
+      const linkedJournals = await db.select({
+        journal: cashierSalesJournals,
+      })
+        .from(branchDailyClosureJournals)
+        .innerJoin(cashierSalesJournals, eq(branchDailyClosureJournals.journalId, cashierSalesJournals.id))
+        .where(eq(branchDailyClosureJournals.closureId, id));
+      
+      res.json({
+        ...closure,
+        payments,
+        journals: linkedJournals.map((lj: any) => lj.journal),
+      });
+    } catch (error) {
+      console.error("Error fetching branch daily closure:", error);
+      res.status(500).json({ error: "Failed to fetch branch daily closure" });
     }
   });
 
