@@ -52,7 +52,20 @@ interface PaymentBreakdownInput {
   amount: number;
   transactionCount: number;
   notes?: string;
+  // Bank reconciliation fields - حقول مطابقة البنك
+  posAmount?: number; // المبلغ من نظام نقاط البيع
+  terminalAmount?: number; // المبلغ من جهاز الصراف البنكي
+  bankDiscrepancy?: number; // الفرق
+  bankDiscrepancyType?: string; // balanced, shortage, surplus
+  terminalTransactionCount?: number; // عدد العمليات من جهاز البنك
 }
+
+// Bank payment methods that require terminal reconciliation
+const BANK_PAYMENT_METHODS = ["card", "mada", "stc_pay", "apple_pay", "visa", "mastercard"];
+
+const isBankPaymentMethod = (method: string): boolean => {
+  return BANK_PAYMENT_METHODS.includes(method);
+};
 
 export default function CashierJournalFormPage() {
   const { id } = useParams();
@@ -162,11 +175,17 @@ export default function CashierJournalFormPage() {
       });
       if (existingJournal.paymentBreakdowns?.length > 0) {
         setPaymentBreakdowns(
-          existingJournal.paymentBreakdowns.map((b) => ({
+          existingJournal.paymentBreakdowns.map((b: any) => ({
             paymentMethod: b.paymentMethod,
             amount: b.amount,
             transactionCount: b.transactionCount || 0,
             notes: b.notes || "",
+            // Bank reconciliation fields
+            posAmount: b.posAmount || b.amount || 0,
+            terminalAmount: b.terminalAmount || 0,
+            bankDiscrepancy: b.bankDiscrepancy || 0,
+            bankDiscrepancyType: b.bankDiscrepancyType || 'balanced',
+            terminalTransactionCount: b.terminalTransactionCount || 0,
           }))
         );
       }
@@ -401,21 +420,82 @@ export default function CashierJournalFormPage() {
     setPaymentBreakdowns(paymentBreakdowns.filter((_, i) => i !== index));
   };
 
+  // Update a single field - use functional state update to avoid stale state issues
   const updatePaymentBreakdown = (index: number, field: string, value: any) => {
-    const updated = [...paymentBreakdowns];
-    updated[index] = { ...updated[index], [field]: value };
-    setPaymentBreakdowns(updated);
-
-    if (field === "amount") {
-      const cashBreakdown = updated.find((b) => b.paymentMethod === "cash");
-      if (cashBreakdown) {
-        setFormData((prev) => ({ ...prev, cashTotal: cashBreakdown.amount }));
+    setPaymentBreakdowns(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      
+      // Update cash total if we're updating amount on cash payment
+      if (field === "amount") {
+        const cashBreakdown = updated.find((b) => b.paymentMethod === "cash");
+        if (cashBreakdown) {
+          setFormData((prevForm) => ({ ...prevForm, cashTotal: cashBreakdown.amount }));
+        }
       }
-    }
+      
+      return updated;
+    });
+  };
+
+  // Update multiple fields at once - for bank payment updates that need to set both amount and posAmount
+  const updatePaymentBreakdownMultiple = (index: number, updates: Partial<PaymentBreakdownInput>) => {
+    setPaymentBreakdowns(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], ...updates };
+      
+      // Update cash total if we're updating amount on cash payment
+      if ('amount' in updates) {
+        const cashBreakdown = updated.find((b) => b.paymentMethod === "cash");
+        if (cashBreakdown) {
+          setFormData((prevForm) => ({ ...prevForm, cashTotal: cashBreakdown.amount }));
+        }
+      }
+      
+      return updated;
+    });
   };
 
   const getBreakdownTotal = () => {
     return paymentBreakdowns.reduce((sum, b) => sum + (b.amount || 0), 0);
+  };
+
+  // Calculate total bank reconciliation discrepancy
+  const getBankReconciliationSummary = () => {
+    const bankPayments = paymentBreakdowns.filter(b => isBankPaymentMethod(b.paymentMethod) && (b.amount > 0 || b.terminalAmount));
+    
+    let totalPosAmount = 0;
+    let totalTerminalAmount = 0;
+    let totalPosTransactions = 0;
+    let totalTerminalTransactions = 0;
+    
+    bankPayments.forEach(b => {
+      totalPosAmount += b.posAmount || b.amount || 0;
+      totalTerminalAmount += b.terminalAmount || 0;
+      totalPosTransactions += b.transactionCount || 0;
+      totalTerminalTransactions += b.terminalTransactionCount || 0;
+    });
+    
+    const discrepancy = totalTerminalAmount - totalPosAmount;
+    const transactionDiff = totalTerminalTransactions - totalPosTransactions;
+    
+    // Detect potential input error: when cash shortage equals bank surplus (wrong payment button pressed)
+    const cashDiscrepancy = calculateDiscrepancy();
+    const inputErrorDetected = Math.abs(cashDiscrepancy) > 0.5 && Math.abs(discrepancy) > 0.5 && 
+      Math.abs(Math.abs(cashDiscrepancy) - Math.abs(discrepancy)) < 1 && 
+      (cashDiscrepancy * discrepancy) < 0; // opposite signs
+    
+    return {
+      bankPayments,
+      totalPosAmount,
+      totalTerminalAmount,
+      totalPosTransactions,
+      totalTerminalTransactions,
+      discrepancy,
+      transactionDiff,
+      inputErrorDetected,
+      type: discrepancy > 0.5 ? 'surplus' : discrepancy < -0.5 ? 'shortage' : 'balanced'
+    };
   };
 
   const getTotalsMismatch = () => {
@@ -976,52 +1056,130 @@ export default function CashierJournalFormPage() {
                 {paymentBreakdowns.map((breakdown, index) => {
                   const method = PAYMENT_METHODS.find((m) => m.value === breakdown.paymentMethod);
                   const Icon = method?.icon || Wallet;
+                  const isBank = isBankPaymentMethod(breakdown.paymentMethod);
+                  const bankDisc = (breakdown.terminalAmount || 0) - (breakdown.posAmount || breakdown.amount || 0);
+                  const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
 
                   return (
-                    <div key={index} className="flex items-center gap-3 p-3 border rounded-lg" data-testid={`payment-row-${index}`}>
-                      <Icon className="w-5 h-5 text-muted-foreground" />
-                      <Select
-                        value={breakdown.paymentMethod}
-                        onValueChange={(v) => updatePaymentBreakdown(index, "paymentMethod", v)}
-                        disabled={isReadOnly}
-                      >
-                        <SelectTrigger className="w-40 h-11 sm:h-10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          {PAYMENT_METHODS.map((m) => (
-                            <SelectItem key={m.value} value={m.value}>
-                              {m.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex-1">
-                        <Input
-                          type="number"
-                          placeholder="المبلغ"
-                          value={breakdown.amount || ""}
-                          onChange={(e) => updatePaymentBreakdown(index, "amount", parseFloat(e.target.value) || 0)}
+                    <div key={index} className={`p-3 border rounded-lg ${isBank ? 'border-blue-200 bg-blue-50/30' : ''}`} data-testid={`payment-row-${index}`}>
+                      {/* Main Row */}
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-5 h-5 text-muted-foreground" />
+                        <Select
+                          value={breakdown.paymentMethod}
+                          onValueChange={(v) => {
+                            // Use atomic update to avoid stale state issues
+                            if (!isBankPaymentMethod(v)) {
+                              // Reset terminal fields when changing to non-bank payment method
+                              updatePaymentBreakdownMultiple(index, {
+                                paymentMethod: v,
+                                terminalAmount: 0,
+                                posAmount: 0,
+                                terminalTransactionCount: 0,
+                              });
+                            } else {
+                              updatePaymentBreakdown(index, "paymentMethod", v);
+                            }
+                          }}
                           disabled={isReadOnly}
-                          className="h-11 sm:h-10"
-                          data-testid={`input-payment-amount-${index}`}
-                        />
+                        >
+                          <SelectTrigger className="w-40 h-11 sm:h-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {PAYMENT_METHODS.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex-1">
+                          <Input
+                            type="number"
+                            placeholder={isBank ? "مبلغ الكاشير (POS)" : "المبلغ"}
+                            value={breakdown.amount || ""}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              // Use atomic update for bank payments to set both amount and posAmount
+                              if (isBank) {
+                                updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val });
+                              } else {
+                                updatePaymentBreakdown(index, "amount", val);
+                              }
+                            }}
+                            disabled={isReadOnly}
+                            className="h-11 sm:h-10"
+                            data-testid={`input-payment-amount-${index}`}
+                          />
+                        </div>
+                        <div className="w-24">
+                          <Input
+                            type="number"
+                            placeholder="عدد"
+                            value={breakdown.transactionCount || ""}
+                            onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                            disabled={isReadOnly}
+                            className="h-11 sm:h-10"
+                            data-testid={`input-payment-count-${index}`}
+                          />
+                        </div>
+                        {paymentBreakdowns.length > 1 && !isReadOnly && (
+                          <Button variant="ghost" size="sm" className="h-11 w-11 sm:h-9 sm:w-9" onClick={() => removePaymentBreakdown(index)}>
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
                       </div>
-                      <div className="w-24">
-                        <Input
-                          type="number"
-                          placeholder="عدد"
-                          value={breakdown.transactionCount || ""}
-                          onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
-                          disabled={isReadOnly}
-                          className="h-11 sm:h-10"
-                          data-testid={`input-payment-count-${index}`}
-                        />
-                      </div>
-                      {paymentBreakdowns.length > 1 && !isReadOnly && (
-                        <Button variant="ghost" size="sm" className="h-11 w-11 sm:h-9 sm:w-9" onClick={() => removePaymentBreakdown(index)}>
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
+                      
+                      {/* Bank Reconciliation Row - Only for bank payment methods */}
+                      {isBank && (
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            <CreditCard className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm font-medium text-blue-700">مطابقة جهاز البنك (Terminal)</span>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">مبلغ التيرمنال</Label>
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                value={breakdown.terminalAmount || ""}
+                                onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseFloat(e.target.value) || 0)}
+                                disabled={isReadOnly}
+                                className="h-10 bg-white"
+                                data-testid={`input-terminal-amount-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">عدد عمليات التيرمنال</Label>
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                value={breakdown.terminalTransactionCount || ""}
+                                onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseInt(e.target.value) || 0)}
+                                disabled={isReadOnly}
+                                className="h-10 bg-white"
+                                data-testid={`input-terminal-count-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">الفرق</Label>
+                              <Input
+                                type="number"
+                                value={bankDisc.toFixed(2)}
+                                readOnly
+                                className={`h-10 font-bold ${bankDiscType === 'surplus' ? 'bg-green-100 text-green-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">الحالة</Label>
+                              <div className={`h-10 flex items-center justify-center rounded-md font-medium text-sm ${bankDiscType === 'surplus' ? 'bg-green-100 text-green-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {bankDiscType === 'surplus' ? '⬆️ زيادة' : bankDiscType === 'shortage' ? '⬇️ عجز' : '✓ متطابق'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </div>
                   );
@@ -1042,6 +1200,60 @@ export default function CashierJournalFormPage() {
                     </AlertDescription>
                   </Alert>
                 )}
+                
+                {/* Bank Reconciliation Summary */}
+                {(() => {
+                  const bankSummary = getBankReconciliationSummary();
+                  if (bankSummary.bankPayments.length === 0) return null;
+                  
+                  return (
+                    <>
+                      <Separator />
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CreditCard className="w-5 h-5 text-blue-600" />
+                          <span className="font-bold text-blue-700">ملخص مطابقة البنك</span>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                          <div className="p-2 bg-white rounded">
+                            <div className="text-muted-foreground text-xs">إجمالي POS</div>
+                            <div className="font-bold">{bankSummary.totalPosAmount.toFixed(2)} ر.س</div>
+                          </div>
+                          <div className="p-2 bg-white rounded">
+                            <div className="text-muted-foreground text-xs">إجمالي التيرمنال</div>
+                            <div className="font-bold">{bankSummary.totalTerminalAmount.toFixed(2)} ر.س</div>
+                          </div>
+                          <div className={`p-2 rounded ${bankSummary.type === 'surplus' ? 'bg-green-100' : bankSummary.type === 'shortage' ? 'bg-red-100' : 'bg-gray-100'}`}>
+                            <div className="text-muted-foreground text-xs">الفرق الإجمالي</div>
+                            <div className={`font-bold ${bankSummary.type === 'surplus' ? 'text-green-700' : bankSummary.type === 'shortage' ? 'text-red-700' : ''}`}>
+                              {bankSummary.discrepancy.toFixed(2)} ر.س
+                            </div>
+                          </div>
+                          <div className={`p-2 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-green-100 text-green-700' : bankSummary.type === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>
+                            <span className="font-bold text-sm">
+                              {bankSummary.type === 'surplus' ? '⬆️ زيادة في البنك' : bankSummary.type === 'shortage' ? '⬇️ عجز في البنك' : '✓ متطابق'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Input Error Detection Alert */}
+                        {bankSummary.inputErrorDetected && (
+                          <Alert className="mt-3 border-orange-300 bg-orange-50">
+                            <AlertCircle className="h-4 w-4 text-orange-600" />
+                            <AlertTitle className="text-orange-700">تنبيه: احتمال خطأ في الإدخال</AlertTitle>
+                            <AlertDescription className="text-orange-600">
+                              يُحتمل أن الكاشير ضغط زر الدفع الخاطئ! 
+                              <br />
+                              العجز النقدي ({Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س) يساوي تقريباً الزيادة في البنك ({Math.abs(bankSummary.discrepancy).toFixed(2)} ر.س)
+                              <br />
+                              <strong>يرجى مراجعة عمليات الدفع والتأكد من صحتها.</strong>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
 
