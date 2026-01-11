@@ -1172,14 +1172,16 @@ export default function TargetsPlanning() {
                             const branchName = selectedTarget ? getBranchName(selectedTarget.branchId) : 'غير معروف';
                             const dayNames = ['الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعة', 'السبت'];
                             
+                            const dayNamesEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                            
                             const tableBody = [
                               [
-                                { text: 'التاريخ', style: 'tableHeader' },
-                                { text: 'اليوم', style: 'tableHeader' },
-                                { text: 'الهدف اليومي', style: 'tableHeader' },
-                                { text: 'النسبة %', style: 'tableHeader' },
-                                { text: 'ويكند', style: 'tableHeader' },
-                                { text: 'نهاية الشهر', style: 'tableHeader' },
+                                { text: 'Date', style: 'tableHeader' },
+                                { text: 'Day', style: 'tableHeader' },
+                                { text: 'Daily Target', style: 'tableHeader' },
+                                { text: '%', style: 'tableHeader' },
+                                { text: 'Weekend', style: 'tableHeader' },
+                                { text: 'EOM', style: 'tableHeader' },
                               ],
                               ...allocations.map(alloc => {
                                 const date = new Date(alloc.targetDate);
@@ -1187,11 +1189,11 @@ export default function TargetsPlanning() {
                                 const isEndOfMonth = date.getDate() >= 27;
                                 return [
                                   new Date(alloc.targetDate).toLocaleDateString('en-GB'),
-                                  dayNames[date.getDay()],
+                                  dayNamesEn[date.getDay()],
                                   { text: alloc.dailyTarget.toLocaleString('en-US'), alignment: 'center' },
                                   { text: alloc.weightPercent.toFixed(2) + '%', alignment: 'center' },
-                                  { text: isWeekend ? 'نعم' : '-', alignment: 'center' },
-                                  { text: isEndOfMonth ? 'نعم' : '-', alignment: 'center' },
+                                  { text: isWeekend ? 'Yes' : '-', alignment: 'center', fillColor: isWeekend ? '#fef3c7' : undefined },
+                                  { text: isEndOfMonth ? 'Yes' : '-', alignment: 'center', fillColor: isEndOfMonth ? '#ffedd5' : undefined },
                                 ];
                               })
                             ];
@@ -1206,25 +1208,25 @@ export default function TargetsPlanning() {
                             const docDefinition = {
                               pageOrientation: 'portrait' as const,
                               content: [
-                                { text: 'التوزيع اليومي للاهداف', style: 'header', alignment: 'center' },
-                                { text: `الفرع: ${branchName}`, style: 'subheader', alignment: 'center', margin: [0, 5, 0, 5] },
-                                { text: `الشهر: ${selectedTarget?.yearMonth || ''}`, alignment: 'center', margin: [0, 0, 0, 10] },
+                                { text: 'Daily Target Distribution Report', style: 'header', alignment: 'center' },
+                                { text: `Branch: ${branchName}`, style: 'subheader', alignment: 'center', margin: [0, 5, 0, 5] },
+                                { text: `Month: ${selectedTarget?.yearMonth || ''}`, alignment: 'center', margin: [0, 0, 0, 10] },
                                 {
                                   style: 'statsTable',
                                   table: {
                                     widths: ['*', '*', '*', '*'],
                                     body: [
                                       [
-                                        { text: 'اجمالي الهدف', alignment: 'center', bold: true },
-                                        { text: 'ايام الويكند', alignment: 'center', bold: true },
-                                        { text: 'نهاية الشهر', alignment: 'center', bold: true },
-                                        { text: 'عدد الايام', alignment: 'center', bold: true },
+                                        { text: 'Total Target', alignment: 'center', bold: true },
+                                        { text: 'Weekend Days', alignment: 'center', bold: true },
+                                        { text: 'End of Month', alignment: 'center', bold: true },
+                                        { text: 'Total Days', alignment: 'center', bold: true },
                                       ],
                                       [
-                                        { text: totalTarget.toLocaleString('en-US') + ' ر.س', alignment: 'center' },
-                                        { text: weekendDays.length + ' يوم', alignment: 'center' },
-                                        { text: endOfMonthDays.length + ' يوم', alignment: 'center' },
-                                        { text: allocations.length + ' يوم', alignment: 'center' },
+                                        { text: totalTarget.toLocaleString('en-US') + ' SAR', alignment: 'center' },
+                                        { text: weekendDays.length + ' days', alignment: 'center' },
+                                        { text: endOfMonthDays.length + ' days', alignment: 'center' },
+                                        { text: allocations.length + ' days', alignment: 'center' },
                                       ]
                                     ]
                                   },
@@ -1238,7 +1240,7 @@ export default function TargetsPlanning() {
                                     body: tableBody
                                   }
                                 },
-                                { text: `تاريخ التصدير: ${new Date().toLocaleDateString('en-GB')}`, alignment: 'center', margin: [0, 15, 0, 0], fontSize: 8, color: 'gray' }
+                                { text: `Export Date: ${new Date().toLocaleDateString('en-GB')}`, alignment: 'center', margin: [0, 15, 0, 0], fontSize: 8, color: 'gray' }
                               ],
                               styles: {
                                 header: { fontSize: 16, bold: true, margin: [0, 0, 0, 10] },
@@ -1247,7 +1249,7 @@ export default function TargetsPlanning() {
                                 dataTable: { fontSize: 8 },
                                 statsTable: { fontSize: 9 }
                               },
-                              defaultStyle: { font: 'Roboto', alignment: 'right' as const }
+                              defaultStyle: { font: 'Roboto', alignment: 'center' as const }
                             };
                             
                             downloadArabicPdf(docDefinition, `توزيع_${branchName}_${selectedTarget?.yearMonth || 'monthly'}.pdf`);
