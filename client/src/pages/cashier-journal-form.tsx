@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -40,11 +41,15 @@ const PAYMENT_CATEGORIES = {
 const PAYMENT_METHODS = [
   { value: "cash", label: "نقداً", icon: Wallet, category: "cash" },
   { value: "mada", label: "مدى", icon: CreditCard, category: "cards" },
-  { value: "card", label: "بطاقة ائتمان", icon: CreditCard, category: "cards" },
-  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards" },
-  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards" },
   { value: "visa", label: "فيزا", icon: CreditCard, category: "cards" },
   { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards" },
+  { value: "amex", label: "أمريكان إكسبريس", icon: CreditCard, category: "cards" },
+  { value: "card_other", label: "بطاقة أخرى", icon: CreditCard, category: "cards" },
+  // Legacy bank payment methods (for backward compatibility)
+  { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards" },
+  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards" },
+  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards" },
+  // Delivery apps
   { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps" },
   { value: "jahez", label: "جاهز", icon: Truck, category: "apps" },
   { value: "toyou", label: "ToYou", icon: Truck, category: "apps" },
@@ -74,8 +79,8 @@ interface PaymentBreakdownInput {
   terminalTransactionCount?: number; // عدد العمليات من جهاز البنك
 }
 
-// Bank payment methods that require terminal reconciliation
-const BANK_PAYMENT_METHODS = ["card", "mada", "stc_pay", "apple_pay", "visa", "mastercard"];
+// Bank payment methods that require terminal reconciliation (includes legacy methods)
+const BANK_PAYMENT_METHODS = ["mada", "visa", "mastercard", "amex", "card_other", "card", "apple_pay", "stc_pay"];
 
 const isBankPaymentMethod = (method: string): boolean => {
   return BANK_PAYMENT_METHODS.includes(method);
@@ -92,6 +97,7 @@ export default function CashierJournalFormPage() {
   const [hasSignature, setHasSignature] = useState(false);
   const [showShortageConfirm, setShowShortageConfirm] = useState(false);
   const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null);
+  const [activeTab, setActiveTab] = useState("shift");
 
   const isEdit = !!id;
 
@@ -852,12 +858,14 @@ export default function CashierJournalFormPage() {
 
     const PAYMENT_METHOD_LABELS: Record<string, string> = {
       cash: "نقداً",
-      card: "بطاقة ائتمان",
       mada: "مدى",
-      apple_pay: "Apple Pay",
-      stc_pay: "STC Pay",
       visa: "فيزا",
       mastercard: "ماستركارد",
+      amex: "أمريكان إكسبريس",
+      card_other: "بطاقة أخرى",
+      card: "بطاقة ائتمان",
+      apple_pay: "Apple Pay",
+      stc_pay: "STC Pay",
       hunger_station: "هنقرستيشن",
       toyou: "ToYou",
       jahez: "جاهز",
@@ -1039,7 +1047,7 @@ export default function CashierJournalFormPage() {
         <div class="cat-row cash"><span>💵 نقدي</span><span>${categoryTotals.cash.toFixed(2)} ر.س</span></div>
         
         <div class="cat-row cards"><span>💳 بطاقات</span><span>${categoryTotals.cards.toFixed(2)} ر.س</span></div>
-        ${paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay', 'visa', 'mastercard'].includes(p.paymentMethod)).map(p => `
+        ${paymentBreakdowns.filter(p => p.amount > 0 && ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'].includes(p.paymentMethod)).map(p => `
         <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toFixed(2)}</span></div>
         `).join('')}
         
@@ -1264,16 +1272,53 @@ export default function CashierJournalFormPage() {
             </Card>
 
             <Card>
-              <CardHeader className="flex-row justify-between items-center">
-                <div>
-                  <CardTitle>تفصيل المبيعات حسب طريقة الدفع</CardTitle>
-                  <CardDescription>أدخل المبيعات لكل طريقة دفع</CardDescription>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg">تفصيل المبيعات حسب طريقة الدفع</CardTitle>
+                    <CardDescription>أدخل المبيعات لكل طريقة دفع</CardDescription>
+                  </div>
+                  {!isReadOnly && (
+                    <Button variant="outline" size="lg" className="h-12 px-4 gap-2" onClick={addPaymentBreakdown} data-testid="button-add-payment">
+                      <Plus className="w-5 h-5" />
+                      إضافة طريقة دفع
+                    </Button>
+                  )}
                 </div>
+                
+                {/* Quick Add Buttons - Bank Payment Methods */}
                 {!isReadOnly && (
-                  <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={addPaymentBreakdown} data-testid="button-add-payment">
-                    <Plus className="w-4 h-4 mr-1" />
-                    إضافة
-                  </Button>
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground mb-3">إضافة سريعة للبطاقات البنكية:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "mada", label: "مدى", color: "bg-blue-500 hover:bg-blue-600" },
+                        { value: "visa", label: "فيزا", color: "bg-indigo-500 hover:bg-indigo-600" },
+                        { value: "mastercard", label: "ماستركارد", color: "bg-orange-500 hover:bg-orange-600" },
+                        { value: "amex", label: "أمريكان إكسبريس", color: "bg-teal-500 hover:bg-teal-600" },
+                        { value: "card_other", label: "بطاقة أخرى", color: "bg-gray-500 hover:bg-gray-600" },
+                      ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
+                        <Button
+                          key={method.value}
+                          type="button"
+                          size="lg"
+                          className={`h-12 px-4 text-white ${method.color}`}
+                          onClick={() => setPaymentBreakdowns([...paymentBreakdowns, { 
+                            paymentMethod: method.value, 
+                            amount: 0, 
+                            transactionCount: 0,
+                            posAmount: 0,
+                            terminalAmount: 0,
+                            terminalTransactionCount: 0
+                          }])}
+                          data-testid={`quick-add-${method.value}`}
+                        >
+                          <CreditCard className="w-5 h-5 ml-2" />
+                          {method.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1285,47 +1330,59 @@ export default function CashierJournalFormPage() {
                   const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
 
                   return (
-                    <div key={index} className={`p-3 border rounded-lg ${isBank ? 'border-blue-200 bg-blue-50/30' : ''}`} data-testid={`payment-row-${index}`}>
-                      {/* Main Row */}
-                      <div className="flex items-center gap-3">
-                        <Icon className="w-5 h-5 text-muted-foreground" />
-                        <Select
-                          value={breakdown.paymentMethod}
-                          onValueChange={(v) => {
-                            // Use atomic update to avoid stale state issues
-                            if (!isBankPaymentMethod(v)) {
-                              // Reset terminal fields when changing to non-bank payment method
-                              updatePaymentBreakdownMultiple(index, {
-                                paymentMethod: v,
-                                terminalAmount: 0,
-                                posAmount: 0,
-                                terminalTransactionCount: 0,
-                              });
-                            } else {
-                              updatePaymentBreakdown(index, "paymentMethod", v);
-                            }
-                          }}
-                          disabled={isReadOnly}
-                        >
-                          <SelectTrigger className="w-40 h-11 sm:h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-60 overflow-y-auto">
-                            {PAYMENT_METHODS.map((m) => (
-                              <SelectItem key={m.value} value={m.value}>
-                                {m.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="flex-1">
+                    <div key={index} className={`p-4 border-2 rounded-xl ${isBank ? 'border-blue-300 bg-gradient-to-r from-blue-50 to-blue-100/50' : 'border-gray-200 bg-gray-50/50'}`} data-testid={`payment-row-${index}`}>
+                      {/* Payment Method Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${isBank ? 'bg-blue-200' : 'bg-gray-200'}`}>
+                            <Icon className={`w-6 h-6 ${isBank ? 'text-blue-700' : 'text-gray-600'}`} />
+                          </div>
+                          <Select
+                            value={breakdown.paymentMethod}
+                            onValueChange={(v) => {
+                              if (!isBankPaymentMethod(v)) {
+                                updatePaymentBreakdownMultiple(index, {
+                                  paymentMethod: v,
+                                  terminalAmount: 0,
+                                  posAmount: 0,
+                                  terminalTransactionCount: 0,
+                                });
+                              } else {
+                                updatePaymentBreakdown(index, "paymentMethod", v);
+                              }
+                            }}
+                            disabled={isReadOnly}
+                          >
+                            <SelectTrigger className="w-48 h-12 text-base font-medium">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60 overflow-y-auto">
+                              {PAYMENT_METHODS.map((m) => (
+                                <SelectItem key={m.value} value={m.value} className="py-3">
+                                  {m.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {paymentBreakdowns.length > 1 && !isReadOnly && (
+                          <Button variant="ghost" size="lg" className="h-12 w-12 text-red-500 hover:text-red-600 hover:bg-red-100" onClick={() => removePaymentBreakdown(index)}>
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {/* Amount Inputs */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">{isBank ? "مبلغ الكاشير (POS)" : "المبلغ"}</Label>
                           <Input
                             type="number"
-                            placeholder={isBank ? "مبلغ الكاشير (POS)" : "المبلغ"}
+                            inputMode="decimal"
+                            placeholder="0.00"
                             value={breakdown.amount ?? ""}
                             onChange={(e) => {
                               const val = parseFloat(e.target.value) || 0;
-                              // Use atomic update for bank payments to set both amount and posAmount
                               if (isBank) {
                                 updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val });
                               } else {
@@ -1333,90 +1390,80 @@ export default function CashierJournalFormPage() {
                               }
                             }}
                             disabled={isReadOnly}
-                            className="h-11 sm:h-10"
+                            className="h-14 text-xl font-bold text-center"
                             data-testid={`input-payment-amount-${index}`}
                           />
                         </div>
-                        <div className="w-24">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">عدد العمليات</Label>
                           <Input
                             type="number"
-                            placeholder="عدد"
+                            inputMode="numeric"
+                            placeholder="0"
                             value={breakdown.transactionCount ?? ""}
                             onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
                             disabled={isReadOnly}
-                            className="h-11 sm:h-10"
+                            className="h-14 text-xl font-bold text-center"
                             data-testid={`input-payment-count-${index}`}
                           />
                         </div>
-                        {paymentBreakdowns.length > 1 && !isReadOnly && (
-                          <Button variant="ghost" size="sm" className="h-11 w-11 sm:h-9 sm:w-9" onClick={() => removePaymentBreakdown(index)}>
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        )}
                       </div>
                       
                       {/* Bank Reconciliation Row - Only for bank payment methods */}
                       {isBank && (
-                        <div className="mt-3 pt-3 border-t border-blue-200">
-                          <div className="flex items-center justify-between mb-2">
+                        <div className="mt-4 pt-4 border-t-2 border-blue-300">
+                          <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
-                              <CreditCard className="w-4 h-4 text-blue-600" />
-                              <span className="text-sm font-medium text-blue-700">مطابقة جهاز البنك (Terminal)</span>
+                              <span className="text-base font-bold text-blue-700">🏦 مطابقة التيرمنال</span>
                             </div>
-                            {/* Copy POS to Terminal button */}
                             {!isReadOnly && (
                               <Button
                                 type="button"
                                 variant="outline"
-                                size="sm"
-                                className="h-8 text-xs bg-blue-50 hover:bg-blue-100 border-blue-300"
+                                size="lg"
+                                className="h-11 px-4 bg-blue-50 hover:bg-blue-100 border-blue-300 gap-2"
                                 onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
                               >
-                                <Copy className="w-3 h-3 ml-1" />
-                                نسخ للتيرمنال
+                                <Copy className="w-4 h-4" />
+                                نسخ من الكاشير
                               </Button>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">مبلغ التيرمنال</Label>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">مبلغ التيرمنال</Label>
                               <Input
                                 type="number"
+                                inputMode="decimal"
                                 placeholder="0.00"
                                 value={breakdown.terminalAmount ?? ""}
                                 onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseFloat(e.target.value) || 0)}
                                 disabled={isReadOnly}
-                                className="h-10 bg-white"
+                                className="h-14 text-xl font-bold text-center bg-white"
                                 data-testid={`input-terminal-amount-${index}`}
                               />
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">عدد عمليات التيرمنال</Label>
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">عدد عمليات التيرمنال</Label>
                               <Input
                                 type="number"
+                                inputMode="numeric"
                                 placeholder="0"
                                 value={breakdown.terminalTransactionCount ?? ""}
                                 onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseInt(e.target.value) || 0)}
                                 disabled={isReadOnly}
-                                className="h-10 bg-white"
+                                className="h-14 text-xl font-bold text-center bg-white"
                                 data-testid={`input-terminal-count-${index}`}
                               />
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">الفرق</Label>
-                              <Input
-                                type="number"
-                                value={bankDisc.toFixed(2)}
-                                readOnly
-                                className={`h-10 font-bold ${bankDiscType === 'surplus' ? 'bg-emerald-200 text-emerald-800 border-emerald-400' : bankDiscType === 'shortage' ? 'bg-red-200 text-red-800 border-red-400' : 'bg-gray-100'}`}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">الحالة</Label>
-                              <div className={`h-10 flex items-center justify-center rounded-md font-bold text-sm ${bankDiscType === 'surplus' ? 'bg-emerald-200 text-emerald-800' : bankDiscType === 'shortage' ? 'bg-red-200 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
-                                {bankDiscType === 'surplus' ? '⬆️ زيادة' : bankDiscType === 'shortage' ? '⬇️ عجز' : '✓ متطابق'}
-                              </div>
-                            </div>
+                          </div>
+                          {/* Discrepancy Summary */}
+                          <div className={`mt-3 p-3 rounded-lg flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-100 border border-emerald-300' : bankDiscType === 'shortage' ? 'bg-red-100 border border-red-300' : 'bg-gray-100 border border-gray-300'}`}>
+                            <span className="font-medium">الفرق:</span>
+                            <span className={`text-xl font-bold ${bankDiscType === 'surplus' ? 'text-emerald-700' : bankDiscType === 'shortage' ? 'text-red-700' : 'text-gray-600'}`}>
+                              {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} ر.س
+                              {bankDiscType === 'surplus' ? ' ⬆️' : bankDiscType === 'shortage' ? ' ⬇️' : ' ✓'}
+                            </span>
                           </div>
                         </div>
                       )}
@@ -1615,8 +1662,8 @@ export default function CashierJournalFormPage() {
                           <SelectItem value="mada">مدى</SelectItem>
                           <SelectItem value="visa">فيزا</SelectItem>
                           <SelectItem value="mastercard">ماستركارد</SelectItem>
-                          <SelectItem value="apple_pay">Apple Pay</SelectItem>
-                          <SelectItem value="stc_pay">STC Pay</SelectItem>
+                          <SelectItem value="amex">أمريكان إكسبريس</SelectItem>
+                          <SelectItem value="card_other">بطاقة أخرى</SelectItem>
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">طريقة الدفع التي استخدمها العميل في الشراء الأصلي</p>
@@ -2275,6 +2322,92 @@ export default function CashierJournalFormPage() {
             </div>
           </div>
         </div>
+
+        {/* Sticky Bottom Action Bar - iPad Optimized */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-3 md:p-4">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+            {/* Summary Stats */}
+            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 text-sm">
+              <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg">
+                <Receipt className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-600">المبيعات:</span>
+                <span className="font-bold text-lg">{formData.totalSales.toLocaleString('en')} ر.س</span>
+              </div>
+              {returnData.hasReturn && returnData.returnAmount > 0 && (
+                <div className="flex items-center gap-2 bg-red-100 px-3 py-2 rounded-lg">
+                  <RotateCcw className="w-4 h-4 text-red-500" />
+                  <span className="text-red-600">مرتجع:</span>
+                  <span className="font-bold text-red-700">-{returnData.returnAmount.toLocaleString('en')}</span>
+                </div>
+              )}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+                (() => {
+                  const variance = getVarianceSummary();
+                  if (variance.varianceType === 'balanced') return 'bg-green-100';
+                  if (variance.varianceType === 'warning') return 'bg-amber-100';
+                  return 'bg-red-100';
+                })()
+              }`}>
+                <Calculator className="w-4 h-4" />
+                <span>الفارق:</span>
+                <span className={`font-bold text-lg ${
+                  (() => {
+                    const variance = getVarianceSummary();
+                    if (variance.varianceType === 'balanced') return 'text-green-700';
+                    if (variance.varianceType === 'warning') return 'text-amber-700';
+                    return 'text-red-700';
+                  })()
+                }`}>
+                  {getVarianceSummary().netVariance >= 0 ? '+' : ''}{getVarianceSummary().netVariance.toLocaleString('en', {minimumFractionDigits: 2})}
+                </span>
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              {!isReadOnly && (
+                <>
+                  <Button
+                    size="lg"
+                    className="gap-2 h-12 px-6 text-base min-w-[140px]"
+                    onClick={handleSave}
+                    disabled={createMutation.isPending || updateMutation.isPending || !canSave}
+                    data-testid="button-save-sticky"
+                  >
+                    <Save className="w-5 h-5" />
+                    {isEdit ? "حفظ" : "حفظ مسودة"}
+                  </Button>
+                  {isEdit && existingJournal?.status === "draft" && (
+                    <Button
+                      size="lg"
+                      className="gap-2 bg-green-600 hover:bg-green-700 h-12 px-6 text-base min-w-[140px]"
+                      onClick={handleSaveAndPost}
+                      disabled={postMutation.isPending || updateMutation.isPending || !canPost}
+                      data-testid="button-post-sticky"
+                    >
+                      <Send className="w-5 h-5" />
+                      ترحيل
+                    </Button>
+                  )}
+                </>
+              )}
+              {isReadOnly && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="gap-2 h-12 px-6"
+                  onClick={() => setLocation("/cashier-journals")}
+                >
+                  <ArrowRight className="w-5 h-5" />
+                  العودة للقائمة
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Spacer for sticky bar */}
+        <div className="h-24 md:h-20" />
       </div>
 
       {/* Shortage Confirmation Dialog */}
