@@ -1112,21 +1112,58 @@ export default function TargetsPlanning() {
                     </CardDescription>
                   </div>
                   {selectedTargetId && (
-                    <Select 
-                      value={selectedTargetId.toString()} 
-                      onValueChange={(v) => setSelectedTargetId(parseInt(v))}
-                    >
-                      <SelectTrigger className="w-56">
-                        <SelectValue placeholder="اختر هدف" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {targets.map(t => (
-                          <SelectItem key={t.id} value={t.id.toString()}>
-                            {getBranchName(t.branchId)} - {formatCurrency(t.targetAmount)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Select 
+                        value={selectedTargetId.toString()} 
+                        onValueChange={(v) => setSelectedTargetId(parseInt(v))}
+                      >
+                        <SelectTrigger className="w-56">
+                          <SelectValue placeholder="اختر هدف" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {targets.map(t => (
+                            <SelectItem key={t.id} value={t.id.toString()}>
+                              {getBranchName(t.branchId)} - {formatCurrency(t.targetAmount)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {allocations.length > 0 && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            const selectedTarget = targets.find(t => t.id === selectedTargetId);
+                            const branchName = selectedTarget ? getBranchName(selectedTarget.branchId) : 'Unknown';
+                            const data = allocations.map(alloc => {
+                              const date = new Date(alloc.targetDate);
+                              const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                              const isWeekend = date.getDay() === 4 || date.getDay() === 5 || date.getDay() === 6;
+                              const isEndOfMonth = date.getDate() >= 27;
+                              return {
+                                'التاريخ': new Date(alloc.targetDate).toLocaleDateString('en-GB'),
+                                'اليوم': dayNames[date.getDay()],
+                                'الهدف اليومي': alloc.dailyTarget,
+                                'النسبة %': alloc.weightPercent.toFixed(2),
+                                'ويكند': isWeekend ? 'نعم' : 'لا',
+                                'نهاية الشهر': isEndOfMonth ? 'نعم' : 'لا',
+                                'عيد/مناسبة': alloc.isHoliday ? 'نعم' : 'لا',
+                                'تعديل يدوي': alloc.isManualOverride ? 'نعم' : 'لا',
+                              };
+                            });
+                            const ws = XLSX.utils.json_to_sheet(data);
+                            const wb = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(wb, ws, 'التوزيع اليومي');
+                            XLSX.writeFile(wb, `توزيع_${branchName}_${selectedTarget?.yearMonth || 'monthly'}.xlsx`);
+                          }}
+                          className="min-h-[44px]"
+                          data-testid="btn-export-allocations"
+                        >
+                          <FileSpreadsheet className="h-4 w-4 ml-2" />
+                          تصدير Excel
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               </CardHeader>
@@ -1180,7 +1217,8 @@ export default function TargetsPlanning() {
                       {allocations.map((alloc) => {
                         const date = new Date(alloc.targetDate);
                         const dayOfMonth = date.getDate();
-                        const isWeekend = date.getDay() === 4 || date.getDay() === 5;
+                        const isWeekend = date.getDay() === 4 || date.getDay() === 5 || date.getDay() === 6; // Thu, Fri, Sat
+                        const isEndOfMonth = dayOfMonth >= 27; // End of month boost days
                         const isEditing = editingAllocation === alloc.id;
                         const dateHolidays = getHolidaysForDate(alloc.targetDate);
                         const hasHoliday = dateHolidays.length > 0;
@@ -1202,6 +1240,8 @@ export default function TargetsPlanning() {
                               hasHoliday ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300' :
                               alloc.isHoliday ? 'bg-red-50 border-red-200' :
                               alloc.isManualOverride ? 'bg-blue-50 border-blue-200' :
+                              (isWeekend && isEndOfMonth) ? 'bg-gradient-to-br from-amber-100 to-orange-100 border-orange-300' :
+                              isEndOfMonth ? 'bg-orange-50 border-orange-200' :
                               isWeekend ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'
                             }`}
                             data-testid={`allocation-${alloc.id}`}
@@ -1290,6 +1330,37 @@ export default function TargetsPlanning() {
                       })}
                     </div>
                     
+                    {/* Color Legend */}
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm font-medium mb-2">دليل الألوان:</p>
+                      <div className="flex flex-wrap gap-2 md:gap-4">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-4 h-4 rounded bg-amber-50 border border-amber-200"></div>
+                          <span>ويكند (خميس/جمعة/سبت)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-4 h-4 rounded bg-orange-50 border border-orange-200"></div>
+                          <span>نهاية الشهر (27-31)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-4 h-4 rounded bg-gradient-to-br from-amber-100 to-orange-100 border border-orange-300"></div>
+                          <span>ويكند + نهاية شهر</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-4 h-4 rounded bg-green-50 border-2 border-green-400"></div>
+                          <span>اليوم الحالي</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-4 h-4 rounded bg-gray-100 border border-gray-300 opacity-60"></div>
+                          <span>أيام سابقة</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-4 h-4 rounded bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-300"></div>
+                          <span>أعياد/مناسبات</span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Holiday Legend */}
                     {holidays.length > 0 && (
                       <div className="p-3 bg-gray-50 rounded-lg">
@@ -1309,6 +1380,51 @@ export default function TargetsPlanning() {
                         </div>
                       </div>
                     )}
+                    
+                    {/* Statistics Summary */}
+                    {(() => {
+                      const weekendDays = allocations.filter(a => {
+                        const d = new Date(a.targetDate);
+                        return d.getDay() === 4 || d.getDay() === 5 || d.getDay() === 6;
+                      });
+                      const endOfMonthDays = allocations.filter(a => {
+                        const d = new Date(a.targetDate);
+                        return d.getDate() >= 27;
+                      });
+                      const weekendTotal = weekendDays.reduce((sum, a) => sum + a.dailyTarget, 0);
+                      const endOfMonthTotal = endOfMonthDays.reduce((sum, a) => sum + a.dailyTarget, 0);
+                      const totalTarget = allocations.reduce((sum, a) => sum + a.dailyTarget, 0);
+                      const maxTarget = Math.max(...allocations.map(a => a.dailyTarget));
+                      const minTarget = Math.min(...allocations.map(a => a.dailyTarget));
+                      const avgTarget = totalTarget / allocations.length;
+                      
+                      return (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                          <div className="text-center p-2">
+                            <div className="text-xs text-gray-500 mb-1">أيام الويكند</div>
+                            <div className="font-bold text-amber-700">{weekendDays.length} يوم</div>
+                            <div className="text-xs text-gray-600">{formatCurrency(weekendTotal)}</div>
+                            <div className="text-xs text-amber-600">({((weekendTotal / totalTarget) * 100).toFixed(1)}%)</div>
+                          </div>
+                          <div className="text-center p-2">
+                            <div className="text-xs text-gray-500 mb-1">نهاية الشهر</div>
+                            <div className="font-bold text-orange-700">{endOfMonthDays.length} يوم</div>
+                            <div className="text-xs text-gray-600">{formatCurrency(endOfMonthTotal)}</div>
+                            <div className="text-xs text-orange-600">({((endOfMonthTotal / totalTarget) * 100).toFixed(1)}%)</div>
+                          </div>
+                          <div className="text-center p-2">
+                            <div className="text-xs text-gray-500 mb-1">أعلى هدف</div>
+                            <div className="font-bold text-green-700">{formatCurrency(maxTarget)}</div>
+                            <div className="text-xs text-gray-500">متوسط: {formatCurrency(avgTarget)}</div>
+                          </div>
+                          <div className="text-center p-2">
+                            <div className="text-xs text-gray-500 mb-1">أدنى هدف</div>
+                            <div className="font-bold text-red-700">{formatCurrency(minTarget)}</div>
+                            <div className="text-xs text-gray-500">فرق: {formatCurrency(maxTarget - minTarget)}</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     
                     <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
                       <span className="font-medium">إجمالي التوزيع اليومي:</span>
