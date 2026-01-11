@@ -599,6 +599,31 @@ export default function CashierJournalFormPage() {
     return adjustedCategoryTotals.cash;
   };
 
+  // Comprehensive variance summary - unified source of truth
+  const getVarianceSummary = () => {
+    const bankSummary = getBankReconciliationSummary();
+    const totalTerminal = bankSummary.totalTerminalAmount || 0;
+    const actualCash = formData.actualCashDrawer || 0;
+    const totalActualCollected = actualCash + totalTerminal;
+    const netSalesVal = getNetSales();
+    const cashDiscrepancy = calculateDiscrepancy();
+    const bankDiscrepancy = bankSummary.discrepancy;
+    const netVariance = totalActualCollected - netSalesVal;
+    
+    const absVariance = Math.abs(netVariance);
+    const varianceType = absVariance <= 5 ? 'balanced' : absVariance <= 25 ? 'warning' : 'critical';
+    
+    return {
+      netVariance,
+      cashDiscrepancy,
+      bankDiscrepancy,
+      totalActualCollected,
+      netSales: netSalesVal,
+      varianceType,
+      hasBankPayments: bankSummary.bankPayments.length > 0,
+    };
+  };
+
   const calculateAverageTicket = () => {
     if (formData.transactionCount > 0) {
       return formData.totalSales / formData.transactionCount;
@@ -2183,38 +2208,64 @@ export default function CashierJournalFormPage() {
                   </>
                 )}
                 
-                <Separator />
-                <div className="text-xs font-semibold text-muted-foreground">تسوية النقدي</div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">المبيعات النقدية</span>
-                  <span className="font-medium">{getExpectedCashInDrawer().toFixed(2)} ر.س</span>
-                </div>
-                {returnData.hasReturn && returnData.returnPaymentMethod === "cash" && returnData.returnAmount > 0 && (
-                  <div className="text-xs text-red-600 pr-2">
-                    (الأصل: {formData.cashTotal.toFixed(2)} - مرتجع: {returnData.returnAmount.toFixed(2)})
-                  </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">الرصيد الفعلي</span>
-                  <span className="font-medium">{formData.actualCashDrawer.toFixed(2)} ر.س</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">الفارق</span>
-                  <span className={`font-bold text-lg ${calculateDiscrepancy() === 0 ? "text-green-600" : calculateDiscrepancy() < 0 ? "text-red-600" : "text-amber-600"}`}>
-                    {calculateDiscrepancy().toFixed(2)} ر.س
-                  </span>
-                </div>
-                {discrepancyStatus.isShortage && (
-                  <div className="mt-2 p-2 bg-red-100 rounded text-red-700 text-xs text-center">
-                    عجز مُسجَّل على الكاشير
-                  </div>
-                )}
-                {getDiscrepancyAnalysis().type === "possible_misclass" && (
-                  <div className="mt-2 p-2 bg-amber-100 rounded text-amber-700 text-xs">
-                    <AlertCircle className="w-3 h-3 inline ml-1" />
-                    {getDiscrepancyAnalysis().message}
-                  </div>
-                )}
+                {/* Comprehensive Variance Summary - صافي الفرق النهائي */}
+                {(() => {
+                  const vs = getVarianceSummary();
+                  const netVarColor = vs.varianceType === 'balanced' ? 'text-green-600 bg-green-50 border-green-200' : 
+                    vs.varianceType === 'warning' ? 'text-amber-600 bg-amber-50 border-amber-200' : 
+                    'text-red-600 bg-red-50 border-red-200';
+                  
+                  return (
+                    <>
+                      <Separator />
+                      <div className="text-xs font-semibold text-purple-700">صافي الفرق النهائي</div>
+                      <div className={`p-3 rounded-lg border-2 ${netVarColor}`}>
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">الفارق الإجمالي:</span>
+                          <span className="font-bold text-lg">
+                            {vs.netVariance >= 0 ? '+' : ''}{vs.netVariance.toFixed(2)} ر.س
+                          </span>
+                        </div>
+                        <div className="text-xs mt-1 opacity-80">
+                          (المحصل: {vs.totalActualCollected.toFixed(2)} - المبيعات: {vs.netSales.toFixed(2)})
+                        </div>
+                      </div>
+                      
+                      {/* Component breakdown - sub-discrepancies */}
+                      {(Math.abs(vs.cashDiscrepancy) > 0.01 || Math.abs(vs.bankDiscrepancy) > 0.01) && (
+                        <div className="space-y-2 p-2 bg-gray-50 rounded border text-xs">
+                          <div className="text-muted-foreground font-medium">تفصيل الفروقات:</div>
+                          <div className="flex justify-between">
+                            <span>فرق الصندوق النقدي:</span>
+                            <span className={vs.cashDiscrepancy > 0 ? 'text-amber-600' : vs.cashDiscrepancy < 0 ? 'text-red-600' : 'text-green-600'}>
+                              {vs.cashDiscrepancy >= 0 ? '+' : ''}{vs.cashDiscrepancy.toFixed(2)} ر.س
+                            </span>
+                          </div>
+                          {vs.hasBankPayments && (
+                            <div className="flex justify-between">
+                              <span>فرق مطابقة البنك:</span>
+                              <span className={vs.bankDiscrepancy > 0 ? 'text-amber-600' : vs.bankDiscrepancy < 0 ? 'text-red-600' : 'text-green-600'}>
+                                {vs.bankDiscrepancy >= 0 ? '+' : ''}{vs.bankDiscrepancy.toFixed(2)} ر.س
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {discrepancyStatus.isShortage && (
+                        <div className="mt-2 p-2 bg-red-100 rounded text-red-700 text-xs text-center">
+                          عجز مُسجَّل على الكاشير ({vs.cashDiscrepancy.toFixed(2)} ر.س)
+                        </div>
+                      )}
+                      {getDiscrepancyAnalysis().type === "possible_misclass" && (
+                        <div className="mt-2 p-2 bg-amber-100 rounded text-amber-700 text-xs">
+                          <AlertCircle className="w-3 h-3 inline ml-1" />
+                          {getDiscrepancyAnalysis().message}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
 
