@@ -10,7 +10,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter } from "lucide-react";
+import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
@@ -125,6 +136,24 @@ export default function CashierJournalsPage() {
       toast({ title: "خطأ", description: "فشل في رفض اليومية", variant: "destructive" });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest(`/api/cashier-journals/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals/stats/summary"] });
+      toast({ title: "تم حذف اليومية بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "خطأ", 
+        description: error?.message || "فشل في حذف اليومية", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const { isAdmin } = useAuth();
 
   const getBranchName = (branchId: string) => {
     const branch = branches?.find((b) => b.id === branchId);
@@ -562,6 +591,39 @@ export default function CashierJournalsPage() {
                                       <XCircle className="w-5 h-5 sm:w-4 sm:h-4" />
                                     </Button>
                                   </>
+                                )}
+                                {isAdmin && journal.status !== "approved" && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-11 w-11 sm:h-8 sm:w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        data-testid={`button-delete-${journal.id}`}
+                                      >
+                                        <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="max-w-md" dir="rtl">
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>تأكيد حذف اليومية</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          هل أنت متأكد من حذف يومية <strong>{journal.cashierName}</strong> بتاريخ <strong>{journal.journalDate}</strong>؟
+                                          <br />
+                                          <span className="text-red-500 font-medium">هذا الإجراء لا يمكن التراجع عنه!</span>
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter className="flex-row-reverse gap-2">
+                                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          className="bg-red-600 hover:bg-red-700"
+                                          onClick={() => deleteMutation.mutate(journal.id)}
+                                        >
+                                          حذف اليومية
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                                 )}
                               </div>
                             </TableCell>
