@@ -147,7 +147,7 @@ export default function BranchDailyClosingPage() {
 
   const createClosureMutation = useMutation({
     mutationFn: async (data: { branchId: string; closureDate: string; journalIds: number[]; notes: string }) => {
-      return apiRequest("/api/branch-daily-closures", "POST", data);
+      return apiRequest("POST", "/api/branch-daily-closures", data);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] });
