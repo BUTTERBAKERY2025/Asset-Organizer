@@ -138,7 +138,7 @@ export default function CashierJournalsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/cashier-journals/${id}`, "DELETE"),
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/cashier-journals/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals/stats/summary"] });
