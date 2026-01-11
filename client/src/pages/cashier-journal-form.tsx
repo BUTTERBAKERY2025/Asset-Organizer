@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,20 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { Branch, CashierSalesJournal, CashierPaymentBreakdown, JournalAttachment } from "@shared/schema";
 import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPES, type AttachmentType } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
@@ -25,15 +35,18 @@ const PAYMENT_CATEGORIES = {
   apps: { label: "تطبيقات التوصيل (آجل)", color: "bg-purple-100 text-purple-700" },
 };
 
+// Payment methods ordered by most commonly used first
 const PAYMENT_METHODS = [
   { value: "cash", label: "نقداً", icon: Wallet, category: "cash" },
-  { value: "card", label: "بطاقة ائتمان", icon: CreditCard, category: "cards" },
   { value: "mada", label: "مدى", icon: CreditCard, category: "cards" },
+  { value: "card", label: "بطاقة ائتمان", icon: CreditCard, category: "cards" },
   { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards" },
   { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards" },
+  { value: "visa", label: "فيزا", icon: CreditCard, category: "cards" },
+  { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards" },
   { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps" },
-  { value: "toyou", label: "ToYou", icon: Truck, category: "apps" },
   { value: "jahez", label: "جاهز", icon: Truck, category: "apps" },
+  { value: "toyou", label: "ToYou", icon: Truck, category: "apps" },
   { value: "marsool", label: "مرسول", icon: Truck, category: "apps" },
   { value: "keeta", label: "كيتا", icon: Truck, category: "apps" },
   { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps" },
@@ -76,6 +89,8 @@ export default function CashierJournalFormPage() {
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const [showShortageConfirm, setShowShortageConfirm] = useState(false);
+  const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null);
 
   const isEdit = !!id;
 
@@ -339,6 +354,27 @@ export default function CashierJournalFormPage() {
 
   const isReadOnly = existingJournal && existingJournal.status !== "draft";
 
+  // Threshold for shortage confirmation (50 SAR)
+  const SHORTAGE_CONFIRM_THRESHOLD = 50;
+
+  const doSave = () => {
+    const canvas = signatureCanvasRef.current;
+    const signatureData = hasSignature && canvas ? canvas.toDataURL("image/png") : undefined;
+
+    const data = {
+      ...formData,
+      paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0),
+      signatureData,
+      signerName: formData.cashierName,
+    };
+
+    if (isEdit) {
+      updateMutation.mutate(data);
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
   const handleSave = () => {
     if (!hasSignature && !isEdit) {
       toast({ 
@@ -358,21 +394,15 @@ export default function CashierJournalFormPage() {
       return;
     }
 
-    const canvas = signatureCanvasRef.current;
-    const signatureData = hasSignature && canvas ? canvas.toDataURL("image/png") : undefined;
-
-    const data = {
-      ...formData,
-      paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0),
-      signatureData,
-      signerName: formData.cashierName,
-    };
-
-    if (isEdit) {
-      updateMutation.mutate(data);
-    } else {
-      createMutation.mutate(data);
+    // Check for large shortage and show confirmation dialog
+    const discrepancy = calculateDiscrepancy();
+    if (discrepancy < -SHORTAGE_CONFIRM_THRESHOLD) {
+      setPendingSaveAction(() => doSave);
+      setShowShortageConfirm(true);
+      return;
     }
+
+    doSave();
   };
 
   const handleSaveAndPost = async () => {
@@ -617,27 +647,51 @@ export default function CashierJournalFormPage() {
     initCanvas();
   }, []);
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Get coordinates from mouse or touch event
+  const getCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    
+    if ('touches' in e) {
+      // Touch event
+      const touch = e.touches[0] || e.changedTouches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    } else {
+      // Mouse event
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // Prevent scrolling on touch
     const canvas = signatureCanvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext("2d");
-      const rect = canvas.getBoundingClientRect();
+      const { x, y } = getCoordinates(e);
       if (ctx) {
         ctx.beginPath();
-        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.moveTo(x, y);
         setIsDrawing(true);
       }
     }
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
+    e.preventDefault(); // Prevent scrolling on touch
     const canvas = signatureCanvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext("2d");
-      const rect = canvas.getBoundingClientRect();
+      const { x, y } = getCoordinates(e);
       if (ctx) {
-        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.lineTo(x, y);
         ctx.stroke();
       }
     }
@@ -1134,9 +1188,24 @@ export default function CashierJournalFormPage() {
                       {/* Bank Reconciliation Row - Only for bank payment methods */}
                       {isBank && (
                         <div className="mt-3 pt-3 border-t border-blue-200">
-                          <div className="flex items-center gap-2 mb-2">
-                            <CreditCard className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm font-medium text-blue-700">مطابقة جهاز البنك (Terminal)</span>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="w-4 h-4 text-blue-600" />
+                              <span className="text-sm font-medium text-blue-700">مطابقة جهاز البنك (Terminal)</span>
+                            </div>
+                            {/* Copy POS to Terminal button */}
+                            {!isReadOnly && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs bg-blue-50 hover:bg-blue-100 border-blue-300"
+                                onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
+                              >
+                                <Copy className="w-3 h-3 ml-1" />
+                                نسخ للتيرمنال
+                              </Button>
+                            )}
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div className="space-y-1">
@@ -1169,12 +1238,12 @@ export default function CashierJournalFormPage() {
                                 type="number"
                                 value={bankDisc.toFixed(2)}
                                 readOnly
-                                className={`h-10 font-bold ${bankDiscType === 'surplus' ? 'bg-green-100 text-green-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}
+                                className={`h-10 font-bold ${bankDiscType === 'surplus' ? 'bg-emerald-200 text-emerald-800 border-emerald-400' : bankDiscType === 'shortage' ? 'bg-red-200 text-red-800 border-red-400' : 'bg-gray-100'}`}
                               />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs text-muted-foreground">الحالة</Label>
-                              <div className={`h-10 flex items-center justify-center rounded-md font-medium text-sm ${bankDiscType === 'surplus' ? 'bg-green-100 text-green-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                              <div className={`h-10 flex items-center justify-center rounded-md font-bold text-sm ${bankDiscType === 'surplus' ? 'bg-emerald-200 text-emerald-800' : bankDiscType === 'shortage' ? 'bg-red-200 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
                                 {bankDiscType === 'surplus' ? '⬆️ زيادة' : bankDiscType === 'shortage' ? '⬇️ عجز' : '✓ متطابق'}
                               </div>
                             </div>
@@ -1223,13 +1292,13 @@ export default function CashierJournalFormPage() {
                             <div className="text-muted-foreground text-xs">إجمالي التيرمنال</div>
                             <div className="font-bold">{bankSummary.totalTerminalAmount.toFixed(2)} ر.س</div>
                           </div>
-                          <div className={`p-2 rounded ${bankSummary.type === 'surplus' ? 'bg-green-100' : bankSummary.type === 'shortage' ? 'bg-red-100' : 'bg-gray-100'}`}>
+                          <div className={`p-2 rounded ${bankSummary.type === 'surplus' ? 'bg-emerald-200 border border-emerald-400' : bankSummary.type === 'shortage' ? 'bg-red-200 border border-red-400' : 'bg-gray-100'}`}>
                             <div className="text-muted-foreground text-xs">الفرق الإجمالي</div>
-                            <div className={`font-bold ${bankSummary.type === 'surplus' ? 'text-green-700' : bankSummary.type === 'shortage' ? 'text-red-700' : ''}`}>
+                            <div className={`font-bold ${bankSummary.type === 'surplus' ? 'text-emerald-800' : bankSummary.type === 'shortage' ? 'text-red-800' : ''}`}>
                               {bankSummary.discrepancy.toFixed(2)} ر.س
                             </div>
                           </div>
-                          <div className={`p-2 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-green-100 text-green-700' : bankSummary.type === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>
+                          <div className={`p-2 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-emerald-200 text-emerald-800 border border-emerald-400' : bankSummary.type === 'shortage' ? 'bg-red-200 text-red-800 border border-red-400' : 'bg-gray-100'}`}>
                             <span className="font-bold text-sm">
                               {bankSummary.type === 'surplus' ? '⬆️ زيادة في البنك' : bankSummary.type === 'shortage' ? '⬇️ عجز في البنك' : '✓ متطابق'}
                             </span>
@@ -1248,12 +1317,12 @@ export default function CashierJournalFormPage() {
                                 const diff = termAmt - posAmt;
                                 const diffStatus = diff > 0.5 ? 'surplus' : diff < -0.5 ? 'shortage' : 'balanced';
                                 return (
-                                  <div key={idx} className="flex items-center justify-between text-xs bg-white/50 p-1.5 rounded">
-                                    <span className="text-gray-600">{methodLabel}</span>
+                                  <div key={idx} className={`flex items-center justify-between text-xs p-2 rounded border ${diffStatus === 'surplus' ? 'bg-emerald-50 border-emerald-200' : diffStatus === 'shortage' ? 'bg-red-50 border-red-200' : 'bg-white/50 border-gray-200'}`}>
+                                    <span className="text-gray-700 font-medium">{methodLabel}</span>
                                     <div className="flex items-center gap-3">
-                                      <span>POS: {posAmt.toFixed(2)}</span>
-                                      <span>تيرمنال: {termAmt.toFixed(2)}</span>
-                                      <span className={`font-medium ${diffStatus === 'surplus' ? 'text-green-600' : diffStatus === 'shortage' ? 'text-red-600' : 'text-gray-500'}`}>
+                                      <span className="text-gray-600">POS: {posAmt.toFixed(2)}</span>
+                                      <span className="text-gray-600">تيرمنال: {termAmt.toFixed(2)}</span>
+                                      <span className={`font-bold px-2 py-0.5 rounded ${diffStatus === 'surplus' ? 'bg-emerald-200 text-emerald-800' : diffStatus === 'shortage' ? 'bg-red-200 text-red-800' : 'text-gray-500'}`}>
                                         ({diff >= 0 ? '+' : ''}{diff.toFixed(2)})
                                       </span>
                                     </div>
@@ -1494,19 +1563,25 @@ export default function CashierJournalFormPage() {
                     <span>يجب التوقيع الإلكتروني قبل حفظ اليومية</span>
                   </div>
                 )}
-                <div className={`border rounded-lg overflow-hidden ${!hasSignature && !isEdit ? "border-red-300" : ""}`}>
+                <div className={`border-2 rounded-lg overflow-hidden ${!hasSignature && !isEdit ? "border-red-300" : "border-amber-400"}`}>
                   <canvas
                     ref={signatureCanvasRef}
                     width={280}
                     height={150}
-                    className="w-full cursor-crosshair bg-white"
+                    className="w-full cursor-crosshair bg-white touch-none"
+                    style={{ touchAction: 'none' }}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
                     onMouseLeave={stopDrawing}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
+                    onTouchCancel={stopDrawing}
                     data-testid="canvas-signature"
                   />
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">يدعم اللمس على الأجهزة اللوحية</p>
                 <Button variant="outline" size="sm" onClick={clearSignature} className="w-full h-11 sm:h-9" data-testid="button-clear-signature">
                   مسح التوقيع
                 </Button>
@@ -1670,6 +1745,42 @@ export default function CashierJournalFormPage() {
           </div>
         </div>
       </div>
+
+      {/* Shortage Confirmation Dialog */}
+      <AlertDialog open={showShortageConfirm} onOpenChange={setShowShortageConfirm}>
+        <AlertDialogContent className="max-w-md" dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              تأكيد حفظ اليومية مع عجز كبير
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right space-y-2">
+              <p>
+                تم اكتشاف عجز بقيمة <span className="font-bold text-red-600">{Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س</span> في الصندوق.
+              </p>
+              <p className="text-amber-600">
+                سيُسجَّل هذا العجز على الكاشير. هل أنت متأكد من صحة البيانات؟
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel className="flex-1">
+              مراجعة البيانات
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="flex-1 bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (pendingSaveAction) {
+                  pendingSaveAction();
+                  setPendingSaveAction(null);
+                }
+              }}
+            >
+              تأكيد الحفظ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }
