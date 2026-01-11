@@ -2514,12 +2514,14 @@ export async function registerRoutes(
         }
       }
       
-      // Server-side validation: payment breakdown totals must match total sales
+      // Server-side validation: payment breakdown totals must match total sales (only for posting, not drafts)
       if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
         const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
         const totalSales = parseFloat(journalData.totalSales) || 0;
-        const tolerance = 0.01;
-        if (Math.abs(breakdownTotal - totalSales) > tolerance) {
+        const tolerance = 1.0; // Allow 1 SAR tolerance for rounding errors
+        
+        // Only reject if explicitly posting (status is 'posted') - drafts can be saved with mismatches
+        if (journalData.status === 'posted' && Math.abs(breakdownTotal - totalSales) > tolerance) {
           return res.status(400).json({ 
             error: "مجموع التفصيل لا يطابق إجمالي المبيعات",
             details: { breakdownTotal, totalSales, difference: Math.abs(breakdownTotal - totalSales) }
@@ -2598,11 +2600,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
       }
       
-      // Server-side validation: totals must match
+      // Server-side validation: totals must match (only for posting, not drafts)
       if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && journalData.totalSales !== undefined) {
         const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
         const diff = Math.abs(journalData.totalSales - breakdownTotal);
-        if (diff > 0.01) {
+        const tolerance = 1.0; // Allow 1 SAR tolerance for rounding errors
+        // Only reject if explicitly posting - drafts can be saved with mismatches
+        if (journalData.status === 'posted' && diff > tolerance) {
           return res.status(400).json({ error: "Payment breakdown total must match total sales" });
         }
         
