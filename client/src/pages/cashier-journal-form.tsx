@@ -481,7 +481,7 @@ export default function CashierJournalFormPage() {
     
     // Detect potential input error: when cash shortage equals bank surplus (wrong payment button pressed)
     const cashDiscrepancy = calculateDiscrepancy();
-    const inputErrorDetected = Math.abs(cashDiscrepancy) > 0.5 && Math.abs(discrepancy) > 0.5 && 
+    const inputErrorDetected = Math.abs(cashDiscrepancy) > 0.01 && Math.abs(discrepancy) > 0.01 && 
       Math.abs(Math.abs(cashDiscrepancy) - Math.abs(discrepancy)) < 1 && 
       (cashDiscrepancy * discrepancy) < 0; // opposite signs
     
@@ -494,7 +494,7 @@ export default function CashierJournalFormPage() {
       discrepancy,
       transactionDiff,
       inputErrorDetected,
-      type: discrepancy > 0.5 ? 'surplus' : discrepancy < -0.5 ? 'shortage' : 'balanced'
+      type: discrepancy > 0.01 ? 'surplus' : discrepancy < -0.01 ? 'shortage' : 'balanced'
     };
   };
 
@@ -1058,7 +1058,7 @@ export default function CashierJournalFormPage() {
                   const Icon = method?.icon || Wallet;
                   const isBank = isBankPaymentMethod(breakdown.paymentMethod);
                   const bankDisc = (breakdown.terminalAmount || 0) - (breakdown.posAmount || breakdown.amount || 0);
-                  const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
+                  const bankDiscType = bankDisc > 0.01 ? 'surplus' : bankDisc < -0.01 ? 'shortage' : 'balanced';
 
                   return (
                     <div key={index} className={`p-3 border rounded-lg ${isBank ? 'border-blue-200 bg-blue-50/30' : ''}`} data-testid={`payment-row-${index}`}>
