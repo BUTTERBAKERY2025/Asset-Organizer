@@ -2,6 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
+import { db } from "./db";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { 
+  branchDailyClosures, 
+  branchDailyClosurePayments, 
+  branchDailyClosureJournals,
+  cashierSalesJournals,
+  cashierPaymentBreakdowns
+} from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
   generateBranchComparisonPdf, type BranchComparisonPdfData,
@@ -2969,6 +2978,384 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to delete journal attachment" });
     }
   });
+
+  // ==================== Branch Daily Closures Module ====================
+
+  // Get all branch daily closures
+  app.get("/api/branch-daily-closures", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, startDate, endDate, status } = req.query;
+      const user = req.user;
+      
+      // Build query conditions
+      let query = db.select().from(branchDailyClosures);
+      
+      // For non-admins, filter by their branch
+      const effectiveBranchId = user.role !== 'admin' ? user.branchId : branchId;
+      
+      const closures = await db.select()
+        .from(branchDailyClosures)
+        .where(
+          and(
+            effectiveBranchId ? eq(branchDailyClosures.branchId, effectiveBranchId as string) : undefined,
+            status ? eq(branchDailyClosures.status, status as string) : undefined,
+          )
+        )
+        .orderBy(desc(branchDailyClosures.closureDate));
+      
+      res.json(closures);
+    } catch (error) {
+      console.error("Error fetching branch daily closures:", error);
+      res.status(500).json({ error: "Failed to fetch branch daily closures" });
+    }
+  });
+
+  // Get single branch daily closure with details
+  app.get("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      
+      const [closure] = await db.select()
+        .from(branchDailyClosures)
+        .where(eq(branchDailyClosures.id, id));
+      
+      if (!closure) {
+        return res.status(404).json({ error: "Closure not found" });
+      }
+      
+      // Get payment breakdowns
+      const payments = await db.select()
+        .from(branchDailyClosurePayments)
+        .where(eq(branchDailyClosurePayments.closureId, id));
+      
+      // Get linked journals
+      const linkedJournals = await db.select({
+        journal: cashierSalesJournals,
+      })
+        .from(branchDailyClosureJournals)
+        .innerJoin(cashierSalesJournals, eq(branchDailyClosureJournals.journalId, cashierSalesJournals.id))
+        .where(eq(branchDailyClosureJournals.closureId, id));
+      
+      res.json({
+        ...closure,
+        payments,
+        journals: linkedJournals.map(lj => lj.journal),
+      });
+    } catch (error) {
+      console.error("Error fetching branch daily closure:", error);
+      res.status(500).json({ error: "Failed to fetch branch daily closure" });
+    }
+  });
+
+  // Get journals for a specific date and branch (for creating closure)
+  app.get("/api/branch-daily-closures/journals-preview", isAuthenticated, async (req: any, res) => {
+    try {
+      const { branchId, date } = req.query;
+      const user = req.user;
+      
+      if (!date) {
+        return res.status(400).json({ error: "Date is required" });
+      }
+      
+      const effectiveBranchId = branchId || user.branchId;
+      if (!effectiveBranchId) {
+        return res.status(400).json({ error: "Branch ID is required" });
+      }
+      
+      // Check if closure already exists for this date/branch
+      const [existingClosure] = await db.select()
+        .from(branchDailyClosures)
+        .where(
+          and(
+            eq(branchDailyClosures.branchId, effectiveBranchId as string),
+            eq(branchDailyClosures.closureDate, date as string),
+          )
+        );
+      
+      // Get all journals for that date and branch
+      const journals = await db.select()
+        .from(cashierSalesJournals)
+        .where(
+          and(
+            eq(cashierSalesJournals.branchId, effectiveBranchId as string),
+            eq(cashierSalesJournals.journalDate, date as string),
+          )
+        );
+      
+      // Get payment breakdowns for all journals
+      const journalIds = journals.map(j => j.id);
+      const paymentBreakdowns = journalIds.length > 0 
+        ? await db.select()
+            .from(cashierPaymentBreakdowns)
+            .where(inArray(cashierPaymentBreakdowns.journalId, journalIds))
+        : [];
+      
+      // Attach payment breakdowns to journals
+      const journalsWithPayments = journals.map(journal => ({
+        ...journal,
+        paymentBreakdowns: paymentBreakdowns.filter(pb => pb.journalId === journal.id),
+      }));
+      
+      // Calculate aggregated totals
+      const totals = {
+        totalSales: journals.reduce((sum, j) => sum + (j.totalSales || 0), 0),
+        cashTotal: journals.reduce((sum, j) => sum + (j.cashTotal || 0), 0),
+        networkTotal: journals.reduce((sum, j) => sum + (j.networkTotal || 0), 0),
+        deliveryTotal: journals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0),
+        totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
+        totalExpectedCash: journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0),
+        totalActualCash: journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0),
+        totalCashDiscrepancy: journals.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0),
+        totalCustomerCount: journals.reduce((sum, j) => sum + (j.customerCount || 0), 0),
+        totalTransactionCount: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
+        totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),
+        totalBankTerminalAmount: journals.reduce((sum, j) => sum + (j.totalBankTerminalAmount || 0), 0),
+        totalBankDiscrepancy: journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0),
+        journalsCount: journals.length,
+      };
+      
+      // Aggregate payment methods
+      const paymentMethodTotals: Record<string, {
+        totalAmount: number;
+        totalPosAmount: number;
+        totalTerminalAmount: number;
+        totalBankDiscrepancy: number;
+        totalTransactionCount: number;
+        totalTerminalTransactionCount: number;
+      }> = {};
+      
+      for (const pb of paymentBreakdowns) {
+        const method = pb.paymentMethod;
+        if (!paymentMethodTotals[method]) {
+          paymentMethodTotals[method] = {
+            totalAmount: 0,
+            totalPosAmount: 0,
+            totalTerminalAmount: 0,
+            totalBankDiscrepancy: 0,
+            totalTransactionCount: 0,
+            totalTerminalTransactionCount: 0,
+          };
+        }
+        paymentMethodTotals[method].totalAmount += pb.amount || 0;
+        paymentMethodTotals[method].totalPosAmount += pb.posAmount || 0;
+        paymentMethodTotals[method].totalTerminalAmount += pb.terminalAmount || 0;
+        paymentMethodTotals[method].totalBankDiscrepancy += pb.bankDiscrepancy || 0;
+        paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
+        paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
+      }
+      
+      res.json({
+        existingClosure,
+        journals: journalsWithPayments,
+        totals,
+        paymentMethodTotals,
+      });
+    } catch (error) {
+      console.error("Error fetching journals preview:", error);
+      res.status(500).json({ error: "Failed to fetch journals preview" });
+    }
+  });
+
+  // Create branch daily closure
+  app.post("/api/branch-daily-closures", isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const { branchId, closureDate, journalIds, notes } = req.body;
+      
+      if (!branchId || !closureDate || !journalIds || journalIds.length === 0) {
+        return res.status(400).json({ error: "Branch ID, date, and journal IDs are required" });
+      }
+      
+      // Check if closure already exists
+      const [existingClosure] = await db.select()
+        .from(branchDailyClosures)
+        .where(
+          and(
+            eq(branchDailyClosures.branchId, branchId),
+            eq(branchDailyClosures.closureDate, closureDate),
+          )
+        );
+      
+      if (existingClosure) {
+        return res.status(400).json({ error: "يوجد إغلاق يومي لهذا التاريخ بالفعل" });
+      }
+      
+      // Get journals
+      const journals = await db.select()
+        .from(cashierSalesJournals)
+        .where(inArray(cashierSalesJournals.id, journalIds));
+      
+      // Get payment breakdowns
+      const paymentBreakdowns = await db.select()
+        .from(cashierPaymentBreakdowns)
+        .where(inArray(cashierPaymentBreakdowns.journalId, journalIds));
+      
+      // Calculate totals
+      const totalSales = journals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+      const cashTotal = journals.reduce((sum, j) => sum + (j.cashTotal || 0), 0);
+      const networkTotal = journals.reduce((sum, j) => sum + (j.networkTotal || 0), 0);
+      const deliveryTotal = journals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
+      const totalCashDiscrepancy = journals.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+      const totalBankDiscrepancy = journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0);
+      
+      const cashDiscrepancyStatus = totalCashDiscrepancy > 0.5 ? 'surplus' : totalCashDiscrepancy < -0.5 ? 'shortage' : 'balanced';
+      const bankDiscrepancyStatus = totalBankDiscrepancy > 0.5 ? 'surplus' : totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
+      
+      // Create closure
+      const [newClosure] = await db.insert(branchDailyClosures).values({
+        branchId,
+        closureDate,
+        totalSales,
+        cashTotal,
+        networkTotal,
+        deliveryTotal,
+        totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
+        totalExpectedCash: journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0),
+        totalActualCash: journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0),
+        totalCashDiscrepancy,
+        cashDiscrepancyStatus,
+        totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),
+        totalBankTerminalAmount: journals.reduce((sum, j) => sum + (j.totalBankTerminalAmount || 0), 0),
+        totalBankDiscrepancy,
+        bankDiscrepancyStatus,
+        totalCustomerCount: journals.reduce((sum, j) => sum + (j.customerCount || 0), 0),
+        totalTransactionCount: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
+        averageTicket: totalSales / Math.max(journals.reduce((sum, j) => sum + (j.customerCount || 0), 0), 1),
+        journalsCount: journals.length,
+        status: 'open',
+        notes,
+        createdBy: user.id,
+      }).returning();
+      
+      // Link journals to closure
+      for (const journalId of journalIds) {
+        await db.insert(branchDailyClosureJournals).values({
+          closureId: newClosure.id,
+          journalId,
+        });
+      }
+      
+      // Aggregate and insert payment breakdowns
+      const paymentMethodTotals: Record<string, {
+        totalAmount: number;
+        totalPosAmount: number;
+        totalTerminalAmount: number;
+        totalBankDiscrepancy: number;
+        totalTransactionCount: number;
+        totalTerminalTransactionCount: number;
+      }> = {};
+      
+      for (const pb of paymentBreakdowns) {
+        const method = pb.paymentMethod;
+        if (!paymentMethodTotals[method]) {
+          paymentMethodTotals[method] = {
+            totalAmount: 0,
+            totalPosAmount: 0,
+            totalTerminalAmount: 0,
+            totalBankDiscrepancy: 0,
+            totalTransactionCount: 0,
+            totalTerminalTransactionCount: 0,
+          };
+        }
+        paymentMethodTotals[method].totalAmount += pb.amount || 0;
+        paymentMethodTotals[method].totalPosAmount += pb.posAmount || 0;
+        paymentMethodTotals[method].totalTerminalAmount += pb.terminalAmount || 0;
+        paymentMethodTotals[method].totalBankDiscrepancy += pb.bankDiscrepancy || 0;
+        paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
+        paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
+      }
+      
+      for (const [method, totals] of Object.entries(paymentMethodTotals)) {
+        const discType = totals.totalBankDiscrepancy > 0.5 ? 'surplus' : totals.totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
+        await db.insert(branchDailyClosurePayments).values({
+          closureId: newClosure.id,
+          paymentMethod: method,
+          totalAmount: totals.totalAmount,
+          totalPosAmount: totals.totalPosAmount,
+          totalTerminalAmount: totals.totalTerminalAmount,
+          totalBankDiscrepancy: totals.totalBankDiscrepancy,
+          bankDiscrepancyType: discType,
+          totalTransactionCount: totals.totalTransactionCount,
+          totalTerminalTransactionCount: totals.totalTerminalTransactionCount,
+        });
+      }
+      
+      res.json(newClosure);
+    } catch (error) {
+      console.error("Error creating branch daily closure:", error);
+      res.status(500).json({ error: "Failed to create branch daily closure" });
+    }
+  });
+
+  // Close (finalize) branch daily closure
+  app.post("/api/branch-daily-closures/:id/close", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const user = req.user;
+      
+      const [closure] = await db.select()
+        .from(branchDailyClosures)
+        .where(eq(branchDailyClosures.id, id));
+      
+      if (!closure) {
+        return res.status(404).json({ error: "Closure not found" });
+      }
+      
+      if (closure.status === 'closed') {
+        return res.status(400).json({ error: "اليومية مغلقة بالفعل" });
+      }
+      
+      const [updated] = await db.update(branchDailyClosures)
+        .set({
+          status: 'closed',
+          closedBy: user.id,
+          closedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(branchDailyClosures.id, id))
+        .returning();
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error closing branch daily closure:", error);
+      res.status(500).json({ error: "Failed to close branch daily closure" });
+    }
+  });
+
+  // Delete branch daily closure (only if open)
+  app.delete("/api/branch-daily-closures/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const user = req.user;
+      
+      // Only admins can delete
+      if (user.role !== 'admin') {
+        return res.status(403).json({ error: "غير مصرح بالحذف" });
+      }
+      
+      const [closure] = await db.select()
+        .from(branchDailyClosures)
+        .where(eq(branchDailyClosures.id, id));
+      
+      if (!closure) {
+        return res.status(404).json({ error: "Closure not found" });
+      }
+      
+      if (closure.status === 'closed') {
+        return res.status(400).json({ error: "لا يمكن حذف يومية مغلقة" });
+      }
+      
+      await db.delete(branchDailyClosures)
+        .where(eq(branchDailyClosures.id, id));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting branch daily closure:", error);
+      res.status(500).json({ error: "Failed to delete branch daily closure" });
+    }
+  });
+
+  // ==================== End Branch Daily Closures Module ====================
 
   // Comprehensive Operations Reports Dashboard
   app.get("/api/operations/reports", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
