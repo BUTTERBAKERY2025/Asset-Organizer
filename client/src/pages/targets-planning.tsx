@@ -1172,10 +1172,20 @@ export default function TargetsPlanning() {
                         const dateHolidays = getHolidaysForDate(alloc.targetDate);
                         const hasHoliday = dateHolidays.length > 0;
                         
+                        // Check if the day has passed (before today)
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const targetDate = new Date(alloc.targetDate);
+                        targetDate.setHours(0, 0, 0, 0);
+                        const isPast = targetDate < today;
+                        const isToday = targetDate.getTime() === today.getTime();
+                        
                         return (
                           <div
                             key={alloc.id}
                             className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md relative ${
+                              isPast ? 'bg-gray-100 border-gray-300 opacity-60' :
+                              isToday ? 'bg-green-50 border-green-400 ring-2 ring-green-300' :
                               hasHoliday ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300' :
                               alloc.isHoliday ? 'bg-red-50 border-red-200' :
                               alloc.isManualOverride ? 'bg-blue-50 border-blue-200' :
