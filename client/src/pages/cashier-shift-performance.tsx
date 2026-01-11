@@ -215,7 +215,7 @@ export default function CashierShiftPerformance() {
     if (!shiftTargets.length) return { totalTarget: 0, totalAchieved: 0, avgPercent: 0, alertCount: 0 };
     
     const totalTarget = shiftTargets.reduce((sum, t) => sum + (Number(t.targetAmount) || 0), 0);
-    const totalAchieved = shiftTracking.reduce((sum, t) => sum + (Number(t.currentSalesAmount) || 0), 0);
+    const totalAchieved = shiftTracking.reduce((sum, t) => sum + (Number(t.totalSales) || 0), 0);
     const avgPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
     const alertCount = performanceAlerts.filter(a => !a.isRead).length;
     
@@ -232,12 +232,12 @@ export default function CashierShiftPerformance() {
       {
         name: "الشفت الصباحي",
         target: morningTargets.reduce((sum, t) => sum + (Number(t.targetAmount) || 0), 0),
-        achieved: morningTracking.reduce((sum, t) => sum + (Number(t.currentSalesAmount) || 0), 0),
+        achieved: morningTracking.reduce((sum, t) => sum + (Number(t.totalSales) || 0), 0),
       },
       {
         name: "الشفت المسائي",
         target: eveningTargets.reduce((sum, t) => sum + (Number(t.targetAmount) || 0), 0),
-        achieved: eveningTracking.reduce((sum, t) => sum + (Number(t.currentSalesAmount) || 0), 0),
+        achieved: eveningTracking.reduce((sum, t) => sum + (Number(t.totalSales) || 0), 0),
       }
     ];
   }, [shiftTargets, shiftTracking]);
@@ -536,7 +536,7 @@ export default function CashierShiftPerformance() {
                     <div className="space-y-4">
                       {shiftTargets.filter(t => t.shiftType === 'morning').map((target) => {
                         const tracking = shiftTracking.find(t => t.shiftType === 'morning' && t.branchId === target.branchId);
-                        const achieved = tracking ? Number(tracking.currentSalesAmount || 0) : 0;
+                        const achieved = tracking ? Number(tracking.totalSales || 0) : 0;
                         const percent = target.targetAmount ? (achieved / Number(target.targetAmount)) * 100 : 0;
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-morning-${target.id}`}>
@@ -582,7 +582,7 @@ export default function CashierShiftPerformance() {
                     <div className="space-y-4">
                       {shiftTargets.filter(t => t.shiftType === 'evening').map((target) => {
                         const tracking = shiftTracking.find(t => t.shiftType === 'evening' && t.branchId === target.branchId);
-                        const achieved = tracking ? Number(tracking.currentSalesAmount || 0) : 0;
+                        const achieved = tracking ? Number(tracking.totalSales || 0) : 0;
                         const percent = target.targetAmount ? (achieved / Number(target.targetAmount)) * 100 : 0;
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-evening-${target.id}`}>
@@ -652,8 +652,8 @@ export default function CashierShiftPerformance() {
                   ) : (
                     <div className="space-y-4">
                       {shiftTracking.map((track) => {
-                        const currentPercent = Number(track.achievementPercent || 0);
-                        const isActive = !track.shiftEndTime;
+                        const currentPercent = Number(track.achievementPercentage || 0);
+                        const isActive = !track.status;
                         return (
                           <div key={track.id} className="border rounded-lg p-4" data-testid={`tracking-${track.id}`}>
                             <div className="flex items-center justify-between mb-3">
@@ -678,16 +678,16 @@ export default function CashierShiftPerformance() {
                             <div className="grid grid-cols-3 gap-4 mt-3 text-sm">
                               <div className="text-center">
                                 <p className="text-muted-foreground">المعاملات</p>
-                                <p className="font-semibold">{track.currentTransactions || 0}</p>
+                                <p className="font-semibold">{track.totalTransactions || 0}</p>
                               </div>
                               <div className="text-center">
                                 <p className="text-muted-foreground">متوسط الفاتورة</p>
-                                <p className="font-semibold">{formatCurrency(Number(track.currentAverageTicket || 0))}</p>
+                                <p className="font-semibold">{formatCurrency(Number(track.averageTicket || 0))}</p>
                               </div>
                               <div className="text-center">
                                 <p className="text-muted-foreground">آخر تحديث</p>
                                 <p className="font-semibold text-xs">
-                                  {track.lastUpdatedAt ? new Date(track.lastUpdatedAt).toLocaleTimeString('ar-SA') : '-'}
+                                  {track.updatedAt ? new Date(track.updatedAt).toLocaleTimeString('ar-SA') : '-'}
                                 </p>
                               </div>
                             </div>

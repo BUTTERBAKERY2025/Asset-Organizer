@@ -11,6 +11,8 @@ import {
   jsonb,
   boolean,
   doublePrecision,
+  date,
+  numeric,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -2990,36 +2992,25 @@ export const shiftPerformanceTracking = pgTable("shift_performance_tracking", {
   branchId: varchar("branch_id")
     .notNull()
     .references(() => branches.id),
-  trackingDate: text("tracking_date").notNull(), // YYYY-MM-DD
-  shiftType: text("shift_type").notNull(), // morning, evening, night
-  shiftStartTime: text("shift_start_time").notNull(), // HH:MM
-  shiftEndTime: text("shift_end_time"), // HH:MM (null if ongoing)
-  // Target metrics
-  shiftTargetAmount: real("shift_target_amount").notNull(),
-  expectedAtCurrentTime: real("expected_at_current_time").default(0), // المتوقع حتى الآن
+  shiftType: varchar("shift_type").notNull(), // morning, evening
+  trackingDate: date("tracking_date").notNull(), // YYYY-MM-DD
   // Actual metrics
-  currentSalesAmount: real("current_sales_amount").default(0).notNull(),
-  currentTransactions: integer("current_transactions").default(0),
-  currentAverageTicket: real("current_average_ticket").default(0),
-  currentCashierCount: integer("current_cashier_count").default(0),
+  totalSales: numeric("total_sales").default("0"),
+  totalTransactions: integer("total_transactions").default(0),
+  averageTicket: numeric("average_ticket").default("0"),
+  // Target metrics
+  targetSales: numeric("target_sales").default("0"),
+  targetTransactions: integer("target_transactions").default(0),
   // Performance indicators
-  achievementPercent: real("achievement_percent").default(0),
-  progressStatus: text("progress_status").default("on_track"), // on_track, behind, ahead, critical
-  estimatedEndAmount: real("estimated_end_amount").default(0), // التقدير للنهاية
-  // Cashier breakdown
-  topCashierId: varchar("top_cashier_id").references(() => users.id),
-  topCashierSales: real("top_cashier_sales").default(0),
-  lowestCashierId: varchar("lowest_cashier_id").references(() => users.id),
-  lowestCashierSales: real("lowest_cashier_sales").default(0),
+  achievementPercentage: numeric("achievement_percentage").default("0"),
+  status: varchar("status").default("in_progress"), // in_progress, completed
   // Timestamps
-  lastUpdatedAt: timestamp("last_updated_at").defaultNow().notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertShiftPerformanceTrackingSchema = createInsertSchema(shiftPerformanceTracking).omit({
   id: true,
-  lastUpdatedAt: true,
-  createdAt: true,
+  updatedAt: true,
 });
 
 export type ShiftPerformanceTracking = typeof shiftPerformanceTracking.$inferSelect;
