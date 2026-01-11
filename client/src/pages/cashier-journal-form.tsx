@@ -487,7 +487,14 @@ export default function CashierJournalFormPage() {
   };
 
   const getBreakdownTotal = () => {
-    return paymentBreakdowns.reduce((sum, b) => sum + (b.amount || 0), 0);
+    return paymentBreakdowns.reduce((sum, b) => {
+      const amount = b.amount || 0;
+      if (isBankPaymentMethod(b.paymentMethod)) {
+        const terminalAmount = b.terminalAmount || 0;
+        return sum + Math.max(amount, terminalAmount);
+      }
+      return sum + amount;
+    }, 0);
   };
 
   // Calculate total bank reconciliation discrepancy
