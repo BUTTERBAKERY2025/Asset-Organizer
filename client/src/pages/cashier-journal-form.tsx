@@ -532,9 +532,12 @@ export default function CashierJournalFormPage() {
     return paymentBreakdowns.reduce((sum, b) => sum + (b.amount || 0), 0);
   };
 
-  // Net sales = Total Sales - Returns
+  // Net sales = Total Sales from payment breakdowns - Returns
+  // IMPORTANT: Use getBreakdownTotal() instead of formData.totalSales 
+  // because formData.totalSales is not automatically updated from payment breakdowns
   const getNetSales = () => {
-    return formData.totalSales - (returnData.hasReturn ? returnData.returnAmount : 0);
+    const totalFromBreakdowns = getBreakdownTotal();
+    return totalFromBreakdowns - (returnData.hasReturn ? returnData.returnAmount : 0);
   };
 
   // Get adjusted breakdown total (subtracts return from appropriate payment method)
@@ -1858,8 +1861,8 @@ export default function CashierJournalFormPage() {
                         </div>
                       ) : (
                         <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-muted-foreground">إجمالي المبيعات (POS)</span>
-                          <span className="font-bold text-lg">{netSalesForRecon.toFixed(2)} ر.س</span>
+                          <span className="text-muted-foreground">إجمالي المبيعات (من التفصيل)</span>
+                          <span className="font-bold text-lg">{getBreakdownTotal().toFixed(2)} ر.س</span>
                         </div>
                       )}
                       
@@ -2117,7 +2120,7 @@ export default function CashierJournalFormPage() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">إجمالي المبيعات</span>
-                  <span className="font-bold text-lg">{formData.totalSales.toFixed(2)} ر.س</span>
+                  <span className="font-bold text-lg">{getBreakdownTotal().toFixed(2)} ر.س</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-sm">
