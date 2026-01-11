@@ -2942,32 +2942,24 @@ export type InsertAverageTicketTarget = z.infer<typeof insertAverageTicketTarget
 // Performance Alerts - تنبيهات الأداء الفورية
 export const performanceAlerts = pgTable("performance_alerts", {
   id: serial("id").primaryKey(),
-  alertType: text("alert_type").notNull(), // shift_behind, shift_ahead, cashier_behind, cashier_ahead, ticket_low
-  severity: text("severity").notNull(), // info, warning, critical, success
+  cashierId: varchar("cashier_id")
+    .references(() => users.id),
   branchId: varchar("branch_id")
     .notNull()
     .references(() => branches.id),
-  cashierId: varchar("cashier_id")
-    .references(() => users.id),
-  shiftType: text("shift_type"), // morning, evening, night
-  alertDate: text("alert_date").notNull(), // YYYY-MM-DD
-  alertTime: text("alert_time").notNull(), // HH:MM:SS
-  targetAmount: real("target_amount"),
-  currentAmount: real("current_amount"),
-  achievementPercent: real("achievement_percent"),
+  shiftType: varchar("shift_type"), // morning, evening
+  alertType: varchar("alert_type").notNull(), // shift_behind, shift_ahead, cashier_behind, cashier_ahead, ticket_low
+  alertLevel: varchar("alert_level").notNull(), // info, warning, critical, success
   message: text("message").notNull(),
-  messageAr: text("message_ar"), // الرسالة بالعربية
+  currentValue: numeric("current_value"),
+  targetValue: numeric("target_value"),
+  percentage: numeric("percentage"),
   isRead: boolean("is_read").default(false).notNull(),
-  isAcknowledged: boolean("is_acknowledged").default(false).notNull(),
-  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
-  acknowledgedAt: timestamp("acknowledged_at"),
-  metadata: jsonb("metadata"), // بيانات إضافية
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertPerformanceAlertSchema = createInsertSchema(performanceAlerts).omit({
   id: true,
-  acknowledgedAt: true,
   createdAt: true,
 });
 

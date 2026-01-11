@@ -176,12 +176,10 @@ export default function CashierShiftPerformance() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-SA', { 
-      style: 'currency', 
-      currency: 'SAR',
+    return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 0,
       maximumFractionDigits: 0 
-    }).format(amount);
+    }).format(amount) + ' ر.س';
   };
 
   const getPercentColor = (percent: number) => {

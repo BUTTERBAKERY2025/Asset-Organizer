@@ -5546,7 +5546,6 @@ export class DatabaseStorage implements IStorage {
   async getAllPerformanceAlerts(filters?: { branchId?: string; date?: string; isRead?: boolean }): Promise<PerformanceAlert[]> {
     const conditions = [];
     if (filters?.branchId) conditions.push(eq(performanceAlerts.branchId, filters.branchId));
-    if (filters?.date) conditions.push(eq(performanceAlerts.alertDate, filters.date));
     if (filters?.isRead !== undefined) conditions.push(eq(performanceAlerts.isRead, filters.isRead));
     
     if (conditions.length > 0) {
@@ -5577,10 +5576,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async acknowledgeAlert(id: number, acknowledgedBy: string): Promise<PerformanceAlert | undefined> {
+    // Mark as read since acknowledge columns don't exist in database
     const [updated] = await db.update(performanceAlerts).set({ 
-      isAcknowledged: true, 
-      acknowledgedBy, 
-      acknowledgedAt: new Date() 
+      isRead: true
     }).where(eq(performanceAlerts.id, id)).returning();
     return updated;
   }
