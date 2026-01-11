@@ -1441,10 +1441,14 @@ export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   discrepancyAmount: real("discrepancy_amount").default(0).notNull(), // مبلغ الفرق النقدي
   discrepancyStatus: text("discrepancy_status").default("balanced").notNull(), // balanced, shortage, surplus
 
-  // NOTE: Bank Reconciliation columns are computed on-the-fly from payment breakdowns
-  // The following columns will be added after running supabase_cashier_bank_reconciliation.sql:
-  // totalBankPosAmount, totalBankTerminalAmount, bankDiscrepancyTotal, bankDiscrepancyStatus,
-  // isInputError, inputErrorAmount, netDiscrepancy
+  // Bank Reconciliation columns - مطابقة البنك
+  totalBankPosAmount: real("total_bank_pos_amount").default(0), // إجمالي المدفوعات البنكية من الكاشير
+  totalBankTerminalAmount: real("total_bank_terminal_amount").default(0), // إجمالي المدفوعات البنكية من التيرمنال
+  bankDiscrepancyTotal: real("bank_discrepancy_total").default(0), // إجمالي الفرق البنكي
+  bankDiscrepancyStatus: text("bank_discrepancy_status").default("balanced"), // حالة المطابقة البنكية
+  isInputError: boolean("is_input_error").default(false), // هل الفرق بسبب خطأ إدخال
+  inputErrorAmount: real("input_error_amount").default(0), // مبلغ خطأ الإدخال
+  netDiscrepancy: real("net_discrepancy").default(0), // صافي الفرق
 
   // إحصائيات
   customerCount: integer("customer_count").default(0), // عدد العملاء
@@ -1491,8 +1495,12 @@ export const cashierPaymentBreakdowns = pgTable("cashier_payment_breakdowns", {
   paymentMethod: text("payment_method").notNull(), // cash, card, mada, stc_pay, apple_pay, visa, mastercard, delivery_app, other
   amount: real("amount").default(0).notNull(), // المبلغ من نظام الكاشير (POS)
   
-  // NOTE: Bank Reconciliation columns will be added after running supabase_cashier_bank_reconciliation.sql:
-  // posAmount, terminalAmount, bankDiscrepancy, bankDiscrepancyType, terminalTransactionCount
+  // Bank Reconciliation columns - مطابقة البنك
+  posAmount: real("pos_amount").default(0), // المبلغ من نظام نقاط البيع (POS)
+  terminalAmount: real("terminal_amount").default(0), // المبلغ من جهاز الصراف البنكي (Terminal)
+  bankDiscrepancy: real("bank_discrepancy").default(0), // الفرق بين POS والتيرمنال
+  bankDiscrepancyType: text("bank_discrepancy_type").default("balanced"), // نوع الفرق: balanced, shortage, surplus
+  terminalTransactionCount: integer("terminal_transaction_count").default(0), // عدد العمليات من جهاز البنك
   
   transactionCount: integer("transaction_count").default(0), // عدد العمليات من الكاشير
   notes: text("notes"),
