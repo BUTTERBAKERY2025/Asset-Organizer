@@ -11,10 +11,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -133,6 +134,16 @@ export default function CashierJournalFormPage() {
     { paymentMethod: "cash", amount: 0, transactionCount: 0 },
   ]);
 
+  // Returns state - المرتجع
+  const [showReturns, setShowReturns] = useState(false);
+  const [returnData, setReturnData] = useState({
+    returnAmount: 0,
+    returnPaymentMethod: "cash",
+    returnReason: "",
+    returnReference: "",
+    hasReturn: false,
+  });
+
   const [attachments, setAttachments] = useState<JournalAttachment[]>([]);
   const [pendingAttachments, setPendingAttachments] = useState<{
     attachmentType: AttachmentType;
@@ -203,6 +214,17 @@ export default function CashierJournalFormPage() {
             terminalTransactionCount: b.terminalTransactionCount || 0,
           }))
         );
+      }
+      // Load returns data
+      if ((existingJournal as any).hasReturn || (existingJournal as any).returnAmount > 0) {
+        setReturnData({
+          returnAmount: (existingJournal as any).returnAmount || 0,
+          returnPaymentMethod: (existingJournal as any).returnPaymentMethod || "cash",
+          returnReason: (existingJournal as any).returnReason || "",
+          returnReference: (existingJournal as any).returnReference || "",
+          hasReturn: (existingJournal as any).hasReturn || false,
+        });
+        setShowReturns(true);
       }
     }
   }, [existingJournal]);
@@ -366,6 +388,12 @@ export default function CashierJournalFormPage() {
       paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0 || (b.terminalAmount && b.terminalAmount > 0)),
       signatureData,
       signerName: formData.cashierName,
+      // Returns data
+      returnAmount: returnData.hasReturn ? returnData.returnAmount : 0,
+      returnPaymentMethod: returnData.hasReturn ? returnData.returnPaymentMethod : null,
+      returnReason: returnData.hasReturn ? returnData.returnReason : null,
+      returnReference: returnData.hasReturn ? returnData.returnReference : null,
+      hasReturn: returnData.hasReturn,
     };
 
     if (isEdit) {
@@ -422,6 +450,12 @@ export default function CashierJournalFormPage() {
       const data = {
         ...formData,
         paymentBreakdowns: paymentBreakdowns.filter((b) => b.amount > 0 || (b.terminalAmount && b.terminalAmount > 0)),
+        // Returns data
+        returnAmount: returnData.hasReturn ? returnData.returnAmount : 0,
+        returnPaymentMethod: returnData.hasReturn ? returnData.returnPaymentMethod : null,
+        returnReason: returnData.hasReturn ? returnData.returnReason : null,
+        returnReference: returnData.hasReturn ? returnData.returnReference : null,
+        hasReturn: returnData.hasReturn,
       };
       await updateMutation.mutateAsync(data);
     }
@@ -492,6 +526,20 @@ export default function CashierJournalFormPage() {
     return paymentBreakdowns.reduce((sum, b) => sum + (b.amount || 0), 0);
   };
 
+  // Net sales = Total Sales - Returns
+  const getNetSales = () => {
+    return formData.totalSales - (returnData.hasReturn ? returnData.returnAmount : 0);
+  };
+
+  // Get adjusted breakdown total (subtracts return from appropriate payment method)
+  const getAdjustedBreakdownTotal = () => {
+    const grossTotal = getBreakdownTotal();
+    if (!returnData.hasReturn || returnData.returnAmount <= 0) {
+      return grossTotal;
+    }
+    return grossTotal - returnData.returnAmount;
+  };
+
   // Calculate total bank reconciliation discrepancy
   const getBankReconciliationSummary = () => {
     const bankPayments = paymentBreakdowns.filter(b => isBankPaymentMethod(b.paymentMethod) && (b.amount > 0 || b.terminalAmount));
@@ -531,13 +579,24 @@ export default function CashierJournalFormPage() {
   };
 
   const getTotalsMismatch = () => {
+    // Compare breakdown total with total sales
+    // If there's a return, compare gross totals (return is separate line item, not part of breakdown)
     const breakdownTotal = getBreakdownTotal();
     const diff = Math.abs(formData.totalSales - breakdownTotal);
     return diff > 0.01;
   };
 
   const calculateDiscrepancy = () => {
-    return formData.actualCashDrawer - formData.cashTotal;
+    // Use adjusted cash total if there's a cash return
+    const adjustedCategoryTotals = getAdjustedCategoryTotals();
+    const expectedCash = adjustedCategoryTotals.cash;
+    return formData.actualCashDrawer - expectedCash;
+  };
+
+  // Calculate discrepancy for display (same as above but clearer)
+  const getExpectedCashInDrawer = () => {
+    const adjustedCategoryTotals = getAdjustedCategoryTotals();
+    return adjustedCategoryTotals.cash;
   };
 
   const calculateAverageTicket = () => {
@@ -562,6 +621,21 @@ export default function CashierJournalFormPage() {
         totals[method.category as keyof typeof totals] += b.amount || 0;
       }
     });
+    return totals;
+  };
+
+  // Get category totals adjusted for returns (subtracts return from appropriate category)
+  const getAdjustedCategoryTotals = () => {
+    const totals = getCategoryTotals();
+    if (!returnData.hasReturn || returnData.returnAmount <= 0) {
+      return totals;
+    }
+    
+    // Find which category the return payment method belongs to
+    const method = PAYMENT_METHODS.find((m) => m.value === returnData.returnPaymentMethod);
+    if (method) {
+      totals[method.category as keyof typeof totals] -= returnData.returnAmount;
+    }
     return totals;
   };
 
@@ -1413,6 +1487,156 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
+            {/* Returns Section - المرتجع */}
+            <Card className={`border-2 ${showReturns && returnData.hasReturn ? 'border-red-300 bg-red-50/30' : 'border-gray-200'}`}>
+              <CardHeader className={`pb-2 ${showReturns && returnData.hasReturn ? 'bg-red-50' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <RotateCcw className="w-5 h-5 text-red-600" />
+                    <CardTitle className={`text-base ${showReturns && returnData.hasReturn ? 'text-red-700' : 'text-gray-600'}`}>
+                      المرتجعات
+                    </CardTitle>
+                    {returnData.hasReturn && returnData.returnAmount > 0 && (
+                      <Badge variant="destructive" className="mr-2">
+                        -{returnData.returnAmount.toFixed(2)} ر.س
+                      </Badge>
+                    )}
+                  </div>
+                  {!isReadOnly && (
+                    <Button
+                      type="button"
+                      variant={showReturns ? "destructive" : "outline"}
+                      size="sm"
+                      className="h-9"
+                      onClick={() => {
+                        if (showReturns) {
+                          setShowReturns(false);
+                          setReturnData({ returnAmount: 0, returnPaymentMethod: "cash", returnReason: "", returnReference: "", hasReturn: false });
+                        } else {
+                          setShowReturns(true);
+                          setReturnData(prev => ({ ...prev, hasReturn: true }));
+                        }
+                      }}
+                      data-testid="button-toggle-returns"
+                    >
+                      {showReturns ? (
+                        <>
+                          <X className="w-4 h-4 ml-1" />
+                          إلغاء المرتجع
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 ml-1" />
+                          إضافة مرتجع
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+                {!showReturns && !returnData.hasReturn && (
+                  <CardDescription className="text-gray-500 text-sm mt-1">
+                    اضغط على "إضافة مرتجع" في حال وجود مرتجع يُخصم من المبيعات
+                  </CardDescription>
+                )}
+              </CardHeader>
+              
+              {showReturns && (
+                <CardContent className="space-y-4 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-red-700 font-medium">مبلغ المرتجع (ر.س) *</Label>
+                      <Input
+                        type="number"
+                        value={returnData.returnAmount || ""}
+                        onChange={(e) => setReturnData(prev => ({ ...prev, returnAmount: parseFloat(e.target.value) || 0 }))}
+                        className="h-11 border-red-200 focus:border-red-400 text-lg font-bold"
+                        placeholder="0.00"
+                        disabled={isReadOnly}
+                        data-testid="input-return-amount"
+                      />
+                      <p className="text-xs text-red-600">هذا المبلغ سيُخصم من إجمالي المبيعات</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-red-700 font-medium">طريقة الاسترداد *</Label>
+                      <Select
+                        value={returnData.returnPaymentMethod}
+                        onValueChange={(v) => setReturnData(prev => ({ ...prev, returnPaymentMethod: v }))}
+                        disabled={isReadOnly}
+                      >
+                        <SelectTrigger className="h-11 border-red-200" data-testid="select-return-method">
+                          <SelectValue placeholder="اختر طريقة الاسترداد" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">نقداً</SelectItem>
+                          <SelectItem value="mada">مدى</SelectItem>
+                          <SelectItem value="visa">فيزا</SelectItem>
+                          <SelectItem value="mastercard">ماستركارد</SelectItem>
+                          <SelectItem value="apple_pay">Apple Pay</SelectItem>
+                          <SelectItem value="stc_pay">STC Pay</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">طريقة الدفع التي استخدمها العميل في الشراء الأصلي</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-gray-700">رقم فاتورة المرتجع (اختياري)</Label>
+                      <Input
+                        type="text"
+                        value={returnData.returnReference || ""}
+                        onChange={(e) => setReturnData(prev => ({ ...prev, returnReference: e.target.value }))}
+                        className="h-11"
+                        placeholder="مثال: INV-2024-001234"
+                        disabled={isReadOnly}
+                        data-testid="input-return-reference"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-gray-700">سبب المرتجع (اختياري)</Label>
+                      <Input
+                        type="text"
+                        value={returnData.returnReason || ""}
+                        onChange={(e) => setReturnData(prev => ({ ...prev, returnReason: e.target.value }))}
+                        className="h-11"
+                        placeholder="مثال: المنتج غير مطابق للطلب"
+                        disabled={isReadOnly}
+                        data-testid="input-return-reason"
+                      />
+                    </div>
+                  </div>
+                  
+                  {returnData.returnAmount > 0 && (
+                    <div className="p-4 bg-red-100 border border-red-300 rounded-lg">
+                      <div className="flex items-center gap-2 text-red-700 font-bold text-lg">
+                        <AlertCircle className="w-5 h-5" />
+                        <span>تأثير المرتجع على اليومية:</span>
+                      </div>
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">إجمالي المبيعات الأصلي:</span>
+                          <span className="font-medium">{formData.totalSales.toFixed(2)} ر.س</span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>المرتجع:</span>
+                          <span className="font-medium">-{returnData.returnAmount.toFixed(2)} ر.س</span>
+                        </div>
+                        <Separator className="bg-red-300" />
+                        <div className="flex justify-between text-lg font-bold">
+                          <span>صافي المبيعات:</span>
+                          <span className="text-red-700">{getNetSales().toFixed(2)} ر.س</span>
+                        </div>
+                        {returnData.returnPaymentMethod === "cash" && (
+                          <p className="text-xs text-red-600 mt-2 bg-red-200 p-2 rounded">
+                            ⚠️ سيتم خصم المرتجع من النقد المتوقع في الصندوق
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+
             <Card className="border-2 border-amber-200">
               <CardHeader className="bg-amber-50">
                 <CardTitle className="flex items-center gap-2">
@@ -1425,8 +1649,20 @@ export default function CashierJournalFormPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>المبيعات النقدية المتوقعة (ر.س)</Label>
-                    <Input type="number" value={formData.cashTotal.toFixed(2)} readOnly className="bg-muted text-lg font-bold h-11 sm:h-10" data-testid="input-expected-cash" />
-                    <p className="text-xs text-muted-foreground">تُحسب تلقائياً من تفصيل المبيعات النقدية</p>
+                    <Input 
+                      type="number" 
+                      value={getExpectedCashInDrawer().toFixed(2)} 
+                      readOnly 
+                      className="bg-muted text-lg font-bold h-11 sm:h-10" 
+                      data-testid="input-expected-cash" 
+                    />
+                    {returnData.hasReturn && returnData.returnPaymentMethod === "cash" && returnData.returnAmount > 0 ? (
+                      <p className="text-xs text-red-600">
+                        النقد الأصلي: {formData.cashTotal.toFixed(2)} - المرتجع: {returnData.returnAmount.toFixed(2)} = {getExpectedCashInDrawer().toFixed(2)} ر.س
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">تُحسب تلقائياً من تفصيل المبيعات النقدية</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>الرصيد الفعلي في الصندوق (ر.س) *</Label>
@@ -1834,12 +2070,42 @@ export default function CashierJournalFormPage() {
                   )}
                 </div>
                 
+                {/* Returns Summary */}
+                {returnData.hasReturn && returnData.returnAmount > 0 && (
+                  <>
+                    <Separator />
+                    <div className="text-xs font-semibold text-red-600">المرتجع</div>
+                    <div className="p-2 bg-red-50 rounded border border-red-200">
+                      <div className="flex justify-between text-sm text-red-700">
+                        <span className="flex items-center gap-1">
+                          <RotateCcw className="w-3 h-3" />
+                          مبلغ المرتجع
+                        </span>
+                        <span className="font-bold">-{returnData.returnAmount.toFixed(2)} ر.س</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-red-600 mt-1">
+                        <span>طريقة الاسترداد:</span>
+                        <span>{PAYMENT_METHODS.find(m => m.value === returnData.returnPaymentMethod)?.label || returnData.returnPaymentMethod}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold mt-2 pt-2 border-t border-red-200">
+                        <span>صافي المبيعات:</span>
+                        <span>{getNetSales().toFixed(2)} ر.س</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
                 <Separator />
                 <div className="text-xs font-semibold text-muted-foreground">تسوية النقدي</div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">المبيعات النقدية</span>
-                  <span className="font-medium">{formData.cashTotal.toFixed(2)} ر.س</span>
+                  <span className="font-medium">{getExpectedCashInDrawer().toFixed(2)} ر.س</span>
                 </div>
+                {returnData.hasReturn && returnData.returnPaymentMethod === "cash" && returnData.returnAmount > 0 && (
+                  <div className="text-xs text-red-600 pr-2">
+                    (الأصل: {formData.cashTotal.toFixed(2)} - مرتجع: {returnData.returnAmount.toFixed(2)})
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">الرصيد الفعلي</span>
                   <span className="font-medium">{formData.actualCashDrawer.toFixed(2)} ر.س</span>
