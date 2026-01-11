@@ -1701,6 +1701,128 @@ export const JOURNAL_STATUS_LABELS: Record<JournalStatus, string> = {
   rejected: "مرفوض",
 };
 
+// ==================== Branch Daily Closures Module ====================
+
+// Branch Daily Closures table - الإغلاق اليومي للفرع (اليومية المجمعة)
+export const branchDailyClosures = pgTable("branch_daily_closures", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  closureDate: text("closure_date").notNull(), // تاريخ الإغلاق
+
+  // إجمالي المبيعات المجمعة
+  totalSales: real("total_sales").default(0).notNull(),
+  cashTotal: real("cash_total").default(0).notNull(),
+  networkTotal: real("network_total").default(0).notNull(),
+  deliveryTotal: real("delivery_total").default(0).notNull(),
+
+  // إجمالي الصندوق النقدي
+  totalOpeningBalance: real("total_opening_balance").default(0).notNull(),
+  totalExpectedCash: real("total_expected_cash").default(0).notNull(),
+  totalActualCash: real("total_actual_cash").default(0).notNull(),
+  totalCashDiscrepancy: real("total_cash_discrepancy").default(0).notNull(),
+  cashDiscrepancyStatus: text("cash_discrepancy_status").default("balanced").notNull(),
+
+  // مطابقة البنك المجمعة
+  totalBankPosAmount: real("total_bank_pos_amount").default(0),
+  totalBankTerminalAmount: real("total_bank_terminal_amount").default(0),
+  totalBankDiscrepancy: real("total_bank_discrepancy").default(0),
+  bankDiscrepancyStatus: text("bank_discrepancy_status").default("balanced"),
+
+  // إحصائيات مجمعة
+  totalCustomerCount: integer("total_customer_count").default(0),
+  totalTransactionCount: integer("total_transaction_count").default(0),
+  averageTicket: real("average_ticket").default(0),
+  journalsCount: integer("journals_count").default(0).notNull(), // عدد اليوميات المجمعة
+
+  // الحالة
+  status: text("status").default("open").notNull(), // open, closed
+  closedBy: varchar("closed_by").references(() => users.id),
+  closedAt: timestamp("closed_at"),
+
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_closure_branch_date").on(table.branchId, table.closureDate),
+  index("idx_daily_closure_status").on(table.status),
+]);
+
+export const insertBranchDailyClosureSchema = createInsertSchema(
+  branchDailyClosures,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  closedAt: true,
+});
+
+export type BranchDailyClosure = typeof branchDailyClosures.$inferSelect;
+export type InsertBranchDailyClosure = z.infer<typeof insertBranchDailyClosureSchema>;
+
+// Branch Daily Closure Payments - تفاصيل الدفع المجمعة
+export const branchDailyClosurePayments = pgTable("branch_daily_closure_payments", {
+  id: serial("id").primaryKey(),
+  closureId: integer("closure_id")
+    .notNull()
+    .references(() => branchDailyClosures.id, { onDelete: "cascade" }),
+  paymentMethod: text("payment_method").notNull(),
+  totalAmount: real("total_amount").default(0).notNull(),
+  totalPosAmount: real("total_pos_amount").default(0),
+  totalTerminalAmount: real("total_terminal_amount").default(0),
+  totalBankDiscrepancy: real("total_bank_discrepancy").default(0),
+  bankDiscrepancyType: text("bank_discrepancy_type").default("balanced"),
+  totalTransactionCount: integer("total_transaction_count").default(0),
+  totalTerminalTransactionCount: integer("total_terminal_transaction_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertBranchDailyClosurePaymentSchema = createInsertSchema(
+  branchDailyClosurePayments,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BranchDailyClosurePayment = typeof branchDailyClosurePayments.$inferSelect;
+export type InsertBranchDailyClosurePayment = z.infer<typeof insertBranchDailyClosurePaymentSchema>;
+
+// Branch Daily Closure Journals - ربط اليومية المجمعة باليوميات الفردية
+export const branchDailyClosureJournals = pgTable("branch_daily_closure_journals", {
+  id: serial("id").primaryKey(),
+  closureId: integer("closure_id")
+    .notNull()
+    .references(() => branchDailyClosures.id, { onDelete: "cascade" }),
+  journalId: integer("journal_id")
+    .notNull()
+    .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_closure_journal_closure").on(table.closureId),
+  index("idx_closure_journal_journal").on(table.journalId),
+]);
+
+export const insertBranchDailyClosureJournalSchema = createInsertSchema(
+  branchDailyClosureJournals,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BranchDailyClosureJournal = typeof branchDailyClosureJournals.$inferSelect;
+export type InsertBranchDailyClosureJournal = z.infer<typeof insertBranchDailyClosureJournalSchema>;
+
+// Closure status labels
+export const CLOSURE_STATUS = ["open", "closed"] as const;
+export type ClosureStatus = (typeof CLOSURE_STATUS)[number];
+
+export const CLOSURE_STATUS_LABELS: Record<ClosureStatus, string> = {
+  open: "مفتوح",
+  closed: "مُغلق",
+};
+
 // ==========================================
 // نظام الأهداف والحوافز - Targets & Incentives System
 // ==========================================
