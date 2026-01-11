@@ -9,7 +9,7 @@ import {
   FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, 
   ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, 
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
-  Receipt, PieChart
+  Receipt, PieChart, Lock
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -156,6 +156,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Receipt,
         items: [
           { href: "/cashier-journals", label: "يومية الكاشير", icon: Wallet, module: "cashier_journal", isHeader: true },
+          { href: "/branch-daily-closures", label: "الإغلاقات اليومية", icon: Lock, module: "cashier_journal", indent: true },
           { href: "/sales-analytics", label: "تحليلات المبيعات", icon: PieChart, module: "sales_analytics", indent: true },
           { href: "/targets-planning", label: "تخطيط الأهداف", icon: Target, module: "targets_planning", indent: true },
           { href: "/targets-dashboard", label: "لوحة الأهداف", icon: TrendingUp, module: "targets", indent: true },

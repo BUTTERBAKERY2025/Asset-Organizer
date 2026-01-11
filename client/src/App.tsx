@@ -38,6 +38,8 @@ import ProductionPage from "@/pages/production";
 import QualityControlPage from "@/pages/quality-control";
 import CashierJournalsPage from "@/pages/cashier-journals";
 import CashierJournalFormPage from "@/pages/cashier-journal-form";
+import BranchDailyClosingPage from "@/pages/branch-daily-closing";
+import BranchDailyClosuresPage from "@/pages/branch-daily-closures";
 import OperationsEmployeesPage from "@/pages/operations-employees";
 import TargetsPlanningPage from "@/pages/targets-planning";
 import TargetsDashboardPage from "@/pages/targets-dashboard";
@@ -145,6 +147,8 @@ function Router() {
       <Route path="/cashier-journals">{() => <ModulePage component={CashierJournalsPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/new">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/:id">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
+      <Route path="/branch-daily-closures">{() => <ModulePage component={BranchDailyClosuresPage} module="cashier_journal" />}</Route>
+      <Route path="/branch-daily-closing">{() => <ModulePage component={BranchDailyClosingPage} module="cashier_journal" />}</Route>
       <Route path="/sales-analytics">{() => <ModulePage component={SalesAnalyticsPage} module="sales_analytics" />}</Route>
       <Route path="/targets-planning">{() => <ModulePage component={TargetsPlanningPage} module="targets_planning" />}</Route>
       <Route path="/targets-dashboard">{() => <ModulePage component={TargetsDashboardPage} module="targets" />}</Route>
