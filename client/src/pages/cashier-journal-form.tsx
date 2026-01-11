@@ -1474,6 +1474,129 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
+            {/* Comprehensive Reconciliation Summary - ملخص التسوية الشاملة */}
+            {(() => {
+              const bankSummary = getBankReconciliationSummary();
+              const totalTerminal = bankSummary.totalTerminalAmount || 0;
+              const actualCash = formData.actualCashDrawer || 0;
+              const totalActualCollected = actualCash + totalTerminal;
+              const totalSales = formData.totalSales || 0;
+              const netVariance = totalActualCollected - totalSales;
+              
+              const cashDiscrepancy = calculateDiscrepancy(); // actual - expected (positive = surplus)
+              const bankDiscrepancy = bankSummary.discrepancy; // terminal - pos (positive = surplus)
+              
+              // Detect misclassification: cash surplus offsets bank shortage (or vice versa)
+              const hasMisclassification = Math.abs(cashDiscrepancy) > 5 && 
+                Math.abs(bankDiscrepancy) > 5 && 
+                (cashDiscrepancy * bankDiscrepancy) < 0 && // opposite signs
+                Math.abs(Math.abs(cashDiscrepancy) - Math.abs(bankDiscrepancy)) < 25;
+              
+              // Variance classification
+              const absVariance = Math.abs(netVariance);
+              const varianceType = absVariance <= 5 ? 'balanced' : 
+                absVariance <= 25 ? 'warning' : 'critical';
+              const varianceColor = varianceType === 'balanced' ? 'bg-emerald-100 border-emerald-300 text-emerald-800' :
+                varianceType === 'warning' ? 'bg-amber-100 border-amber-300 text-amber-800' :
+                'bg-red-100 border-red-300 text-red-800';
+              
+              if (bankSummary.bankPayments.length === 0 && actualCash === 0) return null;
+              
+              return (
+                <Card className="border-2 border-purple-200">
+                  <CardHeader className="bg-purple-50">
+                    <CardTitle className="flex items-center gap-2">
+                      <Calculator className="w-5 h-5" />
+                      ملخص التسوية الشاملة
+                    </CardTitle>
+                    <CardDescription>مقارنة المبيعات المسجلة بالمحصل الفعلي (نقد + بنك)</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4 pt-4">
+                    {/* Main Calculation */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+                        <span className="text-muted-foreground">إجمالي المبيعات (POS)</span>
+                        <span className="font-bold text-lg">{totalSales.toFixed(2)} ر.س</span>
+                      </div>
+                      
+                      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-sm text-blue-600 mb-2 font-medium">المحصل الفعلي:</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">النقد الفعلي:</span>
+                            <span className="font-medium">{actualCash.toFixed(2)} ر.س</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">إيداعات التيرمنال:</span>
+                            <span className="font-medium">{totalTerminal.toFixed(2)} ر.س</span>
+                          </div>
+                        </div>
+                        <Separator className="my-2" />
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">إجمالي المحصل:</span>
+                          <span className="font-bold text-lg text-blue-700">{totalActualCollected.toFixed(2)} ر.س</span>
+                        </div>
+                      </div>
+                      
+                      {/* Net Variance */}
+                      <div className={`p-4 rounded-lg border-2 ${varianceColor}`}>
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-lg">صافي الفرق النهائي:</span>
+                          <span className="font-bold text-xl">
+                            {netVariance >= 0 ? '+' : ''}{netVariance.toFixed(2)} ر.س
+                            {varianceType === 'balanced' && ' ✓'}
+                          </span>
+                        </div>
+                        <p className="text-sm mt-1">
+                          {netVariance > 5 ? 'زيادة في المحصل عن المبيعات المسجلة' : 
+                           netVariance < -5 ? 'عجز في المحصل عن المبيعات المسجلة' : 
+                           'الفرق ضمن الحد المقبول (±5 ر.س)'}
+                        </p>
+                      </div>
+                      
+                      {/* Component Breakdown */}
+                      <div className="p-3 bg-gray-50 rounded-lg border">
+                        <div className="text-sm text-muted-foreground mb-2">تفصيل الفروقات:</div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div className={`p-2 rounded ${cashDiscrepancy > 0.5 ? 'bg-emerald-100' : cashDiscrepancy < -0.5 ? 'bg-red-100' : 'bg-gray-100'}`}>
+                            <div className="text-xs text-muted-foreground">فرق الصندوق النقدي:</div>
+                            <div className="font-bold">{cashDiscrepancy >= 0 ? '+' : ''}{cashDiscrepancy.toFixed(2)} ر.س</div>
+                          </div>
+                          <div className={`p-2 rounded ${bankDiscrepancy > 0.5 ? 'bg-emerald-100' : bankDiscrepancy < -0.5 ? 'bg-red-100' : 'bg-gray-100'}`}>
+                            <div className="text-xs text-muted-foreground">فرق مطابقة البنك:</div>
+                            <div className="font-bold">{bankDiscrepancy >= 0 ? '+' : ''}{bankDiscrepancy.toFixed(2)} ر.س</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Misclassification Alert */}
+                      {hasMisclassification && (
+                        <Alert className="border-orange-300 bg-orange-50">
+                          <AlertCircle className="h-4 w-4 text-orange-600" />
+                          <AlertTitle className="text-orange-700">احتمال خطأ تصنيف الدفع</AlertTitle>
+                          <AlertDescription className="text-orange-600">
+                            {cashDiscrepancy > 0 && bankDiscrepancy < 0 ? (
+                              <>
+                                زيادة النقد (+{cashDiscrepancy.toFixed(2)} ر.س) تقابل عجز البنك ({bankDiscrepancy.toFixed(2)} ر.س)
+                                <br />
+                                <strong>السبب المحتمل:</strong> عميل دفع نقداً لكن الكاشير ضغط زر بطاقة بالخطأ
+                              </>
+                            ) : (
+                              <>
+                                عجز النقد ({cashDiscrepancy.toFixed(2)} ر.س) يقابل زيادة البنك (+{bankDiscrepancy.toFixed(2)} ر.س)
+                                <br />
+                                <strong>السبب المحتمل:</strong> عميل دفع ببطاقة لكن الكاشير ضغط زر نقد بالخطأ
+                              </>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
             <Card>
               <CardHeader>
                 <CardTitle>ملاحظات</CardTitle>
