@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil } from "lucide-react";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter } from "lucide-react";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import type { User, UserPermission, Branch } from "@shared/schema";
 import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
@@ -67,6 +67,11 @@ export default function UsersPage() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Search and filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [filterRole, setFilterRole] = useState<string>("all");
 
   useEffect(() => {
     if (!authLoading && (!isAuthenticated || !isAdmin)) {
@@ -624,50 +629,197 @@ export default function UsersPage() {
         </div>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                قائمة المستخدمين
-                <Badge variant="secondary" className="mr-2">{users.length}</Badge>
-              </CardTitle>
-              <CardDescription>إجمالي عدد المستخدمين: {users.length}</CardDescription>
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  قائمة المستخدمين
+                  <Badge variant="secondary" className="mr-2">{users.length}</Badge>
+                </CardTitle>
+                <CardDescription>إجمالي عدد المستخدمين: {users.length}</CardDescription>
+              </div>
+              <ExportButtons
+                data={users.map(user => ({
+                  ...user,
+                  name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'مستخدم',
+                }))}
+                columns={exportColumns}
+                fileName="users"
+                title="تقرير المستخدمين"
+                sheetName="المستخدمين"
+              />
             </div>
-            <ExportButtons
-              data={users.map(user => ({
-                ...user,
-                name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'مستخدم',
-              }))}
-              columns={exportColumns}
-              fileName="users"
-              title="تقرير المستخدمين"
-              sheetName="المستخدمين"
-            />
+            
+            {/* Search and Filters */}
+            <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Search Input */}
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="بحث بالاسم أو اسم المستخدم..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="pr-10 h-11"
+                      data-testid="input-search-users"
+                    />
+                    {searchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute left-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Branch Filter */}
+                <div className="w-full lg:w-48">
+                  <Select value={filterBranch} onValueChange={(value) => { setFilterBranch(value); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-11" data-testid="filter-branch">
+                      <SelectValue placeholder="الفرع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الفروع</SelectItem>
+                      <SelectItem value="no_branch">بدون فرع</SelectItem>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Role Filter */}
+                <div className="w-full lg:w-40">
+                  <Select value={filterRole} onValueChange={(value) => { setFilterRole(value); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-11" data-testid="filter-role">
+                      <SelectValue placeholder="الصلاحية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الصلاحيات</SelectItem>
+                      {ROLES.map((role) => (
+                        <SelectItem key={role.value} value={role.value}>
+                          {role.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Clear Filters */}
+                {(searchQuery || filterBranch !== "all" || filterRole !== "all") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-11 whitespace-nowrap"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setFilterBranch("all");
+                      setFilterRole("all");
+                      setCurrentPage(1);
+                    }}
+                    data-testid="btn-clear-filters"
+                  >
+                    <X className="h-4 w-4 ml-1" />
+                    مسح الفلاتر
+                  </Button>
+                )}
+              </div>
+              
+              {/* Active Filters Summary */}
+              {(searchQuery || filterBranch !== "all" || filterRole !== "all") && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <Filter className="h-4 w-4" />
+                  <span>الفلاتر النشطة:</span>
+                  {searchQuery && (
+                    <Badge variant="secondary">بحث: {searchQuery}</Badge>
+                  )}
+                  {filterBranch !== "all" && (
+                    <Badge variant="secondary">
+                      الفرع: {filterBranch === "no_branch" ? "بدون فرع" : branches.find(b => b.id === filterBranch)?.name || filterBranch}
+                    </Badge>
+                  )}
+                  {filterRole !== "all" && (
+                    <Badge variant="secondary">
+                      الصلاحية: {ROLES.find(r => r.value === filterRole)?.label || filterRole}
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">المستخدم</TableHead>
-                    <TableHead className="text-right">اسم المستخدم</TableHead>
-                    <TableHead className="text-right">الفرع</TableHead>
-                    <TableHead className="text-right">تاريخ التسجيل</TableHead>
-                    <TableHead className="text-right">الصلاحية</TableHead>
-                    <TableHead className="text-right">الإجراءات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        لا يوجد مستخدمين
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    users
-                      .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-                      .map((user) => (
+            {(() => {
+              // Apply filters
+              const filteredUsers = users.filter(user => {
+                // Search filter
+                if (searchQuery) {
+                  const query = searchQuery.toLowerCase();
+                  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
+                  const username = (user.username || '').toLowerCase();
+                  if (!fullName.includes(query) && !username.includes(query)) {
+                    return false;
+                  }
+                }
+                // Branch filter
+                if (filterBranch !== "all") {
+                  if (filterBranch === "no_branch") {
+                    if (user.branchId) return false;
+                  } else {
+                    if (user.branchId !== filterBranch) return false;
+                  }
+                }
+                // Role filter
+                if (filterRole !== "all" && user.role !== filterRole) {
+                  return false;
+                }
+                return true;
+              });
+              
+              const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+              const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+              
+              return (
+                <>
+                  {/* Results count */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      عرض {paginatedUsers.length} من {filteredUsers.length} مستخدم
+                      {filteredUsers.length !== users.length && ` (من إجمالي ${users.length})`}
+                    </p>
+                  </div>
+                  
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="text-right font-semibold">المستخدم</TableHead>
+                          <TableHead className="text-right font-semibold">اسم المستخدم</TableHead>
+                          <TableHead className="text-right font-semibold">الفرع</TableHead>
+                          <TableHead className="text-right font-semibold">تاريخ التسجيل</TableHead>
+                          <TableHead className="text-right font-semibold">الصلاحية</TableHead>
+                          <TableHead className="text-right font-semibold">الإجراءات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                              {users.length === 0 ? "لا يوجد مستخدمين" : "لا توجد نتائج مطابقة للبحث"}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          paginatedUsers.map((user) => (
                       <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                         <TableCell>
                           <div className="flex items-center gap-3">
@@ -749,15 +901,20 @@ export default function UsersPage() {
                       </TableRow>
                     ))
                   )}
-                </TableBody>
-              </Table>
-            </div>
-            <TablePagination
-              currentPage={currentPage}
-              totalItems={users.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-            />
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {totalPages > 1 && (
+                      <TablePagination
+                        currentPage={currentPage}
+                        totalItems={filteredUsers.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setCurrentPage}
+                      />
+                    )}
+                  </>
+                );
+              })()}
           </CardContent>
         </Card>
       </div>
