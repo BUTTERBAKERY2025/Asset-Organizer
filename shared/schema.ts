@@ -2899,13 +2899,11 @@ export const cashierShiftTargets = pgTable("cashier_shift_targets", {
   targetDate: date("target_date").notNull(), // YYYY-MM-DD
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const insertCashierShiftTargetSchema = createInsertSchema(cashierShiftTargets).omit({
   id: true,
   createdAt: true,
-  updatedAt: true,
 });
 
 export type CashierShiftTarget = typeof cashierShiftTargets.$inferSelect;

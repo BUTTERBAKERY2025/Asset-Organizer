@@ -5483,7 +5483,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCashierShiftTarget(id: number, target: Partial<InsertCashierShiftTarget>): Promise<CashierShiftTarget | undefined> {
-    const [updated] = await db.update(cashierShiftTargets).set({ ...target, updatedAt: new Date() }).where(eq(cashierShiftTargets.id, id)).returning();
+    const [updated] = await db.update(cashierShiftTargets).set(target).where(eq(cashierShiftTargets.id, id)).returning();
     return updated;
   }
 
