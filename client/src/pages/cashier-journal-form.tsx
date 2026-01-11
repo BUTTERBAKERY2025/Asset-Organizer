@@ -1023,8 +1023,9 @@ export default function CashierJournalFormPage() {
           const totalTerminal = bankSummary.totalTerminalAmount || 0;
           const actualCash = formData.actualCashDrawer || 0;
           const totalActualCollected = actualCash + totalTerminal;
-          const totalSalesVal = formData.totalSales || 0;
-          const netVariance = totalActualCollected - totalSalesVal;
+          // Use NET sales (after returns) for comparison
+          const netSalesForRecon = netSales;
+          const netVariance = totalActualCollected - netSalesForRecon;
           
           if (totalTerminal > 0 || actualCash > 0) {
             return `
@@ -1038,7 +1039,13 @@ export default function CashierJournalFormPage() {
               <span>إجمالي المُحصّل</span>
               <span style="color: #2e7d32;">${totalActualCollected.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span>
             </div>
-            <div class="recon-row" style="margin-top: 8px;"><span>إجمالي المبيعات المُسجّل</span><span>${totalSalesVal.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            ${returnData.hasReturn && returnData.returnAmount > 0 ? `
+            <div class="recon-row" style="margin-top: 8px;"><span>إجمالي المبيعات الأصلي</span><span>${formData.totalSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row" style="color: #c62828;"><span>المرتجع</span><span>-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row" style="font-weight: bold;"><span>صافي المبيعات</span><span>${netSalesForRecon.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            ` : `
+            <div class="recon-row" style="margin-top: 8px;"><span>إجمالي المبيعات</span><span>${netSalesForRecon.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            `}
             <div class="recon-row" style="border-top: 1px solid #ddd; padding-top: 4px;">
               <span style="font-weight: bold;">الفارق الإجمالي</span>
               <span style="font-weight: bold; color: ${netVariance >= 0 ? '#2e7d32' : '#c62828'};">
@@ -1774,8 +1781,9 @@ export default function CashierJournalFormPage() {
               const totalTerminal = bankSummary.totalTerminalAmount || 0;
               const actualCash = formData.actualCashDrawer || 0;
               const totalActualCollected = actualCash + totalTerminal;
-              const totalSales = formData.totalSales || 0;
-              const netVariance = totalActualCollected - totalSales;
+              // Use NET sales (after returns) for comparison
+              const netSalesForRecon = getNetSales();
+              const netVariance = totalActualCollected - netSalesForRecon;
               
               const cashDiscrepancy = calculateDiscrepancy(); // actual - expected (positive = surplus)
               const bankDiscrepancy = bankSummary.discrepancy; // terminal - pos (positive = surplus)
@@ -1808,10 +1816,29 @@ export default function CashierJournalFormPage() {
                   <CardContent className="space-y-4 pt-4">
                     {/* Main Calculation */}
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
-                        <span className="text-muted-foreground">إجمالي المبيعات (POS)</span>
-                        <span className="font-bold text-lg">{totalSales.toFixed(2)} ر.س</span>
-                      </div>
+                      {/* Show net sales with return breakdown if applicable */}
+                      {returnData.hasReturn && returnData.returnAmount > 0 ? (
+                        <div className="p-3 bg-gray-50 rounded-lg border space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">إجمالي المبيعات الأصلي</span>
+                            <span className="font-medium">{formData.totalSales.toFixed(2)} ر.س</span>
+                          </div>
+                          <div className="flex justify-between items-center text-red-600">
+                            <span>المرتجع</span>
+                            <span className="font-medium">-{returnData.returnAmount.toFixed(2)} ر.س</span>
+                          </div>
+                          <Separator />
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium">صافي المبيعات</span>
+                            <span className="font-bold text-lg">{netSalesForRecon.toFixed(2)} ر.س</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+                          <span className="text-muted-foreground">إجمالي المبيعات (POS)</span>
+                          <span className="font-bold text-lg">{netSalesForRecon.toFixed(2)} ر.س</span>
+                        </div>
+                      )}
                       
                       <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="text-sm text-blue-600 mb-2 font-medium">المحصل الفعلي:</div>
