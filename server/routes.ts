@@ -2539,6 +2539,16 @@ export async function registerRoutes(
         journalData.deliveryTotal = paymentBreakdowns
           .filter((b: any) => deliveryMethods.includes(b.paymentMethod))
           .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        
+        // Calculate total bank terminal amount (sum of all terminal amounts from card payments)
+        journalData.totalBankTerminalAmount = paymentBreakdowns
+          .filter((b: any) => cardMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.terminalAmount) || 0), 0);
+        
+        // Calculate total bank POS amount (sum of all POS amounts from card payments)
+        journalData.totalBankPosAmount = paymentBreakdowns
+          .filter((b: any) => cardMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
       }
       
       // Calculate average ticket from transaction count (with explicit zero guard)
@@ -2620,6 +2630,16 @@ export async function registerRoutes(
         
         journalData.deliveryTotal = paymentBreakdowns
           .filter((b: any) => deliveryMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        
+        // Calculate total bank terminal amount (sum of all terminal amounts from card payments)
+        journalData.totalBankTerminalAmount = paymentBreakdowns
+          .filter((b: any) => cardMethods.includes(b.paymentMethod))
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.terminalAmount) || 0), 0);
+        
+        // Calculate total bank POS amount (sum of all POS amounts from card payments)
+        journalData.totalBankPosAmount = paymentBreakdowns
+          .filter((b: any) => cardMethods.includes(b.paymentMethod))
           .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
       }
       
@@ -2888,21 +2908,34 @@ export async function registerRoutes(
         journals = journals.filter(j => j.branchId === branchId);
       }
       
-      // Calculate stats from filtered journals
+      // Calculate stats from filtered journals using COMPREHENSIVE net variance
+      // Net variance = (actualCashDrawer + totalBankTerminalAmount) - (totalSales - returnAmount)
       const totalJournals = journals.length;
-      const totalSales = journals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
-      const shortages = journals.filter(j => j.discrepancyStatus === 'shortage');
-      const surpluses = journals.filter(j => j.discrepancyStatus === 'surplus');
-      const shortageAmount = shortages.reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0);
-      const surplusAmount = surpluses.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+      const totalSalesSum = journals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+      
+      // Calculate comprehensive net variance for each journal
+      const journalsWithNetVariance = journals.map(j => {
+        const actualCash = j.actualCashDrawer || 0;
+        const terminalTotal = j.totalBankTerminalAmount || 0;
+        const netSales = (j.totalSales || 0) - (j.returnAmount || 0);
+        const netVariance = (actualCash + terminalTotal) - netSales;
+        return { ...j, netVariance };
+      });
+      
+      // Categorize by net variance (comprehensive)
+      const netShortages = journalsWithNetVariance.filter(j => j.netVariance < -5); // Allow 5 SAR tolerance
+      const netSurpluses = journalsWithNetVariance.filter(j => j.netVariance > 5);
+      const shortageAmount = netShortages.reduce((sum, j) => sum + Math.abs(j.netVariance), 0);
+      const surplusAmount = netSurpluses.reduce((sum, j) => sum + j.netVariance, 0);
+      
       const totalCustomers = journals.reduce((sum, j) => sum + (j.customerCount || 0), 0);
-      const averageTicket = totalCustomers > 0 ? totalSales / totalCustomers : 0;
+      const averageTicket = totalCustomers > 0 ? totalSalesSum / totalCustomers : 0;
       
       res.json({
         totalJournals,
-        totalSales,
-        totalShortages: shortages.length,
-        totalSurpluses: surpluses.length,
+        totalSales: totalSalesSum,
+        totalShortages: netShortages.length,
+        totalSurpluses: netSurpluses.length,
         shortageAmount,
         surplusAmount,
         averageTicket,
