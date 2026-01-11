@@ -3423,7 +3423,13 @@ export async function registerRoutes(
       const [year, month] = target.yearMonth.split('-').map(Number);
       const daysInMonth = new Date(year, month, 0).getDate();
       
-      // Calculate weights for each day
+      // Calculate weights for each day with smart distribution
+      // Weekend boost (Thu=4, Fri=5, Sat=6): 1.3x multiplier - higher sales
+      // End of month boost (days 27-31): 1.2x multiplier - salary period
+      // Combined boost: 1.56x (1.3 * 1.2)
+      const WEEKEND_MULTIPLIER = 1.3;
+      const END_OF_MONTH_MULTIPLIER = 1.2;
+      
       const dayWeights: number[] = [];
       const weekdayWeights = [
         profile.sundayWeight,
@@ -3438,20 +3444,46 @@ export async function registerRoutes(
       for (let day = 1; day <= daysInMonth; day++) {
         const date = new Date(year, month - 1, day);
         const dayOfWeek = date.getDay();
-        dayWeights.push(weekdayWeights[dayOfWeek]);
+        let weight = weekdayWeights[dayOfWeek];
+        
+        // Apply weekend boost (Thursday, Friday, Saturday)
+        const isWeekend = dayOfWeek === 4 || dayOfWeek === 5 || dayOfWeek === 6;
+        if (isWeekend) {
+          weight *= WEEKEND_MULTIPLIER;
+        }
+        
+        // Apply end of month boost (days 27-31)
+        const isEndOfMonth = day >= 27;
+        if (isEndOfMonth) {
+          weight *= END_OF_MONTH_MULTIPLIER;
+        }
+        
+        dayWeights.push(weight);
       }
       
       // Normalize weights to sum to 100
       const totalWeight = dayWeights.reduce((sum, w) => sum + w, 0);
       const normalizedWeights = dayWeights.map(w => (w / totalWeight) * 100);
       
-      // Create allocations
+      // Create allocations with rounding that preserves exact total
       const allocations = [];
+      let allocatedTotal = 0;
+      const provisionalTargets = normalizedWeights.map(w => (target.targetAmount * w) / 100);
+      
       for (let day = 1; day <= daysInMonth; day++) {
         const dayStr = day.toString().padStart(2, '0');
         const targetDate = `${target.yearMonth}-${dayStr}`;
         const weightPercent = normalizedWeights[day - 1];
-        const dailyTarget = (target.targetAmount * weightPercent) / 100;
+        
+        // Round to nearest integer, but track for adjustment
+        let dailyTarget = Math.round(provisionalTargets[day - 1]);
+        
+        // For last day, adjust to ensure exact total
+        if (day === daysInMonth) {
+          dailyTarget = target.targetAmount - allocatedTotal;
+        } else {
+          allocatedTotal += dailyTarget;
+        }
         
         allocations.push({
           monthlyTargetId: id,
