@@ -77,7 +77,22 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **`shared/schema.ts`**: Primary source of truth for database schema (TypeScript/Drizzle ORM)
 - **`database_schema.sql`**: Complete SQL reference file generated from schema.ts (94 tables)
 
-### Recent Schema Changes (2026-01-11)
+### Recent Schema Changes (2026-01-12)
+
+#### RBAC Complete Permissions Update
+**SQL Migration File**: `supabase_rbac_complete_permissions.sql`
+
+This migration adds comprehensive permissions for all 50+ system modules:
+- Adds permissions for all missing modules (platform_home, asset_transfers, attendance, etc.)
+- Adds special permissions (sign, close, reopen, transfer, approve, etc.)
+- Updates role permissions distribution for balanced access:
+  - Super Admin: All permissions
+  - Regional Manager: All except system settings
+  - Branch Manager: Full branch operations
+  - Cashier: Cashier operations + attendance
+  - Viewer: View-only access to all modules
+
+### Previous Schema Changes (2026-01-11)
 
 #### Comprehensive Net Variance for Cashier Journals
 **SQL Migration File**: `supabase_journal_bank_totals.sql`

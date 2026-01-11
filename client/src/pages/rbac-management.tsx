@@ -98,25 +98,87 @@ interface UserBranchAccess {
 }
 
 const MODULE_LABELS: Record<string, string> = {
+  // الأساسية
   dashboard: "لوحة التحكم",
-  inventory: "المخزون",
+  platform_home: "الصفحة الرئيسية",
+  settings: "الإعدادات",
+  
+  // المخزون والأصول
+  inventory: "المخزون والأصول",
+  asset_transfers: "تحويلات الأصول",
+  inspections: "التفتيش والجرد",
+  maintenance: "الصيانة",
+  assets: "الأصول",
+  
+  // الإنتاج والتشغيل
   production: "الإنتاج",
+  daily_production: "الإنتاج اليومي",
+  advanced_production: "الإنتاج المتقدم",
+  quality_control: "مراقبة الجودة",
+  quality: "الجودة",
+  products: "المنتجات",
+  operations: "العمليات",
+  ai_production_planner: "تخطيط الإنتاج الذكي",
+  
+  // الورديات والحضور
+  shifts: "الورديات",
+  attendance: "الحضور والانصراف",
+  timesheet: "سجل الدوام",
+  
+  // الموظفين والموارد البشرية
+  users: "المستخدمين",
+  branch_employees: "موظفي الفروع",
+  branches: "الفروع",
+  organizational_structure: "الهيكل التنظيمي",
+  employee_reports: "تقارير الموظفين",
+  employee_transfers: "نقل الموظفين",
+  hr_management: "إدارة الموارد البشرية",
+  
+  // المالية
   cashier: "الكاشير",
   cashier_journal: "يومية الكاشير",
-  waste: "الهدر",
-  quality: "الجودة",
+  cashier_performance: "أداء الكاشير",
+  pnl_dashboard: "لوحة الأرباح والخسائر",
+  incentives: "الحوافز",
+  sales_analytics: "تحليلات المبيعات",
+  sales_uploads: "رفع المبيعات",
+  
+  // الأهداف والأداء
   targets: "الأهداف",
-  reports: "التقارير",
-  users: "المستخدمين",
-  branches: "الفروع",
+  targets_planning: "تخطيط الأهداف",
+  waste_tracking: "تتبع الهدر",
+  waste: "الهدر",
+  
+  // مشاريع الإنشاء
   construction: "المشاريع الإنشائية",
-  settings: "الإعدادات",
-  assets: "الأصول",
-  projects: "المشاريع",
-  marketing: "التسويق",
-  operations: "العمليات",
-  shifts: "الورديات",
+  construction_projects: "مشاريع الإنشاء",
+  construction_work_items: "بنود الأعمال",
+  construction_reports: "تقارير الإنشاء",
   contractors: "المقاولين",
+  contracts: "العقود",
+  budget_planning: "تخطيط الميزانية",
+  payment_requests: "طلبات الدفع",
+  projects: "المشاريع",
+  
+  // التسويق (complete list from SYSTEM_MODULES)
+  marketing: "التسويق",
+  marketing_campaigns: "الحملات التسويقية",
+  marketing_influencers: "المؤثرين",
+  marketing_tasks: "مهام التسويق",
+  marketing_goals: "أهداف التسويق",
+  marketing_calendar: "تقويم التسويق",
+  marketing_alerts: "تنبيهات التسويق",
+  marketing_assets: "أصول التسويق",
+  marketing_expenses: "مصاريف التسويق",
+  marketing_reports: "تقارير التسويق",
+  marketing_team: "فريق التسويق",
+  
+  // النظام والإدارة
+  rbac_management: "إدارة الصلاحيات",
+  audit_logs: "سجلات المراجعة",
+  backups: "النسخ الاحتياطي",
+  integrations: "التكاملات",
+  reports: "التقارير",
 };
 
 const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
