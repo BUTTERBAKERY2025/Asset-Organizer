@@ -806,9 +806,11 @@ export default function CashierJournalFormPage() {
     };
 
     const categoryTotals = getCategoryTotals();
-    const expectedCash = formData.openingBalance + categoryTotals.cash;
-    const discrepancy = formData.actualCashDrawer - categoryTotals.cash;
+    const adjustedCategoryTotals = getAdjustedCategoryTotals();
+    const expectedCash = formData.openingBalance + adjustedCategoryTotals.cash;
+    const discrepancy = formData.actualCashDrawer - adjustedCategoryTotals.cash;
     const discrepancyStatusText = discrepancy === 0 ? 'متوازن' : discrepancy < 0 ? 'عجز' : 'فائض';
+    const netSales = getNetSales();
 
     const STATUS_LABELS: Record<string, string> = {
       draft: "مسودة",
@@ -941,6 +943,16 @@ export default function CashierJournalFormPage() {
         <div class="section">
           <div class="section-title">ملخص المبيعات</div>
           <div class="row"><span class="label">إجمالي المبيعات</span><span class="value big">${formData.totalSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+          ${returnData.hasReturn && returnData.returnAmount > 0 ? `
+          <div class="row" style="background: #ffebee; padding: 4px 8px; border-radius: 4px; margin: 4px 0;">
+            <span class="label" style="color: #c62828;">🔄 المرتجع</span>
+            <span class="value" style="color: #c62828; font-weight: bold;">-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span>
+          </div>
+          <div class="row" style="border-top: 2px solid #ddd; padding-top: 6px;">
+            <span class="label" style="font-weight: bold;">صافي المبيعات</span>
+            <span class="value big" style="color: #2e7d32;">${netSales.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span>
+          </div>
+          ` : ''}
           <div class="row"><span class="label">عدد الفواتير</span><span class="value">${formData.transactionCount}</span></div>
           <div class="row"><span class="label">عدد العملاء</span><span class="value">${formData.customerCount}</span></div>
           <div class="row"><span class="label">متوسط الفاتورة</span><span class="value">${averageTicket.toFixed(2)} ر.س</span></div>
@@ -951,6 +963,10 @@ export default function CashierJournalFormPage() {
           <div class="recon-box">
             <div class="recon-row"><span>رصيد الافتتاح</span><span>${formData.openingBalance.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
             <div class="recon-row"><span>المبيعات النقدية</span><span>${categoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            ${returnData.hasReturn && returnData.returnPaymentMethod === 'cash' && returnData.returnAmount > 0 ? `
+            <div class="recon-row" style="color: #c62828;"><span>المرتجع النقدي</span><span>-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row" style="font-weight: bold; border-top: 1px solid #ddd; padding-top: 4px;"><span>صافي النقد المتوقع</span><span>${adjustedCategoryTotals.cash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            ` : ''}
             <div class="recon-row"><span>المتوقع في الصندوق</span><span>${expectedCash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
             <div class="recon-row"><span>الفعلي في الصندوق</span><span>${formData.actualCashDrawer.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           </div>
@@ -1002,9 +1018,54 @@ export default function CashierJournalFormPage() {
           </div>
         </div>
         ` : ''}
+        
+        ${(() => {
+          const totalTerminal = bankSummary.totalTerminalAmount || 0;
+          const actualCash = formData.actualCashDrawer || 0;
+          const totalActualCollected = actualCash + totalTerminal;
+          const totalSalesVal = formData.totalSales || 0;
+          const netVariance = totalActualCollected - totalSalesVal;
+          
+          if (totalTerminal > 0 || actualCash > 0) {
+            return `
+        <div class="section">
+          <div class="section-title">📊 ملخص التسوية الشاملة</div>
+          <div class="recon-box" style="background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);">
+            <div style="font-size: 9px; color: #666; margin-bottom: 6px;">ما تم تحصيله فعلياً:</div>
+            <div class="recon-row"><span>النقد الفعلي في الصندوق</span><span>${actualCash.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>إجمالي التيرمنال البنكي</span><span>${totalTerminal.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row" style="border-top: 2px solid #d4a853; padding-top: 6px; margin-top: 4px; font-weight: bold; font-size: 12px;">
+              <span>إجمالي المُحصّل</span>
+              <span style="color: #2e7d32;">${totalActualCollected.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span>
+            </div>
+            <div class="recon-row" style="margin-top: 8px;"><span>إجمالي المبيعات المُسجّل</span><span>${totalSalesVal.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row" style="border-top: 1px solid #ddd; padding-top: 4px;">
+              <span style="font-weight: bold;">الفارق الإجمالي</span>
+              <span style="font-weight: bold; color: ${netVariance >= 0 ? '#2e7d32' : '#c62828'};">
+                ${netVariance >= 0 ? '+' : ''}${netVariance.toLocaleString('en', {minimumFractionDigits: 2})} ر.س
+              </span>
+            </div>
+          </div>
+        </div>
+            `;
+          }
+          return '';
+        })()}
       </div>
       
       <div>
+        ${returnData.hasReturn && returnData.returnAmount > 0 ? `
+        <div class="section">
+          <div class="section-title" style="color: #c62828;">🔄 تفاصيل المرتجع</div>
+          <div class="recon-box" style="background: #ffebee; border: 1px solid #ffcdd2;">
+            <div class="recon-row"><span>مبلغ المرتجع</span><span style="color: #c62828; font-weight: bold;">-${returnData.returnAmount.toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>طريقة الاسترداد</span><span>${PAYMENT_METHOD_LABELS[returnData.returnPaymentMethod] || returnData.returnPaymentMethod}</span></div>
+            ${returnData.returnReference ? `<div class="recon-row"><span>رقم الفاتورة</span><span>${returnData.returnReference}</span></div>` : ''}
+            ${returnData.returnReason ? `<div class="recon-row"><span>السبب</span><span>${returnData.returnReason}</span></div>` : ''}
+          </div>
+        </div>
+        ` : ''}
+        
         <div class="section">
           <div class="section-title">تصنيف المبيعات</div>
           
