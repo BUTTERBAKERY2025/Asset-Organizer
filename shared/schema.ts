@@ -2885,29 +2885,19 @@ export type InsertRoleTemplate = z.infer<typeof insertRoleTemplateSchema>;
 // Cashier Shift Targets - أهداف الكاشير داخل الشفت
 export const cashierShiftTargets = pgTable("cashier_shift_targets", {
   id: serial("id").primaryKey(),
-  shiftAllocationId: integer("shift_allocation_id")
-    .references(() => targetShiftAllocations.id, { onDelete: "cascade" }),
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id),
   cashierId: varchar("cashier_id")
     .notNull()
     .references(() => users.id),
-  targetDate: text("target_date").notNull(), // YYYY-MM-DD
-  shiftType: text("shift_type").notNull(), // morning, evening, night
-  cashierRole: text("cashier_role").default("main").notNull(), // main, assistant
-  targetAmount: real("target_amount").notNull(), // هدف المبيعات
-  targetTicketValue: real("target_ticket_value"), // هدف متوسط الفاتورة
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  shiftType: varchar("shift_type").notNull(), // morning, evening
+  cashierRole: varchar("cashier_role").default("main").notNull(), // main, assistant, trainee
+  targetAmount: numeric("target_amount").notNull(), // هدف المبيعات
   targetTransactions: integer("target_transactions"), // عدد المعاملات المستهدف
-  shiftStartTime: text("shift_start_time"), // وقت بدء الشفت HH:MM
-  shiftEndTime: text("shift_end_time"), // وقت انتهاء الشفت HH:MM
-  shiftDurationHours: real("shift_duration_hours"), // مدة الشفت بالساعات
-  // Alert thresholds
-  alertThresholdPercent: real("alert_threshold_percent").default(80), // تنبيه عند الوصول لهذه النسبة
-  belowTrackThreshold: real("below_track_threshold").default(70), // تحذير التأخر عن المسار
-  notes: text("notes"),
+  targetTicketValue: numeric("target_ticket_value"), // هدف متوسط الفاتورة
+  targetDate: date("target_date").notNull(), // YYYY-MM-DD
   isActive: boolean("is_active").default(true).notNull(),
-  createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -397,7 +397,16 @@ export default function CashierShiftPerformance() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 sm:gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-6">
+          {/* Cashier Name Display */}
+          {user && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <UserIcon className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-medium text-amber-800" data-testid="text-cashier-name">
+                {user.firstName || user.username || 'الكاشير'} {user.lastName || ''}
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Label className="text-sm">التاريخ:</Label>
             <Input 

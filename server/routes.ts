@@ -7615,16 +7615,25 @@ export async function registerRoutes(
       if (date) filters.date = date;
       if (shiftType) filters.shiftType = shiftType;
       
+      console.log("[cashier-shift-targets] Request filters:", filters);
+      
       let targets = await storage.getAllCashierShiftTargets(filters);
+      console.log("[cashier-shift-targets] Storage returned:", targets.length, "targets");
+      
       const user = req.currentUser;
       const activeBranch = getActiveBranchFilter(req);
+      console.log("[cashier-shift-targets] User:", user?.id, "Role:", user?.role, "ActiveBranch:", activeBranch);
 
       // Enforce branch and user filtering
       if (user?.role !== "admin") {
-        if (!activeBranch) return res.json([]);
+        if (!activeBranch) {
+          console.log("[cashier-shift-targets] No active branch, returning []");
+          return res.json([]);
+        }
         
         // Filter by branch
         targets = targets.filter(t => t.branchId === activeBranch);
+        console.log("[cashier-shift-targets] After branch filter:", targets.length, "targets");
         
         // Check if user is a manager (can view all in branch)
         const permissions = await storage.getUserPermissions(user.id);
@@ -7633,10 +7642,13 @@ export async function registerRoutes(
         
         if (!isManager) {
           // Cashier only sees their own targets
+          console.log("[cashier-shift-targets] Filtering by cashier ID:", user.id);
           targets = targets.filter(t => t.cashierId === user.id);
+          console.log("[cashier-shift-targets] After cashier filter:", targets.length, "targets");
         }
       }
 
+      console.log("[cashier-shift-targets] Final result:", targets.length, "targets");
       res.json(targets);
     } catch (error) {
       console.error("Error fetching cashier shift targets:", error);
