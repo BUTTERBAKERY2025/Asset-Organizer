@@ -385,13 +385,13 @@ export default function CashierJournalFormPage() {
       return;
     }
 
+    // Show warning if there's a mismatch but allow saving as draft
     if (getTotalsMismatch()) {
       toast({ 
-        title: "لا يمكن الحفظ", 
-        description: "مجموع التفصيل لا يطابق إجمالي المبيعات", 
-        variant: "destructive" 
+        title: "تنبيه: فرق في الأرقام", 
+        description: "سيتم حفظ اليومية كمسودة. يرجى تصحيح الفرق قبل الترحيل.", 
+        variant: "default" 
       });
-      return;
     }
 
     // Check for large shortage and show confirmation dialog
@@ -584,7 +584,9 @@ export default function CashierJournalFormPage() {
     });
   };
 
-  const canSave = !getTotalsMismatch() && formData.totalSales > 0 && formData.branchId && formData.cashierName;
+  // Allow saving drafts even with mismatch, but require match for posting
+  const canSave = formData.totalSales > 0 && formData.branchId && formData.cashierName;
+  const canPost = canSave && !getTotalsMismatch();
 
   const getDiscrepancyAnalysis = () => {
     const cashDiscrepancy = calculateDiscrepancy();
@@ -1894,7 +1896,7 @@ export default function CashierJournalFormPage() {
                       variant="default"
                       className="w-full gap-2 bg-green-600 hover:bg-green-700 h-11 sm:h-10"
                       onClick={handleSaveAndPost}
-                      disabled={postMutation.isPending || updateMutation.isPending || !canSave}
+                      disabled={postMutation.isPending || updateMutation.isPending || !canPost}
                       data-testid="button-save-post"
                     >
                       <Send className="w-4 h-4" />
@@ -1902,8 +1904,8 @@ export default function CashierJournalFormPage() {
                     </Button>
                   )}
                   {getTotalsMismatch() && (
-                    <p className="text-xs text-red-500 text-center">
-                      لا يمكن الحفظ: مجموع التفصيل لا يطابق إجمالي المبيعات
+                    <p className="text-xs text-amber-600 text-center">
+                      تنبيه: يمكن الحفظ كمسودة، لكن الترحيل يتطلب تطابق الأرقام
                     </p>
                   )}
                 </>
