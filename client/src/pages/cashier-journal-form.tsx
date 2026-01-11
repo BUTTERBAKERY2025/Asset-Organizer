@@ -1236,6 +1236,34 @@ export default function CashierJournalFormPage() {
                           </div>
                         </div>
                         
+                        {/* Bank Payment Details Breakdown */}
+                        {bankSummary.bankPayments.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-blue-200">
+                            <div className="text-xs text-blue-600 mb-2 font-medium">تفاصيل البطاقات البنكية:</div>
+                            <div className="space-y-1">
+                              {bankSummary.bankPayments.map((payment, idx) => {
+                                const methodLabel = PAYMENT_METHODS.find(m => m.value === payment.paymentMethod)?.label || payment.paymentMethod;
+                                const posAmt = payment.posAmount || payment.amount || 0;
+                                const termAmt = payment.terminalAmount || 0;
+                                const diff = termAmt - posAmt;
+                                const diffStatus = diff > 0.5 ? 'surplus' : diff < -0.5 ? 'shortage' : 'balanced';
+                                return (
+                                  <div key={idx} className="flex items-center justify-between text-xs bg-white/50 p-1.5 rounded">
+                                    <span className="text-gray-600">{methodLabel}</span>
+                                    <div className="flex items-center gap-3">
+                                      <span>POS: {posAmt.toFixed(2)}</span>
+                                      <span>تيرمنال: {termAmt.toFixed(2)}</span>
+                                      <span className={`font-medium ${diffStatus === 'surplus' ? 'text-green-600' : diffStatus === 'shortage' ? 'text-red-600' : 'text-gray-500'}`}>
+                                        ({diff >= 0 ? '+' : ''}{diff.toFixed(2)})
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        
                         {/* Tolerance Note - for small differences within 0.5 SAR */}
                         {bankSummary.type === 'balanced' && Math.abs(bankSummary.discrepancy) > 0.01 && Math.abs(bankSummary.discrepancy) <= 0.5 && (
                           <p className="mt-2 text-xs text-blue-600 bg-blue-100 p-2 rounded">
