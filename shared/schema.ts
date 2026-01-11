@@ -1450,6 +1450,13 @@ export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   inputErrorAmount: real("input_error_amount").default(0), // مبلغ خطأ الإدخال
   netDiscrepancy: real("net_discrepancy").default(0), // صافي الفرق
 
+  // المرتجعات - Returns
+  returnAmount: real("return_amount").default(0), // مبلغ المرتجع
+  returnPaymentMethod: text("return_payment_method"), // طريقة الدفع المرتجعة (cash, mada, visa, etc)
+  returnReason: text("return_reason"), // سبب المرتجع
+  returnReference: text("return_reference"), // رقم الفاتورة المرتجعة
+  hasReturn: boolean("has_return").default(false), // هل يوجد مرتجع
+
   // إحصائيات
   customerCount: integer("customer_count").default(0), // عدد العملاء
   transactionCount: integer("transaction_count").default(0), // عدد الفواتير
