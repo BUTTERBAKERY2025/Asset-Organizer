@@ -1154,7 +1154,7 @@ export default function CashierJournalFormPage() {
                   <div className="space-y-2">
                     <Label>الفرع *</Label>
                     <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
+                      <SelectTrigger className="h-12 text-base" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -1173,14 +1173,14 @@ export default function CashierJournalFormPage() {
                       value={formData.journalDate}
                       onChange={(e) => setFormData({ ...formData, journalDate: e.target.value })}
                       disabled={isReadOnly}
-                      className="h-11 sm:h-10"
+                      className="h-12 text-base"
                       data-testid="input-date"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>الوردية *</Label>
                     <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-shift">
+                      <SelectTrigger className="h-12 text-base" data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -1197,7 +1197,7 @@ export default function CashierJournalFormPage() {
                     <Input
                       value={formData.cashierName}
                       readOnly
-                      className="bg-muted cursor-not-allowed h-11 sm:h-10"
+                      className="bg-muted cursor-not-allowed h-12 text-base"
                       placeholder="اسم الكاشير"
                       data-testid="input-cashier-name"
                     />
@@ -1598,7 +1598,7 @@ export default function CashierJournalFormPage() {
                       type="button"
                       variant={showReturns ? "destructive" : "outline"}
                       size="sm"
-                      className="h-9"
+                      className="h-12 text-base"
                       onClick={() => {
                         if (showReturns) {
                           setShowReturns(false);
@@ -1640,7 +1640,7 @@ export default function CashierJournalFormPage() {
                         type="number"
                         value={returnData.returnAmount || ""}
                         onChange={(e) => setReturnData(prev => ({ ...prev, returnAmount: parseFloat(e.target.value) || 0 }))}
-                        className="h-11 border-red-200 focus:border-red-400 text-lg font-bold"
+                        className="h-14 border-red-200 focus:border-red-400 text-xl font-bold text-center"
                         placeholder="0.00"
                         disabled={isReadOnly}
                         data-testid="input-return-amount"
@@ -1654,7 +1654,7 @@ export default function CashierJournalFormPage() {
                         onValueChange={(v) => setReturnData(prev => ({ ...prev, returnPaymentMethod: v }))}
                         disabled={isReadOnly}
                       >
-                        <SelectTrigger className="h-11 border-red-200" data-testid="select-return-method">
+                        <SelectTrigger className="h-12 border-red-200 text-base" data-testid="select-return-method">
                           <SelectValue placeholder="اختر طريقة الاسترداد" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1744,7 +1744,7 @@ export default function CashierJournalFormPage() {
                       type="number" 
                       value={getExpectedCashInDrawer().toFixed(2)} 
                       readOnly 
-                      className="bg-muted text-lg font-bold h-11 sm:h-10" 
+                      className="bg-muted text-xl font-bold h-14 text-center" 
                       data-testid="input-expected-cash" 
                     />
                     {returnData.hasReturn && returnData.returnPaymentMethod === "cash" && returnData.returnAmount > 0 ? (
@@ -1761,7 +1761,7 @@ export default function CashierJournalFormPage() {
                       type="number"
                       value={formData.actualCashDrawer ?? ""}
                       onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
-                      className="text-lg font-bold h-11 sm:h-10"
+                      className="text-xl font-bold h-14 text-center"
                       placeholder="0.00"
                       disabled={isReadOnly}
                       data-testid="input-actual-cash"
@@ -2104,7 +2104,7 @@ export default function CashierJournalFormPage() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">يدعم اللمس على الأجهزة اللوحية</p>
-                <Button variant="outline" size="sm" onClick={clearSignature} className="w-full h-11 sm:h-9" data-testid="button-clear-signature">
+                <Button variant="outline" size="lg" onClick={clearSignature} className="w-full h-12" data-testid="button-clear-signature">
                   مسح التوقيع
                 </Button>
               </CardContent>
@@ -2281,7 +2281,7 @@ export default function CashierJournalFormPage() {
               {!isReadOnly && (
                 <>
                   <Button
-                    className="w-full gap-2 h-11 sm:h-10"
+                    className="w-full gap-2 h-12"
                     onClick={handleSave}
                     disabled={createMutation.isPending || updateMutation.isPending || !canSave}
                     data-testid="button-save"
@@ -2292,7 +2292,7 @@ export default function CashierJournalFormPage() {
                   {isEdit && existingJournal?.status === "draft" && (
                     <Button
                       variant="default"
-                      className="w-full gap-2 bg-green-600 hover:bg-green-700 h-11 sm:h-10"
+                      className="w-full gap-2 bg-green-600 hover:bg-green-700 h-12"
                       onClick={handleSaveAndPost}
                       disabled={postMutation.isPending || updateMutation.isPending || !canPost}
                       data-testid="button-save-post"
@@ -2311,7 +2311,7 @@ export default function CashierJournalFormPage() {
               {isReadOnly && (
                 <Button
                   variant="outline"
-                  className="w-full gap-2 h-11 sm:h-10"
+                  className="w-full gap-2 h-12"
                   onClick={() => setLocation("/cashier-journals")}
                   data-testid="button-back-list"
                 >
