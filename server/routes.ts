@@ -3424,11 +3424,12 @@ export async function registerRoutes(
       const daysInMonth = new Date(year, month, 0).getDate();
       
       // Calculate weights for each day with smart distribution
-      // Weekend boost (Thu=4, Fri=5, Sat=6): 1.3x multiplier - higher sales
-      // End of month boost (days 27-31): 1.2x multiplier - salary period
-      // Combined boost: 1.56x (1.3 * 1.2)
-      const WEEKEND_MULTIPLIER = 1.3;
-      const END_OF_MONTH_MULTIPLIER = 1.2;
+      // Weekend boost (Thu=4, Fri=5, Sat=6): +15% - higher sales on weekends
+      // End of month boost (days 27-31): +20% - salary period
+      // Combined boost (weekend + end of month): +30% (not multiplicative)
+      const WEEKEND_BOOST = 0.15;      // +15%
+      const END_OF_MONTH_BOOST = 0.20; // +20%
+      const COMBINED_BOOST = 0.30;     // +30% for days that are both weekend AND end of month
       
       const dayWeights: number[] = [];
       const weekdayWeights = [
@@ -3446,16 +3447,20 @@ export async function registerRoutes(
         const dayOfWeek = date.getDay();
         let weight = weekdayWeights[dayOfWeek];
         
-        // Apply weekend boost (Thursday, Friday, Saturday)
-        const isWeekend = dayOfWeek === 4 || dayOfWeek === 5 || dayOfWeek === 6;
-        if (isWeekend) {
-          weight *= WEEKEND_MULTIPLIER;
-        }
-        
-        // Apply end of month boost (days 27-31)
+        // Check day categories
+        const isWeekend = dayOfWeek === 4 || dayOfWeek === 5 || dayOfWeek === 6; // Thu, Fri, Sat
         const isEndOfMonth = day >= 27;
-        if (isEndOfMonth) {
-          weight *= END_OF_MONTH_MULTIPLIER;
+        
+        // Apply boosts based on category
+        if (isWeekend && isEndOfMonth) {
+          // Combined boost for days that are both weekend AND end of month
+          weight *= (1 + COMBINED_BOOST); // +30%
+        } else if (isWeekend) {
+          // Weekend only boost
+          weight *= (1 + WEEKEND_BOOST); // +15%
+        } else if (isEndOfMonth) {
+          // End of month only boost
+          weight *= (1 + END_OF_MONTH_BOOST); // +20%
         }
         
         dayWeights.push(weight);
