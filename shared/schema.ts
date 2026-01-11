@@ -1441,16 +1441,10 @@ export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   discrepancyAmount: real("discrepancy_amount").default(0).notNull(), // مبلغ الفرق النقدي
   discrepancyStatus: text("discrepancy_status").default("balanced").notNull(), // balanced, shortage, surplus
 
-  // مطابقة البنك - Bank Reconciliation Summary
-  totalBankPosAmount: real("total_bank_pos_amount").default(0), // إجمالي المدفوعات البنكية من الكاشير
-  totalBankTerminalAmount: real("total_bank_terminal_amount").default(0), // إجمالي المدفوعات البنكية من جهاز البنك
-  bankDiscrepancyTotal: real("bank_discrepancy_total").default(0), // إجمالي الفرق البنكي
-  bankDiscrepancyStatus: text("bank_discrepancy_status").default("balanced"), // balanced, shortage, surplus
-  
-  // تحليل خطأ الإدخال - Input Error Analysis
-  isInputError: boolean("is_input_error").default(false), // هل الفرق بسبب خطأ إدخال (عجز نقدي = زيادة بنكية)
-  inputErrorAmount: real("input_error_amount").default(0), // مبلغ خطأ الإدخال المحتمل
-  netDiscrepancy: real("net_discrepancy").default(0), // صافي الفرق بعد احتساب خطأ الإدخال
+  // NOTE: Bank Reconciliation columns are computed on-the-fly from payment breakdowns
+  // The following columns will be added after running supabase_cashier_bank_reconciliation.sql:
+  // totalBankPosAmount, totalBankTerminalAmount, bankDiscrepancyTotal, bankDiscrepancyStatus,
+  // isInputError, inputErrorAmount, netDiscrepancy
 
   // إحصائيات
   customerCount: integer("customer_count").default(0), // عدد العملاء
@@ -1495,16 +1489,12 @@ export const cashierPaymentBreakdowns = pgTable("cashier_payment_breakdowns", {
     .notNull()
     .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
   paymentMethod: text("payment_method").notNull(), // cash, card, mada, stc_pay, apple_pay, visa, mastercard, delivery_app, other
-  amount: real("amount").default(0).notNull(), // المبلغ من نظام الكاشير (POS) - للتوافق مع الإصدار السابق
+  amount: real("amount").default(0).notNull(), // المبلغ من نظام الكاشير (POS)
   
-  // مطابقة البنك - Bank Reconciliation (للمدفوعات البنكية فقط)
-  posAmount: real("pos_amount").default(0), // المبلغ من نظام نقاط البيع (POS)
-  terminalAmount: real("terminal_amount").default(0), // المبلغ من جهاز الصراف البنكي (Terminal)
-  bankDiscrepancy: real("bank_discrepancy").default(0), // الفرق بين POS والتيرمنال
-  bankDiscrepancyType: text("bank_discrepancy_type").default("balanced"), // balanced, shortage, surplus
+  // NOTE: Bank Reconciliation columns will be added after running supabase_cashier_bank_reconciliation.sql:
+  // posAmount, terminalAmount, bankDiscrepancy, bankDiscrepancyType, terminalTransactionCount
   
   transactionCount: integer("transaction_count").default(0), // عدد العمليات من الكاشير
-  terminalTransactionCount: integer("terminal_transaction_count").default(0), // عدد العمليات من جهاز البنك
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
