@@ -1000,20 +1000,18 @@ export default function TargetsPlanning() {
                           <TableCell className="max-w-xs truncate text-gray-500">{target.notes || '-'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2 flex-wrap">
-                              {target.status === 'draft' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="bg-amber-50 hover:bg-amber-100 border-amber-300"
-                                  onClick={() => generateAllocationsMutation.mutate(target.id)}
-                                  disabled={generateAllocationsMutation.isPending}
-                                  title="توزيع على الأيام"
-                                  data-testid={`button-generate-${target.id}`}
-                                >
-                                  <Play className="h-4 w-4 text-amber-600" />
-                                  <span className="mr-1 text-xs">توزيع</span>
-                                </Button>
-                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="bg-amber-50 hover:bg-amber-100 border-amber-300"
+                                onClick={() => generateAllocationsMutation.mutate(target.id)}
+                                disabled={generateAllocationsMutation.isPending}
+                                title="توزيع / إعادة توزيع على الأيام"
+                                data-testid={`button-generate-${target.id}`}
+                              >
+                                <Play className="h-4 w-4 text-amber-600" />
+                                <span className="mr-1 text-xs">{target.status === 'draft' ? 'توزيع' : 'إعادة التوزيع'}</span>
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
