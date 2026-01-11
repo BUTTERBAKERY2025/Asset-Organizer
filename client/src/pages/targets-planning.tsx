@@ -1162,6 +1162,15 @@ export default function TargetsPlanning() {
                         <div key={day} className="text-center font-bold text-gray-600 p-2">{day}</div>
                       ))}
                       
+                      {/* Add empty cells before the first day to align with correct weekday */}
+                      {allocations.length > 0 && (() => {
+                        const firstDate = new Date(allocations[0].targetDate);
+                        const firstDayOfWeek = firstDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+                        return Array.from({ length: firstDayOfWeek }, (_, i) => (
+                          <div key={`empty-${i}`} className="p-3"></div>
+                        ));
+                      })()}
+                      
                       {allocations.map((alloc) => {
                         const date = new Date(alloc.targetDate);
                         const dayOfMonth = date.getDate();
