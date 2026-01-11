@@ -77,7 +77,21 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **`shared/schema.ts`**: Primary source of truth for database schema (TypeScript/Drizzle ORM)
 - **`database_schema.sql`**: Complete SQL reference file generated from schema.ts (94 tables)
 
-### Recent Schema Changes (2026-01-10)
+### Recent Schema Changes (2026-01-11)
+
+#### Comprehensive Net Variance for Cashier Journals
+**SQL Migration File**: `supabase_journal_bank_totals.sql`
+
+This migration adds support for comprehensive net variance calculation in cashier journal stats:
+- Adds `total_bank_pos_amount` column if not exists
+- Adds `total_bank_terminal_amount` column if not exists
+- Backfills existing journals from payment breakdowns
+
+**Net Variance Formula**: (actualCashDrawer + totalBankTerminalAmount) - (totalSales - returnAmount)
+
+This replaces the previous cash-only discrepancy calculation in the stats cards.
+
+### Previous Schema Changes (2026-01-10)
 
 #### RBAC Security Enhancement (NEW)
 **SQL Migration Files** (Execute in order in Supabase SQL Editor):
