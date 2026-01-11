@@ -1164,8 +1164,14 @@ export default function TargetsPlanning() {
                       
                       {/* Add empty cells before the first day to align with correct weekday */}
                       {allocations.length > 0 && (() => {
-                        const firstDate = new Date(allocations[0].targetDate);
+                        // Parse date string correctly to avoid timezone issues
+                        const dateStr = allocations[0].targetDate;
+                        const [year, month, day] = typeof dateStr === 'string' 
+                          ? dateStr.split('T')[0].split('-').map(Number)
+                          : [new Date(dateStr).getFullYear(), new Date(dateStr).getMonth() + 1, new Date(dateStr).getDate()];
+                        const firstDate = new Date(year, month - 1, day);
                         const firstDayOfWeek = firstDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+                        console.log('First date:', dateStr, 'Parsed:', firstDate, 'Day of week:', firstDayOfWeek);
                         return Array.from({ length: firstDayOfWeek }, (_, i) => (
                           <div key={`empty-${i}`} className="p-3"></div>
                         ));
