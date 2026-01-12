@@ -618,7 +618,19 @@ export default function CashierJournalFormPage() {
     const netSalesVal = getNetSales();
     const cashDiscrepancy = calculateDiscrepancy();
     const bankDiscrepancy = bankSummary.discrepancy;
-    const netVariance = totalActualCollected - netSalesVal;
+    
+    // Get delivery apps total (آجل - deferred payments)
+    // These should NOT be included in the expected collected amount
+    // because the money comes later from the app companies
+    const categoryTotals = getAdjustedCategoryTotals();
+    const appsTotal = categoryTotals.apps || 0;
+    
+    // Expected collected = net sales - deferred apps
+    // We only expect to collect cash + bank payments today
+    const expectedCollected = netSalesVal - appsTotal;
+    
+    // Net variance = actual collected - expected collected (excluding deferred apps)
+    const netVariance = totalActualCollected - expectedCollected;
     
     const absVariance = Math.abs(netVariance);
     const varianceType = absVariance <= 5 ? 'balanced' : absVariance <= 25 ? 'warning' : 'critical';
@@ -629,6 +641,8 @@ export default function CashierJournalFormPage() {
       bankDiscrepancy,
       totalActualCollected,
       netSales: netSalesVal,
+      expectedCollected, // Expected cash+bank (excluding deferred apps)
+      appsTotal, // Deferred delivery apps amount
       varianceType,
       hasBankPayments: bankSummary.bankPayments.length > 0,
     };
@@ -1804,16 +1818,19 @@ export default function CashierJournalFormPage() {
 
             {/* Comprehensive Reconciliation Summary - ملخص التسوية الشاملة */}
             {(() => {
+              // Use unified variance summary function
+              const varianceSummary = getVarianceSummary();
               const bankSummary = getBankReconciliationSummary();
               const totalTerminal = bankSummary.totalTerminalAmount || 0;
               const actualCash = formData.actualCashDrawer || 0;
-              const totalActualCollected = actualCash + totalTerminal;
-              // Use NET sales (after returns) for comparison
-              const netSalesForRecon = getNetSales();
-              const netVariance = totalActualCollected - netSalesForRecon;
+              const totalActualCollected = varianceSummary.totalActualCollected;
+              const netSalesForRecon = varianceSummary.netSales;
+              const appsTotal = varianceSummary.appsTotal;
+              const expectedCollected = varianceSummary.expectedCollected;
+              const netVariance = varianceSummary.netVariance;
               
-              const cashDiscrepancy = calculateDiscrepancy(); // actual - expected (positive = surplus)
-              const bankDiscrepancy = bankSummary.discrepancy; // terminal - pos (positive = surplus)
+              const cashDiscrepancy = varianceSummary.cashDiscrepancy;
+              const bankDiscrepancy = varianceSummary.bankDiscrepancy;
               
               // Detect misclassification: cash surplus offsets bank shortage (or vice versa)
               const hasMisclassification = Math.abs(cashDiscrepancy) > 5 && 
@@ -1822,9 +1839,7 @@ export default function CashierJournalFormPage() {
                 Math.abs(Math.abs(cashDiscrepancy) - Math.abs(bankDiscrepancy)) < 25;
               
               // Variance classification
-              const absVariance = Math.abs(netVariance);
-              const varianceType = absVariance <= 5 ? 'balanced' : 
-                absVariance <= 25 ? 'warning' : 'critical';
+              const varianceType = varianceSummary.varianceType;
               const varianceColor = varianceType === 'balanced' ? 'bg-emerald-100 border-emerald-300 text-emerald-800' :
                 varianceType === 'warning' ? 'bg-amber-100 border-amber-300 text-amber-800' :
                 'bg-red-100 border-red-300 text-red-800';
@@ -1838,34 +1853,38 @@ export default function CashierJournalFormPage() {
                       <Calculator className="w-5 h-5" />
                       ملخص التسوية الشاملة
                     </CardTitle>
-                    <CardDescription>مقارنة المبيعات المسجلة بالمحصل الفعلي (نقد + بنك)</CardDescription>
+                    <CardDescription>مقارنة المبيعات المسجلة بالمحصل الفعلي (نقد + بنك) - تطبيقات التوصيل آجلة</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4 pt-4">
                     {/* Main Calculation */}
                     <div className="space-y-3">
-                      {/* Show net sales with return breakdown if applicable */}
-                      {returnData.hasReturn && returnData.returnAmount > 0 ? (
-                        <div className="p-3 bg-gray-50 rounded-lg border space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground">إجمالي المبيعات الأصلي</span>
-                            <span className="font-medium">{formData.totalSales.toFixed(2)} ر.س</span>
-                          </div>
+                      {/* Show sales breakdown with apps deduction */}
+                      <div className="p-3 bg-gray-50 rounded-lg border space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">إجمالي المبيعات (من التفصيل)</span>
+                          <span className="font-medium">{getBreakdownTotal().toFixed(2)} ر.س</span>
+                        </div>
+                        {returnData.hasReturn && returnData.returnAmount > 0 && (
                           <div className="flex justify-between items-center text-red-600">
                             <span>المرتجع</span>
                             <span className="font-medium">-{returnData.returnAmount.toFixed(2)} ر.س</span>
                           </div>
-                          <Separator />
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium">صافي المبيعات</span>
-                            <span className="font-bold text-lg">{netSalesForRecon.toFixed(2)} ر.س</span>
+                        )}
+                        {appsTotal > 0 && (
+                          <div className="flex justify-between items-center text-purple-600">
+                            <span className="flex items-center gap-1">
+                              <Truck className="w-3 h-3" />
+                              تطبيقات التوصيل (آجل)
+                            </span>
+                            <span className="font-medium">-{appsTotal.toFixed(2)} ر.س</span>
                           </div>
+                        )}
+                        <Separator />
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">المتوقع تحصيله (نقد + بنك)</span>
+                          <span className="font-bold text-lg">{expectedCollected.toFixed(2)} ر.س</span>
                         </div>
-                      ) : (
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-muted-foreground">إجمالي المبيعات (من التفصيل)</span>
-                          <span className="font-bold text-lg">{getBreakdownTotal().toFixed(2)} ر.س</span>
-                        </div>
-                      )}
+                      </div>
                       
                       <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="text-sm text-blue-600 mb-2 font-medium">المحصل الفعلي:</div>
@@ -1896,9 +1915,12 @@ export default function CashierJournalFormPage() {
                           </span>
                         </div>
                         <p className="text-sm mt-1">
-                          {netVariance > 5 ? 'زيادة في المحصل عن المبيعات المسجلة' : 
-                           netVariance < -5 ? 'عجز في المحصل عن المبيعات المسجلة' : 
+                          {netVariance > 5 ? 'زيادة في المحصل عن المتوقع' : 
+                           netVariance < -5 ? 'عجز في المحصل عن المتوقع' : 
                            'الفرق ضمن الحد المقبول (±5 ر.س)'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          (المحصل: {totalActualCollected.toFixed(2)} - المتوقع: {expectedCollected.toFixed(2)})
                         </p>
                       </div>
                       
