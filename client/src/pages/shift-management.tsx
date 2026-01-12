@@ -488,6 +488,180 @@ export default function ShiftManagementPage() {
     }
   };
 
+  const exportScheduleToExcel = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لتصدير الجدول", variant: "destructive" });
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const reportData: any[] = [];
+      
+      filteredEmployees.forEach(employee => {
+        const empIdStr = String(employee.id);
+        const row: any = {
+          "اسم الموظف": employee.employeeName,
+          "المسمى الوظيفي": employee.jobTitle || "موظف",
+        };
+        
+        weekDates.forEach((date, index) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const cellData = scheduleData[empIdStr]?.[dateStr];
+          
+          if (cellData?.isOff) {
+            row[`${DAYS_AR[index]} ${format(date, "dd/MM")}`] = "إجازة";
+          } else if (cellData) {
+            row[`${DAYS_AR[index]} ${format(date, "dd/MM")}`] = `${cellData.startTime} - ${cellData.endTime}`;
+          } else {
+            row[`${DAYS_AR[index]} ${format(date, "dd/MM")}`] = "-";
+          }
+        });
+        
+        reportData.push(row);
+      });
+      
+      const ws = XLSX.utils.json_to_sheet(reportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "جدول الدوام");
+      
+      const fileName = `جدول_الدوام_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast({ title: "تم تصدير جدول الدوام بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في تصدير جدول الدوام", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportScheduleToPdf = async () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لتصدير الجدول", variant: "destructive" });
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const scheduleRows = filteredEmployees.map(employee => {
+        const empIdStr = String(employee.id);
+        const days = weekDates.map((date, index) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const cellData = scheduleData[empIdStr]?.[dateStr];
+          return {
+            day: DAYS_AR[index],
+            date: format(date, "dd/MM"),
+            isOff: cellData?.isOff || false,
+            startTime: cellData?.startTime || "",
+            endTime: cellData?.endTime || "",
+          };
+        });
+        return {
+          employeeName: employee.employeeName,
+          jobTitle: employee.jobTitle || "موظف",
+          days,
+        };
+      });
+
+      const res = await apiRequest("POST", "/api/reports/weekly-schedule-pdf", {
+        branchName: getBranchName(selectedBranch),
+        periodStart: format(currentWeekStart, "dd/MM/yyyy"),
+        periodEnd: format(addDays(currentWeekStart, 6), "dd/MM/yyyy"),
+        weekDates: weekDates.map((d, i) => ({ day: DAYS_AR[i], date: format(d, "dd/MM") })),
+        employees: scheduleRows,
+      });
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `جدول_الدوام_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast({ title: "تم تصدير جدول الدوام بصيغة PDF بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في تصدير جدول الدوام كـ PDF", variant: "destructive" });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const printSchedule = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لطباعة الجدول", variant: "destructive" });
+      return;
+    }
+    
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      const tableRows = filteredEmployees.map(employee => {
+        const empIdStr = String(employee.id);
+        const cells = weekDates.map((date, index) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const cellData = scheduleData[empIdStr]?.[dateStr];
+          if (cellData?.isOff) {
+            return `<td style="text-align: center; background: #fef3c7;">إجازة</td>`;
+          } else if (cellData) {
+            return `<td style="text-align: center;"><div>من ${cellData.startTime}</div><div>إلى ${cellData.endTime}</div></td>`;
+          }
+          return `<td style="text-align: center;">-</td>`;
+        }).join("");
+        return `<tr><td style="text-align: right; font-weight: bold;">${employee.employeeName}<br><span style="font-size: 11px; color: #666;">${employee.jobTitle || "موظف"}</span></td>${cells}</tr>`;
+      }).join("");
+
+      const headerCells = weekDates.map((date, index) => 
+        `<th style="text-align: center;"><div style="font-weight: bold;">${DAYS_AR[index]}</div><div style="font-size: 11px;">${format(date, "dd/MM")}</div></th>`
+      ).join("");
+
+      printWindow.document.write(`
+        <html dir="rtl">
+          <head>
+            <title>جدول الدوام - ${getBranchName(selectedBranch)}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; }
+              th { background-color: #f4f4f4; }
+              h1 { text-align: center; color: #333; margin-bottom: 5px; }
+              .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <h1>جدول الدوام الأسبوعي - ${getBranchName(selectedBranch)}</h1>
+            <div class="subtitle">${format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - ${format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: right;">الموظف</th>
+                  ${headerCells}
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   const exportToPdf = async () => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
@@ -621,6 +795,29 @@ export default function ShiftManagementPage() {
                       <Button variant="outline" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-next-week">
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="gap-2 h-11 sm:h-9" disabled={isExporting || isExportingPdf} data-testid="btn-export-schedule">
+                            {(isExporting || isExportingPdf) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            تصدير
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={exportScheduleToExcel} className="gap-2 cursor-pointer" data-testid="btn-export-schedule-excel">
+                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                            تصدير Excel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={exportScheduleToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-schedule-pdf">
+                            <File className="w-4 h-4 text-red-600" />
+                            تصدير PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={printSchedule} className="gap-2 cursor-pointer" data-testid="btn-print-schedule">
+                            <Printer className="w-4 h-4 text-blue-600" />
+                            طباعة
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </CardHeader>

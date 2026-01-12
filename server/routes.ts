@@ -22,7 +22,8 @@ import {
   generateMarketingReportPdf, type MarketingReportPdfData,
   generateProductionReportPdf, type ProductionReportPdfData,
   generateProductionOrderPdf, type ProductionOrderPdfData,
-  generateShiftSchedulePdf, type ShiftSchedulePdfData
+  generateShiftSchedulePdf, type ShiftSchedulePdfData,
+  generateWeeklySchedulePdf, type WeeklySchedulePdfData
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema } from "@shared/schema";
 import { z } from "zod";
@@ -12899,6 +12900,23 @@ export async function registerRoutes(
       res.send(pdfBuffer);
     } catch (error) {
       console.error("Error generating shift schedule PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for weekly schedule table
+  app.post("/api/reports/weekly-schedule-pdf", isAuthenticated, async (req, res) => {
+    try {
+      const data: WeeklySchedulePdfData = req.body;
+      if (!data.branchName || !data.periodStart || !data.periodEnd || !data.employees || !Array.isArray(data.employees)) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateWeeklySchedulePdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=weekly_schedule_${data.periodStart}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating weekly schedule PDF:", error);
       res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
     }
   });

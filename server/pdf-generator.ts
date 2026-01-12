@@ -961,6 +961,99 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
   return await generatePdfFromHtml(html, { landscape: false });
 }
 
+export interface WeeklyScheduleDay {
+  day: string;
+  date: string;
+  isOff: boolean;
+  startTime: string;
+  endTime: string;
+}
+
+export interface WeeklyScheduleEmployee {
+  employeeName: string;
+  jobTitle: string;
+  days: WeeklyScheduleDay[];
+}
+
+export interface WeeklySchedulePdfData {
+  branchName: string;
+  periodStart: string;
+  periodEnd: string;
+  weekDates: { day: string; date: string }[];
+  employees: WeeklyScheduleEmployee[];
+}
+
+export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Promise<Buffer> {
+  const headerCells = data.weekDates.map(d => 
+    `<th style="text-align: center; min-width: 80px;"><div style="font-weight: bold;">${d.day}</div><div style="font-size: 9px; color: #666;">${d.date}</div></th>`
+  ).join('');
+
+  const rows = data.employees.map(emp => {
+    const dayCells = emp.days.map(d => {
+      if (d.isOff) {
+        return `<td style="text-align: center; background: #fef3c7; color: #92400e; font-size: 10px;">إجازة</td>`;
+      } else if (d.startTime && d.endTime) {
+        return `<td style="text-align: center; font-size: 9px;"><div>من ${d.startTime}</div><div>إلى ${d.endTime}</div></td>`;
+      }
+      return `<td style="text-align: center;">-</td>`;
+    }).join('');
+    
+    return `
+      <tr>
+        <td style="text-align: right; font-weight: bold; font-size: 10px;">
+          ${emp.employeeName}
+          <div style="font-size: 9px; color: #666; font-weight: normal;">${emp.jobTitle}</div>
+        </td>
+        ${dayCells}
+      </tr>
+    `;
+  }).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 15px; font-size: 10px; }
+    ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
+    .info-row { text-align: center; font-size: 11px; color: #666; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 6px 4px; }
+    th { background-color: #f3f4f6; font-weight: bold; text-align: center; font-size: 10px; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+  </style>
+</head>
+<body>
+  ${getPdfHeaderHtml('جدول الدوام الأسبوعي', `الفرع: ${data.branchName}`)}
+  <div class="info-row">${data.periodStart} - ${data.periodEnd}</div>
+  
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align: right; min-width: 120px;">الموظف</th>
+        ${headerCells}
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+  
+  ${getSummaryHtml('ملخص الجدول', [
+    { label: 'عدد الموظفين', value: formatNumber(data.employees.length) },
+    { label: 'الفرع', value: data.branchName },
+    { label: 'الفترة', value: `${data.periodStart} - ${data.periodEnd}` },
+  ])}
+</body>
+</html>`;
+
+  return await generatePdfFromHtml(html, { landscape: true });
+}
+
 export interface ShiftScheduleEmployee {
   employeeName: string;
   workDays: number;
