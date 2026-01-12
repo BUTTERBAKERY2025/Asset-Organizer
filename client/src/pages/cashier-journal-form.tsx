@@ -2350,10 +2350,57 @@ export default function CashierJournalFormPage() {
         </div>
 
         {/* Sticky Bottom Action Bar - iPad Optimized */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-3 md:p-4">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-2 md:p-3">
+          <div className="max-w-7xl mx-auto flex flex-col gap-2">
+            {/* Quick Add Payment Buttons - Always visible */}
+            {!isReadOnly && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="text-xs text-gray-500 ml-2">إضافة سريعة:</span>
+                {[
+                  { value: "hunger_station", label: "هنجرستيشن", color: "bg-orange-500 hover:bg-orange-600" },
+                  { value: "keeta", label: "كيتا", color: "bg-green-500 hover:bg-green-600" },
+                  { value: "jahez", label: "جاهز", color: "bg-blue-500 hover:bg-blue-600" },
+                  { value: "marsool", label: "مرسول", color: "bg-purple-500 hover:bg-purple-600" },
+                  { value: "toyou", label: "ToYou", color: "bg-pink-500 hover:bg-pink-600" },
+                  { value: "talabat", label: "طلبات", color: "bg-red-500 hover:bg-red-600" },
+                  { value: "the_chefs", label: "ذا شيفز", color: "bg-amber-600 hover:bg-amber-700" },
+                ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
+                  <Button
+                    key={method.value}
+                    type="button"
+                    size="sm"
+                    className={`h-9 px-3 text-white text-xs ${method.color}`}
+                    onClick={() => {
+                      setPaymentBreakdowns([...paymentBreakdowns, { 
+                        paymentMethod: method.value, 
+                        amount: 0, 
+                        transactionCount: 0 
+                      }]);
+                    }}
+                    data-testid={`quick-add-sticky-${method.value}`}
+                  >
+                    <Truck className="w-3 h-3 ml-1" />
+                    {method.label}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3 text-xs border-dashed"
+                  onClick={addPaymentBreakdown}
+                  data-testid="quick-add-sticky-other"
+                >
+                  <Plus className="w-3 h-3 ml-1" />
+                  أخرى
+                </Button>
+              </div>
+            )}
+            
+            {/* Summary Stats and Action Buttons Row */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-2">
             {/* Summary Stats */}
-            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 text-sm">
+            <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4 text-sm">
               <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg">
                 <Receipt className="w-4 h-4 text-gray-500" />
                 <span className="text-gray-600">المبيعات:</span>
@@ -2429,11 +2476,12 @@ export default function CashierJournalFormPage() {
                 </Button>
               )}
             </div>
+            </div>
           </div>
         </div>
         
         {/* Spacer for sticky bar */}
-        <div className="h-24 md:h-20" />
+        <div className="h-36 md:h-28" />
       </div>
 
       {/* Variance Confirmation Dialog - for posting with mismatch */}
