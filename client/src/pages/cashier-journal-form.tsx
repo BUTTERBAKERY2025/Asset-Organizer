@@ -1675,18 +1675,20 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
-            {/* Returns Section - المرتجع */}
-            <Card className={`border-2 ${showReturns && returnData.hasReturn ? 'border-red-300 bg-red-50/30' : 'border-gray-200'}`}>
-              <CardHeader className={`pb-2 ${showReturns && returnData.hasReturn ? 'bg-red-50' : ''}`}>
+            {/* Returns Section - المرتجع - Compact Design */}
+            <Card className={`border ${showReturns && returnData.hasReturn ? 'border-red-200 bg-red-50/30' : 'border-gray-200'}`}>
+              <CardHeader className={`py-2 px-3 ${showReturns && returnData.hasReturn ? 'bg-red-50' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <RotateCcw className="w-5 h-5 text-red-600" />
-                    <CardTitle className={`text-base ${showReturns && returnData.hasReturn ? 'text-red-700' : 'text-gray-600'}`}>
+                    <div className={`p-1.5 rounded ${showReturns ? 'bg-red-200' : 'bg-gray-200'}`}>
+                      <RotateCcw className={`w-4 h-4 ${showReturns ? 'text-red-700' : 'text-gray-600'}`} />
+                    </div>
+                    <span className={`text-sm font-medium ${showReturns && returnData.hasReturn ? 'text-red-700' : 'text-gray-600'}`}>
                       المرتجعات
-                    </CardTitle>
+                    </span>
                     {returnData.hasReturn && returnData.returnAmount > 0 && (
-                      <Badge variant="destructive" className="mr-2">
-                        -{returnData.returnAmount.toFixed(2)} ر.س
+                      <Badge variant="destructive" className="text-xs px-1.5 py-0.5">
+                        -{returnData.returnAmount.toFixed(2)}
                       </Badge>
                     )}
                   </div>
@@ -1695,7 +1697,7 @@ export default function CashierJournalFormPage() {
                       type="button"
                       variant={showReturns ? "destructive" : "outline"}
                       size="sm"
-                      className="h-12 text-base"
+                      className="h-8 text-xs px-2"
                       onClick={() => {
                         if (showReturns) {
                           setShowReturns(false);
@@ -1709,50 +1711,46 @@ export default function CashierJournalFormPage() {
                     >
                       {showReturns ? (
                         <>
-                          <X className="w-4 h-4 ml-1" />
-                          إلغاء المرتجع
+                          <X className="w-3 h-3 ml-1" />
+                          إلغاء
                         </>
                       ) : (
                         <>
-                          <Plus className="w-4 h-4 ml-1" />
+                          <Plus className="w-3 h-3 ml-1" />
                           إضافة مرتجع
                         </>
                       )}
                     </Button>
                   )}
                 </div>
-                {!showReturns && !returnData.hasReturn && (
-                  <CardDescription className="text-gray-500 text-sm mt-1">
-                    اضغط على "إضافة مرتجع" في حال وجود مرتجع يُخصم من المبيعات
-                  </CardDescription>
-                )}
               </CardHeader>
               
               {showReturns && (
-                <CardContent className="space-y-4 pt-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-red-700 font-medium">مبلغ المرتجع (ر.س) *</Label>
+                <CardContent className="space-y-2 pt-2 px-3 pb-3">
+                  {/* Compact Row: Amount + Payment Method side by side */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-red-700 font-medium">مبلغ المرتجع (ر.س)</Label>
                       <Input
                         type="number"
                         value={returnData.returnAmount || ""}
                         onChange={(e) => setReturnData(prev => ({ ...prev, returnAmount: parseFloat(e.target.value) || 0 }))}
-                        className="h-14 border-red-200 focus:border-red-400 text-xl font-bold text-center"
+                        className="h-10 border-red-200 text-base font-bold text-center"
                         placeholder="0.00"
                         disabled={isReadOnly}
                         data-testid="input-return-amount"
                       />
-                      <p className="text-xs text-red-600">هذا المبلغ سيُخصم من إجمالي المبيعات</p>
+                      <p className="text-[10px] text-red-500">يُخصم من إجمالي المبيعات</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-red-700 font-medium">طريقة الاسترداد *</Label>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-red-700 font-medium">طريقة الاسترداد</Label>
                       <Select
                         value={returnData.returnPaymentMethod}
                         onValueChange={(v) => setReturnData(prev => ({ ...prev, returnPaymentMethod: v }))}
                         disabled={isReadOnly}
                       >
-                        <SelectTrigger className="h-12 border-red-200 text-base" data-testid="select-return-method">
-                          <SelectValue placeholder="اختر طريقة الاسترداد" />
+                        <SelectTrigger className="h-10 border-red-200 text-sm" data-testid="select-return-method">
+                          <SelectValue placeholder="اختر" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cash">نقداً</SelectItem>
@@ -1763,60 +1761,50 @@ export default function CashierJournalFormPage() {
                           <SelectItem value="card_other">بطاقة أخرى</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">طريقة الدفع التي استخدمها العميل في الشراء الأصلي</p>
+                      <p className="text-[10px] text-gray-500">طريقة الدفع الأصلية</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-gray-700">رقم فاتورة المرتجع (اختياري)</Label>
+                  {/* Compact Row: Reference + Reason (smaller) */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-gray-500">رقم الفاتورة (اختياري)</Label>
                       <Input
                         type="text"
                         value={returnData.returnReference || ""}
                         onChange={(e) => setReturnData(prev => ({ ...prev, returnReference: e.target.value }))}
-                        className="h-11"
-                        placeholder="مثال: INV-2024-001234"
+                        className="h-8 text-xs"
+                        placeholder="INV-2024-001234"
                         disabled={isReadOnly}
                         data-testid="input-return-reference"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-gray-700">سبب المرتجع (اختياري)</Label>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-gray-500">السبب (اختياري)</Label>
                       <Input
                         type="text"
                         value={returnData.returnReason || ""}
                         onChange={(e) => setReturnData(prev => ({ ...prev, returnReason: e.target.value }))}
-                        className="h-11"
-                        placeholder="مثال: المنتج غير مطابق للطلب"
+                        className="h-8 text-xs"
+                        placeholder="المنتج غير مطابق"
                         disabled={isReadOnly}
                         data-testid="input-return-reason"
                       />
                     </div>
                   </div>
                   
+                  {/* Compact Impact Summary */}
                   {returnData.returnAmount > 0 && (
-                    <div className="p-4 bg-red-100 border border-red-300 rounded-lg">
-                      <div className="flex items-center gap-2 text-red-700 font-bold text-lg">
-                        <AlertCircle className="w-5 h-5" />
-                        <span>تأثير المرتجع على اليومية:</span>
-                      </div>
-                      <div className="mt-3 space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">إجمالي المبيعات الأصلي:</span>
-                          <span className="font-medium">{formData.totalSales.toFixed(2)} ر.س</span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>المرتجع:</span>
-                          <span className="font-medium">-{returnData.returnAmount.toFixed(2)} ر.س</span>
-                        </div>
-                        <Separator className="bg-red-300" />
-                        <div className="flex justify-between text-lg font-bold">
-                          <span>صافي المبيعات:</span>
-                          <span className="text-red-700">{getNetSales().toFixed(2)} ر.س</span>
-                        </div>
+                    <div className="flex items-center gap-2 text-xs bg-red-100 border border-red-200 rounded px-2 py-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-gray-600">{formData.totalSales.toFixed(2)} ر.س</span>
+                        <span>-</span>
+                        <span className="text-red-600 font-medium">{returnData.returnAmount.toFixed(2)} ر.س</span>
+                        <span>=</span>
+                        <span className="font-bold text-red-700">{getNetSales().toFixed(2)} ر.س</span>
+                        <span className="text-gray-500">(صافي)</span>
                         {returnData.returnPaymentMethod === "cash" && (
-                          <p className="text-xs text-red-600 mt-2 bg-red-200 p-2 rounded">
-                            ⚠️ سيتم خصم المرتجع من النقد المتوقع في الصندوق
-                          </p>
+                          <span className="text-red-600 bg-red-200 px-1 rounded text-[10px]">⚠️ يُخصم من النقد</span>
                         )}
                       </div>
                     </div>
