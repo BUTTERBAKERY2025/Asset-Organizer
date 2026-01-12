@@ -2796,19 +2796,9 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Journal already posted or submitted" });
       }
       
-      // Server-side validation: fetch payment breakdowns and verify totals match
-      const breakdowns = await storage.getPaymentBreakdowns(id);
-      if (breakdowns && breakdowns.length > 0) {
-        const breakdownTotal = breakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
-        const totalSales = parseFloat(String(existing.totalSales)) || 0;
-        const tolerance = 0.01;
-        if (Math.abs(breakdownTotal - totalSales) > tolerance) {
-          return res.status(400).json({ 
-            error: "لا يمكن الترحيل: مجموع التفصيل لا يطابق إجمالي المبيعات",
-            details: { breakdownTotal, totalSales, difference: Math.abs(breakdownTotal - totalSales) }
-          });
-        }
-      }
+      // Note: Variance validation is now handled client-side with confirmation dialog
+      // Cashiers can post journals with variance after confirming in the UI
+      // The variance is recorded in the journal for audit purposes
       
       // Create signature if provided
       if (signatureData) {
