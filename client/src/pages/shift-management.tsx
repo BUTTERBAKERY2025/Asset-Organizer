@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File } from "lucide-react";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
@@ -49,6 +49,11 @@ export default function ShiftManagementPage() {
   const [selectedShiftProfile, setSelectedShiftProfile] = useState<string>("morning");
   const [employeeShiftSelections, setEmployeeShiftSelections] = useState<Record<string, string>>({});
   const reportRef = useRef<HTMLDivElement>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -750,6 +755,187 @@ export default function ShiftManagementPage() {
 
   const [, navigate] = useLocation();
 
+  // Download Excel template for importing schedules
+  const downloadImportTemplate = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين في هذا الفرع", variant: "destructive" });
+      return;
+    }
+
+    const templateData = filteredEmployees.map(emp => {
+      const row: any = {
+        "رقم الموظف Employee ID": emp.id,
+        "اسم الموظف Employee Name": emp.employeeName,
+        "المسمى الوظيفي Job Title": emp.jobTitle || "موظف",
+      };
+      weekDates.forEach((date, index) => {
+        row[`${DAYS_AR[index]} ${DAYS_EN[index]} ${format(date, "dd/MM")}`] = "";
+      });
+      return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Schedule Template");
+    
+    // Add instructions sheet
+    const instructions = [
+      { "التعليمات Instructions": "كيفية ملء الجدول / How to fill the schedule:" },
+      { "التعليمات Instructions": "" },
+      { "التعليمات Instructions": "1. لا تغير رقم الموظف أو الاسم / Do not change Employee ID or Name" },
+      { "التعليمات Instructions": "2. لتحديد وقت العمل اكتب: 08:00-16:00 / For work time write: 08:00-16:00" },
+      { "التعليمات Instructions": "3. للإجازة اكتب: إجازة أو OFF / For day off write: إجازة or OFF" },
+      { "التعليمات Instructions": "4. اترك الخلية فارغة إذا لم يتغير الجدول / Leave cell empty if no change" },
+      { "التعليمات Instructions": "" },
+      { "التعليمات Instructions": "أمثلة Examples:" },
+      { "التعليمات Instructions": "08:00-16:00 = وردية صباحية / Morning shift" },
+      { "التعليمات Instructions": "16:00-00:00 = وردية مسائية / Evening shift" },
+      { "التعليمات Instructions": "إجازة = يوم إجازة / Day off" },
+    ];
+    const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+    XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+    
+    const fileName = `نموذج_استيراد_الجدول_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast({ title: "تم تحميل نموذج الاستيراد بنجاح" });
+  };
+
+  // Handle Excel file upload and parsing
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        const errors: string[] = [];
+        const parsedData: any[] = [];
+
+        jsonData.forEach((row: any, rowIndex) => {
+          const empId = row["رقم الموظف Employee ID"];
+          const empName = row["اسم الموظف Employee Name"];
+          
+          if (!empId) {
+            errors.push(`صف ${rowIndex + 2}: رقم الموظف مفقود`);
+            return;
+          }
+
+          const employee = filteredEmployees.find(e => e.id === empId || e.id === Number(empId));
+          if (!employee) {
+            errors.push(`صف ${rowIndex + 2}: الموظف "${empName}" غير موجود في الفرع`);
+            return;
+          }
+
+          const scheduleRow: any = {
+            employeeId: employee.id,
+            employeeName: employee.employeeName,
+            schedules: []
+          };
+
+          weekDates.forEach((date, index) => {
+            const columnKey = Object.keys(row).find(k => k.includes(DAYS_EN[index]) || k.includes(DAYS_AR[index]));
+            const cellValue = columnKey ? String(row[columnKey] || "").trim() : "";
+            
+            if (!cellValue) return;
+
+            const dateStr = format(date, "yyyy-MM-dd");
+            
+            if (cellValue.toLowerCase() === "off" || cellValue === "إجازة" || cellValue.includes("إجازة")) {
+              scheduleRow.schedules.push({
+                date: dateStr,
+                dayOfWeek: DAYS_ORDER[index],
+                isOff: true,
+                startTime: null,
+                endTime: null
+              });
+            } else if (cellValue.includes("-")) {
+              const [start, end] = cellValue.split("-").map(t => t.trim());
+              if (start && end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end)) {
+                scheduleRow.schedules.push({
+                  date: dateStr,
+                  dayOfWeek: DAYS_ORDER[index],
+                  isOff: false,
+                  startTime: start.padStart(5, "0"),
+                  endTime: end.padStart(5, "0")
+                });
+              } else {
+                errors.push(`صف ${rowIndex + 2}, يوم ${DAYS_AR[index]}: تنسيق الوقت غير صحيح`);
+              }
+            }
+          });
+
+          if (scheduleRow.schedules.length > 0) {
+            parsedData.push(scheduleRow);
+          }
+        });
+
+        setImportData(parsedData);
+        setImportErrors(errors);
+        setIsImportDialogOpen(true);
+      } catch (error) {
+        toast({ title: "خطأ", description: "فشل في قراءة ملف Excel", variant: "destructive" });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Apply imported schedules
+  const applyImportedSchedules = async () => {
+    if (importData.length === 0) {
+      toast({ title: "تنبيه", description: "لا توجد بيانات للاستيراد", variant: "destructive" });
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const schedulesToSave: any[] = [];
+      
+      importData.forEach(empData => {
+        const employee = filteredEmployees.find(e => e.id === empData.employeeId);
+        if (!employee) return;
+
+        empData.schedules.forEach((schedule: any) => {
+          schedulesToSave.push({
+            employeeId: employee.linkedUserId || `branch_emp_${employee.id}`,
+            employeeName: employee.employeeName,
+            branchId: selectedBranch,
+            branchEmployeeId: employee.id,
+            scheduleDate: schedule.date,
+            dayOfWeek: schedule.dayOfWeek,
+            isOff: schedule.isOff,
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            status: "scheduled"
+          });
+        });
+      });
+
+      // Save via API
+      await apiRequest("POST", "/api/employee-schedules/bulk", { schedules: schedulesToSave });
+      
+      toast({ title: "تم استيراد الجداول بنجاح", description: `تم تحديث ${schedulesToSave.length} جدول` });
+      setIsImportDialogOpen(false);
+      setImportData([]);
+      setImportErrors([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في حفظ الجداول المستوردة", variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="p-6 space-y-6">
@@ -854,8 +1040,24 @@ export default function ShiftManagementPage() {
                             <Printer className="w-4 h-4 text-blue-600" />
                             طباعة
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={downloadImportTemplate} className="gap-2 cursor-pointer" data-testid="btn-download-template">
+                            <Download className="w-4 h-4 text-amber-600" />
+                            تحميل نموذج الاستيراد
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2 cursor-pointer" data-testid="btn-import-excel">
+                            <Upload className="w-4 h-4 text-purple-600" />
+                            استيراد من Excel
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept=".xlsx,.xls"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
                     </div>
                   </div>
                 </CardHeader>
@@ -1291,6 +1493,91 @@ export default function ShiftManagementPage() {
           </Tabs>
         )}
       </div>
+
+      {/* Import Preview Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileUp className="w-5 h-5" />
+              معاينة البيانات المستوردة
+            </DialogTitle>
+            <DialogDescription>
+              راجع البيانات قبل الحفظ. سيتم تحديث الجداول الموجودة أو إنشاء جداول جديدة.
+            </DialogDescription>
+          </DialogHeader>
+
+          {importErrors.length > 0 && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 mb-4">
+              <h4 className="font-semibold text-destructive flex items-center gap-2 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                تحذيرات ({importErrors.length})
+              </h4>
+              <ul className="text-sm text-destructive space-y-1 list-disc list-inside max-h-32 overflow-y-auto">
+                {importErrors.map((error, i) => (
+                  <li key={i}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {importData.length > 0 && (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">الموظف</TableHead>
+                    <TableHead className="text-center">عدد الأيام</TableHead>
+                    <TableHead className="text-right">التفاصيل</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {importData.map((emp, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{emp.schedules.length} أيام</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {emp.schedules.slice(0, 4).map((s: any, i: number) => (
+                            <Badge key={i} variant={s.isOff ? "outline" : "default"} className="text-xs">
+                              {s.isOff ? "إجازة" : `${s.startTime}-${s.endTime}`}
+                            </Badge>
+                          ))}
+                          {emp.schedules.length > 4 && (
+                            <Badge variant="secondary" className="text-xs">+{emp.schedules.length - 4}</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {importData.length === 0 && importErrors.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              لم يتم العثور على بيانات صالحة للاستيراد
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button
+              onClick={applyImportedSchedules}
+              disabled={importData.length === 0 || isImporting}
+              className="gap-2"
+            >
+              {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              استيراد {importData.reduce((sum, e) => sum + e.schedules.length, 0)} جدول
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
