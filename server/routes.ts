@@ -8221,13 +8221,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-shift-targets/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       const target = await storage.getCashierShiftTarget(id);
       if (!target) {
         return res.status(404).json({ error: "الهدف غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && target.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && target.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الهدف" });
+        }
+      }
+      
       res.json(target);
     } catch (error) {
       console.error("Error fetching cashier shift target:", error);
@@ -8238,6 +8247,18 @@ export async function registerRoutes(
   app.get("/api/cashier-shift-targets/branch/:branchId/date/:date", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId, date } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (!mandatoryBranch) {
+          return res.json([]);
+        }
+        if (branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الفرع" });
+        }
+      }
+      
       const targets = await storage.getCashierShiftTargetsByBranch(branchId, date);
       res.json(targets);
     } catch (error) {
@@ -8246,15 +8267,26 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/cashier/:cashierId", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-shift-targets/cashier/:cashierId", isAuthenticated, async (req: any, res) => {
     try {
       const { cashierId } = req.params;
       const { startDate, endDate } = req.query;
-      const targets = await storage.getCashierShiftTargetsByCashier(
+      
+      let targets = await storage.getCashierShiftTargetsByCashier(
         cashierId, 
         startDate as string | undefined, 
         endDate as string | undefined
       );
+      
+      // SECURITY: Filter by branch for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (!mandatoryBranch) {
+          return res.json([]);
+        }
+        targets = targets.filter((t: any) => t.branchId === mandatoryBranch);
+      }
+      
       res.json(targets);
     } catch (error) {
       console.error("Error fetching cashier targets:", error);
@@ -8265,6 +8297,15 @@ export async function registerRoutes(
   app.post("/api/cashier-shift-targets", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
     try {
       const currentUser = req.currentUser;
+      
+      // SECURITY: Validate branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && req.body.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء أهداف لفرع آخر" });
+        }
+      }
+      
       const targetData = { ...req.body, createdBy: currentUser.id };
       const target = await storage.createCashierShiftTarget(targetData);
       res.status(201).json(target);
@@ -8277,6 +8318,18 @@ export async function registerRoutes(
   app.post("/api/cashier-shift-targets/bulk", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
     try {
       const currentUser = req.currentUser;
+      
+      // SECURITY: Validate branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && req.body.targets) {
+          const invalidTarget = req.body.targets.find((t: any) => t.branchId && t.branchId !== mandatoryBranch);
+          if (invalidTarget) {
+            return res.status(403).json({ error: "غير مصرح بإنشاء أهداف لفرع آخر" });
+          }
+        }
+      }
+      
       const targets = req.body.targets?.map((t: any) => ({ ...t, createdBy: currentUser.id })) || [];
       const created = await storage.bulkCreateCashierShiftTargets(targets);
       res.status(201).json(created);
@@ -8294,8 +8347,16 @@ export async function registerRoutes(
         return res.status(404).json({ error: "الهدف غير موجود" });
       }
 
-      const currentUser = req.currentUser;
-      if (currentUser.role !== 'admin' && req.body.branchId && req.body.branchId !== existing.branchId) {
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا الهدف" });
+        }
+      }
+      
+      // Prevent branch changes for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId && req.body.branchId !== existing.branchId) {
         return res.status(403).json({ error: "لا يمكنك تغيير الفرع" });
       }
 
@@ -8307,9 +8368,23 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req, res) => {
+  app.delete("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existing = await storage.getCashierShiftTarget(id);
+      if (!existing) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+      
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا الهدف" });
+        }
+      }
+      
       await storage.deleteCashierShiftTarget(id);
       res.status(204).send();
     } catch (error) {
@@ -8322,11 +8397,23 @@ export async function registerRoutes(
   // Average Ticket Targets API - أهداف متوسط الفاتورة
   // ==========================================
 
-  app.get("/api/average-ticket-targets", isAuthenticated, async (req, res) => {
+  app.get("/api/average-ticket-targets", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId, isActive } = req.query;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
+      }
+      
       const filters: any = {};
-      if (branchId) filters.branchId = branchId;
+      if (effectiveBranchId) filters.branchId = effectiveBranchId;
       if (isActive !== undefined) filters.isActive = isActive === 'true';
       
       const targets = await storage.getAllAverageTicketTargets(filters);
@@ -8337,11 +8424,23 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/average-ticket-targets/active", isAuthenticated, async (req, res) => {
+  app.get("/api/average-ticket-targets/active", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId, cashierId } = req.query;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
+      }
+      
       const targets = await storage.getActiveAverageTicketTargets(
-        branchId as string | undefined,
+        effectiveBranchId,
         cashierId as string | undefined
       );
       res.json(targets);
@@ -8351,13 +8450,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/average-ticket-targets/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/average-ticket-targets/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       const target = await storage.getAverageTicketTarget(id);
       if (!target) {
         return res.status(404).json({ error: "الهدف غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && target.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && target.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الهدف" });
+        }
+      }
+      
       res.json(target);
     } catch (error) {
       console.error("Error fetching average ticket target:", error);
@@ -8368,6 +8476,15 @@ export async function registerRoutes(
   app.post("/api/average-ticket-targets", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
     try {
       const currentUser = req.currentUser;
+      
+      // SECURITY: Validate branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && req.body.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء أهداف لفرع آخر" });
+        }
+      }
+      
       const targetData = { ...req.body, createdBy: currentUser.id };
       const target = await storage.createAverageTicketTarget(targetData);
       res.status(201).json(target);
@@ -8377,13 +8494,29 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req, res) => {
+  app.patch("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const updated = await storage.updateAverageTicketTarget(id, req.body);
-      if (!updated) {
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existing = await storage.getAverageTicketTarget(id);
+      if (!existing) {
         return res.status(404).json({ error: "الهدف غير موجود" });
       }
+      
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا الهدف" });
+        }
+      }
+      
+      // Prevent branch changes for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId && req.body.branchId !== existing.branchId) {
+        return res.status(403).json({ error: "لا يمكنك تغيير الفرع" });
+      }
+      
+      const updated = await storage.updateAverageTicketTarget(id, req.body);
       res.json(updated);
     } catch (error) {
       console.error("Error updating average ticket target:", error);
@@ -8391,9 +8524,23 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req, res) => {
+  app.delete("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existing = await storage.getAverageTicketTarget(id);
+      if (!existing) {
+        return res.status(404).json({ error: "الهدف غير موجود" });
+      }
+      
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا الهدف" });
+        }
+      }
+      
       await storage.deleteAverageTicketTarget(id);
       res.status(204).send();
     } catch (error) {
@@ -8434,6 +8581,18 @@ export async function registerRoutes(
   app.get("/api/performance-alerts/unread/:branchId", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (!mandatoryBranch) {
+          return res.json([]);
+        }
+        if (branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لتنبيهات هذا الفرع" });
+        }
+      }
+      
       const alerts = await storage.getUnreadAlerts(branchId);
       res.json(alerts);
     } catch (error) {
@@ -8442,13 +8601,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/performance-alerts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/performance-alerts/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       const alert = await storage.getPerformanceAlert(id);
       if (!alert) {
         return res.status(404).json({ error: "التنبيه غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && alert.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا التنبيه" });
+        }
+      }
+      
       res.json(alert);
     } catch (error) {
       console.error("Error fetching performance alert:", error);
@@ -8458,6 +8626,14 @@ export async function registerRoutes(
 
   app.post("/api/performance-alerts", isAuthenticated, async (req: any, res) => {
     try {
+      // SECURITY: Validate branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && req.body.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء تنبيهات لفرع آخر" });
+        }
+      }
+      
       const alert = await storage.createPerformanceAlert(req.body);
       res.status(201).json(alert);
     } catch (error) {
@@ -8466,13 +8642,24 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/performance-alerts/:id/read", isAuthenticated, async (req, res) => {
+  app.patch("/api/performance-alerts/:id/read", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const updated = await storage.markAlertAsRead(id);
-      if (!updated) {
+      
+      // SECURITY: Verify branch access for non-admin users
+      const alert = await storage.getPerformanceAlert(id);
+      if (!alert) {
         return res.status(404).json({ error: "التنبيه غير موجود" });
       }
+      
+      if (!isUserAdmin(req) && alert.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا التنبيه" });
+        }
+      }
+      
+      const updated = await storage.markAlertAsRead(id);
       res.json(updated);
     } catch (error) {
       console.error("Error marking alert as read:", error);
@@ -8484,10 +8671,21 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const currentUser = req.currentUser;
-      const updated = await storage.acknowledgeAlert(id, currentUser.id);
-      if (!updated) {
+      
+      // SECURITY: Verify branch access for non-admin users
+      const alert = await storage.getPerformanceAlert(id);
+      if (!alert) {
         return res.status(404).json({ error: "التنبيه غير موجود" });
       }
+      
+      if (!isUserAdmin(req) && alert.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بتأكيد هذا التنبيه" });
+        }
+      }
+      
+      const updated = await storage.acknowledgeAlert(id, currentUser.id);
       res.json(updated);
     } catch (error) {
       console.error("Error acknowledging alert:", error);
@@ -8495,12 +8693,29 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/performance-alerts/bulk-read", isAuthenticated, async (req, res) => {
+  app.post("/api/performance-alerts/bulk-read", isAuthenticated, async (req: any, res) => {
     try {
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
         return res.status(400).json({ error: "قائمة المعرفات مطلوبة" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (!mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول" });
+        }
+        
+        // Fetch all alerts and verify they belong to user's branch
+        for (const id of ids) {
+          const alert = await storage.getPerformanceAlert(id);
+          if (alert && alert.branchId && alert.branchId !== mandatoryBranch) {
+            return res.status(403).json({ error: "غير مصرح بتعديل تنبيهات فرع آخر" });
+          }
+        }
+      }
+      
       await storage.bulkMarkAlertsAsRead(ids);
       res.json({ success: true });
     } catch (error) {
@@ -8540,6 +8755,18 @@ export async function registerRoutes(
   app.get("/api/shift-performance-tracking/active/:branchId/:date/:shiftType", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId, date, shiftType } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (!mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول" });
+        }
+        if (branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الفرع" });
+        }
+      }
+      
       const tracking = await storage.getActiveShiftPerformance(branchId, date, shiftType);
       if (!tracking) {
         return res.status(404).json({ error: "لا يوجد تتبع للشفت" });
@@ -8551,13 +8778,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/shift-performance-tracking/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       const tracking = await storage.getShiftPerformanceTracking(id);
       if (!tracking) {
         return res.status(404).json({ error: "التتبع غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && tracking.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && tracking.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا التتبع" });
+        }
+      }
+      
       res.json(tracking);
     } catch (error) {
       console.error("Error fetching shift performance tracking:", error);
@@ -8567,6 +8803,14 @@ export async function registerRoutes(
 
   app.post("/api/shift-performance-tracking", isAuthenticated, async (req: any, res) => {
     try {
+      // SECURITY: Validate branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && req.body.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء تتبع لفرع آخر" });
+        }
+      }
+      
       const tracking = await storage.createShiftPerformanceTracking(req.body);
       res.status(201).json(tracking);
     } catch (error) {
@@ -8575,13 +8819,29 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/shift-performance-tracking/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const updated = await storage.updateShiftPerformanceTracking(id, req.body);
-      if (!updated) {
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existing = await storage.getShiftPerformanceTracking(id);
+      if (!existing) {
         return res.status(404).json({ error: "التتبع غير موجود" });
       }
+      
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا التتبع" });
+        }
+      }
+      
+      // Prevent branch changes for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId && req.body.branchId !== existing.branchId) {
+        return res.status(403).json({ error: "لا يمكنك تغيير الفرع" });
+      }
+      
+      const updated = await storage.updateShiftPerformanceTracking(id, req.body);
       res.json(updated);
     } catch (error) {
       console.error("Error updating shift performance tracking:", error);
@@ -8591,6 +8851,14 @@ export async function registerRoutes(
 
   app.put("/api/shift-performance-tracking/upsert", isAuthenticated, async (req: any, res) => {
     try {
+      // SECURITY: Validate branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && req.body.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء/تعديل تتبع لفرع آخر" });
+        }
+      }
+      
       const tracking = await storage.upsertShiftPerformanceTracking(req.body);
       res.json(tracking);
     } catch (error) {
