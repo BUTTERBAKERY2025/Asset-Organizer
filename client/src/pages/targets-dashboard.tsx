@@ -974,17 +974,17 @@ export default function TargetsDashboard() {
                             </CardHeader>
                             <CardContent>
                               <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm table-fixed">
                                   <thead>
                                     <tr className="bg-gray-100">
-                                      <th className="p-2 text-right">التاريخ</th>
-                                      <th className="p-2 text-right">اليوم</th>
-                                      <th className="p-2 text-right">الهدف</th>
-                                      <th className="p-2 text-right">المحقق</th>
-                                      <th className="p-2 text-right">النسبة</th>
-                                      <th className="p-2 text-right">الفارق</th>
-                                      <th className="p-2 text-right">يوميات</th>
-                                      <th className="p-2 text-right">تراكمي%</th>
+                                      <th className="p-2 text-right w-[100px]">التاريخ</th>
+                                      <th className="p-2 text-right w-[80px]">اليوم</th>
+                                      <th className="p-2 text-left w-[110px]">الهدف</th>
+                                      <th className="p-2 text-left w-[110px]">المحقق</th>
+                                      <th className="p-2 text-center w-[70px]">النسبة</th>
+                                      <th className="p-2 text-left w-[110px]">الفارق</th>
+                                      <th className="p-2 text-center w-[80px]">يوميات</th>
+                                      <th className="p-2 text-center w-[70px]">تراكمي%</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -992,22 +992,22 @@ export default function TargetsDashboard() {
                                       .filter(d => d.achievedAmount > 0 || new Date(d.date) <= new Date())
                                       .map((day) => (
                                       <tr key={day.date} className={`border-b hover:bg-gray-50 ${day.achievedAmount > 0 ? '' : 'text-gray-400'}`}>
-                                        <td className="p-2">{new Date(day.date).toLocaleDateString('en-GB')}</td>
-                                        <td className="p-2">{day.dayName}</td>
-                                        <td className="p-2 font-mono">{formatCurrency(day.targetAmount)}</td>
-                                        <td className="p-2 font-mono font-bold">{formatCurrency(day.achievedAmount)}</td>
-                                        <td className={`p-2 font-bold ${getPercentColor(day.achievementPercent)}`}>
+                                        <td className="p-2 text-right">{new Date(day.date).toLocaleDateString('en-GB')}</td>
+                                        <td className="p-2 text-right">{day.dayName}</td>
+                                        <td className="p-2 text-left font-mono">{formatCurrency(day.targetAmount)}</td>
+                                        <td className="p-2 text-left font-mono font-bold">{formatCurrency(day.achievedAmount)}</td>
+                                        <td className={`p-2 text-center font-bold ${getPercentColor(day.achievementPercent)}`}>
                                           {day.achievementPercent.toFixed(0)}%
                                         </td>
-                                        <td className={`p-2 font-mono ${day.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        <td className={`p-2 text-left font-mono ${day.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                           {day.variance >= 0 ? '+' : ''}{formatCurrency(day.variance)}
                                         </td>
-                                        <td className="p-2">
+                                        <td className="p-2 text-center">
                                           {day.journalCount > 0 && (
                                             <Badge variant="outline">{day.journalCount} يومية</Badge>
                                           )}
                                         </td>
-                                        <td className={`p-2 font-bold ${getPercentColor(day.cumulativePercent)}`}>
+                                        <td className={`p-2 text-center font-bold ${getPercentColor(day.cumulativePercent)}`}>
                                           {day.cumulativePercent.toFixed(1)}%
                                         </td>
                                       </tr>
