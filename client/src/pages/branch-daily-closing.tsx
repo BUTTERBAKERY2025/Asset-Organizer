@@ -223,15 +223,28 @@ export default function BranchDailyClosingPage() {
 
   const selectedJournalsList = journalPreview?.journals?.filter((j: any) => selectedJournals.includes(j.id)) || [];
   const selectedTotals = {
-    totalSales: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.totalSales || 0), 0),
-    cashTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.cashTotal || 0), 0),
-    networkTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.networkTotal || 0), 0),
-    deliveryTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.deliveryTotal || 0), 0),
-    totalCashDiscrepancy: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.discrepancyAmount || 0), 0),
-    totalBankDiscrepancy: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.bankDiscrepancyTotal || 0), 0),
-    totalCustomerCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.customerCount || 0), 0),
+    totalSales: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.totalSales ?? 0), 0),
+    cashTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.cashTotal ?? 0), 0),
+    networkTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.networkTotal ?? 0), 0),
+    deliveryTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.deliveryTotal ?? 0), 0),
+    totalCashDiscrepancy: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.discrepancyAmount ?? 0), 0),
+    totalBankDiscrepancy: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.bankDiscrepancyTotal ?? 0), 0),
+    totalCustomerCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.customerCount ?? 0), 0),
+    totalOpeningBalance: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.openingBalance ?? 0), 0),
+    totalExpectedCash: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.expectedCash ?? 0), 0),
+    totalActualCash: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.actualCashDrawer ?? 0), 0),
+    totalTransactionCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.transactionCount ?? 0), 0),
     journalsCount: selectedJournalsList.length,
   };
+  
+  const grandPaymentTotals = journalPreview?.paymentMethodTotals ? 
+    Object.values(journalPreview.paymentMethodTotals).reduce((acc: any, data: any) => ({
+      totalAmount: (acc.totalAmount ?? 0) + (data.totalAmount ?? 0),
+      totalPosAmount: (acc.totalPosAmount ?? 0) + (data.totalPosAmount ?? 0),
+      totalTerminalAmount: (acc.totalTerminalAmount ?? 0) + (data.totalTerminalAmount ?? 0),
+      totalBankDiscrepancy: (acc.totalBankDiscrepancy ?? 0) + (data.totalBankDiscrepancy ?? 0),
+      totalTransactionCount: (acc.totalTransactionCount ?? 0) + (data.totalTransactionCount ?? 0),
+    }), { totalAmount: 0, totalPosAmount: 0, totalTerminalAmount: 0, totalBankDiscrepancy: 0, totalTransactionCount: 0 }) : null;
 
   const branchName = branches?.find(b => b.id === selectedBranch)?.name || "";
 
@@ -489,10 +502,10 @@ export default function BranchDailyClosingPage() {
                     ملخص الإغلاق اليومي
                   </CardTitle>
                   <CardDescription>
-                    مجموع {selectedTotals.journalsCount} يومية محددة
+                    مجموع {selectedTotals.journalsCount} يومية محددة • {formatNumber(selectedTotals.totalTransactionCount)} عملية
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-6">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-white rounded-lg p-4 border shadow-sm">
                       <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
@@ -524,57 +537,61 @@ export default function BranchDailyClosingPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <div className={`rounded-lg p-4 border ${
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
+                    <h4 className="font-semibold text-green-800 mb-4 flex items-center gap-2">
+                      <Wallet className="h-5 w-5" />
+                      تفاصيل النقدي بالصندوق
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-white rounded-lg p-3 border border-green-100">
+                        <span className="text-gray-500 text-sm block mb-1">رصيد الافتتاح</span>
+                        <span className="font-bold text-lg text-gray-800">{formatCurrency(selectedTotals.totalOpeningBalance)} ريال</span>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-green-100">
+                        <span className="text-gray-500 text-sm block mb-1">مبيعات نقدية</span>
+                        <span className="font-bold text-lg text-green-700">{formatCurrency(selectedTotals.cashTotal)} ريال</span>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-green-100">
+                        <span className="text-gray-500 text-sm block mb-1">المتوقع بالصندوق</span>
+                        <span className="font-bold text-lg text-blue-700">{formatCurrency(selectedTotals.totalExpectedCash)} ريال</span>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-green-100">
+                        <span className="text-gray-500 text-sm block mb-1">الفعلي المعدود</span>
+                        <span className="font-bold text-lg text-amber-700">{formatCurrency(selectedTotals.totalActualCash)} ريال</span>
+                      </div>
+                    </div>
+                    <div className={`mt-4 rounded-lg p-4 border ${
                       getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'shortage' ? 'bg-red-50 border-red-200' :
                       getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'surplus' ? 'bg-amber-50 border-amber-200' :
-                      'bg-green-50 border-green-200'
+                      'bg-green-100 border-green-300'
                     }`}>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-600">فرق النقدي الكلي</span>
-                        <span className={`font-bold text-lg ${
-                          getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'shortage' ? 'text-red-700' :
-                          getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'surplus' ? 'text-amber-700' :
-                          'text-green-700'
-                        }`}>
-                          {formatCurrency(selectedTotals.totalCashDiscrepancy)} ريال
-                        </span>
+                        <div>
+                          <span className="text-gray-600 font-medium">فرق النقدي</span>
+                          <p className="text-xs text-gray-500 mt-1">(الفعلي المعدود - المتوقع بالصندوق)</p>
+                        </div>
+                        <div className="text-left">
+                          <span className={`font-bold text-2xl ${
+                            getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'shortage' ? 'text-red-700' :
+                            getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'surplus' ? 'text-amber-700' :
+                            'text-green-700'
+                          }`}>
+                            {formatCurrency(selectedTotals.totalCashDiscrepancy)} ريال
+                          </span>
+                          <Badge className="mr-2" variant={
+                            getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'shortage' ? 'destructive' :
+                            getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'surplus' ? 'default' :
+                            'outline'
+                          }>
+                            {DISCREPANCY_LABELS[getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy)]?.label}
+                          </Badge>
+                        </div>
                       </div>
-                      <Badge className="mt-2" variant={
-                        getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'shortage' ? 'destructive' :
-                        getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy) === 'surplus' ? 'default' :
-                        'outline'
-                      }>
-                        {DISCREPANCY_LABELS[getDiscrepancyStatus(selectedTotals.totalCashDiscrepancy)]?.label}
-                      </Badge>
-                    </div>
-                    <div className={`rounded-lg p-4 border ${
-                      getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'shortage' ? 'bg-red-50 border-red-200' :
-                      getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'surplus' ? 'bg-amber-50 border-amber-200' :
-                      'bg-green-50 border-green-200'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">فرق مطابقة البنوك</span>
-                        <span className={`font-bold text-lg ${
-                          getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'shortage' ? 'text-red-700' :
-                          getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'surplus' ? 'text-amber-700' :
-                          'text-green-700'
-                        }`}>
-                          {formatCurrency(selectedTotals.totalBankDiscrepancy)} ريال
-                        </span>
-                      </div>
-                      <Badge className="mt-2" variant={
-                        getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'shortage' ? 'destructive' :
-                        getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'surplus' ? 'default' :
-                        'outline'
-                      }>
-                        {DISCREPANCY_LABELS[getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy)]?.label}
-                      </Badge>
                     </div>
                   </div>
 
                   {journalPreview?.paymentMethodTotals && Object.keys(journalPreview.paymentMethodTotals).length > 0 && (
-                    <div className="mt-6 bg-white rounded-lg border p-4">
+                    <div className="bg-white rounded-lg border p-4">
                       <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-amber-600" />
                         إجمالي طرق الدفع
@@ -582,28 +599,31 @@ export default function BranchDailyClosingPage() {
                       <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-right">طريقة الدفع</TableHead>
-                              <TableHead className="text-center">إجمالي المبلغ</TableHead>
-                              <TableHead className="text-center">نقطة البيع</TableHead>
-                              <TableHead className="text-center">الجهاز</TableHead>
-                              <TableHead className="text-center">الفرق</TableHead>
-                              <TableHead className="text-center">عدد العمليات</TableHead>
+                            <TableRow className="bg-gray-50">
+                              <TableHead className="text-right font-bold">طريقة الدفع</TableHead>
+                              <TableHead className="text-center font-bold">إجمالي المبلغ</TableHead>
+                              <TableHead className="text-center font-bold">نقطة البيع</TableHead>
+                              <TableHead className="text-center font-bold">الجهاز</TableHead>
+                              <TableHead className="text-center font-bold">الفرق</TableHead>
+                              <TableHead className="text-center font-bold">عدد العمليات</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {Object.entries(journalPreview.paymentMethodTotals).map(([method, data]) => {
+                            {Object.entries(journalPreview.paymentMethodTotals)
+                              .sort(([a], [b]) => a === 'cash' ? -1 : b === 'cash' ? 1 : 0)
+                              .map(([method, data]) => {
                               const totalAmt = data.totalAmount ?? 0;
                               const posAmt = data.totalPosAmount ?? 0;
                               const termAmt = data.totalTerminalAmount ?? 0;
                               const bankDisc = data.totalBankDiscrepancy ?? 0;
                               const txnCount = data.totalTransactionCount ?? 0;
+                              const isCash = method === 'cash';
                               return (
-                                <TableRow key={method}>
-                                  <TableCell className="font-medium">
+                                <TableRow key={method} className={isCash ? 'bg-green-50' : ''}>
+                                  <TableCell className={`font-medium ${isCash ? 'text-green-700' : ''}`}>
                                     {PAYMENT_METHOD_LABELS[method] || method}
                                   </TableCell>
-                                  <TableCell className="text-center font-semibold">
+                                  <TableCell className={`text-center font-semibold ${isCash ? 'text-green-700' : ''}`}>
                                     {formatCurrency(totalAmt)} ريال
                                   </TableCell>
                                   <TableCell className="text-center">
@@ -624,11 +644,63 @@ export default function BranchDailyClosingPage() {
                                 </TableRow>
                               );
                             })}
+                            {grandPaymentTotals && (
+                              <TableRow className="bg-amber-100 font-bold border-t-2 border-amber-300">
+                                <TableCell className="font-bold text-amber-800">الإجمالي الكلي</TableCell>
+                                <TableCell className="text-center font-bold text-amber-800">
+                                  {formatCurrency(grandPaymentTotals.totalAmount)} ريال
+                                </TableCell>
+                                <TableCell className="text-center font-bold text-amber-800">
+                                  {formatCurrency(grandPaymentTotals.totalPosAmount)} ريال
+                                </TableCell>
+                                <TableCell className="text-center font-bold text-amber-800">
+                                  {formatCurrency(grandPaymentTotals.totalTerminalAmount)} ريال
+                                </TableCell>
+                                <TableCell className={`text-center font-bold ${
+                                  grandPaymentTotals.totalBankDiscrepancy > 0.5 ? 'text-amber-700' : 
+                                  grandPaymentTotals.totalBankDiscrepancy < -0.5 ? 'text-red-700' : 'text-green-700'
+                                }`}>
+                                  {formatCurrency(grandPaymentTotals.totalBankDiscrepancy)} ريال
+                                </TableCell>
+                                <TableCell className="text-center font-bold text-amber-800">
+                                  {formatNumber(grandPaymentTotals.totalTransactionCount)}
+                                </TableCell>
+                              </TableRow>
+                            )}
                           </TableBody>
                         </Table>
                       </div>
                     </div>
                   )}
+
+                  <div className={`rounded-lg p-4 border ${
+                    getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'shortage' ? 'bg-red-50 border-red-200' :
+                    getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'surplus' ? 'bg-amber-50 border-amber-200' :
+                    'bg-green-50 border-green-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-gray-600 font-medium">فرق مطابقة البنوك (الشبكة)</span>
+                        <p className="text-xs text-gray-500 mt-1">(جهاز الشبكة - نقطة البيع)</p>
+                      </div>
+                      <div className="text-left">
+                        <span className={`font-bold text-xl ${
+                          getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'shortage' ? 'text-red-700' :
+                          getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'surplus' ? 'text-amber-700' :
+                          'text-green-700'
+                        }`}>
+                          {formatCurrency(selectedTotals.totalBankDiscrepancy)} ريال
+                        </span>
+                        <Badge className="mr-2" variant={
+                          getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'shortage' ? 'destructive' :
+                          getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy) === 'surplus' ? 'default' :
+                          'outline'
+                        }>
+                          {DISCREPANCY_LABELS[getDiscrepancyStatus(selectedTotals.totalBankDiscrepancy)]?.label}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="mt-4 space-y-2">
                     <Label>ملاحظات (اختياري)</Label>
