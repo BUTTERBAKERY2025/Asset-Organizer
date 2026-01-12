@@ -991,6 +991,19 @@ function formatTimeTo12Hour(time24: string): string {
   return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
+// Determine shift type based on start time
+function getShiftType(startTime: string): { type: string; class: string } {
+  if (!startTime) return { type: '-', class: '' };
+  const [hours] = startTime.split(':').map(Number);
+  if (hours >= 5 && hours < 12) {
+    return { type: 'صباحي', class: 'shift-morning' };
+  } else if (hours >= 12 && hours < 18) {
+    return { type: 'مسائي', class: 'shift-evening' };
+  } else {
+    return { type: 'ليلي', class: 'shift-night' };
+  }
+}
+
 export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Promise<Buffer> {
   const headerCells = data.weekDates.map(d => 
     `<th class="day-header">${d.day}<br/>${d.date}</th>`
@@ -998,6 +1011,11 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
 
   // Group employees by job title
   const sortedEmployees = [...data.employees].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle, 'ar'));
+  
+  // Count shift types
+  let morningCount = 0;
+  let eveningCount = 0;
+  let nightCount = 0;
   
   let currentJobTitle = '';
   let seqNum = 0;
@@ -1008,6 +1026,15 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       seqNum = 0;
     }
     seqNum++;
+    
+    // Determine employee's primary shift type from first work day
+    const firstWorkDay = emp.days.find(d => !d.isOff && d.startTime);
+    const shiftInfo = firstWorkDay ? getShiftType(firstWorkDay.startTime!) : { type: '-', class: '' };
+    
+    // Count shift types
+    if (shiftInfo.type === 'صباحي') morningCount++;
+    else if (shiftInfo.type === 'مسائي') eveningCount++;
+    else if (shiftInfo.type === 'ليلي') nightCount++;
     
     const dayCells = emp.days.map(d => {
       if (d.isOff) {
@@ -1020,16 +1047,20 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       return `<td class="cell-empty">-</td>`;
     }).join('');
     
-    const jobTitleRow = showJobTitle ? `<tr class="job-title-row"><td colspan="10" class="job-title-cell">${emp.jobTitle}</td></tr>` : '';
+    const jobTitleRow = showJobTitle ? `<tr class="job-title-row"><td colspan="11" class="job-title-cell">${emp.jobTitle}</td></tr>` : '';
     
     return `${jobTitleRow}
       <tr>
         <td class="cell-seq">${seqNum}</td>
         <td class="cell-employee">${emp.employeeName}</td>
+        <td class="cell-shift ${shiftInfo.class}">${shiftInfo.type}</td>
         ${dayCells}
       </tr>
     `;
   }).join('');
+  
+  // Store counts for summary
+  const shiftSummary = { morning: morningCount, evening: eveningCount, night: nightCount };
 
   const workingEmployees = data.employees.filter(e => e.days.some(d => !d.isOff && d.startTime)).length;
   const totalWorkDays = data.employees.reduce((sum, e) => sum + e.days.filter(d => !d.isOff && d.startTime).length, 0);
@@ -1097,8 +1128,9 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       font-size: 8px;
     }
     
-    .col-seq { width: 25px; text-align: center; }
-    .col-name { min-width: 90px; text-align: right; }
+    .col-seq { width: 20px; text-align: center; }
+    .col-name { min-width: 80px; text-align: right; }
+    .col-shift { width: 40px; text-align: center; }
     
     .job-title-row td {
       background: #d4a853 !important;
@@ -1150,6 +1182,27 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       color: #d1d5db;
     }
     
+    .cell-shift {
+      text-align: center;
+      font-weight: 600;
+      font-size: 7px;
+    }
+    
+    .shift-morning {
+      background: #dbeafe !important;
+      color: #1e40af;
+    }
+    
+    .shift-evening {
+      background: #fef3c7 !important;
+      color: #92400e;
+    }
+    
+    .shift-night {
+      background: #e0e7ff !important;
+      color: #3730a3;
+    }
+    
     .footer-section {
       margin-top: 12px;
       display: flex;
@@ -1165,6 +1218,13 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     
     .summary-compact span { color: #6b7280; }
     .summary-compact strong { color: #1f2937; }
+    
+    .shift-morning-badge { background: #dbeafe; padding: 2px 6px; border-radius: 3px; }
+    .shift-morning-badge strong { color: #1e40af; }
+    .shift-evening-badge { background: #fef3c7; padding: 2px 6px; border-radius: 3px; }
+    .shift-evening-badge strong { color: #92400e; }
+    .shift-night-badge { background: #e0e7ff; padding: 2px 6px; border-radius: 3px; }
+    .shift-night-badge strong { color: #3730a3; }
     
     .signatures-compact {
       display: flex;
@@ -1205,6 +1265,7 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       <tr>
         <th class="col-seq">م</th>
         <th class="col-name">الموظف</th>
+        <th class="col-shift">الوردية</th>
         ${headerCells}
       </tr>
     </thead>
@@ -1215,7 +1276,10 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
   
   <div class="footer-section">
     <div class="summary-compact">
-      <span>موظفين: <strong>${data.employees.length}</strong></span>
+      <span>إجمالي: <strong>${data.employees.length}</strong></span>
+      <span class="shift-morning-badge">صباحي: <strong>${shiftSummary.morning}</strong></span>
+      <span class="shift-evening-badge">مسائي: <strong>${shiftSummary.evening}</strong></span>
+      <span class="shift-night-badge">ليلي: <strong>${shiftSummary.night}</strong></span>
       <span>أيام عمل: <strong>${totalWorkDays}</strong></span>
       <span>إجازات: <strong>${totalOffDays}</strong></span>
     </div>
