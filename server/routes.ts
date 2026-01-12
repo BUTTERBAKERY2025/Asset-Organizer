@@ -3819,9 +3819,10 @@ export async function registerRoutes(
       }
       
       res.json(newClosure);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating branch daily closure:", error);
-      res.status(500).json({ error: "Failed to create branch daily closure" });
+      console.error("Error details:", error?.message, error?.stack);
+      res.status(500).json({ error: "Failed to create branch daily closure", details: error?.message });
     }
   });
 
