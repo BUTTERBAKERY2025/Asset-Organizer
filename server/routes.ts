@@ -1521,11 +1521,25 @@ export async function registerRoutes(
   });
 
   // Contract Items
-  app.get("/api/construction/contracts/:contractId/items", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+  // Helper: Check contract branch access via project
+  async function checkContractBranchAccess(req: any, contractId: number): Promise<{allowed: boolean}> {
+    const mandatoryBranch = getMandatoryBranchFilter(req);
+    if (!mandatoryBranch) return { allowed: true };
+    const contract = await storage.getContract(contractId);
+    if (!contract) return { allowed: true };
+    return checkProjectBranchAccess(req, contract.projectId);
+  }
+
+  app.get("/api/construction/contracts/:contractId/items", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
     try {
       const contractId = parseInt(req.params.contractId, 10);
       if (isNaN(contractId)) {
         return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      // SECURITY: Verify contract branch access for non-admins
+      const access = await checkContractBranchAccess(req, contractId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لبنود هذا العقد" });
       }
       const items = await storage.getContractItems(contractId);
       res.json(items);
@@ -1535,8 +1549,13 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contract-items", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
+  app.post("/api/construction/contract-items", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
     try {
+      // SECURITY: Verify contract branch access for non-admins
+      const access = await checkContractBranchAccess(req, req.body.contractId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بإضافة بنود لهذا العقد" });
+      }
       const validatedData = insertContractItemSchema.parse(req.body);
       const item = await storage.createContractItem(validatedData);
       res.status(201).json(item);
@@ -1549,11 +1568,19 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+  app.patch("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid contract item ID" });
+      }
+      // SECURITY: Verify contract branch access for non-admins
+      const existingItem = await storage.getContractItem(id);
+      if (existingItem) {
+        const access = await checkContractBranchAccess(req, existingItem.contractId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بتعديل بنود هذا العقد" });
+        }
       }
       const partialData = insertContractItemSchema.partial().parse(req.body);
       const item = await storage.updateContractItem(id, partialData);
@@ -1570,11 +1597,19 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
+  app.delete("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid contract item ID" });
+      }
+      // SECURITY: Verify contract branch access for non-admins
+      const existingItem = await storage.getContractItem(id);
+      if (existingItem) {
+        const access = await checkContractBranchAccess(req, existingItem.contractId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بحذف بنود هذا العقد" });
+        }
       }
       const success = await storage.deleteContractItem(id);
       if (!success) {
@@ -1588,11 +1623,16 @@ export async function registerRoutes(
   });
 
   // Contract Payments
-  app.get("/api/construction/contracts/:contractId/payments", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+  app.get("/api/construction/contracts/:contractId/payments", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
     try {
       const contractId = parseInt(req.params.contractId, 10);
       if (isNaN(contractId)) {
         return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      // SECURITY: Verify contract branch access for non-admins
+      const access = await checkContractBranchAccess(req, contractId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لدفعات هذا العقد" });
       }
       const payments = await storage.getContractPayments(contractId);
       res.json(payments);
@@ -1604,6 +1644,11 @@ export async function registerRoutes(
 
   app.post("/api/construction/contract-payments", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
     try {
+      // SECURITY: Verify contract branch access for non-admins
+      const access = await checkContractBranchAccess(req, req.body.contractId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بإضافة دفعات لهذا العقد" });
+      }
       const validatedData = insertContractPaymentSchema.parse({
         ...req.body,
         createdBy: req.currentUser?.id
@@ -1694,6 +1739,11 @@ export async function registerRoutes(
 
   app.post("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "create"), async (req: any, res) => {
     try {
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, req.body.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء طلب دفع لهذا المشروع" });
+      }
       const today = new Date().toISOString().split('T')[0];
       const validatedData = insertPaymentRequestSchema.parse({
         ...req.body,
@@ -1711,11 +1761,19 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "edit"), async (req, res) => {
+  app.patch("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid request ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingRequest = await storage.getPaymentRequest(id);
+      if (existingRequest) {
+        const access = await checkProjectBranchAccess(req, existingRequest.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا الطلب" });
+        }
       }
       const partialData = insertPaymentRequestSchema.partial().parse(req.body);
       const request = await storage.updatePaymentRequest(id, partialData);
@@ -1738,6 +1796,14 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid request ID" });
       }
+      // SECURITY: Verify project branch access for non-admins
+      const existingRequest = await storage.getPaymentRequest(id);
+      if (existingRequest) {
+        const access = await checkProjectBranchAccess(req, existingRequest.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بالموافقة على هذا الطلب" });
+        }
+      }
       const request = await storage.approvePaymentRequest(id, req.currentUser?.id);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
@@ -1749,11 +1815,19 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/reject", isAuthenticated, requirePermission("payment_requests", "approve"), async (req, res) => {
+  app.post("/api/payment-requests/:id/reject", isAuthenticated, requirePermission("payment_requests", "approve"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid request ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingRequest = await storage.getPaymentRequest(id);
+      if (existingRequest) {
+        const access = await checkProjectBranchAccess(req, existingRequest.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح برفض هذا الطلب" });
+        }
       }
       const { reason } = req.body;
       if (!reason) {
@@ -1770,11 +1844,19 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/mark-paid", isAuthenticated, requirePermission("payment_requests", "approve"), async (req, res) => {
+  app.post("/api/payment-requests/:id/mark-paid", isAuthenticated, requirePermission("payment_requests", "approve"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid request ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingRequest = await storage.getPaymentRequest(id);
+      if (existingRequest) {
+        const access = await checkProjectBranchAccess(req, existingRequest.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بتحديث حالة الدفع لهذا الطلب" });
+        }
       }
       const request = await storage.markPaymentRequestAsPaid(id);
       if (!request) {
@@ -1787,11 +1869,19 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "delete"), async (req, res) => {
+  app.delete("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid request ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingRequest = await storage.getPaymentRequest(id);
+      if (existingRequest) {
+        const access = await checkProjectBranchAccess(req, existingRequest.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا الطلب" });
+        }
       }
       const success = await storage.deletePaymentRequest(id);
       if (!success) {
