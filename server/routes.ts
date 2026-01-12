@@ -293,9 +293,19 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/branches/:id", async (req, res) => {
+  app.get("/api/branches/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const branch = await storage.getBranch(req.params.id);
+      const branchId = req.params.id;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const userBranchId = req.currentUser?.branchId;
+        if (!userBranchId || userBranchId !== branchId) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+      }
+      
+      const branch = await storage.getBranch(branchId);
       if (!branch) {
         return res.status(404).json({ error: "Branch not found" });
       }
