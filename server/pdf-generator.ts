@@ -999,21 +999,20 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
   const rows = data.employees.map((emp, index) => {
     const dayCells = emp.days.map(d => {
       if (d.isOff) {
-        return `<td class="cell-off"><span class="off-badge">🏖️ إجازة</span></td>`;
+        return `<td class="cell-off">إجازة</td>`;
       } else if (d.startTime && d.endTime) {
         const start12 = formatTimeTo12Hour(d.startTime);
         const end12 = formatTimeTo12Hour(d.endTime);
-        return `<td class="cell-work"><div class="time-from">من ${start12}</div><div class="time-to">إلى ${end12}</div></td>`;
+        return `<td class="cell-work"><div class="time-row">من: ${start12}</div><div class="time-row">إلى: ${end12}</div></td>`;
       }
       return `<td class="cell-empty">-</td>`;
     }).join('');
     
     return `
-      <tr class="${index % 2 === 0 ? 'row-even' : 'row-odd'}">
-        <td class="cell-employee">
-          <div class="emp-name">${emp.employeeName}</div>
-          <div class="emp-title">${emp.jobTitle}</div>
-        </td>
+      <tr>
+        <td class="cell-seq">${index + 1}</td>
+        <td class="cell-employee">${emp.employeeName}</td>
+        <td class="cell-title">${emp.jobTitle}</td>
         ${dayCells}
       </tr>
     `;
@@ -1038,192 +1037,213 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       direction: rtl; 
       text-align: right; 
       padding: 20px; 
-      font-size: 11px;
+      font-size: 10px;
       background: #fff;
     }
     
     ${getPdfHeaderStyles()}
     ${getPdfFooterStyles()}
     
-    .report-header {
-      background: linear-gradient(135deg, #d4a853 0%, #b8942d 100%);
-      color: white;
-      padding: 20px;
-      border-radius: 10px;
-      margin-bottom: 20px;
+    .info-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 15px 0;
+      padding: 12px 20px;
+      background: #f8f9fa;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+    }
+    
+    .info-item {
       text-align: center;
     }
     
-    .report-title {
-      font-size: 22px;
-      font-weight: 700;
-      margin-bottom: 5px;
+    .info-label {
+      font-size: 10px;
+      color: #6b7280;
+      margin-bottom: 3px;
     }
     
-    .report-subtitle {
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    
-    .report-period {
-      background: rgba(255,255,255,0.2);
-      padding: 8px 20px;
-      border-radius: 20px;
-      display: inline-block;
-      margin-top: 10px;
+    .info-value {
       font-size: 12px;
+      font-weight: 700;
+      color: #1f2937;
     }
     
     table { 
       width: 100%; 
-      border-collapse: separate;
-      border-spacing: 0;
+      border-collapse: collapse;
       margin-top: 15px;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border: 2px solid #1f2937;
     }
     
     th, td { 
-      padding: 10px 8px;
-      border-bottom: 1px solid #e5e7eb;
+      padding: 8px 6px;
+      border: 1px solid #d1d5db;
+      font-size: 9px;
+    }
+    
+    thead tr:first-child th {
+      background: #1f2937;
+      color: white;
+      font-weight: 700;
+      font-size: 10px;
+      border-color: #1f2937;
     }
     
     .day-header {
-      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+      background: #f3f4f6;
       font-weight: 600;
       text-align: center;
-      min-width: 90px;
-      border-left: 1px solid #e5e7eb;
+      min-width: 75px;
     }
     
-    .day-header:last-child { border-left: none; }
-    
     .day-name { 
-      font-size: 12px; 
+      font-size: 10px; 
       font-weight: 700; 
       color: #1f2937;
     }
     
     .day-date { 
-      font-size: 10px; 
+      font-size: 9px; 
       color: #6b7280; 
-      margin-top: 2px;
     }
     
-    th:first-child {
-      background: linear-gradient(180deg, #d4a853 0%, #b8942d 100%);
-      color: white;
-      text-align: right;
-      min-width: 140px;
-      font-size: 13px;
-    }
+    .col-seq { width: 35px; text-align: center; }
+    .col-name { width: 120px; text-align: right; }
+    .col-title { width: 80px; text-align: center; }
     
-    .row-even { background: #ffffff; }
-    .row-odd { background: #fafafa; }
+    tr:nth-child(even) { background: #f9fafb; }
+    tr:nth-child(odd) { background: #ffffff; }
+    
+    .cell-seq {
+      text-align: center;
+      font-weight: 600;
+      color: #6b7280;
+    }
     
     .cell-employee {
       text-align: right;
-      border-left: 3px solid #d4a853;
-      padding-right: 12px;
-    }
-    
-    .emp-name { 
-      font-weight: 600; 
-      font-size: 11px;
+      font-weight: 600;
       color: #1f2937;
+      font-size: 10px;
     }
     
-    .emp-title { 
-      font-size: 9px; 
+    .cell-title {
+      text-align: center;
       color: #6b7280;
-      margin-top: 2px;
+      font-size: 9px;
     }
     
     .cell-work {
       text-align: center;
-      background: #f0fdf4;
-      border-left: 1px solid #e5e7eb;
+      background: #ecfdf5 !important;
     }
     
-    .time-from, .time-to {
-      font-size: 10px;
-      color: #166534;
+    .time-row {
+      font-size: 9px;
+      color: #065f46;
     }
-    
-    .time-from { font-weight: 600; }
     
     .cell-off {
       text-align: center;
-      background: #fffbeb;
-      border-left: 1px solid #e5e7eb;
-    }
-    
-    .off-badge {
-      background: #fef3c7;
+      background: #fef3c7 !important;
       color: #92400e;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 10px;
       font-weight: 600;
+      font-size: 9px;
     }
     
     .cell-empty {
       text-align: center;
       color: #9ca3af;
+    }
+    
+    .summary-section {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-around;
+      padding: 15px;
+      background: #f8f9fa;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+    }
+    
+    .summary-item {
+      text-align: center;
+      padding: 0 20px;
       border-left: 1px solid #e5e7eb;
     }
     
-    .stats-container {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      margin-top: 25px;
-      flex-wrap: wrap;
-    }
+    .summary-item:last-child { border-left: none; }
     
-    .stat-card {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-      border-radius: 10px;
-      padding: 15px 25px;
-      text-align: center;
-      min-width: 120px;
-      border: 1px solid #e5e7eb;
-    }
-    
-    .stat-value {
-      font-size: 24px;
+    .summary-value {
+      font-size: 18px;
       font-weight: 700;
-      color: #d4a853;
+      color: #92400e;
     }
     
-    .stat-label {
-      font-size: 11px;
-      color: #6b7280;
-      margin-top: 5px;
-    }
-    
-    .footer-note {
-      text-align: center;
-      margin-top: 20px;
-      padding-top: 15px;
-      border-top: 1px dashed #e5e7eb;
-      color: #9ca3af;
+    .summary-label {
       font-size: 10px;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+    
+    .signatures-section {
+      margin-top: 30px;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 40px;
+    }
+    
+    .signature-box {
+      text-align: center;
+      min-width: 150px;
+    }
+    
+    .signature-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 30px;
+    }
+    
+    .signature-line {
+      border-top: 1px solid #1f2937;
+      padding-top: 5px;
+      font-size: 9px;
+      color: #6b7280;
     }
   </style>
 </head>
 <body>
-  <div class="report-header">
-    <div class="report-title">📋 جدول الدوام الأسبوعي</div>
-    <div class="report-subtitle">${data.branchName}</div>
-    <div class="report-period">📅 ${data.periodStart} - ${data.periodEnd}</div>
+  ${getPdfHeaderHtml('جدول الدوام الأسبوعي', `الفرع: ${data.branchName}`)}
+  
+  <div class="info-section">
+    <div class="info-item">
+      <div class="info-label">الفترة من</div>
+      <div class="info-value">${data.periodStart}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">الفترة إلى</div>
+      <div class="info-value">${data.periodEnd}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">عدد الموظفين</div>
+      <div class="info-value">${data.employees.length}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">تاريخ الإصدار</div>
+      <div class="info-value">${formatPrintDate()}</div>
+    </div>
   </div>
   
   <table>
     <thead>
       <tr>
-        <th>الموظف / المسمى</th>
+        <th class="col-seq">م</th>
+        <th class="col-name">اسم الموظف</th>
+        <th class="col-title">المسمى الوظيفي</th>
         ${headerCells}
       </tr>
     </thead>
@@ -1232,27 +1252,38 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     </tbody>
   </table>
   
-  <div class="stats-container">
-    <div class="stat-card">
-      <div class="stat-value">${data.employees.length}</div>
-      <div class="stat-label">إجمالي الموظفين</div>
+  <div class="summary-section">
+    <div class="summary-item">
+      <div class="summary-value">${data.employees.length}</div>
+      <div class="summary-label">إجمالي الموظفين</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value">${workingEmployees}</div>
-      <div class="stat-label">موظفين بجداول</div>
+    <div class="summary-item">
+      <div class="summary-value">${workingEmployees}</div>
+      <div class="summary-label">موظفين بجداول عمل</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value">${totalWorkDays}</div>
-      <div class="stat-label">أيام عمل</div>
+    <div class="summary-item">
+      <div class="summary-value">${totalWorkDays}</div>
+      <div class="summary-label">إجمالي أيام العمل</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value">${totalOffDays}</div>
-      <div class="stat-label">أيام إجازة</div>
+    <div class="summary-item">
+      <div class="summary-value">${totalOffDays}</div>
+      <div class="summary-label">إجمالي أيام الإجازة</div>
     </div>
   </div>
   
-  <div class="footer-note">
-    تم إنشاء هذا التقرير آلياً من نظام باتر لإدارة الموارد البشرية
+  <div class="signatures-section">
+    <div class="signature-box">
+      <div class="signature-title">إعداد</div>
+      <div class="signature-line">الاسم والتوقيع</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-title">مراجعة</div>
+      <div class="signature-line">الاسم والتوقيع</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-title">اعتماد</div>
+      <div class="signature-line">الاسم والتوقيع</div>
+    </div>
   </div>
 </body>
 </html>`;
