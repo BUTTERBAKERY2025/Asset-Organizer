@@ -1303,41 +1303,6 @@ export default function CashierJournalFormPage() {
                     </Button>
                   )}
                 </div>
-                
-                {/* Quick Add Buttons - Bank Payment Methods */}
-                {!isReadOnly && (
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-sm text-muted-foreground mb-3">إضافة سريعة للبطاقات البنكية:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { value: "mada", label: "مدى", color: "bg-blue-500 hover:bg-blue-600" },
-                        { value: "visa", label: "فيزا", color: "bg-indigo-500 hover:bg-indigo-600" },
-                        { value: "mastercard", label: "ماستركارد", color: "bg-orange-500 hover:bg-orange-600" },
-                        { value: "amex", label: "أمريكان إكسبريس", color: "bg-teal-500 hover:bg-teal-600" },
-                        { value: "card_other", label: "بطاقة أخرى", color: "bg-gray-500 hover:bg-gray-600" },
-                      ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
-                        <Button
-                          key={method.value}
-                          type="button"
-                          size="lg"
-                          className={`h-12 px-4 text-white ${method.color}`}
-                          onClick={() => setPaymentBreakdowns([...paymentBreakdowns, { 
-                            paymentMethod: method.value, 
-                            amount: 0, 
-                            transactionCount: 0,
-                            posAmount: 0,
-                            terminalAmount: 0,
-                            terminalTransactionCount: 0
-                          }])}
-                          data-testid={`quick-add-${method.value}`}
-                        >
-                          <CreditCard className="w-5 h-5 ml-2" />
-                          {method.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 {paymentBreakdowns.map((breakdown, index) => {
