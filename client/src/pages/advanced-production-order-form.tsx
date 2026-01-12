@@ -17,7 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProductSelector } from "@/components/product-selector";
-import type { Branch, Product } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
+import type { Product } from "@shared/schema";
 import { format, addDays, eachDayOfInterval } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -98,9 +99,13 @@ export default function AdvancedProductionOrderFormPage() {
     schedule: [],
   });
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+  
+  useEffect(() => {
+    if (userBranchId && !formData.branchId) {
+      setFormData((prev) => ({ ...prev, branchId: userBranchId }));
+    }
+  }, [userBranchId]);
 
   const { data: products, isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ["/api/products"],
@@ -530,7 +535,7 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.branchId}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, branchId: value }))}
                     >
-                      <SelectTrigger id="branchId" className="h-11 sm:h-10" data-testid="select-source-branch">
+                      <SelectTrigger id="branchId" className="h-11 sm:h-10" data-testid="select-source-branch" disabled={!canSelectBranch}>
                         <SelectValue placeholder="اختر الفرع المصدر" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -549,12 +554,12 @@ export default function AdvancedProductionOrderFormPage() {
                       value={formData.targetBranchId || "same_branch"}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, targetBranchId: value === "same_branch" ? "" : value }))}
                     >
-                      <SelectTrigger id="targetBranchId" className="h-11 sm:h-10" data-testid="select-target-branch">
+                      <SelectTrigger id="targetBranchId" className="h-11 sm:h-10" data-testid="select-target-branch" disabled={!canSelectBranch}>
                         <SelectValue placeholder="اختر الفرع المستهدف" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="same_branch">نفس الفرع</SelectItem>
-                        {branches?.map((branch) => (
+                        {allBranches?.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
                             {branch.name}
                           </SelectItem>

@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
@@ -121,9 +122,14 @@ export default function DisplayBarWastePage() {
     { value: "night", label: "الوردية الليلية", time: "22:00 - 06:00" },
   ];
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, canSelectBranch, userBranchId } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && !canSelectBranch) {
+      setSelectedBranch(userBranchId);
+      setWasteBranch(userBranchId);
+    }
+  }, [userBranchId, canSelectBranch]);
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
@@ -655,13 +661,13 @@ export default function DisplayBarWastePage() {
             <p className="text-sm text-muted-foreground">إدارة استلام الإنتاج ومتابعة الهالك اليومي</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
               <SelectTrigger className="w-36 sm:w-40 h-11 sm:h-10" data-testid="select-branch">
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="الفرع" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
-                <SelectItem value="all">جميع الفروع</SelectItem>
+                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                 {branches.map(b => (
                   <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                 ))}

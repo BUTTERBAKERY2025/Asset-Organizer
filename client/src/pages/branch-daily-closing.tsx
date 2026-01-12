@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -109,22 +110,14 @@ export default function BranchDailyClosingPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   const [, navigate] = useLocation();
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
-
-  const filteredBranches = branches?.filter(branch => {
-    if (user?.role === "admin") return true;
-    return user?.branchId === branch.id;
-  });
-
   useEffect(() => {
-    if (user?.branchId && !selectedBranch) {
-      setSelectedBranch(user.branchId);
+    if (userBranchId && !selectedBranch) {
+      setSelectedBranch(userBranchId);
     }
-  }, [user, selectedBranch]);
+  }, [userBranchId, selectedBranch]);
 
   const { data: journalPreview, isLoading: isLoadingPreview } = useQuery<JournalPreviewResponse | null>({
     queryKey: ["/api/branch-daily-closures/journals-preview", selectedBranch, selectedDate],
@@ -250,11 +243,11 @@ export default function BranchDailyClosingPage() {
             <div className="space-y-2">
               <Label>الفرع</Label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger>
+                <SelectTrigger disabled={!canSelectBranch}>
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredBranches?.map(branch => (
+                  {branches?.map(branch => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}
                     </SelectItem>

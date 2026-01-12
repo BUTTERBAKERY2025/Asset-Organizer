@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation, Link } from "wouter";
+import { useBranches } from "@/hooks/useBranches";
 import { 
   BarChart3, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Factory, 
   CheckCircle, XCircle, Clock, AlertTriangle, Download, Wallet, CreditCard, Truck,
@@ -709,9 +710,13 @@ export default function OperationsReportsDashboardPage() {
   const [filtersOpen, setFiltersOpen] = useState(true);
   const cashierPageSize = 15;
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && !filters.branchId) {
+      setFilters(prev => ({ ...prev, branchId: userBranchId }));
+    }
+  }, [userBranchId, filters.branchId]);
 
   // Query for users (cashiers)
   const { data: users } = useQuery<{ id: string; username: string; firstName: string | null; lastName: string | null }[]>({
@@ -1649,12 +1654,12 @@ export default function OperationsReportsDashboardPage() {
                   <Building2 className="w-4 h-4" />
                   الفرع
                 </Label>
-                <Select value={filters.branchId || "all"} onValueChange={(v) => setFilters({ ...filters, branchId: v === "all" ? "" : v })}>
+                <Select value={filters.branchId || "all"} onValueChange={(v) => setFilters({ ...filters, branchId: v === "all" ? "" : v })} disabled={!canSelectBranch}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الفروع</SelectItem>
+                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}

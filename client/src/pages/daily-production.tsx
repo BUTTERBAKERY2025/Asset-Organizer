@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, subDays } from "date-fns";
@@ -142,20 +143,20 @@ export default function DailyProductionPage() {
   const canModifyRecords = isAdmin || canEdit("production");
   const canDeleteRecords = isAdmin || canDelete("production");
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, canSelectBranch, userBranchId } = useBranches();
 
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
 
-  // Initialize branch from context or fallback to first branch
+  // Initialize branch from context, user's branch, or fallback to first branch
   useEffect(() => {
-    if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
+    if (userBranchId && !canSelectBranch) {
+      setBranchId(userBranchId);
+    } else if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
       setBranchId(branches[0].id);
     }
-  }, [branches, branchId, setBranchId]);
+  }, [branches, branchId, setBranchId, userBranchId, canSelectBranch]);
 
   const { data: batches, isLoading: batchesLoading, refetch: refetchBatches } = useQuery<DailyProductionBatch[]>({
     queryKey: ["/api/daily-production/batches", branchId, selectedDate],
@@ -675,7 +676,7 @@ export default function DailyProductionPage() {
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-2 min-w-[200px]">
             <Label>الفرع *</Label>
-            <Select value={branchId} onValueChange={setBranchId}>
+            <Select value={branchId} onValueChange={setBranchId} disabled={!canSelectBranch}>
               <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>

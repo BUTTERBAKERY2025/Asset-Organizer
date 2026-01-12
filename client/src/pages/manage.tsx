@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -39,9 +39,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useBranches } from "@/hooks/useBranches";
 import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye, Upload, Download, Camera } from "lucide-react";
 import * as XLSX from "xlsx";
-import type { Branch, InventoryItem } from "@shared/schema";
+import type { InventoryItem } from "@shared/schema";
 import { AssetDetailsDialog } from "@/components/asset-details-dialog";
 import { CameraCapture } from "@/components/camera-capture";
 
@@ -85,8 +86,9 @@ const STATUSES = [
 ];
 
 export default function ManagePage() {
+  const { branches, isLoading: branchesLoading, userBranchId, canSelectBranch } = useBranches();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -99,14 +101,11 @@ export default function ManagePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  useEffect(() => {
+    if (userBranchId) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId]);
 
   const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
@@ -682,12 +681,12 @@ export default function ManagePage() {
                   data-testid="input-search-manage"
                 />
               </div>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                 <SelectTrigger className="w-full md:w-[200px]" data-testid="select-branch-filter">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                   {branches.map(branch => (
                     <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                   ))}

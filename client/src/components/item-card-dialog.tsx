@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Printer, Download, X, Package, Calendar, DollarSign, MapPin, FileText, Hash, Clock, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Wrench, ArrowLeftRight, ArrowRight } from "lucide-react";
-import type { InventoryItem, AssetTransfer, Branch } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
+import type { InventoryItem, AssetTransfer } from "@shared/schema";
 import * as XLSX from "xlsx";
 
 interface ItemCardDialogProps {
@@ -70,6 +71,7 @@ const TRANSFER_STATUS_LABELS: Record<string, { label: string; color: string }> =
 
 export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCardDialogProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const { allBranches } = useBranches();
 
   const { data: transfers = [] } = useQuery<AssetTransfer[]>({
     queryKey: ["/api/asset-transfers/by-item", item?.id],
@@ -82,13 +84,8 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
     enabled: !!item?.id && open,
   });
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    enabled: open,
-  });
-
   const getBranchName = (branchId: string) => {
-    return branches.find(b => b.id === branchId)?.name || `فرع ${branchId}`;
+    return allBranches.find(b => b.id === branchId)?.name || `فرع ${branchId}`;
   };
 
   const handlePrint = useReactToPrint({

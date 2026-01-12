@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { format, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProductionContext } from "@/contexts/ProductionContext";
+import { useBranches } from "@/hooks/useBranches";
 import * as XLSX from "xlsx";
 import {
   LineChart,
@@ -149,9 +150,13 @@ export default function ProductionReportsPage() {
   const [activeTab, setActiveTab] = useState("data");
   const [isExporting, setIsExporting] = useState<string | null>(null);
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && (!selectedBranch || selectedBranch === "all")) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId, selectedBranch, setSelectedBranch]);
 
   const { data: reportData, isLoading, isError, error, refetch } = useQuery<ReportData>({
     queryKey: ["/api/production/reports", selectedBranch, startDate, endDate],
@@ -434,12 +439,12 @@ export default function ProductionReportsPage() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-gray-500" />
-                <Select value={selectedBranch || "all"} onValueChange={setSelectedBranch}>
+                <Select value={selectedBranch || "all"} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                   <SelectTrigger className="w-[140px] h-11 sm:h-10 text-sm" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
-                    <SelectItem value="all">جميع الفروع</SelectItem>
+                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                     ))}

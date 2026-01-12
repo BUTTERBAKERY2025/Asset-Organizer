@@ -4,19 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Package, Building2, AlertTriangle, DollarSign } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import type { Branch, InventoryItem } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
+import type { InventoryItem } from "@shared/schema";
 
 const COLORS = ["#f59e0b", "#22c55e", "#3b82f6", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
 
 export default function DashboardPage() {
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  const { branches, isLoading: branchesLoading } = useBranches();
 
   const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],

@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
+import { useBranches } from "@/hooks/useBranches";
 import {
   Table,
   TableBody,
@@ -25,14 +26,13 @@ export default function MaintenancePage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const printRef = useRef<HTMLDivElement>(null);
 
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && !canSelectBranch) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId, canSelectBranch]);
 
   const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
@@ -204,12 +204,12 @@ export default function MaintenancePage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                 <SelectTrigger className="w-full sm:w-[200px] h-11 sm:h-10" data-testid="select-branch-filter-maintenance">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
-                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                   {branches.map(branch => (
                     <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                   ))}

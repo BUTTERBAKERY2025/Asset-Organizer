@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
-import type { Branch } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
 
 interface BranchPerformance {
   branchId: string;
@@ -138,14 +138,17 @@ const YEARS = Array.from({ length: 10 }, (_, i) => {
 });
 
 export default function TargetsDashboard() {
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
   const [selectedMonthNum, setSelectedMonthNum] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
   const selectedMonth = `${selectedYear}-${selectedMonthNum}`;
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  useEffect(() => {
+    if (userBranchId) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId]);
 
   const { data: leaderboard, isLoading: leaderboardLoading } = useQuery<Leaderboard>({
     queryKey: ["/api/targets/leaderboard", selectedMonth],
@@ -839,12 +842,12 @@ export default function TargetsDashboard() {
                     التقدم اليومي للمبيعات مقابل الأهداف
                   </CardTitle>
                   <div className="flex items-center gap-4 mt-4 flex-wrap">
-                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                    <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                       <SelectTrigger className="w-48" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">اختر فرع</SelectItem>
+                        {canSelectBranch && <SelectItem value="all">اختر فرع</SelectItem>}
                         {branches.map(b => (
                           <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                         ))}

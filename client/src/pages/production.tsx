@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useBranches } from "@/hooks/useBranches";
 import { Plus, Search, Edit, Trash2, Factory, Clock, Calendar, CheckCircle, AlertTriangle, Play, Pause } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
@@ -68,9 +69,14 @@ export default function ProductionPage() {
     queryKey: ["/api/products"],
   });
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, canSelectBranch, userBranchId } = useBranches();
+
+  // Initialize branchId from user's branch for non-admins
+  useEffect(() => {
+    if (userBranchId && !canSelectBranch && !formData.branchId) {
+      setFormData(prev => ({ ...prev, branchId: userBranchId }));
+    }
+  }, [userBranchId, canSelectBranch, formData.branchId]);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => apiRequest("POST", "/api/production-orders", data),
@@ -181,7 +187,7 @@ export default function ProductionPage() {
               <div className="space-y-4">
                 <div>
                   <Label>الفرع *</Label>
-                  <Select value={formData.branchId} onValueChange={v => setFormData({ ...formData, branchId: v })}>
+                  <Select value={formData.branchId || userBranchId || ""} onValueChange={v => setFormData({ ...formData, branchId: v })} disabled={!canSelectBranch}>
                     <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
                       <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>

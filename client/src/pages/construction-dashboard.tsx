@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -12,7 +13,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
-import type { Branch, ConstructionProject, Contractor, ConstructionCategory, ProjectWorkItem } from "@shared/schema";
+import type { ConstructionProject, Contractor, ConstructionCategory, ProjectWorkItem } from "@shared/schema";
 
 const STATUS_LABELS: Record<string, string> = {
   planned: "مخطط",
@@ -48,14 +49,7 @@ export default function ConstructionDashboardPage() {
     documentTitle: "تقرير لوحة تحكم المشاريع الإنشائية",
   });
 
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  const { allBranches: branches, isLoading: branchesLoading } = useBranches();
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ConstructionProject[]>({
     queryKey: ["/api/construction/projects"],

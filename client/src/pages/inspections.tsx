@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,18 +38,18 @@ export default function InspectionsPage() {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [intervalDays, setIntervalDays] = useState("30");
-  const [filterBranch, setFilterBranch] = useState("all");
+  const [filterBranch, setFilterBranch] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
 
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  useEffect(() => {
+    if (userBranchId && filterBranch === "") {
+      setFilterBranch(userBranchId);
+    } else if (!userBranchId && filterBranch === "") {
+      setFilterBranch("all");
+    }
+  }, [userBranchId, filterBranch]);
 
   const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
@@ -185,11 +186,11 @@ export default function InspectionsPage() {
             <p className="text-muted-foreground mt-1">إدارة مواعيد فحص الأصول وتتبع التنبيهات</p>
           </div>
           <Select value={filterBranch} onValueChange={setFilterBranch}>
-            <SelectTrigger className="w-full sm:w-[200px] h-11 sm:h-10" data-testid="select-filter-branch">
+            <SelectTrigger className="w-full sm:w-[200px] h-11 sm:h-10" data-testid="select-filter-branch" disabled={!canSelectBranch}>
               <SelectValue placeholder="اختر الفرع" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
-              <SelectItem value="all">جميع الفروع</SelectItem>
+              {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
               {branches.map(branch => (
                 <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
               ))}

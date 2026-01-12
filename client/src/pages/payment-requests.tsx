@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useBranches } from "@/hooks/useBranches";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -44,7 +45,7 @@ import {
   Search, Eye, Calendar, Building2, Filter, X
 } from "lucide-react";
 import { Link } from "wouter";
-import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory, Branch } from "@shared/schema";
+import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -157,14 +158,7 @@ export default function PaymentRequestsPage() {
     },
   });
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  const { branches, allBranches } = useBranches();
 
   const form = useForm<PaymentRequestFormData>({
     resolver: zodResolver(paymentRequestFormSchema),

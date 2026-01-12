@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useBranches } from "@/hooks/useBranches";
 import { 
   Factory, 
   FileSpreadsheet, 
@@ -187,9 +188,13 @@ export default function ProductionDashboardPage() {
     }
   }, [selectedBranch, setSelectedBranch]);
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && !selectedBranch) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId, selectedBranch, setSelectedBranch]);
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<OrderStats>({
     queryKey: ["/api/advanced-production-orders/stats"],
@@ -325,12 +330,12 @@ export default function ProductionDashboardPage() {
             <div className="flex flex-wrap items-end gap-3 sm:gap-4">
               <div className="space-y-2 min-w-[160px] sm:min-w-[180px]">
                 <Label className="text-amber-800">الفرع</Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                   <SelectTrigger className="bg-white border-amber-200 h-11 sm:h-10">
                     <SelectValue placeholder="كل الفروع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
-                    <SelectItem value="all">كل الفروع</SelectItem>
+                    {canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                     ))}

@@ -23,6 +23,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -802,7 +803,8 @@ export default function BranchEmployeesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const { branches, canSelectBranch, userBranchId } = useBranches();
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
@@ -837,13 +839,11 @@ export default function BranchEmployeesPage() {
   const [hireDateFrom, setHireDateFrom] = useState<string>("");
   const [hireDateTo, setHireDateTo] = useState<string>("");
 
-  const { data: branches } = useQuery({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      return res.json();
-    },
-  });
+  React.useEffect(() => {
+    if (!canSelectBranch && userBranchId && selectedBranch !== userBranchId) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [canSelectBranch, userBranchId, selectedBranch]);
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ["/api/branch-employees", selectedBranch],
@@ -2087,12 +2087,12 @@ export default function BranchEmployeesPage() {
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <Building className="w-4 h-4 text-gray-500 hidden sm:block" />
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
               <SelectTrigger className="w-40 sm:w-48 h-11 sm:h-10" data-testid="filter-branch">
                 <SelectValue placeholder="جميع الفروع" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
-                <SelectItem value="all">جميع الفروع</SelectItem>
+                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                 {branches?.map((b: { id: string; name: string }) => (
                   <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                 ))}

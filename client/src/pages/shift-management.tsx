@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight } from "lucide-react";
@@ -32,7 +33,7 @@ interface ScheduleCell {
 
 export default function ShiftManagementPage() {
   const [activeTab, setActiveTab] = useState("schedule");
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 6 }));
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
@@ -49,8 +50,7 @@ export default function ShiftManagementPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-
-  const { data: branches } = useQuery<Branch[]>({ queryKey: ["/api/branches"] });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   
   const { data: shiftProfiles } = useQuery<{shiftCode: string; displayName: string; startTime: string; endTime: string; isActive: boolean}[]>({
     queryKey: ["/api/shift-profiles", selectedBranch],
@@ -102,10 +102,12 @@ export default function ShiftManagementPage() {
   }, [branchEmployees, selectedBranch]);
 
   useEffect(() => {
-    if (user?.role !== "admin" && user?.branchId && selectedBranch === "all") {
-      setSelectedBranch(user.branchId);
+    if (userBranchId && selectedBranch === "") {
+      setSelectedBranch(userBranchId);
+    } else if (!userBranchId && selectedBranch === "") {
+      setSelectedBranch("all");
     }
-  }, [user, selectedBranch]);
+  }, [userBranchId, selectedBranch]);
 
   useEffect(() => {
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
@@ -507,12 +509,12 @@ export default function ShiftManagementPage() {
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48 h-11 sm:h-10" data-testid="select-branch">
+              <SelectTrigger className="w-48 h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
-                {user?.role === "admin" && <SelectItem value="all">جميع الفروع</SelectItem>}
+                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                 {branches?.map(branch => (
                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                 ))}

@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +20,7 @@ import { TablePagination } from "@/components/ui/pagination";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
-import type { Branch, ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem } from "@shared/schema";
+import type { ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem } from "@shared/schema";
 
 function HighlightText({ text, highlight }: { text: string; highlight: string }) {
   if (!highlight.trim()) return <>{text}</>;
@@ -63,7 +64,14 @@ const WORK_STATUS_LABELS: Record<string, string> = {
 const CHART_COLORS = ["#f59e0b", "#22c55e", "#3b82f6", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
 
 export default function ConstructionReportsPage() {
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
+  
+  useEffect(() => {
+    if (userBranchId && selectedBranch !== userBranchId) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId]);
   const [selectedProject, setSelectedProject] = useState<string>("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedContractor, setSelectedContractor] = useState<string>("all");
@@ -82,14 +90,6 @@ export default function ConstructionReportsPage() {
     setCurrentPage(1);
   }, [selectedBranch, selectedCategory, selectedContractor, selectedStatus, searchQuery, minCost, maxCost]);
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
 
   const { data: projects = [] } = useQuery<ConstructionProject[]>({
     queryKey: ["/api/construction/projects"],
@@ -625,11 +625,11 @@ export default function ConstructionReportsPage() {
                   <div className="space-y-2">
                     <Label>الفرع</Label>
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch-filter">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch-filter" disabled={!canSelectBranch}>
                         <SelectValue placeholder="جميع الفروع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
-                        <SelectItem value="all">جميع الفروع</SelectItem>
+                        {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                         {branches.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
                             {branch.name}

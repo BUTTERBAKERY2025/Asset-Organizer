@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
-import type { Branch } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
 import { Brain, Calendar, DollarSign, Percent, Package, CheckCircle, Clock, Sparkles, TrendingUp, History, FileText, Loader2, AlertCircle, RefreshCw, ArrowLeft, Trash2 } from "lucide-react";
 import { useProductionContext } from "@/contexts/ProductionContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -105,16 +105,15 @@ export default function AdvancedProductionPlannerPage() {
   const queryClient = useQueryClient();
   const { itemsPerPage, getPageItems } = usePagination(6);
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   
-  // Initialize branch from context or fallback to first branch
   useEffect(() => {
-    if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
+    if (userBranchId) {
+      setBranchId(userBranchId);
+    } else if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
       setBranchId(branches[0].id);
     }
-  }, [branches, branchId, setBranchId]);
+  }, [branches, branchId, userBranchId, setBranchId]);
 
   const { data: salesDataFiles } = useQuery<SalesDataFile[]>({
     queryKey: ["/api/sales-data-uploads"],
@@ -234,7 +233,7 @@ export default function AdvancedProductionPlannerPage() {
               <div className="space-y-2">
                 <Label htmlFor="branch">الفرع *</Label>
                 <Select value={branchId} onValueChange={setBranchId}>
-                  <SelectTrigger data-testid="select-branch">
+                  <SelectTrigger data-testid="select-branch" disabled={!canSelectBranch}>
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">

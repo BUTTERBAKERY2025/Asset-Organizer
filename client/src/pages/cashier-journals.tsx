@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -60,25 +61,28 @@ const exportColumns = [
 ];
 
 export default function CashierJournalsPage() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user, isAdmin } = useAuth();
+  const { branches, canSelectBranch, userBranchId } = useBranches();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>(userBranchId || "all");
   const [discrepancyFilter, setDiscrepancyFilter] = useState<string>("all");
   const [cashierFilter, setCashierFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
+  useEffect(() => {
+    if (userBranchId && !canSelectBranch) {
+      setBranchFilter(userBranchId);
+    }
+  }, [userBranchId, canSelectBranch]);
 
   const { data: journals, isLoading } = useQuery<CashierSalesJournal[]>({
     queryKey: ["/api/cashier-journals"],
-  });
-
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
   });
 
   const { data: userPermissions } = useQuery<{ module: string; actions: string[] }[]>({
@@ -89,17 +93,6 @@ export default function CashierJournalsPage() {
   const journalPerms = userPermissions?.find(p => p.module === 'cashier_journal');
   const isManager = user?.role === 'admin' || journalPerms?.actions.includes('approve');
   const canViewAllCashiers = isManager;
-
-  const filteredBranches = branches?.filter(branch => {
-    if (user?.role === "admin") return true;
-    return user?.branchId === branch.id;
-  });
-
-  useEffect(() => {
-    if (user?.role !== "admin" && user?.branchId && branchFilter === "all") {
-      setBranchFilter(user.branchId);
-    }
-  }, [user, branchFilter]);
 
   const { data: stats } = useQuery<{
     totalJournals: number;
@@ -153,7 +146,6 @@ export default function CashierJournalsPage() {
     },
   });
 
-  const { isAdmin } = useAuth();
 
   const getBranchName = (branchId: string) => {
     const branch = branches?.find((b) => b.id === branchId);
@@ -465,13 +457,13 @@ export default function CashierJournalsPage() {
                   placeholder="إلى تاريخ"
                   data-testid="input-date-to"
                 />
-                <Select value={branchFilter} onValueChange={setBranchFilter}>
+                <Select value={branchFilter} onValueChange={setBranchFilter} disabled={!canSelectBranch}>
                   <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-branch">
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
-                    {user?.role === "admin" && <SelectItem value="all">جميع الفروع</SelectItem>}
-                    {filteredBranches?.map((branch) => (
+                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                    {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
                       </SelectItem>

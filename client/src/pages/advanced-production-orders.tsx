@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
-import type { Branch } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,11 +84,18 @@ const ORDER_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 export default function AdvancedProductionOrdersPage() {
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>(userBranchId || "all");
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
+  
+  useEffect(() => {
+    if (userBranchId && branchFilter !== userBranchId) {
+      setBranchFilter(userBranchId);
+    }
+  }, [userBranchId]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -107,9 +114,6 @@ export default function AdvancedProductionOrdersPage() {
     queryKey: [ordersQueryUrl],
   });
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
 
   const { data: stats } = useQuery<OrderStats>({
     queryKey: ["/api/advanced-production-orders/stats"],
@@ -287,12 +291,12 @@ export default function AdvancedProductionOrdersPage() {
                 />
               </div>
               <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 sm:h-10" data-testid="select-branch">
+                <SelectTrigger className="bg-gray-50 border-gray-200 h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
                   <Building2 className="h-4 w-4 ml-2 text-muted-foreground" />
                   <SelectValue placeholder="الفرع" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
-                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                   {branches?.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}

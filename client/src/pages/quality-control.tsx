@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useBranches } from "@/hooks/useBranches";
 import { Plus, Search, ClipboardCheck, CheckCircle, XCircle, AlertTriangle, Thermometer, Calendar, User } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { QualityCheck, Branch } from "@shared/schema";
@@ -50,13 +51,17 @@ export default function QualityControlPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+
   const { data: checks, isLoading } = useQuery<QualityCheck[]>({
     queryKey: ["/api/quality-checks"],
   });
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  useEffect(() => {
+    if (userBranchId && !formData.branchId) {
+      setFormData(prev => ({ ...prev, branchId: userBranchId }));
+    }
+  }, [userBranchId, formData.branchId]);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => apiRequest("POST", "/api/quality-checks", data),
@@ -132,7 +137,7 @@ export default function QualityControlPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>الفرع *</Label>
-                    <Select value={formData.branchId} onValueChange={v => setFormData({ ...formData, branchId: v })}>
+                    <Select value={formData.branchId} onValueChange={v => setFormData({ ...formData, branchId: v })} disabled={!canSelectBranch}>
                       <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>

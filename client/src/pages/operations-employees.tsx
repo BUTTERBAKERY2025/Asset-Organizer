@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useBranches } from "@/hooks/useBranches";
 import { Loader2, Users, Plus, Pencil, Trash2, Building2, Briefcase, Phone, Mail, UserCheck, UserX, RefreshCw, Shield } from "lucide-react";
-import type { User, Branch } from "@shared/schema";
+import type { User } from "@shared/schema";
 import React, { useState, useEffect } from "react";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
@@ -48,14 +49,21 @@ export default function OperationsEmployeesPage() {
   const queryClient = useQueryClient();
   const { user: currentUser, isAdmin, isLoading: authLoading, isAuthenticated } = useAuth();
   const { canView: canViewOperations, canCreate: canCreateOperations, canEdit: canEditOperations, canDelete: canDeleteOperations, isLoading: permissionsLoading } = usePermissions();
+  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<SafeUser | null>(null);
-  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [filterBranch, setFilterBranch] = useState<string>(userBranchId || "all");
   const [filterJobTitle, setFilterJobTitle] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    if (userBranchId) {
+      setFilterBranch(userBranchId);
+    }
+  }, [userBranchId]);
 
   const [newEmployee, setNewEmployee] = useState({
     username: "",
@@ -95,14 +103,6 @@ export default function OperationsEmployeesPage() {
     enabled: canView,
   });
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
 
   const filteredEmployees = employees.filter(emp => {
     if (filterBranch !== "all" && emp.branchId !== filterBranch) return false;
@@ -455,12 +455,12 @@ export default function OperationsEmployeesPage() {
                   data-testid="input-search"
                 />
               </div>
-              <Select value={filterBranch} onValueChange={setFilterBranch}>
+              <Select value={filterBranch} onValueChange={setFilterBranch} disabled={!canSelectBranch}>
                 <SelectTrigger className="h-11 sm:h-10 w-40" data-testid="filter-branch">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                   {branches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}

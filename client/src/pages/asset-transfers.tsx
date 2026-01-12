@@ -15,10 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useBranches } from "@/hooks/useBranches";
 import { ArrowLeftRight, Plus, Search, Check, X, Clock, Send, Package, Building2, FileText, Eye, Hash, MapPin, Tag, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
-import type { AssetTransfer, InventoryItem, Branch } from "@shared/schema";
+import type { AssetTransfer, InventoryItem } from "@shared/schema";
 
 const exportColumns = [
   { header: "رقم النقل", key: "transferNumber", width: 15 },
@@ -77,16 +78,20 @@ export default function AssetTransfersPage() {
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
 
+  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId) {
+      setBranchFilter(userBranchId);
+    }
+  }, [userBranchId]);
+
   const { data: transfers = [], isLoading } = useQuery<AssetTransfer[]>({
     queryKey: ["/api/asset-transfers"],
   });
 
   const { data: items = [] } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
-  });
-
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
   });
 
   const createMutation = useMutation({
@@ -190,7 +195,7 @@ export default function AssetTransfersPage() {
   });
 
   const getBranchName = (branchId: string) => {
-    return branches.find((b) => b.id === branchId)?.name || branchId;
+    return allBranches.find((b) => b.id === branchId)?.name || branchId;
   };
 
   const getItemName = (itemId: string) => {
@@ -326,12 +331,12 @@ export default function AssetTransfersPage() {
                             data-testid="input-asset-search"
                           />
                         </div>
-                        <Select value={branchFilter} onValueChange={setBranchFilter}>
+                        <Select value={branchFilter} onValueChange={setBranchFilter} disabled={!canSelectBranch}>
                           <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-branch-filter">
                             <SelectValue placeholder="كل الفروع" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">كل الفروع</SelectItem>
+                            {canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}
                             {branches.map((branch) => (
                               <SelectItem key={branch.id} value={branch.id}>
                                 {branch.name}

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useBranches } from "@/hooks/useBranches";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,7 +34,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Loader2, Building2, Calendar, DollarSign, Eye } from "lucide-react";
 import { Link } from "wouter";
-import type { Branch, ConstructionProject } from "@shared/schema";
+import type { ConstructionProject } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -58,8 +59,15 @@ const PROJECT_STATUSES = [
 ];
 
 export default function ConstructionProjectsPage() {
+  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
+  
+  useEffect(() => {
+    if (userBranchId && selectedBranch !== userBranchId) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId]);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -75,14 +83,6 @@ export default function ConstructionProjectsPage() {
   const canCreateProject = isAdmin || canCreate("construction_projects");
   const canDeleteProject = isAdmin || canDelete("construction_projects");
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
 
   const { data: projects = [], isLoading } = useQuery<ConstructionProject[]>({
     queryKey: ["/api/construction/projects"],
@@ -243,11 +243,11 @@ export default function ConstructionProjectsPage() {
             />
           </div>
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="w-full sm:w-48 h-11 sm:h-10" data-testid="select-branch-filter">
+            <SelectTrigger className="w-full sm:w-48 h-11 sm:h-10" data-testid="select-branch-filter" disabled={!canSelectBranch}>
               <SelectValue placeholder="جميع الفروع" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
-              <SelectItem value="all">جميع الفروع</SelectItem>
+              {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
               {branches.map((branch) => (
                 <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
               ))}

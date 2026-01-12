@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
+import { useBranches } from "@/hooks/useBranches";
 import { useReactToPrint } from "react-to-print";
 import logo from "@assets/logo_-5_1765206843638.png";
 import {
@@ -32,8 +33,10 @@ import { ExportButtons } from "@/components/export-buttons";
 type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
 export default function InventoryPage() {
+  const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeBranch, setActiveBranch] = useState("medina");
+  const [activeBranch, setActiveBranch] = useState<string>(userBranchId || "all");
   const [showPrices, setShowPrices] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [advancedFilters, setAdvancedFilters] = useState<FilterConfig>(defaultFilters);
@@ -43,14 +46,11 @@ export default function InventoryPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  useEffect(() => {
+    if (userBranchId && !canSelectBranch) {
+      setActiveBranch(userBranchId);
+    }
+  }, [userBranchId, canSelectBranch]);
 
   const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
@@ -576,14 +576,14 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          <Tabs defaultValue="medina" className="w-full" onValueChange={setActiveBranch} value={activeBranch}>
+          <Tabs defaultValue={userBranchId || "all"} className="w-full" onValueChange={canSelectBranch ? setActiveBranch : undefined} value={activeBranch}>
             <TabsList className="w-full md:w-auto grid grid-cols-2 md:inline-flex h-auto p-1 bg-muted/50 print:hidden">
               {branches.map(branch => (
-                <TabsTrigger key={branch.id} value={branch.id} className="py-2.5 px-6 text-base" data-testid={`tab-branch-${branch.id}`}>
+                <TabsTrigger key={branch.id} value={branch.id} className="py-2.5 px-6 text-base" data-testid={`tab-branch-${branch.id}`} disabled={!canSelectBranch && branch.id !== userBranchId}>
                   {branch.name}
                 </TabsTrigger>
               ))}
-              <TabsTrigger value="all" className="py-2.5 px-6 text-base font-bold text-primary" data-testid="tab-branch-all">بحث شامل (كل الفروع)</TabsTrigger>
+              {canSelectBranch && <TabsTrigger value="all" className="py-2.5 px-6 text-base font-bold text-primary" data-testid="tab-branch-all">بحث شامل (كل الفروع)</TabsTrigger>}
             </TabsList>
 
             <div className="mt-6 flex flex-col md:flex-row items-start md:items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">

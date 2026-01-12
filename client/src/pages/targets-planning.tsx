@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,9 +114,13 @@ export default function TargetsPlanning() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, canSelectBranch, userBranchId } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && !canSelectBranch) {
+      setNewTarget(prev => ({ ...prev, branchId: userBranchId }));
+    }
+  }, [userBranchId, canSelectBranch]);
 
   const { data: targets = [], isLoading: targetsLoading } = useQuery<BranchMonthlyTarget[]>({
     queryKey: ["/api/targets/monthly", { yearMonth: selectedMonth }],
@@ -602,8 +607,9 @@ export default function TargetsPlanning() {
                     <div>
                       <Label>الفرع</Label>
                       <Select
-                        value={newTarget.branchId}
+                        value={newTarget.branchId || userBranchId || ""}
                         onValueChange={(v) => setNewTarget({ ...newTarget, branchId: v })}
+                        disabled={!canSelectBranch}
                       >
                         <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                           <SelectValue placeholder="اختر الفرع" />

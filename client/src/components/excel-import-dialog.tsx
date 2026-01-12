@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Upload, Download, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { useBranches } from "@/hooks/useBranches";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
-import type { Branch } from "@shared/schema";
 
 interface ExcelImportDialogProps {
   open: boolean;
@@ -61,7 +61,8 @@ const VALID_CATEGORIES = [
 ];
 
 export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps) {
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "");
   const [importData, setImportData] = useState<ImportRow[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [fileName, setFileName] = useState<string>("");
@@ -69,9 +70,11 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  useEffect(() => {
+    if (userBranchId) {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId]);
 
   const importMutation = useMutation({
     mutationFn: async (data: { branchId: string; items: ImportRow[] }) => {
@@ -273,7 +276,7 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
           <div className="flex gap-4 items-end">
             <div className="flex-1">
               <Label>الفرع</Label>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>

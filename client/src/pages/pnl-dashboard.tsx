@@ -1,6 +1,7 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useBranches } from "@/hooks/useBranches";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -786,9 +787,13 @@ export default function PnLDashboard() {
   const [operatingExpensesEntries, setOperatingExpensesEntries] = useState<Array<{ expenseType: string; notes: string; amount: number }>>([]);
   const [fixedCostsEntries, setFixedCostsEntries] = useState<Array<{ costType: string; notes: string; amount: number }>>([]);
 
-  const { data: branches = [], isLoading: loadingBranches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, canSelectBranch, userBranchId, isLoading: loadingBranches } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && !canSelectBranch) {
+      setSelectedBranchId(userBranchId);
+    }
+  }, [userBranchId, canSelectBranch]);
 
   const { data: periods = [], isLoading: loadingPeriods, refetch: refetchPeriods } = useQuery<FinancialPeriod[]>({
     queryKey: ["/api/financials/periods", { branchId: selectedBranchId, year: selectedYear }],
@@ -1321,11 +1326,12 @@ export default function PnLDashboard() {
               <div>
                 <Label className="text-xs sm:text-sm">الفرع</Label>
                 <Select
-                  value={selectedBranchId}
+                  value={selectedBranchId || userBranchId || ""}
                   onValueChange={(value) => {
                     setSelectedBranchId(value);
                     handleSelectPeriod(value, selectedYear, selectedMonth);
                   }}
+                  disabled={!canSelectBranch}
                 >
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,24 +45,24 @@ const STATUS_CHART_COLORS: Record<string, string> = {
 const BRANCH_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444"];
 
 export default function ReportsPage() {
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [reportType, setReportType] = useState<string>("overview");
   const [inventoryPage, setInventoryPage] = useState(1);
   const printRef = useRef<HTMLDivElement>(null);
+  const { branches, userBranchId, canSelectBranch } = useBranches();
 
   useEffect(() => {
     setInventoryPage(1);
   }, [selectedBranch, selectedCategory]);
 
-  const { data: branches = [] } = useQuery<any[]>({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) throw new Error("Failed to fetch branches");
-      return res.json();
-    },
-  });
+  useEffect(() => {
+    if (userBranchId && selectedBranch === "") {
+      setSelectedBranch(userBranchId);
+    } else if (!userBranchId && selectedBranch === "") {
+      setSelectedBranch("all");
+    }
+  }, [userBranchId, selectedBranch]);
 
   const { data: inventory = [] } = useQuery<any[]>({
     queryKey: ["/api/inventory"],
@@ -251,12 +252,12 @@ export default function ReportsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-36 sm:w-40 h-11 sm:h-10" data-testid="select-branch-filter">
+              <SelectTrigger className="w-36 sm:w-40 h-11 sm:h-10" data-testid="select-branch-filter" disabled={!canSelectBranch}>
                 <MapPin className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="جميع الفروع" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع الفروع</SelectItem>
+                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                 {branches.map((branch: any) => (
                   <SelectItem key={branch.id} value={branch.id}>
                     {branch.name}

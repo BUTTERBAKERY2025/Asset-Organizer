@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ export default function CashierShiftPerformance() {
   const today = new Date().toISOString().split('T')[0];
   
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedShift, setSelectedShift] = useState<string>("all");
   const [showTargetDialog, setShowTargetDialog] = useState(false);
   const [newTarget, setNewTarget] = useState({
@@ -71,25 +72,20 @@ export default function CashierShiftPerformance() {
   });
 
   const { user } = useAuth();
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
-
-  const filteredBranches = useMemo(() => {
-    if (user?.role === "admin") return branches;
-    return branches.filter(b => b.id === user?.branchId);
-  }, [branches, user]);
+  const { branches, userBranchId, canSelectBranch } = useBranches();
 
   const selectedBranchData = useMemo(() => {
     if (selectedBranch === "all") return null;
-    return filteredBranches.find(b => b.id === selectedBranch);
-  }, [selectedBranch, filteredBranches]);
+    return branches.find(b => b.id === selectedBranch);
+  }, [selectedBranch, branches]);
 
   useEffect(() => {
-    if (user?.role !== "admin" && user?.branchId && selectedBranch === "all") {
-      setSelectedBranch(user.branchId);
+    if (userBranchId && (selectedBranch === "" || selectedBranch === "all")) {
+      setSelectedBranch(userBranchId);
+    } else if (!userBranchId && selectedBranch === "") {
+      setSelectedBranch("all");
     }
-  }, [user, selectedBranch]);
+  }, [userBranchId, selectedBranch]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -418,12 +414,12 @@ export default function CashierShiftPerformance() {
           <div className="flex items-center gap-2">
             <Label className="text-sm">الفرع:</Label>
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-36 sm:w-44 h-11 sm:h-10" data-testid="select-filter-branch">
+              <SelectTrigger className="w-36 sm:w-44 h-11 sm:h-10" data-testid="select-filter-branch" disabled={!canSelectBranch}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {user?.role === "admin" && <SelectItem value="all">جميع الفروع</SelectItem>}
-                {filteredBranches.map((branch) => (
+                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                {branches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                 ))}
               </SelectContent>

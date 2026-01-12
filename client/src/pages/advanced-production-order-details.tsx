@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { Branch } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { useRef } from "react";
@@ -95,9 +95,7 @@ export default function AdvancedProductionOrderDetailsPage() {
     enabled: !!id,
   });
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { allBranches: branches } = useBranches();
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,

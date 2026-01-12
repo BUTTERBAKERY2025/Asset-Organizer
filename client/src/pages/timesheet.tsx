@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -112,8 +113,9 @@ const TIMESHEET_STATUS_LABELS: Record<string, { label: string; color: string }> 
 export default function TimesheetPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [activeTab, setActiveTab] = useState("generate");
@@ -124,9 +126,13 @@ export default function TimesheetPage() {
   
   const signatureRef = useRef<SignatureCanvas>(null);
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  useEffect(() => {
+    if (userBranchId && selectedBranch === "") {
+      setSelectedBranch(userBranchId);
+    } else if (!userBranchId && selectedBranch === "") {
+      setSelectedBranch("all");
+    }
+  }, [userBranchId, selectedBranch]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -530,11 +536,11 @@ export default function TimesheetPage() {
                   <div className="space-y-2">
                     <Label>الفرع</Label>
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
+                      <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
-                        <SelectItem value="all">جميع الفروع</SelectItem>
+                        {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                         {branches.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                         ))}
@@ -793,11 +799,11 @@ export default function TimesheetPage() {
               <CardContent>
                 <div className="mb-4">
                   <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                    <SelectTrigger className="w-[200px]" data-testid="select-history-branch">
+                    <SelectTrigger className="w-[200px]" data-testid="select-history-branch" disabled={!canSelectBranch}>
                       <SelectValue placeholder="فلترة حسب الفرع" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
-                      <SelectItem value="all">جميع الفروع</SelectItem>
+                      {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                       {branches.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                       ))}

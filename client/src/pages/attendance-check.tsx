@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2 } from "lucide-react";
@@ -50,7 +51,7 @@ export default function AttendanceCheckPage() {
 
   const today = format(new Date(), "yyyy-MM-dd");
 
-  const { data: branches } = useQuery<Branch[]>({ queryKey: ["/api/branches"] });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
 
   const { data: scheduledEmployees, isLoading: loadingEmployees } = useQuery<ScheduledEmployee[]>({
     queryKey: ["/api/scheduled-employees-for-attendance", selectedBranch, selectedShift, today],
@@ -69,10 +70,10 @@ export default function AttendanceCheckPage() {
   }, []);
 
   useEffect(() => {
-    if (user?.branchId) {
-      setSelectedBranch(user.branchId);
+    if (userBranchId && !selectedBranch) {
+      setSelectedBranch(userBranchId);
     }
-  }, [user]);
+  }, [userBranchId, selectedBranch]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -259,7 +260,7 @@ export default function AttendanceCheckPage() {
                   <Building2 className="w-4 h-4" />
                   الفرع
                 </label>
-                <Select value={selectedBranch} onValueChange={(v) => { setSelectedBranch(v); setSelectedShift(""); }}>
+                <Select value={selectedBranch} onValueChange={(v) => { setSelectedBranch(v); setSelectedShift(""); }} disabled={!canSelectBranch}>
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>

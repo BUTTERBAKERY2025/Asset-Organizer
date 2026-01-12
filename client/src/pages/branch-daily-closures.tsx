@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -119,7 +120,7 @@ const exportColumns = [
 export default function BranchDailyClosuresPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>("");
   const [discrepancyFilter, setDiscrepancyFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -129,25 +130,19 @@ export default function BranchDailyClosuresPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
 
   const { data: closures, isLoading } = useQuery<BranchDailyClosure[]>({
     queryKey: ["/api/branch-daily-closures"],
   });
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
-
-  const filteredBranches = branches?.filter(branch => {
-    if (user?.role === "admin") return true;
-    return user?.branchId === branch.id;
-  });
-
   useEffect(() => {
-    if (user?.role !== "admin" && user?.branchId && branchFilter === "all") {
-      setBranchFilter(user.branchId);
+    if (userBranchId && (branchFilter === "" || branchFilter === "all")) {
+      setBranchFilter(userBranchId);
+    } else if (!userBranchId && branchFilter === "") {
+      setBranchFilter("all");
     }
-  }, [user, branchFilter]);
+  }, [userBranchId, branchFilter]);
 
   const closeMutation = useMutation({
     mutationFn: async (id: number) => apiRequest(`/api/branch-daily-closures/${id}/close`, "POST", {}),
@@ -311,12 +306,12 @@ export default function BranchDailyClosuresPage() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
               <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger>
+                <SelectTrigger disabled={!canSelectBranch}>
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">جميع الفروع</SelectItem>
-                  {filteredBranches?.map(branch => (
+                  {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                  {branches?.map(branch => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}
                     </SelectItem>

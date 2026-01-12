@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
 import { useLocation, useParams, Link } from "wouter";
 import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -163,14 +164,13 @@ export default function CashierJournalFormPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingType, setUploadingType] = useState<AttachmentType | null>(null);
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches: filteredBranches, userBranchId, canSelectBranch } = useBranches();
 
-  const filteredBranches = branches?.filter(branch => {
-    if (user?.role === "admin") return true;
-    return user?.branchId === branch.id;
-  });
+  useEffect(() => {
+    if (userBranchId && !formData.branchId && !isEdit) {
+      setFormData(prev => ({ ...prev, branchId: userBranchId }));
+    }
+  }, [userBranchId, formData.branchId, isEdit]);
 
   const { data: existingJournal, isLoading: loadingJournal } = useQuery<CashierSalesJournal & { 
     paymentBreakdowns: CashierPaymentBreakdown[];
@@ -1171,7 +1171,7 @@ export default function CashierJournalFormPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>الفرع *</Label>
-                    <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly}>
+                    <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly || !canSelectBranch}>
                       <SelectTrigger className="h-12 text-base" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>

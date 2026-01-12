@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useBranches } from "@/hooks/useBranches";
 import { Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus, FileSpreadsheet, FileText } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
@@ -69,9 +70,7 @@ export default function IncentivesManagement() {
     sortOrder: "0"
   });
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, allBranches, canSelectBranch } = useBranches();
 
   const { data: tiers = [], isLoading: tiersLoading } = useQuery<IncentiveTier[]>({
     queryKey: ["/api/incentives/tiers"],

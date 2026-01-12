@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useBranches } from "@/hooks/useBranches";
 import { Upload, FileSpreadsheet, Calendar, Building2, Eye, Loader2, AlertCircle, CheckCircle, Clock, TrendingUp, Package, DollarSign, Target, Sparkles, Send, ArrowLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +20,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import * as XLSX from "xlsx";
-import type { Branch } from "@shared/schema";
 
 interface SalesDataUpload {
   id: number;
@@ -76,7 +76,8 @@ interface ForecastResult {
 }
 
 export default function SalesDataUploadsPage() {
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "");
   const [periodStart, setPeriodStart] = useState<string>("");
   const [periodEnd, setPeriodEnd] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -84,8 +85,7 @@ export default function SalesDataUploadsPage() {
   const [analyticsUploadId, setAnalyticsUploadId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Forecast form state
-  const [forecastBranch, setForecastBranch] = useState<string>("");
+  const [forecastBranch, setForecastBranch] = useState<string>(userBranchId || "");
   const [forecastTargetSales, setForecastTargetSales] = useState<string>("");
   const [forecastDate, setForecastDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [forecastNotes, setForecastNotes] = useState<string>("");
@@ -96,9 +96,12 @@ export default function SalesDataUploadsPage() {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  useEffect(() => {
+    if (userBranchId) {
+      setSelectedBranch(userBranchId);
+      setForecastBranch(userBranchId);
+    }
+  }, [userBranchId]);
 
   const { data: uploads, isLoading } = useQuery<SalesDataUpload[]>({
     queryKey: ["/api/sales-data-uploads"],
@@ -339,7 +342,7 @@ export default function SalesDataUploadsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="branch">الفرع</Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                   <SelectTrigger data-testid="select-branch">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
@@ -644,7 +647,7 @@ export default function SalesDataUploadsPage() {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                           <div className="space-y-2">
                                             <Label>الفرع المستهدف *</Label>
-                                            <Select value={forecastBranch} onValueChange={setForecastBranch}>
+                                            <Select value={forecastBranch} onValueChange={setForecastBranch} disabled={!canSelectBranch}>
                                               <SelectTrigger>
                                                 <SelectValue placeholder="اختر الفرع" />
                                               </SelectTrigger>

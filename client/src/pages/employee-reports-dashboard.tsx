@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getQueryFn } from "@/lib/queryClient";
+import { useBranches } from "@/hooks/useBranches";
 import * as XLSX from "xlsx";
 import {
   BarChart,
@@ -114,10 +115,13 @@ export default function EmployeeReportsDashboardPage() {
   const [salarySortField, setSalarySortField] = useState<string>("employeeName");
   const [salarySortOrder, setSalarySortOrder] = useState<"asc" | "desc">("asc");
 
-  const { data: branches } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["/api/branches"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-  });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && selectedBranch === "all") {
+      setSelectedBranch(userBranchId);
+    }
+  }, [userBranchId, selectedBranch]);
 
   const { data: employees, isLoading: employeesLoading } = useQuery<BranchEmployee[]>({
     queryKey: ["/api/branch-employees"],
@@ -2514,12 +2518,12 @@ export default function EmployeeReportsDashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
                 <Label>الفرع</Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
-                    <SelectItem value="all">جميع الفروع</SelectItem>
+                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                     ))}

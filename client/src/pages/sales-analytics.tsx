@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,7 +61,7 @@ export default function SalesAnalytics() {
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState((currentDate.getMonth() + 1).toString().padStart(2, "0"));
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [activeTab, setActiveTab] = useState("overview");
   const [journalStatus, setJournalStatus] = useState<string>("all");
   const [discrepancyType, setDiscrepancyType] = useState<string>("all");
@@ -95,9 +96,15 @@ export default function SalesAnalytics() {
   const fromDate = `${yearMonth}-01`;
   const toDate = `${yearMonth}-${daysInMonth.toString().padStart(2, "0")}`;
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  const { branches, userBranchId, canSelectBranch } = useBranches();
+
+  useEffect(() => {
+    if (userBranchId && (selectedBranch === "" || selectedBranch === "all")) {
+      setSelectedBranch(userBranchId);
+    } else if (!userBranchId && selectedBranch === "") {
+      setSelectedBranch("all");
+    }
+  }, [userBranchId, selectedBranch]);
 
   const { data: targetsVsActuals = [], isLoading: loadingTargets, refetch: refetchTargets } = useQuery<any[]>({
     queryKey: ["/api/analytics/targets-vs-actuals", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
@@ -396,11 +403,11 @@ export default function SalesAnalytics() {
                 </Select>
 
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-branch">
+                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
                     <SelectValue placeholder="الفرع" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الفروع</SelectItem>
+                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
                     {branches.map((b) => (
                       <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                     ))}
