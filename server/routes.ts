@@ -566,8 +566,8 @@ export async function registerRoutes(
     }
   });
 
-  // Saved Filters
-  app.get("/api/filters", isAuthenticated, async (req, res) => {
+  // Saved Filters - Require inventory permission since filters are used for inventory views
+  app.get("/api/filters", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const filters = await storage.getAllSavedFilters();
       res.json(filters);
@@ -577,7 +577,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/filters", isAuthenticated, async (req, res) => {
+  app.post("/api/filters", isAuthenticated, requirePermission("inventory", "edit"), async (req, res) => {
     try {
       const validatedData = insertSavedFilterSchema.parse(req.body);
       const filter = await storage.createSavedFilter(validatedData);
@@ -591,7 +591,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/filters/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/filters/:id", isAuthenticated, requirePermission("inventory", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -619,6 +619,14 @@ export async function registerRoutes(
       
       if (!branchId) {
         return res.status(400).json({ error: "Branch ID is required" });
+      }
+      
+      // SECURITY: Verify branch access for non-admins
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح باستيراد بيانات لهذا الفرع" });
+        }
       }
       
       const userId = req.currentUser.id;
@@ -2560,13 +2568,21 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/production-orders/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+  app.patch("/api/production-orders/:id", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const order = await storage.updateProductionOrder(id, req.body);
-      if (!order) {
+      // SECURITY: Verify branch access for non-admins
+      const existingOrder = await storage.getProductionOrder(id);
+      if (!existingOrder) {
         return res.status(404).json({ error: "Production order not found" });
       }
+      if (!isUserAdmin(req) && existingOrder.branchId) {
+        const hasAccess = await canAccessBranch(req, existingOrder.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل أمر إنتاج هذا الفرع" });
+        }
+      }
+      const order = await storage.updateProductionOrder(id, req.body);
       res.json(order);
     } catch (error) {
       console.error("Error updating production order:", error);
@@ -2574,13 +2590,21 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+  app.delete("/api/production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const deleted = await storage.deleteProductionOrder(id);
-      if (!deleted) {
+      // SECURITY: Verify branch access for non-admins
+      const existingOrder = await storage.getProductionOrder(id);
+      if (!existingOrder) {
         return res.status(404).json({ error: "Production order not found" });
       }
+      if (!isUserAdmin(req) && existingOrder.branchId) {
+        const hasAccess = await canAccessBranch(req, existingOrder.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف أمر إنتاج هذا الفرع" });
+        }
+      }
+      const deleted = await storage.deleteProductionOrder(id);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting production order:", error);
@@ -2589,12 +2613,21 @@ export async function registerRoutes(
   });
 
   // Quality Checks Routes
-  app.get("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "view"), async (req, res) => {
+  app.get("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "view"), async (req: any, res) => {
     try {
       const { branchId, date } = req.query;
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || branchId as string | undefined;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
+      }
+      
       let checks;
-      if (branchId) {
-        checks = await storage.getQualityChecksByBranch(branchId as string);
+      if (effectiveBranchId) {
+        checks = await storage.getQualityChecksByBranch(effectiveBranchId);
       } else if (date) {
         checks = await storage.getQualityChecksByDate(date as string);
       } else {
@@ -2607,12 +2640,19 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quality-checks/:id", isAuthenticated, requirePermission("quality_control", "view"), async (req, res) => {
+  app.get("/api/quality-checks/:id", isAuthenticated, requirePermission("quality_control", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const check = await storage.getQualityCheck(id);
       if (!check) {
         return res.status(404).json({ error: "Quality check not found" });
+      }
+      // SECURITY: Verify branch access for non-admins
+      if (!isUserAdmin(req) && check.branchId) {
+        const hasAccess = await canAccessBranch(req, check.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفحص" });
+        }
       }
       res.json(check);
     } catch (error) {
@@ -2621,8 +2661,15 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "create"), async (req, res) => {
+  app.post("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "create"), async (req: any, res) => {
     try {
+      // SECURITY: Verify branch access for non-admins
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء فحص لهذا الفرع" });
+        }
+      }
       const validatedData = insertQualityCheckSchema.parse(req.body);
       const check = await storage.createQualityCheck(validatedData);
       res.status(201).json(check);
@@ -3030,6 +3077,13 @@ export async function registerRoutes(
       if (!existing) {
         return res.status(404).json({ error: "Cashier journal not found" });
       }
+      // SECURITY: Verify branch access for non-admins
+      if (!isUserAdmin(req) && existing.branchId) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل سجل هذا الفرع" });
+        }
+      }
       if (existing.status !== 'draft') {
         return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
       }
@@ -3127,12 +3181,19 @@ export async function registerRoutes(
   });
 
   // Delete cashier journal
-  app.delete("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "delete"), async (req, res) => {
+  app.delete("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const existing = await storage.getCashierJournal(id);
       if (!existing) {
         return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      // SECURITY: Verify branch access for non-admins
+      if (!isUserAdmin(req) && existing.branchId) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف سجل هذا الفرع" });
+        }
       }
       if (existing.status === 'approved') {
         return res.status(400).json({ error: "Cannot delete approved journal" });
@@ -11078,8 +11139,15 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance", isAuthenticated, async (req, res) => {
+  app.post("/api/attendance", isAuthenticated, async (req: any, res) => {
     try {
+      // SECURITY: Verify branch access for non-admins
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء سجل لهذا الفرع" });
+        }
+      }
       const validatedData = insertAttendanceRecordSchema.parse(req.body);
       const record = await storage.createAttendanceRecord(validatedData);
       res.status(201).json(record);
@@ -11092,13 +11160,21 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/attendance/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/attendance/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      // SECURITY: Verify branch access for non-admins
+      const existingRecord = await storage.getAttendanceRecord(id);
+      if (!existingRecord) return res.status(404).json({ error: "السجل غير موجود" });
+      if (!isUserAdmin(req) && existingRecord.branchId) {
+        const hasAccess = await canAccessBranch(req, existingRecord.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل سجل هذا الفرع" });
+        }
+      }
       const partialData = insertAttendanceRecordSchema.partial().parse(req.body);
       const record = await storage.updateAttendanceRecord(id, partialData);
-      if (!record) return res.status(404).json({ error: "السجل غير موجود" });
       res.json(record);
     } catch (error) {
       if (error instanceof z.ZodError) {
