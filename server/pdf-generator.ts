@@ -996,11 +996,11 @@ function getShiftType(startTime: string): { type: string; class: string } {
   if (!startTime) return { type: '-', class: '' };
   const [hours] = startTime.split(':').map(Number);
   if (hours >= 5 && hours < 12) {
-    return { type: 'صباحي', class: 'shift-morning' };
+    return { type: 'صباحي AM', class: 'shift-morning' };
   } else if (hours >= 12 && hours < 18) {
-    return { type: 'مسائي', class: 'shift-evening' };
+    return { type: 'مسائي PM', class: 'shift-evening' };
   } else {
-    return { type: 'ليلي', class: 'shift-night' };
+    return { type: 'ليلي Night', class: 'shift-night' };
   }
 }
 
@@ -1038,7 +1038,7 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     
     const dayCells = emp.days.map(d => {
       if (d.isOff) {
-        return `<td class="cell-off">إجازة</td>`;
+        return `<td class="cell-off">إجازة<br/>Off</td>`;
       } else if (d.startTime && d.endTime) {
         const start12 = formatTimeTo12Hour(d.startTime);
         const end12 = formatTimeTo12Hour(d.endTime);
@@ -1265,9 +1265,9 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
   <table>
     <thead>
       <tr>
-        <th class="col-seq">م</th>
-        <th class="col-name">الموظف</th>
-        <th class="col-shift">الوردية</th>
+        <th class="col-seq">م<br/>No</th>
+        <th class="col-name">الموظف Employee</th>
+        <th class="col-shift">الوردية<br/>Shift</th>
         ${headerCells}
       </tr>
     </thead>
@@ -1278,16 +1278,16 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
   
   <div class="footer-section">
     <div class="summary-compact">
-      <span>إجمالي: <strong>${data.employees.length}</strong></span>
-      <span class="shift-morning-badge">صباحي: <strong>${shiftSummary.morning}</strong></span>
-      <span class="shift-evening-badge">مسائي: <strong>${shiftSummary.evening}</strong></span>
-      <span class="shift-night-badge">ليلي: <strong>${shiftSummary.night}</strong></span>
-      <span class="no-off-badge">بدون إجازة: <strong>${noOffDaysEmployees}</strong></span>
+      <span>إجمالي Total: <strong>${data.employees.length}</strong></span>
+      <span class="shift-morning-badge">صباحي Morning: <strong>${shiftSummary.morning}</strong></span>
+      <span class="shift-evening-badge">مسائي Evening: <strong>${shiftSummary.evening}</strong></span>
+      <span class="shift-night-badge">ليلي Night: <strong>${shiftSummary.night}</strong></span>
+      <span class="no-off-badge">بدون إجازة No Off: <strong>${noOffDaysEmployees}</strong></span>
     </div>
     <div class="signatures-compact">
-      <div class="sig-box"><div class="sig-label">إعداد</div><div class="sig-line">التوقيع</div></div>
-      <div class="sig-box"><div class="sig-label">مراجعة</div><div class="sig-line">التوقيع</div></div>
-      <div class="sig-box"><div class="sig-label">اعتماد</div><div class="sig-line">التوقيع</div></div>
+      <div class="sig-box"><div class="sig-label">إعداد Prepared</div><div class="sig-line">التوقيع Sign</div></div>
+      <div class="sig-box"><div class="sig-label">مراجعة Reviewed</div><div class="sig-line">التوقيع Sign</div></div>
+      <div class="sig-box"><div class="sig-label">اعتماد Approved</div><div class="sig-line">التوقيع Sign</div></div>
     </div>
   </div>
 </body>
