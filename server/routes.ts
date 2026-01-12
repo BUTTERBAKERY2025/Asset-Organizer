@@ -4370,13 +4370,19 @@ export async function registerRoutes(
   });
 
   // Branch Daily Sales Progress
-  app.get("/api/targets/progress/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/targets/progress/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId } = req.params;
       const { yearMonth } = req.query;
       
       if (!yearMonth) {
         return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (mandatoryBranch && branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
       
       const progress = await storage.getBranchDailySalesProgress(branchId, yearMonth as string);
@@ -4391,7 +4397,7 @@ export async function registerRoutes(
   });
 
   // All Branches Sales Progress Summary
-  app.get("/api/targets/progress-summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/targets/progress-summary", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { yearMonth } = req.query;
       
@@ -4399,7 +4405,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "yearMonth is required" });
       }
       
-      const summary = await storage.getAllBranchesSalesProgress(yearMonth as string);
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const allSummary = await storage.getAllBranchesSalesProgress(yearMonth as string);
+      const summary = mandatoryBranch 
+        ? allSummary.filter(s => s.branchId === mandatoryBranch)
+        : allSummary;
       res.json(summary);
     } catch (error) {
       console.error("Error fetching progress summary:", error);
@@ -4408,13 +4419,19 @@ export async function registerRoutes(
   });
 
   // Performance & Leaderboard
-  app.get("/api/targets/performance/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/targets/performance/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId } = req.params;
       const { yearMonth } = req.query;
       
       if (!yearMonth) {
         return res.status(400).json({ error: "yearMonth is required" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (mandatoryBranch && branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
       
       const performance = await storage.calculateBranchPerformance(branchId, yearMonth as string);
@@ -4425,7 +4442,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/targets/leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/targets/leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { yearMonth } = req.query;
       
@@ -4433,7 +4450,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "yearMonth is required" });
       }
       
-      const leaderboard = await storage.getLeaderboard(yearMonth as string);
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const allLeaderboard = await storage.getLeaderboard(yearMonth as string);
+      const leaderboard = mandatoryBranch 
+        ? allLeaderboard.filter((l: any) => l.branchId === mandatoryBranch)
+        : allLeaderboard;
       res.json(leaderboard);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
@@ -5024,7 +5046,7 @@ export async function registerRoutes(
   });
 
   // Branch Competition - منافسة الفروع
-  app.get("/api/analytics/branch-competition", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/analytics/branch-competition", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5032,8 +5054,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "fromDate and toDate are required" });
       }
       
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
       const yearMonth = (fromDate as string).substring(0, 7);
-      const branches = await storage.getAllBranches();
+      const allBranches = await storage.getAllBranches();
+      const branches = mandatoryBranch 
+        ? allBranches.filter(b => b.id === mandatoryBranch)
+        : allBranches;
       const incentiveTiers = await storage.getActiveIncentiveTiers();
       
       const branchStats = await Promise.all(branches.map(async (branch) => {
@@ -6956,12 +6984,16 @@ export async function registerRoutes(
   });
 
   // Production Hub - unified endpoint for dashboard (supports branchId=all)
-  app.get("/api/production/hub", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+  app.get("/api/production/hub", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
-      const { branchId, date } = req.query;
-      if (!branchId || !date) {
+      const { branchId: queryBranchId, date } = req.query;
+      if (!queryBranchId || !date) {
         return res.status(400).json({ error: "الفرع والتاريخ مطلوبان" });
       }
+      
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const branchId = mandatoryBranch || queryBranchId;
       
       const dateStr = date as string;
       const prevDate = new Date(dateStr);
@@ -12874,17 +12906,26 @@ export async function registerRoutes(
   });
 
   // Get branch ranking
-  app.get("/api/financials/ranking", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/ranking", isAuthenticated, async (req: any, res) => {
     try {
       const { year, month, metric } = req.query;
       const yearNum = parseInt(year as string) || new Date().getFullYear();
       const monthNum = parseInt(month as string) || new Date().getMonth() + 1;
       const metricType = (metric as 'profit' | 'revenue' | 'margin') || 'profit';
       
-      const ranking = await storage.getBranchRanking(yearNum, monthNum, metricType);
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      const allRanking = await storage.getBranchRanking(yearNum, monthNum, metricType);
+      const ranking = mandatoryBranch 
+        ? allRanking.filter(r => r.branchId === mandatoryBranch)
+        : allRanking;
       
       // Enrich with branch names
-      const branches = await storage.getAllBranches();
+      const allBranches = await storage.getAllBranches();
+      const branches = mandatoryBranch 
+        ? allBranches.filter(b => b.id === mandatoryBranch)
+        : allBranches;
       const branchMap = new Map(branches.map(b => [b.id, b.name]));
       
       const enrichedRanking = ranking.map((r, index) => ({
