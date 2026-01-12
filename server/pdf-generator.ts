@@ -1062,9 +1062,9 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
   // Store counts for summary
   const shiftSummary = { morning: morningCount, evening: eveningCount, night: nightCount };
 
-  const workingEmployees = data.employees.filter(e => e.days.some(d => !d.isOff && d.startTime)).length;
-  const totalWorkDays = data.employees.reduce((sum, e) => sum + e.days.filter(d => !d.isOff && d.startTime).length, 0);
   const totalOffDays = data.employees.reduce((sum, e) => sum + e.days.filter(d => d.isOff).length, 0);
+  // Employees who have NO off days this week
+  const noOffDaysEmployees = data.employees.filter(e => !e.days.some(d => d.isOff)).length;
 
   const html = `
 <!DOCTYPE html>
@@ -1225,6 +1225,8 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     .shift-evening-badge strong { color: #92400e; }
     .shift-night-badge { background: #e0e7ff; padding: 2px 6px; border-radius: 3px; }
     .shift-night-badge strong { color: #3730a3; }
+    .no-off-badge { background: #fee2e2; padding: 2px 6px; border-radius: 3px; }
+    .no-off-badge strong { color: #dc2626; }
     
     .signatures-compact {
       display: flex;
@@ -1280,8 +1282,7 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       <span class="shift-morning-badge">صباحي: <strong>${shiftSummary.morning}</strong></span>
       <span class="shift-evening-badge">مسائي: <strong>${shiftSummary.evening}</strong></span>
       <span class="shift-night-badge">ليلي: <strong>${shiftSummary.night}</strong></span>
-      <span>أيام عمل: <strong>${totalWorkDays}</strong></span>
-      <span>إجازات: <strong>${totalOffDays}</strong></span>
+      <span class="no-off-badge">بدون إجازة: <strong>${noOffDaysEmployees}</strong></span>
     </div>
     <div class="signatures-compact">
       <div class="sig-box"><div class="sig-label">إعداد</div><div class="sig-line">التوقيع</div></div>
