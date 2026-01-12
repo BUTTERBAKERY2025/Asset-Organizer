@@ -96,6 +96,8 @@ export default function CashierJournalFormPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [showShortageConfirm, setShowShortageConfirm] = useState(false);
+  const [showVarianceConfirm, setShowVarianceConfirm] = useState(false);
+  const [varianceConfirmed, setVarianceConfirmed] = useState(false);
   const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null);
   const [activeTab, setActiveTab] = useState("shift");
 
@@ -440,14 +442,13 @@ export default function CashierJournalFormPage() {
   };
 
   const handleSaveAndPost = async () => {
-    if (getTotalsMismatch()) {
-      toast({ 
-        title: "لا يمكن الترحيل", 
-        description: "مجموع التفصيل لا يطابق إجمالي المبيعات", 
-        variant: "destructive" 
-      });
+    // Show confirmation if there's a variance, but allow posting after confirmation
+    if (getTotalsMismatch() && !varianceConfirmed) {
+      setShowVarianceConfirm(true);
       return;
     }
+    // Reset confirmation flag for next time
+    setVarianceConfirmed(false);
 
     const canvas = signatureCanvasRef.current;
     const signatureData = canvas ? canvas.toDataURL("image/png") : undefined;
@@ -687,9 +688,9 @@ export default function CashierJournalFormPage() {
     });
   };
 
-  // Allow saving drafts even with mismatch, but require match for posting
+  // Allow saving drafts even with mismatch, and allow posting with variance (after confirmation)
   const canSave = formData.totalSales > 0 && formData.branchId && formData.cashierName;
-  const canPost = canSave && !getTotalsMismatch();
+  const canPost = canSave; // Allow posting with variance - confirmation dialog will be shown
 
   const getDiscrepancyAnalysis = () => {
     const cashDiscrepancy = calculateDiscrepancy();
@@ -2306,7 +2307,7 @@ export default function CashierJournalFormPage() {
                   )}
                   {getTotalsMismatch() && (
                     <p className="text-xs text-amber-600 text-center">
-                      تنبيه: يمكن الحفظ كمسودة، لكن الترحيل يتطلب تطابق الأرقام
+                      تنبيه: يوجد فرق في الأرقام. سيُطلب تأكيد قبل الترحيل.
                     </p>
                   )}
                 </>
@@ -2412,6 +2413,63 @@ export default function CashierJournalFormPage() {
         {/* Spacer for sticky bar */}
         <div className="h-24 md:h-20" />
       </div>
+
+      {/* Variance Confirmation Dialog - for posting with mismatch */}
+      <AlertDialog open={showVarianceConfirm} onOpenChange={setShowVarianceConfirm}>
+        <AlertDialogContent className="max-w-md" dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-5 h-5" />
+              تأكيد الترحيل مع وجود فرق
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right space-y-2">
+              <p>
+                يوجد فرق بين مجموع التفصيل وإجمالي المبيعات بقيمة{" "}
+                <span className="font-bold text-amber-600">
+                  {Math.abs(formData.totalSales - getBreakdownTotal()).toFixed(2)} ر.س
+                </span>
+              </p>
+              <div className="bg-gray-50 p-3 rounded-md space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span>إجمالي المبيعات:</span>
+                  <span className="font-medium">{formData.totalSales.toFixed(2)} ر.س</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>مجموع التفصيل:</span>
+                  <span className="font-medium">{getBreakdownTotal().toFixed(2)} ر.س</span>
+                </div>
+                <div className="flex justify-between border-t pt-1 mt-1">
+                  <span>الفرق:</span>
+                  <span className={`font-bold ${formData.totalSales > getBreakdownTotal() ? "text-red-600" : "text-green-600"}`}>
+                    {formData.totalSales > getBreakdownTotal() ? "-" : "+"}{Math.abs(formData.totalSales - getBreakdownTotal()).toFixed(2)} ر.س
+                  </span>
+                </div>
+              </div>
+              <p className="text-muted-foreground text-sm">
+                هل أنت متأكد من ترحيل اليومية بهذا الفرق؟
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel className="flex-1">
+              مراجعة البيانات
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              onClick={() => {
+                setVarianceConfirmed(true);
+                setShowVarianceConfirm(false);
+                // Re-call handleSaveAndPost - the confirmed flag will allow it to proceed
+                setTimeout(() => {
+                  handleSaveAndPost();
+                }, 100);
+              }}
+            >
+              تأكيد الترحيل
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Shortage Confirmation Dialog */}
       <AlertDialog open={showShortageConfirm} onOpenChange={setShowShortageConfirm}>
