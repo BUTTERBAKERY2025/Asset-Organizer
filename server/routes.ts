@@ -656,9 +656,14 @@ export async function registerRoutes(
   // ===== Asset Transfers Routes =====
 
   // Get all asset transfers
-  app.get("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
+  app.get("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
     try {
-      const transfers = await storage.getAllAssetTransfers();
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const allTransfers = await storage.getAllAssetTransfers();
+      const transfers = mandatoryBranch 
+        ? allTransfers.filter(t => t.fromBranchId === mandatoryBranch || t.toBranchId === mandatoryBranch)
+        : allTransfers;
       res.json(transfers);
     } catch (error) {
       console.error("Error fetching asset transfers:", error);
@@ -667,9 +672,14 @@ export async function registerRoutes(
   });
 
   // Get transfers by item
-  app.get("/api/asset-transfers/by-item/:itemId", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
+  app.get("/api/asset-transfers/by-item/:itemId", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
     try {
-      const transfers = await storage.getAssetTransfersByItem(req.params.itemId);
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const allTransfers = await storage.getAssetTransfersByItem(req.params.itemId);
+      const transfers = mandatoryBranch 
+        ? allTransfers.filter(t => t.fromBranchId === mandatoryBranch || t.toBranchId === mandatoryBranch)
+        : allTransfers;
       res.json(transfers);
     } catch (error) {
       console.error("Error fetching item transfers:", error);
@@ -678,7 +688,7 @@ export async function registerRoutes(
   });
 
   // Get single transfer
-  app.get("/api/asset-transfers/:id", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
+  app.get("/api/asset-transfers/:id", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -688,6 +698,11 @@ export async function registerRoutes(
       if (!transfer) {
         return res.status(404).json({ error: "Transfer not found" });
       }
+      // SECURITY: Verify branch access for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (mandatoryBranch && transfer.fromBranchId !== mandatoryBranch && transfer.toBranchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
+      }
       res.json(transfer);
     } catch (error) {
       console.error("Error fetching transfer:", error);
@@ -696,11 +711,19 @@ export async function registerRoutes(
   });
 
   // Get transfer events
-  app.get("/api/asset-transfers/:id/events", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
+  app.get("/api/asset-transfers/:id/events", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid transfer ID" });
+      }
+      // SECURITY: Verify branch access for non-admins
+      const transfer = await storage.getAssetTransfer(id);
+      if (transfer) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && transfer.fromBranchId !== mandatoryBranch && transfer.toBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
+        }
       }
       const events = await storage.getAssetTransferEvents(id);
       res.json(events);
@@ -711,7 +734,7 @@ export async function registerRoutes(
   });
 
   // Create new transfer
-  app.post("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "create"), async (req, res) => {
+  app.post("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "create"), async (req: any, res) => {
     try {
       const { itemId, quantity, fromBranchId, toBranchId, reason, notes } = req.body;
       
@@ -721,6 +744,12 @@ export async function registerRoutes(
       
       if (fromBranchId === toBranchId) {
         return res.status(400).json({ error: "Cannot transfer to the same branch" });
+      }
+      
+      // SECURITY: Verify branch access for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (mandatoryBranch && fromBranchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "لا يمكنك إنشاء تحويل من فرع غير فرعك" });
       }
       
       const userId = req.currentUser!.id;
@@ -742,21 +771,30 @@ export async function registerRoutes(
   });
 
   // Approve transfer
-  app.post("/api/asset-transfers/:id/approve", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req, res) => {
+  app.post("/api/asset-transfers/:id/approve", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid transfer ID" });
       }
       
-      const userId = req.currentUser!.id;
-      const transfer = await storage.approveAssetTransfer(id, userId);
+      // SECURITY: Verify branch access for non-admins
+      const transfer = await storage.getAssetTransfer(id);
+      if (transfer) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && transfer.fromBranchId !== mandatoryBranch && transfer.toBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالموافقة على هذا التحويل" });
+        }
+      }
       
-      if (!transfer) {
+      const userId = req.currentUser!.id;
+      const approvedTransfer = await storage.approveAssetTransfer(id, userId);
+      
+      if (!approvedTransfer) {
         return res.status(404).json({ error: "Transfer not found" });
       }
       
-      res.json(transfer);
+      res.json(approvedTransfer);
     } catch (error) {
       console.error("Error approving transfer:", error);
       res.status(500).json({ error: "Failed to approve transfer" });
@@ -764,11 +802,20 @@ export async function registerRoutes(
   });
 
   // Confirm receipt
-  app.post("/api/asset-transfers/:id/confirm", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req, res) => {
+  app.post("/api/asset-transfers/:id/confirm", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid transfer ID" });
+      }
+      
+      // SECURITY: Verify branch access for non-admins
+      const existingTransfer = await storage.getAssetTransfer(id);
+      if (existingTransfer) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existingTransfer.toBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "فقط الفرع المستلم يمكنه تأكيد الاستلام" });
+        }
       }
       
       const { receiverName, signature } = req.body;
@@ -792,11 +839,20 @@ export async function registerRoutes(
   });
 
   // Cancel transfer
-  app.post("/api/asset-transfers/:id/cancel", isAuthenticated, requirePermission("asset_transfers", "edit"), async (req, res) => {
+  app.post("/api/asset-transfers/:id/cancel", isAuthenticated, requirePermission("asset_transfers", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid transfer ID" });
+      }
+      
+      // SECURITY: Verify branch access for non-admins
+      const existingTransfer = await storage.getAssetTransfer(id);
+      if (existingTransfer) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existingTransfer.fromBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "فقط الفرع المرسل يمكنه إلغاء التحويل" });
+        }
       }
       
       const { reason } = req.body;
@@ -908,9 +964,13 @@ export async function registerRoutes(
   });
 
   // Construction Projects
-  app.get("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+  app.get("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "view"), async (req: any, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const requestedBranch = req.query.branchId as string | undefined;
+      const branchId = mandatoryBranch || requestedBranch;
+      
       const projects = branchId 
         ? await storage.getConstructionProjectsByBranch(branchId)
         : await storage.getAllConstructionProjects();
@@ -921,7 +981,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+  app.get("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -931,6 +991,11 @@ export async function registerRoutes(
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
+      // SECURITY: Verify branch access for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (mandatoryBranch && project.branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا المشروع" });
+      }
       res.json(project);
     } catch (error) {
       console.error("Error fetching project:", error);
@@ -938,8 +1003,13 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "create"), async (req, res) => {
+  app.post("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "create"), async (req: any, res) => {
     try {
+      // SECURITY: Verify branch access for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (mandatoryBranch && req.body.branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "لا يمكنك إنشاء مشروع لفرع آخر" });
+      }
       const validatedData = insertConstructionProjectSchema.parse(req.body);
       const project = await storage.createConstructionProject(validatedData);
       res.status(201).json(project);
@@ -952,11 +1022,19 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
+  app.patch("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid project ID" });
+      }
+      // SECURITY: Verify branch access for non-admins
+      const existingProject = await storage.getConstructionProject(id);
+      if (existingProject) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existingProject.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا المشروع" });
+        }
       }
       const partialData = insertConstructionProjectSchema.partial().parse(req.body);
       const project = await storage.updateConstructionProject(id, partialData);
@@ -973,11 +1051,19 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "delete"), async (req, res) => {
+  app.delete("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid project ID" });
+      }
+      // SECURITY: Verify branch access for non-admins
+      const existingProject = await storage.getConstructionProject(id);
+      if (existingProject) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existingProject.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا المشروع" });
+        }
       }
       const success = await storage.deleteConstructionProject(id);
       if (!success) {
