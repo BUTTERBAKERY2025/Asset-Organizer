@@ -630,6 +630,7 @@ export interface IStorage {
 
   // Production Order Items
   getProductionOrderItems(orderId: number): Promise<ProductionOrderItem[]>;
+  getProductionOrderItemById(id: number): Promise<ProductionOrderItem | undefined>;
   getProductionTargetsByDate(branchId: string, date: string): Promise<{ totalTarget: number; totalProduced: number }>;
   createProductionOrderItem(item: InsertProductionOrderItem): Promise<ProductionOrderItem>;
   bulkCreateProductionOrderItems(items: InsertProductionOrderItem[]): Promise<ProductionOrderItem[]>;
@@ -4521,6 +4522,12 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(productionOrderItems)
       .where(eq(productionOrderItems.orderId, orderId))
       .orderBy(productionOrderItems.priority);
+  }
+
+  async getProductionOrderItemById(id: number): Promise<ProductionOrderItem | undefined> {
+    const [item] = await db.select().from(productionOrderItems)
+      .where(eq(productionOrderItems.id, id));
+    return item || undefined;
   }
 
   async getProductionTargetsByDate(branchId: string, date: string): Promise<{ totalTarget: number; totalProduced: number }> {

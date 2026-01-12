@@ -6299,18 +6299,29 @@ export async function registerRoutes(
   });
 
   // Delete production order
-  app.delete("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+  app.delete("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid order ID" });
       }
       
-      const success = await storage.deleteAdvancedProductionOrder(id);
-      if (!success) {
+      // SECURITY: Verify branch access for non-admins (must have access to ALL branches involved)
+      const existingOrder = await storage.getAdvancedProductionOrder(id);
+      if (!existingOrder) {
         return res.status(404).json({ error: "Order not found" });
       }
+      if (!isUserAdmin(req)) {
+        // User must have access to both source and target branches for cross-branch operations
+        const hasSourceAccess = existingOrder.sourceBranchId ? await canAccessBranch(req, existingOrder.sourceBranchId) : true;
+        const hasTargetAccess = existingOrder.targetBranchId ? await canAccessBranch(req, existingOrder.targetBranchId) : true;
+        // Require access to BOTH branches for cross-branch orders
+        if (!hasSourceAccess || !hasTargetAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف أمر إنتاج هذا الفرع - يجب أن يكون لديك صلاحية للفرعين المصدر والهدف" });
+        }
+      }
       
+      const success = await storage.deleteAdvancedProductionOrder(id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting production order:", error);
@@ -6321,11 +6332,25 @@ export async function registerRoutes(
   // ==================== Production Order Items ====================
   
   // Add item to order
-  app.post("/api/advanced-production-orders/:orderId/items", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+  app.post("/api/advanced-production-orders/:orderId/items", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
       const orderId = parseInt(req.params.orderId, 10);
       if (isNaN(orderId)) {
         return res.status(400).json({ error: "Invalid order ID" });
+      }
+      
+      // SECURITY: Verify branch access for non-admins via parent order (must have access to ALL branches)
+      const parentOrder = await storage.getAdvancedProductionOrder(orderId);
+      if (!parentOrder) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      if (!isUserAdmin(req)) {
+        // User must have access to both source and target branches for cross-branch operations
+        const hasSourceAccess = parentOrder.sourceBranchId ? await canAccessBranch(req, parentOrder.sourceBranchId) : true;
+        const hasTargetAccess = parentOrder.targetBranchId ? await canAccessBranch(req, parentOrder.targetBranchId) : true;
+        if (!hasSourceAccess || !hasTargetAccess) {
+          return res.status(403).json({ error: "غير مصرح بإضافة عناصر لأمر إنتاج هذا الفرع - يجب أن يكون لديك صلاحية للفرعين" });
+        }
       }
       
       const item = await storage.createProductionOrderItem({
@@ -6348,24 +6373,38 @@ export async function registerRoutes(
   });
 
   // Update order item
-  app.patch("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+  app.patch("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid item ID" });
       }
       
-      const item = await storage.updateProductionOrderItem(id, req.body);
-      if (!item) {
+      // First get the item to find its parent order
+      const existingItem = await storage.getProductionOrderItemById(id);
+      if (!existingItem) {
         return res.status(404).json({ error: "Item not found" });
       }
       
+      // SECURITY: Verify branch access via parent order (must have access to ALL branches)
+      const parentOrder = await storage.getAdvancedProductionOrder(existingItem.orderId);
+      if (!isUserAdmin(req) && parentOrder) {
+        // User must have access to both source and target branches for cross-branch operations
+        const hasSourceAccess = parentOrder.sourceBranchId ? await canAccessBranch(req, parentOrder.sourceBranchId) : true;
+        const hasTargetAccess = parentOrder.targetBranchId ? await canAccessBranch(req, parentOrder.targetBranchId) : true;
+        if (!hasSourceAccess || !hasTargetAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل عناصر هذا الفرع - يجب أن يكون لديك صلاحية للفرعين" });
+        }
+      }
+      
+      const item = await storage.updateProductionOrderItem(id, req.body);
+      
       // Update order completion percentage
-      const allItems = await storage.getProductionOrderItems(item.orderId);
+      const allItems = await storage.getProductionOrderItems(item!.orderId);
       const completedItems = allItems.filter(i => i.status === 'completed').length;
       const completionPercent = allItems.length > 0 ? (completedItems / allItems.length) * 100 : 0;
       
-      await storage.updateAdvancedProductionOrder(item.orderId, {
+      await storage.updateAdvancedProductionOrder(item!.orderId, {
         completedItems,
         completionPercent,
         actualCost: allItems.reduce((sum, i) => sum + ((i.producedQuantity || 0) * (i.unitPrice || 0)), 0)
@@ -6379,18 +6418,31 @@ export async function registerRoutes(
   });
 
   // Delete order item
-  app.delete("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+  app.delete("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid item ID" });
       }
       
-      const success = await storage.deleteProductionOrderItem(id);
-      if (!success) {
+      // First get the item to find its parent order
+      const existingItem = await storage.getProductionOrderItemById(id);
+      if (!existingItem) {
         return res.status(404).json({ error: "Item not found" });
       }
       
+      // SECURITY: Verify branch access via parent order (must have access to ALL branches)
+      const parentOrder = await storage.getAdvancedProductionOrder(existingItem.orderId);
+      if (!isUserAdmin(req) && parentOrder) {
+        // User must have access to both source and target branches for cross-branch operations
+        const hasSourceAccess = parentOrder.sourceBranchId ? await canAccessBranch(req, parentOrder.sourceBranchId) : true;
+        const hasTargetAccess = parentOrder.targetBranchId ? await canAccessBranch(req, parentOrder.targetBranchId) : true;
+        if (!hasSourceAccess || !hasTargetAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف عناصر هذا الفرع - يجب أن يكون لديك صلاحية للفرعين" });
+        }
+      }
+      
+      const success = await storage.deleteProductionOrderItem(id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting order item:", error);
@@ -6401,9 +6453,23 @@ export async function registerRoutes(
   // ==================== AI Production Plans ====================
   
   // Get all AI plans
-  app.get("/api/production-ai-plans", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+  app.get("/api/production-ai-plans", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
-      const plans = await storage.getAllProductionAiPlans();
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !mandatoryBranch) {
+        return res.json([]);
+      }
+      
+      let plans = await storage.getAllProductionAiPlans();
+      
+      // Filter by branch for non-admin users
+      if (mandatoryBranch) {
+        plans = plans.filter(plan => plan.branchId === mandatoryBranch);
+      }
+      
       // Format response for frontend compatibility
       const formattedPlans = plans.map(plan => ({
         id: plan.id,
@@ -6428,18 +6494,26 @@ export async function registerRoutes(
   });
 
   // Delete AI production plan
-  app.delete("/api/production-ai-plans/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
+  app.delete("/api/production-ai-plans/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid plan ID" });
       }
       
-      const success = await storage.deleteProductionAiPlan(id);
-      if (!success) {
+      // SECURITY: Verify branch access for non-admins
+      const existingPlan = await storage.getProductionAiPlan(id);
+      if (!existingPlan) {
         return res.status(404).json({ error: "Plan not found" });
       }
+      if (!isUserAdmin(req) && existingPlan.branchId) {
+        const hasAccess = await canAccessBranch(req, existingPlan.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف خطة هذا الفرع" });
+        }
+      }
       
+      const success = await storage.deleteProductionAiPlan(id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting AI plan:", error);
@@ -6448,12 +6522,20 @@ export async function registerRoutes(
   });
 
   // Generate AI production plan
-  app.post("/api/production-ai-plans/generate", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+  app.post("/api/production-ai-plans/generate", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
     try {
       const { branchId, targetSalesValue, planDate, uploadId } = req.body;
       
       if (!branchId || !targetSalesValue || !planDate) {
         return res.status(400).json({ error: "Missing required fields: branchId, targetSalesValue, planDate" });
+      }
+      
+      // SECURITY: Verify branch access for non-admins
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء خطة لهذا الفرع" });
+        }
       }
       
       // Get products and their sales analytics if available
