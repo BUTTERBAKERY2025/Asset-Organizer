@@ -1077,21 +1077,48 @@ export async function registerRoutes(
   });
 
   // Project Work Items
-  app.get("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
+  // Helper: Check project branch access
+  async function checkProjectBranchAccess(req: any, projectId: number): Promise<{allowed: boolean, branchId?: string}> {
+    const mandatoryBranch = getMandatoryBranchFilter(req);
+    if (!mandatoryBranch) return { allowed: true };
+    const project = await storage.getConstructionProject(projectId);
+    if (!project) return { allowed: true };
+    return { allowed: project.branchId === mandatoryBranch, branchId: project.branchId || undefined };
+  }
+
+  app.get("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req: any, res) => {
     try {
-      const items = await storage.getAllWorkItems();
-      res.json(items);
+      // SECURITY: Filter work items by project branch for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const allItems = await storage.getAllWorkItems();
+      if (!mandatoryBranch) {
+        return res.json(allItems);
+      }
+      // Filter by checking each work item's project branch
+      const filteredItems = [];
+      for (const item of allItems) {
+        const project = await storage.getConstructionProject(item.projectId);
+        if (project && project.branchId === mandatoryBranch) {
+          filteredItems.push(item);
+        }
+      }
+      res.json(filteredItems);
     } catch (error) {
       console.error("Error fetching all work items:", error);
       res.status(500).json({ error: "Failed to fetch work items" });
     }
   });
 
-  app.get("/api/construction/projects/:projectId/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
+  app.get("/api/construction/projects/:projectId/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req: any, res) => {
     try {
       const projectId = parseInt(req.params.projectId, 10);
       if (isNaN(projectId)) {
         return res.status(400).json({ error: "Invalid project ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا المشروع" });
       }
       const items = await storage.getWorkItemsByProject(projectId);
       res.json(items);
@@ -1101,7 +1128,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
+  app.get("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1111,6 +1138,11 @@ export async function registerRoutes(
       if (!item) {
         return res.status(404).json({ error: "Work item not found" });
       }
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, item.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا البند" });
+      }
       res.json(item);
     } catch (error) {
       console.error("Error fetching work item:", error);
@@ -1118,9 +1150,14 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "create"), async (req, res) => {
+  app.post("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "create"), async (req: any, res) => {
     try {
       const validatedData = insertProjectWorkItemSchema.parse(req.body);
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, validatedData.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بإضافة بنود لهذا المشروع" });
+      }
       const item = await storage.createWorkItem(validatedData);
       res.status(201).json(item);
     } catch (error) {
@@ -1132,11 +1169,19 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "edit"), async (req, res) => {
+  app.patch("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid work item ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingItem = await storage.getWorkItem(id);
+      if (existingItem) {
+        const access = await checkProjectBranchAccess(req, existingItem.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا البند" });
+        }
       }
       const partialData = insertProjectWorkItemSchema.partial().parse(req.body);
       const item = await storage.updateWorkItem(id, partialData);
@@ -1153,11 +1198,19 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "delete"), async (req, res) => {
+  app.delete("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid work item ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingItem = await storage.getWorkItem(id);
+      if (existingItem) {
+        const access = await checkProjectBranchAccess(req, existingItem.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا البند" });
+        }
       }
       const success = await storage.deleteWorkItem(id);
       if (!success) {
@@ -1171,11 +1224,16 @@ export async function registerRoutes(
   });
 
   // Budget Allocations
-  app.get("/api/construction/projects/:projectId/budget-allocations", isAuthenticated, requirePermission("budget_planning", "view"), async (req, res) => {
+  app.get("/api/construction/projects/:projectId/budget-allocations", isAuthenticated, requirePermission("budget_planning", "view"), async (req: any, res) => {
     try {
       const projectId = parseInt(req.params.projectId, 10);
       if (isNaN(projectId)) {
         return res.status(400).json({ error: "Invalid project ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لميزانية هذا المشروع" });
       }
       const allocations = await storage.getBudgetAllocationsByProject(projectId);
       res.json(allocations);
@@ -1185,9 +1243,14 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/budget-allocations", isAuthenticated, requirePermission("budget_planning", "create"), async (req, res) => {
+  app.post("/api/construction/budget-allocations", isAuthenticated, requirePermission("budget_planning", "create"), async (req: any, res) => {
     try {
       const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, validatedData.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بإضافة ميزانية لهذا المشروع" });
+      }
       const allocation = await storage.createBudgetAllocation(validatedData);
       res.status(201).json(allocation);
     } catch (error) {
@@ -1199,9 +1262,14 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/budget-allocations/upsert", isAuthenticated, requireAnyPermission("budget_planning", ["create", "edit"]), async (req, res) => {
+  app.post("/api/construction/budget-allocations/upsert", isAuthenticated, requireAnyPermission("budget_planning", ["create", "edit"]), async (req: any, res) => {
     try {
       const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, validatedData.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بتعديل ميزانية هذا المشروع" });
+      }
       const allocation = await storage.upsertBudgetAllocation(validatedData);
       res.json(allocation);
     } catch (error) {
@@ -1318,20 +1386,43 @@ export async function registerRoutes(
 
   // ===== Construction Contracts Routes =====
   
-  app.get("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+  app.get("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
     try {
       const projectId = req.query.projectId as string | undefined;
-      const contracts = projectId 
-        ? await storage.getContractsByProject(parseInt(projectId, 10))
-        : await storage.getAllContracts();
-      res.json(contracts);
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      if (projectId) {
+        // Verify project branch access
+        const access = await checkProjectBranchAccess(req, parseInt(projectId, 10));
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لعقود هذا المشروع" });
+        }
+        const contracts = await storage.getContractsByProject(parseInt(projectId, 10));
+        return res.json(contracts);
+      }
+      
+      // For all contracts, filter by branch
+      const allContracts = await storage.getAllContracts();
+      if (!mandatoryBranch) {
+        return res.json(allContracts);
+      }
+      // Filter contracts by project branch
+      const filteredContracts = [];
+      for (const contract of allContracts) {
+        const project = await storage.getConstructionProject(contract.projectId);
+        if (project && project.branchId === mandatoryBranch) {
+          filteredContracts.push(contract);
+        }
+      }
+      res.json(filteredContracts);
     } catch (error) {
       console.error("Error fetching contracts:", error);
       res.status(500).json({ error: "Failed to fetch contracts" });
     }
   });
 
-  app.get("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+  app.get("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1340,6 +1431,11 @@ export async function registerRoutes(
       const contract = await storage.getContract(id);
       if (!contract) {
         return res.status(404).json({ error: "Contract not found" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, contract.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا العقد" });
       }
       res.json(contract);
     } catch (error) {
@@ -1350,6 +1446,11 @@ export async function registerRoutes(
 
   app.post("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
     try {
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, req.body.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء عقد لهذا المشروع" });
+      }
       const validatedData = insertConstructionContractSchema.parse({
         ...req.body,
         createdBy: req.currentUser?.id
@@ -1365,11 +1466,19 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+  app.patch("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingContract = await storage.getContract(id);
+      if (existingContract) {
+        const access = await checkProjectBranchAccess(req, existingContract.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا العقد" });
+        }
       }
       const partialData = insertConstructionContractSchema.partial().parse(req.body);
       const contract = await storage.updateContract(id, partialData);
@@ -1386,11 +1495,19 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
+  app.delete("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid contract ID" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const existingContract = await storage.getContract(id);
+      if (existingContract) {
+        const access = await checkProjectBranchAccess(req, existingContract.projectId);
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا العقد" });
+        }
       }
       const success = await storage.deleteContract(id);
       if (!success) {
@@ -1504,16 +1621,47 @@ export async function registerRoutes(
 
   // ===== Payment Requests Routes =====
   
-  app.get("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "view"), async (req, res) => {
+  app.get("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "view"), async (req: any, res) => {
     try {
       const { projectId, status } = req.query;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
       let requests;
       if (projectId) {
+        // Verify project branch access
+        const access = await checkProjectBranchAccess(req, parseInt(projectId as string, 10));
+        if (!access.allowed) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لطلبات هذا المشروع" });
+        }
         requests = await storage.getPaymentRequestsByProject(parseInt(projectId as string, 10));
       } else if (status) {
-        requests = await storage.getPaymentRequestsByStatus(status as string);
+        const allByStatus = await storage.getPaymentRequestsByStatus(status as string);
+        if (mandatoryBranch) {
+          // Filter by project branch
+          requests = [];
+          for (const req of allByStatus) {
+            const project = await storage.getConstructionProject(req.projectId);
+            if (project && project.branchId === mandatoryBranch) {
+              requests.push(req);
+            }
+          }
+        } else {
+          requests = allByStatus;
+        }
       } else {
-        requests = await storage.getAllPaymentRequests();
+        const allRequests = await storage.getAllPaymentRequests();
+        if (mandatoryBranch) {
+          // Filter by project branch
+          requests = [];
+          for (const req of allRequests) {
+            const project = await storage.getConstructionProject(req.projectId);
+            if (project && project.branchId === mandatoryBranch) {
+              requests.push(req);
+            }
+          }
+        } else {
+          requests = allRequests;
+        }
       }
       res.json(requests);
     } catch (error) {
@@ -1522,7 +1670,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "view"), async (req, res) => {
+  app.get("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1531,6 +1679,11 @@ export async function registerRoutes(
       const request = await storage.getPaymentRequest(id);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
+      }
+      // SECURITY: Verify project branch access for non-admins
+      const access = await checkProjectBranchAccess(req, request.projectId);
+      if (!access.allowed) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
       }
       res.json(request);
     } catch (error) {
