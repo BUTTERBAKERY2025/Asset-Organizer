@@ -71,6 +71,25 @@ const DISCREPANCY_LABELS: Record<string, { label: string; color: string; icon: a
   surplus: { label: "زيادة", color: "text-amber-600", icon: TrendingUp },
 };
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "نقدي",
+  mada: "مدى",
+  visa: "فيزا",
+  mastercard: "ماستركارد",
+  amex: "أمريكان إكسبريس",
+  card_other: "بطاقة أخرى",
+  apple_pay: "Apple Pay",
+  stc_pay: "STC Pay",
+  hunger_station: "هنقرستيشن",
+  toyou: "ToYou",
+  jahez: "جاهز",
+  marsool: "مرسول",
+  keeta: "كيتا",
+  the_chefs: "ذا شيفز",
+  talabat: "طلبات",
+  other: "أخرى",
+};
+
 type JournalPreviewResponse = {
   existingClosure: any | null;
   journals: CashierSalesJournal[];
@@ -368,27 +387,90 @@ export default function BranchDailyClosingPage() {
                           </div>
                         </div>
                         <CollapsibleContent>
-                          <div className="mt-4 pt-4 border-t grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">النقدي:</span>
-                              <span className="font-medium mr-2">{formatCurrency(journal.cashTotal)} ريال</span>
+                          <div className="mt-4 pt-4 border-t space-y-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-500">النقدي:</span>
+                                <span className="font-medium mr-2">{formatCurrency(journal.cashTotal)} ريال</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">الشبكة:</span>
+                                <span className="font-medium mr-2">{formatCurrency(journal.networkTotal)} ريال</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">التوصيل:</span>
+                                <span className="font-medium mr-2">{formatCurrency(journal.deliveryTotal)} ريال</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-500">فرق النقدي:</span>
+                                <span className={`font-medium ${
+                                  (journal.discrepancyAmount || 0) > 0.5 ? 'text-amber-600' : 
+                                  (journal.discrepancyAmount || 0) < -0.5 ? 'text-red-600' : 'text-green-600'
+                                }`}>
+                                  {formatCurrency(journal.discrepancyAmount)} ريال
+                                </span>
+                              </div>
                             </div>
-                            <div>
-                              <span className="text-gray-500">الشبكة:</span>
-                              <span className="font-medium mr-2">{formatCurrency(journal.networkTotal)} ريال</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">التوصيل:</span>
-                              <span className="font-medium mr-2">{formatCurrency(journal.deliveryTotal)} ريال</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-500">فرق النقدي:</span>
-                              <span className={`font-medium ${
-                                (journal.discrepancyAmount || 0) > 0.5 ? 'text-amber-600' : 
-                                (journal.discrepancyAmount || 0) < -0.5 ? 'text-red-600' : 'text-green-600'
-                              }`}>
-                                {formatCurrency(journal.discrepancyAmount)} ريال
-                              </span>
+                            
+                            {journal.paymentBreakdowns && journal.paymentBreakdowns.length > 0 && (
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-sm font-medium text-gray-700 mb-2">تفصيل طرق الدفع:</p>
+                                <div className="overflow-x-auto">
+                                  <Table className="text-xs">
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="text-right">طريقة الدفع</TableHead>
+                                        <TableHead className="text-center">المبلغ</TableHead>
+                                        <TableHead className="text-center">نقطة البيع</TableHead>
+                                        <TableHead className="text-center">الجهاز</TableHead>
+                                        <TableHead className="text-center">الفرق</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {journal.paymentBreakdowns.map((pb: any, idx: number) => {
+                                        const posAmt = pb.posAmount ?? pb.amount ?? 0;
+                                        const termAmt = pb.terminalAmount ?? 0;
+                                        const bankDisc = pb.bankDiscrepancy ?? (termAmt - posAmt);
+                                        return (
+                                          <TableRow key={idx}>
+                                            <TableCell className="font-medium">
+                                              {PAYMENT_METHOD_LABELS[pb.paymentMethod] || pb.paymentMethod}
+                                            </TableCell>
+                                            <TableCell className="text-center">{formatCurrency(pb.amount ?? 0)}</TableCell>
+                                            <TableCell className="text-center">{formatCurrency(posAmt)}</TableCell>
+                                            <TableCell className="text-center">{formatCurrency(termAmt)}</TableCell>
+                                            <TableCell className={`text-center font-medium ${
+                                              bankDisc > 0.5 ? 'text-amber-600' : 
+                                              bankDisc < -0.5 ? 'text-red-600' : 'text-green-600'
+                                            }`}>
+                                              {formatCurrency(bankDisc)}
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                              <div className="bg-blue-50 rounded p-2">
+                                <span className="text-gray-500 block">عدد العمليات:</span>
+                                <span className="font-semibold">{formatNumber(journal.transactionCount)}</span>
+                              </div>
+                              <div className="bg-green-50 rounded p-2">
+                                <span className="text-gray-500 block">رصيد الافتتاح:</span>
+                                <span className="font-semibold">{formatCurrency(journal.openingBalance)} ريال</span>
+                              </div>
+                              <div className="bg-purple-50 rounded p-2">
+                                <span className="text-gray-500 block">المتوقع بالصندوق:</span>
+                                <span className="font-semibold">{formatCurrency(journal.expectedCash)} ريال</span>
+                              </div>
+                              <div className="bg-amber-50 rounded p-2">
+                                <span className="text-gray-500 block">الفعلي بالصندوق:</span>
+                                <span className="font-semibold">{formatCurrency(journal.actualCashDrawer)} ريال</span>
+                              </div>
                             </div>
                           </div>
                         </CollapsibleContent>
@@ -490,6 +572,63 @@ export default function BranchDailyClosingPage() {
                       </Badge>
                     </div>
                   </div>
+
+                  {journalPreview?.paymentMethodTotals && Object.keys(journalPreview.paymentMethodTotals).length > 0 && (
+                    <div className="mt-6 bg-white rounded-lg border p-4">
+                      <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-amber-600" />
+                        إجمالي طرق الدفع
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">طريقة الدفع</TableHead>
+                              <TableHead className="text-center">إجمالي المبلغ</TableHead>
+                              <TableHead className="text-center">نقطة البيع</TableHead>
+                              <TableHead className="text-center">الجهاز</TableHead>
+                              <TableHead className="text-center">الفرق</TableHead>
+                              <TableHead className="text-center">عدد العمليات</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {Object.entries(journalPreview.paymentMethodTotals).map(([method, data]) => {
+                              const totalAmt = data.totalAmount ?? 0;
+                              const posAmt = data.totalPosAmount ?? 0;
+                              const termAmt = data.totalTerminalAmount ?? 0;
+                              const bankDisc = data.totalBankDiscrepancy ?? 0;
+                              const txnCount = data.totalTransactionCount ?? 0;
+                              return (
+                                <TableRow key={method}>
+                                  <TableCell className="font-medium">
+                                    {PAYMENT_METHOD_LABELS[method] || method}
+                                  </TableCell>
+                                  <TableCell className="text-center font-semibold">
+                                    {formatCurrency(totalAmt)} ريال
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatCurrency(posAmt)} ريال
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatCurrency(termAmt)} ريال
+                                  </TableCell>
+                                  <TableCell className={`text-center font-medium ${
+                                    bankDisc > 0.5 ? 'text-amber-600' : 
+                                    bankDisc < -0.5 ? 'text-red-600' : 'text-green-600'
+                                  }`}>
+                                    {formatCurrency(bankDisc)} ريال
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatNumber(txnCount)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-4 space-y-2">
                     <Label>ملاحظات (اختياري)</Label>
