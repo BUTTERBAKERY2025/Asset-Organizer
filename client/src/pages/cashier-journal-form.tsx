@@ -596,17 +596,17 @@ export default function CashierJournalFormPage() {
     return diff > 0.01;
   };
 
-  const calculateDiscrepancy = () => {
-    // Use adjusted cash total if there's a cash return
-    const adjustedCategoryTotals = getAdjustedCategoryTotals();
-    const expectedCash = adjustedCategoryTotals.cash;
-    return formData.actualCashDrawer - expectedCash;
-  };
-
-  // Calculate discrepancy for display (same as above but clearer)
+  // Calculate expected cash in drawer = Opening Balance + Cash Sales - Cash Returns
   const getExpectedCashInDrawer = () => {
     const adjustedCategoryTotals = getAdjustedCategoryTotals();
-    return adjustedCategoryTotals.cash;
+    const openingBalance = formData.openingBalance ?? 0;
+    return openingBalance + adjustedCategoryTotals.cash;
+  };
+
+  const calculateDiscrepancy = () => {
+    // Discrepancy = Actual Cash - Expected Cash (including opening balance)
+    const expectedCash = getExpectedCashInDrawer();
+    return formData.actualCashDrawer - expectedCash;
   };
 
   // Comprehensive variance summary - unified source of truth
@@ -1309,15 +1309,25 @@ export default function CashierJournalFormPage() {
                   const method = PAYMENT_METHODS.find((m) => m.value === breakdown.paymentMethod);
                   const Icon = method?.icon || Wallet;
                   const isBank = isBankPaymentMethod(breakdown.paymentMethod);
+                  const isCash = breakdown.paymentMethod === 'cash';
                   const bankDisc = (breakdown.terminalAmount || 0) - (breakdown.posAmount || breakdown.amount || 0);
                   const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
+                  
+                  // Row styling based on payment type
+                  const rowStyle = isBank 
+                    ? 'border-blue-200 bg-blue-50/50' 
+                    : isCash 
+                      ? 'border-amber-200 bg-amber-50/50' 
+                      : 'border-gray-200 bg-gray-50/30';
+                  const iconBg = isBank ? 'bg-blue-200' : isCash ? 'bg-amber-200' : 'bg-gray-200';
+                  const iconColor = isBank ? 'text-blue-700' : isCash ? 'text-amber-700' : 'text-gray-600';
 
                   return (
-                    <div key={index} className={`p-3 border rounded-lg ${isBank ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-gray-50/30'}`} data-testid={`payment-row-${index}`}>
+                    <div key={index} className={`p-3 border rounded-lg ${rowStyle}`} data-testid={`payment-row-${index}`}>
                       {/* Compact Header Row */}
                       <div className="flex items-center gap-2 mb-2">
-                        <div className={`p-1.5 rounded ${isBank ? 'bg-blue-200' : 'bg-gray-200'}`}>
-                          <Icon className={`w-4 h-4 ${isBank ? 'text-blue-700' : 'text-gray-600'}`} />
+                        <div className={`p-1.5 rounded ${iconBg}`}>
+                          <Icon className={`w-4 h-4 ${iconColor}`} />
                         </div>
                         <Select
                           value={breakdown.paymentMethod}
@@ -1441,8 +1451,90 @@ export default function CashierJournalFormPage() {
                             </div>
                           </div>
                         </div>
+                      ) : breakdown.paymentMethod === 'cash' ? (
+                        /* Cash: POS Amount vs Actual Drawer - Special Layout */
+                        (() => {
+                          const expectedCash = getExpectedCashInDrawer();
+                          const actualCash = formData.actualCashDrawer ?? 0;
+                          const cashDisc = actualCash - expectedCash;
+                          const cashDiscType = cashDisc > 0.5 ? 'surplus' : cashDisc < -0.5 ? 'shortage' : 'balanced';
+                          return (
+                            <div className="space-y-2">
+                              {/* Cash POS & Actual Drawer - Side by Side */}
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-amber-700 font-medium">النقد المسجل (POS)</Label>
+                                  <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="0.00"
+                                    value={breakdown.amount ?? ""}
+                                    onChange={(e) => updatePaymentBreakdown(index, "amount", parseFloat(e.target.value) || 0)}
+                                    disabled={isReadOnly}
+                                    className="h-10 text-base font-bold text-center"
+                                    data-testid={`input-payment-amount-${index}`}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-amber-700 font-medium">الفعلي في الصندوق</Label>
+                                  <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="0.00"
+                                    value={formData.actualCashDrawer ?? ""}
+                                    onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
+                                    disabled={isReadOnly}
+                                    className="h-10 text-base font-bold text-center bg-white"
+                                    data-testid="input-actual-cash-inline"
+                                  />
+                                </div>
+                              </div>
+                              {/* Cash Discrepancy & Transaction Count - Compact Row */}
+                              <div className="flex items-center gap-2 text-xs">
+                                <div className={`flex-1 px-2 py-1.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : cashDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  <span>الفرق:</span>
+                                  <span className="font-bold">
+                                    {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} ر.س {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                                  <span className="text-gray-500 text-[10px]">عمليات:</span>
+                                  <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    value={breakdown.transactionCount ?? ""}
+                                    onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                                    disabled={isReadOnly}
+                                    className="h-6 w-10 text-xs font-bold text-center p-0.5"
+                                    data-testid={`input-payment-count-${index}`}
+                                  />
+                                </div>
+                              </div>
+                              {/* Expected Cash Formula Context */}
+                              <div className="text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded flex flex-wrap items-center gap-1">
+                                <span>المتوقع:</span>
+                                {formData.openingBalance > 0 && (
+                                  <>
+                                    <span className="font-medium">{formData.openingBalance.toFixed(0)}</span>
+                                    <span>+</span>
+                                  </>
+                                )}
+                                <span className="font-medium">{(breakdown.amount ?? 0).toFixed(0)}</span>
+                                {returnData.hasReturn && returnData.returnPaymentMethod === 'cash' && returnData.returnAmount > 0 && (
+                                  <>
+                                    <span>-</span>
+                                    <span className="font-medium text-red-600">{returnData.returnAmount.toFixed(0)}</span>
+                                  </>
+                                )}
+                                <span>=</span>
+                                <span className="font-bold">{expectedCash.toFixed(2)} ر.س</span>
+                              </div>
+                            </div>
+                          );
+                        })()
                       ) : (
-                        /* Non-Bank: Simple Amount + Transaction Count */
+                        /* Other Non-Bank: Simple Amount + Transaction Count */
                         <div className="flex items-end gap-3">
                           <div className="flex-1 space-y-1">
                             <Label className="text-xs font-medium">المبلغ</Label>
@@ -1733,75 +1825,21 @@ export default function CashierJournalFormPage() {
               )}
             </Card>
 
-            <Card className="border-2 border-amber-200">
-              <CardHeader className="bg-amber-50">
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="w-5 h-5" />
-                  تسوية الصندوق النقدي
-                </CardTitle>
-                <CardDescription>مطابقة الرصيد الفعلي مع المتوقع في الصندوق</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4 p-3 sm:p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-2">
-                    <Label>المبيعات النقدية المتوقعة (ر.س)</Label>
-                    <Input 
-                      type="number" 
-                      value={getExpectedCashInDrawer().toFixed(2)} 
-                      readOnly 
-                      className="bg-muted text-xl font-bold h-14 text-center" 
-                      data-testid="input-expected-cash" 
-                    />
-                    {returnData.hasReturn && returnData.returnPaymentMethod === "cash" && returnData.returnAmount > 0 ? (
-                      <p className="text-xs text-red-600">
-                        النقد الأصلي: {formData.cashTotal.toFixed(2)} - المرتجع: {returnData.returnAmount.toFixed(2)} = {getExpectedCashInDrawer().toFixed(2)} ر.س
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">تُحسب تلقائياً من تفصيل المبيعات النقدية</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>الرصيد الفعلي في الصندوق (ر.س) *</Label>
-                    <Input
-                      type="number"
-                      value={formData.actualCashDrawer ?? ""}
-                      onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
-                      className="text-xl font-bold h-14 text-center"
-                      placeholder="0.00"
-                      disabled={isReadOnly}
-                      data-testid="input-actual-cash"
-                    />
-                    <p className="text-xs text-muted-foreground">أدخل المبلغ الفعلي الموجود في درج الكاشير</p>
-                  </div>
-                </div>
-                
-                <div className={`p-4 rounded-lg flex items-center gap-3 ${discrepancyStatus.color}`}>
-                  {discrepancyStatus.isShortage ? (
-                    <AlertTriangle className="w-6 h-6" />
-                  ) : calculateDiscrepancy() === 0 ? (
-                    <CheckCircle className="w-6 h-6" />
-                  ) : (
-                    <AlertCircle className="w-6 h-6" />
-                  )}
-                  <span className="font-bold text-lg" data-testid="text-discrepancy">{discrepancyStatus.label}</span>
-                </div>
-
-                {discrepancyStatus.isShortage && (
-                  <Alert variant="destructive" className="border-2">
-                    <AlertTriangle className="h-5 w-5" />
-                    <AlertTitle className="text-lg font-bold">تنبيه هام: عجز في الصندوق</AlertTitle>
-                    <AlertDescription className="text-base mt-2">
-                      <p className="font-semibold">
-                        هذا العجز بقيمة {Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س سيُسجَّل على أمين الصندوق / الكاشير: <strong>{formData.cashierName || "غير محدد"}</strong>
-                      </p>
-                      <p className="mt-2 text-sm">
-                        يرجى التأكد من صحة المبلغ المُدخل قبل الحفظ. في حالة وجود عجز، سيتم توثيقه وقد يتم خصمه من راتب الموظف وفقاً لسياسة الشركة.
-                      </p>
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
+            {/* Cash Shortage Warning - Only shows when there's a shortage */}
+            {discrepancyStatus.isShortage && (
+              <Alert variant="destructive" className="border-2">
+                <AlertTriangle className="h-5 w-5" />
+                <AlertTitle className="text-lg font-bold">تنبيه هام: عجز في الصندوق النقدي</AlertTitle>
+                <AlertDescription className="text-base mt-2">
+                  <p className="font-semibold">
+                    هذا العجز بقيمة {Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س سيُسجَّل على أمين الصندوق / الكاشير: <strong>{formData.cashierName || "غير محدد"}</strong>
+                  </p>
+                  <p className="mt-2 text-sm">
+                    يرجى التأكد من صحة المبلغ المُدخل قبل الحفظ. في حالة وجود عجز، سيتم توثيقه وقد يتم خصمه من راتب الموظف وفقاً لسياسة الشركة.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Comprehensive Reconciliation Summary - ملخص التسوية الشاملة */}
             {(() => {
