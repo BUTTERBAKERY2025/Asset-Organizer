@@ -993,26 +993,39 @@ function formatTimeTo12Hour(time24: string): string {
 
 export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Promise<Buffer> {
   const headerCells = data.weekDates.map(d => 
-    `<th class="day-header"><div class="day-name">${d.day}</div><div class="day-date">${d.date}</div></th>`
+    `<th class="day-header">${d.day}<br/>${d.date}</th>`
   ).join('');
 
-  const rows = data.employees.map((emp, index) => {
+  // Group employees by job title
+  const sortedEmployees = [...data.employees].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle, 'ar'));
+  
+  let currentJobTitle = '';
+  let seqNum = 0;
+  const rows = sortedEmployees.map((emp) => {
+    const showJobTitle = emp.jobTitle !== currentJobTitle;
+    if (showJobTitle) {
+      currentJobTitle = emp.jobTitle;
+      seqNum = 0;
+    }
+    seqNum++;
+    
     const dayCells = emp.days.map(d => {
       if (d.isOff) {
         return `<td class="cell-off">إجازة</td>`;
       } else if (d.startTime && d.endTime) {
         const start12 = formatTimeTo12Hour(d.startTime);
         const end12 = formatTimeTo12Hour(d.endTime);
-        return `<td class="cell-work"><div class="time-row">من: ${start12}</div><div class="time-row">إلى: ${end12}</div></td>`;
+        return `<td class="cell-work">${start12}<br/>${end12}</td>`;
       }
       return `<td class="cell-empty">-</td>`;
     }).join('');
     
-    return `
+    const jobTitleRow = showJobTitle ? `<tr class="job-title-row"><td colspan="10" class="job-title-cell">${emp.jobTitle}</td></tr>` : '';
+    
+    return `${jobTitleRow}
       <tr>
-        <td class="cell-seq">${index + 1}</td>
+        <td class="cell-seq">${seqNum}</td>
         <td class="cell-employee">${emp.employeeName}</td>
-        <td class="cell-title">${emp.jobTitle}</td>
         ${dayCells}
       </tr>
     `;
@@ -1036,114 +1049,92 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       font-family: 'Cairo', sans-serif; 
       direction: rtl; 
       text-align: right; 
-      padding: 20px; 
-      font-size: 10px;
+      padding: 10px 15px; 
+      font-size: 8px;
       background: #fff;
     }
     
     ${getPdfHeaderStyles()}
     ${getPdfFooterStyles()}
     
-    .info-section {
+    .info-bar {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin: 15px 0;
-      padding: 12px 20px;
-      background: #f8f9fa;
+      margin: 8px 0;
+      padding: 6px 12px;
+      background: #f3f4f6;
       border: 1px solid #e5e7eb;
-      border-radius: 6px;
+      font-size: 9px;
     }
     
-    .info-item {
-      text-align: center;
-    }
-    
-    .info-label {
-      font-size: 10px;
-      color: #6b7280;
-      margin-bottom: 3px;
-    }
-    
-    .info-value {
-      font-size: 12px;
-      font-weight: 700;
-      color: #1f2937;
-    }
+    .info-bar span { color: #374151; }
+    .info-bar strong { color: #1f2937; }
     
     table { 
       width: 100%; 
       border-collapse: collapse;
-      margin-top: 15px;
-      border: 2px solid #1f2937;
+      margin-top: 8px;
+      border: 1px solid #374151;
     }
     
     th, td { 
-      padding: 8px 6px;
-      border: 1px solid #d1d5db;
-      font-size: 9px;
+      padding: 4px 3px;
+      border: 1px solid #9ca3af;
+      font-size: 8px;
+      line-height: 1.2;
     }
     
-    thead tr:first-child th {
-      background: #1f2937;
+    thead tr th {
+      background: #374151;
       color: white;
-      font-weight: 700;
-      font-size: 10px;
-      border-color: #1f2937;
+      font-weight: 600;
+      font-size: 8px;
     }
     
     .day-header {
-      background: #f3f4f6;
-      font-weight: 600;
       text-align: center;
-      min-width: 75px;
+      min-width: 55px;
+      font-size: 8px;
     }
     
-    .day-name { 
-      font-size: 10px; 
-      font-weight: 700; 
-      color: #1f2937;
+    .col-seq { width: 25px; text-align: center; }
+    .col-name { min-width: 90px; text-align: right; }
+    
+    .job-title-row td {
+      background: #d4a853 !important;
+      color: white;
+      font-weight: 700;
+      font-size: 9px;
+      text-align: right;
+      padding: 4px 8px;
     }
     
-    .day-date { 
-      font-size: 9px; 
-      color: #6b7280; 
+    .job-title-cell {
+      border-color: #b8942d !important;
     }
     
-    .col-seq { width: 35px; text-align: center; }
-    .col-name { width: 120px; text-align: right; }
-    .col-title { width: 80px; text-align: center; }
-    
-    tr:nth-child(even) { background: #f9fafb; }
-    tr:nth-child(odd) { background: #ffffff; }
+    tbody tr:not(.job-title-row):nth-child(even) { background: #f9fafb; }
+    tbody tr:not(.job-title-row):nth-child(odd) { background: #ffffff; }
     
     .cell-seq {
       text-align: center;
-      font-weight: 600;
       color: #6b7280;
+      font-size: 8px;
     }
     
     .cell-employee {
       text-align: right;
-      font-weight: 600;
+      font-weight: 500;
       color: #1f2937;
-      font-size: 10px;
-    }
-    
-    .cell-title {
-      text-align: center;
-      color: #6b7280;
-      font-size: 9px;
+      font-size: 8px;
+      padding-right: 6px;
     }
     
     .cell-work {
       text-align: center;
       background: #ecfdf5 !important;
-    }
-    
-    .time-row {
-      font-size: 9px;
       color: #065f46;
+      font-size: 7px;
     }
     
     .cell-off {
@@ -1151,99 +1142,69 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       background: #fef3c7 !important;
       color: #92400e;
       font-weight: 600;
-      font-size: 9px;
+      font-size: 7px;
     }
     
     .cell-empty {
       text-align: center;
-      color: #9ca3af;
+      color: #d1d5db;
     }
     
-    .summary-section {
-      margin-top: 20px;
-      display: flex;
-      justify-content: space-around;
-      padding: 15px;
-      background: #f8f9fa;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-    }
-    
-    .summary-item {
-      text-align: center;
-      padding: 0 20px;
-      border-left: 1px solid #e5e7eb;
-    }
-    
-    .summary-item:last-child { border-left: none; }
-    
-    .summary-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: #92400e;
-    }
-    
-    .summary-label {
-      font-size: 10px;
-      color: #6b7280;
-      margin-top: 3px;
-    }
-    
-    .signatures-section {
-      margin-top: 30px;
+    .footer-section {
+      margin-top: 12px;
       display: flex;
       justify-content: space-between;
-      padding: 0 40px;
+      align-items: flex-start;
     }
     
-    .signature-box {
+    .summary-compact {
+      display: flex;
+      gap: 15px;
+      font-size: 8px;
+    }
+    
+    .summary-compact span { color: #6b7280; }
+    .summary-compact strong { color: #1f2937; }
+    
+    .signatures-compact {
+      display: flex;
+      gap: 30px;
+    }
+    
+    .sig-box {
       text-align: center;
-      min-width: 150px;
+      font-size: 8px;
     }
     
-    .signature-title {
-      font-size: 10px;
+    .sig-label {
+      color: #374151;
       font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 30px;
+      margin-bottom: 15px;
     }
     
-    .signature-line {
-      border-top: 1px solid #1f2937;
-      padding-top: 5px;
-      font-size: 9px;
-      color: #6b7280;
+    .sig-line {
+      width: 80px;
+      border-top: 1px solid #374151;
+      padding-top: 2px;
+      color: #9ca3af;
+      font-size: 7px;
     }
   </style>
 </head>
 <body>
-  ${getPdfHeaderHtml('جدول الدوام الأسبوعي', `الفرع: ${data.branchName}`)}
+  ${getPdfHeaderHtml('جدول الدوام الأسبوعي', `${data.branchName}`)}
   
-  <div class="info-section">
-    <div class="info-item">
-      <div class="info-label">الفترة من</div>
-      <div class="info-value">${data.periodStart}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">الفترة إلى</div>
-      <div class="info-value">${data.periodEnd}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">عدد الموظفين</div>
-      <div class="info-value">${data.employees.length}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">تاريخ الإصدار</div>
-      <div class="info-value">${formatPrintDate()}</div>
-    </div>
+  <div class="info-bar">
+    <span>الفترة: <strong>${data.periodStart} - ${data.periodEnd}</strong></span>
+    <span>عدد الموظفين: <strong>${data.employees.length}</strong></span>
+    <span>تاريخ الإصدار: <strong>${formatPrintDate()}</strong></span>
   </div>
   
   <table>
     <thead>
       <tr>
         <th class="col-seq">م</th>
-        <th class="col-name">اسم الموظف</th>
-        <th class="col-title">المسمى الوظيفي</th>
+        <th class="col-name">الموظف</th>
         ${headerCells}
       </tr>
     </thead>
@@ -1252,37 +1213,16 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     </tbody>
   </table>
   
-  <div class="summary-section">
-    <div class="summary-item">
-      <div class="summary-value">${data.employees.length}</div>
-      <div class="summary-label">إجمالي الموظفين</div>
+  <div class="footer-section">
+    <div class="summary-compact">
+      <span>موظفين: <strong>${data.employees.length}</strong></span>
+      <span>أيام عمل: <strong>${totalWorkDays}</strong></span>
+      <span>إجازات: <strong>${totalOffDays}</strong></span>
     </div>
-    <div class="summary-item">
-      <div class="summary-value">${workingEmployees}</div>
-      <div class="summary-label">موظفين بجداول عمل</div>
-    </div>
-    <div class="summary-item">
-      <div class="summary-value">${totalWorkDays}</div>
-      <div class="summary-label">إجمالي أيام العمل</div>
-    </div>
-    <div class="summary-item">
-      <div class="summary-value">${totalOffDays}</div>
-      <div class="summary-label">إجمالي أيام الإجازة</div>
-    </div>
-  </div>
-  
-  <div class="signatures-section">
-    <div class="signature-box">
-      <div class="signature-title">إعداد</div>
-      <div class="signature-line">الاسم والتوقيع</div>
-    </div>
-    <div class="signature-box">
-      <div class="signature-title">مراجعة</div>
-      <div class="signature-line">الاسم والتوقيع</div>
-    </div>
-    <div class="signature-box">
-      <div class="signature-title">اعتماد</div>
-      <div class="signature-line">الاسم والتوقيع</div>
+    <div class="signatures-compact">
+      <div class="sig-box"><div class="sig-label">إعداد</div><div class="sig-line">التوقيع</div></div>
+      <div class="sig-box"><div class="sig-label">مراجعة</div><div class="sig-line">التوقيع</div></div>
+      <div class="sig-box"><div class="sig-label">اعتماد</div><div class="sig-line">التوقيع</div></div>
     </div>
   </div>
 </body>
