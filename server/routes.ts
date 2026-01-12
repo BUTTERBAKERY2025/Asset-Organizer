@@ -25,7 +25,7 @@ import {
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, getMandatoryBranchFilter, isUserAdmin } from "./auth";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -310,27 +310,22 @@ export async function registerRoutes(
   // Inventory Items
   app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
     try {
-      // Get branch filter - prioritize query param, then use active branch from session
+      // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
-      const activeBranch = getActiveBranchFilter(req);
-      const branchId = queryBranchId || activeBranch;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       
-      // For non-admin users, always filter by their active branch
-      const user = req.currentUser;
-      if (user?.role !== "admin" && !branchId) {
-        return res.json([]); // No branch = no data for regular users
+      // For non-admins, ignore query param and use mandatory branch filter
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
       }
       
-      // If branch specified, verify access
-      if (branchId && user?.role !== "admin") {
-        const hasAccess = await canAccessBranch(req, branchId);
-        if (!hasAccess) {
-          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
-        }
-      }
-      
-      const items = branchId 
-        ? await storage.getInventoryItemsByBranch(branchId)
+      const items = effectiveBranchId 
+        ? await storage.getInventoryItemsByBranch(effectiveBranchId)
         : await storage.getAllInventoryItems();
       res.json(items);
     } catch (error) {
@@ -1960,12 +1955,28 @@ export async function registerRoutes(
   });
 
   // Shifts Routes
-  app.get("/api/shifts", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
+  app.get("/api/shifts", isAuthenticated, requirePermission("shifts", "view"), async (req: any, res) => {
     try {
       const { branchId, date } = req.query;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
+      }
+      
       let shifts;
-      if (branchId) {
-        shifts = await storage.getShiftsByBranch(branchId as string);
+      if (effectiveBranchId) {
+        shifts = await storage.getShiftsByBranch(effectiveBranchId);
+        if (date) {
+          shifts = shifts.filter((s: any) => s.date === date);
+        }
       } else if (date) {
         shifts = await storage.getShiftsByDate(date as string);
       } else {
@@ -1978,13 +1989,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
+  app.get("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const shift = await storage.getShift(id);
       if (!shift) {
         return res.status(404).json({ error: "Shift not found" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && shift.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && shift.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه الوردية" });
+        }
+      }
+      
       res.json(shift);
     } catch (error) {
       console.error("Error fetching shift:", error);
@@ -2093,28 +2113,24 @@ export async function registerRoutes(
   app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
       const { branchId, date } = req.query;
-      const activeBranch = getActiveBranchFilter(req);
-      const user = req.currentUser;
       
-      // Determine branch to filter by
-      const filterBranchId = branchId as string || activeBranch;
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       
-      // For non-admin users, must have a branch filter
-      if (user?.role !== "admin" && !filterBranchId) {
+      // For non-admins, ignore query param and use mandatory branch filter
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
         return res.json([]);
       }
       
-      // Verify branch access for non-admin users
-      if (user?.role !== "admin" && filterBranchId) {
-        const hasAccess = await canAccessBranch(req, filterBranchId);
-        if (!hasAccess) {
-          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
-        }
-      }
-      
       let orders;
-      if (filterBranchId) {
-        orders = await storage.getProductionOrdersByBranch(filterBranchId);
+      if (effectiveBranchId) {
+        orders = await storage.getProductionOrdersByBranch(effectiveBranchId);
         if (date) {
           orders = orders.filter((o: any) => o.productionDate === date);
         }
@@ -2130,13 +2146,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/production-orders/:id", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+  app.get("/api/production-orders/:id", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const order = await storage.getProductionOrder(id);
       if (!order) {
         return res.status(404).json({ error: "Production order not found" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && order.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && order.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
+        }
+      }
+      
       res.json(order);
     } catch (error) {
       console.error("Error fetching production order:", error);
@@ -2440,16 +2465,16 @@ export async function registerRoutes(
     try {
       const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus } = req.query;
       
-      // Get branch filter from session for non-admin users
-      const activeBranch = getActiveBranchFilter(req);
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const user = req.currentUser;
       
       // Get all journals first, then apply filters
       let journals = await storage.getAllCashierJournals();
       
       // Strict branch and user filtering
-      if (user?.role !== "admin") {
-        if (!activeBranch) {
+      if (!isUserAdmin(req)) {
+        if (!mandatoryBranch) {
           return res.json([]); // No branch = no data
         }
         
@@ -2460,7 +2485,7 @@ export async function registerRoutes(
         
         if (isManager) {
           // Manager sees all journals in their branch
-          journals = journals.filter(j => j.branchId === activeBranch);
+          journals = journals.filter(j => j.branchId === mandatoryBranch);
         } else {
           // Cashier sees only their own journals in their branch
           // Coerce to strings for reliable comparison (handles numeric vs string IDs)
@@ -2502,12 +2527,20 @@ export async function registerRoutes(
   });
 
   // Get single cashier journal with payment breakdowns and signatures
-  app.get("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+  app.get("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const journal = await storage.getCashierJournal(id);
       if (!journal) {
         return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && journal.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه اليومية" });
+        }
       }
       
       // Get related payment breakdowns and signatures
@@ -10249,8 +10282,21 @@ export async function registerRoutes(
   app.get("/api/attendance", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId, employeeId, startDate, endDate, status } = req.query;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
+      }
+      
       const filters: any = {};
-      if (branchId) filters.branchId = branchId;
+      if (effectiveBranchId) filters.branchId = effectiveBranchId;
       if (employeeId) filters.employeeId = employeeId;
       if (startDate) filters.startDate = startDate;
       if (endDate) filters.endDate = endDate;
@@ -10264,12 +10310,21 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/attendance/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const record = await storage.getAttendanceRecord(id);
       if (!record) return res.status(404).json({ error: "السجل غير موجود" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && record.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا السجل" });
+        }
+      }
+      
       res.json(record);
     } catch (error) {
       console.error("Error fetching attendance record:", error);
@@ -10497,8 +10552,21 @@ export async function registerRoutes(
   app.get("/api/attendance-summary", isAuthenticated, async (req: any, res) => {
     try {
       const { branchId, month } = req.query;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
+      }
+      
       const filters: any = {};
-      if (branchId) filters.branchId = branchId;
+      if (effectiveBranchId) filters.branchId = effectiveBranchId;
       if (month) filters.month = month;
       
       const summaries = await storage.getAllAttendanceSummaries(filters);
@@ -10509,9 +10577,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/attendance-summary/:employeeId/:month", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance-summary/:employeeId/:month", isAuthenticated, async (req: any, res) => {
     try {
       const { employeeId, month } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch) {
+          // Get the employee to verify branch
+          const employee = await storage.getBranchEmployee(parseInt(employeeId));
+          if (employee && employee.branchId !== mandatoryBranch) {
+            return res.status(403).json({ error: "غير مصرح بالوصول لهذا الموظف" });
+          }
+        }
+      }
+      
       const summary = await storage.getAttendanceSummary(employeeId, month);
       if (!summary) {
         return res.status(404).json({ error: "الملخص غير موجود" });
@@ -10523,9 +10604,21 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance-summary/calculate/:employeeId/:month", isAuthenticated, async (req, res) => {
+  app.post("/api/attendance-summary/calculate/:employeeId/:month", isAuthenticated, async (req: any, res) => {
     try {
       const { employeeId, month } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch) {
+          const employee = await storage.getBranchEmployee(parseInt(employeeId));
+          if (employee && employee.branchId !== mandatoryBranch) {
+            return res.status(403).json({ error: "غير مصرح بالوصول لهذا الموظف" });
+          }
+        }
+      }
+      
       const summary = await storage.calculateAndUpdateMonthlySummary(employeeId, month);
       res.json(summary);
     } catch (error) {
@@ -10537,11 +10630,17 @@ export async function registerRoutes(
   // Attendance Statistics
   app.get("/api/attendance/stats/today", isAuthenticated, async (req: any, res) => {
     try {
-      const { branchId } = req.query;
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = req.query.branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
       const today = new Date().toISOString().split('T')[0];
       
       const records = await storage.getAllAttendanceRecords({ 
-        branchId: branchId as string, 
+        branchId: effectiveBranchId || undefined, 
         startDate: today, 
         endDate: today 
       });
@@ -10572,15 +10671,28 @@ export async function registerRoutes(
   
   app.get("/api/attendance-dashboard-stats", isAuthenticated, async (req: any, res) => {
     try {
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch;
+      
       const today = new Date().toISOString().split('T')[0];
       
-      // Get total branch employees (active only)
-      const branchEmployees = await storage.getAllBranchEmployees();
+      // Get total branch employees (active only) - filtered by branch
+      let branchEmployees;
+      if (effectiveBranchId) {
+        branchEmployees = await storage.getBranchEmployeesByBranch(effectiveBranchId);
+      } else {
+        branchEmployees = await storage.getAllBranchEmployees();
+      }
       const activeEmployees = branchEmployees.filter(e => e.status === 'active');
       const totalEmployees = activeEmployees.length;
       
-      // Get today's attendance
-      const todayRecords = await storage.getAllAttendanceRecords({ startDate: today, endDate: today });
+      // Get today's attendance - filtered by branch
+      const todayRecords = await storage.getAllAttendanceRecords({ 
+        branchId: effectiveBranchId || undefined,
+        startDate: today, 
+        endDate: today 
+      });
       const presentToday = todayRecords.filter(r => r.status === 'present' || r.status === 'late').length;
       const lateToday = todayRecords.filter(r => r.status === 'late').length;
       
@@ -10641,9 +10753,22 @@ export async function registerRoutes(
   app.get("/api/timesheet-reports", isAuthenticated, async (req: any, res) => {
     try {
       const { employeeId, branchId, status } = req.query;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
+      }
+      
       const filters: { employeeId?: string; branchId?: string; status?: string } = {};
       if (employeeId) filters.employeeId = employeeId as string;
-      if (branchId) filters.branchId = branchId as string;
+      if (effectiveBranchId) filters.branchId = effectiveBranchId;
       if (status) filters.status = status as string;
       
       const reports = await storage.getTimesheetReports(filters);
@@ -10655,13 +10780,21 @@ export async function registerRoutes(
   });
 
   // Get single timesheet report by ID
-  app.get("/api/timesheet-reports/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/timesheet-reports/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       
       const report = await storage.getTimesheetReport(id);
       if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && report.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && report.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا التقرير" });
+        }
+      }
       
       res.json(report);
     } catch (error) {
@@ -10671,10 +10804,21 @@ export async function registerRoutes(
   });
 
   // Get timesheet report entries
-  app.get("/api/timesheet-reports/:id/entries", isAuthenticated, async (req, res) => {
+  app.get("/api/timesheet-reports/:id/entries", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: First check if user has access to this report
+      const report = await storage.getTimesheetReport(id);
+      if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
+      
+      if (!isUserAdmin(req) && report.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && report.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا التقرير" });
+        }
+      }
       
       const entries = await storage.getTimesheetReportEntries(id);
       res.json(entries);
@@ -10926,19 +11070,29 @@ export async function registerRoutes(
   // =====================================================
   
   // Get all branch employees or filter by branch
-  app.get("/api/branch-employees", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees", isAuthenticated, async (req: any, res) => {
     try {
-      const { branchId } = req.query;
-      let employees;
-      if (branchId && typeof branchId === 'string') {
-        employees = await storage.getBranchEmployeesByBranch(branchId);
-      } else {
-        employees = await storage.getAllBranchEmployees();
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = req.query.branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      // For non-admins, always use their mandatory branch filter
+      // Query param is ignored for security - non-admins can only see their branch
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      // If non-admin has no branch assigned, return empty array
+      if (!isUserAdmin(req) && !effectiveBranchId) {
+        return res.json([]);
       }
-      // Debug: log employees without employee numbers
-      const missingNumbers = employees.filter(e => !e.employeeNumber);
-      if (missingNumbers.length > 0) {
-        console.log("DEBUG: Employees missing employeeNumber:", missingNumbers.map(e => ({ id: e.id, name: e.employeeName, empNum: e.employeeNumber })));
+      
+      let employees;
+      if (effectiveBranchId) {
+        employees = await storage.getBranchEmployeesByBranch(effectiveBranchId);
+      } else {
+        // Only admins with no branch selected can see all
+        employees = await storage.getAllBranchEmployees();
       }
       res.json(employees);
     } catch (error) {
@@ -10948,10 +11102,16 @@ export async function registerRoutes(
   });
 
   // Get branch employees statistics
-  app.get("/api/branch-employees/stats", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/stats", isAuthenticated, async (req: any, res) => {
     try {
-      const { branchId } = req.query;
-      const stats = await storage.getBranchEmployeeStats(branchId as string | undefined);
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = req.query.branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (queryBranchId || mandatoryBranch) 
+        : mandatoryBranch;
+      
+      const stats = await storage.getBranchEmployeeStats(effectiveBranchId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching branch employee stats:", error);
@@ -10960,7 +11120,7 @@ export async function registerRoutes(
   });
 
   // Get single branch employee
-  app.get("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -10969,6 +11129,15 @@ export async function registerRoutes(
       if (!employee) {
         return res.status(404).json({ error: "الموظف غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && employee.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الموظف" });
+        }
+      }
+      
       res.json(employee);
     } catch (error) {
       console.error("Error fetching branch employee:", error);

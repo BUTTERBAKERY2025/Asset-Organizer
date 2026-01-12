@@ -499,3 +499,34 @@ export const requireBranchAccess: RequestHandler = async (req, res, next) => {
   
   next();
 };
+
+// CRITICAL: Get mandatory branch filter for non-admin users
+// This function returns:
+// - For admins: null (can see all) OR activeBranchId if they selected one
+// - For non-admins: their activeBranchId or default branchId (NEVER null)
+// Use this for ALL data retrieval to enforce branch isolation
+export function getMandatoryBranchFilter(req: any): string | null {
+  const user = req.currentUser;
+  if (!user) return null;
+  
+  // Admin can see all branches unless they selected a specific one
+  if (user.role === "admin") {
+    return req.session?.activeBranchId || null;
+  }
+  
+  // Non-admins MUST have a branch filter - never return null
+  const branchFilter = req.session?.activeBranchId || user.branchId;
+  
+  // If somehow no branch is assigned, this is a security issue - log it
+  if (!branchFilter) {
+    console.error(`SECURITY: User ${user.id} (${user.username}) has no branch assigned!`);
+  }
+  
+  return branchFilter || null;
+}
+
+// Check if user is admin (can see all branches)
+export function isUserAdmin(req: any): boolean {
+  const user = req.currentUser;
+  return user?.role === "admin";
+}
