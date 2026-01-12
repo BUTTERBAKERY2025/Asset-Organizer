@@ -1006,7 +1006,7 @@ function getShiftType(startTime: string): { type: string; class: string } {
 
 export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Promise<Buffer> {
   const headerCells = data.weekDates.map(d => 
-    `<th class="day-header">${d.day}<br/>${d.date}</th>`
+    `<th class="day-header">${d.day} / ${(d as any).dayEn || ''}<br/>${d.date}</th>`
   ).join('');
 
   // Group employees by job title

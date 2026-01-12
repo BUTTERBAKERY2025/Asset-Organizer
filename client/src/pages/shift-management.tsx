@@ -24,6 +24,7 @@ import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord, 
 import * as XLSX from "xlsx";
 
 const DAYS_AR = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
+const DAYS_EN = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
 const DAYS_ORDER = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 
 interface ScheduleCell {
@@ -584,7 +585,7 @@ export default function ShiftManagementPage() {
         branchName: getBranchName(selectedBranch),
         periodStart: format(currentWeekStart, "dd/MM/yyyy"),
         periodEnd: format(addDays(currentWeekStart, 6), "dd/MM/yyyy"),
-        weekDates: weekDates.map((d, i) => ({ day: DAYS_AR[i], date: format(d, "dd/MM") })),
+        weekDates: weekDates.map((d, i) => ({ day: DAYS_AR[i], dayEn: DAYS_EN[i], date: format(d, "dd/MM") })),
         employees: scheduleRows,
       });
       
