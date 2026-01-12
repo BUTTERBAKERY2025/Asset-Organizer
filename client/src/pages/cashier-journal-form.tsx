@@ -1313,108 +1313,84 @@ export default function CashierJournalFormPage() {
                   const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
 
                   return (
-                    <div key={index} className={`p-4 border-2 rounded-xl ${isBank ? 'border-blue-300 bg-gradient-to-r from-blue-50 to-blue-100/50' : 'border-gray-200 bg-gray-50/50'}`} data-testid={`payment-row-${index}`}>
-                      {/* Payment Method Header */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${isBank ? 'bg-blue-200' : 'bg-gray-200'}`}>
-                            <Icon className={`w-6 h-6 ${isBank ? 'text-blue-700' : 'text-gray-600'}`} />
-                          </div>
-                          <Select
-                            value={breakdown.paymentMethod}
-                            onValueChange={(v) => {
-                              if (!isBankPaymentMethod(v)) {
-                                updatePaymentBreakdownMultiple(index, {
-                                  paymentMethod: v,
-                                  terminalAmount: 0,
-                                  posAmount: 0,
-                                  terminalTransactionCount: 0,
-                                });
-                              } else {
-                                updatePaymentBreakdown(index, "paymentMethod", v);
-                              }
-                            }}
-                            disabled={isReadOnly}
-                          >
-                            <SelectTrigger className="w-48 h-12 text-base font-medium">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60 overflow-y-auto">
-                              {PAYMENT_METHODS.map((m) => (
-                                <SelectItem key={m.value} value={m.value} className="py-3">
-                                  {m.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                    <div key={index} className={`p-3 border rounded-lg ${isBank ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-gray-50/30'}`} data-testid={`payment-row-${index}`}>
+                      {/* Compact Header Row */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`p-1.5 rounded ${isBank ? 'bg-blue-200' : 'bg-gray-200'}`}>
+                          <Icon className={`w-4 h-4 ${isBank ? 'text-blue-700' : 'text-gray-600'}`} />
                         </div>
+                        <Select
+                          value={breakdown.paymentMethod}
+                          onValueChange={(v) => {
+                            if (!isBankPaymentMethod(v)) {
+                              updatePaymentBreakdownMultiple(index, {
+                                paymentMethod: v,
+                                terminalAmount: 0,
+                                posAmount: 0,
+                                terminalTransactionCount: 0,
+                              });
+                            } else {
+                              updatePaymentBreakdown(index, "paymentMethod", v);
+                            }
+                          }}
+                          disabled={isReadOnly}
+                        >
+                          <SelectTrigger className="w-36 h-9 text-sm font-medium">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {PAYMENT_METHODS.map((m) => (
+                              <SelectItem key={m.value} value={m.value} className="py-2">
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex-1" />
                         {paymentBreakdowns.length > 1 && !isReadOnly && (
-                          <Button variant="ghost" size="lg" className="h-12 w-12 text-red-500 hover:text-red-600 hover:bg-red-100" onClick={() => removePaymentBreakdown(index)}>
-                            <Trash2 className="w-5 h-5" />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100 p-0" onClick={() => removePaymentBreakdown(index)}>
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         )}
                       </div>
                       
-                      {/* Amount Inputs */}
-                      <div className="grid grid-cols-2 gap-4">
+                      {/* Compact Input Grid - Bank Methods: POS vs Terminal side by side */}
+                      {isBank ? (
                         <div className="space-y-2">
-                          <Label className="text-sm font-medium">{isBank ? "مبلغ الكاشير (POS)" : "المبلغ"}</Label>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="0.00"
-                            value={breakdown.amount ?? ""}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              if (isBank) {
-                                updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val });
-                              } else {
-                                updatePaymentBreakdown(index, "amount", val);
-                              }
-                            }}
-                            disabled={isReadOnly}
-                            className="h-14 text-xl font-bold text-center"
-                            data-testid={`input-payment-amount-${index}`}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">عدد العمليات</Label>
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            placeholder="0"
-                            value={breakdown.transactionCount ?? ""}
-                            onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
-                            disabled={isReadOnly}
-                            className="h-14 text-xl font-bold text-center"
-                            data-testid={`input-payment-count-${index}`}
-                          />
-                        </div>
-                      </div>
-                      
-                      {/* Bank Reconciliation Row - Only for bank payment methods */}
-                      {isBank && (
-                        <div className="mt-4 pt-4 border-t-2 border-blue-300">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-base font-bold text-blue-700">🏦 مطابقة التيرمنال</span>
+                          {/* POS & Terminal Amounts - Side by Side */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs text-blue-700 font-medium">POS (الكاشير)</Label>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                value={breakdown.amount ?? ""}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val });
+                                }}
+                                disabled={isReadOnly}
+                                className="h-10 text-base font-bold text-center"
+                                data-testid={`input-payment-amount-${index}`}
+                              />
                             </div>
-                            {!isReadOnly && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="lg"
-                                className="h-11 px-4 bg-blue-50 hover:bg-blue-100 border-blue-300 gap-2"
-                                onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
-                              >
-                                <Copy className="w-4 h-4" />
-                                نسخ من الكاشير
-                              </Button>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">مبلغ التيرمنال</Label>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-xs text-blue-700 font-medium">Terminal (الجهاز)</Label>
+                                {!isReadOnly && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 px-1 text-xs text-blue-600 hover:text-blue-800 p-0"
+                                    onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
+                                  >
+                                    <Copy className="w-3 h-3 ml-1" />
+                                    نسخ
+                                  </Button>
+                                )}
+                              </div>
                               <Input
                                 type="number"
                                 inputMode="decimal"
@@ -1422,31 +1398,77 @@ export default function CashierJournalFormPage() {
                                 value={breakdown.terminalAmount ?? ""}
                                 onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseFloat(e.target.value) || 0)}
                                 disabled={isReadOnly}
-                                className="h-14 text-xl font-bold text-center bg-white"
+                                className="h-10 text-base font-bold text-center bg-white"
                                 data-testid={`input-terminal-amount-${index}`}
                               />
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">عدد عمليات التيرمنال</Label>
-                              <Input
-                                type="number"
-                                inputMode="numeric"
-                                placeholder="0"
-                                value={breakdown.terminalTransactionCount ?? ""}
-                                onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseInt(e.target.value) || 0)}
-                                disabled={isReadOnly}
-                                className="h-14 text-xl font-bold text-center bg-white"
-                                data-testid={`input-terminal-count-${index}`}
-                              />
+                          </div>
+                          {/* Discrepancy & Transaction Counts - Compact Row */}
+                          <div className="flex items-center gap-2 text-xs">
+                            <div className={`flex-1 px-2 py-1.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                              <span>الفرق:</span>
+                              <span className="font-bold">
+                                {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} ر.س {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded">
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-500 text-[10px]">POS:</span>
+                                <Input
+                                  type="number"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={breakdown.transactionCount ?? ""}
+                                  onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                                  disabled={isReadOnly}
+                                  className="h-6 w-10 text-xs font-bold text-center p-0.5"
+                                  data-testid={`input-payment-count-${index}`}
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-500 text-[10px]">جهاز:</span>
+                                <Input
+                                  type="number"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={breakdown.terminalTransactionCount ?? ""}
+                                  onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseInt(e.target.value) || 0)}
+                                  disabled={isReadOnly}
+                                  className="h-6 w-10 text-xs font-bold text-center p-0.5"
+                                  data-testid={`input-terminal-count-${index}`}
+                                />
+                              </div>
                             </div>
                           </div>
-                          {/* Discrepancy Summary */}
-                          <div className={`mt-3 p-3 rounded-lg flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-100 border border-emerald-300' : bankDiscType === 'shortage' ? 'bg-red-100 border border-red-300' : 'bg-gray-100 border border-gray-300'}`}>
-                            <span className="font-medium">الفرق:</span>
-                            <span className={`text-xl font-bold ${bankDiscType === 'surplus' ? 'text-emerald-700' : bankDiscType === 'shortage' ? 'text-red-700' : 'text-gray-600'}`}>
-                              {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} ر.س
-                              {bankDiscType === 'surplus' ? ' ⬆️' : bankDiscType === 'shortage' ? ' ⬇️' : ' ✓'}
-                            </span>
+                        </div>
+                      ) : (
+                        /* Non-Bank: Simple Amount + Transaction Count */
+                        <div className="flex items-end gap-3">
+                          <div className="flex-1 space-y-1">
+                            <Label className="text-xs font-medium">المبلغ</Label>
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              value={breakdown.amount ?? ""}
+                              onChange={(e) => updatePaymentBreakdown(index, "amount", parseFloat(e.target.value) || 0)}
+                              disabled={isReadOnly}
+                              className="h-10 text-base font-bold text-center"
+                              data-testid={`input-payment-amount-${index}`}
+                            />
+                          </div>
+                          <div className="w-20 space-y-1">
+                            <Label className="text-xs font-medium text-gray-500">عمليات</Label>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="0"
+                              value={breakdown.transactionCount ?? ""}
+                              onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                              disabled={isReadOnly}
+                              className="h-10 text-sm font-medium text-center"
+                              data-testid={`input-payment-count-${index}`}
+                            />
                           </div>
                         </div>
                       )}
