@@ -961,6 +961,115 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
   return await generatePdfFromHtml(html, { landscape: false });
 }
 
+export interface ShiftScheduleEmployee {
+  employeeName: string;
+  workDays: number;
+  offDays: number;
+  attendedDays: number;
+  absentDays: number;
+  rate: number;
+}
+
+export interface ShiftSchedulePdfData {
+  branchName: string;
+  periodStart: string;
+  periodEnd: string;
+  employees: ShiftScheduleEmployee[];
+}
+
+export async function generateShiftSchedulePdf(data: ShiftSchedulePdfData): Promise<Buffer> {
+  const rows = data.employees.map((emp, index) => {
+    const badgeStyle = emp.rate >= 80 
+      ? 'background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 4px;'
+      : emp.rate >= 50 
+        ? 'background: #fff3cd; color: #856404; padding: 2px 8px; border-radius: 4px;'
+        : 'background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 4px;';
+    
+    return `
+    <tr>
+      <td style="text-align: center;">${index + 1}</td>
+      <td style="text-align: right;">${emp.employeeName}</td>
+      <td style="text-align: center;">${emp.workDays}</td>
+      <td style="text-align: center;">${emp.offDays}</td>
+      <td style="text-align: center; color: green;">${emp.attendedDays}</td>
+      <td style="text-align: center; color: ${emp.absentDays > 0 ? 'red' : 'inherit'};">${emp.absentDays}</td>
+      <td style="text-align: center;"><span style="${badgeStyle}">${emp.rate}%</span></td>
+    </tr>
+  `;
+  }).join('');
+
+  const totals = {
+    workDays: data.employees.reduce((sum, e) => sum + e.workDays, 0),
+    offDays: data.employees.reduce((sum, e) => sum + e.offDays, 0),
+    attendedDays: data.employees.reduce((sum, e) => sum + e.attendedDays, 0),
+    absentDays: data.employees.reduce((sum, e) => sum + e.absentDays, 0),
+  };
+  const avgRate = data.employees.length > 0 
+    ? Math.round(data.employees.reduce((sum, e) => sum + e.rate, 0) / data.employees.length) 
+    : 0;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 20px; font-size: 11px; }
+    ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
+    .info-row { text-align: center; font-size: 11px; color: #666; margin-bottom: 15px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
+    th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    .totals-row { background-color: #e5e7eb !important; font-weight: bold; }
+  </style>
+</head>
+<body>
+  ${getPdfHeaderHtml('تقرير جدول الدوام الأسبوعي', `الفرع: ${data.branchName}`)}
+  <div class="info-row">الفترة: ${data.periodStart} - ${data.periodEnd}</div>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>م</th>
+        <th>اسم الموظف</th>
+        <th>أيام العمل</th>
+        <th>أيام الإجازة</th>
+        <th>أيام الحضور</th>
+        <th>أيام الغياب</th>
+        <th>نسبة الحضور</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr class="totals-row">
+        <td colspan="2" style="text-align: right;">الإجمالي</td>
+        <td style="text-align: center;">${totals.workDays}</td>
+        <td style="text-align: center;">${totals.offDays}</td>
+        <td style="text-align: center; color: green;">${totals.attendedDays}</td>
+        <td style="text-align: center; color: red;">${totals.absentDays}</td>
+        <td style="text-align: center;">${avgRate}%</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  ${getSummaryHtml('ملخص تقرير الدوام', [
+    { label: 'عدد الموظفين', value: formatNumber(data.employees.length) },
+    { label: 'إجمالي أيام العمل', value: formatNumber(totals.workDays) },
+    { label: 'إجمالي أيام الإجازات', value: formatNumber(totals.offDays) },
+    { label: 'إجمالي أيام الحضور', value: formatNumber(totals.attendedDays) },
+    { label: 'إجمالي أيام الغياب', value: formatNumber(totals.absentDays) },
+    { label: 'متوسط نسبة الحضور', value: avgRate + '%' },
+  ])}
+</body>
+</html>`;
+
+  return await generatePdfFromHtml(html, { landscape: false });
+}
+
 interface PdfOptions {
   landscape?: boolean;
   printedBy?: string;

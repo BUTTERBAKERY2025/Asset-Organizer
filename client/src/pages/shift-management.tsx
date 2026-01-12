@@ -15,7 +15,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight } from "lucide-react";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -42,6 +43,7 @@ export default function ShiftManagementPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isGeneratingMonthly, setIsGeneratingMonthly] = useState(false);
   const [selectedShiftProfile, setSelectedShiftProfile] = useState<string>("morning");
   const [employeeShiftSelections, setEmployeeShiftSelections] = useState<Record<string, string>>({});
@@ -486,6 +488,54 @@ export default function ShiftManagementPage() {
     }
   };
 
+  const exportToPdf = async () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لتصدير التقرير", variant: "destructive" });
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const reportData = filteredEmployees.map(employee => {
+        const empIdStr = String(employee.id);
+        const linkedUserId = employee.linkedUserId || empIdStr;
+        const empSchedule = scheduleData[empIdStr] || {};
+        const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
+        const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
+        const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
+        const absentDays = workDays - attendedDays;
+        const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
+        return { employeeName: employee.employeeName, workDays, offDays, attendedDays, absentDays: Math.max(absentDays, 0), rate };
+      });
+
+      const res = await apiRequest("POST", "/api/reports/shift-schedule-pdf", {
+        branchName: getBranchName(selectedBranch),
+        periodStart: format(currentWeekStart, "dd/MM/yyyy"),
+        periodEnd: format(addDays(currentWeekStart, 6), "dd/MM/yyyy"),
+        employees: reportData,
+      });
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `تقرير_الدوام_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast({ title: "تم تصدير التقرير بصيغة PDF بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في تصدير التقرير كـ PDF", variant: "destructive" });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const [, navigate] = useLocation();
 
   return (
@@ -879,10 +929,29 @@ export default function ShiftManagementPage() {
                           }, 0)}
                         </span>
                       </div>
-                      <Button variant="outline" className="w-full gap-2 h-11 sm:h-9" onClick={exportWeeklyReport} disabled={isExporting} data-testid="btn-export-weekly">
-                        {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                        {isExporting ? "جاري التصدير..." : "تصدير التقرير"}
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full gap-2 h-11 sm:h-9" disabled={isExporting || isExportingPdf} data-testid="btn-export-weekly">
+                            {(isExporting || isExportingPdf) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {isExporting ? "جاري التصدير Excel..." : isExportingPdf ? "جاري التصدير PDF..." : "تصدير التقرير"}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={exportWeeklyReport} className="gap-2 cursor-pointer" data-testid="btn-export-excel">
+                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                            تصدير Excel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={exportToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-pdf">
+                            <File className="w-4 h-4 text-red-600" />
+                            تصدير PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={printReport} className="gap-2 cursor-pointer" data-testid="btn-print-weekly">
+                            <Printer className="w-4 h-4 text-blue-600" />
+                            طباعة
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </CardContent>
                 </Card>
