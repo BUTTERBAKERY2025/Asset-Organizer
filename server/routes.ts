@@ -4843,8 +4843,12 @@ export async function registerRoutes(
       // SECURITY: Apply mandatory branch filter for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const allLeaderboard = await storage.getLeaderboard(yearMonth as string);
+      // Filter both branches and cashiers arrays for non-admins
       const leaderboard = mandatoryBranch 
-        ? allLeaderboard.filter((l: any) => l.branchId === mandatoryBranch)
+        ? {
+            branches: allLeaderboard.branches.filter((b: any) => b.branchId === mandatoryBranch),
+            cashiers: allLeaderboard.cashiers.filter((c: any) => c.branchId === mandatoryBranch),
+          }
         : allLeaderboard;
       res.json(leaderboard);
     } catch (error) {
@@ -5294,7 +5298,7 @@ export async function registerRoutes(
   // Target Alerts Routes
   // ==========================================
 
-  app.get("/api/targets/alerts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/targets/alerts", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { yearMonth } = req.query;
       
@@ -5302,7 +5306,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "yearMonth is required" });
       }
       
-      const alerts = await storage.getTargetAlerts(yearMonth as string);
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const allAlerts = await storage.getTargetAlerts(yearMonth as string);
+      const alerts = mandatoryBranch 
+        ? allAlerts.filter((a: any) => a.branchId === mandatoryBranch)
+        : allAlerts;
       res.json(alerts);
     } catch (error) {
       console.error("Error fetching target alerts:", error);
@@ -5315,7 +5324,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Targets vs Actuals - مقارنة الأهداف بالفعليات
-  app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5323,8 +5332,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "fromDate and toDate are required" });
       }
       
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || (branchId as string | null);
+      
       const data = await storage.getTargetsVsActuals(
-        branchId as string | null,
+        effectiveBranchId,
         fromDate as string,
         toDate as string,
         status as string | undefined,
@@ -5338,7 +5351,7 @@ export async function registerRoutes(
   });
 
   // Shift Analytics - تحليلات الورديات
-  app.get("/api/analytics/shifts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/analytics/shifts", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5346,8 +5359,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "fromDate and toDate are required" });
       }
       
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || (branchId as string | null);
+      
       const data = await storage.getShiftAnalytics(
-        branchId as string | null,
+        effectiveBranchId,
         fromDate as string,
         toDate as string,
         status as string | undefined,
@@ -5361,7 +5378,7 @@ export async function registerRoutes(
   });
 
   // Cashier Leaderboard - ترتيب الكاشيرين
-  app.get("/api/analytics/cashier-leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/analytics/cashier-leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5369,8 +5386,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "fromDate and toDate are required" });
       }
       
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || (branchId as string | null);
+      
       const data = await storage.getCashierLeaderboard(
-        branchId as string | null,
+        effectiveBranchId,
         fromDate as string,
         toDate as string,
         status as string | undefined,
@@ -5531,7 +5552,7 @@ export async function registerRoutes(
   });
 
   // Average Ticket Analysis - تحليل متوسط الفاتورة
-  app.get("/api/analytics/average-ticket", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/analytics/average-ticket", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId, groupBy, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5539,10 +5560,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "fromDate and toDate are required" });
       }
       
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || (branchId as string | null);
+      
       const validGroupBy = ['shift', 'cashier', 'date'].includes(groupBy as string) ? groupBy as 'shift' | 'cashier' | 'date' : 'shift';
       
       const data = await storage.getAverageTicketAnalysis(
-        branchId as string | null,
+        effectiveBranchId,
         validGroupBy,
         fromDate as string,
         toDate as string,

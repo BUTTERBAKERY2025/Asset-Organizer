@@ -2950,11 +2950,15 @@ export class DatabaseStorage implements IStorage {
     const shiftsByType = Object.entries(shiftTypeCounts).map(([type, count]) => ({ type, count }));
     const employeesByRole = Object.entries(roleCounts).map(([role, count]) => ({ role, count }));
 
-    // Branch Comparison
+    // Branch Comparison - SECURITY: Only include authorized branches
     const allBranches = await this.getAllBranches();
+    // When branchId is specified (mandatory for non-admins), only show that branch
+    const branchesToCompare = branchId 
+      ? allBranches.filter(b => b.id === branchId)
+      : allBranches;
     const branchComparison = [];
     
-    for (const branch of allBranches) {
+    for (const branch of branchesToCompare) {
       const branchJournals = allJournals.filter(j => j.branchId === branch.id);
       const branchOrders = allOrders.filter(o => o.branchId === branch.id);
       const branchSales = branchJournals.reduce((sum, j) => sum + j.totalSales, 0);
