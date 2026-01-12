@@ -11137,19 +11137,33 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/employee-schedules/bulk", isAuthenticated, async (req, res) => {
+  app.post("/api/employee-schedules/bulk", isAuthenticated, async (req: any, res) => {
     try {
       const { schedules } = req.body;
       if (!Array.isArray(schedules)) {
         return res.status(400).json({ error: "يجب أن تكون البيانات مصفوفة" });
       }
       
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        // Validate all schedules belong to user's assigned branch
+        const invalidSchedules = schedules.filter(s => s.branchId && s.branchId !== mandatoryBranch);
+        if (invalidSchedules.length > 0) {
+          console.warn(`[SECURITY] User ${req.currentUser?.id} attempted to create schedules for unauthorized branch`);
+          return res.status(403).json({ error: "غير مصرح لك بإنشاء جداول لهذا الفرع" });
+        }
+      }
+      
       const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
       const validatedSchedules = schedules.map(s => {
         const date = new Date(s.scheduleDate);
         const dayOfWeek = s.dayOfWeek || dayNames[date.getDay()];
+        // For non-admin users, enforce their branch on all schedules
+        const branchId = (!isUserAdmin(req) && mandatoryBranch) ? mandatoryBranch : s.branchId;
         return {
           ...s,
+          branchId,
           dayOfWeek,
           employeeName: s.employeeName || "Unknown",
         };
