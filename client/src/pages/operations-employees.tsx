@@ -53,7 +53,7 @@ export default function OperationsEmployeesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<SafeUser | null>(null);
-  const [filterBranch, setFilterBranch] = useState<string>(userBranchId || "all");
+  const [filterBranch, setFilterBranch] = useState<string>("");
   const [filterJobTitle, setFilterJobTitle] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,8 +62,10 @@ export default function OperationsEmployeesPage() {
   useEffect(() => {
     if (userBranchId) {
       setFilterBranch(userBranchId);
+    } else if (canSelectBranch) {
+      setFilterBranch("all");
     }
-  }, [userBranchId]);
+  }, [userBranchId, canSelectBranch]);
 
   const [newEmployee, setNewEmployee] = useState({
     username: "",

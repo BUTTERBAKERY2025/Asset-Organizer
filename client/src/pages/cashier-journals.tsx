@@ -68,7 +68,7 @@ export default function CashierJournalsPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>(userBranchId || "all");
+  const [branchFilter, setBranchFilter] = useState<string>("");
   const [discrepancyFilter, setDiscrepancyFilter] = useState<string>("all");
   const [cashierFilter, setCashierFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<string>("");
@@ -76,8 +76,10 @@ export default function CashierJournalsPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    if (userBranchId && !canSelectBranch) {
+    if (userBranchId) {
       setBranchFilter(userBranchId);
+    } else if (canSelectBranch) {
+      setBranchFilter("all");
     }
   }, [userBranchId, canSelectBranch]);
 
@@ -152,7 +154,7 @@ export default function CashierJournalsPage() {
     return branch?.name || branchId;
   };
 
-  const uniqueCashiers = journals ? [...new Set(journals.map(j => j.cashierName))].filter(Boolean).sort() : [];
+  const uniqueCashiers = journals ? Array.from(new Set(journals.map(j => j.cashierName))).filter(Boolean).sort() : [];
   
   // Get current user's display name for dropdown
   const currentUserName = user?.firstName && user?.lastName 

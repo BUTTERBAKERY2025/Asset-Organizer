@@ -100,7 +100,7 @@ export default function EmployeeReportsDashboardPage() {
   const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
   
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
@@ -118,10 +118,12 @@ export default function EmployeeReportsDashboardPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
   useEffect(() => {
-    if (userBranchId && selectedBranch === "all") {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
+    } else if (canSelectBranch) {
+      setSelectedBranch("all");
     }
-  }, [userBranchId, selectedBranch]);
+  }, [userBranchId, canSelectBranch]);
 
   const { data: employees, isLoading: employeesLoading } = useQuery<BranchEmployee[]>({
     queryKey: ["/api/branch-employees"],

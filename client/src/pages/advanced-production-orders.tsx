@@ -87,15 +87,17 @@ export default function AdvancedProductionOrdersPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>(userBranchId || "all");
+  const [branchFilter, setBranchFilter] = useState<string>("");
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   
   useEffect(() => {
-    if (userBranchId && branchFilter !== userBranchId) {
+    if (userBranchId) {
       setBranchFilter(userBranchId);
+    } else if (canSelectBranch) {
+      setBranchFilter("all");
     }
-  }, [userBranchId]);
+  }, [userBranchId, canSelectBranch]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();

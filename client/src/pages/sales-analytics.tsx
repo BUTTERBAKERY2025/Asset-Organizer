@@ -99,12 +99,12 @@ export default function SalesAnalytics() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
   useEffect(() => {
-    if (userBranchId && (selectedBranch === "" || selectedBranch === "all")) {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
-    } else if (!userBranchId && selectedBranch === "") {
+    } else if (canSelectBranch) {
       setSelectedBranch("all");
     }
-  }, [userBranchId, selectedBranch]);
+  }, [userBranchId, canSelectBranch]);
 
   const { data: targetsVsActuals = [], isLoading: loadingTargets, refetch: refetchTargets } = useQuery<any[]>({
     queryKey: ["/api/analytics/targets-vs-actuals", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],

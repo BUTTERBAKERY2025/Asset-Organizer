@@ -61,13 +61,15 @@ const PROJECT_STATUSES = [
 export default function ConstructionProjectsPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   
   useEffect(() => {
-    if (userBranchId && selectedBranch !== userBranchId) {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
+    } else if (canSelectBranch) {
+      setSelectedBranch("all");
     }
-  }, [userBranchId]);
+  }, [userBranchId, canSelectBranch]);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);

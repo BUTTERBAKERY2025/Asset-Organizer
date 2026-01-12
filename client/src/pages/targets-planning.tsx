@@ -79,7 +79,7 @@ export default function TargetsPlanning() {
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null);
   const [editingTarget, setEditingTarget] = useState<BranchMonthlyTarget | null>(null);
-  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [filterBranch, setFilterBranch] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [editingAllocation, setEditingAllocation] = useState<number | null>(null);
@@ -117,8 +117,11 @@ export default function TargetsPlanning() {
   const { branches, canSelectBranch, userBranchId } = useBranches();
 
   useEffect(() => {
-    if (userBranchId && !canSelectBranch) {
+    if (userBranchId) {
+      setFilterBranch(userBranchId);
       setNewTarget(prev => ({ ...prev, branchId: userBranchId }));
+    } else if (canSelectBranch) {
+      setFilterBranch("all");
     }
   }, [userBranchId, canSelectBranch]);
 

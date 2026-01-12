@@ -22,15 +22,17 @@ import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 
 export default function MaintenancePage() {
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const printRef = useRef<HTMLDivElement>(null);
 
   const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
 
   useEffect(() => {
-    if (userBranchId && !canSelectBranch) {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
+    } else if (canSelectBranch) {
+      setSelectedBranch("all");
     }
   }, [userBranchId, canSelectBranch]);
 

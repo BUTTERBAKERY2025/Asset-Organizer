@@ -65,13 +65,15 @@ const CHART_COLORS = ["#f59e0b", "#22c55e", "#3b82f6", "#ef4444", "#8b5cf6", "#0
 
 export default function ConstructionReportsPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
-  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   
   useEffect(() => {
-    if (userBranchId && selectedBranch !== userBranchId) {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
+    } else if (canSelectBranch) {
+      setSelectedBranch("all");
     }
-  }, [userBranchId]);
+  }, [userBranchId, canSelectBranch]);
   const [selectedProject, setSelectedProject] = useState<string>("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedContractor, setSelectedContractor] = useState<string>("all");

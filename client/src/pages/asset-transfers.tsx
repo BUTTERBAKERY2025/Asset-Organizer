@@ -75,7 +75,7 @@ export default function AssetTransfersPage() {
 
   const [assetSearch, setAssetSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-  const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
 
   const { branches, userBranchId, canSelectBranch } = useBranches();
@@ -83,8 +83,10 @@ export default function AssetTransfersPage() {
   useEffect(() => {
     if (userBranchId) {
       setBranchFilter(userBranchId);
+    } else if (canSelectBranch) {
+      setBranchFilter("all");
     }
-  }, [userBranchId]);
+  }, [userBranchId, canSelectBranch]);
 
   const { data: transfers = [], isLoading } = useQuery<AssetTransfer[]>({
     queryKey: ["/api/asset-transfers"],

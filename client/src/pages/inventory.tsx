@@ -36,7 +36,7 @@ export default function InventoryPage() {
   const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeBranch, setActiveBranch] = useState<string>(userBranchId || "all");
+  const [activeBranch, setActiveBranch] = useState<string>("");
   const [showPrices, setShowPrices] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [advancedFilters, setAdvancedFilters] = useState<FilterConfig>(defaultFilters);
@@ -47,8 +47,10 @@ export default function InventoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    if (userBranchId && !canSelectBranch) {
+    if (userBranchId) {
       setActiveBranch(userBranchId);
+    } else if (canSelectBranch) {
+      setActiveBranch("all");
     }
   }, [userBranchId, canSelectBranch]);
 

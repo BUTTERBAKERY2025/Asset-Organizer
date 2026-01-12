@@ -80,12 +80,12 @@ export default function CashierShiftPerformance() {
   }, [selectedBranch, branches]);
 
   useEffect(() => {
-    if (userBranchId && (selectedBranch === "" || selectedBranch === "all")) {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
-    } else if (!userBranchId && selectedBranch === "") {
+    } else if (canSelectBranch) {
       setSelectedBranch("all");
     }
-  }, [userBranchId, selectedBranch]);
+  }, [userBranchId, canSelectBranch]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -284,7 +284,7 @@ export default function CashierShiftPerformance() {
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
-                        {filteredBranches.map((branch) => (
+                        {branches.map((branch: { id: string; name: string }) => (
                           <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -728,7 +728,7 @@ export default function CashierShiftPerformance() {
                         'info': 'on_track',
                         'success': 'exceeding',
                       };
-                      const colors = ALERT_COLORS[severityMap[alert.severity] || 'warning'];
+                      const colors = ALERT_COLORS[severityMap[alert.alertLevel] || 'warning'];
                       return (
                         <div 
                           key={alert.id} 

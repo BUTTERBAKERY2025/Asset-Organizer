@@ -72,7 +72,7 @@ const ProductionContext = createContext<ProductionContextType | undefined>(
 );
 
 export function ProductionProvider({ children }: { children: ReactNode }) {
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(
     format(new Date(), "yyyy-MM-dd"),
   );

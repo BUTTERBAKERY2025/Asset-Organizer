@@ -57,12 +57,12 @@ export default function ReportsPage() {
   }, [selectedBranch, selectedCategory]);
 
   useEffect(() => {
-    if (userBranchId && selectedBranch === "") {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
-    } else if (!userBranchId && selectedBranch === "") {
+    } else if (canSelectBranch) {
       setSelectedBranch("all");
     }
-  }, [userBranchId, selectedBranch]);
+  }, [userBranchId, canSelectBranch]);
 
   const { data: inventory = [] } = useQuery<any[]>({
     queryKey: ["/api/inventory"],

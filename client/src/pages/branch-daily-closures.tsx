@@ -137,12 +137,12 @@ export default function BranchDailyClosuresPage() {
   });
 
   useEffect(() => {
-    if (userBranchId && (branchFilter === "" || branchFilter === "all")) {
+    if (userBranchId) {
       setBranchFilter(userBranchId);
-    } else if (!userBranchId && branchFilter === "") {
+    } else if (canSelectBranch) {
       setBranchFilter("all");
     }
-  }, [userBranchId, branchFilter]);
+  }, [userBranchId, canSelectBranch]);
 
   const closeMutation = useMutation({
     mutationFn: async (id: number) => apiRequest(`/api/branch-daily-closures/${id}/close`, "POST", {}),

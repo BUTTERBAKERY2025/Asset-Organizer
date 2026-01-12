@@ -149,11 +149,11 @@ export default function DailyProductionPage() {
     queryKey: ["/api/products"],
   });
 
-  // Initialize branch from context, user's branch, or fallback to first branch
+  // Initialize branch from context, user's branch, or fallback to first branch for admins
   useEffect(() => {
-    if (userBranchId && !canSelectBranch) {
+    if (userBranchId) {
       setBranchId(userBranchId);
-    } else if (branches && branches.length > 0 && (!branchId || branchId === "all")) {
+    } else if (canSelectBranch && branches && branches.length > 0 && (!branchId || branchId === "all")) {
       setBranchId(branches[0].id);
     }
   }, [branches, branchId, setBranchId, userBranchId, canSelectBranch]);

@@ -61,7 +61,7 @@ export default function DisplayBarWastePage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [receiptBranch, setReceiptBranch] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [activeTab, setActiveTab] = useState("receipts");
@@ -125,9 +125,11 @@ export default function DisplayBarWastePage() {
   const { branches, canSelectBranch, userBranchId } = useBranches();
 
   useEffect(() => {
-    if (userBranchId && !canSelectBranch) {
+    if (userBranchId) {
       setSelectedBranch(userBranchId);
       setWasteBranch(userBranchId);
+    } else if (canSelectBranch) {
+      setSelectedBranch("all");
     }
   }, [userBranchId, canSelectBranch]);
 
