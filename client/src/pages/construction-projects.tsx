@@ -59,7 +59,7 @@ const PROJECT_STATUSES = [
 ];
 
 export default function ConstructionProjectsPage() {
-  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
   

@@ -99,7 +99,7 @@ export default function AdvancedProductionOrderFormPage() {
     schedule: [],
   });
 
-  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   
   useEffect(() => {
     if (userBranchId && !formData.branchId) {
@@ -559,7 +559,7 @@ export default function AdvancedProductionOrderFormPage() {
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="same_branch">نفس الفرع</SelectItem>
-                        {allBranches?.map((branch) => (
+                        {branches?.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>
                             {branch.name}
                           </SelectItem>

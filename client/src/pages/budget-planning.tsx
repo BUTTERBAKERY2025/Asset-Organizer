@@ -83,7 +83,7 @@ export default function BudgetPlanningPage() {
     },
   });
 
-  const { allBranches: branches } = useBranches();
+  const { branches } = useBranches();
 
   const { data: paymentRequests = [] } = useQuery<PaymentRequest[]>({
     queryKey: ["/api/payment-requests"],

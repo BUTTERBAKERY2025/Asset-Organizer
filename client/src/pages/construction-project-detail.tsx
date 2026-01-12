@@ -115,7 +115,7 @@ export default function ConstructionProjectDetailPage() {
     enabled: projectId > 0,
   });
 
-  const { allBranches: branches } = useBranches();
+  const { branches } = useBranches();
 
   const { data: categories = [] } = useQuery<ConstructionCategory[]>({
     queryKey: ["/api/construction/categories"],

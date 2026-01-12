@@ -49,7 +49,7 @@ export default function OperationsEmployeesPage() {
   const queryClient = useQueryClient();
   const { user: currentUser, isAdmin, isLoading: authLoading, isAuthenticated } = useAuth();
   const { canView: canViewOperations, canCreate: canCreateOperations, canEdit: canEditOperations, canDelete: canDeleteOperations, isLoading: permissionsLoading } = usePermissions();
-  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<SafeUser | null>(null);

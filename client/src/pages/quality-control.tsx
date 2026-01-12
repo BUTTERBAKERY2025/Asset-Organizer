@@ -51,7 +51,7 @@ export default function QualityControlPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
 
   const { data: checks, isLoading } = useQuery<QualityCheck[]>({
     queryKey: ["/api/quality-checks"],

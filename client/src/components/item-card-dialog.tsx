@@ -71,7 +71,7 @@ const TRANSFER_STATUS_LABELS: Record<string, { label: string; color: string }> =
 
 export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCardDialogProps) {
   const printRef = useRef<HTMLDivElement>(null);
-  const { allBranches } = useBranches();
+  const { branches } = useBranches();
 
   const { data: transfers = [] } = useQuery<AssetTransfer[]>({
     queryKey: ["/api/asset-transfers/by-item", item?.id],
@@ -85,7 +85,7 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
   });
 
   const getBranchName = (branchId: string) => {
-    return allBranches.find(b => b.id === branchId)?.name || `فرع ${branchId}`;
+    return branches.find(b => b.id === branchId)?.name || `فرع ${branchId}`;
   };
 
   const handlePrint = useReactToPrint({

@@ -70,7 +70,7 @@ export default function IncentivesManagement() {
     sortOrder: "0"
   });
 
-  const { branches, allBranches, canSelectBranch } = useBranches();
+  const { branches, canSelectBranch } = useBranches();
 
   const { data: tiers = [], isLoading: tiersLoading } = useQuery<IncentiveTier[]>({
     queryKey: ["/api/incentives/tiers"],

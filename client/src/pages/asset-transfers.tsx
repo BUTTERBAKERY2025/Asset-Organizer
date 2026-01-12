@@ -78,7 +78,7 @@ export default function AssetTransfersPage() {
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { branches, allBranches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
 
   useEffect(() => {
     if (userBranchId) {
@@ -195,7 +195,7 @@ export default function AssetTransfersPage() {
   });
 
   const getBranchName = (branchId: string) => {
-    return allBranches.find((b) => b.id === branchId)?.name || branchId;
+    return branches.find((b) => b.id === branchId)?.name || branchId;
   };
 
   const getItemName = (itemId: string) => {

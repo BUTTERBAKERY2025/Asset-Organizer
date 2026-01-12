@@ -95,7 +95,7 @@ export default function AdvancedProductionOrderDetailsPage() {
     enabled: !!id,
   });
 
-  const { allBranches: branches } = useBranches();
+  const { branches } = useBranches();
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,

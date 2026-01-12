@@ -76,7 +76,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setOpenGroups(prev => ({ ...prev, [group]: !prev[group] }));
   };
 
-  const { data: allBranches = [] } = useQuery<Branch[]>({
+  const { data: fetchedBranches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
     queryFn: async () => {
       const res = await fetch("/api/branches");
@@ -86,7 +86,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     enabled: isAuthenticated,
   });
 
-  const availableBranches = isAdmin ? allBranches : allBranches.filter(b => 
+  const availableBranches = isAdmin ? fetchedBranches : fetchedBranches.filter(b => 
     allowedBranches.some(ub => ub.branchId === b.id)
   );
 

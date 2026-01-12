@@ -269,11 +269,24 @@ export async function registerRoutes(
     }
   });
 
-  // Branches
-  app.get("/api/branches", async (req, res) => {
+  // Branches - Returns all branches for admins, only assigned branch for non-admins
+  app.get("/api/branches", isAuthenticated, async (req: any, res) => {
     try {
       const branches = await getCachedBranches();
-      res.json(branches);
+      
+      // SECURITY: Filter branches based on user role
+      if (isUserAdmin(req)) {
+        // Admins can see all branches
+        res.json(branches);
+      } else {
+        // Non-admins only see their assigned branch
+        const userBranchId = req.currentUser?.branchId;
+        if (!userBranchId) {
+          return res.json([]);
+        }
+        const filteredBranches = branches.filter((b: any) => b.id === userBranchId);
+        res.json(filteredBranches);
+      }
     } catch (error) {
       console.error("Error fetching branches:", error);
       res.status(500).json({ error: "Failed to fetch branches" });

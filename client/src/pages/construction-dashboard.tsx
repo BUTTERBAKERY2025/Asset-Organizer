@@ -49,7 +49,7 @@ export default function ConstructionDashboardPage() {
     documentTitle: "تقرير لوحة تحكم المشاريع الإنشائية",
   });
 
-  const { allBranches: branches, isLoading: branchesLoading } = useBranches();
+  const { branches, isLoading: branchesLoading } = useBranches();
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ConstructionProject[]>({
     queryKey: ["/api/construction/projects"],

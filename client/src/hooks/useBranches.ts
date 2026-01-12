@@ -5,7 +5,8 @@ import type { Branch } from "@shared/schema";
 export function useBranches() {
   const { user, isAdmin } = useAuth();
 
-  const { data: allBranches = [], isLoading } = useQuery<Branch[]>({
+  // Server now filters branches based on user role, so we get pre-filtered data
+  const { data: branches = [], isLoading } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
     queryFn: async () => {
       const res = await fetch("/api/branches", { credentials: "include" });
@@ -14,26 +15,18 @@ export function useBranches() {
     },
   });
 
-  const filteredBranches = (() => {
-    if (isAdmin) {
-      return allBranches;
-    }
-    if (user?.branchId) {
-      return allBranches.filter((b) => b.id === user.branchId);
-    }
-    return [];
-  })();
-
   const userBranchId = isAdmin ? null : (user?.branchId || null);
 
   const canSelectBranch = isAdmin;
 
+  // defaultBranchId: For non-admins, use their assigned branch; for admins, use null (allow "all")
+  const defaultBranchId = userBranchId || (branches[0]?.id ?? null);
+
   return {
-    branches: filteredBranches,
-    allBranches,
+    branches, // Server-filtered: all for admins, only user's branch for non-admins
     isLoading,
     userBranchId,
     canSelectBranch,
-    defaultBranchId: userBranchId || (filteredBranches[0]?.id ?? null),
+    defaultBranchId,
   };
 }

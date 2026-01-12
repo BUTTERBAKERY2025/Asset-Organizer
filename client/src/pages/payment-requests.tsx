@@ -158,7 +158,7 @@ export default function PaymentRequestsPage() {
     },
   });
 
-  const { branches, allBranches } = useBranches();
+  const { branches } = useBranches();
 
   const form = useForm<PaymentRequestFormData>({
     resolver: zodResolver(paymentRequestFormSchema),
