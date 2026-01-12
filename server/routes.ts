@@ -567,7 +567,7 @@ export async function registerRoutes(
   });
 
   // Saved Filters
-  app.get("/api/filters", async (req, res) => {
+  app.get("/api/filters", isAuthenticated, async (req, res) => {
     try {
       const filters = await storage.getAllSavedFilters();
       res.json(filters);
@@ -817,7 +817,7 @@ export async function registerRoutes(
   // ===== Construction Project Management Routes =====
 
   // Construction Categories
-  app.get("/api/construction/categories", async (req, res) => {
+  app.get("/api/construction/categories", isAuthenticated, async (req, res) => {
     try {
       const categories = await storage.getAllConstructionCategories();
       res.json(categories);
@@ -2530,7 +2530,7 @@ export async function registerRoutes(
           // Coerce to strings for reliable comparison (handles numeric vs string IDs)
           const userId = String(user.id);
           journals = journals.filter(j => 
-            j.branchId === activeBranch && String(j.cashierId) === userId
+            j.branchId === mandatoryBranch && String(j.cashierId) === userId
           );
         }
       } else if (branchId) {
@@ -3506,11 +3506,15 @@ export async function registerRoutes(
   // ==================== End Branch Daily Closures Module ====================
 
   // Comprehensive Operations Reports Dashboard
-  app.get("/api/operations/reports", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/operations/reports", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId, startDate, endDate } = req.query;
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || branchId as string | undefined;
+      
       const report = await storage.getOperationsReport({
-        branchId: branchId as string | undefined,
+        branchId: effectiveBranchId,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
       });
@@ -3522,17 +3526,25 @@ export async function registerRoutes(
   });
 
   // Branch Overview Report - Asset Readiness, Inventory, Maintenance
-  app.get("/api/reports/branch-overview", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/reports/branch-overview", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
       const { branchId } = req.query;
-      const branches = await storage.getAllBranches();
-      const allItems = branchId 
-        ? await storage.getInventoryItemsByBranch(branchId as string)
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || branchId as string | undefined;
+      
+      const allBranches = await storage.getAllBranches();
+      // Filter branches list based on access
+      const branches = mandatoryBranch 
+        ? allBranches.filter(b => b.id === mandatoryBranch)
+        : allBranches;
+      const allItems = effectiveBranchId 
+        ? await storage.getInventoryItemsByBranch(effectiveBranchId)
         : await storage.getAllInventoryItems();
       
       const branchOverviews = [];
-      const branchList = branchId 
-        ? branches.filter(b => b.id === branchId)
+      const branchList = effectiveBranchId 
+        ? branches.filter(b => b.id === effectiveBranchId)
         : branches;
 
       for (const branch of branchList) {
@@ -3628,18 +3640,31 @@ export async function registerRoutes(
   });
 
   // Executive Summary Report - Comprehensive data for PDF/Excel export
-  app.get("/api/reports/executive-summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/reports/executive-summary", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
     try {
-      const { startDate, endDate } = req.query;
-      const branches = await storage.getAllBranches();
+      const { startDate, endDate, branchId } = req.query;
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || branchId as string | undefined;
+      
+      const allBranches = await storage.getAllBranches();
+      const branches = mandatoryBranch 
+        ? allBranches.filter(b => b.id === mandatoryBranch)
+        : allBranches;
       
       const operationsReport = await storage.getOperationsReport({
+        branchId: effectiveBranchId,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
       });
       
-      const allItems = await storage.getAllInventoryItems();
-      const allJournals = await storage.getAllCashierJournals();
+      const allItems = effectiveBranchId 
+        ? await storage.getInventoryItemsByBranch(effectiveBranchId)
+        : await storage.getAllInventoryItems();
+      const tempAllJournals = await storage.getAllCashierJournals();
+      const allJournals = effectiveBranchId 
+        ? tempAllJournals.filter(j => j.branchId === effectiveBranchId)
+        : tempAllJournals;
       
       let filteredJournals = allJournals;
       if (startDate) {
@@ -3656,7 +3681,11 @@ export async function registerRoutes(
 
       const now = new Date();
       const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const targetsProgress = await storage.getAllBranchesSalesProgress(currentYearMonth);
+      const allTargetsProgress = await storage.getAllBranchesSalesProgress(currentYearMonth);
+      // SECURITY: Filter targets to user's branch for non-admins
+      const targetsProgress = effectiveBranchId 
+        ? allTargetsProgress.filter(b => b.branchId === effectiveBranchId)
+        : allTargetsProgress;
       const totalTarget = targetsProgress.reduce((sum, b) => sum + (b.targetAmount || 0), 0);
       const totalAchieved = targetsProgress.reduce((sum, b) => sum + (b.achievedAmount || 0), 0);
       const targetAchievementPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
@@ -7030,9 +7059,12 @@ export async function registerRoutes(
   });
 
   // Production Reports API - comprehensive reports with date range
-  app.get("/api/production/reports", async (req, res) => {
+  app.get("/api/production/reports", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
-      const branchId = (req.query.branchId as string) || 'all';
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const requestedBranch = (req.query.branchId as string) || 'all';
+      const branchId = mandatoryBranch || requestedBranch;
       const startDate = (req.query.startDate as string) || new Date().toISOString().split('T')[0];
       const endDate = (req.query.endDate as string) || new Date().toISOString().split('T')[0];
       
