@@ -113,13 +113,24 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/users/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+  app.patch("/api/users/:id", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
     try {
-      const { firstName, lastName, role, password, branchId } = req.body;
+      const { firstName, lastName, username, role, password, branchId, isActive } = req.body;
       const updateData: any = {};
+      const currentUser = req.currentUser;
       
       if (firstName !== undefined) updateData.firstName = firstName;
       if (lastName !== undefined) updateData.lastName = lastName;
+      
+      // Handle username change with uniqueness check
+      if (username !== undefined) {
+        const existingUser = await storage.getUserByUsername(username);
+        if (existingUser && existingUser.id !== req.params.id) {
+          return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
+        }
+        updateData.username = username;
+      }
+      
       if (role !== undefined) {
         if (!["admin", "employee", "viewer"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
@@ -128,6 +139,18 @@ export async function registerRoutes(
       }
       if (password) updateData.password = password;
       if (branchId !== undefined) updateData.branchId = branchId || null;
+      
+      // Handle isActive status change with security checks
+      if (isActive !== undefined) {
+        if (!["active", "inactive"].includes(isActive)) {
+          return res.status(400).json({ error: "Invalid status. Must be 'active' or 'inactive'" });
+        }
+        // Prevent users from deactivating their own account
+        if (currentUser.id === req.params.id && isActive === "inactive") {
+          return res.status(400).json({ error: "لا يمكنك تعطيل حسابك الخاص" });
+        }
+        updateData.isActive = isActive;
+      }
       
       const user = await storage.updateUser(req.params.id, updateData);
       if (!user) {

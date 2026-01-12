@@ -113,6 +113,11 @@ export async function setupAuth(app: Express) {
         return res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" });
       }
 
+      // Security check: Prevent inactive users from logging in
+      if (user.isActive === "inactive") {
+        return res.status(403).json({ error: "حسابك معطّل. يرجى التواصل مع المسؤول." });
+      }
+
       req.session.regenerate(async (regenerateErr) => {
         try {
           if (regenerateErr) {
@@ -202,6 +207,12 @@ export async function setupAuth(app: Express) {
       if (!user) {
         req.session.destroy(() => {});
         return res.json(null);
+      }
+
+      // Security check: Auto-logout if user has been deactivated
+      if (user.isActive === "inactive") {
+        req.session.destroy(() => {});
+        return res.status(403).json({ error: "حسابك معطّل. يرجى التواصل مع المسؤول." });
       }
 
       const { password: _, ...safeUser } = user;
@@ -324,6 +335,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = await storage.getUser(req.session.userId);
   if (!user) {
     return res.status(401).json({ message: "غير مصرح" });
+  }
+
+  // Security: Block inactive users from accessing any protected API
+  if (user.isActive === "inactive") {
+    req.session.destroy(() => {});
+    return res.status(403).json({ message: "حسابك معطّل. يرجى التواصل مع المسؤول." });
   }
 
   (req as any).currentUser = user;
