@@ -983,31 +983,45 @@ export interface WeeklySchedulePdfData {
   employees: WeeklyScheduleEmployee[];
 }
 
+function formatTimeTo12Hour(time24: string): string {
+  if (!time24) return '';
+  const [hours, minutes] = time24.split(':').map(Number);
+  const period = hours >= 12 ? 'م' : 'ص';
+  const hours12 = hours % 12 || 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+}
+
 export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Promise<Buffer> {
   const headerCells = data.weekDates.map(d => 
-    `<th style="text-align: center; min-width: 80px;"><div style="font-weight: bold;">${d.day}</div><div style="font-size: 9px; color: #666;">${d.date}</div></th>`
+    `<th class="day-header"><div class="day-name">${d.day}</div><div class="day-date">${d.date}</div></th>`
   ).join('');
 
-  const rows = data.employees.map(emp => {
+  const rows = data.employees.map((emp, index) => {
     const dayCells = emp.days.map(d => {
       if (d.isOff) {
-        return `<td style="text-align: center; background: #fef3c7; color: #92400e; font-size: 10px;">إجازة</td>`;
+        return `<td class="cell-off"><span class="off-badge">🏖️ إجازة</span></td>`;
       } else if (d.startTime && d.endTime) {
-        return `<td style="text-align: center; font-size: 9px;"><div>من ${d.startTime}</div><div>إلى ${d.endTime}</div></td>`;
+        const start12 = formatTimeTo12Hour(d.startTime);
+        const end12 = formatTimeTo12Hour(d.endTime);
+        return `<td class="cell-work"><div class="time-from">من ${start12}</div><div class="time-to">إلى ${end12}</div></td>`;
       }
-      return `<td style="text-align: center;">-</td>`;
+      return `<td class="cell-empty">-</td>`;
     }).join('');
     
     return `
-      <tr>
-        <td style="text-align: right; font-weight: bold; font-size: 10px;">
-          ${emp.employeeName}
-          <div style="font-size: 9px; color: #666; font-weight: normal;">${emp.jobTitle}</div>
+      <tr class="${index % 2 === 0 ? 'row-even' : 'row-odd'}">
+        <td class="cell-employee">
+          <div class="emp-name">${emp.employeeName}</div>
+          <div class="emp-title">${emp.jobTitle}</div>
         </td>
         ${dayCells}
       </tr>
     `;
   }).join('');
+
+  const workingEmployees = data.employees.filter(e => e.days.some(d => !d.isOff && d.startTime)).length;
+  const totalWorkDays = data.employees.reduce((sum, e) => sum + e.days.filter(d => !d.isOff && d.startTime).length, 0);
+  const totalOffDays = data.employees.reduce((sum, e) => sum + e.days.filter(d => d.isOff).length, 0);
 
   const html = `
 <!DOCTYPE html>
@@ -1015,26 +1029,201 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
 <head>
   <meta charset="UTF-8">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 15px; font-size: 10px; }
+    
+    body { 
+      font-family: 'Cairo', sans-serif; 
+      direction: rtl; 
+      text-align: right; 
+      padding: 20px; 
+      font-size: 11px;
+      background: #fff;
+    }
+    
     ${getPdfHeaderStyles()}
     ${getPdfFooterStyles()}
-    .info-row { text-align: center; font-size: 11px; color: #666; margin-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 6px 4px; }
-    th { background-color: #f3f4f6; font-weight: bold; text-align: center; font-size: 10px; }
-    tr:nth-child(even) { background-color: #f9f9f9; }
+    
+    .report-header {
+      background: linear-gradient(135deg, #d4a853 0%, #b8942d 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    .report-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    
+    .report-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .report-period {
+      background: rgba(255,255,255,0.2);
+      padding: 8px 20px;
+      border-radius: 20px;
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    
+    table { 
+      width: 100%; 
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 15px;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    th, td { 
+      padding: 10px 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .day-header {
+      background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+      font-weight: 600;
+      text-align: center;
+      min-width: 90px;
+      border-left: 1px solid #e5e7eb;
+    }
+    
+    .day-header:last-child { border-left: none; }
+    
+    .day-name { 
+      font-size: 12px; 
+      font-weight: 700; 
+      color: #1f2937;
+    }
+    
+    .day-date { 
+      font-size: 10px; 
+      color: #6b7280; 
+      margin-top: 2px;
+    }
+    
+    th:first-child {
+      background: linear-gradient(180deg, #d4a853 0%, #b8942d 100%);
+      color: white;
+      text-align: right;
+      min-width: 140px;
+      font-size: 13px;
+    }
+    
+    .row-even { background: #ffffff; }
+    .row-odd { background: #fafafa; }
+    
+    .cell-employee {
+      text-align: right;
+      border-left: 3px solid #d4a853;
+      padding-right: 12px;
+    }
+    
+    .emp-name { 
+      font-weight: 600; 
+      font-size: 11px;
+      color: #1f2937;
+    }
+    
+    .emp-title { 
+      font-size: 9px; 
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    
+    .cell-work {
+      text-align: center;
+      background: #f0fdf4;
+      border-left: 1px solid #e5e7eb;
+    }
+    
+    .time-from, .time-to {
+      font-size: 10px;
+      color: #166534;
+    }
+    
+    .time-from { font-weight: 600; }
+    
+    .cell-off {
+      text-align: center;
+      background: #fffbeb;
+      border-left: 1px solid #e5e7eb;
+    }
+    
+    .off-badge {
+      background: #fef3c7;
+      color: #92400e;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    
+    .cell-empty {
+      text-align: center;
+      color: #9ca3af;
+      border-left: 1px solid #e5e7eb;
+    }
+    
+    .stats-container {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 25px;
+      flex-wrap: wrap;
+    }
+    
+    .stat-card {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-radius: 10px;
+      padding: 15px 25px;
+      text-align: center;
+      min-width: 120px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #d4a853;
+    }
+    
+    .stat-label {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 5px;
+    }
+    
+    .footer-note {
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px dashed #e5e7eb;
+      color: #9ca3af;
+      font-size: 10px;
+    }
   </style>
 </head>
 <body>
-  ${getPdfHeaderHtml('جدول الدوام الأسبوعي', `الفرع: ${data.branchName}`)}
-  <div class="info-row">${data.periodStart} - ${data.periodEnd}</div>
+  <div class="report-header">
+    <div class="report-title">📋 جدول الدوام الأسبوعي</div>
+    <div class="report-subtitle">${data.branchName}</div>
+    <div class="report-period">📅 ${data.periodStart} - ${data.periodEnd}</div>
+  </div>
   
   <table>
     <thead>
       <tr>
-        <th style="text-align: right; min-width: 120px;">الموظف</th>
+        <th>الموظف / المسمى</th>
         ${headerCells}
       </tr>
     </thead>
@@ -1043,11 +1232,28 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     </tbody>
   </table>
   
-  ${getSummaryHtml('ملخص الجدول', [
-    { label: 'عدد الموظفين', value: formatNumber(data.employees.length) },
-    { label: 'الفرع', value: data.branchName },
-    { label: 'الفترة', value: `${data.periodStart} - ${data.periodEnd}` },
-  ])}
+  <div class="stats-container">
+    <div class="stat-card">
+      <div class="stat-value">${data.employees.length}</div>
+      <div class="stat-label">إجمالي الموظفين</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${workingEmployees}</div>
+      <div class="stat-label">موظفين بجداول</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${totalWorkDays}</div>
+      <div class="stat-label">أيام عمل</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${totalOffDays}</div>
+      <div class="stat-label">أيام إجازة</div>
+    </div>
+  </div>
+  
+  <div class="footer-note">
+    تم إنشاء هذا التقرير آلياً من نظام باتر لإدارة الموارد البشرية
+  </div>
 </body>
 </html>`;
 

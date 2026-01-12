@@ -488,6 +488,14 @@ export default function ShiftManagementPage() {
     }
   };
 
+  const formatTo12HourExcel = (time24: string) => {
+    if (!time24) return '';
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'م' : 'ص';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
   const exportScheduleToExcel = () => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
@@ -515,7 +523,9 @@ export default function ShiftManagementPage() {
           if (cellData?.isOff) {
             row[`${DAYS_AR[index]} ${format(date, "dd/MM")}`] = "إجازة";
           } else if (cellData) {
-            row[`${DAYS_AR[index]} ${format(date, "dd/MM")}`] = `${cellData.startTime} - ${cellData.endTime}`;
+            const start12 = formatTo12HourExcel(cellData.startTime);
+            const end12 = formatTo12HourExcel(cellData.endTime);
+            row[`${DAYS_AR[index]} ${format(date, "dd/MM")}`] = `${start12} - ${end12}`;
           } else {
             row[`${DAYS_AR[index]} ${format(date, "dd/MM")}`] = "-";
           }
@@ -596,6 +606,14 @@ export default function ShiftManagementPage() {
     }
   };
 
+  const formatTo12Hour = (time24: string) => {
+    if (!time24) return '';
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'م' : 'ص';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
   const printSchedule = () => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
@@ -614,17 +632,17 @@ export default function ShiftManagementPage() {
           const dateStr = format(date, "yyyy-MM-dd");
           const cellData = scheduleData[empIdStr]?.[dateStr];
           if (cellData?.isOff) {
-            return `<td style="text-align: center; background: #fef3c7;">إجازة</td>`;
+            return `<td class="cell-off"><span class="off-badge">🏖️ إجازة</span></td>`;
           } else if (cellData) {
-            return `<td style="text-align: center;"><div>من ${cellData.startTime}</div><div>إلى ${cellData.endTime}</div></td>`;
+            return `<td class="cell-work"><div class="time-from">من ${formatTo12Hour(cellData.startTime)}</div><div class="time-to">إلى ${formatTo12Hour(cellData.endTime)}</div></td>`;
           }
-          return `<td style="text-align: center;">-</td>`;
+          return `<td style="text-align: center; color: #999;">-</td>`;
         }).join("");
-        return `<tr><td style="text-align: right; font-weight: bold;">${employee.employeeName}<br><span style="font-size: 11px; color: #666;">${employee.jobTitle || "موظف"}</span></td>${cells}</tr>`;
+        return `<tr><td class="cell-employee"><div class="emp-name">${employee.employeeName}</div><div class="emp-title">${employee.jobTitle || "موظف"}</div></td>${cells}</tr>`;
       }).join("");
 
       const headerCells = weekDates.map((date, index) => 
-        `<th style="text-align: center;"><div style="font-weight: bold;">${DAYS_AR[index]}</div><div style="font-size: 11px;">${format(date, "dd/MM")}</div></th>`
+        `<th class="day-header"><div class="day-name">${DAYS_AR[index]}</div><div class="day-date">${format(date, "dd/MM")}</div></th>`
       ).join("");
 
       printWindow.document.write(`
@@ -632,21 +650,40 @@ export default function ShiftManagementPage() {
           <head>
             <title>جدول الدوام - ${getBranchName(selectedBranch)}</title>
             <style>
-              body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; }
-              th { background-color: #f4f4f4; }
-              h1 { text-align: center; color: #333; margin-bottom: 5px; }
-              .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+              @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+              body { font-family: 'Cairo', Arial, sans-serif; padding: 20px; direction: rtl; background: #fff; }
+              .report-header { background: linear-gradient(135deg, #d4a853 0%, #b8942d 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
+              .report-title { font-size: 22px; font-weight: 700; margin-bottom: 5px; }
+              .report-subtitle { font-size: 14px; opacity: 0.9; }
+              .report-period { background: rgba(255,255,255,0.2); padding: 8px 20px; border-radius: 20px; display: inline-block; margin-top: 10px; font-size: 12px; }
+              table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 15px; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              th, td { padding: 10px 8px; border-bottom: 1px solid #e5e7eb; }
+              .day-header { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); font-weight: 600; text-align: center; min-width: 90px; border-left: 1px solid #e5e7eb; }
+              .day-name { font-size: 12px; font-weight: 700; color: #1f2937; }
+              .day-date { font-size: 10px; color: #6b7280; margin-top: 2px; }
+              th:first-child { background: linear-gradient(180deg, #d4a853 0%, #b8942d 100%); color: white; text-align: right; min-width: 140px; font-size: 13px; }
+              tr:nth-child(even) { background: #fafafa; }
+              .cell-employee { text-align: right; border-left: 3px solid #d4a853; padding-right: 12px; }
+              .emp-name { font-weight: 600; font-size: 11px; color: #1f2937; }
+              .emp-title { font-size: 9px; color: #6b7280; margin-top: 2px; }
+              .cell-work { text-align: center; background: #f0fdf4; border-left: 1px solid #e5e7eb; }
+              .time-from, .time-to { font-size: 10px; color: #166534; }
+              .time-from { font-weight: 600; }
+              .cell-off { text-align: center; background: #fffbeb; border-left: 1px solid #e5e7eb; }
+              .off-badge { background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+              @media print { body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
             </style>
           </head>
           <body>
-            <h1>جدول الدوام الأسبوعي - ${getBranchName(selectedBranch)}</h1>
-            <div class="subtitle">${format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - ${format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}</div>
+            <div class="report-header">
+              <div class="report-title">📋 جدول الدوام الأسبوعي</div>
+              <div class="report-subtitle">${getBranchName(selectedBranch)}</div>
+              <div class="report-period">📅 ${format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - ${format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}</div>
+            </div>
             <table>
               <thead>
                 <tr>
-                  <th style="text-align: right;">الموظف</th>
+                  <th style="text-align: right;">الموظف / المسمى</th>
                   ${headerCells}
                 </tr>
               </thead>
