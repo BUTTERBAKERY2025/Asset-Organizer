@@ -2362,8 +2362,6 @@ export default function CashierJournalFormPage() {
                     { value: "mada", label: "مدى", color: "bg-blue-600 hover:bg-blue-700" },
                     { value: "visa", label: "فيزا", color: "bg-indigo-600 hover:bg-indigo-700" },
                     { value: "mastercard", label: "ماستركارد", color: "bg-orange-600 hover:bg-orange-700" },
-                    { value: "apple_pay", label: "Apple Pay", color: "bg-gray-800 hover:bg-gray-900" },
-                    { value: "stc_pay", label: "STC Pay", color: "bg-purple-600 hover:bg-purple-700" },
                   ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
                     <Button
                       key={method.value}
@@ -2397,7 +2395,6 @@ export default function CashierJournalFormPage() {
                     { value: "jahez", label: "جاهز", color: "bg-blue-500 hover:bg-blue-600" },
                     { value: "marsool", label: "مرسول", color: "bg-purple-500 hover:bg-purple-600" },
                     { value: "toyou", label: "ToYou", color: "bg-pink-500 hover:bg-pink-600" },
-                    { value: "talabat", label: "طلبات", color: "bg-red-500 hover:bg-red-600" },
                     { value: "the_chefs", label: "ذا شيفز", color: "bg-amber-600 hover:bg-amber-700" },
                   ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
                     <Button
