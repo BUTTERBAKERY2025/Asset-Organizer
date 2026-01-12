@@ -87,6 +87,37 @@ const isBankPaymentMethod = (method: string): boolean => {
   return BANK_PAYMENT_METHODS.includes(method);
 };
 
+// Prevent scroll/wheel from changing number input values
+const preventWheelChange = (e: { currentTarget: HTMLInputElement }) => {
+  e.currentTarget.blur();
+};
+
+// Clean numeric input - remove leading zeros and format properly
+const cleanNumericValue = (value: string, isDecimal: boolean = true): string => {
+  if (!value || value === '') return '';
+  // Remove any non-numeric characters except decimal point
+  let cleaned = value.replace(/[^\d.]/g, '');
+  // Handle multiple decimal points - keep only first
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    cleaned = parts[0] + '.' + parts.slice(1).join('');
+  }
+  // Remove leading zeros (but keep "0." for decimals)
+  if (isDecimal) {
+    cleaned = cleaned.replace(/^0+(?=\d)/, '');
+  } else {
+    cleaned = cleaned.replace(/^0+/, '') || '0';
+  }
+  return cleaned;
+};
+
+// Parse numeric value safely - handles empty/invalid strings
+const parseNumericValue = (value: string, isDecimal: boolean = true): number => {
+  const cleaned = cleanNumericValue(value, isDecimal);
+  if (!cleaned || cleaned === '') return 0;
+  return isDecimal ? parseFloat(cleaned) || 0 : parseInt(cleaned) || 0;
+};
+
 export default function CashierJournalFormPage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -1240,7 +1271,8 @@ export default function CashierJournalFormPage() {
                     <Input
                       type="number"
                       value={formData.totalSales ?? ""}
-                      onChange={(e) => setFormData({ ...formData, totalSales: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => setFormData({ ...formData, totalSales: parseNumericValue(e.target.value) })}
+                      onWheel={preventWheelChange}
                       className="text-lg sm:text-xl font-bold h-12 sm:h-14 min-h-[48px]"
                       placeholder="0.00"
                       disabled={isReadOnly}
@@ -1255,7 +1287,8 @@ export default function CashierJournalFormPage() {
                     <Input
                       type="number"
                       value={formData.transactionCount ?? ""}
-                      onChange={(e) => setFormData({ ...formData, transactionCount: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => setFormData({ ...formData, transactionCount: parseNumericValue(e.target.value, false) })}
+                      onWheel={preventWheelChange}
                       className="h-12 sm:h-14 min-h-[48px]"
                       placeholder="0"
                       disabled={isReadOnly}
@@ -1279,7 +1312,8 @@ export default function CashierJournalFormPage() {
                   <Input
                     type="number"
                     value={formData.openingBalance ?? ""}
-                    onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, openingBalance: parseNumericValue(e.target.value) })}
+                    onWheel={preventWheelChange}
                     placeholder="0.00"
                     disabled={isReadOnly}
                     className="h-11 sm:h-10"
@@ -1377,9 +1411,10 @@ export default function CashierJournalFormPage() {
                                 placeholder="0.00"
                                 value={breakdown.amount ?? ""}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const val = parseNumericValue(e.target.value);
                                   updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val });
                                 }}
+                                onWheel={preventWheelChange}
                                 disabled={isReadOnly}
                                 className="h-10 text-base font-bold text-center"
                                 data-testid={`input-payment-amount-${index}`}
@@ -1406,7 +1441,8 @@ export default function CashierJournalFormPage() {
                                 inputMode="decimal"
                                 placeholder="0.00"
                                 value={breakdown.terminalAmount ?? ""}
-                                onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseFloat(e.target.value) || 0)}
+                                onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseNumericValue(e.target.value))}
+                                onWheel={preventWheelChange}
                                 disabled={isReadOnly}
                                 className="h-10 text-base font-bold text-center bg-white"
                                 data-testid={`input-terminal-amount-${index}`}
@@ -1429,7 +1465,8 @@ export default function CashierJournalFormPage() {
                                   inputMode="numeric"
                                   placeholder="0"
                                   value={breakdown.transactionCount ?? ""}
-                                  onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                                  onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
+                                  onWheel={preventWheelChange}
                                   disabled={isReadOnly}
                                   className="h-6 w-10 text-xs font-bold text-center p-0.5"
                                   data-testid={`input-payment-count-${index}`}
@@ -1442,7 +1479,8 @@ export default function CashierJournalFormPage() {
                                   inputMode="numeric"
                                   placeholder="0"
                                   value={breakdown.terminalTransactionCount ?? ""}
-                                  onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseInt(e.target.value) || 0)}
+                                  onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseNumericValue(e.target.value, false))}
+                                  onWheel={preventWheelChange}
                                   disabled={isReadOnly}
                                   className="h-6 w-10 text-xs font-bold text-center p-0.5"
                                   data-testid={`input-terminal-count-${index}`}
@@ -1469,7 +1507,8 @@ export default function CashierJournalFormPage() {
                                     inputMode="decimal"
                                     placeholder="0.00"
                                     value={breakdown.amount ?? ""}
-                                    onChange={(e) => updatePaymentBreakdown(index, "amount", parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
+                                    onWheel={preventWheelChange}
                                     disabled={isReadOnly}
                                     className="h-10 text-base font-bold text-center"
                                     data-testid={`input-payment-amount-${index}`}
@@ -1482,7 +1521,8 @@ export default function CashierJournalFormPage() {
                                     inputMode="decimal"
                                     placeholder="0.00"
                                     value={formData.actualCashDrawer ?? ""}
-                                    onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseFloat(e.target.value) || 0 })}
+                                    onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseNumericValue(e.target.value) })}
+                                    onWheel={preventWheelChange}
                                     disabled={isReadOnly}
                                     className="h-10 text-base font-bold text-center bg-white"
                                     data-testid="input-actual-cash-inline"
@@ -1504,7 +1544,8 @@ export default function CashierJournalFormPage() {
                                     inputMode="numeric"
                                     placeholder="0"
                                     value={breakdown.transactionCount ?? ""}
-                                    onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                                    onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
+                                    onWheel={preventWheelChange}
                                     disabled={isReadOnly}
                                     className="h-6 w-10 text-xs font-bold text-center p-0.5"
                                     data-testid={`input-payment-count-${index}`}
@@ -1543,7 +1584,8 @@ export default function CashierJournalFormPage() {
                               inputMode="decimal"
                               placeholder="0.00"
                               value={breakdown.amount ?? ""}
-                              onChange={(e) => updatePaymentBreakdown(index, "amount", parseFloat(e.target.value) || 0)}
+                              onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
+                              onWheel={preventWheelChange}
                               disabled={isReadOnly}
                               className="h-10 text-base font-bold text-center"
                               data-testid={`input-payment-amount-${index}`}
@@ -1556,7 +1598,8 @@ export default function CashierJournalFormPage() {
                               inputMode="numeric"
                               placeholder="0"
                               value={breakdown.transactionCount ?? ""}
-                              onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseInt(e.target.value) || 0)}
+                              onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
+                              onWheel={preventWheelChange}
                               disabled={isReadOnly}
                               className="h-10 text-sm font-medium text-center"
                               data-testid={`input-payment-count-${index}`}
@@ -1734,7 +1777,8 @@ export default function CashierJournalFormPage() {
                       <Input
                         type="number"
                         value={returnData.returnAmount || ""}
-                        onChange={(e) => setReturnData(prev => ({ ...prev, returnAmount: parseFloat(e.target.value) || 0 }))}
+                        onChange={(e) => setReturnData(prev => ({ ...prev, returnAmount: parseNumericValue(e.target.value) }))}
+                        onWheel={preventWheelChange}
                         className="h-10 border-red-200 text-base font-bold text-center"
                         placeholder="0.00"
                         disabled={isReadOnly}
