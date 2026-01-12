@@ -14,7 +14,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter } from "lucide-react";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import type { User, UserPermission, Branch } from "@shared/schema";
 import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
@@ -61,10 +63,14 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState({
     firstName: "",
     lastName: "",
+    username: "",
     role: "viewer",
     password: "",
     branchId: "",
   });
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<SafeUser | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<SafeUser | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
@@ -162,10 +168,11 @@ export default function UsersPage() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; role?: string; password?: string; branchId?: string } }) => {
+    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; username?: string; role?: string; password?: string; branchId?: string } }) => {
       const updateData: any = {};
       if (data.firstName !== undefined) updateData.firstName = data.firstName;
       if (data.lastName !== undefined) updateData.lastName = data.lastName;
+      if (data.username !== undefined) updateData.username = data.username;
       if (data.role !== undefined) updateData.role = data.role;
       if (data.password && data.password.trim() !== "") updateData.password = data.password;
       if (data.branchId !== undefined) updateData.branchId = data.branchId || null;
@@ -244,12 +251,68 @@ export default function UsersPage() {
     setEditUser({
       firstName: user.firstName || "",
       lastName: user.lastName || "",
+      username: user.username || "",
       role: user.role,
       password: "",
       branchId: user.branchId || "",
     });
     setIsEditDialogOpen(true);
   };
+
+  const toggleUserStatusMutation = useMutation({
+    mutationFn: async ({ userId, isActive }: { userId: string; isActive: string }) => {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update user status");
+      }
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ 
+        title: variables.isActive === "active" ? "تم تفعيل المستخدم" : "تم تعطيل المستخدم",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "فشل تحديث حالة المستخدم", variant: "destructive" });
+    },
+  });
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmUser) {
+      deleteUserMutation.mutate(deleteConfirmUser.id);
+      setDeleteConfirmUser(null);
+    }
+  };
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to reset password");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "تم إعادة تعيين كلمة المرور بنجاح" });
+      setResetPasswordUser(null);
+      setNewPassword("");
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "فشل إعادة تعيين كلمة المرور", variant: "destructive" });
+    },
+  });
 
   const handleEditUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -808,13 +871,14 @@ export default function UsersPage() {
                           <TableHead className="text-right font-semibold">الفرع</TableHead>
                           <TableHead className="text-right font-semibold">تاريخ التسجيل</TableHead>
                           <TableHead className="text-right font-semibold">الصلاحية</TableHead>
+                          <TableHead className="text-center font-semibold">الحالة</TableHead>
                           <TableHead className="text-right font-semibold">الإجراءات</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredUsers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                               {users.length === 0 ? "لا يوجد مستخدمين" : "لا توجد نتائج مطابقة للبحث"}
                             </TableCell>
                           </TableRow>
@@ -863,6 +927,26 @@ export default function UsersPage() {
                             </SelectContent>
                           </Select>
                         </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Switch
+                              checked={user.isActive === "active"}
+                              onCheckedChange={(checked) => {
+                                if (user.id !== currentUser?.id) {
+                                  toggleUserStatusMutation.mutate({
+                                    userId: user.id,
+                                    isActive: checked ? "active" : "inactive"
+                                  });
+                                }
+                              }}
+                              disabled={user.id === currentUser?.id || toggleUserStatusMutation.isPending}
+                              data-testid={`switch-status-${user.id}`}
+                            />
+                            <span className={`text-xs font-medium ${user.isActive === "active" ? "text-green-600" : "text-red-500"}`}>
+                              {user.isActive === "active" ? "مفعّل" : "معطّل"}
+                            </span>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Button
@@ -878,6 +962,17 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="text-purple-600 hover:text-purple-700 h-11 w-11 sm:h-8 sm:w-8"
+                              onClick={() => setResetPasswordUser(user)}
+                              disabled={user.id === currentUser?.id}
+                              data-testid={`button-reset-password-${user.id}`}
+                              title="إعادة تعيين كلمة المرور"
+                            >
+                              <KeyRound className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="text-blue-600 hover:text-blue-700 h-11 w-11 sm:h-8 sm:w-8"
                               onClick={() => openPermissionsDialog(user)}
                               data-testid={`button-permissions-${user.id}`}
@@ -889,7 +984,7 @@ export default function UsersPage() {
                               variant="ghost"
                               size="icon"
                               className="text-destructive hover:text-destructive h-11 w-11 sm:h-8 sm:w-8"
-                              onClick={() => deleteUserMutation.mutate(user.id)}
+                              onClick={() => setDeleteConfirmUser(user)}
                               disabled={user.id === currentUser?.id || deleteUserMutation.isPending}
                               data-testid={`button-delete-${user.id}`}
                               title="حذف المستخدم"
@@ -1168,6 +1263,18 @@ export default function UsersPage() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="editUsername">اسم المستخدم</Label>
+              <Input
+                id="editUsername"
+                value={editUser.username}
+                onChange={(e) => setEditUser({ ...editUser, username: e.target.value })}
+                className="text-left"
+                dir="ltr"
+                data-testid="input-edit-username"
+              />
+              <p className="text-xs text-muted-foreground">اسم المستخدم الذي يستخدم لتسجيل الدخول</p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="editRole">الدور</Label>
               <Select 
                 value={editUser.role} 
@@ -1244,6 +1351,100 @@ export default function UsersPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmUser} onOpenChange={(open) => !open && setDeleteConfirmUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-right">تأكيد حذف المستخدم</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              هل أنت متأكد من حذف المستخدم <strong>{deleteConfirmUser?.firstName} {deleteConfirmUser?.lastName}</strong> ({deleteConfirmUser?.username})؟
+              <br />
+              <span className="text-destructive">هذا الإجراء لا يمكن التراجع عنه.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel data-testid="button-cancel-delete">إلغاء</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteUserMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري الحذف...
+                </>
+              ) : (
+                "حذف المستخدم"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetPasswordUser} onOpenChange={(open) => { if (!open) { setResetPasswordUser(null); setNewPassword(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5" />
+              إعادة تعيين كلمة المرور
+            </DialogTitle>
+            <DialogDescription>
+              إعادة تعيين كلمة المرور للمستخدم: <strong>{resetPasswordUser?.firstName} {resetPasswordUser?.lastName}</strong> ({resetPasswordUser?.username})
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-sm">
+              <Shield className="w-4 h-4 inline-block ml-2" />
+              كلمات المرور مشفرة ولا يمكن عرضها. يمكنك فقط إعادة تعيينها بكلمة مرور جديدة.
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">كلمة المرور الجديدة *</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="أدخل كلمة المرور الجديدة"
+                className="text-left"
+                dir="ltr"
+                data-testid="input-new-password"
+              />
+              <p className="text-xs text-muted-foreground">يجب أن تكون كلمة المرور قوية وآمنة</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setResetPasswordUser(null); setNewPassword(""); }}
+              data-testid="button-cancel-reset-password"
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={() => {
+                if (resetPasswordUser && newPassword.trim()) {
+                  resetPasswordMutation.mutate({ userId: resetPasswordUser.id, password: newPassword });
+                }
+              }}
+              disabled={!newPassword.trim() || resetPasswordMutation.isPending}
+              data-testid="button-confirm-reset-password"
+            >
+              {resetPasswordMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                "تعيين كلمة المرور"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </Layout>
