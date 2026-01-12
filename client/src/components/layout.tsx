@@ -385,7 +385,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-72 p-0 overflow-y-auto pb-48">
+            <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
                 <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16" />
                 <p className="text-[10px] text-muted-foreground text-center mt-2">منصة بتر بيكري الشاملة</p>
