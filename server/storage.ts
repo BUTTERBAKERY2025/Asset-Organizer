@@ -6355,17 +6355,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEmployeeSchedulesByBranchAndDateRange(branchId: string, startDate: string, endDate: string): Promise<EmployeeSchedule[]> {
-    const branchUsers = await db.select().from(users).where(eq(users.branchId, branchId));
-    const employeeIds = branchUsers.map(u => u.id);
-    if (employeeIds.length === 0) return [];
-    
-    return await db.select().from(employeeSchedules)
+    // Get schedules directly by branchId on the schedule table (for branch employees)
+    const branchSchedules = await db.select().from(employeeSchedules)
       .where(and(
-        inArray(employeeSchedules.employeeId, employeeIds),
+        eq(employeeSchedules.branchId, branchId),
         gte(employeeSchedules.scheduleDate, startDate),
         lte(employeeSchedules.scheduleDate, endDate)
       ))
       .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
+    
+    // Also get schedules for users assigned to this branch (legacy support)
+    const branchUsers = await db.select().from(users).where(eq(users.branchId, branchId));
+    const userIds = branchUsers.map(u => u.id);
+    
+    if (userIds.length > 0) {
+      const userSchedules = await db.select().from(employeeSchedules)
+        .where(and(
+          inArray(employeeSchedules.employeeId, userIds),
+          gte(employeeSchedules.scheduleDate, startDate),
+          lte(employeeSchedules.scheduleDate, endDate)
+        ))
+        .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
+      
+      // Merge and deduplicate by schedule id
+      const allSchedules = [...branchSchedules];
+      for (const schedule of userSchedules) {
+        if (!allSchedules.some(s => s.id === schedule.id)) {
+          allSchedules.push(schedule);
+        }
+      }
+      return allSchedules;
+    }
+    
+    return branchSchedules;
   }
 
   async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
