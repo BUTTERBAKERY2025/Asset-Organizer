@@ -1,7 +1,7 @@
 # نظام إدارة المشروعات والأصول والصيانة - باتر
 
 ## Overview
-This project is a comprehensive management system designed for Butter Bakery, operating across multiple branches in Saudi Arabia. It aims to streamline the management of projects, assets, and maintenance operations. Key capabilities include inventory tracking, asset management, construction project oversight, maintenance scheduling, and detailed reporting, all presented with an Arabic RTL interface. The system supports multi-location inventory, tracks asset status for maintenance reporting, handles Saudi VAT calculations, and includes modules for production management and cashier sales journals.
+This project is a comprehensive management system for Butter Bakery, designed to streamline project, asset, and maintenance operations across multiple branches in Saudi Arabia. It includes multi-location inventory, asset status tracking, construction project oversight, maintenance scheduling, and detailed reporting. Key features also encompass Saudi VAT calculations, production management, and cashier sales journals, all within an Arabic RTL interface. The system aims to enhance operational efficiency and provide a unified view of the business.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 - Database updates require manual SQL execution in Supabase SQL Editor before code deployment
 
 ## System Architecture
-The system employs a modern web architecture with a React-based frontend and a Node.js/Express backend.
+The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
 
 ### UI/UX Decisions
 - **Arabic-First Design**: Default RTL layout with Arabic fonts (Cairo) and interface text.
@@ -28,31 +28,27 @@ The system employs a modern web architecture with a React-based frontend and a N
 - **Branch-Based Organization**: Inventory and operations are structured by branch locations.
 - **Status Tracking**: Assets and production items have statuses (e.g., good, maintenance, damaged, missing, pending, completed).
 - **Financials**: Built-in 15% Saudi VAT calculation.
-- **Construction Project Management**: Module for tracking projects, work items (electrical, plumbing, etc.), contractors, and project statuses.
+- **Construction Project Management**: Module for tracking projects, work items, contractors, and project statuses.
 - **Operations and Production Module**: Manages products, shift scheduling, production orders, quality control, and daily summaries.
-- **Cashier Sales Journal Module**: Facilitates daily sales recording, payment breakdowns, cash reconciliation, and electronic signatures.
-- **Pagination System**: Comprehensive pagination implemented across data-heavy pages for efficient data handling.
+- **Cashier Sales Journal Module**: Facilitates daily sales recording, payment breakdowns, cash reconciliation, and electronic signatures with comprehensive net variance calculation.
+- **Pagination System**: Comprehensive pagination implemented across data-heavy pages.
 - **Sales Analytics**: Advanced filters, CSV/Excel export, seasonal factors, and auto-refresh for sales reports.
-- **Unified Command Center**: A dashboard aggregating KPIs from production, inventory, cashier, and waste modules, with comparison metrics and auto-refresh.
-- **RBAC System (Role-Based Access Control)**: Comprehensive permission system with:
-  - 7 departments (Production, Operations, Finance, Sales, HR, Maintenance, Administration)
-  - 6 hierarchical roles (Super Admin level 0 to Viewer level 5)
-  - 47+ granular permissions organized by module and action
-  - User assignments with branch and department scope
-  - Permission overrides for temporary grants/revokes
-  - Branch-level access control
-  - API endpoints: `/api/rbac/*` for managing departments, roles, permissions, and user assignments
-  - Management UI at `/rbac-management`
+- **Unified Command Center**: A dashboard aggregating KPIs from production, inventory, cashier, and waste modules.
+- **RBAC System (Role-Based Access Control)**: Comprehensive permission system with departments, hierarchical roles, granular permissions (200+), user assignments with branch/department scope, and permission overrides. This includes enhanced security features like 2FA, IP whitelisting, session management, password policies, and audit trails.
+- **P&L Dashboard Enhancements**: Includes advanced financial KPIs such as EBITDA, contribution margin, labor productivity, and operating profit.
+- **Marketing Influencers Enhancement**: Management of influencer data including social media metrics and bank details.
+- **Branch Employee Integration**: Features for linking employees to user accounts, tracking attendance, schedules, and timesheets.
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema ensures type consistency between frontend and backend.
 - **Modular Design**: Distinct modules for construction, operations, and cashier functions.
 - **Scalability**: Designed to handle multi-branch operations and large datasets with pagination.
+- **Branch-Level Security**: Strict branch-level data isolation for non-admin users enforced via backend filters and frontend component logic.
 
 ## External Dependencies
 
 ### Database
-- **PostgreSQL**: Primary data store, configured via `DATABASE_URL`.
+- **PostgreSQL**: Primary data store.
 - **Drizzle Kit**: Used for database migrations.
 
 ### Third-Party Libraries
@@ -68,138 +64,5 @@ The system employs a modern web architecture with a React-based frontend and a N
 
 ### External System Integrations
 - **Accounting Integration**: API endpoints for exporting inventory valuation, asset movements, and project cost reports in JSON format.
-- **SMS/WhatsApp Notifications**: Notification queue system ready for Twilio integration (requires manual setup of `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`).
-- **Data Import**: Excel import functionality available via an API endpoint (`/api/import-jobs`).
-
-## Database Schema Documentation
-
-### Schema Files
-- **`shared/schema.ts`**: Primary source of truth for database schema (TypeScript/Drizzle ORM)
-- **`database_schema.sql`**: Complete SQL reference file generated from schema.ts (94 tables)
-
-### Recent Schema Changes (2026-01-12)
-
-#### RBAC Complete Permissions Update
-**SQL Migration File**: `supabase_rbac_complete_permissions.sql`
-
-This migration adds comprehensive permissions for all 50+ system modules:
-- Adds permissions for all missing modules (platform_home, asset_transfers, attendance, etc.)
-- Adds special permissions (sign, close, reopen, transfer, approve, etc.)
-- Updates role permissions distribution for balanced access:
-  - Super Admin: All permissions
-  - Regional Manager: All except system settings
-  - Branch Manager: Full branch operations
-  - Cashier: Cashier operations + attendance
-  - Viewer: View-only access to all modules
-
-### Previous Schema Changes (2026-01-11)
-
-#### Comprehensive Net Variance for Cashier Journals
-**SQL Migration File**: `supabase_journal_bank_totals.sql`
-
-This migration adds support for comprehensive net variance calculation in cashier journal stats:
-- Adds `total_bank_pos_amount` column if not exists
-- Adds `total_bank_terminal_amount` column if not exists
-- Backfills existing journals from payment breakdowns
-
-**Net Variance Formula**: (actualCashDrawer + totalBankTerminalAmount) - (totalSales - returnAmount)
-
-This replaces the previous cash-only discrepancy calculation in the stats cards.
-
-### Previous Schema Changes (2026-01-10)
-
-#### RBAC Security Enhancement (NEW)
-**SQL Migration Files** (Execute in order in Supabase SQL Editor):
-1. `supabase_rbac_security_enhancement.sql` - Creates security tables
-2. `supabase_seed_permissions.sql` - Seeds all permissions (200+ permissions)
-
-**New Security Tables:**
-- `user_security_settings` - 2FA, IP whitelist, session timeout, password policies
-- `user_sessions` - Active session tracking with device info
-- `security_violation_alerts` - Unauthorized access attempt logging
-- `permission_check_logs` - Audit trail for all permission checks
-- `role_templates` - Pre-built role permission templates
-
-**Expanded SYSTEM_MODULES** (from 17 to 50+ modules):
-- Core: dashboard, platform_home, settings
-- Inventory: inventory, asset_transfers, inspections, maintenance
-- Production: production, daily_production, advanced_production, quality_control, products, operations
-- HR: users, branch_employees, branches, organizational_structure, employee_reports, employee_transfers
-- Finance: cashier_journal, cashier_performance, pnl_dashboard, incentives, sales_analytics
-- Targets: targets, targets_planning, waste_tracking
-- Construction: construction_projects, construction_work_items, contractors, contracts, budget_planning, payment_requests
-- Marketing: marketing, marketing_campaigns, marketing_influencers, marketing_tasks, marketing_goals, etc.
-- System: rbac_management, audit_logs, backups, integrations, reports
-
-**Security Features:**
-- Two-Factor Authentication (2FA) support
-- IP whitelist restrictions
-- Session management with concurrent session limits
-- Password expiry policies
-- Failed login attempt tracking and account lockout
-- Trusted device management
-- Security violation alerts with severity levels
-
-**Security API Endpoints:**
-- `GET /api/security/users/:userId/settings` - Get user security settings
-- `PATCH /api/security/users/:userId/settings` - Update user security settings
-- `GET /api/security/users/:userId/locked` - Check if user is locked
-- `GET /api/security/sessions` - Get current user's active sessions
-- `GET /api/security/users/:userId/sessions` - Get user's sessions (admin)
-- `DELETE /api/security/sessions/:sessionId` - Invalidate a session
-- `DELETE /api/security/users/:userId/sessions` - Invalidate all user sessions
-- `GET /api/security/alerts` - Get security violation alerts
-- `GET /api/security/alerts/unresolved-count` - Get unresolved alert count
-- `PATCH /api/security/alerts/:id/resolve` - Resolve a security alert
-- `GET /api/security/permission-logs` - Get permission check logs
-- `GET /api/security/users/:userId/denied-permissions` - Get denied permissions summary
-- `GET /api/rbac/role-templates` - Get all role templates
-- `GET /api/rbac/role-templates/:id` - Get role template by ID
-- `POST /api/rbac/role-templates` - Create role template
-- `PATCH /api/rbac/role-templates/:id` - Update role template
-- `DELETE /api/rbac/role-templates/:id` - Delete role template
-- `POST /api/rbac/roles/:roleId/apply-template/:templateId` - Apply template to role
-
-- **P&L Dashboard Enhancements**: Added advanced financial KPIs to `financial_metrics` table:
-  - `ebitda` - Earnings Before Interest, Taxes, Depreciation, and Amortization
-  - `ebitda_margin_pct` - EBITDA as percentage of revenue
-  - `contribution_margin` - Revenue minus variable costs (COGS)
-  - `contribution_margin_pct` - Contribution margin as percentage of revenue
-  - `labor_productivity` - Gross profit per salary expense ratio
-  - `revenue_per_employee` - Total revenue divided by number of active employees
-  - `employee_count` - Number of active employees in the branch
-  - `operating_profit` - Gross profit minus operating expenses
-  - `operating_margin_pct` - Operating profit as percentage of revenue
-- **SQL Migration File**: `supabase_pnl_new_kpis.sql` - Execute in Supabase SQL Editor before deploying
-- **Auto-Import Feature**: API endpoints for importing sales data from cashier journals:
-  - `POST /api/financials/periods/:id/import-sales` - Import sales from cashier journals
-  - `GET /api/financials/periods/:id/cashier-summary` - Preview cashier data before import
-  - `GET /api/financials/periods/:id/comparison` - Month-over-month and year-over-year comparisons
-- **PDF/Excel Export**: Professional reports with Butter Bakery branding (gold theme)
-- **Improved Data Entry UI**: Tabbed interface for Sales, COGS, OpEx, and Fixed Costs
-
-- **Marketing Influencers Enhancement**: Added new fields to `marketing_influencers` table:
-  - `account_url` - Social media account URL
-  - `coverage_url` - Coverage/collaboration URL
-  - `follower_count_text` - Original follower count text (e.g., "133k")
-  - `view_rating` - View rating (1-100)
-  - `bank_account_number` - Bank account number for payments
-  - `bank_account_holder` - Bank account holder name
-  - `bank_name` - Bank name
-- **Data Import**: Added Python script `scripts/import-influencers.py` for importing influencer data from Excel files
-- **Imported 83 influencers** from Riyadh region with full details including bank information and social media metrics
-
-### Previous Schema Changes (2026-01-05)
-- **Branch Employee Integration**: Added `linkedUserId` and `defaultScheduleTemplateId` to `branch_employees` table
-- **Attendance Integration**: Added `branchEmployeeId` foreign key to `attendance_records`, `employee_schedules`, and `timesheet_reports`
-- **API Endpoints**: 
-  - `PUT /api/branch-employees/:id/link-user` - Link employee to user account
-  - `GET /api/branch-employees/:id/attendance` - Get employee attendance records
-  - `GET /api/branch-employees/:id/timesheets` - Get employee timesheet reports
-  - `GET /api/branch-employees/:id/schedules` - Get employee work schedules
-  - `GET /api/branch-employees/by-user/:userId` - Find employee by linked user
-
-### Number Formatting
-- All numbers display in English numerals (en-US locale)
-- Currency format: `formatCurrency` uses comma separators with "ريال" suffix
-- Number format: `formatNumber` uses comma separators for thousands
+- **SMS/WhatsApp Notifications**: Notification queue system ready for Twilio integration.
+- **Data Import**: Excel import functionality via API endpoint (`/api/import-jobs`).
