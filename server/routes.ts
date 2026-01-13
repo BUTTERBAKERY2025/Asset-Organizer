@@ -6818,9 +6818,11 @@ export async function registerRoutes(
         const orderItems = productionItems.filter(i => i.orderId === order.id);
         for (const item of orderItems) {
           const key = `${order.targetBranchId}|${order.startDate}|${item.productName}`;
-          const existing = productionByKey.get(key) || { quantity: 0, value: 0, category: item.category };
-          existing.quantity += item.producedQuantity || item.plannedQuantity || 0;
-          existing.value += (item.producedQuantity || item.plannedQuantity || 0) * (item.unitPrice || 0);
+          const existing = productionByKey.get(key) || { quantity: 0, value: 0, category: item.productCategory };
+          // Use producedQuantity if available, otherwise use targetQuantity
+          const qty = item.producedQuantity || item.targetQuantity || 0;
+          existing.quantity += qty;
+          existing.value += qty * (item.unitPrice || 0);
           productionByKey.set(key, existing);
         }
       }
