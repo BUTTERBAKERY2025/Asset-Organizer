@@ -6939,18 +6939,36 @@ export async function registerRoutes(
       
       const recommendedProducts = plan.recommendedProducts as any[] || [];
       
-      const formatNumber = (num: number) => new Intl.NumberFormat("ar-SA").format(num);
+      // Debug log to see actual data
+      console.log('PDF Export - Products sample:', JSON.stringify(recommendedProducts.slice(0, 2), null, 2));
       
-      const productRows = recommendedProducts.map((p: any, i: number) => `
+      // Use English locale for numbers
+      const formatNumber = (num: number) => {
+        if (num === null || num === undefined || isNaN(num)) return '0';
+        return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+      };
+      
+      const formatInt = (num: number) => {
+        if (num === null || num === undefined || isNaN(num)) return '0';
+        return new Intl.NumberFormat("en-US").format(Math.round(num));
+      };
+      
+      const productRows = recommendedProducts.map((p: any, i: number) => {
+        const qty = Number(p.quantity) || 0;
+        const price = Number(p.unitPrice) || 0;
+        const total = Number(p.totalPrice || p.estimatedValue) || 0;
+        const cat = p.category || p.systemCategory || 'عام';
+        
+        return `
         <tr style="background-color: ${i % 2 === 0 ? '#fff' : '#f9fafb'}">
           <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${i + 1}</td>
           <td style="padding: 8px; text-align: right; border: 1px solid #e5e7eb;">${p.productName || ''}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${p.category || 'عام'}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${p.quantity || 0}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${formatNumber(p.unitPrice || 0)}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb; font-weight: bold;">${formatNumber((p.totalPrice || p.estimatedValue) || 0)}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${cat}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${formatInt(qty)}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${formatNumber(price)}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb; font-weight: bold;">${formatNumber(total)}</td>
         </tr>
-      `).join('');
+      `;}).join('');
       
       const html = `
 <!DOCTYPE html>
@@ -7000,11 +7018,11 @@ export async function registerRoutes(
       <div class="label">مستوى الثقة</div>
     </div>
     <div class="summary-item green">
-      <div class="value">${formatNumber(plan.totalEstimatedValue || 0)} ر.س</div>
+      <div class="value">${formatNumber(Number(plan.totalEstimatedValue) || 0)} SAR</div>
       <div class="label">القيمة المتوقعة</div>
     </div>
     <div class="summary-item amber">
-      <div class="value">${formatNumber(plan.totalEstimatedCost || 0)} ر.س</div>
+      <div class="value">${formatNumber(Number(plan.totalEstimatedCost) || 0)} SAR</div>
       <div class="label">التكلفة المتوقعة</div>
     </div>
     <div class="summary-item blue">
@@ -7029,9 +7047,9 @@ export async function registerRoutes(
       ${productRows}
       <tr class="total-row">
         <td colspan="3" style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">الإجمالي</td>
-        <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">${recommendedProducts.reduce((sum, p) => sum + (p.quantity || 0), 0)}</td>
+        <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">${formatInt(recommendedProducts.reduce((sum: number, p: any) => sum + (Number(p.quantity) || 0), 0))}</td>
         <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">-</td>
-        <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">${formatNumber(plan.totalEstimatedValue || 0)} ر.س</td>
+        <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">${formatNumber(Number(plan.totalEstimatedValue) || 0)} SAR</td>
       </tr>
     </tbody>
   </table>
