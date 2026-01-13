@@ -6609,6 +6609,12 @@ export async function registerRoutes(
             return res.status(400).json({ error: "الملف فارغ أو بتنسيق غير صحيح" });
           }
           
+          // Log first row columns for debugging
+          const firstRow = data[0];
+          const columns = Object.keys(firstRow);
+          console.log("Excel columns detected:", columns);
+          console.log("First row sample:", firstRow);
+          
           // Create upload record
           const [uploadRecord] = await db.insert(comparisonUploads).values({
             branchId,
@@ -6628,13 +6634,27 @@ export async function registerRoutes(
           let maxDate: string | null = null;
           
           for (const row of data) {
-            const dateValue = row["Date"] || row["التاريخ"] || row["date"] || row["تاريخ"];
-            const productName = row["Product Name"] || row["اسم المنتج"] || row["product"] || row["المنتج"] || row["Product"];
-            const quantity = parseInt(row["Quantity"] || row["الكمية"] || row["qty"] || row["كمية"] || "0", 10);
-            const salesValue = parseFloat(row["Sales Value"] || row["قيمة المبيعات"] || row["value"] || row["القيمة"] || "0");
-            const category = row["Category"] || row["الفئة"] || row["category"] || null;
+            // Flexible column detection for various Foodics export formats
+            const dateValue = row["Date"] || row["التاريخ"] || row["date"] || row["تاريخ"] || 
+                              row["Business Date"] || row["تاريخ العمل"] || row["Order Date"] || row["تاريخ الطلب"] ||
+                              row["Created Date"] || row["تاريخ الإنشاء"] || row["Day"] || row["اليوم"];
+            const productName = row["Product Name"] || row["اسم المنتج"] || row["product"] || row["المنتج"] || row["Product"] ||
+                                row["Item Name"] || row["اسم الصنف"] || row["Item"] || row["الصنف"] || row["Name"] || row["الاسم"] ||
+                                row["Product"] || row["SKU Name"] || row["اسم المنتج (SKU)"];
+            const quantity = parseInt(row["Quantity"] || row["الكمية"] || row["qty"] || row["كمية"] || 
+                                      row["Qty"] || row["Count"] || row["العدد"] || row["Sold Quantity"] || row["الكمية المباعة"] ||
+                                      row["Total Quantity"] || row["إجمالي الكمية"] || "0", 10);
+            const salesValue = parseFloat(row["Sales Value"] || row["قيمة المبيعات"] || row["value"] || row["القيمة"] || 
+                                          row["Total"] || row["الإجمالي"] || row["Amount"] || row["المبلغ"] ||
+                                          row["Net Sales"] || row["صافي المبيعات"] || row["Gross Sales"] || row["إجمالي المبيعات"] ||
+                                          row["Revenue"] || row["الإيراد"] || "0");
+            const category = row["Category"] || row["الفئة"] || row["category"] || 
+                             row["Product Category"] || row["فئة المنتج"] || row["Menu Category"] || row["فئة القائمة"] || null;
             
-            if (!productName || !dateValue) continue;
+            if (!productName || !dateValue) {
+              console.log("Skipping row - missing productName or dateValue:", { productName, dateValue, row });
+              continue;
+            }
             
             // Parse date
             let salesDate: string;
