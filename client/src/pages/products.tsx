@@ -17,13 +17,18 @@ import { ExportButtons } from "@/components/export-buttons";
 import type { Product } from "@shared/schema";
 
 const PRODUCT_CATEGORIES = [
+  { value: "إفطار", label: "إفطار" },
   { value: "مخبوزات", label: "مخبوزات" },
-  { value: "مشروبات", label: "مشروبات" },
   { value: "حلويات", label: "حلويات" },
   { value: "بيتزا", label: "بيتزا" },
-  { value: "سلطات ووجبات", label: "سلطات ووجبات" },
-  { value: "هدايا وإكسسوارات", label: "هدايا وإكسسوارات" },
+  { value: "باريستا", label: "باريستا" },
+  { value: "تجمعات", label: "تجمعات" },
   { value: "أخرى", label: "أخرى" },
+];
+
+const PRODUCT_TYPES = [
+  { value: "finish", label: "نهائي (للبيع)", color: "bg-green-100 text-green-700" },
+  { value: "inventory", label: "مخزني (خام)", color: "bg-blue-100 text-blue-700" },
 ];
 
 const UNITS = [
@@ -38,6 +43,7 @@ const UNITS = [
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [productTypeFilter, setProductTypeFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -47,6 +53,7 @@ export default function ProductsPage() {
     name: "",
     sku: "",
     category: "",
+    productType: "finish",
     unit: "قطعة",
     basePrice: "",
     priceExclVat: "",
@@ -102,7 +109,7 @@ export default function ProductsPage() {
   });
 
   const resetForm = () => {
-    setFormData({ name: "", sku: "", category: "", unit: "قطعة", basePrice: "", priceExclVat: "", vatAmount: "", vatRate: "0.15" });
+    setFormData({ name: "", sku: "", category: "", productType: "finish", unit: "قطعة", basePrice: "", priceExclVat: "", vatAmount: "", vatRate: "0.15" });
     setEditingProduct(null);
     setIsDialogOpen(false);
   };
@@ -112,6 +119,7 @@ export default function ProductsPage() {
       name: formData.name,
       sku: formData.sku,
       category: formData.category,
+      productType: formData.productType,
       unit: formData.unit,
       basePrice: formData.basePrice ? parseFloat(formData.basePrice) : null,
       priceExclVat: formData.priceExclVat ? parseFloat(formData.priceExclVat) : null,
@@ -133,6 +141,7 @@ export default function ProductsPage() {
       name: product.name,
       sku: (product as any).sku || "",
       category: product.category,
+      productType: (product as any).productType || "finish",
       unit: product.unit || "قطعة",
       basePrice: product.basePrice?.toString() || "",
       priceExclVat: (product as any).priceExclVat?.toString() || "",
@@ -159,22 +168,31 @@ export default function ProductsPage() {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ((p as any).sku || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === "all" || p.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesType = productTypeFilter === "all" || (p as any).productType === productTypeFilter;
+    return matchesSearch && matchesCategory && matchesType;
   });
 
   const paginatedProducts = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const getCategoryBadgeColor = (category: string) => {
     const colors: Record<string, string> = {
+      "إفطار": "bg-orange-100 text-orange-700",
       "مخبوزات": "bg-amber-100 text-amber-700",
-      "مشروبات": "bg-blue-100 text-blue-700",
       "حلويات": "bg-pink-100 text-pink-700",
       "بيتزا": "bg-red-100 text-red-700",
-      "سلطات ووجبات": "bg-green-100 text-green-700",
-      "هدايا وإكسسوارات": "bg-purple-100 text-purple-700",
+      "باريستا": "bg-blue-100 text-blue-700",
+      "تجمعات": "bg-purple-100 text-purple-700",
       "أخرى": "bg-gray-100 text-gray-700",
     };
     return colors[category] || "bg-gray-100 text-gray-700";
+  };
+
+  const getProductTypeBadgeColor = (type: string) => {
+    return type === "finish" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700";
+  };
+
+  const getProductTypeLabel = (type: string) => {
+    return type === "finish" ? "نهائي" : "مخزني";
   };
 
   const categoryCounts = PRODUCT_CATEGORIES.map(cat => ({
@@ -186,6 +204,7 @@ export default function ProductsPage() {
     { header: "رمز SKU", key: "sku", width: 12 },
     { header: "اسم المنتج", key: "name", width: 35 },
     { header: "الفئة", key: "category", width: 15 },
+    { header: "نوع الصنف", key: "productTypeLabel", width: 12 },
     { header: "الوحدة", key: "unit", width: 10 },
     { header: "السعر بدون ضريبة", key: "priceExclVat", width: 15 },
     { header: "قيمة الضريبة", key: "vatAmount", width: 12 },
@@ -198,6 +217,7 @@ export default function ProductsPage() {
     priceExclVat: (p as any).priceExclVat || 0,
     vatAmount: (p as any).vatAmount || 0,
     vatRatePercent: `${((p as any).vatRate || 0.15) * 100}%`,
+    productTypeLabel: getProductTypeLabel((p as any).productType || "finish"),
   }));
 
   return (
@@ -261,6 +281,19 @@ export default function ProductsPage() {
                         <SelectContent className="max-h-60 overflow-y-auto">
                           {PRODUCT_CATEGORIES.map(cat => (
                             <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>نوع الصنف *</Label>
+                      <Select value={formData.productType} onValueChange={v => setFormData({ ...formData, productType: v })}>
+                        <SelectTrigger data-testid="select-product-type" className="h-11 sm:h-10">
+                          <SelectValue placeholder="اختر النوع" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60 overflow-y-auto">
+                          {PRODUCT_TYPES.map(type => (
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -336,6 +369,27 @@ export default function ProductsPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-sm text-muted-foreground">نوع الصنف:</span>
+          <Badge
+            variant={productTypeFilter === "all" ? "default" : "outline"}
+            className="cursor-pointer px-3 py-1"
+            onClick={() => { setProductTypeFilter("all"); setCurrentPage(1); }}
+          >
+            الكل
+          </Badge>
+          {PRODUCT_TYPES.map(type => (
+            <Badge
+              key={type.value}
+              variant={productTypeFilter === type.value ? "default" : "outline"}
+              className={`cursor-pointer px-3 py-1 ${productTypeFilter === type.value ? "" : type.color}`}
+              onClick={() => { setProductTypeFilter(type.value); setCurrentPage(1); }}
+            >
+              {type.label} ({products.filter(p => (p as any).productType === type.value).length})
+            </Badge>
+          ))}
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Badge
             variant={categoryFilter === "all" ? "default" : "outline"}
@@ -369,11 +423,11 @@ export default function ProductsPage() {
                   data-testid="input-search"
                 />
               </div>
-              {(searchTerm || categoryFilter !== "all") && (
+              {(searchTerm || categoryFilter !== "all" || productTypeFilter !== "all") && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => { setSearchTerm(""); setCategoryFilter("all"); setCurrentPage(1); }}
+                  onClick={() => { setSearchTerm(""); setCategoryFilter("all"); setProductTypeFilter("all"); setCurrentPage(1); }}
                   className="gap-1 h-11 sm:h-9"
                 >
                   <X className="w-4 h-4" />
@@ -398,6 +452,7 @@ export default function ProductsPage() {
                         <th className="p-3 text-right font-semibold">SKU</th>
                         <th className="p-3 text-right font-semibold">اسم المنتج</th>
                         <th className="p-3 text-right font-semibold">الفئة</th>
+                        <th className="p-3 text-right font-semibold">النوع</th>
                         <th className="p-3 text-right font-semibold">الوحدة</th>
                         <th className="p-3 text-right font-semibold">السعر بدون ضريبة</th>
                         <th className="p-3 text-right font-semibold">الضريبة</th>
@@ -408,7 +463,7 @@ export default function ProductsPage() {
                     <tbody className="divide-y">
                       {paginatedProducts.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                          <td colSpan={10} className="p-8 text-center text-muted-foreground">
                             لا توجد منتجات مطابقة للبحث
                           </td>
                         </tr>
@@ -427,6 +482,11 @@ export default function ProductsPage() {
                             <td className="p-3">
                               <Badge className={getCategoryBadgeColor(product.category)} variant="secondary">
                                 {product.category}
+                              </Badge>
+                            </td>
+                            <td className="p-3">
+                              <Badge className={getProductTypeBadgeColor((product as any).productType || "finish")} variant="secondary">
+                                {getProductTypeLabel((product as any).productType || "finish")}
                               </Badge>
                             </td>
                             <td className="p-3 text-muted-foreground">{product.unit}</td>

@@ -1228,6 +1228,7 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   sku: text("sku"), // رمز المنتج
   category: text("category").notNull(), // bread, pastry, cake, sandwich, etc.
+  productType: text("product_type").default("finish"), // نوع الصنف: finish (نهائي) أو inventory (مخزني)
   unit: text("unit").default("قطعة"), // قطعة، كيلو، صينية
   basePrice: doublePrecision("base_price"), // السعر شامل الضريبة
   priceExclVat: doublePrecision("price_excl_vat"), // السعر بدون ضريبة
