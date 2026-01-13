@@ -7260,6 +7260,9 @@ export async function registerRoutes(
       // Get all products for matching
       const products = await storage.getAllProducts();
       
+      // Calculate source sales value from historical data
+      const sourceSalesValue = totalHistoricalRevenue;
+      
       // Prepare order data
       const orderNumber = `FCST-${Date.now().toString(36).toUpperCase()}`;
       const orderData = {
@@ -7274,7 +7277,8 @@ export async function registerRoutes(
         priority: 'normal' as const,
         status: 'draft' as const,
         targetSalesValue: targetSalesNum,
-        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('ar-SA')} ريال`,
+        sourceSalesValue: sourceSalesValue,
+        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('ar-SA')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('ar-SA')} ريال`,
         totalItems: forecastItems.length,
         completedItems: 0
       };
@@ -7392,6 +7396,7 @@ export async function registerRoutes(
           productName: item.productName,
           productCategory: item.productCategory || product?.category || null,
           targetQuantity: item.forecastedQuantity,
+          originalQuantity: item.historicalQuantity,
           producedQuantity: 0,
           wastedQuantity: 0,
           unitPrice: Math.round(unitPrice * 100) / 100,
