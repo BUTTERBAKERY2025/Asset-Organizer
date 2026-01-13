@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -189,8 +190,9 @@ export default function ProductionComparisonReports() {
   }, [topWaste]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-6" dir="rtl">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-6" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-amber-900" data-testid="text-page-title">تقارير مقارنة الإنتاج</h1>
@@ -831,7 +833,8 @@ export default function ProductionComparisonReports() {
             )}
           </TabsContent>
         </Tabs>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
