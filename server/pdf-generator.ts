@@ -1012,10 +1012,13 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
   // Group employees by job title
   const sortedEmployees = [...data.employees].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle, 'ar'));
   
-  // Count shift types
+  // Count shift types and build job title analytics
   let morningCount = 0;
   let eveningCount = 0;
   let nightCount = 0;
+  
+  // Analytics: Per job title shift distribution
+  const jobTitleAnalytics: Map<string, { morning: number; evening: number; night: number; total: number }> = new Map();
   
   let currentJobTitle = '';
   let seqNum = 0;
@@ -1032,9 +1035,19 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     const shiftInfo = firstWorkDay ? getShiftType(firstWorkDay.startTime!) : { type: '-', class: '' };
     
     // Count shift types
-    if (shiftInfo.type === 'صباحي') morningCount++;
-    else if (shiftInfo.type === 'مسائي') eveningCount++;
-    else if (shiftInfo.type === 'ليلي') nightCount++;
+    if (shiftInfo.type.includes('صباحي')) morningCount++;
+    else if (shiftInfo.type.includes('مسائي')) eveningCount++;
+    else if (shiftInfo.type.includes('ليلي')) nightCount++;
+    
+    // Build job title analytics
+    if (!jobTitleAnalytics.has(emp.jobTitle)) {
+      jobTitleAnalytics.set(emp.jobTitle, { morning: 0, evening: 0, night: 0, total: 0 });
+    }
+    const jobStats = jobTitleAnalytics.get(emp.jobTitle)!;
+    jobStats.total++;
+    if (shiftInfo.type.includes('صباحي')) jobStats.morning++;
+    else if (shiftInfo.type.includes('مسائي')) jobStats.evening++;
+    else if (shiftInfo.type.includes('ليلي')) jobStats.night++;
     
     const dayCells = emp.days.map(d => {
       if (d.isOff) {
@@ -1061,6 +1074,31 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
   
   // Store counts for summary
   const shiftSummary = { morning: morningCount, evening: eveningCount, night: nightCount };
+  
+  // Build job title analytics HTML
+  const analyticsRows = Array.from(jobTitleAnalytics.entries()).map(([title, stats]) => {
+    const total = stats.total || 1;
+    const mPct = Math.round((stats.morning / total) * 100);
+    const ePct = Math.round((stats.evening / total) * 100);
+    const nPct = Math.round((stats.night / total) * 100);
+    
+    return `
+      <div class="analytics-row">
+        <div class="analytics-title">${title}</div>
+        <div class="analytics-badges">
+          ${stats.morning > 0 ? `<span class="badge-morning">${stats.morning}</span>` : ''}
+          ${stats.evening > 0 ? `<span class="badge-evening">${stats.evening}</span>` : ''}
+          ${stats.night > 0 ? `<span class="badge-night">${stats.night}</span>` : ''}
+          <span class="badge-total">${stats.total}</span>
+        </div>
+        <div class="analytics-bar">
+          ${stats.morning > 0 ? `<div class="bar-morning" style="width: ${mPct}%"></div>` : ''}
+          ${stats.evening > 0 ? `<div class="bar-evening" style="width: ${ePct}%"></div>` : ''}
+          ${stats.night > 0 ? `<div class="bar-night" style="width: ${nPct}%"></div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
 
   const totalOffDays = data.employees.reduce((sum, e) => sum + e.days.filter(d => d.isOff).length, 0);
   // Employees who have NO off days this week
@@ -1228,6 +1266,123 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
     .no-off-badge { background: #fee2e2; padding: 2px 6px; border-radius: 3px; }
     .no-off-badge strong { color: #dc2626; }
     
+    /* Job Title Analytics Section */
+    .analytics-section {
+      margin-top: 10px;
+      padding: 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+    }
+    
+    .analytics-header {
+      font-size: 9px;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 4px;
+    }
+    
+    .analytics-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    
+    .analytics-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      font-size: 7px;
+    }
+    
+    .analytics-title {
+      font-weight: 600;
+      color: #374151;
+      min-width: 70px;
+    }
+    
+    .analytics-badges {
+      display: flex;
+      gap: 3px;
+    }
+    
+    .badge-morning {
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      font-size: 7px;
+    }
+    
+    .badge-evening {
+      background: #fef3c7;
+      color: #92400e;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      font-size: 7px;
+    }
+    
+    .badge-night {
+      background: #e0e7ff;
+      color: #3730a3;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      font-size: 7px;
+    }
+    
+    .badge-total {
+      background: #374151;
+      color: white;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      font-size: 7px;
+    }
+    
+    .analytics-bar {
+      display: flex;
+      width: 50px;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    
+    .bar-morning { background: #3b82f6; }
+    .bar-evening { background: #f59e0b; }
+    .bar-night { background: #6366f1; }
+    
+    .legend-row {
+      display: flex;
+      gap: 10px;
+      font-size: 7px;
+      color: #6b7280;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+    }
+    
     .signatures-compact {
       display: flex;
       gap: 30px;
@@ -1275,6 +1430,21 @@ export async function generateWeeklySchedulePdf(data: WeeklySchedulePdfData): Pr
       ${rows}
     </tbody>
   </table>
+  
+  <!-- Job Title Analytics Section -->
+  <div class="analytics-section">
+    <div class="analytics-header">
+      <span>📊 توزيع الورديات حسب الوظيفة / Shift Distribution by Job Title</span>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background: #3b82f6;"></div>صباحي AM</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #f59e0b;"></div>مسائي PM</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #6366f1;"></div>ليلي Night</div>
+      </div>
+    </div>
+    <div class="analytics-grid">
+      ${analyticsRows}
+    </div>
+  </div>
   
   <div class="footer-section">
     <div class="summary-compact">
