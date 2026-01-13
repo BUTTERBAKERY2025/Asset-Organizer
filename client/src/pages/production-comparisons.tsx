@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Info,
   Tag,
+  PieChart as PieChartIcon,
 } from "lucide-react";
 import {
   Card,
@@ -455,6 +456,15 @@ export default function ProductionComparisonsPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => navigate("/production-comparison-reports")}
+              className="gap-2"
+              data-testid="button-waste-reports"
+            >
+              <PieChartIcon className="h-4 w-4" />
+              تقارير تحليل الهدر
+            </Button>
             <Button
               variant="outline"
               onClick={() => navigate("/product-category-management")}
