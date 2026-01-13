@@ -47,6 +47,7 @@ interface OrderItem {
   productName: string;
   category?: string;
   targetQuantity: number;
+  originalQuantity?: number;
   producedQuantity: number;
   unit: string;
   unitPrice: number;
@@ -114,6 +115,7 @@ export default function AdvancedProductionOrderDetailsPage() {
       productName: item.productName || item.product_name || "",
       category: item.category || item.productCategory || item.product_category || "",
       targetQuantity: Number(item.targetQuantity || item.target_quantity || item.quantity) || 0,
+      originalQuantity: Number(item.originalQuantity || item.original_quantity) || 0,
       producedQuantity: Number(item.producedQuantity || item.produced_quantity) || 0,
       unit: item.unit || "قطعة",
       unitPrice: Number(item.unitPrice || item.unit_price) || 0,
@@ -214,14 +216,23 @@ export default function AdvancedProductionOrderDetailsPage() {
           notes: order.notes || '',
           estimatedCost: order.estimatedCost || 0,
           actualCost: order.actualCost || 0,
-          items: items.map((item: OrderItem, index: number) => ({
-            productName: item.productName,
-            category: item.category || 'عام',
-            targetQuantity: item.targetQuantity || 0,
-            producedQuantity: item.producedQuantity || 0,
-            unitPrice: item.unitPrice || 0,
-            total: (item.targetQuantity || 0) * (item.unitPrice || 0),
-          })),
+          targetSalesValue: order.targetSalesValue || 0,
+          sourceSalesValue: order.sourceSalesValue || 0,
+          items: items.map((item: OrderItem) => {
+            const originalQty = item.originalQuantity || 0;
+            const targetQty = item.targetQuantity || 0;
+            const increaseQty = originalQty > 0 ? targetQty - originalQty : 0;
+            return {
+              productName: item.productName,
+              category: item.category || 'عام',
+              targetQuantity: targetQty,
+              producedQuantity: item.producedQuantity || 0,
+              unitPrice: item.unitPrice || 0,
+              total: targetQty * (item.unitPrice || 0),
+              originalQuantity: originalQty,
+              increaseQuantity: increaseQty > 0 ? increaseQty : 0,
+            };
+          }),
         }),
       });
       if (!response.ok) throw new Error("Failed to generate PDF");

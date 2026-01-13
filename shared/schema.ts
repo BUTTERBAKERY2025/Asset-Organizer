@@ -2494,6 +2494,7 @@ export const advancedProductionOrders = pgTable("advanced_production_orders", {
   startDate: text("start_date").notNull(), // تاريخ البداية
   endDate: text("end_date").notNull(), // تاريخ النهاية (نفس تاريخ البداية للأوامر اليومية)
   targetSalesValue: real("target_sales_value"), // قيمة المبيعات المستهدفة (للذكاء الاصطناعي)
+  sourceSalesValue: real("source_sales_value"), // قيمة المبيعات من الملف المصدر
   estimatedCost: real("estimated_cost").default(0),
   actualCost: real("actual_cost").default(0),
   totalItems: integer("total_items").default(0),
@@ -2534,6 +2535,7 @@ export const productionOrderItems = pgTable("production_order_items", {
   productName: text("product_name").notNull(),
   productCategory: text("product_category"),
   targetQuantity: integer("target_quantity").notNull(),
+  originalQuantity: integer("original_quantity"), // الكمية الأصلية من الملف المصدر
   producedQuantity: integer("produced_quantity").default(0),
   wastedQuantity: integer("wasted_quantity").default(0),
   unitPrice: real("unit_price").default(0), // سعر الوحدة
