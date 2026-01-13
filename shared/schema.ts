@@ -1226,6 +1226,7 @@ export type InsertAccountingExport = z.infer<
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  nameEn: text("name_en"), // الاسم بالإنجليزية
   sku: text("sku"), // رمز المنتج
   category: text("category").notNull(), // bread, pastry, cake, sandwich, etc.
   productType: text("product_type").default("finish"), // نوع الصنف: finish (نهائي) أو inventory (مخزني)

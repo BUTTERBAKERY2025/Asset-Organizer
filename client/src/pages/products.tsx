@@ -51,6 +51,7 @@ export default function ProductsPage() {
 
   const [formData, setFormData] = useState({
     name: "",
+    nameEn: "",
     sku: "",
     category: "",
     productType: "finish",
@@ -109,7 +110,7 @@ export default function ProductsPage() {
   });
 
   const resetForm = () => {
-    setFormData({ name: "", sku: "", category: "", productType: "finish", unit: "قطعة", basePrice: "", priceExclVat: "", vatAmount: "", vatRate: "0.15" });
+    setFormData({ name: "", nameEn: "", sku: "", category: "", productType: "finish", unit: "قطعة", basePrice: "", priceExclVat: "", vatAmount: "", vatRate: "0.15" });
     setEditingProduct(null);
     setIsDialogOpen(false);
   };
@@ -117,6 +118,7 @@ export default function ProductsPage() {
   const handleSubmit = () => {
     const data = {
       name: formData.name,
+      nameEn: formData.nameEn,
       sku: formData.sku,
       category: formData.category,
       productType: formData.productType,
@@ -139,6 +141,7 @@ export default function ProductsPage() {
     setEditingProduct(product);
     setFormData({
       name: product.name,
+      nameEn: (product as any).nameEn || "",
       sku: (product as any).sku || "",
       category: product.category,
       productType: (product as any).productType || "finish",
@@ -202,7 +205,8 @@ export default function ProductsPage() {
 
   const exportColumns = [
     { header: "رمز SKU", key: "sku", width: 12 },
-    { header: "اسم المنتج", key: "name", width: 35 },
+    { header: "اسم المنتج (عربي)", key: "name", width: 30 },
+    { header: "Product Name (English)", key: "nameEn", width: 30 },
     { header: "الفئة", key: "category", width: 15 },
     { header: "نوع الصنف", key: "productTypeLabel", width: 12 },
     { header: "الوحدة", key: "unit", width: 10 },
@@ -214,6 +218,7 @@ export default function ProductsPage() {
 
   const exportData = filteredProducts.map(p => ({
     ...p,
+    nameEn: (p as any).nameEn || "",
     priceExclVat: (p as any).priceExclVat || 0,
     vatAmount: (p as any).vatAmount || 0,
     vatRatePercent: `${((p as any).vatRate || 0.15) * 100}%`,
@@ -253,14 +258,25 @@ export default function ProductsPage() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <Label>اسم المنتج *</Label>
+                    <div>
+                      <Label>اسم المنتج (عربي) *</Label>
                       <Input
                         value={formData.name}
                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                         placeholder="مثال: كرواسون شوكولاته"
                         data-testid="input-product-name"
                         className="h-11 sm:h-10"
+                      />
+                    </div>
+                    <div>
+                      <Label>Product Name (English)</Label>
+                      <Input
+                        value={formData.nameEn}
+                        onChange={e => setFormData({ ...formData, nameEn: e.target.value })}
+                        placeholder="e.g. Chocolate Croissant"
+                        data-testid="input-product-name-en"
+                        className="h-11 sm:h-10"
+                        dir="ltr"
                       />
                     </div>
                     <div>
