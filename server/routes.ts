@@ -6939,97 +6939,134 @@ export async function registerRoutes(
       
       const recommendedProducts = plan.recommendedProducts as any[] || [];
       
-      // Generate PDF using pdfmake
-      const pdfMake = await import("pdfmake/build/pdfmake");
-      const pdfFonts = await import("pdfmake/build/vfs_fonts");
+      const formatNumber = (num: number) => new Intl.NumberFormat("ar-SA").format(num);
       
-      // Set fonts
-      (pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs;
+      const productRows = recommendedProducts.map((p: any, i: number) => `
+        <tr style="background-color: ${i % 2 === 0 ? '#fff' : '#f9fafb'}">
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${i + 1}</td>
+          <td style="padding: 8px; text-align: right; border: 1px solid #e5e7eb;">${p.productName || ''}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${p.category || 'عام'}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${p.quantity || 0}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb;">${formatNumber(p.unitPrice || 0)}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #e5e7eb; font-weight: bold;">${formatNumber((p.totalPrice || p.estimatedValue) || 0)}</td>
+        </tr>
+      `).join('');
       
-      const docDefinition: any = {
-        pageSize: 'A4',
-        pageOrientation: 'portrait',
-        pageMargins: [40, 60, 40, 60],
-        defaultStyle: {
-          font: 'Helvetica',
-          alignment: 'right'
-        },
-        content: [
-          { text: 'خطة الإنتاج الذكية', style: 'header', alignment: 'center' },
-          { text: '\n' },
-          {
-            style: 'tableExample',
-            table: {
-              widths: ['*', '*'],
-              body: [
-                [{ text: branchName, bold: true }, { text: 'الفرع', alignment: 'left' }],
-                [{ text: planDateFormatted, bold: true }, { text: 'التاريخ', alignment: 'left' }],
-                [{ text: `${plan.targetSalesValue?.toLocaleString()} ر.س`, bold: true }, { text: 'المبيعات المستهدفة', alignment: 'left' }],
-                [{ text: `${plan.totalEstimatedValue?.toLocaleString()} ر.س`, bold: true }, { text: 'القيمة المتوقعة', alignment: 'left' }],
-                [{ text: `${plan.totalEstimatedCost?.toLocaleString()} ر.س`, bold: true }, { text: 'التكلفة المتوقعة', alignment: 'left' }],
-                [{ text: `${(plan.profitMargin || 0).toFixed(1)}%`, bold: true }, { text: 'هامش الربح', alignment: 'left' }],
-                [{ text: `${((plan.confidenceScore || 0) * 100).toFixed(0)}%`, bold: true }, { text: 'مستوى الثقة', alignment: 'left' }]
-              ]
-            },
-            layout: 'lightHorizontalLines'
-          },
-          { text: '\n\n' },
-          { text: `المنتجات الموصى بها (${recommendedProducts.length})`, style: 'subheader' },
-          { text: '\n' },
-          {
-            table: {
-              headerRows: 1,
-              widths: ['*', 'auto', 'auto', 'auto', 'auto'],
-              body: [
-                [
-                  { text: 'المنتج', style: 'tableHeader' },
-                  { text: 'التصنيف', style: 'tableHeader' },
-                  { text: 'الكمية', style: 'tableHeader' },
-                  { text: 'السعر', style: 'tableHeader' },
-                  { text: 'الإجمالي', style: 'tableHeader' }
-                ],
-                ...recommendedProducts.map((p: any) => [
-                  { text: p.productName || '', alignment: 'right' },
-                  { text: p.category || 'عام', alignment: 'center' },
-                  { text: p.quantity?.toString() || '0', alignment: 'center' },
-                  { text: `${(p.unitPrice || 0).toFixed(2)}`, alignment: 'center' },
-                  { text: `${((p.totalPrice || p.estimatedValue) || 0).toFixed(2)}`, alignment: 'center' }
-                ])
-              ]
-            },
-            layout: 'lightHorizontalLines'
-          }
-        ],
-        styles: {
-          header: {
-            fontSize: 18,
-            bold: true,
-            margin: [0, 0, 0, 10]
-          },
-          subheader: {
-            fontSize: 14,
-            bold: true,
-            margin: [0, 10, 0, 5]
-          },
-          tableHeader: {
-            bold: true,
-            fontSize: 10,
-            color: 'black',
-            fillColor: '#f3f4f6'
-          },
-          tableExample: {
-            margin: [0, 5, 0, 15]
-          }
-        }
-      };
+      const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 30px; font-size: 11px; }
+    .header { text-align: center; margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border-radius: 10px; color: white; }
+    .header h1 { font-size: 24px; margin-bottom: 5px; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+    .summary-item { padding: 15px; border-radius: 8px; text-align: center; }
+    .summary-item.purple { background: #f3e8ff; }
+    .summary-item.green { background: #dcfce7; }
+    .summary-item.amber { background: #fef3c7; }
+    .summary-item.blue { background: #dbeafe; }
+    .summary-item .value { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+    .summary-item .label { font-size: 10px; color: #666; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th { background: #6366f1; color: white; padding: 10px; text-align: center; font-size: 11px; }
+    .section-title { font-size: 14px; font-weight: bold; margin: 20px 0 10px; color: #4f46e5; border-bottom: 2px solid #4f46e5; padding-bottom: 5px; }
+    .info-row { display: flex; gap: 20px; margin-bottom: 10px; padding: 10px; background: #f9fafb; border-radius: 5px; }
+    .info-item { flex: 1; }
+    .info-label { font-size: 10px; color: #666; }
+    .info-value { font-weight: bold; }
+    .total-row { background: #f3e8ff !important; font-weight: bold; }
+    .total-row td { padding: 10px 8px !important; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>خطة الإنتاج الذكية</h1>
+    <div style="font-size: 12px;">نظام باتر للإدارة</div>
+  </div>
+  
+  <div class="info-row">
+    <div class="info-item"><span class="info-label">الفرع:</span> <span class="info-value">${branchName}</span></div>
+    <div class="info-item"><span class="info-label">تاريخ الخطة:</span> <span class="info-value">${planDateFormatted}</span></div>
+    <div class="info-item"><span class="info-label">عدد المنتجات:</span> <span class="info-value">${recommendedProducts.length}</span></div>
+  </div>
+  
+  <div class="summary">
+    <div class="summary-item purple">
+      <div class="value">${((plan.confidenceScore || 0) * 100).toFixed(0)}%</div>
+      <div class="label">مستوى الثقة</div>
+    </div>
+    <div class="summary-item green">
+      <div class="value">${formatNumber(plan.totalEstimatedValue || 0)} ر.س</div>
+      <div class="label">القيمة المتوقعة</div>
+    </div>
+    <div class="summary-item amber">
+      <div class="value">${formatNumber(plan.totalEstimatedCost || 0)} ر.س</div>
+      <div class="label">التكلفة المتوقعة</div>
+    </div>
+    <div class="summary-item blue">
+      <div class="value">${(plan.profitMargin || 0).toFixed(1)}%</div>
+      <div class="label">هامش الربح</div>
+    </div>
+  </div>
+  
+  <div class="section-title">المنتجات الموصى بها</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px;">#</th>
+        <th>المنتج</th>
+        <th style="width: 80px;">التصنيف</th>
+        <th style="width: 60px;">الكمية</th>
+        <th style="width: 80px;">السعر</th>
+        <th style="width: 100px;">الإجمالي</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${productRows}
+      <tr class="total-row">
+        <td colspan="3" style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">الإجمالي</td>
+        <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">${recommendedProducts.reduce((sum, p) => sum + (p.quantity || 0), 0)}</td>
+        <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">-</td>
+        <td style="padding: 10px; text-align: center; border: 1px solid #e5e7eb;">${formatNumber(plan.totalEstimatedValue || 0)} ر.س</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div style="margin-top: 30px; text-align: center; color: #666; font-size: 9px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
+    تم التوليد بواسطة نظام باتر للإدارة الذكية - ${new Date().toLocaleString('ar-SA')}
+  </div>
+</body>
+</html>`;
+
+      // Generate PDF using puppeteer
+      const puppeteer = await import("puppeteer-core");
+      const chromium = await import("@sparticuz/chromium");
       
-      const pdfDoc = pdfMake.default.createPdf(docDefinition);
-      
-      pdfDoc.getBuffer((buffer: Buffer) => {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="production_plan_${planId}.pdf"`);
-        res.send(buffer);
+      const browser = await puppeteer.default.launch({
+        args: chromium.default.args,
+        defaultViewport: chromium.default.defaultViewport,
+        executablePath: await chromium.default.executablePath(),
+        headless: true,
       });
+      
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+      });
+      
+      await browser.close();
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="production_plan_${planId}.pdf"`);
+      res.send(Buffer.from(pdfBuffer));
     } catch (error) {
       console.error("Error exporting AI plan to PDF:", error);
       res.status(500).json({ error: "Failed to export AI plan to PDF" });
