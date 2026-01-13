@@ -122,6 +122,7 @@ export default function ProductionComparisonsPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [salesFile, setSalesFile] = useState<File | null>(null);
   const [uploadBranch, setUploadBranch] = useState<string>("");
+  const [uploadDate, setUploadDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [activeTab, setActiveTab] = useState("overview");
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -233,8 +234,9 @@ export default function ProductionComparisonsPage() {
     const formData = new FormData();
     formData.append("file", salesFile);
     formData.append("branchId", uploadBranch);
+    formData.append("defaultDate", uploadDate);
     uploadMutation.mutate(formData);
-  }, [salesFile, uploadBranch, uploadMutation, toast]);
+  }, [salesFile, uploadBranch, uploadDate, uploadMutation, toast]);
 
   const categoryBreakdown = useMemo(() => {
     const breakdown: Record<string, { produced: number; sold: number; waste: number }> = {};
@@ -371,6 +373,20 @@ export default function ProductionComparisonsPage() {
                   </div>
 
                   <div>
+                    <Label>تاريخ المبيعات</Label>
+                    <Input
+                      type="date"
+                      value={uploadDate}
+                      onChange={(e) => setUploadDate(e.target.value)}
+                      className="mt-1"
+                      data-testid="input-sales-date"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      حدد تاريخ المبيعات في حال عدم وجود عمود التاريخ في الملف
+                    </p>
+                  </div>
+
+                  <div>
                     <Label>ملف المبيعات (Excel)</Label>
                     <Input
                       type="file"
@@ -392,10 +408,9 @@ export default function ProductionComparisonsPage() {
                       <div className="text-sm text-amber-800">
                         <p className="font-medium mb-1">تنسيق الملف المطلوب:</p>
                         <ul className="text-xs space-y-0.5 list-disc list-inside">
-                          <li>عمود التاريخ (Date)</li>
-                          <li>عمود اسم المنتج (Product Name)</li>
+                          <li>عمود اسم المنتج (Product)</li>
                           <li>عمود الكمية المباعة (Quantity)</li>
-                          <li>عمود قيمة المبيعات (Sales Value) - اختياري</li>
+                          <li>عمود قيمة المبيعات (Sales) - اختياري</li>
                         </ul>
                       </div>
                     </div>

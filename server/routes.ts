@@ -6583,6 +6583,7 @@ export async function registerRoutes(
         
         const file = req.file;
         const branchId = req.body.branchId;
+        const defaultDate = req.body.defaultDate; // Fallback date when file has no date column
         
         if (!file) {
           return res.status(400).json({ error: "الملف مطلوب" });
@@ -6637,22 +6638,28 @@ export async function registerRoutes(
             // Flexible column detection for various Foodics export formats
             const dateValue = row["Date"] || row["التاريخ"] || row["date"] || row["تاريخ"] || 
                               row["Business Date"] || row["تاريخ العمل"] || row["Order Date"] || row["تاريخ الطلب"] ||
-                              row["Created Date"] || row["تاريخ الإنشاء"] || row["Day"] || row["اليوم"];
+                              row["Created Date"] || row["تاريخ الإنشاء"] || row["Day"] || row["اليوم"] ||
+                              defaultDate; // Use defaultDate from form if no date column
             const productName = row["Product Name"] || row["اسم المنتج"] || row["product"] || row["المنتج"] || row["Product"] ||
                                 row["Item Name"] || row["اسم الصنف"] || row["Item"] || row["الصنف"] || row["Name"] || row["الاسم"] ||
-                                row["Product"] || row["SKU Name"] || row["اسم المنتج (SKU)"];
+                                row["SKU Name"] || row["اسم المنتج (SKU)"];
             const quantity = parseInt(row["Quantity"] || row["الكمية"] || row["qty"] || row["كمية"] || 
                                       row["Qty"] || row["Count"] || row["العدد"] || row["Sold Quantity"] || row["الكمية المباعة"] ||
                                       row["Total Quantity"] || row["إجمالي الكمية"] || "0", 10);
             const salesValue = parseFloat(row["Sales Value"] || row["قيمة المبيعات"] || row["value"] || row["القيمة"] || 
                                           row["Total"] || row["الإجمالي"] || row["Amount"] || row["المبلغ"] ||
                                           row["Net Sales"] || row["صافي المبيعات"] || row["Gross Sales"] || row["إجمالي المبيعات"] ||
-                                          row["Revenue"] || row["الإيراد"] || "0");
+                                          row["Revenue"] || row["الإيراد"] || row["Sales"] || "0");
             const category = row["Category"] || row["الفئة"] || row["category"] || 
                              row["Product Category"] || row["فئة المنتج"] || row["Menu Category"] || row["فئة القائمة"] || null;
             
-            if (!productName || !dateValue) {
-              console.log("Skipping row - missing productName or dateValue:", { productName, dateValue, row });
+            if (!productName) {
+              console.log("Skipping row - missing productName:", { productName, row });
+              continue;
+            }
+            
+            if (!dateValue) {
+              console.log("Skipping row - missing dateValue and no defaultDate provided:", { dateValue, row });
               continue;
             }
             
