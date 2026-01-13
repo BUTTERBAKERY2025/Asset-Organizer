@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Calendar, TrendingUp, TrendingDown, Building2, Package, AlertTriangle, BarChart3, PieChart, Download, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart as RechartsPie, Pie, Cell } from "recharts";
+import { ExportButtons } from "@/components/export-buttons";
+import { ExportColumn } from "@/lib/export-utils";
 
 const COLORS = ["#f59e0b", "#ef4444", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
 
@@ -100,20 +102,91 @@ export default function ProductionComparisonReports() {
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("ar-SA", {
-      style: "currency",
-      currency: "SAR",
+    return new Intl.NumberFormat("en-US", {
       maximumFractionDigits: 0,
-    }).format(value);
+    }).format(value) + " ر.س";
   };
 
   const formatNumber = (value: number) => {
-    return new Intl.NumberFormat("ar-SA").format(Math.round(value));
+    return new Intl.NumberFormat("en-US").format(Math.round(value));
   };
 
   const formatPercent = (value: number) => {
     return `${value.toFixed(1)}%`;
   };
+
+  // Export columns for different reports
+  const monthlyExportColumns: ExportColumn[] = [
+    { header: "الفئة", key: "category", width: 20 },
+    { header: "الإنتاج", key: "produced", width: 15 },
+    { header: "المبيعات", key: "sold", width: 15 },
+    { header: "الهدر", key: "waste", width: 15 },
+    { header: "نسبة الهدر %", key: "wastePercentage", width: 15 },
+    { header: "قيمة الهدر", key: "wasteValue", width: 18 },
+  ];
+
+  const branchExportColumns: ExportColumn[] = [
+    { header: "الفرع", key: "branchName", width: 25 },
+    { header: "الإنتاج", key: "totalProduced", width: 15 },
+    { header: "المبيعات", key: "totalSold", width: 15 },
+    { header: "الهدر", key: "totalWaste", width: 15 },
+    { header: "الكفاءة %", key: "efficiency", width: 15 },
+    { header: "قيمة الهدر", key: "wasteValue", width: 18 },
+  ];
+
+  const trendsExportColumns: ExportColumn[] = [
+    { header: "التاريخ", key: "date", width: 15 },
+    { header: "الإنتاج", key: "produced", width: 15 },
+    { header: "المبيعات", key: "sold", width: 15 },
+    { header: "الهدر", key: "waste", width: 15 },
+    { header: "الكفاءة %", key: "efficiency", width: 15 },
+  ];
+
+  const productsExportColumns: ExportColumn[] = [
+    { header: "المنتج", key: "productName", width: 30 },
+    { header: "الفئة", key: "category", width: 20 },
+    { header: "الإنتاج", key: "totalProduced", width: 15 },
+    { header: "الهدر", key: "totalWaste", width: 15 },
+    { header: "نسبة الهدر %", key: "wastePercentage", width: 15 },
+    { header: "قيمة الهدر", key: "totalWasteValue", width: 18 },
+  ];
+
+  // Prepare export data for each tab
+  const monthlyExportData = useMemo(() => {
+    if (!monthlyReport?.byCategory) return [];
+    return monthlyReport.byCategory.map((item: any) => ({
+      ...item,
+      wastePercentage: item.wastePercentage?.toFixed(1) || "0.0",
+      wasteValue: item.wasteValue?.toFixed(0) || "0",
+    }));
+  }, [monthlyReport]);
+
+  const branchExportData = useMemo(() => {
+    if (!branchPerformance?.branches) return [];
+    return branchPerformance.branches.map((branch: any) => ({
+      ...branch,
+      branchName: getBranchName(branch.branchId),
+      efficiency: branch.efficiency?.toFixed(1) || "0.0",
+      wasteValue: branch.wasteValue?.toFixed(0) || "0",
+    }));
+  }, [branchPerformance, branches]);
+
+  const trendsExportData = useMemo(() => {
+    if (!trends?.data) return [];
+    return trends.data.map((item: any) => ({
+      ...item,
+      efficiency: item.efficiency?.toFixed(1) || "0.0",
+    }));
+  }, [trends]);
+
+  const productsExportData = useMemo(() => {
+    if (!topWaste?.products) return [];
+    return topWaste.products.map((product: any) => ({
+      ...product,
+      wastePercentage: product.wastePercentage?.toFixed(1) || "0.0",
+      totalWasteValue: product.totalWasteValue?.toFixed(0) || "0",
+    }));
+  }, [topWaste]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-6" dir="rtl">
@@ -166,28 +239,43 @@ export default function ProductionComparisonReports() {
           </TabsList>
 
           <TabsContent value="monthly" className="space-y-6">
-            <div className="flex flex-wrap items-center gap-3 bg-white/50 p-4 rounded-lg">
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-[120px]" data-testid="select-year">
-                  <SelectValue placeholder="السنة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2024, 2025, 2026].map(year => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white/50 p-4 rounded-lg">
+              <div className="flex flex-wrap items-center gap-3">
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="w-[120px]" data-testid="select-year">
+                    <SelectValue placeholder="السنة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2024, 2025, 2026].map(year => (
+                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-[140px]" data-testid="select-month">
-                  <SelectValue placeholder="الشهر" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ARABIC_MONTHS.map((month, idx) => (
-                    <SelectItem key={idx + 1} value={(idx + 1).toString()}>{month}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-[140px]" data-testid="select-month">
+                    <SelectValue placeholder="الشهر" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ARABIC_MONTHS.map((month, idx) => (
+                      <SelectItem key={idx + 1} value={(idx + 1).toString()}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <ExportButtons
+                data={monthlyExportData}
+                columns={monthlyExportColumns}
+                fileName={`تقرير-الهدر-الشهري-${ARABIC_MONTHS[parseInt(selectedMonth) - 1]}-${selectedYear}`}
+                title="تقرير الهدر الشهري"
+                subtitle={`${ARABIC_MONTHS[parseInt(selectedMonth) - 1]} ${selectedYear}`}
+                headerInfo={[
+                  { label: "الشهر", value: ARABIC_MONTHS[parseInt(selectedMonth) - 1] },
+                  { label: "السنة", value: selectedYear },
+                  { label: "الفرع", value: selectedBranch === "all" ? "جميع الفروع" : getBranchName(selectedBranch) },
+                ]}
+              />
             </div>
 
             {loadingMonthly ? (
@@ -333,27 +421,41 @@ export default function ProductionComparisonReports() {
           </TabsContent>
 
           <TabsContent value="branches" className="space-y-6">
-            <div className="flex flex-wrap items-center gap-3 bg-white/50 p-4 rounded-lg">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">من:</span>
-                <input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  className="border rounded-md px-3 py-2 text-sm"
-                  data-testid="input-start-date"
-                />
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white/50 p-4 rounded-lg">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">من:</span>
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="border rounded-md px-3 py-2 text-sm"
+                    data-testid="input-start-date"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">إلى:</span>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="border rounded-md px-3 py-2 text-sm"
+                    data-testid="input-end-date"
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">إلى:</span>
-                <input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  className="border rounded-md px-3 py-2 text-sm"
-                  data-testid="input-end-date"
-                />
-              </div>
+
+              <ExportButtons
+                data={branchExportData}
+                columns={branchExportColumns}
+                fileName={`تقرير-أداء-الفروع-${dateRange.start}-${dateRange.end}`}
+                title="تقرير أداء الفروع"
+                subtitle={`من ${dateRange.start} إلى ${dateRange.end}`}
+                headerInfo={[
+                  { label: "من تاريخ", value: dateRange.start },
+                  { label: "إلى تاريخ", value: dateRange.end },
+                ]}
+              />
             </div>
 
             {loadingBranch ? (
@@ -471,25 +573,40 @@ export default function ProductionComparisonReports() {
           </TabsContent>
 
           <TabsContent value="trends" className="space-y-6">
-            <div className="flex flex-wrap items-center gap-3 bg-white/50 p-4 rounded-lg">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">من:</span>
-                <input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  className="border rounded-md px-3 py-2 text-sm"
-                />
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white/50 p-4 rounded-lg">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">من:</span>
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="border rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">إلى:</span>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="border rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">إلى:</span>
-                <input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  className="border rounded-md px-3 py-2 text-sm"
-                />
-              </div>
+
+              <ExportButtons
+                data={trendsExportData}
+                columns={trendsExportColumns}
+                fileName={`تقرير-الاتجاهات-${dateRange.start}-${dateRange.end}`}
+                title="تقرير الاتجاهات الزمنية"
+                subtitle={`من ${dateRange.start} إلى ${dateRange.end}`}
+                headerInfo={[
+                  { label: "من تاريخ", value: dateRange.start },
+                  { label: "إلى تاريخ", value: dateRange.end },
+                  { label: "الفرع", value: selectedBranch === "all" ? "جميع الفروع" : getBranchName(selectedBranch) },
+                ]}
+              />
             </div>
 
             {loadingTrends ? (
@@ -555,25 +672,40 @@ export default function ProductionComparisonReports() {
           </TabsContent>
 
           <TabsContent value="products" className="space-y-6">
-            <div className="flex flex-wrap items-center gap-3 bg-white/50 p-4 rounded-lg">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">من:</span>
-                <input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  className="border rounded-md px-3 py-2 text-sm"
-                />
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white/50 p-4 rounded-lg">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">من:</span>
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="border rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">إلى:</span>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="border rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">إلى:</span>
-                <input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  className="border rounded-md px-3 py-2 text-sm"
-                />
-              </div>
+
+              <ExportButtons
+                data={productsExportData}
+                columns={productsExportColumns}
+                fileName={`أعلى-المنتجات-هدراً-${dateRange.start}-${dateRange.end}`}
+                title="تقرير أعلى المنتجات هدراً"
+                subtitle={`من ${dateRange.start} إلى ${dateRange.end}`}
+                headerInfo={[
+                  { label: "من تاريخ", value: dateRange.start },
+                  { label: "إلى تاريخ", value: dateRange.end },
+                  { label: "الفرع", value: selectedBranch === "all" ? "جميع الفروع" : getBranchName(selectedBranch) },
+                ]}
+              />
             </div>
 
             {loadingTopWaste ? (
