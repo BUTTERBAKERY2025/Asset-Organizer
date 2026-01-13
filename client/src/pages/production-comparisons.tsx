@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { Layout } from "@/components/layout";
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ar } from "date-fns/locale";
 import {
@@ -433,8 +434,9 @@ export default function ProductionComparisonsPage() {
   const formatCurrency = (num: number) => `${formatNumber(num)} ر.س`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/20" dir="rtl">
-      <div className="container mx-auto px-4 py-6">
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/20" dir="rtl">
+        <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <Button
@@ -1327,7 +1329,8 @@ export default function ProductionComparisonsPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
