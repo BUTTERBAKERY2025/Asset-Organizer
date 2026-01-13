@@ -6576,6 +6576,369 @@ export async function registerRoutes(
     }
   });
 
+  // ========== Production Comparison Reports API ==========
+  
+  // Monthly Waste Report - comprehensive waste analysis
+  app.get("/api/production-comparison-reports/monthly-waste", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { year, month, branchId } = req.query;
+      
+      const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
+      
+      // Validate year and month with sensible defaults
+      const currentDate = new Date();
+      let targetYear = parseInt(year as string);
+      let targetMonth = parseInt(month as string);
+      
+      if (isNaN(targetYear) || targetYear < 2020 || targetYear > 2030) {
+        targetYear = currentDate.getFullYear();
+      }
+      if (isNaN(targetMonth) || targetMonth < 1 || targetMonth > 12) {
+        targetMonth = currentDate.getMonth() + 1;
+      }
+      
+      // Calculate date range for the month
+      const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
+      const endDate = new Date(targetYear, targetMonth, 0).toISOString().split('T')[0];
+      
+      const conditions: any[] = [
+        gte(dailyComparisons.comparisonDate, startDate),
+        lte(dailyComparisons.comparisonDate, endDate),
+      ];
+      
+      if (effectiveBranchId && effectiveBranchId !== "all") {
+        conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
+      }
+      
+      const comparisons = await db
+        .select()
+        .from(dailyComparisons)
+        .where(and(...conditions));
+      
+      // Calculate totals
+      const totalProduced = comparisons.reduce((sum, c) => sum + (c.producedQuantity || 0), 0);
+      const totalSold = comparisons.reduce((sum, c) => sum + (c.soldQuantity || 0), 0);
+      const wasteRecords = comparisons.filter(c => c.status === "waste" || (c.difference || 0) > 0);
+      const totalWasteQuantity = wasteRecords.reduce((sum, c) => sum + Math.max(0, c.difference || 0), 0);
+      const totalWasteValue = comparisons.reduce((sum, c) => sum + (c.wasteValue || 0), 0);
+      const totalProductionValue = comparisons.reduce((sum, c) => sum + (c.productionValue || 0), 0);
+      const totalSalesValue = comparisons.reduce((sum, c) => sum + (c.salesValue || 0), 0);
+      
+      // Group by category
+      const categoryStats: Record<string, { produced: number; sold: number; waste: number; wasteValue: number }> = {};
+      comparisons.forEach(c => {
+        const cat = c.productCategory || "أخرى";
+        if (!categoryStats[cat]) {
+          categoryStats[cat] = { produced: 0, sold: 0, waste: 0, wasteValue: 0 };
+        }
+        categoryStats[cat].produced += c.producedQuantity || 0;
+        categoryStats[cat].sold += c.soldQuantity || 0;
+        categoryStats[cat].waste += Math.max(0, c.difference || 0);
+        categoryStats[cat].wasteValue += c.wasteValue || 0;
+      });
+      
+      // Group by branch
+      const branchStats: Record<string, { produced: number; sold: number; waste: number; wasteValue: number; efficiency: number }> = {};
+      comparisons.forEach(c => {
+        const branch = c.branchId;
+        if (!branchStats[branch]) {
+          branchStats[branch] = { produced: 0, sold: 0, waste: 0, wasteValue: 0, efficiency: 0 };
+        }
+        branchStats[branch].produced += c.producedQuantity || 0;
+        branchStats[branch].sold += c.soldQuantity || 0;
+        branchStats[branch].waste += Math.max(0, c.difference || 0);
+        branchStats[branch].wasteValue += c.wasteValue || 0;
+      });
+      
+      // Calculate efficiency for each branch
+      Object.keys(branchStats).forEach(branch => {
+        const stats = branchStats[branch];
+        stats.efficiency = stats.produced > 0 ? (stats.sold / stats.produced) * 100 : 0;
+      });
+      
+      // Top 10 waste products
+      const productWaste: Record<string, { name: string; category: string; waste: number; wasteValue: number }> = {};
+      comparisons.forEach(c => {
+        const key = c.productName;
+        if (!productWaste[key]) {
+          productWaste[key] = { name: c.productName, category: c.productCategory || "أخرى", waste: 0, wasteValue: 0 };
+        }
+        productWaste[key].waste += Math.max(0, c.difference || 0);
+        productWaste[key].wasteValue += c.wasteValue || 0;
+      });
+      
+      const topWasteProducts = Object.values(productWaste)
+        .sort((a, b) => b.wasteValue - a.wasteValue)
+        .slice(0, 10);
+      
+      res.json({
+        period: { year: targetYear, month: targetMonth, startDate, endDate },
+        summary: {
+          totalProduced,
+          totalSold,
+          totalWasteQuantity,
+          totalWasteValue,
+          totalProductionValue,
+          totalSalesValue,
+          efficiency: totalProduced > 0 ? (totalSold / totalProduced) * 100 : 0,
+          wastePercentage: totalProduced > 0 ? (totalWasteQuantity / totalProduced) * 100 : 0,
+          recordCount: comparisons.length,
+        },
+        byCategory: Object.entries(categoryStats).map(([category, stats]) => ({
+          category,
+          ...stats,
+          wastePercentage: stats.produced > 0 ? (stats.waste / stats.produced) * 100 : 0,
+        })),
+        byBranch: Object.entries(branchStats).map(([branchId, stats]) => ({
+          branchId,
+          ...stats,
+        })),
+        topWasteProducts,
+      });
+    } catch (error) {
+      console.error("Error generating monthly waste report:", error);
+      res.status(500).json({ error: "فشل إنشاء التقرير الشهري" });
+    }
+  });
+
+  // Branch Performance Comparison Report
+  app.get("/api/production-comparison-reports/branch-performance", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { startDate, endDate } = req.query;
+      
+      const conditions: any[] = [];
+      if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      if (mandatoryBranch) conditions.push(eq(dailyComparisons.branchId, mandatoryBranch));
+      
+      const comparisons = await db
+        .select()
+        .from(dailyComparisons)
+        .where(conditions.length > 0 ? and(...conditions) : sql`true`);
+      
+      // Group by branch
+      const branchStats: Record<string, {
+        branchId: string;
+        totalProduced: number;
+        totalSold: number;
+        totalWaste: number;
+        totalWasteValue: number;
+        recordCount: number;
+        daysActive: Set<string>;
+      }> = {};
+      
+      comparisons.forEach(c => {
+        const branch = c.branchId;
+        if (!branchStats[branch]) {
+          branchStats[branch] = {
+            branchId: branch,
+            totalProduced: 0,
+            totalSold: 0,
+            totalWaste: 0,
+            totalWasteValue: 0,
+            recordCount: 0,
+            daysActive: new Set(),
+          };
+        }
+        branchStats[branch].totalProduced += c.producedQuantity || 0;
+        branchStats[branch].totalSold += c.soldQuantity || 0;
+        branchStats[branch].totalWaste += Math.max(0, c.difference || 0);
+        branchStats[branch].totalWasteValue += c.wasteValue || 0;
+        branchStats[branch].recordCount++;
+        branchStats[branch].daysActive.add(c.comparisonDate);
+      });
+      
+      const branchPerformance = Object.values(branchStats).map(stats => ({
+        branchId: stats.branchId,
+        totalProduced: stats.totalProduced,
+        totalSold: stats.totalSold,
+        totalWaste: stats.totalWaste,
+        totalWasteValue: stats.totalWasteValue,
+        efficiency: stats.totalProduced > 0 ? (stats.totalSold / stats.totalProduced) * 100 : 0,
+        wastePercentage: stats.totalProduced > 0 ? (stats.totalWaste / stats.totalProduced) * 100 : 0,
+        recordCount: stats.recordCount,
+        daysActive: stats.daysActive.size,
+        avgDailyProduction: stats.daysActive.size > 0 ? stats.totalProduced / stats.daysActive.size : 0,
+        avgDailyWaste: stats.daysActive.size > 0 ? stats.totalWaste / stats.daysActive.size : 0,
+      }));
+      
+      // Sort by efficiency (best first)
+      branchPerformance.sort((a, b) => b.efficiency - a.efficiency);
+      
+      res.json({
+        period: { startDate, endDate },
+        branches: branchPerformance,
+        overallStats: {
+          totalBranches: branchPerformance.length,
+          bestBranch: branchPerformance[0]?.branchId || null,
+          worstBranch: branchPerformance[branchPerformance.length - 1]?.branchId || null,
+          avgEfficiency: branchPerformance.length > 0 
+            ? branchPerformance.reduce((sum, b) => sum + b.efficiency, 0) / branchPerformance.length 
+            : 0,
+        },
+      });
+    } catch (error) {
+      console.error("Error generating branch performance report:", error);
+      res.status(500).json({ error: "فشل إنشاء تقرير أداء الفروع" });
+    }
+  });
+
+  // Trend Analysis Report - daily/weekly trends
+  app.get("/api/production-comparison-reports/trends", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { startDate, endDate, branchId, groupBy: rawGroupBy } = req.query;
+      
+      // Validate groupBy parameter
+      const validGroupByOptions = ["daily", "weekly", "monthly"];
+      const groupBy = validGroupByOptions.includes(rawGroupBy as string) ? rawGroupBy : "daily";
+      
+      const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
+      
+      const conditions: any[] = [];
+      if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      if (effectiveBranchId) conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
+      
+      const comparisons = await db
+        .select()
+        .from(dailyComparisons)
+        .where(conditions.length > 0 ? and(...conditions) : sql`true`)
+        .orderBy(dailyComparisons.comparisonDate);
+      
+      // Group by period
+      const trendData: Record<string, {
+        period: string;
+        produced: number;
+        sold: number;
+        waste: number;
+        wasteValue: number;
+        recordCount: number;
+      }> = {};
+      
+      comparisons.forEach(c => {
+        let periodKey: string;
+        const date = new Date(c.comparisonDate);
+        
+        if (groupBy === "weekly") {
+          // Get week number
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay());
+          periodKey = weekStart.toISOString().split('T')[0];
+        } else if (groupBy === "monthly") {
+          periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        } else {
+          periodKey = c.comparisonDate;
+        }
+        
+        if (!trendData[periodKey]) {
+          trendData[periodKey] = { period: periodKey, produced: 0, sold: 0, waste: 0, wasteValue: 0, recordCount: 0 };
+        }
+        trendData[periodKey].produced += c.producedQuantity || 0;
+        trendData[periodKey].sold += c.soldQuantity || 0;
+        trendData[periodKey].waste += Math.max(0, c.difference || 0);
+        trendData[periodKey].wasteValue += c.wasteValue || 0;
+        trendData[periodKey].recordCount++;
+      });
+      
+      const trends = Object.values(trendData)
+        .sort((a, b) => a.period.localeCompare(b.period))
+        .map(t => ({
+          ...t,
+          efficiency: t.produced > 0 ? (t.sold / t.produced) * 100 : 0,
+          wastePercentage: t.produced > 0 ? (t.waste / t.produced) * 100 : 0,
+        }));
+      
+      res.json({
+        period: { startDate, endDate },
+        groupBy,
+        trends,
+      });
+    } catch (error) {
+      console.error("Error generating trends report:", error);
+      res.status(500).json({ error: "فشل إنشاء تقرير الاتجاهات" });
+    }
+  });
+
+  // Top Waste Products Report
+  app.get("/api/production-comparison-reports/top-waste-products", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { startDate, endDate, branchId, limit: rawLimit } = req.query;
+      
+      // Validate limit parameter (1-100, default 10)
+      let limit = parseInt(rawLimit as string);
+      if (isNaN(limit) || limit < 1) limit = 10;
+      if (limit > 100) limit = 100;
+      
+      const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
+      
+      const conditions: any[] = [];
+      if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      if (effectiveBranchId) conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
+      
+      const comparisons = await db
+        .select()
+        .from(dailyComparisons)
+        .where(conditions.length > 0 ? and(...conditions) : sql`true`);
+      
+      // Group by product
+      const productStats: Record<string, {
+        productName: string;
+        category: string;
+        totalProduced: number;
+        totalSold: number;
+        totalWaste: number;
+        totalWasteValue: number;
+        occurrences: number;
+      }> = {};
+      
+      comparisons.forEach(c => {
+        const key = c.productName;
+        if (!productStats[key]) {
+          productStats[key] = {
+            productName: c.productName,
+            category: c.productCategory || "أخرى",
+            totalProduced: 0,
+            totalSold: 0,
+            totalWaste: 0,
+            totalWasteValue: 0,
+            occurrences: 0,
+          };
+        }
+        productStats[key].totalProduced += c.producedQuantity || 0;
+        productStats[key].totalSold += c.soldQuantity || 0;
+        productStats[key].totalWaste += Math.max(0, c.difference || 0);
+        productStats[key].totalWasteValue += c.wasteValue || 0;
+        productStats[key].occurrences++;
+      });
+      
+      const topProducts = Object.values(productStats)
+        .filter(p => p.totalWaste > 0 || p.totalWasteValue > 0)
+        .sort((a, b) => b.totalWasteValue - a.totalWasteValue)
+        .slice(0, limit)
+        .map(p => ({
+          ...p,
+          avgWastePerOccurrence: p.occurrences > 0 ? p.totalWaste / p.occurrences : 0,
+          wastePercentage: p.totalProduced > 0 ? (p.totalWaste / p.totalProduced) * 100 : 0,
+        }));
+      
+      res.json({
+        period: { startDate, endDate },
+        branchId: effectiveBranchId || "all",
+        topProducts,
+        totalUniqueProducts: Object.keys(productStats).length,
+        productsWithWaste: Object.values(productStats).filter(p => p.totalWaste > 0).length,
+      });
+    } catch (error) {
+      console.error("Error generating top waste products report:", error);
+      res.status(500).json({ error: "فشل إنشاء تقرير المنتجات الأكثر هدراً" });
+    }
+  });
+
   // Export comparisons to Excel/CSV (with branch isolation)
   app.get("/api/production-comparisons/export", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
