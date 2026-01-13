@@ -7344,7 +7344,21 @@ export async function registerRoutes(
       }
       
       const analytics = await storage.getProductSalesAnalytics(id);
-      res.json(analytics);
+      
+      // Filter out invalid product names (metadata rows from Excel)
+      const invalidProductNames = ['النطاق الزمني', 'الفترة', 'التاريخ', 'الإجمالي', 'المجموع', 'الفروع', 'total', 'sum', 'date range', 'period', 'product', 'branches'];
+      const isValidProduct = (name: string) => {
+        if (!name || name.trim().length < 2) return false;
+        const lowerName = name.toLowerCase().trim();
+        return !invalidProductNames.some(invalid => 
+          lowerName === invalid.toLowerCase() || 
+          lowerName.includes(invalid.toLowerCase()) || 
+          invalid.toLowerCase().includes(lowerName)
+        );
+      };
+      
+      const filteredAnalytics = analytics.filter(a => isValidProduct(a.productName));
+      res.json(filteredAnalytics);
     } catch (error) {
       console.error("Error fetching analytics:", error);
       res.status(500).json({ error: "Failed to fetch analytics" });
@@ -7375,7 +7389,22 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات المبيعات لم تكتمل معالجتها بعد" });
       }
       
-      const analytics = await storage.getProductSalesAnalytics(uploadId);
+      const rawAnalytics = await storage.getProductSalesAnalytics(uploadId);
+      
+      // Filter out invalid product names (metadata rows from Excel)
+      const invalidProductNames = ['النطاق الزمني', 'الفترة', 'التاريخ', 'الإجمالي', 'المجموع', 'الفروع', 'total', 'sum', 'date range', 'period', 'product', 'branches'];
+      const isValidProduct = (name: string) => {
+        if (!name || name.trim().length < 2) return false;
+        const lowerName = name.toLowerCase().trim();
+        return !invalidProductNames.some(invalid => 
+          lowerName === invalid.toLowerCase() || 
+          lowerName.includes(invalid.toLowerCase()) || 
+          invalid.toLowerCase().includes(lowerName)
+        );
+      };
+      
+      const analytics = rawAnalytics.filter(a => isValidProduct(a.productName));
+      
       if (!analytics || analytics.length === 0) {
         return res.status(400).json({ error: "لا توجد بيانات تحليل للمنتجات - تأكد من رفع ملف يحتوي على بيانات صحيحة" });
       }
