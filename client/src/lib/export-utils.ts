@@ -251,6 +251,139 @@ export function printAsPDF(
   }
 }
 
+export function downloadAsPDF(
+  data: any[],
+  columns: ExportColumn[],
+  fileName: string,
+  title: string,
+  subtitle?: string,
+  headerInfo?: { label: string; value: string }[]
+) {
+  const tableRows = data
+    .map((item, idx) => {
+      const cells = columns
+        .map((col) => {
+          const keys = col.key.split(".");
+          let value = item;
+          for (const k of keys) {
+            value = value?.[k];
+          }
+          return `<td style="border: 1px solid #ddd; padding: 6px 8px; text-align: right; font-size: 11px;">${value ?? ""}</td>`;
+        })
+        .join("");
+      return `<tr style="background-color: ${idx % 2 === 0 ? "#fff" : "#f9f9f9"};">${cells}</tr>`;
+    })
+    .join("");
+
+  const tableHeaders = columns
+    .map(
+      (col) =>
+        `<th style="border: 1px solid #ddd; padding: 8px; background-color: #f5a623; color: white; text-align: right; font-size: 11px;">${col.header}</th>`
+    )
+    .join("");
+
+  const headerInfoHtml = headerInfo?.length ? `
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; background: #f9f9f9; padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #eee;">
+      ${headerInfo.map(h => `<div style="font-size: 11px;"><span style="color: #666; font-weight: 600;">${h.label}:</span> <span style="color: #333;">${h.value}</span></div>`).join("")}
+    </div>
+  ` : "";
+
+  const html = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8">
+      <title>${title}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        * { box-sizing: border-box; }
+        body {
+          font-family: 'Cairo', sans-serif;
+          padding: 15px;
+          direction: rtl;
+          margin: 0;
+          font-size: 12px;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 15px;
+          border-bottom: 2px solid #f5a623;
+          padding-bottom: 10px;
+        }
+        .header h1 {
+          color: #333;
+          margin: 0 0 5px 0;
+          font-size: 20px;
+        }
+        .header p {
+          color: #666;
+          margin: 0;
+          font-size: 13px;
+        }
+        .meta {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 10px;
+          font-size: 11px;
+          color: #666;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 8px;
+        }
+        .footer {
+          margin-top: 15px;
+          text-align: center;
+          font-size: 10px;
+          color: #999;
+          border-top: 1px solid #ddd;
+          padding-top: 8px;
+        }
+        @media print {
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          @page { size: A4 landscape; margin: 10mm; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>${title}</h1>
+        ${subtitle ? `<p>${subtitle}</p>` : ""}
+      </div>
+      ${headerInfoHtml}
+      <div class="meta">
+        <span>تاريخ التصدير: ${new Date().toLocaleDateString("en-GB")}</span>
+        <span>إجمالي السجلات: ${data.length}</span>
+      </div>
+      <table>
+        <thead>
+          <tr>${tableHeaders}</tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+      <div class="footer">
+        <p>نظام إدارة باتر بيكري - ${new Date().getFullYear()}</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open("", "_blank", "width=1200,height=800");
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+    };
+  }
+}
+
 export function formatCurrencyForExport(value: number | null | undefined): string {
   if (value == null) return "0";
   return value.toLocaleString("ar-SA");

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
-import { exportToExcel, exportToCSV, printAsPDF, ExportColumn } from "@/lib/export-utils";
+import { Download, FileSpreadsheet, FileText, FileDown } from "lucide-react";
+import { exportToExcel, exportToCSV, downloadAsPDF, ExportColumn } from "@/lib/export-utils";
 
 interface ExportButtonsProps {
   data: any[];
@@ -32,8 +32,8 @@ export function ExportButtons({
     exportToCSV(data, columns, fileName);
   };
 
-  const handlePrint = () => {
-    printAsPDF(data, columns, title, subtitle, headerInfo);
+  const handlePDFExport = () => {
+    downloadAsPDF(data, columns, fileName, title, subtitle, headerInfo);
   };
 
   return (
@@ -59,9 +59,9 @@ export function ExportButtons({
           <FileText className="h-4 w-4 text-blue-600" />
           <span>تصدير CSV</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={handlePrint} className="gap-2 cursor-pointer" data-testid="btn-export-pdf">
-          <Printer className="h-4 w-4 text-red-600" />
-          <span>طباعة PDF</span>
+        <DropdownMenuItem onClick={handlePDFExport} className="gap-2 cursor-pointer" data-testid="btn-export-pdf">
+          <FileDown className="h-4 w-4 text-red-600" />
+          <span>تصدير PDF</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
