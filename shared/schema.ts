@@ -4774,9 +4774,13 @@ export const dailyComparisons = pgTable("daily_comparisons", {
   productionValue: real("production_value").default(0),
   salesValue: real("sales_value").default(0),
   valueDifference: real("value_difference").default(0),
+  wasteValue: real("waste_value").default(0), // قيمة الهدر المالية
   isStorable: boolean("is_storable").default(false),
   storageNotes: text("storage_notes"),
   status: text("status").default("normal"), // normal, waste, shortage, stored
+  statusChangedBy: varchar("status_changed_by"), // من قام بتغيير الحالة
+  statusChangedAt: timestamp("status_changed_at"), // متى تم تغيير الحالة
+  statusReason: text("status_reason"), // سبب تغيير الحالة
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -4957,4 +4961,129 @@ export const COMPARISON_STATUS = {
   shortage: { label: "نقص", color: "orange" },
   stored: { label: "مخزن", color: "blue" },
   made_to_order: { label: "حسب الطلب", color: "purple" },
+} as const;
+
+// Comparison Status History - سجل تغييرات حالة المقارنة
+export const comparisonStatusHistory = pgTable("comparison_status_history", {
+  id: serial("id").primaryKey(),
+  comparisonId: integer("comparison_id").notNull().references(() => dailyComparisons.id),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status").notNull(),
+  reason: text("reason"),
+  changedBy: varchar("changed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_status_history_comparison").on(table.comparisonId),
+  index("idx_status_history_date").on(table.createdAt),
+]);
+
+export const insertComparisonStatusHistorySchema = createInsertSchema(comparisonStatusHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComparisonStatusHistory = typeof comparisonStatusHistory.$inferSelect;
+export type InsertComparisonStatusHistory = z.infer<typeof insertComparisonStatusHistorySchema>;
+
+// Product Prices - أسعار المنتجات
+export const productPrices = pgTable("product_prices", {
+  id: serial("id").primaryKey(),
+  productName: text("product_name").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  price: real("price").notNull(),
+  costPrice: real("cost_price"), // سعر التكلفة
+  currency: varchar("currency", { length: 3 }).default("SAR"),
+  effectiveDate: date("effective_date").defaultNow().notNull(),
+  source: text("source"), // manual, foodics, import
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedBy: varchar("updated_by"),
+}, (table) => [
+  index("idx_product_prices_name").on(table.productName),
+  index("idx_product_prices_branch").on(table.branchId),
+  index("idx_product_prices_date").on(table.effectiveDate),
+]);
+
+export const insertProductPriceSchema = createInsertSchema(productPrices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductPrice = typeof productPrices.$inferSelect;
+export type InsertProductPrice = z.infer<typeof insertProductPriceSchema>;
+
+// Waste Risk Rules - قواعد مخاطر الهدر
+export const wasteRiskRules = pgTable("waste_risk_rules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id), // null = all branches
+  category: text("category"), // null = all categories
+  productName: text("product_name"), // null = all products
+  thresholdType: text("threshold_type").notNull(), // quantity, value, percent
+  thresholdValue: real("threshold_value").notNull(),
+  periodDays: integer("period_days").default(1), // 1 = daily, 7 = weekly, etc
+  severity: text("severity").default("medium"), // low, medium, high, critical
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_waste_rules_branch").on(table.branchId),
+  index("idx_waste_rules_category").on(table.category),
+  index("idx_waste_rules_active").on(table.isActive),
+]);
+
+export const insertWasteRiskRuleSchema = createInsertSchema(wasteRiskRules).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WasteRiskRule = typeof wasteRiskRules.$inferSelect;
+export type InsertWasteRiskRule = z.infer<typeof insertWasteRiskRuleSchema>;
+
+// Waste Risk Alerts - تنبيهات مخاطر الهدر
+export const wasteRiskAlerts = pgTable("waste_risk_alerts", {
+  id: serial("id").primaryKey(),
+  ruleId: integer("rule_id").notNull().references(() => wasteRiskRules.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  alertDate: date("alert_date").notNull(),
+  productName: text("product_name"),
+  category: text("category"),
+  currentValue: real("current_value").notNull(),
+  thresholdValue: real("threshold_value").notNull(),
+  severity: text("severity").default("medium"),
+  status: text("status").default("open"), // open, acknowledged, resolved
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_waste_alerts_rule").on(table.ruleId),
+  index("idx_waste_alerts_branch").on(table.branchId),
+  index("idx_waste_alerts_date").on(table.alertDate),
+  index("idx_waste_alerts_status").on(table.status),
+  index("idx_waste_alerts_severity").on(table.severity),
+]);
+
+export const insertWasteRiskAlertSchema = createInsertSchema(wasteRiskAlerts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WasteRiskAlert = typeof wasteRiskAlerts.$inferSelect;
+export type InsertWasteRiskAlert = z.infer<typeof insertWasteRiskAlertSchema>;
+
+// Risk severity levels
+export const RISK_SEVERITY = {
+  low: { label: "منخفض", color: "blue", icon: "info" },
+  medium: { label: "متوسط", color: "yellow", icon: "alert-triangle" },
+  high: { label: "عالي", color: "orange", icon: "alert-circle" },
+  critical: { label: "حرج", color: "red", icon: "x-circle" },
+} as const;
+
+// Alert status
+export const ALERT_STATUS = {
+  open: { label: "مفتوح", color: "red" },
+  acknowledged: { label: "تم الاطلاع", color: "yellow" },
+  resolved: { label: "تم الحل", color: "green" },
 } as const;

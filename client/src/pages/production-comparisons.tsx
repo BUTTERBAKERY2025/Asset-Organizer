@@ -123,7 +123,18 @@ const STATUS_COLORS = {
   waste: "#ef4444",
   shortage: "#f59e0b",
   stored: "#3b82f6",
+  made_to_order: "#8b5cf6",
 };
+
+interface StatusHistory {
+  id: number;
+  previousStatus: string | null;
+  newStatus: string;
+  reason: string | null;
+  changedBy: string | null;
+  createdAt: string;
+  userName: string | null;
+}
 
 export default function ProductionComparisonsPage() {
   const [, navigate] = useLocation();
@@ -141,6 +152,14 @@ export default function ProductionComparisonsPage() {
   const [uploadBranch, setUploadBranch] = useState<string>("");
   const [uploadDate, setUploadDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [activeTab, setActiveTab] = useState("overview");
+  
+  // Status change state
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [selectedComparison, setSelectedComparison] = useState<DailyComparison | null>(null);
+  const [newStatus, setNewStatus] = useState<string>("");
+  const [statusReason, setStatusReason] = useState<string>("");
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [statusHistory, setStatusHistory] = useState<StatusHistory[]>([]);
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -256,6 +275,69 @@ export default function ProductionComparisonsPage() {
       });
     },
   });
+
+  // Status change mutation
+  const statusChangeMutation = useMutation({
+    mutationFn: async ({ id, status, reason }: { id: number; status: string; reason?: string }) => {
+      const res = await apiRequest("PATCH", `/api/production-comparisons/${id}/status`, {
+        status,
+        reason,
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update status");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "تم تحديث الحالة",
+        description: "تم تغيير حالة المقارنة بنجاح",
+      });
+      setStatusDialogOpen(false);
+      setSelectedComparison(null);
+      setNewStatus("");
+      setStatusReason("");
+      queryClient.invalidateQueries({ queryKey: ["/api/production-comparisons"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "خطأ في تحديث الحالة",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleStatusChange = (comparison: DailyComparison) => {
+    setSelectedComparison(comparison);
+    setNewStatus(comparison.status || "normal");
+    setStatusReason("");
+    setStatusDialogOpen(true);
+  };
+
+  const handleStatusSubmit = () => {
+    if (selectedComparison && newStatus) {
+      statusChangeMutation.mutate({
+        id: selectedComparison.id,
+        status: newStatus,
+        reason: statusReason || undefined,
+      });
+    }
+  };
+
+  const fetchStatusHistory = async (comparisonId: number) => {
+    try {
+      const res = await apiRequest("GET", `/api/production-comparisons/${comparisonId}/history`);
+      if (res.ok) {
+        const history = await res.json();
+        setStatusHistory(history);
+        setHistoryDialogOpen(true);
+      }
+    } catch (error) {
+      console.error("Error fetching history:", error);
+    }
+  };
 
   const handleUpload = useCallback(() => {
     if (!salesFile || !uploadBranch) {
@@ -497,6 +579,30 @@ export default function ProductionComparisonsPage() {
               )}
               إجراء المقارنة
             </Button>
+            
+            <Select
+              value=""
+              onValueChange={(value) => {
+                const params = new URLSearchParams({
+                  format: value,
+                  startDate: dateRange.start,
+                  endDate: dateRange.end,
+                });
+                if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+                if (selectedCategory !== "all") params.append("category", selectedCategory);
+                window.open(`/api/production-comparisons/export?${params.toString()}`, "_blank");
+              }}
+            >
+              <SelectTrigger className="w-[130px]" data-testid="select-export">
+                <Download className="h-4 w-4 ml-2" />
+                <SelectValue placeholder="تصدير" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+                <SelectItem value="csv">CSV (.csv)</SelectItem>
+              </SelectContent>
+            </Select>
+            
             {uncategorizedProducts.length > 0 && (
               <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1">
                 <AlertTriangle className="h-3 w-3" />
@@ -865,8 +971,10 @@ export default function ProductionComparisonsPage() {
                           <TableHead className="text-center">الإنتاج</TableHead>
                           <TableHead className="text-center">المبيعات</TableHead>
                           <TableHead className="text-center">الفرق</TableHead>
+                          <TableHead className="text-center">قيمة الهدر</TableHead>
                           <TableHead className="text-center">الحالة</TableHead>
                           <TableHead className="text-center">قابل للتخزين</TableHead>
+                          <TableHead className="text-center">الإجراءات</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -908,8 +1016,18 @@ export default function ProductionComparisonsPage() {
                               </span>
                             </TableCell>
                             <TableCell className="text-center">
+                              {(c.wasteValue || 0) > 0 ? (
+                                <span className="font-medium text-red-600">
+                                  {formatNumber(c.wasteValue || 0)} ر.س
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
                               <Badge
                                 variant="outline"
+                                className="cursor-pointer hover:opacity-80"
                                 style={{
                                   backgroundColor:
                                     STATUS_COLORS[c.status as keyof typeof STATUS_COLORS] + "20",
@@ -917,6 +1035,7 @@ export default function ProductionComparisonsPage() {
                                     STATUS_COLORS[c.status as keyof typeof STATUS_COLORS],
                                   color: STATUS_COLORS[c.status as keyof typeof STATUS_COLORS],
                                 }}
+                                onClick={() => handleStatusChange(c)}
                               >
                                 {COMPARISON_STATUS[c.status as keyof typeof COMPARISON_STATUS]
                                   ?.label || c.status}
@@ -937,6 +1056,42 @@ export default function ProductionComparisonsPage() {
                               ) : (
                                 <XCircle className="h-4 w-4 text-slate-300 mx-auto" />
                               )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => handleStatusChange(c)}
+                                        data-testid={`button-change-status-${c.id}`}
+                                      >
+                                        <RefreshCw className="h-3 w-3" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>تغيير الحالة</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => fetchStatusHistory(c.id)}
+                                        data-testid={`button-history-${c.id}`}
+                                      >
+                                        <Clock className="h-3 w-3" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>سجل التغييرات</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1045,6 +1200,123 @@ export default function ProductionComparisonsPage() {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Status Change Dialog */}
+        <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+          <DialogContent dir="rtl" className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>تغيير حالة المقارنة</DialogTitle>
+              <DialogDescription>
+                {selectedComparison && (
+                  <span>
+                    {selectedComparison.productName} - {format(parseISO(selectedComparison.comparisonDate), "yyyy/MM/dd")}
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>الحالة الجديدة</Label>
+                <Select value={newStatus} onValueChange={setNewStatus}>
+                  <SelectTrigger data-testid="select-new-status">
+                    <SelectValue placeholder="اختر الحالة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(COMPARISON_STATUS).map(([key, val]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: STATUS_COLORS[key as keyof typeof STATUS_COLORS] }}
+                          />
+                          {val.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>سبب التغيير (اختياري)</Label>
+                <Input
+                  value={statusReason}
+                  onChange={(e) => setStatusReason(e.target.value)}
+                  placeholder="أدخل سبب التغيير..."
+                  data-testid="input-status-reason"
+                />
+              </div>
+            </div>
+            <DialogFooter className="flex-row-reverse gap-2">
+              <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button
+                onClick={handleStatusSubmit}
+                disabled={statusChangeMutation.isPending}
+                data-testid="button-submit-status"
+              >
+                {statusChangeMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Status History Dialog */}
+        <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+          <DialogContent dir="rtl" className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>سجل تغييرات الحالة</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-[400px] overflow-y-auto">
+              {statusHistory.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <Clock className="h-8 w-8 mx-auto mb-2" />
+                  <p>لا توجد تغييرات مسجلة</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {statusHistory.map((h) => (
+                    <div key={h.id} className="border rounded-lg p-3 bg-slate-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge
+                          variant="outline"
+                          style={{
+                            backgroundColor: STATUS_COLORS[h.previousStatus as keyof typeof STATUS_COLORS] + "20" || "#f1f5f9",
+                            borderColor: STATUS_COLORS[h.previousStatus as keyof typeof STATUS_COLORS] || "#94a3b8",
+                            color: STATUS_COLORS[h.previousStatus as keyof typeof STATUS_COLORS] || "#64748b",
+                          }}
+                        >
+                          {COMPARISON_STATUS[h.previousStatus as keyof typeof COMPARISON_STATUS]?.label || h.previousStatus || "جديد"}
+                        </Badge>
+                        <span className="text-slate-400">→</span>
+                        <Badge
+                          variant="outline"
+                          style={{
+                            backgroundColor: STATUS_COLORS[h.newStatus as keyof typeof STATUS_COLORS] + "20",
+                            borderColor: STATUS_COLORS[h.newStatus as keyof typeof STATUS_COLORS],
+                            color: STATUS_COLORS[h.newStatus as keyof typeof STATUS_COLORS],
+                          }}
+                        >
+                          {COMPARISON_STATUS[h.newStatus as keyof typeof COMPARISON_STATUS]?.label || h.newStatus}
+                        </Badge>
+                      </div>
+                      {h.reason && (
+                        <p className="text-sm text-slate-600 mb-1">
+                          <strong>السبب:</strong> {h.reason}
+                        </p>
+                      )}
+                      <div className="text-xs text-slate-400 flex items-center gap-2">
+                        <span>{h.userName || "مستخدم"}</span>
+                        <span>•</span>
+                        <span>{format(new Date(h.createdAt), "yyyy/MM/dd HH:mm", { locale: ar })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

@@ -16,7 +16,15 @@ import {
   comparisonSummaries,
   productStorageSettings,
   advancedProductionOrders,
-  productionOrderItems
+  productionOrderItems,
+  comparisonStatusHistory,
+  productPrices,
+  wasteRiskRules,
+  wasteRiskAlerts,
+  users,
+  COMPARISON_STATUS,
+  RISK_SEVERITY,
+  ALERT_STATUS
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -6568,6 +6576,90 @@ export async function registerRoutes(
     }
   });
 
+  // Export comparisons to Excel/CSV
+  app.get("/api/production-comparisons/export", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const XLSX = (await import("xlsx")).default;
+      const { branchId, startDate, endDate, category, format: exportFormat = "xlsx" } = req.query;
+      
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
+      
+      const conditions: any[] = [];
+      if (effectiveBranchId) {
+        conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
+      }
+      if (startDate) {
+        conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      }
+      if (endDate) {
+        conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      }
+      if (category && category !== "all") {
+        conditions.push(eq(dailyComparisons.productCategory, category as string));
+      }
+      
+      let query = db.select().from(dailyComparisons);
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as typeof query;
+      }
+      const comparisons = await query.orderBy(desc(dailyComparisons.comparisonDate));
+      
+      // Prepare data for export
+      const exportData = comparisons.map((c) => ({
+        "التاريخ": c.comparisonDate,
+        "الفرع": c.branchId,
+        "المنتج": c.productName,
+        "الفئة": c.productCategory || "أخرى",
+        "الإنتاج": c.producedQuantity || 0,
+        "المبيعات": c.soldQuantity || 0,
+        "الفرق": c.difference || 0,
+        "نسبة الفرق %": c.differencePercent || 0,
+        "قيمة الإنتاج": c.productionValue || 0,
+        "قيمة المبيعات": c.salesValue || 0,
+        "قيمة الهدر": c.wasteValue || 0,
+        "الحالة": c.status,
+        "قابل للتخزين": c.isStorable ? "نعم" : "لا",
+      }));
+      
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      XLSX.utils.book_append_sheet(wb, ws, "المقارنات");
+      
+      // Add summary sheet
+      const totalProduced = comparisons.reduce((sum, c) => sum + (c.producedQuantity || 0), 0);
+      const totalSold = comparisons.reduce((sum, c) => sum + (c.soldQuantity || 0), 0);
+      const totalWaste = comparisons.filter(c => (c.difference || 0) > 0).reduce((sum, c) => sum + (c.difference || 0), 0);
+      const totalWasteValue = comparisons.reduce((sum, c) => sum + (c.wasteValue || 0), 0);
+      
+      const summaryData = [
+        { "البند": "إجمالي الإنتاج", "القيمة": totalProduced },
+        { "البند": "إجمالي المبيعات", "القيمة": totalSold },
+        { "البند": "إجمالي الهدر (كمية)", "القيمة": totalWaste },
+        { "البند": "إجمالي قيمة الهدر (ر.س)", "القيمة": totalWasteValue },
+        { "البند": "عدد السجلات", "القيمة": comparisons.length },
+        { "البند": "نسبة الكفاءة %", "القيمة": totalProduced > 0 ? ((totalSold / totalProduced) * 100).toFixed(2) : 0 },
+      ];
+      const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, summaryWs, "ملخص");
+      
+      if (exportFormat === "csv") {
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="comparisons_${startDate || "all"}_${endDate || "all"}.csv"`);
+        res.send("\uFEFF" + csv); // BOM for Arabic support
+      } else {
+        const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="comparisons_${startDate || "all"}_${endDate || "all"}.xlsx"`);
+        res.send(buffer);
+      }
+    } catch (error) {
+      console.error("Error exporting comparisons:", error);
+      res.status(500).json({ error: "فشل تصدير البيانات" });
+    }
+  });
+
   // Upload sales file and process it
   app.post("/api/production-comparisons/upload-sales", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
     try {
@@ -6917,6 +7009,444 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error running comparison:", error);
       res.status(500).json({ error: "فشل إجراء المقارنة" });
+    }
+  });
+
+  // Update comparison status
+  app.patch("/api/production-comparisons/:id/status", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { status, reason } = req.body;
+      
+      if (!status) {
+        return res.status(400).json({ error: "الحالة مطلوبة" });
+      }
+      
+      const validStatuses = ["normal", "waste", "shortage", "stored", "made_to_order"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+      
+      // Get current comparison
+      const [current] = await db
+        .select()
+        .from(dailyComparisons)
+        .where(eq(dailyComparisons.id, parseInt(id)))
+        .limit(1);
+      
+      if (!current) {
+        return res.status(404).json({ error: "المقارنة غير موجودة" });
+      }
+      
+      const previousStatus = current.status;
+      
+      // Update comparison in a transaction
+      await db.transaction(async (tx) => {
+        // Update the comparison
+        await tx
+          .update(dailyComparisons)
+          .set({
+            status,
+            statusChangedBy: req.currentUser?.id,
+            statusChangedAt: new Date(),
+            statusReason: reason || null,
+            updatedAt: new Date(),
+          })
+          .where(eq(dailyComparisons.id, parseInt(id)));
+        
+        // Log to history table
+        await tx.insert(comparisonStatusHistory).values({
+          comparisonId: parseInt(id),
+          previousStatus,
+          newStatus: status,
+          reason: reason || null,
+          changedBy: req.currentUser?.id,
+        });
+      });
+      
+      // Return updated comparison
+      const [updated] = await db
+        .select()
+        .from(dailyComparisons)
+        .where(eq(dailyComparisons.id, parseInt(id)));
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating comparison status:", error);
+      res.status(500).json({ error: "فشل تحديث الحالة" });
+    }
+  });
+
+  // Bulk update comparison statuses
+  app.post("/api/production-comparisons/bulk-status", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { ids, status, reason } = req.body;
+      
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "قائمة المقارنات مطلوبة" });
+      }
+      
+      if (!status) {
+        return res.status(400).json({ error: "الحالة مطلوبة" });
+      }
+      
+      const validStatuses = ["normal", "waste", "shortage", "stored", "made_to_order"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+      
+      let updatedCount = 0;
+      
+      await db.transaction(async (tx) => {
+        for (const id of ids) {
+          // Get current status
+          const [current] = await tx
+            .select()
+            .from(dailyComparisons)
+            .where(eq(dailyComparisons.id, parseInt(id)))
+            .limit(1);
+          
+          if (current) {
+            await tx
+              .update(dailyComparisons)
+              .set({
+                status,
+                statusChangedBy: req.currentUser?.id,
+                statusChangedAt: new Date(),
+                statusReason: reason || null,
+                updatedAt: new Date(),
+              })
+              .where(eq(dailyComparisons.id, parseInt(id)));
+            
+            await tx.insert(comparisonStatusHistory).values({
+              comparisonId: parseInt(id),
+              previousStatus: current.status,
+              newStatus: status,
+              reason: reason || null,
+              changedBy: req.currentUser?.id,
+            });
+            
+            updatedCount++;
+          }
+        }
+      });
+      
+      res.json({ success: true, updatedCount });
+    } catch (error) {
+      console.error("Error bulk updating statuses:", error);
+      res.status(500).json({ error: "فشل التحديث الجماعي" });
+    }
+  });
+
+  // Get comparison status history
+  app.get("/api/production-comparisons/:id/history", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const history = await db
+        .select({
+          id: comparisonStatusHistory.id,
+          previousStatus: comparisonStatusHistory.previousStatus,
+          newStatus: comparisonStatusHistory.newStatus,
+          reason: comparisonStatusHistory.reason,
+          changedBy: comparisonStatusHistory.changedBy,
+          createdAt: comparisonStatusHistory.createdAt,
+          userName: users.fullName,
+        })
+        .from(comparisonStatusHistory)
+        .leftJoin(users, eq(comparisonStatusHistory.changedBy, users.id))
+        .where(eq(comparisonStatusHistory.comparisonId, parseInt(id)))
+        .orderBy(desc(comparisonStatusHistory.createdAt));
+      
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching status history:", error);
+      res.status(500).json({ error: "فشل جلب السجل" });
+    }
+  });
+
+  // ========== Product Prices API ==========
+  
+  // Get all product prices
+  app.get("/api/product-prices", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const prices = await db.select().from(productPrices).orderBy(desc(productPrices.effectiveDate));
+      res.json(prices);
+    } catch (error) {
+      console.error("Error fetching product prices:", error);
+      res.status(500).json({ error: "فشل جلب الأسعار" });
+    }
+  });
+
+  // Get latest prices for all products
+  app.get("/api/product-prices/latest", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const { branchId } = req.query;
+      
+      // Get the latest price for each product
+      const latestPrices = await db
+        .selectDistinctOn([productPrices.productName], {
+          productName: productPrices.productName,
+          price: productPrices.price,
+          costPrice: productPrices.costPrice,
+          branchId: productPrices.branchId,
+          effectiveDate: productPrices.effectiveDate,
+        })
+        .from(productPrices)
+        .where(branchId ? eq(productPrices.branchId, branchId) : sql`true`)
+        .orderBy(productPrices.productName, desc(productPrices.effectiveDate));
+      
+      res.json(latestPrices);
+    } catch (error) {
+      console.error("Error fetching latest prices:", error);
+      res.status(500).json({ error: "فشل جلب الأسعار" });
+    }
+  });
+
+  // Add or update product price
+  app.post("/api/product-prices", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { productName, price, costPrice, branchId, source } = req.body;
+      
+      if (!productName || price === undefined) {
+        return res.status(400).json({ error: "اسم المنتج والسعر مطلوبان" });
+      }
+      
+      const [inserted] = await db
+        .insert(productPrices)
+        .values({
+          productName,
+          price: parseFloat(price),
+          costPrice: costPrice ? parseFloat(costPrice) : null,
+          branchId: branchId || null,
+          source: source || "manual",
+          effectiveDate: new Date().toISOString().split('T')[0],
+          updatedBy: req.currentUser?.id,
+        })
+        .returning();
+      
+      res.status(201).json(inserted);
+    } catch (error) {
+      console.error("Error saving product price:", error);
+      res.status(500).json({ error: "فشل حفظ السعر" });
+    }
+  });
+
+  // Bulk import product prices
+  app.post("/api/product-prices/bulk", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { prices } = req.body; // Array of { productName, price, costPrice? }
+      
+      if (!prices || !Array.isArray(prices) || prices.length === 0) {
+        return res.status(400).json({ error: "قائمة الأسعار مطلوبة" });
+      }
+      
+      let insertedCount = 0;
+      const effectiveDate = new Date().toISOString().split('T')[0];
+      
+      await db.transaction(async (tx) => {
+        for (const item of prices) {
+          if (!item.productName || item.price === undefined) continue;
+          
+          await tx.insert(productPrices).values({
+            productName: item.productName,
+            price: parseFloat(item.price),
+            costPrice: item.costPrice ? parseFloat(item.costPrice) : null,
+            branchId: item.branchId || null,
+            source: "import",
+            effectiveDate,
+            updatedBy: req.currentUser?.id,
+          });
+          
+          insertedCount++;
+        }
+      });
+      
+      res.json({ success: true, insertedCount });
+    } catch (error) {
+      console.error("Error bulk importing prices:", error);
+      res.status(500).json({ error: "فشل استيراد الأسعار" });
+    }
+  });
+
+  // ========== Waste Risk Rules API ==========
+  
+  // Get all waste risk rules
+  app.get("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const rules = await db.select().from(wasteRiskRules).orderBy(desc(wasteRiskRules.createdAt));
+      res.json(rules);
+    } catch (error) {
+      console.error("Error fetching waste rules:", error);
+      res.status(500).json({ error: "فشل جلب قواعد المخاطر" });
+    }
+  });
+
+  // Create waste risk rule
+  app.post("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { name, branchId, category, productName, thresholdType, thresholdValue, periodDays, severity } = req.body;
+      
+      if (!name || !thresholdType || thresholdValue === undefined) {
+        return res.status(400).json({ error: "البيانات المطلوبة غير مكتملة" });
+      }
+      
+      const [inserted] = await db
+        .insert(wasteRiskRules)
+        .values({
+          name,
+          branchId: branchId || null,
+          category: category || null,
+          productName: productName || null,
+          thresholdType,
+          thresholdValue: parseFloat(thresholdValue),
+          periodDays: periodDays || 1,
+          severity: severity || "medium",
+          isActive: true,
+          createdBy: req.currentUser?.id,
+        })
+        .returning();
+      
+      res.status(201).json(inserted);
+    } catch (error) {
+      console.error("Error creating waste rule:", error);
+      res.status(500).json({ error: "فشل إنشاء القاعدة" });
+    }
+  });
+
+  // Update waste risk rule
+  app.patch("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const [updated] = await db
+        .update(wasteRiskRules)
+        .set(updates)
+        .where(eq(wasteRiskRules.id, parseInt(id)))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "القاعدة غير موجودة" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating waste rule:", error);
+      res.status(500).json({ error: "فشل تحديث القاعدة" });
+    }
+  });
+
+  // Delete waste risk rule
+  app.delete("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      await db.delete(wasteRiskRules).where(eq(wasteRiskRules.id, parseInt(id)));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting waste rule:", error);
+      res.status(500).json({ error: "فشل حذف القاعدة" });
+    }
+  });
+
+  // ========== Waste Risk Alerts API ==========
+  
+  // Get all waste risk alerts
+  app.get("/api/waste-risk-alerts", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const { status, branchId, severity, startDate, endDate } = req.query;
+      
+      let query = db.select().from(wasteRiskAlerts);
+      const conditions = [];
+      
+      if (status) conditions.push(eq(wasteRiskAlerts.status, status));
+      if (branchId) conditions.push(eq(wasteRiskAlerts.branchId, branchId));
+      if (severity) conditions.push(eq(wasteRiskAlerts.severity, severity));
+      if (startDate) conditions.push(gte(wasteRiskAlerts.alertDate, startDate));
+      if (endDate) conditions.push(lte(wasteRiskAlerts.alertDate, endDate));
+      
+      const alerts = await db
+        .select()
+        .from(wasteRiskAlerts)
+        .where(conditions.length > 0 ? and(...conditions) : sql`true`)
+        .orderBy(desc(wasteRiskAlerts.createdAt))
+        .limit(100);
+      
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching waste alerts:", error);
+      res.status(500).json({ error: "فشل جلب التنبيهات" });
+    }
+  });
+
+  // Get open alerts count
+  app.get("/api/waste-risk-alerts/count", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const [result] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(wasteRiskAlerts)
+        .where(eq(wasteRiskAlerts.status, "open"));
+      
+      res.json({ count: result?.count || 0 });
+    } catch (error) {
+      console.error("Error counting alerts:", error);
+      res.status(500).json({ error: "فشل عد التنبيهات" });
+    }
+  });
+
+  // Acknowledge alert
+  app.post("/api/waste-risk-alerts/:id/acknowledge", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const [updated] = await db
+        .update(wasteRiskAlerts)
+        .set({
+          status: "acknowledged",
+          acknowledgedBy: req.currentUser?.id,
+          acknowledgedAt: new Date(),
+        })
+        .where(eq(wasteRiskAlerts.id, parseInt(id)))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error acknowledging alert:", error);
+      res.status(500).json({ error: "فشل الإقرار بالتنبيه" });
+    }
+  });
+
+  // Resolve alert
+  app.post("/api/waste-risk-alerts/:id/resolve", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { resolutionNotes } = req.body;
+      
+      const [updated] = await db
+        .update(wasteRiskAlerts)
+        .set({
+          status: "resolved",
+          resolvedBy: req.currentUser?.id,
+          resolvedAt: new Date(),
+          resolutionNotes: resolutionNotes || null,
+        })
+        .where(eq(wasteRiskAlerts.id, parseInt(id)))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error resolving alert:", error);
+      res.status(500).json({ error: "فشل حل التنبيه" });
     }
   });
 
