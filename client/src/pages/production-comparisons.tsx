@@ -89,7 +89,12 @@ import {
   AreaChart,
 } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
-import { COMPARISON_CATEGORIES, COMPARISON_STATUS, type Branch, type DailyComparison, type ComparisonSummary } from "@shared/schema";
+import { COMPARISON_CATEGORIES, COMPARISON_STATUS, MADE_TO_ORDER_CATEGORIES, type Branch, type DailyComparison, type ComparisonSummary } from "@shared/schema";
+
+// Categories included in comparison (excluding made-to-order like drinks/pizza)
+const COMPARABLE_CATEGORIES = COMPARISON_CATEGORIES.filter(
+  cat => !(MADE_TO_ORDER_CATEGORIES as readonly string[]).includes(cat)
+);
 
 const CATEGORY_COLORS: Record<string, string> = {
   "إفطار": "#f59e0b",
@@ -481,7 +486,7 @@ export default function ProductionComparisonsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">جميع الفئات</SelectItem>
-                {COMPARISON_CATEGORIES.map((cat) => (
+                {COMPARABLE_CATEGORIES.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
                   </SelectItem>
@@ -872,8 +877,16 @@ export default function ProductionComparisonsPage() {
           </TabsContent>
 
           <TabsContent value="categories">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center gap-2 text-purple-800 text-sm">
+                <Info className="h-4 w-4 flex-shrink-0" />
+                <span>
+                  <strong>ملاحظة:</strong> فئات المشروبات (باريستا) والبيتزا مستثناة من المقارنات لأنها تُصنع حسب طلب العميل ولا يوجد فيها هالك.
+                </span>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {COMPARISON_CATEGORIES.map((category) => {
+              {COMPARABLE_CATEGORIES.map((category) => {
                 const catData = categoryBreakdown.find((c) => c.category === category);
                 const efficiency =
                   catData && catData.produced > 0

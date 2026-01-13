@@ -4860,9 +4860,21 @@ export type InsertProductStorageSetting = z.infer<typeof insertProductStorageSet
 export const COMPARISON_CATEGORIES = ["إفطار", "مخبوزات", "حلويات", "بيتزا", "باريستا", "تجمعات", "أخرى"] as const;
 export type ComparisonCategory = typeof COMPARISON_CATEGORIES[number];
 
+// Categories that are made-to-order (no waste possible) - excluded from waste calculations
+// باريستا (Drinks) and بيتزا (Pizza) are made when customer orders, so no excess production
+export const MADE_TO_ORDER_CATEGORIES = ["باريستا", "بيتزا"] as const;
+export type MadeToOrderCategory = typeof MADE_TO_ORDER_CATEGORIES[number];
+
+// Helper function to check if a category is made-to-order
+export function isMadeToOrderCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  return (MADE_TO_ORDER_CATEGORIES as readonly string[]).includes(category);
+}
+
 export const COMPARISON_STATUS = {
   normal: { label: "طبيعي", color: "green" },
   waste: { label: "هدر", color: "red" },
   shortage: { label: "نقص", color: "orange" },
   stored: { label: "مخزن", color: "blue" },
+  made_to_order: { label: "حسب الطلب", color: "purple" },
 } as const;
