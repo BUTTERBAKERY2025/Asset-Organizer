@@ -179,7 +179,7 @@ export default function PlatformHomePage() {
       title: "الموارد البشرية",
       description: "إدارة الموظفين والهيكل التنظيمي والحضور والورديات",
       icon: UsersRound,
-      href: "/branch-employees",
+      href: "/attendance-dashboard",
       color: "bg-teal-500",
       module: "branch_employees",
       items: [
