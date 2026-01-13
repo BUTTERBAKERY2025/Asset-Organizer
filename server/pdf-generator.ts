@@ -865,6 +865,8 @@ export interface ProductionOrderPdfData {
   notes: string;
   estimatedCost: number;
   actualCost: number;
+  targetSalesValue?: number;
+  sourceSalesValue?: number;
   items: Array<{
     productName: string;
     category: string;
@@ -872,21 +874,188 @@ export interface ProductionOrderPdfData {
     producedQuantity: number;
     unitPrice: number;
     total: number;
+    originalQuantity?: number;
+    increaseQuantity?: number;
   }>;
 }
 
+// Department/Category mapping for grouping
+const DEPARTMENT_MAPPING: Record<string, string> = {
+  'باريستا': 'قسم الباريستا',
+  'مشروبات': 'قسم الباريستا',
+  'مشروبات باردة': 'قسم الباريستا',
+  'مشروبات ساخنة': 'قسم الباريستا',
+  'coffee': 'قسم الباريستا',
+  'مخبوزات': 'قسم البيكري',
+  'معجنات': 'قسم البيكري',
+  'خبز': 'قسم البيكري',
+  'bakery': 'قسم البيكري',
+  'حلويات': 'قسم الحلواني',
+  'كيك': 'قسم الحلواني',
+  'تورتات': 'قسم الحلواني',
+  'desserts': 'قسم الحلواني',
+  'ساندويتشات': 'قسم المطبخ',
+  'سلطات': 'قسم المطبخ',
+  'وجبات': 'قسم المطبخ',
+  'kitchen': 'قسم المطبخ',
+  'عام': 'أخرى',
+  'other': 'أخرى',
+};
+
+function getDepartment(category: string): string {
+  if (!category) return 'أخرى';
+  const lowerCategory = category.toLowerCase();
+  for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
+    if (lowerCategory.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerCategory)) {
+      return dept;
+    }
+  }
+  return 'أخرى';
+}
+
 export async function generateProductionOrderPdf(data: ProductionOrderPdfData): Promise<Buffer> {
-  const itemRows = data.items.map((item, index) => `
-    <tr>
-      <td style="text-align: center;">${index + 1}</td>
-      <td style="text-align: right;">${item.productName}</td>
-      <td style="text-align: center;">${item.category}</td>
-      <td style="text-align: center;">${item.targetQuantity}</td>
-      <td style="text-align: center;">${item.producedQuantity}</td>
-      <td style="text-align: center;">${formatNumber(item.unitPrice)}</td>
-      <td style="text-align: center;">${formatNumber(item.total)}</td>
-    </tr>
-  `).join('');
+  // Group items by department
+  const groupedItems: Record<string, typeof data.items> = {};
+  data.items.forEach(item => {
+    const dept = getDepartment(item.category);
+    if (!groupedItems[dept]) groupedItems[dept] = [];
+    groupedItems[dept].push(item);
+  });
+
+  // Sort departments
+  const deptOrder = ['قسم البيكري', 'قسم الحلواني', 'قسم الباريستا', 'قسم المطبخ', 'أخرى'];
+  const sortedDepts = Object.keys(groupedItems).sort((a, b) => {
+    const aIdx = deptOrder.indexOf(a);
+    const bIdx = deptOrder.indexOf(b);
+    return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+  });
+
+  // Build grouped table rows
+  let itemRows = '';
+  let globalIndex = 1;
+  
+  for (const dept of sortedDepts) {
+    const deptItems = groupedItems[dept];
+    const deptTotal = deptItems.reduce((s, i) => s + i.total, 0);
+    const deptQty = deptItems.reduce((s, i) => s + i.targetQuantity, 0);
+    
+    // Department header row
+    itemRows += `
+      <tr class="dept-header">
+        <td colspan="7" style="background: #92400e; color: white; font-weight: bold; text-align: right; padding: 8px;">
+          ${dept} (${deptItems.length} صنف)
+        </td>
+      </tr>
+    `;
+    
+    // Items in this department
+    for (const item of deptItems) {
+      const increaseNote = item.increaseQuantity && item.increaseQuantity > 0 
+        ? `<span style="color: #16a34a; font-size: 9px;"> (+${item.increaseQuantity})</span>` 
+        : '';
+      itemRows += `
+        <tr>
+          <td style="text-align: center;">${globalIndex++}</td>
+          <td style="text-align: right;">${item.productName}</td>
+          <td style="text-align: center;">${item.category}</td>
+          <td style="text-align: center;">${item.targetQuantity}${increaseNote}</td>
+          <td style="text-align: center;">${item.producedQuantity}</td>
+          <td style="text-align: center;">${formatNumber(item.unitPrice)}</td>
+          <td style="text-align: center;">${formatNumber(item.total)}</td>
+        </tr>
+      `;
+    }
+    
+    // Department subtotal row
+    itemRows += `
+      <tr class="dept-subtotal">
+        <td colspan="3" style="background: #fef3c7; font-weight: bold; text-align: right;">إجمالي ${dept}</td>
+        <td style="background: #fef3c7; font-weight: bold; text-align: center;">${deptQty}</td>
+        <td style="background: #fef3c7;"></td>
+        <td style="background: #fef3c7;"></td>
+        <td style="background: #fef3c7; font-weight: bold; text-align: center;">${formatNumber(deptTotal)} ريال</td>
+      </tr>
+    `;
+  }
+
+  // Grand totals
+  const grandTotalQty = data.items.reduce((s, i) => s + i.targetQuantity, 0);
+  const grandTotalValue = data.items.reduce((s, i) => s + i.total, 0);
+  const totalOriginalQty = data.items.reduce((s, i) => s + (i.originalQuantity || 0), 0);
+  const totalIncrease = data.items.reduce((s, i) => s + (i.increaseQuantity || 0), 0);
+
+  // Comparison section (source vs target)
+  const hasComparison = data.sourceSalesValue && data.targetSalesValue && data.sourceSalesValue > 0;
+  const increaseRatio = hasComparison ? ((data.targetSalesValue! / data.sourceSalesValue!) * 100 - 100).toFixed(1) : '0';
+  
+  const comparisonHtml = hasComparison ? `
+    <div class="comparison-section" style="margin-top: 20px; padding: 15px; background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px;">
+      <h3 style="color: #1e40af; margin-bottom: 10px; font-size: 13px;">مقارنة البيانات المصدر والمستهدف</h3>
+      <table style="width: 100%;">
+        <tr>
+          <td style="width: 50%; padding: 8px; background: #dbeafe;">
+            <div style="font-size: 10px; color: #1e40af;">مبيعات الملف المصدر</div>
+            <div style="font-size: 14px; font-weight: bold; color: #1e3a8a;">${formatNumber(data.sourceSalesValue!)} ريال</div>
+          </td>
+          <td style="width: 50%; padding: 8px; background: #dcfce7;">
+            <div style="font-size: 10px; color: #166534;">المبيعات المستهدفة</div>
+            <div style="font-size: 14px; font-weight: bold; color: #15803d;">${formatNumber(data.targetSalesValue!)} ريال</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 8px; background: #fef9c3;">
+            <div style="font-size: 10px; color: #854d0e;">إجمالي الكمية الأصلية</div>
+            <div style="font-size: 14px; font-weight: bold; color: #a16207;">${formatNumber(totalOriginalQty)} وحدة</div>
+          </td>
+          <td style="padding: 8px; background: #d1fae5;">
+            <div style="font-size: 10px; color: #166534;">الزيادة في الكمية</div>
+            <div style="font-size: 14px; font-weight: bold; color: #16a34a;">+${formatNumber(totalIncrease)} وحدة (${increaseRatio}%)</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+    
+    <h3 style="color: #92400e; margin: 20px 0 10px; font-size: 13px;">تفصيل الزيادات حسب القسم</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>القسم</th>
+          <th>عدد الأصناف</th>
+          <th>الكمية الأصلية</th>
+          <th>الكمية المستهدفة</th>
+          <th>الزيادة</th>
+          <th>الإجمالي (ريال)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sortedDepts.map(dept => {
+          const deptItems = groupedItems[dept];
+          const origQty = deptItems.reduce((s, i) => s + (i.originalQuantity || 0), 0);
+          const targetQty = deptItems.reduce((s, i) => s + i.targetQuantity, 0);
+          const incQty = deptItems.reduce((s, i) => s + (i.increaseQuantity || 0), 0);
+          const deptTotal = deptItems.reduce((s, i) => s + i.total, 0);
+          return `
+            <tr>
+              <td style="font-weight: bold;">${dept}</td>
+              <td style="text-align: center;">${deptItems.length}</td>
+              <td style="text-align: center;">${formatNumber(origQty)}</td>
+              <td style="text-align: center;">${formatNumber(targetQty)}</td>
+              <td style="text-align: center; color: #16a34a;">+${formatNumber(incQty)}</td>
+              <td style="text-align: center;">${formatNumber(deptTotal)}</td>
+            </tr>
+          `;
+        }).join('')}
+        <tr style="background: #fef3c7; font-weight: bold;">
+          <td>الإجمالي</td>
+          <td style="text-align: center;">${data.items.length}</td>
+          <td style="text-align: center;">${formatNumber(totalOriginalQty)}</td>
+          <td style="text-align: center;">${formatNumber(grandTotalQty)}</td>
+          <td style="text-align: center; color: #16a34a;">+${formatNumber(totalIncrease)}</td>
+          <td style="text-align: center;">${formatNumber(grandTotalValue)}</td>
+        </tr>
+      </tbody>
+    </table>
+  ` : '';
 
   const html = `
 <!DOCTYPE html>
@@ -904,14 +1073,17 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
     .info-label { font-size: 10px; color: #92400e; }
     .info-value { font-size: 12px; font-weight: bold; color: #78350f; }
     h2 { font-size: 14px; margin: 15px 0 10px; color: #92400e; }
+    h3 { font-size: 12px; color: #78350f; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     th, td { border: 1px solid #ddd; padding: 8px 6px; font-size: 10px; }
     th { background-color: #fef3c7; font-weight: bold; text-align: center; }
     tr:nth-child(even) { background-color: #fffbeb; }
+    .dept-header td { font-size: 11px !important; }
     .costs { display: flex; justify-content: space-around; margin-top: 20px; padding: 15px; background: #f0fdf4; border-radius: 8px; }
     .cost-item { text-align: center; }
     .cost-label { font-size: 11px; color: #166534; }
     .cost-value { font-size: 16px; font-weight: bold; color: #15803d; }
+    .grand-total { background: #fcd34d !important; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -923,10 +1095,12 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
     <div class="info-item"><div class="info-label">النوع</div><div class="info-value">${data.orderType}</div></div>
     <div class="info-item"><div class="info-label">الفرع</div><div class="info-value">${data.branchName}</div></div>
     <div class="info-item"><div class="info-label">تاريخ التسليم</div><div class="info-value">${data.targetDate}</div></div>
-    <div class="info-item"><div class="info-label">ملاحظات</div><div class="info-value">${data.notes || '-'}</div></div>
+    <div class="info-item"><div class="info-label">المبيعات المستهدفة</div><div class="info-value">${data.targetSalesValue ? formatNumber(data.targetSalesValue) + ' ريال' : '-'}</div></div>
   </div>
   
-  <h2>بنود الأمر</h2>
+  ${data.notes ? `<div style="background: #fef3c7; padding: 10px; border-radius: 6px; margin-bottom: 15px;"><strong>ملاحظات:</strong> ${data.notes}</div>` : ''}
+  
+  <h2>بنود الأمر حسب القسم</h2>
   <table>
     <thead>
       <tr>
@@ -939,17 +1113,29 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
         <th>الإجمالي</th>
       </tr>
     </thead>
-    <tbody>${itemRows}</tbody>
+    <tbody>
+      ${itemRows}
+      <tr class="grand-total">
+        <td colspan="3" style="text-align: right;">الإجمالي الكلي</td>
+        <td style="text-align: center;">${grandTotalQty}</td>
+        <td style="text-align: center;">${data.items.reduce((s, i) => s + i.producedQuantity, 0)}</td>
+        <td></td>
+        <td style="text-align: center;">${formatNumber(grandTotalValue)} ريال</td>
+      </tr>
+    </tbody>
   </table>
+  
+  ${comparisonHtml}
   
   <div class="costs">
     <div class="cost-item"><div class="cost-label">التكلفة المقدرة</div><div class="cost-value">${formatNumber(data.estimatedCost)} ريال</div></div>
     <div class="cost-item"><div class="cost-label">التكلفة الفعلية</div><div class="cost-value">${formatNumber(data.actualCost)} ريال</div></div>
+    <div class="cost-item"><div class="cost-label">عدد الأصناف</div><div class="cost-value">${data.items.length}</div></div>
   </div>
   
   ${getSummaryHtml('ملخص أمر الإنتاج', [
     { label: 'عدد البنود', value: formatNumber(data.items.length) },
-    { label: 'إجمالي الكمية المطلوبة', value: formatNumber(data.items.reduce((s, i) => s + i.targetQuantity, 0)) },
+    { label: 'إجمالي الكمية المطلوبة', value: formatNumber(grandTotalQty) },
     { label: 'إجمالي الكمية المنتجة', value: formatNumber(data.items.reduce((s, i) => s + i.producedQuantity, 0)) },
     { label: 'التكلفة المقدرة', value: formatNumber(data.estimatedCost) + ' ريال' },
     { label: 'التكلفة الفعلية', value: formatNumber(data.actualCost) + ' ريال' },
