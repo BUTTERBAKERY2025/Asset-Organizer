@@ -881,49 +881,118 @@ export interface ProductionOrderPdfData {
 
 // Department/Category mapping for grouping
 const DEPARTMENT_MAPPING: Record<string, string> = {
+  // قسم الباريستا
   'باريستا': 'قسم الباريستا',
+  'barista': 'قسم الباريستا',
   'مشروبات': 'قسم الباريستا',
   'مشروبات باردة': 'قسم الباريستا',
   'مشروبات ساخنة': 'قسم الباريستا',
+  'قهوة': 'قسم الباريستا',
   'coffee': 'قسم الباريستا',
+  'شاي': 'قسم الباريستا',
+  'عصائر': 'قسم الباريستا',
+  'سموذي': 'قسم الباريستا',
+  'smoothie': 'قسم الباريستا',
+  'drinks': 'قسم الباريستا',
+  'beverages': 'قسم الباريستا',
+  // قسم البيكري
   'مخبوزات': 'قسم البيكري',
   'معجنات': 'قسم البيكري',
   'خبز': 'قسم البيكري',
+  'بيكري': 'قسم البيكري',
   'bakery': 'قسم البيكري',
+  'bread': 'قسم البيكري',
+  'فطائر': 'قسم البيكري',
+  'كرواسون': 'قسم البيكري',
+  'croissant': 'قسم البيكري',
+  'دونات': 'قسم البيكري',
+  'donut': 'قسم البيكري',
+  'بان': 'قسم البيكري',
+  // قسم الحلواني
   'حلويات': 'قسم الحلواني',
   'كيك': 'قسم الحلواني',
   'تورتات': 'قسم الحلواني',
+  'تورتة': 'قسم الحلواني',
+  'باستري': 'قسم الحلواني',
+  'pastry': 'قسم الحلواني',
   'desserts': 'قسم الحلواني',
+  'dessert': 'قسم الحلواني',
+  'حلواني': 'قسم الحلواني',
+  'sweets': 'قسم الحلواني',
+  'شوكولاتة': 'قسم الحلواني',
+  'chocolate': 'قسم الحلواني',
+  'كوكيز': 'قسم الحلواني',
+  'cookie': 'قسم الحلواني',
+  // قسم المطبخ
   'ساندويتشات': 'قسم المطبخ',
+  'ساندويش': 'قسم المطبخ',
+  'sandwich': 'قسم المطبخ',
   'سلطات': 'قسم المطبخ',
+  'سلطة': 'قسم المطبخ',
+  'salad': 'قسم المطبخ',
   'وجبات': 'قسم المطبخ',
+  'وجبة': 'قسم المطبخ',
+  'meal': 'قسم المطبخ',
   'kitchen': 'قسم المطبخ',
-  'عام': 'أخرى',
-  'other': 'أخرى',
+  'مطبخ': 'قسم المطبخ',
+  'فطور': 'قسم المطبخ',
+  'breakfast': 'قسم المطبخ',
+  'بيض': 'قسم المطبخ',
+  'egg': 'قسم المطبخ',
+  // أخرى
+  'عام': 'منتجات أخرى',
+  'other': 'منتجات أخرى',
+  'general': 'منتجات أخرى',
 };
 
 function getDepartment(category: string): string {
-  if (!category) return 'أخرى';
+  if (!category) return 'منتجات أخرى';
   const lowerCategory = category.toLowerCase();
   for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
     if (lowerCategory.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerCategory)) {
       return dept;
     }
   }
-  return 'أخرى';
+  return 'منتجات أخرى';
+}
+
+// Invalid product names to filter out (metadata rows from Excel)
+const INVALID_PRODUCT_NAMES = [
+  'النطاق الزمني',
+  'الفترة',
+  'التاريخ',
+  'الإجمالي',
+  'المجموع',
+  'total',
+  'sum',
+  'date range',
+  'period',
+  'header',
+  'footer',
+];
+
+function isValidProductName(name: string): boolean {
+  if (!name || name.trim().length < 2) return false;
+  const lowerName = name.toLowerCase().trim();
+  return !INVALID_PRODUCT_NAMES.some(invalid => 
+    lowerName.includes(invalid.toLowerCase()) || invalid.toLowerCase().includes(lowerName)
+  );
 }
 
 export async function generateProductionOrderPdf(data: ProductionOrderPdfData): Promise<Buffer> {
+  // Filter out invalid items (metadata rows from Excel)
+  const validItems = data.items.filter(item => isValidProductName(item.productName));
+  
   // Group items by department
-  const groupedItems: Record<string, typeof data.items> = {};
-  data.items.forEach(item => {
+  const groupedItems: Record<string, typeof validItems> = {};
+  validItems.forEach(item => {
     const dept = getDepartment(item.category);
     if (!groupedItems[dept]) groupedItems[dept] = [];
     groupedItems[dept].push(item);
   });
 
   // Sort departments
-  const deptOrder = ['قسم البيكري', 'قسم الحلواني', 'قسم الباريستا', 'قسم المطبخ', 'أخرى'];
+  const deptOrder = ['قسم البيكري', 'قسم الحلواني', 'قسم الباريستا', 'قسم المطبخ', 'منتجات أخرى'];
   const sortedDepts = Object.keys(groupedItems).sort((a, b) => {
     const aIdx = deptOrder.indexOf(a);
     const bIdx = deptOrder.indexOf(b);
@@ -978,11 +1047,11 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
     `;
   }
 
-  // Grand totals
-  const grandTotalQty = data.items.reduce((s, i) => s + i.targetQuantity, 0);
-  const grandTotalValue = data.items.reduce((s, i) => s + i.total, 0);
-  const totalOriginalQty = data.items.reduce((s, i) => s + (i.originalQuantity || 0), 0);
-  const totalIncrease = data.items.reduce((s, i) => s + (i.increaseQuantity || 0), 0);
+  // Grand totals (using filtered valid items)
+  const grandTotalQty = validItems.reduce((s, i) => s + i.targetQuantity, 0);
+  const grandTotalValue = validItems.reduce((s, i) => s + i.total, 0);
+  const totalOriginalQty = validItems.reduce((s, i) => s + (i.originalQuantity || 0), 0);
+  const totalIncrease = validItems.reduce((s, i) => s + (i.increaseQuantity || 0), 0);
 
   // Comparison section (source vs target)
   const hasComparison = data.sourceSalesValue && data.targetSalesValue && data.sourceSalesValue > 0;
@@ -1047,7 +1116,7 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
         }).join('')}
         <tr style="background: #fef3c7; font-weight: bold;">
           <td>الإجمالي</td>
-          <td style="text-align: center;">${data.items.length}</td>
+          <td style="text-align: center;">${validItems.length}</td>
           <td style="text-align: center;">${formatNumber(totalOriginalQty)}</td>
           <td style="text-align: center;">${formatNumber(grandTotalQty)}</td>
           <td style="text-align: center; color: #16a34a;">+${formatNumber(totalIncrease)}</td>
