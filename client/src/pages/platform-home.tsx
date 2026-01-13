@@ -201,8 +201,7 @@ export default function PlatformHomePage() {
         { label: "لوحة الإنتاج", href: "/production-dashboard", icon: LayoutDashboard },
         { label: "أوامر الإنتاج", href: "/advanced-production-orders", icon: ClipboardEdit },
         { label: "الإنتاج اليومي", href: "/daily-production", icon: CheckCircle },
-        { label: "المخطط الذكي", href: "/ai-production-planner", icon: Brain },
-        { label: "تقارير الإنتاج", href: "/production-reports", icon: FileBarChart },
+                { label: "تقارير الإنتاج", href: "/production-reports", icon: FileBarChart },
       ],
     },
     {

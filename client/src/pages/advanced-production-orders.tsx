@@ -207,13 +207,7 @@ export default function AdvancedProductionOrdersPage() {
                 <RefreshCw className="h-4 w-4 ml-2" />
                 تحديث
               </Button>
-              <Link href="/ai-production-planner">
-                <Button variant="outline" size="sm" className="border-purple-200 text-purple-700 hover:bg-purple-50 h-11 sm:h-9" data-testid="btn-ai-planner">
-                  <Brain className="h-4 w-4 ml-2" />
-                  المخطط الذكي
-                </Button>
-              </Link>
-              <Link href="/advanced-production-orders/new">
+                            <Link href="/advanced-production-orders/new">
                 <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="button-new-order">
                   <Plus className="w-4 h-4 ml-2" />
                   أمر جديد

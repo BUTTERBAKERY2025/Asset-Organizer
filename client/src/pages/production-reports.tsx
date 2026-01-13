@@ -394,13 +394,7 @@ export default function ProductionReportsPage() {
                   <span className="text-xs">أوامر الإنتاج</span>
                 </Button>
               </Link>
-              <Link href="/ai-production-planner">
-                <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-purple-50 hover:border-purple-300" data-testid="link-ai-planner">
-                  <Sparkles className="h-4 w-4 text-purple-600" />
-                  <span className="text-xs">التخطيط الذكي</span>
-                </Button>
-              </Link>
-              <Link href="/display-bar-waste">
+                            <Link href="/display-bar-waste">
                 <Button variant="outline" size="sm" className="w-full h-auto py-2 flex flex-col items-center gap-1 hover:bg-red-50 hover:border-red-300" data-testid="link-waste">
                   <Trash2 className="h-4 w-4 text-red-600" />
                   <span className="text-xs">إدارة الهالك</span>
