@@ -1,8 +1,19 @@
--- خطوة 1: حذف جميع المنتجات القديمة
+-- تنبيه: هذا الملف سيحذف بيانات الإنتاج والهدر المرتبطة بالمنتجات القديمة
+-- تأكد من أخذ نسخة احتياطية قبل التنفيذ
+
+-- خطوة 1: حذف البيانات المرتبطة بالمنتجات من الجداول الفرعية
+DELETE FROM production_order_items;
+DELETE FROM production_orders;
+DELETE FROM display_bar_receipts;
+DELETE FROM display_bar_daily_summary;
+DELETE FROM waste_items;
+DELETE FROM product_sales_analytics;
+DELETE FROM daily_production_batches;
+
+-- خطوة 2: حذف جميع المنتجات القديمة
 DELETE FROM products;
 
--- خطوة 2: إضافة المنتجات الجديدة (167 منتج)
-
+-- خطوة 3: إضافة المنتجات الجديدة (167 منتج)
 INSERT INTO products (name, category, unit, base_price, is_active, sku, price_excl_vat, vat_amount, vat_rate, product_type) VALUES ('أفوكادو سكرمبل كرواسون', 'إفطار', 'قطعة', 27, true, 'F-BF-0003', 23.48, 3.52, 15, 'finish');
 INSERT INTO products (name, category, unit, base_price, is_active, sku, price_excl_vat, vat_amount, vat_rate, product_type) VALUES ('أميريكان ايج', 'إفطار', 'قطعة', 32.21, true, 'F-BF-0024', 28.01, 4.2, 15, 'finish');
 INSERT INTO products (name, category, unit, base_price, is_active, sku, price_excl_vat, vat_amount, vat_rate, product_type) VALUES ('أومليت فرنسى', 'إفطار', 'قطعة', 36, true, 'F-BF-0022', 31.3, 4.7, 15, 'finish');
