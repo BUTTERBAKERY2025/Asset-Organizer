@@ -27,7 +27,6 @@ import {
   Package,
   Target,
   Zap,
-  Brain,
   RefreshCw,
   ChefHat,
   ShoppingCart,
@@ -99,14 +98,6 @@ const QUICK_ACTIONS = [
     href: "/daily-production",
     color: "bg-gradient-to-br from-amber-500 to-orange-600",
     badge: "جديد"
-  },
-  {
-    title: "المخطط الذكي",
-    description: "تخطيط بالذكاء الاصطناعي",
-    icon: Brain,
-    href: "/ai-production-planner",
-    color: "bg-gradient-to-br from-purple-500 to-indigo-600",
-    badge: "AI"
   },
   {
     title: "رفع المبيعات",
