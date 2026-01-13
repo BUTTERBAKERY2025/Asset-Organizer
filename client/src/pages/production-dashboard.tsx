@@ -556,40 +556,7 @@ export default function ProductionDashboardPage() {
                   <CardDescription>نظرة شاملة على جميع العمليات</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Cashier KPI */}
-                    <Link href="/cashier-journals" className="block group" data-testid="card-cashier-kpi">
-                      <div className="rounded-xl border-2 border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4 hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="h-10 w-10 bg-emerald-100 rounded-xl flex items-center justify-center">
-                            <CreditCard className="h-5 w-5 text-emerald-600" />
-                          </div>
-                          <ArrowUpRight className="h-4 w-4 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <h4 className="font-semibold text-emerald-800 mb-2">الكاشير</h4>
-                        {commandCenterLoading ? (
-                          <Skeleton className="h-12 w-full" />
-                        ) : (
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-slate-500">المبيعات</span>
-                              <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.totalSales || 0)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-slate-500">المتوسط</span>
-                              <span className="font-medium text-slate-700">{formatCurrency(commandCenterData?.cashier?.averageTicket || 0)}</span>
-                            </div>
-                            {(commandCenterData?.cashier?.shortages || 0) > 0 && (
-                              <div className="flex justify-between text-sm text-red-600">
-                                <span>العجز</span>
-                                <span className="font-medium">{formatCurrency(commandCenterData?.cashier?.shortageAmount || 0)}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </Link>
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Waste KPI */}
                     <Link href="/waste-reports" className="block group" data-testid="card-waste-kpi">
                       <div className="rounded-xl border-2 border-red-100 bg-gradient-to-br from-red-50 to-white p-4 hover:border-red-300 hover:shadow-md transition-all cursor-pointer">
