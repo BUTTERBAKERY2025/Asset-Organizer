@@ -6576,14 +6576,23 @@ export async function registerRoutes(
     }
   });
 
-  // Export comparisons to Excel/CSV
+  // Export comparisons to Excel/CSV (with branch isolation)
   app.get("/api/production-comparisons/export", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
       const XLSX = (await import("xlsx")).default;
       const { branchId, startDate, endDate, category, format: exportFormat = "xlsx" } = req.query;
       
       const mandatoryBranch = getMandatoryBranchFilter(req);
-      const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
+      
+      // Enforce branch isolation: non-admin users can only export their own branch
+      let effectiveBranchId: string | undefined;
+      if (mandatoryBranch) {
+        // Non-admin users must use their assigned branch
+        effectiveBranchId = mandatoryBranch;
+      } else {
+        // Admins can filter by any branch or see all
+        effectiveBranchId = branchId !== "all" ? branchId : undefined;
+      }
       
       const conditions: any[] = [];
       if (effectiveBranchId) {
@@ -7012,9 +7021,10 @@ export async function registerRoutes(
     }
   });
 
-  // Update comparison status
+  // Update comparison status (with branch isolation)
   app.patch("/api/production-comparisons/:id/status", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
       const { status, reason } = req.body;
       
@@ -7036,6 +7046,11 @@ export async function registerRoutes(
       
       if (!current) {
         return res.status(404).json({ error: "المقارنة غير موجودة" });
+      }
+      
+      // Branch isolation check
+      if (mandatoryBranch && current.branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مسموح بتعديل بيانات فرع آخر" });
       }
       
       const previousStatus = current.status;
@@ -7077,9 +7092,10 @@ export async function registerRoutes(
     }
   });
 
-  // Bulk update comparison statuses
+  // Bulk update comparison statuses (with branch isolation)
   app.post("/api/production-comparisons/bulk-status", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { ids, status, reason } = req.body;
       
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -7096,6 +7112,7 @@ export async function registerRoutes(
       }
       
       let updatedCount = 0;
+      let skippedCount = 0;
       
       await db.transaction(async (tx) => {
         for (const id of ids) {
@@ -7106,42 +7123,63 @@ export async function registerRoutes(
             .where(eq(dailyComparisons.id, parseInt(id)))
             .limit(1);
           
-          if (current) {
-            await tx
-              .update(dailyComparisons)
-              .set({
-                status,
-                statusChangedBy: req.currentUser?.id,
-                statusChangedAt: new Date(),
-                statusReason: reason || null,
-                updatedAt: new Date(),
-              })
-              .where(eq(dailyComparisons.id, parseInt(id)));
-            
-            await tx.insert(comparisonStatusHistory).values({
-              comparisonId: parseInt(id),
-              previousStatus: current.status,
-              newStatus: status,
-              reason: reason || null,
-              changedBy: req.currentUser?.id,
-            });
-            
-            updatedCount++;
+          // Skip if not found or belongs to another branch (for non-admin users)
+          if (!current) continue;
+          if (mandatoryBranch && current.branchId !== mandatoryBranch) {
+            skippedCount++;
+            continue;
           }
+          
+          await tx
+            .update(dailyComparisons)
+            .set({
+              status,
+              statusChangedBy: req.currentUser?.id,
+              statusChangedAt: new Date(),
+              statusReason: reason || null,
+              updatedAt: new Date(),
+            })
+            .where(eq(dailyComparisons.id, parseInt(id)));
+            
+          await tx.insert(comparisonStatusHistory).values({
+            comparisonId: parseInt(id),
+            previousStatus: current.status,
+            newStatus: status,
+            reason: reason || null,
+            changedBy: req.currentUser?.id,
+          });
+          
+          updatedCount++;
         }
       });
       
-      res.json({ success: true, updatedCount });
+      res.json({ success: true, updatedCount, skippedCount });
     } catch (error) {
       console.error("Error bulk updating statuses:", error);
       res.status(500).json({ error: "فشل التحديث الجماعي" });
     }
   });
 
-  // Get comparison status history
+  // Get comparison status history (with branch isolation)
   app.get("/api/production-comparisons/:id/history", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
+      
+      // Verify comparison belongs to user's branch
+      const [comparison] = await db
+        .select()
+        .from(dailyComparisons)
+        .where(eq(dailyComparisons.id, parseInt(id)))
+        .limit(1);
+      
+      if (!comparison) {
+        return res.status(404).json({ error: "المقارنة غير موجودة" });
+      }
+      
+      if (mandatoryBranch && comparison.branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مسموح بعرض سجل فرع آخر" });
+      }
       
       const history = await db
         .select({
@@ -7167,10 +7205,23 @@ export async function registerRoutes(
 
   // ========== Product Prices API ==========
   
-  // Get all product prices
+  // Get all product prices (with branch isolation)
   app.get("/api/product-prices", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
-      const prices = await db.select().from(productPrices).orderBy(desc(productPrices.effectiveDate));
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { branchId } = req.query;
+      const effectiveBranchId = mandatoryBranch || branchId;
+      
+      const conditions: any[] = [];
+      if (effectiveBranchId) {
+        conditions.push(or(eq(productPrices.branchId, effectiveBranchId), isNull(productPrices.branchId)));
+      }
+      
+      const prices = await db
+        .select()
+        .from(productPrices)
+        .where(conditions.length > 0 ? and(...conditions) : sql`true`)
+        .orderBy(desc(productPrices.effectiveDate));
       res.json(prices);
     } catch (error) {
       console.error("Error fetching product prices:", error);
@@ -7178,12 +7229,14 @@ export async function registerRoutes(
     }
   });
 
-  // Get latest prices for all products
+  // Get latest prices for all products (with branch isolation)
   app.get("/api/product-prices/latest", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { branchId } = req.query;
+      const effectiveBranchId = mandatoryBranch || branchId;
       
-      // Get the latest price for each product
+      // Get the latest price for each product (branch-specific or global)
       const latestPrices = await db
         .selectDistinctOn([productPrices.productName], {
           productName: productPrices.productName,
@@ -7193,7 +7246,9 @@ export async function registerRoutes(
           effectiveDate: productPrices.effectiveDate,
         })
         .from(productPrices)
-        .where(branchId ? eq(productPrices.branchId, branchId) : sql`true`)
+        .where(effectiveBranchId 
+          ? or(eq(productPrices.branchId, effectiveBranchId), isNull(productPrices.branchId))
+          : sql`true`)
         .orderBy(productPrices.productName, desc(productPrices.effectiveDate));
       
       res.json(latestPrices);
@@ -7203,14 +7258,18 @@ export async function registerRoutes(
     }
   });
 
-  // Add or update product price
+  // Add or update product price (with branch isolation)
   app.post("/api/product-prices", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { productName, price, costPrice, branchId, source } = req.body;
       
       if (!productName || price === undefined) {
         return res.status(400).json({ error: "اسم المنتج والسعر مطلوبان" });
       }
+      
+      // Non-admin users can only add prices for their branch
+      const effectiveBranchId = mandatoryBranch || branchId || null;
       
       const [inserted] = await db
         .insert(productPrices)
@@ -7218,7 +7277,7 @@ export async function registerRoutes(
           productName,
           price: parseFloat(price),
           costPrice: costPrice ? parseFloat(costPrice) : null,
-          branchId: branchId || null,
+          branchId: effectiveBranchId,
           source: source || "manual",
           effectiveDate: new Date().toISOString().split('T')[0],
           updatedBy: req.currentUser?.id,
@@ -7232,9 +7291,10 @@ export async function registerRoutes(
     }
   });
 
-  // Bulk import product prices
+  // Bulk import product prices (with branch isolation)
   app.post("/api/product-prices/bulk", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { prices } = req.body; // Array of { productName, price, costPrice? }
       
       if (!prices || !Array.isArray(prices) || prices.length === 0) {
@@ -7248,11 +7308,14 @@ export async function registerRoutes(
         for (const item of prices) {
           if (!item.productName || item.price === undefined) continue;
           
+          // Non-admin users can only add prices for their branch
+          const effectiveBranchId = mandatoryBranch || item.branchId || null;
+          
           await tx.insert(productPrices).values({
             productName: item.productName,
             price: parseFloat(item.price),
             costPrice: item.costPrice ? parseFloat(item.costPrice) : null,
-            branchId: item.branchId || null,
+            branchId: effectiveBranchId,
             source: "import",
             effectiveDate,
             updatedBy: req.currentUser?.id,
@@ -7271,10 +7334,21 @@ export async function registerRoutes(
 
   // ========== Waste Risk Rules API ==========
   
-  // Get all waste risk rules
+  // Get all waste risk rules (with branch isolation)
   app.get("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
-      const rules = await db.select().from(wasteRiskRules).orderBy(desc(wasteRiskRules.createdAt));
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      const conditions: any[] = [];
+      if (mandatoryBranch) {
+        conditions.push(or(eq(wasteRiskRules.branchId, mandatoryBranch), isNull(wasteRiskRules.branchId)));
+      }
+      
+      const rules = await db
+        .select()
+        .from(wasteRiskRules)
+        .where(conditions.length > 0 ? and(...conditions) : sql`true`)
+        .orderBy(desc(wasteRiskRules.createdAt));
       res.json(rules);
     } catch (error) {
       console.error("Error fetching waste rules:", error);
@@ -7282,20 +7356,24 @@ export async function registerRoutes(
     }
   });
 
-  // Create waste risk rule
+  // Create waste risk rule (with branch isolation)
   app.post("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { name, branchId, category, productName, thresholdType, thresholdValue, periodDays, severity } = req.body;
       
       if (!name || !thresholdType || thresholdValue === undefined) {
         return res.status(400).json({ error: "البيانات المطلوبة غير مكتملة" });
       }
       
+      // Non-admin users can only create rules for their branch
+      const effectiveBranchId = mandatoryBranch || branchId || null;
+      
       const [inserted] = await db
         .insert(wasteRiskRules)
         .values({
           name,
-          branchId: branchId || null,
+          branchId: effectiveBranchId,
           category: category || null,
           productName: productName || null,
           thresholdType,
@@ -7314,11 +7392,24 @@ export async function registerRoutes(
     }
   });
 
-  // Update waste risk rule
+  // Update waste risk rule (with branch isolation)
   app.patch("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
       const updates = req.body;
+      
+      // Verify rule belongs to user's branch (for non-admins)
+      if (mandatoryBranch) {
+        const [rule] = await db.select().from(wasteRiskRules).where(eq(wasteRiskRules.id, parseInt(id)));
+        if (!rule) {
+          return res.status(404).json({ error: "القاعدة غير موجودة" });
+        }
+        // Non-admin cannot edit global rules or other branch's rules
+        if (!rule.branchId || rule.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مسموح بتعديل قاعدة عامة أو فرع آخر" });
+        }
+      }
       
       const [updated] = await db
         .update(wasteRiskRules)
@@ -7337,10 +7428,23 @@ export async function registerRoutes(
     }
   });
 
-  // Delete waste risk rule
+  // Delete waste risk rule (with branch isolation)
   app.delete("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
+      
+      // Verify rule belongs to user's branch (for non-admins)
+      if (mandatoryBranch) {
+        const [rule] = await db.select().from(wasteRiskRules).where(eq(wasteRiskRules.id, parseInt(id)));
+        if (!rule) {
+          return res.status(404).json({ error: "القاعدة غير موجودة" });
+        }
+        // Non-admin cannot delete global rules or other branch's rules
+        if (!rule.branchId || rule.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مسموح بحذف قاعدة عامة أو فرع آخر" });
+        }
+      }
       
       await db.delete(wasteRiskRules).where(eq(wasteRiskRules.id, parseInt(id)));
       
@@ -7353,19 +7457,21 @@ export async function registerRoutes(
 
   // ========== Waste Risk Alerts API ==========
   
-  // Get all waste risk alerts
+  // Get all waste risk alerts (with branch isolation)
   app.get("/api/waste-risk-alerts", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { status, branchId, severity, startDate, endDate } = req.query;
       
-      let query = db.select().from(wasteRiskAlerts);
-      const conditions = [];
+      const effectiveBranchId = mandatoryBranch || branchId;
       
+      const conditions: any[] = [];
+      
+      if (effectiveBranchId) conditions.push(eq(wasteRiskAlerts.branchId, effectiveBranchId));
       if (status) conditions.push(eq(wasteRiskAlerts.status, status));
-      if (branchId) conditions.push(eq(wasteRiskAlerts.branchId, branchId));
       if (severity) conditions.push(eq(wasteRiskAlerts.severity, severity));
-      if (startDate) conditions.push(gte(wasteRiskAlerts.alertDate, startDate));
-      if (endDate) conditions.push(lte(wasteRiskAlerts.alertDate, endDate));
+      if (startDate) conditions.push(gte(wasteRiskAlerts.alertDate, startDate as string));
+      if (endDate) conditions.push(lte(wasteRiskAlerts.alertDate, endDate as string));
       
       const alerts = await db
         .select()
@@ -7381,13 +7487,20 @@ export async function registerRoutes(
     }
   });
 
-  // Get open alerts count
+  // Get open alerts count (with branch isolation)
   app.get("/api/waste-risk-alerts/count", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      const conditions: any[] = [eq(wasteRiskAlerts.status, "open")];
+      if (mandatoryBranch) {
+        conditions.push(eq(wasteRiskAlerts.branchId, mandatoryBranch));
+      }
+      
       const [result] = await db
         .select({ count: sql<number>`count(*)` })
         .from(wasteRiskAlerts)
-        .where(eq(wasteRiskAlerts.status, "open"));
+        .where(and(...conditions));
       
       res.json({ count: result?.count || 0 });
     } catch (error) {
@@ -7396,10 +7509,23 @@ export async function registerRoutes(
     }
   });
 
-  // Acknowledge alert
+  // Acknowledge alert (with branch isolation)
   app.post("/api/waste-risk-alerts/:id/acknowledge", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
+      
+      // First verify alert exists and belongs to user's branch
+      const [alert] = await db.select().from(wasteRiskAlerts).where(eq(wasteRiskAlerts.id, parseInt(id)));
+      
+      if (!alert) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      
+      // Branch isolation check for non-admins
+      if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مسموح بتعديل تنبيه فرع آخر" });
+      }
       
       const [updated] = await db
         .update(wasteRiskAlerts)
@@ -7411,10 +7537,6 @@ export async function registerRoutes(
         .where(eq(wasteRiskAlerts.id, parseInt(id)))
         .returning();
       
-      if (!updated) {
-        return res.status(404).json({ error: "التنبيه غير موجود" });
-      }
-      
       res.json(updated);
     } catch (error) {
       console.error("Error acknowledging alert:", error);
@@ -7422,11 +7544,24 @@ export async function registerRoutes(
     }
   });
 
-  // Resolve alert
+  // Resolve alert (with branch isolation)
   app.post("/api/waste-risk-alerts/:id/resolve", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
     try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
       const { resolutionNotes } = req.body;
+      
+      // First verify alert exists and belongs to user's branch
+      const [alert] = await db.select().from(wasteRiskAlerts).where(eq(wasteRiskAlerts.id, parseInt(id)));
+      
+      if (!alert) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      
+      // Branch isolation check for non-admins
+      if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+        return res.status(403).json({ error: "غير مسموح بحل تنبيه فرع آخر" });
+      }
       
       const [updated] = await db
         .update(wasteRiskAlerts)
@@ -7438,10 +7573,6 @@ export async function registerRoutes(
         })
         .where(eq(wasteRiskAlerts.id, parseInt(id)))
         .returning();
-      
-      if (!updated) {
-        return res.status(404).json({ error: "التنبيه غير موجود" });
-      }
       
       res.json(updated);
     } catch (error) {
