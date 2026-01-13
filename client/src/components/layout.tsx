@@ -9,7 +9,7 @@ import {
   FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, 
   ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, 
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
-  Receipt, PieChart, Lock
+  Receipt, PieChart, Lock, Layers, PieChartIcon
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -131,6 +131,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/ai-production-planner", label: "مخطط الإنتاج الذكي", icon: Brain, module: "production", indent: true },
           { href: "/sales-data-uploads", label: "رفع بيانات المبيعات", icon: Upload, module: "production", indent: true },
           { href: "/production-reports", label: "تقارير الإنتاج", icon: FileBarChart, module: "production", indent: true },
+          { href: "/production-comparisons", label: "مقارنة الإنتاج بالمبيعات", icon: Layers, module: "production", indent: true },
+          { href: "/production-comparison-reports", label: "تقارير تحليل الهدر", icon: PieChartIcon, module: "production", indent: true },
         ],
       },
     },
