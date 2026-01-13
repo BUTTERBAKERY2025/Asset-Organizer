@@ -6773,11 +6773,15 @@ export async function registerRoutes(
         .from(dailySalesData)
         .where(and(...salesConditions));
       
-      // Get approved production orders for the period
+      // Get production orders for the period (approved, completed, or pending with produced quantities)
       const productionConditions: any[] = [
         gte(advancedProductionOrders.startDate, startDate),
         lte(advancedProductionOrders.startDate, endDate),
-        eq(advancedProductionOrders.status, "approved"),
+        or(
+          eq(advancedProductionOrders.status, "approved"),
+          eq(advancedProductionOrders.status, "completed"),
+          eq(advancedProductionOrders.status, "pending")
+        ),
       ];
       if (effectiveBranchId) {
         productionConditions.push(eq(advancedProductionOrders.targetBranchId, effectiveBranchId));
