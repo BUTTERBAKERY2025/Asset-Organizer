@@ -11646,11 +11646,11 @@ export async function registerRoutes(
       const absentToday = Math.max(0, totalEmployees - presentToday);
       
       // Get templates count
-      const templates = await storage.getScheduleTemplates();
+      const templates = await storage.getAllScheduleTemplates(effectiveBranchId || undefined);
       const templatesCount = templates.length;
       
       // Get periods count
-      const periods = await storage.getSchedulePeriods({});
+      const periods = await storage.getAllSchedulePeriods(effectiveBranchId || undefined);
       const periodsCount = periods.length;
       
       // Get schedules count (this month)
