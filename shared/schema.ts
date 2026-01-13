@@ -4837,6 +4837,11 @@ export const productStorageSettings = pgTable("product_storage_settings", {
   id: serial("id").primaryKey(),
   productName: text("product_name").notNull().unique(),
   productCategory: text("product_category"),
+  suggestedCategory: text("suggested_category"), // الفئة المقترحة تلقائياً
+  confidenceScore: integer("confidence_score").default(0), // نسبة الثقة في الاقتراح
+  isVerified: boolean("is_verified").default(false), // هل تم التحقق من الفئة
+  verifiedBy: varchar("verified_by"), // من قام بالتحقق
+  verifiedAt: timestamp("verified_at"), // متى تم التحقق
   isStorable: boolean("is_storable").default(false),
   maxStorageDays: integer("max_storage_days").default(0),
   storageType: text("storage_type"), // freezer, refrigerator, room_temp
@@ -4846,6 +4851,7 @@ export const productStorageSettings = pgTable("product_storage_settings", {
 }, (table) => [
   index("idx_product_storage_name").on(table.productName),
   index("idx_product_storage_category").on(table.productCategory),
+  index("idx_product_storage_verified").on(table.isVerified),
 ]);
 
 export const insertProductStorageSettingSchema = createInsertSchema(productStorageSettings).omit({
@@ -4869,6 +4875,80 @@ export type MadeToOrderCategory = typeof MADE_TO_ORDER_CATEGORIES[number];
 export function isMadeToOrderCategory(category: string | null | undefined): boolean {
   if (!category) return false;
   return (MADE_TO_ORDER_CATEGORIES as readonly string[]).includes(category);
+}
+
+// Keyword-based category rules for auto-classification
+// Each rule maps keywords (Arabic/English) to a category
+export const CATEGORY_KEYWORD_RULES: Record<string, string[]> = {
+  "باريستا": [
+    // Coffee drinks
+    "coffee", "كوفي", "قهوة", "لاتيه", "latte", "كابتشينو", "cappuccino",
+    "اسبريسو", "espresso", "موكا", "mocha", "امريكانو", "americano",
+    "فلات وايت", "flat white", "ماكياتو", "macchiato", "v60", "في 60",
+    "cold brew", "كولد برو", "ice coffee", "ايس كوفي",
+    // Other drinks
+    "هوت شوكليت", "hot chocolate", "شوكولاته ساخنة", "ماتشا", "matcha",
+    "شاي", "tea", "عصير", "juice", "سموذي", "smoothie", "ميلك شيك", "milkshake",
+    "فرابي", "frappe", "spanish latte", "سبانش لاتيه",
+    // Barista keywords
+    "barista", "باريستا"
+  ],
+  "بيتزا": [
+    "pizza", "بيتزا", "بيتسا", "مارغريتا", "margherita", "ببروني", "pepperoni"
+  ],
+  "إفطار": [
+    "breakfast", "إفطار", "فطور", "eggs", "بيض", "benedict", "بينيديكت",
+    "أومليت", "omelette", "فول", "شكشوكة", "shakshuka", "توست فرنسي", "french toast",
+    "بانكيك", "pancake", "وافل", "waffle", "croissant egg", "كرواسون بيض",
+    "bruschetta egg", "بروسكيتا بيض", "ساندويتش صباحي"
+  ],
+  "مخبوزات": [
+    "croissant", "كرواسون", "دانش", "danish", "بريوش", "brioche",
+    "باجيت", "baguette", "خبز", "bread", "سندويتش", "sandwich", "ساندوتش",
+    "بان", "bun", "رول", "roll", "فوكاتشا", "focaccia", "سيجنتشر",
+    "signature", "حلومي", "halloumi", "تونا", "tuna", "تركي", "turkey",
+    "سمون", "salmon", "افوكادو", "avocado"
+  ],
+  "حلويات": [
+    "cake", "كيك", "تشيز كيك", "cheesecake", "تارت", "tart", "براوني", "brownie",
+    "كوكي", "cookie", "مافن", "muffin", "تيراميسو", "tiramisu", "بودنج", "pudding",
+    "كريم بروليه", "creme brulee", "ماتيلدا", "matilda", "كراميل", "caramel",
+    "نوتيلا", "nutella", "شوكولاته", "chocolate", "فانيلا", "vanilla",
+    "توت", "berry", "raspberry", "فراولة", "strawberry", "مانجو", "mango",
+    "لوز", "almond", "بيكان", "pecan", "سان سابستيان", "san sebastian",
+    "honey cake", "كيك العسل", "كريمة", "cream"
+  ],
+  "تجمعات": [
+    "catering", "كاترينج", "تجمعات", "حفلات", "party", "بوفيه", "buffet",
+    "مناسبات", "events", "اجتماعات", "meetings"
+  ]
+};
+
+// Function to suggest category based on product name keywords
+export function suggestCategoryFromProductName(productName: string): { category: string | null; confidence: number } {
+  const normalizedName = productName.toLowerCase();
+  
+  let bestMatch: { category: string; matchCount: number } | null = null;
+  
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORD_RULES)) {
+    let matchCount = 0;
+    for (const keyword of keywords) {
+      if (normalizedName.includes(keyword.toLowerCase())) {
+        matchCount++;
+      }
+    }
+    if (matchCount > 0 && (!bestMatch || matchCount > bestMatch.matchCount)) {
+      bestMatch = { category, matchCount };
+    }
+  }
+  
+  if (bestMatch) {
+    // Calculate confidence based on match count
+    const confidence = Math.min(bestMatch.matchCount * 30, 100);
+    return { category: bestMatch.category, confidence };
+  }
+  
+  return { category: null, confidence: 0 };
 }
 
 export const COMPARISON_STATUS = {

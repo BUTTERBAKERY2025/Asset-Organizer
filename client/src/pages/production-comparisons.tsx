@@ -60,7 +60,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Tabs,
   TabsContent,
@@ -165,6 +176,25 @@ export default function ProductionComparisonsPage() {
       return res.json();
     },
   });
+
+  const { data: uncategorizedProducts = [] } = useQuery<{productName: string}[]>({
+    queryKey: ["/api/uncategorized-products"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/uncategorized-products");
+      if (!res.ok) throw new Error("Failed to fetch uncategorized products");
+      return res.json();
+    },
+  });
+
+  const [confirmComparisonOpen, setConfirmComparisonOpen] = useState(false);
+
+  const handleRunComparisonClick = () => {
+    if (uncategorizedProducts.length > 0) {
+      setConfirmComparisonOpen(true);
+    } else {
+      runComparisonMutation.mutate();
+    }
+  };
 
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -456,7 +486,7 @@ export default function ProductionComparisonsPage() {
             <Button
               variant="outline"
               className="gap-2"
-              onClick={() => runComparisonMutation.mutate()}
+              onClick={handleRunComparisonClick}
               disabled={runComparisonMutation.isPending}
               data-testid="button-run-comparison"
             >
@@ -467,8 +497,53 @@ export default function ProductionComparisonsPage() {
               )}
               إجراء المقارنة
             </Button>
+            {uncategorizedProducts.length > 0 && (
+              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                {uncategorizedProducts.length} منتج غير مصنف
+              </Badge>
+            )}
           </div>
         </div>
+
+        {/* Warning dialog for uncategorized products */}
+        <AlertDialog open={confirmComparisonOpen} onOpenChange={setConfirmComparisonOpen}>
+          <AlertDialogContent dir="rtl" className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-yellow-600">
+                <AlertTriangle className="h-5 w-5" />
+                تحذير: منتجات غير مصنفة
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-right">
+                يوجد {uncategorizedProducts.length} منتج غير مصنف في النظام.
+                المنتجات غير المصنفة ستظهر تحت فئة "أخرى" في التقارير.
+                <br /><br />
+                هل تريد المتابعة بإجراء المقارنة؟
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-row-reverse gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setConfirmComparisonOpen(false);
+                  navigate("/product-category-management");
+                }}
+              >
+                <Tag className="h-4 w-4 ml-2" />
+                تصنيف المنتجات
+              </Button>
+              <AlertDialogAction
+                onClick={() => {
+                  setConfirmComparisonOpen(false);
+                  runComparisonMutation.mutate();
+                }}
+              >
+                متابعة
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <div className="flex flex-wrap items-center gap-4 mb-6 bg-white p-4 rounded-xl shadow-sm border">
           <div className="flex items-center gap-2">

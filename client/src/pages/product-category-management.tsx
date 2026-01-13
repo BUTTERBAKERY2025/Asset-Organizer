@@ -43,6 +43,8 @@ import { COMPARISON_CATEGORIES, MADE_TO_ORDER_CATEGORIES } from "@shared/schema"
 
 interface UncategorizedProduct {
   productName: string;
+  suggestedCategory: string | null;
+  confidence: number;
 }
 
 interface ProductStorageSetting {
@@ -121,6 +123,29 @@ export default function ProductCategoryManagementPage() {
       ...newSelections
     }));
   };
+
+  const handleAcceptAllSuggestions = () => {
+    const newSelections: Record<string, string> = {};
+    let acceptedCount = 0;
+    filteredProducts.forEach(p => {
+      if (p.suggestedCategory && p.confidence >= 30) {
+        newSelections[p.productName] = p.suggestedCategory;
+        acceptedCount++;
+      }
+    });
+    if (acceptedCount > 0) {
+      setSelectedProducts(prev => ({
+        ...prev,
+        ...newSelections
+      }));
+      toast({
+        title: "تم قبول الاقتراحات",
+        description: `تم قبول ${acceptedCount} اقتراح`,
+      });
+    }
+  };
+
+  const suggestionsCount = filteredProducts.filter(p => p.suggestedCategory && p.confidence >= 30).length;
 
   const handleSave = () => {
     const products = Object.entries(selectedProducts)
@@ -291,6 +316,18 @@ export default function ProductCategoryManagementPage() {
                 <Filter className="h-4 w-4 ml-2" />
                 تطبيق على الكل
               </Button>
+              
+              {suggestionsCount > 0 && (
+                <Button 
+                  variant="default"
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={handleAcceptAllSuggestions}
+                  data-testid="button-accept-all-suggestions"
+                >
+                  <CheckCircle2 className="h-4 w-4 ml-2" />
+                  قبول جميع الاقتراحات ({suggestionsCount})
+                </Button>
+              )}
             </div>
           </div>
 
@@ -304,19 +341,42 @@ export default function ProductCategoryManagementPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-right w-[50%]">اسم المنتج</TableHead>
-                    <TableHead className="text-right">الفئة</TableHead>
-                    <TableHead className="text-center w-[100px]">حسب الطلب</TableHead>
+                    <TableHead className="text-right w-[35%]">اسم المنتج</TableHead>
+                    <TableHead className="text-right w-[20%]">الفئة المقترحة</TableHead>
+                    <TableHead className="text-right w-[25%]">الفئة المحددة</TableHead>
+                    <TableHead className="text-center w-[20%]">الإجراء</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredProducts.map((product) => {
                     const selectedCat = selectedProducts[product.productName];
                     const isMadeToOrder = selectedCat && (MADE_TO_ORDER_CATEGORIES as readonly string[]).includes(selectedCat);
+                    const hasSuggestion = product.suggestedCategory && product.confidence > 0;
                     
                     return (
                       <TableRow key={product.productName} data-testid={`row-product-${product.productName}`}>
-                        <TableCell className="font-medium">{product.productName}</TableCell>
+                        <TableCell className="font-medium text-sm">{product.productName}</TableCell>
+                        <TableCell>
+                          {hasSuggestion ? (
+                            <div className="flex flex-col gap-1">
+                              <Badge 
+                                variant="outline" 
+                                className={`${
+                                  product.confidence >= 60 
+                                    ? 'bg-green-50 text-green-700 border-green-200' 
+                                    : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                }`}
+                              >
+                                {product.suggestedCategory}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                ثقة: {product.confidence}%
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">لا يوجد اقتراح</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Select
                             value={selectedCat || ""}
@@ -332,17 +392,39 @@ export default function ProductCategoryManagementPage() {
                               {COMPARISON_CATEGORIES.map((cat) => (
                                 <SelectItem key={cat} value={cat}>
                                   {cat}
+                                  {(MADE_TO_ORDER_CATEGORIES as readonly string[]).includes(cat) && (
+                                    <span className="text-xs text-purple-600 mr-1">(حسب الطلب)</span>
+                                  )}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell className="text-center">
-                          {isMadeToOrder && (
-                            <Badge variant="secondary" className="bg-purple-100 text-purple-700">
-                              نعم
-                            </Badge>
-                          )}
+                          <div className="flex items-center justify-center gap-2">
+                            {hasSuggestion && !selectedCat && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs bg-green-50 hover:bg-green-100 text-green-700"
+                                onClick={() => handleSingleCategory(product.productName, product.suggestedCategory!)}
+                                data-testid={`button-accept-${product.productName}`}
+                              >
+                                <CheckCircle2 className="h-3 w-3 ml-1" />
+                                قبول
+                              </Button>
+                            )}
+                            {selectedCat && isMadeToOrder && (
+                              <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-xs">
+                                حسب الطلب
+                              </Badge>
+                            )}
+                            {selectedCat && !isMadeToOrder && (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
+                                محدد
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
