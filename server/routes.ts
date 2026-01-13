@@ -2895,63 +2895,63 @@ export async function registerRoutes(
   // Get all cashier journals with filters (supports combined filters)
   app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
     try {
-      const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus } = req.query;
+      const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus, limit, offset } = req.query;
       
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const user = req.currentUser;
       
-      // Get all journals first, then apply filters
-      let journals = await storage.getAllCashierJournals();
+      // Determine effective branch filter
+      let effectiveBranchId: string | undefined;
+      let effectiveCashierId: string | undefined;
       
-      // Strict branch and user filtering
       if (!isUserAdmin(req)) {
         if (!mandatoryBranch) {
           return res.json([]); // No branch = no data
         }
+        effectiveBranchId = mandatoryBranch;
         
         // Get user permissions to see if they are a supervisor/manager
         const permissions = await storage.getUserPermissions(user.id);
         const journalPerms = permissions.find(p => p.module === 'cashier_journal');
         const isManager = journalPerms?.actions.includes('approve');
         
-        if (isManager) {
-          // Manager sees all journals in their branch
-          journals = journals.filter(j => j.branchId === mandatoryBranch);
-        } else {
-          // Cashier sees only their own journals in their branch
-          // Coerce to strings for reliable comparison (handles numeric vs string IDs)
-          const userId = String(user.id);
-          journals = journals.filter(j => 
-            j.branchId === mandatoryBranch && String(j.cashierId) === userId
-          );
+        if (!isManager) {
+          // Cashier sees only their own journals
+          effectiveCashierId = String(user.id);
         }
       } else if (branchId) {
-        // Admin can filter by specific branch if provided
-        journals = journals.filter(j => j.branchId === branchId);
+        effectiveBranchId = branchId as string;
       }
       
-      // Apply remaining filters
-      if (date) {
-        journals = journals.filter(j => j.journalDate === date);
-      }
-      if (startDate) {
-        journals = journals.filter(j => j.journalDate >= (startDate as string));
-      }
-      if (endDate) {
-        journals = journals.filter(j => j.journalDate <= (endDate as string));
-      }
-      if (cashierId) {
-        journals = journals.filter(j => j.cashierId === cashierId);
-      }
-      if (status) {
-        journals = journals.filter(j => j.status === status);
-      }
-      if (discrepancyStatus) {
-        journals = journals.filter(j => j.discrepancyStatus === discrepancyStatus);
-      }
+      // Parse pagination params
+      const pageLimit = limit ? Math.min(parseInt(limit as string, 10), 100) : undefined;
+      const pageOffset = offset ? parseInt(offset as string, 10) : 0;
       
-      res.json(journals);
+      // Use server-side filtered query with pagination
+      const result = await storage.getCashierJournalsFiltered({
+        branchId: effectiveBranchId,
+        startDate: date as string || startDate as string,
+        endDate: date as string || endDate as string,
+        status: status as string,
+        cashierId: effectiveCashierId || (cashierId as string),
+        discrepancyStatus: discrepancyStatus as string,
+        limit: pageLimit,
+        offset: pageOffset,
+      });
+      
+      // Return with pagination info if limit was provided
+      if (pageLimit) {
+        res.json({
+          journals: result.journals,
+          totalCount: result.totalCount,
+          page: Math.floor(pageOffset / pageLimit) + 1,
+          pageSize: pageLimit,
+          totalPages: Math.ceil(result.totalCount / pageLimit),
+        });
+      } else {
+        res.json(result.journals);
+      }
     } catch (error) {
       console.error("Error fetching cashier journals:", error);
       res.status(500).json({ error: "Failed to fetch cashier journals" });

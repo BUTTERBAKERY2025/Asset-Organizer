@@ -2533,6 +2533,49 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(cashierSalesJournals.journalDate));
   }
 
+  async getCashierJournalsFiltered(filters: { 
+    branchId?: string; 
+    startDate?: string; 
+    endDate?: string; 
+    status?: string;
+    cashierId?: string;
+    discrepancyStatus?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ journals: CashierSalesJournal[]; totalCount: number }> {
+    const conditions: any[] = [];
+    if (filters.branchId) conditions.push(eq(cashierSalesJournals.branchId, filters.branchId));
+    if (filters.startDate) conditions.push(gte(cashierSalesJournals.journalDate, filters.startDate));
+    if (filters.endDate) conditions.push(lte(cashierSalesJournals.journalDate, filters.endDate));
+    if (filters.status) conditions.push(eq(cashierSalesJournals.status, filters.status));
+    if (filters.cashierId) conditions.push(eq(cashierSalesJournals.cashierId, filters.cashierId));
+    if (filters.discrepancyStatus) conditions.push(eq(cashierSalesJournals.discrepancyStatus, filters.discrepancyStatus));
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    // Get total count first
+    const countResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(cashierSalesJournals)
+      .where(whereClause);
+    const totalCount = countResult[0]?.count || 0;
+    
+    // Get paginated results
+    let query = db.select().from(cashierSalesJournals)
+      .where(whereClause)
+      .orderBy(desc(cashierSalesJournals.journalDate));
+    
+    if (filters.limit) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+    if (filters.offset) {
+      query = query.offset(filters.offset) as typeof query;
+    }
+    
+    const journals = await query;
+    
+    return { journals, totalCount };
+  }
+
   async getCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
     const [journal] = await db.select().from(cashierSalesJournals).where(eq(cashierSalesJournals.id, id));
     return journal || undefined;
