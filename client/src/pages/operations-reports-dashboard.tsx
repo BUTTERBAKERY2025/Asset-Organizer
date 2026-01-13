@@ -731,6 +731,7 @@ export default function OperationsReportsDashboardPage() {
 
   const { data: report, isLoading, refetch } = useQuery<OperationsReport>({
     queryKey: [`/api/operations/reports?${queryString}`],
+    staleTime: 5 * 60 * 1000,
   });
 
   const cashierQueryString = new URLSearchParams({
@@ -739,15 +740,17 @@ export default function OperationsReportsDashboardPage() {
     ...(filters.endDate && { endDate: filters.endDate }),
   }).toString();
 
-  const { data: cashierJournals } = useQuery<CashierSalesJournal[]>({
+  const { data: cashierJournals, isLoading: cashierJournalsLoading } = useQuery<CashierSalesJournal[]>({
     queryKey: [`/api/cashier-journals?${cashierQueryString}`],
+    enabled: activeTab === 'cashier' || activeTab === 'overview',
+    staleTime: 5 * 60 * 1000,
   });
 
   // Get current month for targets
   const currentYearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
-  // Query for targets progress summary
-  const { data: targetsProgress } = useQuery<{
+  // Query for targets progress summary - lazy load when targets tab is active
+  const { data: targetsProgress, isLoading: targetsProgressLoading } = useQuery<{
     branchId: string;
     branchName: string;
     targetAmount: number;
@@ -765,11 +768,13 @@ export default function OperationsReportsDashboardPage() {
       const res = await fetch(`/api/targets/progress-summary?yearMonth=${currentYearMonth}`);
       if (!res.ok) return [];
       return res.json();
-    }
+    },
+    enabled: activeTab === 'targets',
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Query for targets leaderboard
-  const { data: targetsLeaderboard } = useQuery<{
+  // Query for targets leaderboard - lazy load when targets tab is active
+  const { data: targetsLeaderboard, isLoading: targetsLeaderboardLoading } = useQuery<{
     branches: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[];
     cashiers: { cashierId: string; cashierName: string; branchId: string; target: number; achieved: number; percent: number; rank: number }[];
   }>({
@@ -778,7 +783,9 @@ export default function OperationsReportsDashboardPage() {
       const res = await fetch(`/api/targets/leaderboard?yearMonth=${currentYearMonth}`);
       if (!res.ok) return { branches: [], cashiers: [] };
       return res.json();
-    }
+    },
+    enabled: activeTab === 'targets',
+    staleTime: 5 * 60 * 1000,
   });
 
   // Query for branch overview report - lazy load when tab is active
