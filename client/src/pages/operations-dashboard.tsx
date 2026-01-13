@@ -44,8 +44,9 @@ export default function OperationsDashboardPage() {
   const salesLinks = [
     { title: "يومية الكاشير", description: "تسجيل المبيعات اليومية", href: "/cashier-journals", icon: Wallet },
     { title: "تحليلات المبيعات", description: "تحليل أداء المبيعات", href: "/sales-analytics", icon: BarChart3 },
+    { title: "الأرباح والخسائر", description: "تحليل مالي شامل للإيرادات والمصروفات", href: "/pnl-dashboard", icon: TrendingUp },
     { title: "تخطيط الأهداف", description: "تحديد الأهداف الشهرية", href: "/targets-planning", icon: Target },
-    { title: "لوحة الأهداف", description: "متابعة تحقيق الأهداف", href: "/targets-dashboard", icon: TrendingUp },
+    { title: "لوحة الأهداف", description: "متابعة تحقيق الأهداف", href: "/targets-dashboard", icon: Activity },
     { title: "إدارة الحوافز", description: "نظام الحوافز والمكافآت", href: "/incentives-management", icon: Gift },
     { title: "تقارير التشغيل", description: "تقارير شاملة", href: "/operations-reports", icon: FileText },
   ];

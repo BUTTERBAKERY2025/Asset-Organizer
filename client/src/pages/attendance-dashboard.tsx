@@ -15,14 +15,12 @@ import {
   UserCheck,
   Timer,
   BarChart3,
-  Settings,
   ChevronLeft,
   Fingerprint,
   FileSignature,
   CalendarClock,
   ListChecks,
   Loader2,
-  TrendingUp,
 } from "lucide-react";
 
 interface QuickAction {
@@ -85,53 +83,37 @@ export default function AttendanceDashboardPage() {
       href: "/branch-employees",
       color: "bg-amber-500",
     },
-    {
-      title: "التقارير الشاملة",
-      description: "تقارير تحليلية وإغلاق الرواتب الشهرية",
-      icon: <BarChart3 className="w-6 h-6" />,
-      href: "/employee-reports",
-      color: "bg-teal-500",
-      badge: "جديد",
-    },
-    {
-      title: "الأرباح والخسائر",
-      description: "تحليل مالي شامل للإيرادات والمصروفات",
-      icon: <TrendingUp className="w-6 h-6" />,
-      href: "/pnl-dashboard",
-      color: "bg-indigo-500",
-      badge: "جديد",
-    },
   ];
 
   const managementCards = [
     {
-      title: "قوالب الورديات",
-      description: "قوالب أسبوعية لجداول العمل",
-      icon: <Calendar className="w-4 h-4" />,
-      href: "/shift-management?tab=templates",
-      stats: stats?.templatesCount || 0,
-      statsLabel: "قالب",
+      title: "الهيكل التنظيمي",
+      description: "الإدارات والأقسام والمناصب",
+      icon: <ClipboardCheck className="w-4 h-4" />,
+      href: "/organizational-structure",
+      stats: stats?.totalEmployees || 0,
+      statsLabel: "موظف",
     },
     {
-      title: "جداول الموظفين",
-      description: "جداول الدوام المعينة للموظفين",
-      icon: <CalendarDays className="w-4 h-4" />,
-      href: "/shift-management?tab=schedules",
-      stats: stats?.schedulesCount || 0,
-      statsLabel: "جدول",
-    },
-    {
-      title: "تقارير التايم شيت",
-      description: "التقارير الشهرية مع التوقيعات",
-      icon: <FileText className="w-4 h-4" />,
-      href: "/timesheet",
+      title: "التقارير الشاملة",
+      description: "تقارير تحليلية وإغلاق الرواتب",
+      icon: <BarChart3 className="w-4 h-4" />,
+      href: "/employee-reports",
       stats: stats?.reportsCount || 0,
       statsLabel: "تقرير",
     },
     {
+      title: "سجل الحضور",
+      description: "سجل الحضور والانصراف التفصيلي",
+      icon: <FileText className="w-4 h-4" />,
+      href: "/attendance-records",
+      stats: stats?.schedulesCount || 0,
+      statsLabel: "سجل",
+    },
+    {
       title: "نسبة الحضور الشهري",
       description: "متوسط نسبة الحضور للشهر الحالي",
-      icon: <BarChart3 className="w-4 h-4" />,
+      icon: <UserCheck className="w-4 h-4" />,
       href: "/timesheet?tab=history",
       stats: stats?.attendanceRate ? `${stats.attendanceRate}%` : "-",
       statsLabel: "نسبة الحضور",
@@ -263,38 +245,11 @@ export default function AttendanceDashboardPage() {
             </div>
 
             <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ListChecks className="w-5 h-5 text-amber-600" />
-                  دليل سريع
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <h4 className="font-semibold mb-2">1. إعداد الورديات</h4>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>• إنشاء قالب وردية جديد</li>
-                      <li>• تحديد أوقات العمل لكل يوم</li>
-                      <li>• تعيين الموظفين للورديات</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">2. تسجيل الحضور</h4>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>• اختيار الموظف والفرع</li>
-                      <li>• تسجيل الحضور بالتوقيع</li>
-                      <li>• تسجيل الانصراف في نهاية الدوام</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">3. التقارير الشهرية</h4>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>• إنشاء تقرير التايم شيت</li>
-                      <li>• توقيع الموظف على التقرير</li>
-                      <li>• اعتماد المدير وطباعة التقرير</li>
-                    </ul>
-                  </div>
+              <CardContent className="py-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <ListChecks className="w-4 h-4 text-amber-600" />
+                  <span className="font-medium text-amber-800">دليل سريع:</span>
+                  <span className="text-amber-700">إعداد الورديات ← تسجيل الحضور ← إنشاء تقارير التايم شيت</span>
                 </div>
               </CardContent>
             </Card>
