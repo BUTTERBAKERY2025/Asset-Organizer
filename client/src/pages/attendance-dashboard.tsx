@@ -107,17 +107,9 @@ export default function AttendanceDashboardPage() {
       title: "سجل الحضور",
       description: "سجل الحضور والانصراف التفصيلي",
       icon: <FileText className="w-4 h-4" />,
-      href: "/attendance-records",
+      href: "/attendance-check",
       stats: stats?.schedulesCount || 0,
       statsLabel: "سجل",
-    },
-    {
-      title: "نسبة الحضور الشهري",
-      description: "متوسط نسبة الحضور للشهر الحالي",
-      icon: <UserCheck className="w-4 h-4" />,
-      href: "/timesheet?tab=history",
-      stats: stats?.attendanceRate ? `${stats.attendanceRate}%` : "-",
-      statsLabel: "نسبة الحضور",
     },
   ];
 
