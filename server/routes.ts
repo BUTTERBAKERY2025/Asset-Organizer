@@ -6961,20 +6961,24 @@ export async function registerRoutes(
         const productColumns = [
           'product', 'productName', 'product_name', 'Product', 'ProductName', 'Product Name',
           'منتج', 'اسم المنتج', 'المنتج', 'الصنف', 'اسم الصنف', 'item', 'Item', 'item_name',
-          'name', 'Name', 'الاسم', 'sku', 'SKU', 'sku_name', 'SKU Name', 'الفروع'
+          'name', 'Name', 'الاسم', 'sku', 'SKU', 'sku_name', 'SKU Name', 'الفروع',
+          'Title', 'title', 'العنوان', 'البند', 'الوصف', 'Description', 'Menu Item', 'menu_item',
+          'تحليل القائمة Report', '__EMPTY', 'Column1', 'Column2', 'A', 'B'
         ];
         
         const quantityColumns = [
           'quantity', 'qty', 'Quantity', 'Qty', 'QTY', 'count', 'Count',
           'كمية', 'الكمية', 'عدد', 'العدد', 'sold_quantity', 'Sold Quantity',
-          'units', 'Units', 'الوحدات', 'sold', 'Sold', 'المباع'
+          'units', 'Units', 'الوحدات', 'sold', 'Sold', 'المباع',
+          'Value', 'value', 'القيمة', '__EMPTY', 'Column2', 'B'
         ];
         
         const revenueColumns = [
           'revenue', 'Revenue', 'total', 'Total', 'amount', 'Amount',
           'إيرادات', 'الإيرادات', 'المبيعات', 'إجمالي', 'الإجمالي', 'المبلغ',
           'sales', 'Sales', 'price', 'Price', 'السعر', 'total_sales', 'Total Sales',
-          'net_sales', 'Net Sales', 'صافي المبيعات', 'gross_sales', 'Gross Sales'
+          'net_sales', 'Net Sales', 'صافي المبيعات', 'gross_sales', 'Gross Sales',
+          'Value', 'value', 'القيمة', '__EMPTY', 'Column2', 'B', 'C'
         ];
 
         // Log column names for debugging
@@ -6991,34 +6995,61 @@ export async function registerRoutes(
         if (Array.isArray(parsedData) && parsedData.length > 1) {
           const firstRow = parsedData[0];
           const firstRowValues = Object.values(firstRow).map(v => String(v).toLowerCase().trim());
+          const columnKeys = Object.keys(firstRow);
           
           // Check if first row looks like header labels
-          const hasProductHeader = firstRowValues.some(v => 
-            v === 'product' || v === 'المنتج' || v === 'منتج' || v === 'item' || v === 'الصنف'
-          );
-          const hasQuantityHeader = firstRowValues.some(v => 
-            v === 'quantity' || v === 'الكمية' || v === 'كمية' || v === 'qty'
-          );
-          const hasSalesHeader = firstRowValues.some(v => 
-            v === 'sales' || v === 'المبيعات' || v === 'revenue' || v === 'total' || v === 'الإيرادات'
-          );
+          const headerKeywords = [
+            'product', 'المنتج', 'منتج', 'item', 'الصنف', 'title', 'العنوان',
+            'quantity', 'الكمية', 'كمية', 'qty', 'value', 'القيمة',
+            'sales', 'المبيعات', 'revenue', 'total', 'الإيرادات', 'amount'
+          ];
           
-          if (hasProductHeader || hasQuantityHeader || hasSalesHeader) {
+          const hasHeaderRow = firstRowValues.some(v => headerKeywords.includes(v));
+          
+          if (hasHeaderRow) {
             console.log('Detected header row in first data row, creating column mapping...');
             dataStartIndex = 1; // Skip first row as it's headers
             
             // Create mapping from Excel column keys to semantic names
             for (const [key, value] of Object.entries(firstRow)) {
               const valLower = String(value).toLowerCase().trim();
-              if (valLower === 'product' || valLower === 'المنتج' || valLower === 'منتج' || valLower === 'item') {
+              if (['product', 'المنتج', 'منتج', 'item', 'title', 'العنوان', 'menu item', 'الصنف', 'name', 'الاسم'].includes(valLower)) {
                 columnMapping['product'] = key;
-              } else if (valLower === 'quantity' || valLower === 'الكمية' || valLower === 'كمية' || valLower === 'qty') {
+              } else if (['quantity', 'الكمية', 'كمية', 'qty', 'count', 'عدد', 'units'].includes(valLower)) {
                 columnMapping['quantity'] = key;
-              } else if (valLower === 'sales' || valLower === 'المبيعات' || valLower === 'revenue' || valLower === 'total') {
+              } else if (['sales', 'المبيعات', 'revenue', 'total', 'amount', 'value', 'القيمة', 'الإيرادات', 'price', 'السعر'].includes(valLower)) {
                 columnMapping['revenue'] = key;
               }
             }
             console.log('Column mapping:', columnMapping);
+          }
+          
+          // Special case: Two-column format (Title/Value or Product/Quantity style)
+          // Common in Foodics "تحليل القائمة" reports
+          if (columnKeys.length === 2 && !hasHeaderRow) {
+            console.log('Detected two-column format, using first as product, second as value');
+            columnMapping['product'] = columnKeys[0];
+            columnMapping['quantity'] = columnKeys[1];
+            columnMapping['revenue'] = columnKeys[1];
+          }
+          
+          // Auto-detect columns if no header and no mapping yet
+          if (Object.keys(columnMapping).length === 0 && columnKeys.length >= 2) {
+            console.log('Auto-detecting column mapping from structure...');
+            // First non-numeric column is likely product, first numeric is quantity/revenue
+            for (const key of columnKeys) {
+              const sampleValues = parsedData.slice(0, 5).map(r => r[key]);
+              const isNumeric = sampleValues.every(v => !isNaN(parseFloat(v)) || v === null || v === undefined);
+              const isText = sampleValues.some(v => typeof v === 'string' && isNaN(parseFloat(v)) && v.length > 0);
+              
+              if (isText && !columnMapping['product']) {
+                columnMapping['product'] = key;
+              } else if (isNumeric && !columnMapping['quantity']) {
+                columnMapping['quantity'] = key;
+                columnMapping['revenue'] = key;
+              }
+            }
+            console.log('Auto-detected column mapping:', columnMapping);
           }
         }
         
