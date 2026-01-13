@@ -880,7 +880,7 @@ export interface ProductionOrderPdfData {
 }
 
 // Department/Category mapping based on system categories:
-// إفطار، مخبوزات، حلويات، بيتزا، باريستا
+// إفطار، مخبوزات، حلويات، بيتزا، باريستا، تجمعات
 const DEPARTMENT_MAPPING: Record<string, string> = {
   // إفطار
   'إفطار': 'إفطار',
@@ -934,29 +934,116 @@ const DEPARTMENT_MAPPING: Record<string, string> = {
   'smoothie': 'باريستا',
   'drinks': 'باريستا',
   'beverages': 'باريستا',
+  // تجمعات
+  'تجمعات': 'تجمعات',
+  'تجمع': 'تجمعات',
+  'gathering': 'تجمعات',
+  'catering': 'تجمعات',
   // أخرى
   'عام': 'أخرى',
   'other': 'أخرى',
   'general': 'أخرى',
 };
 
-function getDepartment(category: string): string {
-  if (!category) return 'أخرى';
-  const lowerCategory = category.toLowerCase().trim();
+// Keywords in product names to infer category when category is missing
+const PRODUCT_NAME_KEYWORDS: Record<string, string> = {
+  // باريستا keywords
+  'latte': 'باريستا',
+  'لاتيه': 'باريستا',
+  'coffee': 'باريستا',
+  'قهوة': 'باريستا',
+  'espresso': 'باريستا',
+  'اسبريسو': 'باريستا',
+  'cappuccino': 'باريستا',
+  'كابتشينو': 'باريستا',
+  'americano': 'باريستا',
+  'امريكانو': 'باريستا',
+  'mocha': 'باريستا',
+  'موكا': 'باريستا',
+  'flat white': 'باريستا',
+  'فلات وايت': 'باريستا',
+  'cortado': 'باريستا',
+  'كورتادو': 'باريستا',
+  'juice': 'باريستا',
+  'عصير': 'باريستا',
+  'tea': 'باريستا',
+  'شاي': 'باريستا',
+  'hot chocolate': 'باريستا',
+  'هوت شوكليت': 'باريستا',
+  'ماء': 'باريستا',
+  'water': 'باريستا',
+  'ice coffee': 'باريستا',
+  'breeze': 'باريستا',
+  'بريز': 'باريستا',
+  // مخبوزات keywords
+  'croissant': 'مخبوزات',
+  'كرواسون': 'مخبوزات',
+  'danish': 'مخبوزات',
+  'دانش': 'مخبوزات',
+  'brioche': 'مخبوزات',
+  'بريوش': 'مخبوزات',
+  'pain': 'مخبوزات',
+  'بان': 'مخبوزات',
+  'bun': 'مخبوزات',
+  // حلويات keywords
+  'cake': 'حلويات',
+  'كيك': 'حلويات',
+  'cheesecake': 'حلويات',
+  'تشيز كيك': 'حلويات',
+  'pudding': 'حلويات',
+  'بودنج': 'حلويات',
+  // إفطار keywords
+  'egg': 'إفطار',
+  'بيض': 'إفطار',
+  'bruschetta': 'إفطار',
+  'بروسكيتا': 'إفطار',
+  'turkish egg': 'إفطار',
+  // بيتزا keywords
+  'sandwich': 'بيتزا',
+  'ساندوتش': 'بيتزا',
+  'ساندويش': 'بيتزا',
+  'tuna': 'بيتزا',
+  'تونة': 'بيتزا',
+};
+
+function inferCategoryFromProductName(productName: string): string | null {
+  if (!productName) return null;
+  const lowerName = productName.toLowerCase();
   
-  // First try exact match
-  for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
-    if (lowerCategory === key.toLowerCase()) {
-      return dept;
+  for (const [keyword, category] of Object.entries(PRODUCT_NAME_KEYWORDS)) {
+    if (lowerName.includes(keyword.toLowerCase())) {
+      return category;
+    }
+  }
+  return null;
+}
+
+function getDepartment(category: string, productName?: string): string {
+  // First try to get department from category
+  if (category) {
+    const lowerCategory = category.toLowerCase().trim();
+    
+    // Exact match
+    for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
+      if (lowerCategory === key.toLowerCase()) {
+        return dept;
+      }
+    }
+    
+    // Partial match
+    for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
+      if (lowerCategory.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerCategory)) {
+        return dept;
+      }
     }
   }
   
-  // Then try partial match
-  for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
-    if (lowerCategory.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerCategory)) {
-      return dept;
-    }
+  // If no category, try to infer from product name
+  if (productName) {
+    const inferred = inferCategoryFromProductName(productName);
+    if (inferred) return inferred;
   }
+  
   return 'أخرى';
 }
 
@@ -987,16 +1074,16 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
   // Filter out invalid items (metadata rows from Excel)
   const validItems = data.items.filter(item => isValidProductName(item.productName));
   
-  // Group items by department
+  // Group items by department (use product name for inference if category is missing)
   const groupedItems: Record<string, typeof validItems> = {};
   validItems.forEach(item => {
-    const dept = getDepartment(item.category);
+    const dept = getDepartment(item.category, item.productName);
     if (!groupedItems[dept]) groupedItems[dept] = [];
     groupedItems[dept].push(item);
   });
 
   // Sort departments based on system categories
-  const deptOrder = ['إفطار', 'مخبوزات', 'حلويات', 'بيتزا', 'باريستا', 'أخرى'];
+  const deptOrder = ['إفطار', 'مخبوزات', 'حلويات', 'بيتزا', 'باريستا', 'تجمعات', 'أخرى'];
   const sortedDepts = Object.keys(groupedItems).sort((a, b) => {
     const aIdx = deptOrder.indexOf(a);
     const bIdx = deptOrder.indexOf(b);
