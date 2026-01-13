@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Link } from "wouter";
+import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
@@ -817,9 +818,10 @@ export default function OrganizationalStructurePage() {
   };
 
   return (
-    <TooltipProvider>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir="rtl">
-        <div className="container mx-auto px-4 py-6">
+    <Layout>
+      <TooltipProvider>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir="rtl">
+          <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between mb-6 print:hidden">
             <div className="flex items-center gap-4">
               <Link href="/branch-employees">
@@ -1007,9 +1009,10 @@ export default function OrganizationalStructurePage() {
                 </Button>
               </div>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </div>
-      </div>
-    </TooltipProvider>
+      </TooltipProvider>
+    </Layout>
   );
 }
