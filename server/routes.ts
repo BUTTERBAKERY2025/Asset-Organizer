@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq, and, desc, inArray, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, lte, sql, or, isNull } from "drizzle-orm";
 import { 
   branchDailyClosures, 
   branchDailyClosurePayments, 
