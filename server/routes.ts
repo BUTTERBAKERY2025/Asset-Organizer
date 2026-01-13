@@ -7281,16 +7281,116 @@ export async function registerRoutes(
       
       // Prepare items (without orderId - will be added in transaction)
       // Products can have null productId if no matching product exists in the database
+      // Helper function for fuzzy name matching
+      const normalizeProductName = (name: string): string => {
+        return name
+          .toLowerCase()
+          .replace(/[-_\s]+/g, ' ')
+          .replace(/[^\u0600-\u06FFa-zA-Z0-9\s]/g, '')
+          .trim();
+      };
+      
+      const findMatchingProduct = (productName: string, productId: number | null) => {
+        // First try exact ID match
+        if (productId) {
+          const exactMatch = products.find(p => p.id === productId);
+          if (exactMatch) return exactMatch;
+        }
+        
+        // Then try exact name match
+        const exactNameMatch = products.find(p => p.name === productName);
+        if (exactNameMatch) return exactNameMatch;
+        
+        // Fuzzy matching - try various strategies
+        const normalizedName = normalizeProductName(productName);
+        const nameParts = normalizedName.split(' ').filter(p => p.length > 2);
+        
+        // Try normalized name match
+        let fuzzyMatch = products.find(p => normalizeProductName(p.name) === normalizedName);
+        if (fuzzyMatch) return fuzzyMatch;
+        
+        // Try if one contains the other
+        fuzzyMatch = products.find(p => {
+          const pNorm = normalizeProductName(p.name);
+          return pNorm.includes(normalizedName) || normalizedName.includes(pNorm);
+        });
+        if (fuzzyMatch) return fuzzyMatch;
+        
+        // Try matching significant parts
+        if (nameParts.length >= 2) {
+          fuzzyMatch = products.find(p => {
+            const pNorm = normalizeProductName(p.name);
+            return nameParts.filter(part => pNorm.includes(part)).length >= 2;
+          });
+          if (fuzzyMatch) return fuzzyMatch;
+        }
+        
+        // Try English-only or Arabic-only part matching
+        const englishPart = productName.match(/[a-zA-Z\s]+/g)?.join(' ').trim();
+        const arabicPart = productName.match(/[\u0600-\u06FF\s]+/g)?.join(' ').trim();
+        
+        if (englishPart && englishPart.length > 3) {
+          fuzzyMatch = products.find(p => 
+            normalizeProductName(p.name).includes(normalizeProductName(englishPart))
+          );
+          if (fuzzyMatch) return fuzzyMatch;
+        }
+        
+        if (arabicPart && arabicPart.length > 3) {
+          fuzzyMatch = products.find(p => 
+            normalizeProductName(p.name).includes(normalizeProductName(arabicPart))
+          );
+          if (fuzzyMatch) return fuzzyMatch;
+        }
+        
+        return null;
+      };
+      
+      // Default prices by category (fallback)
+      const categoryDefaultPrices: Record<string, number> = {
+        'باريستا': 18,
+        'مشروبات': 18,
+        'مخبوزات': 15,
+        'حلويات': 25,
+        'معجنات': 12,
+        'كيك': 30,
+        'ساندويتشات': 22,
+        'سلطات': 20,
+        'عام': 15
+      };
+      
       const orderItems = forecastItems.map((item, index) => {
-        const product = products.find(p => p.id === item.productId || p.name === item.productName);
-        // استخدام السعر من جدول المنتجات (basePrice) أو السعر المحسوب من بيانات المبيعات
-        const unitPrice = product?.basePrice || (item.historicalRevenue > 0 && item.historicalQuantity > 0 
-          ? item.historicalRevenue / item.historicalQuantity 
-          : 0);
+        const product = findMatchingProduct(item.productName, item.productId);
+        
+        // Calculate unit price with multiple fallbacks
+        let unitPrice = 0;
+        
+        // 1. First priority: Product basePrice from database
+        if (product?.basePrice && product.basePrice > 0) {
+          unitPrice = product.basePrice;
+        }
+        // 2. Second priority: Product price from database
+        else if (product?.price && product.price > 0) {
+          unitPrice = product.price;
+        }
+        // 3. Third priority: Calculate from historical sales data
+        else if (item.historicalRevenue > 0 && item.historicalQuantity > 0) {
+          unitPrice = item.historicalRevenue / item.historicalQuantity;
+        }
+        // 4. Fourth priority: Calculate from forecast amounts
+        else if (item.forecastedSalesAmount > 0 && item.forecastedQuantity > 0) {
+          unitPrice = item.forecastedSalesAmount / item.forecastedQuantity;
+        }
+        // 5. Fifth priority: Use category default price
+        else {
+          const category = item.productCategory || product?.category || 'عام';
+          unitPrice = categoryDefaultPrices[category] || categoryDefaultPrices['عام'];
+        }
+        
         return {
           productId: product?.id || null,
           productName: item.productName,
-          productCategory: item.productCategory || null,
+          productCategory: item.productCategory || product?.category || null,
           targetQuantity: item.forecastedQuantity,
           producedQuantity: 0,
           wastedQuantity: 0,
@@ -7298,7 +7398,7 @@ export async function registerRoutes(
           totalValue: Math.round(unitPrice * item.forecastedQuantity * 100) / 100,
           status: 'pending' as const,
           priority: index + 1,
-          notes: `نسبة المبيعات: ${item.salesRatio}%`
+          notes: `نسبة المبيعات: ${item.salesRatio}%${!product ? ' (سعر تقديري)' : ''}`
         };
       });
       
