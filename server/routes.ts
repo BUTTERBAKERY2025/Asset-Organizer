@@ -6582,20 +6582,35 @@ export async function registerRoutes(
         console.log(`AI Planner: Found ${productAnalytics.length} products from uploaded file "${uploadFileName}"`);
         
         if (productAnalytics.length > 0) {
-          const totalRev = productAnalytics.reduce((sum, a) => sum + (a.totalRevenue || 0), 0);
-          const totalQty = productAnalytics.reduce((sum, a) => sum + (a.totalQuantitySold || 0), 0);
+          // Filter out invalid product names (metadata rows from Excel)
+          const invalidProductNames = ['النطاق الزمني', 'الفترة', 'التاريخ', 'الإجمالي', 'المجموع', 'total', 'sum', 'date range', 'period'];
+          const isValidProduct = (name: string) => {
+            if (!name || name.trim().length < 2) return false;
+            const lowerName = name.toLowerCase().trim();
+            return !invalidProductNames.some(invalid => 
+              lowerName.includes(invalid.toLowerCase()) || invalid.toLowerCase().includes(lowerName)
+            );
+          };
+          
+          const validProductAnalytics = productAnalytics.filter(p => isValidProduct(p.productName));
+          
+          const totalRev = validProductAnalytics.reduce((sum, a) => sum + (a.totalRevenue || 0), 0);
+          const totalQty = validProductAnalytics.reduce((sum, a) => sum + (a.totalQuantitySold || 0), 0);
           console.log(`AI Planner: File contains total revenue: ${totalRev.toFixed(2)} SAR, total quantity: ${totalQty}`);
           
           uploadAnalyticsSummary = {
             fileName: uploadFileName,
-            productsCount: productAnalytics.length,
+            productsCount: validProductAnalytics.length,
             totalRevenue: totalRev,
             totalQuantity: totalQty,
-            topProducts: productAnalytics
+            topProducts: validProductAnalytics
               .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
               .slice(0, 5)
               .map(p => ({ name: p.productName, category: p.productCategory || 'عام', revenue: p.totalRevenue, quantity: p.totalQuantitySold }))
           };
+          
+          // Update productAnalytics to use filtered version
+          productAnalytics = validProductAnalytics;
         }
       }
       
@@ -6899,6 +6914,125 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error applying AI plan:", error);
       res.status(500).json({ error: "Failed to apply AI plan" });
+    }
+  });
+
+  // Export AI plan to PDF
+  app.get("/api/production-ai-plans/:id/export-pdf", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const planId = parseInt(req.params.id, 10);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      
+      const plan = await storage.getProductionAiPlan(planId);
+      if (!plan) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      
+      // Get branch name
+      const branch = await storage.getBranch(plan.branchId);
+      const branchName = branch?.name || plan.branchId;
+      
+      // Format date
+      const planDateFormatted = plan.planDate;
+      
+      const recommendedProducts = plan.recommendedProducts as any[] || [];
+      
+      // Generate PDF using pdfmake
+      const pdfMake = await import("pdfmake/build/pdfmake");
+      const pdfFonts = await import("pdfmake/build/vfs_fonts");
+      
+      // Set fonts
+      (pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs;
+      
+      const docDefinition: any = {
+        pageSize: 'A4',
+        pageOrientation: 'portrait',
+        pageMargins: [40, 60, 40, 60],
+        defaultStyle: {
+          font: 'Helvetica',
+          alignment: 'right'
+        },
+        content: [
+          { text: 'خطة الإنتاج الذكية', style: 'header', alignment: 'center' },
+          { text: '\n' },
+          {
+            style: 'tableExample',
+            table: {
+              widths: ['*', '*'],
+              body: [
+                [{ text: branchName, bold: true }, { text: 'الفرع', alignment: 'left' }],
+                [{ text: planDateFormatted, bold: true }, { text: 'التاريخ', alignment: 'left' }],
+                [{ text: `${plan.targetSalesValue?.toLocaleString()} ر.س`, bold: true }, { text: 'المبيعات المستهدفة', alignment: 'left' }],
+                [{ text: `${plan.totalEstimatedValue?.toLocaleString()} ر.س`, bold: true }, { text: 'القيمة المتوقعة', alignment: 'left' }],
+                [{ text: `${plan.totalEstimatedCost?.toLocaleString()} ر.س`, bold: true }, { text: 'التكلفة المتوقعة', alignment: 'left' }],
+                [{ text: `${(plan.profitMargin || 0).toFixed(1)}%`, bold: true }, { text: 'هامش الربح', alignment: 'left' }],
+                [{ text: `${((plan.confidenceScore || 0) * 100).toFixed(0)}%`, bold: true }, { text: 'مستوى الثقة', alignment: 'left' }]
+              ]
+            },
+            layout: 'lightHorizontalLines'
+          },
+          { text: '\n\n' },
+          { text: `المنتجات الموصى بها (${recommendedProducts.length})`, style: 'subheader' },
+          { text: '\n' },
+          {
+            table: {
+              headerRows: 1,
+              widths: ['*', 'auto', 'auto', 'auto', 'auto'],
+              body: [
+                [
+                  { text: 'المنتج', style: 'tableHeader' },
+                  { text: 'التصنيف', style: 'tableHeader' },
+                  { text: 'الكمية', style: 'tableHeader' },
+                  { text: 'السعر', style: 'tableHeader' },
+                  { text: 'الإجمالي', style: 'tableHeader' }
+                ],
+                ...recommendedProducts.map((p: any) => [
+                  { text: p.productName || '', alignment: 'right' },
+                  { text: p.category || 'عام', alignment: 'center' },
+                  { text: p.quantity?.toString() || '0', alignment: 'center' },
+                  { text: `${(p.unitPrice || 0).toFixed(2)}`, alignment: 'center' },
+                  { text: `${((p.totalPrice || p.estimatedValue) || 0).toFixed(2)}`, alignment: 'center' }
+                ])
+              ]
+            },
+            layout: 'lightHorizontalLines'
+          }
+        ],
+        styles: {
+          header: {
+            fontSize: 18,
+            bold: true,
+            margin: [0, 0, 0, 10]
+          },
+          subheader: {
+            fontSize: 14,
+            bold: true,
+            margin: [0, 10, 0, 5]
+          },
+          tableHeader: {
+            bold: true,
+            fontSize: 10,
+            color: 'black',
+            fillColor: '#f3f4f6'
+          },
+          tableExample: {
+            margin: [0, 5, 0, 15]
+          }
+        }
+      };
+      
+      const pdfDoc = pdfMake.default.createPdf(docDefinition);
+      
+      pdfDoc.getBuffer((buffer: Buffer) => {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="production_plan_${planId}.pdf"`);
+        res.send(buffer);
+      });
+    } catch (error) {
+      console.error("Error exporting AI plan to PDF:", error);
+      res.status(500).json({ error: "Failed to export AI plan to PDF" });
     }
   });
 

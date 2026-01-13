@@ -16,7 +16,14 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import { useBranches } from "@/hooks/useBranches";
-import { Brain, Calendar, DollarSign, Percent, Package, CheckCircle, Clock, Sparkles, TrendingUp, History, FileText, Loader2, AlertCircle, RefreshCw, ArrowLeft, Trash2 } from "lucide-react";
+import { Brain, Calendar, DollarSign, Percent, Package, CheckCircle, Clock, Sparkles, TrendingUp, History, FileText, Loader2, AlertCircle, RefreshCw, ArrowLeft, Trash2, Download, FileSpreadsheet, File } from "lucide-react";
+import * as XLSX from "xlsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useProductionContext } from "@/contexts/ProductionContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -201,6 +208,93 @@ export default function AdvancedProductionPlannerPage() {
 
   const getBranchName = (branchId: string) => {
     return branches?.find((b) => b.id === branchId)?.name || branchId;
+  };
+
+  // Export functions
+  const exportToExcel = (plan: AIProductionPlan) => {
+    const data = plan.products.map((product, index) => ({
+      '#': index + 1,
+      'المنتج': product.productName,
+      'التصنيف': product.category || 'عام',
+      'الكمية': product.quantity,
+      'سعر الوحدة': product.unitPrice,
+      'الإجمالي': product.totalPrice,
+      'التكلفة': product.estimatedCost,
+      'نسبة المبيعات %': product.revenueShare || 0,
+      'الأولوية': product.priority === 'high' ? 'عالية' : product.priority === 'medium' ? 'متوسطة' : 'عادية'
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'خطة الإنتاج');
+    
+    // Add summary sheet
+    const summaryData = [
+      { 'البيان': 'الفرع', 'القيمة': getBranchName(plan.branchId) },
+      { 'البيان': 'تاريخ الخطة', 'القيمة': formatDate(plan.planDate) },
+      { 'البيان': 'المبيعات المستهدفة', 'القيمة': `${plan.targetSales} ر.س` },
+      { 'البيان': 'القيمة المتوقعة', 'القيمة': `${plan.totalEstimatedValue} ر.س` },
+      { 'البيان': 'التكلفة المتوقعة', 'القيمة': `${plan.estimatedCost} ر.س` },
+      { 'البيان': 'هامش الربح', 'القيمة': `${plan.profitMargin.toFixed(1)}%` },
+      { 'البيان': 'مستوى الثقة', 'القيمة': `${(plan.confidenceScore * 100).toFixed(0)}%` },
+      { 'البيان': 'عدد المنتجات', 'القيمة': plan.products.length.toString() }
+    ];
+    const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'ملخص');
+    
+    XLSX.writeFile(wb, `خطة_الإنتاج_${plan.planDate}_${getBranchName(plan.branchId)}.xlsx`);
+    toast({ title: "تم التصدير بنجاح", description: "تم تحميل ملف Excel" });
+  };
+
+  const exportToCSV = (plan: AIProductionPlan) => {
+    const headers = ['المنتج', 'التصنيف', 'الكمية', 'سعر الوحدة', 'الإجمالي', 'التكلفة', 'الأولوية'];
+    const rows = plan.products.map(product => [
+      product.productName,
+      product.category || 'عام',
+      product.quantity.toString(),
+      product.unitPrice.toString(),
+      product.totalPrice.toString(),
+      product.estimatedCost.toString(),
+      product.priority === 'high' ? 'عالية' : product.priority === 'medium' ? 'متوسطة' : 'عادية'
+    ]);
+    
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `خطة_الإنتاج_${plan.planDate}_${getBranchName(plan.branchId)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast({ title: "تم التصدير بنجاح", description: "تم تحميل ملف CSV" });
+  };
+
+  const exportToPDF = async (plan: AIProductionPlan) => {
+    try {
+      const response = await fetch(`/api/production-ai-plans/${plan.id}/export-pdf`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('فشل في تحميل ملف PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `خطة_الإنتاج_${plan.planDate}_${getBranchName(plan.branchId)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "تم التصدير بنجاح", description: "تم تحميل ملف PDF" });
+    } catch (error) {
+      toast({ title: "خطأ في التصدير", description: "حدث خطأ أثناء تحميل ملف PDF", variant: "destructive" });
+    }
   };
 
   const paginatedHistory = getPageItems(planHistory || [], historyPage);
@@ -502,7 +596,7 @@ export default function AdvancedProductionPlannerPage() {
                     )}
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <Button
                       onClick={() => handleApply(generatedPlan.id)}
                       disabled={applyMutation.isPending || generatedPlan.status === "applied"}
@@ -526,6 +620,30 @@ export default function AdvancedProductionPlannerPage() {
                         </>
                       )}
                     </Button>
+                    
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" data-testid="button-export-dropdown">
+                          <Download className="w-4 h-4 ml-2" />
+                          تصدير
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => exportToExcel(generatedPlan)} data-testid="button-export-excel">
+                          <FileSpreadsheet className="w-4 h-4 ml-2 text-green-600" />
+                          Excel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportToCSV(generatedPlan)} data-testid="button-export-csv">
+                          <File className="w-4 h-4 ml-2 text-blue-600" />
+                          CSV
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportToPDF(generatedPlan)} data-testid="button-export-pdf">
+                          <FileText className="w-4 h-4 ml-2 text-red-600" />
+                          PDF
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
                     <Button
                       variant="outline"
                       onClick={() => setGeneratedPlan(null)}
