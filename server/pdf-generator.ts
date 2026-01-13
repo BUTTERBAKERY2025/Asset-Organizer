@@ -879,81 +879,85 @@ export interface ProductionOrderPdfData {
   }>;
 }
 
-// Department/Category mapping for grouping
+// Department/Category mapping based on system categories:
+// إفطار، مخبوزات، حلويات، بيتزا، باريستا
 const DEPARTMENT_MAPPING: Record<string, string> = {
-  // قسم الباريستا
-  'باريستا': 'قسم الباريستا',
-  'barista': 'قسم الباريستا',
-  'مشروبات': 'قسم الباريستا',
-  'مشروبات باردة': 'قسم الباريستا',
-  'مشروبات ساخنة': 'قسم الباريستا',
-  'قهوة': 'قسم الباريستا',
-  'coffee': 'قسم الباريستا',
-  'شاي': 'قسم الباريستا',
-  'عصائر': 'قسم الباريستا',
-  'سموذي': 'قسم الباريستا',
-  'smoothie': 'قسم الباريستا',
-  'drinks': 'قسم الباريستا',
-  'beverages': 'قسم الباريستا',
-  // قسم البيكري
-  'مخبوزات': 'قسم البيكري',
-  'معجنات': 'قسم البيكري',
-  'خبز': 'قسم البيكري',
-  'بيكري': 'قسم البيكري',
-  'bakery': 'قسم البيكري',
-  'bread': 'قسم البيكري',
-  'فطائر': 'قسم البيكري',
-  'كرواسون': 'قسم البيكري',
-  'croissant': 'قسم البيكري',
-  'دونات': 'قسم البيكري',
-  'donut': 'قسم البيكري',
-  'بان': 'قسم البيكري',
-  // قسم الحلواني
-  'حلويات': 'قسم الحلواني',
-  'كيك': 'قسم الحلواني',
-  'تورتات': 'قسم الحلواني',
-  'تورتة': 'قسم الحلواني',
-  'باستري': 'قسم الحلواني',
-  'pastry': 'قسم الحلواني',
-  'desserts': 'قسم الحلواني',
-  'dessert': 'قسم الحلواني',
-  'حلواني': 'قسم الحلواني',
-  'sweets': 'قسم الحلواني',
-  'شوكولاتة': 'قسم الحلواني',
-  'chocolate': 'قسم الحلواني',
-  'كوكيز': 'قسم الحلواني',
-  'cookie': 'قسم الحلواني',
-  // قسم المطبخ
-  'ساندويتشات': 'قسم المطبخ',
-  'ساندويش': 'قسم المطبخ',
-  'sandwich': 'قسم المطبخ',
-  'سلطات': 'قسم المطبخ',
-  'سلطة': 'قسم المطبخ',
-  'salad': 'قسم المطبخ',
-  'وجبات': 'قسم المطبخ',
-  'وجبة': 'قسم المطبخ',
-  'meal': 'قسم المطبخ',
-  'kitchen': 'قسم المطبخ',
-  'مطبخ': 'قسم المطبخ',
-  'فطور': 'قسم المطبخ',
-  'breakfast': 'قسم المطبخ',
-  'بيض': 'قسم المطبخ',
-  'egg': 'قسم المطبخ',
+  // إفطار
+  'إفطار': 'إفطار',
+  'افطار': 'إفطار',
+  'فطور': 'إفطار',
+  'breakfast': 'إفطار',
+  // مخبوزات
+  'مخبوزات': 'مخبوزات',
+  'معجنات': 'مخبوزات',
+  'خبز': 'مخبوزات',
+  'بيكري': 'مخبوزات',
+  'bakery': 'مخبوزات',
+  'bread': 'مخبوزات',
+  'فطائر': 'مخبوزات',
+  'كرواسون': 'مخبوزات',
+  'croissant': 'مخبوزات',
+  'دونات': 'مخبوزات',
+  'donut': 'مخبوزات',
+  // حلويات
+  'حلويات': 'حلويات',
+  'كيك': 'حلويات',
+  'تورتات': 'حلويات',
+  'تورتة': 'حلويات',
+  'باستري': 'حلويات',
+  'pastry': 'حلويات',
+  'desserts': 'حلويات',
+  'dessert': 'حلويات',
+  'حلواني': 'حلويات',
+  'sweets': 'حلويات',
+  'شوكولاتة': 'حلويات',
+  'chocolate': 'حلويات',
+  'كوكيز': 'حلويات',
+  'cookie': 'حلويات',
+  // بيتزا
+  'بيتزا': 'بيتزا',
+  'pizza': 'بيتزا',
+  'ساندويتشات': 'بيتزا',
+  'ساندويش': 'بيتزا',
+  'sandwich': 'بيتزا',
+  // باريستا
+  'باريستا': 'باريستا',
+  'barista': 'باريستا',
+  'مشروبات': 'باريستا',
+  'مشروبات باردة': 'باريستا',
+  'مشروبات ساخنة': 'باريستا',
+  'قهوة': 'باريستا',
+  'coffee': 'باريستا',
+  'شاي': 'باريستا',
+  'عصائر': 'باريستا',
+  'سموذي': 'باريستا',
+  'smoothie': 'باريستا',
+  'drinks': 'باريستا',
+  'beverages': 'باريستا',
   // أخرى
-  'عام': 'منتجات أخرى',
-  'other': 'منتجات أخرى',
-  'general': 'منتجات أخرى',
+  'عام': 'أخرى',
+  'other': 'أخرى',
+  'general': 'أخرى',
 };
 
 function getDepartment(category: string): string {
-  if (!category) return 'منتجات أخرى';
-  const lowerCategory = category.toLowerCase();
+  if (!category) return 'أخرى';
+  const lowerCategory = category.toLowerCase().trim();
+  
+  // First try exact match
+  for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
+    if (lowerCategory === key.toLowerCase()) {
+      return dept;
+    }
+  }
+  
+  // Then try partial match
   for (const [key, dept] of Object.entries(DEPARTMENT_MAPPING)) {
     if (lowerCategory.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerCategory)) {
       return dept;
     }
   }
-  return 'منتجات أخرى';
+  return 'أخرى';
 }
 
 // Invalid product names to filter out (metadata rows from Excel)
@@ -991,8 +995,8 @@ export async function generateProductionOrderPdf(data: ProductionOrderPdfData): 
     groupedItems[dept].push(item);
   });
 
-  // Sort departments
-  const deptOrder = ['قسم البيكري', 'قسم الحلواني', 'قسم الباريستا', 'قسم المطبخ', 'منتجات أخرى'];
+  // Sort departments based on system categories
+  const deptOrder = ['إفطار', 'مخبوزات', 'حلويات', 'بيتزا', 'باريستا', 'أخرى'];
   const sortedDepts = Object.keys(groupedItems).sort((a, b) => {
     const aIdx = deptOrder.indexOf(a);
     const bIdx = deptOrder.indexOf(b);
