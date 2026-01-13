@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getQueryFn } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Calendar,
   Clock,
@@ -34,8 +35,9 @@ interface QuickAction {
 
 export default function AttendanceDashboardPage() {
   const [, navigate] = useLocation();
+  const { isAuthenticated } = useAuth();
 
-  const { data: stats, isLoading, error } = useQuery<{
+  const { data: stats, isLoading } = useQuery<{
     totalEmployees: number;
     presentToday: number;
     lateToday: number;
@@ -49,9 +51,8 @@ export default function AttendanceDashboardPage() {
     queryFn: getQueryFn({ on401: "returnNull" }),
     staleTime: 0,
     refetchOnMount: true,
+    enabled: isAuthenticated,
   });
-  
-  console.log("Stats data:", stats, "Loading:", isLoading, "Error:", error);
 
   const quickActions: QuickAction[] = [
     {
