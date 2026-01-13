@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useBranches } from "@/hooks/useBranches";
 import { 
   Factory, 
-  FileSpreadsheet, 
   ClipboardList, 
   BarChart3, 
   TrendingUp, 
@@ -33,23 +33,20 @@ import {
   ShoppingCart,
   Snowflake,
   Activity,
-  AlertTriangle,
-  DollarSign,
-  Boxes,
-  Wrench,
   Trash2,
   CreditCard,
-  Receipt,
-  AlertCircle,
-  FileBarChart2
+  FileBarChart2,
+  LayoutDashboard,
+  Settings2,
+  Layers
 } from "lucide-react";
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import type { Branch } from "@shared/schema";
 import { useProductionContext } from "@/contexts/ProductionContext";
 
 interface OrderStats {
@@ -94,81 +91,74 @@ interface ProductionHubData {
   branchId: string;
 }
 
-interface SalesUpload {
-  id: number;
-  fileName: string;
-  uploadDate: string;
-  branchId: string;
-  status: string;
-  createdAt?: string;
-}
-
 const QUICK_ACTIONS = [
   {
-    title: "الإنتاج الفعلي اليومي",
-    description: "تسجيل دفعات الإنتاج على مدار اليوم",
+    title: "الإنتاج اليومي",
+    description: "تسجيل دفعات الإنتاج",
     icon: ChefHat,
     href: "/daily-production",
-    color: "from-amber-500 to-orange-600",
+    color: "bg-gradient-to-br from-amber-500 to-orange-600",
     badge: "جديد"
   },
   {
-    title: "مخطط الإنتاج الذكي",
-    description: "تخطيط الإنتاج بناءً على البيانات والتوقعات",
+    title: "المخطط الذكي",
+    description: "تخطيط بالذكاء الاصطناعي",
     icon: Brain,
     href: "/ai-production-planner",
-    color: "from-purple-500 to-indigo-600",
-    badge: "ذكاء اصطناعي"
+    color: "bg-gradient-to-br from-purple-500 to-indigo-600",
+    badge: "AI"
   },
   {
-    title: "رفع بيانات المبيعات",
-    description: "استيراد بيانات المبيعات من ملفات Excel",
+    title: "رفع المبيعات",
+    description: "استيراد من Excel",
     icon: Upload,
     href: "/sales-data-uploads",
-    color: "from-blue-500 to-cyan-600",
+    color: "bg-gradient-to-br from-blue-500 to-cyan-600",
     badge: null
   },
   {
     title: "أوامر الإنتاج",
-    description: "إدارة ومتابعة جميع أوامر الإنتاج",
+    description: "إدارة ومتابعة",
     icon: ClipboardList,
     href: "/advanced-production-orders",
-    color: "from-slate-500 to-gray-600",
+    color: "bg-gradient-to-br from-slate-600 to-gray-700",
     badge: null
   },
   {
-    title: "إنشاء أمر إنتاج جديد",
-    description: "إنشاء أمر إنتاج يدوي أو من توقعات",
+    title: "أمر جديد",
+    description: "إنشاء أمر إنتاج",
     icon: Plus,
     href: "/advanced-production-orders/new",
-    color: "from-green-500 to-emerald-600",
+    color: "bg-gradient-to-br from-green-500 to-emerald-600",
     badge: null
   },
   {
-    title: "التقارير الشاملة",
-    description: "جميع تقارير الإنتاج والتصدير Excel/PDF",
+    title: "التقارير",
+    description: "تقارير شاملة",
     icon: FileBarChart2,
     href: "/production-reports",
-    color: "from-rose-500 to-pink-600",
+    color: "bg-gradient-to-br from-rose-500 to-pink-600",
     badge: "جديد"
   },
   {
     title: "تقارير التشغيل",
-    description: "عرض التقارير والتحليلات",
+    description: "التحليلات",
     icon: BarChart3,
     href: "/operations-reports",
-    color: "from-rose-500 to-pink-600",
+    color: "bg-gradient-to-br from-indigo-500 to-violet-600",
     badge: null
   },
   {
     title: "المنتجات",
-    description: "إدارة كتالوج المنتجات والأسعار",
+    description: "كتالوج المنتجات",
     icon: Package,
     href: "/products",
-    color: "from-teal-500 to-green-600",
+    color: "bg-gradient-to-br from-teal-500 to-green-600",
     badge: null
   }
 ];
+
+const COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444'];
 
 export default function ProductionDashboardPage() {
   const { 
@@ -181,7 +171,6 @@ export default function ProductionDashboardPage() {
     refetch: refetchCommandCenter
   } = useProductionContext();
   
-  // Initialize branch to "all" for dashboard if empty
   useEffect(() => {
     if (!selectedBranch) {
       setSelectedBranch("all");
@@ -200,11 +189,6 @@ export default function ProductionDashboardPage() {
     queryKey: ["/api/advanced-production-orders/stats"],
   });
 
-  const { data: recentUploads, isLoading: uploadsLoading } = useQuery<SalesUpload[]>({
-    queryKey: ["/api/sales-data-uploads?limit=5"],
-  });
-
-  // Production Hub - unified endpoint for dashboard (includes today, yesterday, deltas, activeOrders)
   const { data: hubData, isLoading: dailyLoading, refetch: refetchDaily } = useQuery<ProductionHubData>({
     queryKey: ["/api/production/hub", selectedBranch, selectedDate],
     queryFn: async () => {
@@ -222,7 +206,6 @@ export default function ProductionDashboardPage() {
         };
       }
       const data = await res.json();
-      // Ensure target object always exists
       if (!data.target) {
         data.target = { totalTarget: 0, totalProduced: 0, gap: 0, completionRate: 0 };
       }
@@ -233,20 +216,17 @@ export default function ProductionDashboardPage() {
   const dailyStats = hubData?.today;
   const prevDayStats = hubData?.yesterday;
 
-  // Command Center data comes from shared context (no duplicate query)
-
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount || 0);
+    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount || 0);
   };
 
   const completionRate = stats ? 
     Math.round((stats.completed / Math.max(stats.total, 1)) * 100) : 0;
 
-  // Use active orders from hub (includes branch filtering)
   const activeOrders = hubData?.activeOrders ?? (stats ? stats.pending + stats.approved + stats.inProgress : 0);
 
   const getDiff = (current: number, previous: number) => {
-    if (!previous) return { value: current, percentage: 100, direction: "up" as const };
+    if (!previous) return { value: current, percentage: 0, direction: "up" as const };
     const diff = current - previous;
     const percentage = Math.round(Math.abs(diff / previous) * 100);
     return { value: Math.abs(diff), percentage, direction: diff >= 0 ? "up" as const : "down" as const };
@@ -261,720 +241,624 @@ export default function ProductionDashboardPage() {
     refetchCommandCenter();
   }, [refetchStats, refetchDaily, refetchCommandCenter]);
 
-  // Auto-refresh is handled by the shared context
-
   const formatLastUpdated = () => {
     if (!lastUpdated) return "جارٍ التحميل...";
     const now = new Date();
     const diff = Math.floor((now.getTime() - lastUpdated.getTime()) / 1000);
-    if (diff < 60) return `منذ ${diff} ثانية`;
+    if (diff < 60) return `منذ ${diff} ث`;
     const mins = Math.floor(diff / 60);
-    return `منذ ${mins} دقيقة`;
+    return `منذ ${mins} د`;
   };
+
+  const orderStatusData = stats ? [
+    { name: 'مكتمل', value: stats.completed, color: '#10b981' },
+    { name: 'قيد التنفيذ', value: stats.inProgress, color: '#8b5cf6' },
+    { name: 'معتمد', value: stats.approved, color: '#3b82f6' },
+    { name: 'قيد الانتظار', value: stats.pending, color: '#f59e0b' },
+    { name: 'مسودة', value: stats.draft, color: '#6b7280' },
+  ].filter(item => item.value > 0) : [];
+
+  const comparisonData = [
+    {
+      name: "الإجمالي",
+      اليوم: dailyStats?.totalQuantity || 0,
+      أمس: prevDayStats?.totalQuantity || 0,
+      الهدف: hubData?.target?.totalTarget || 0
+    },
+    {
+      name: "بار العرض",
+      اليوم: dailyStats?.byDestination?.display_bar || 0,
+      أمس: prevDayStats?.byDestination?.display_bar || 0,
+      الهدف: 0
+    },
+    {
+      name: "التخزين",
+      اليوم: (dailyStats?.byDestination?.freezer || 0) + (dailyStats?.byDestination?.refrigerator || 0),
+      أمس: (prevDayStats?.byDestination?.freezer || 0) + (prevDayStats?.byDestination?.refrigerator || 0),
+      الهدف: 0
+    }
+  ];
 
   return (
     <Layout>
-      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
-              <Factory className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900" data-testid="page-title">
-                لوحة الإنتاج
-              </h1>
-              <p className="text-gray-600 text-xs sm:text-sm">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* Auto-refresh toggle */}
-            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-              <Switch
-                id="auto-refresh"
-                checked={autoRefresh}
-                onCheckedChange={setAutoRefresh}
-                data-testid="switch-auto-refresh"
-              />
-              <Label htmlFor="auto-refresh" className="text-sm text-gray-600 cursor-pointer">
-                تحديث تلقائي
-              </Label>
-              {autoRefresh && (
-                <Badge variant="secondary" className="text-xs animate-pulse">
-                  كل 60 ثانية
-                </Badge>
-              )}
-            </div>
-            
-            {/* Last updated indicator */}
-            <span className="text-xs text-gray-500" data-testid="text-last-updated">
-              {formatLastUpdated()}
-            </span>
-            
-            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={handleRefresh} data-testid="btn-refresh">
-              <RefreshCw className={`h-4 w-4 ml-2 ${dailyLoading ? 'animate-spin' : ''}`} />
-              تحديث
-            </Button>
-            <Link href="/advanced-production-orders/new">
-              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="btn-new-order">
-                <Plus className="h-4 w-4 ml-2" />
-                أمر إنتاج جديد
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Branch and Date Filters */}
-        <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-wrap items-end gap-3 sm:gap-4">
-              <div className="space-y-2 min-w-[160px] sm:min-w-[180px]">
-                <Label className="text-amber-800">الفرع</Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
-                  <SelectTrigger className="bg-white border-amber-200 h-11 sm:h-10">
-                    <SelectValue placeholder="كل الفروع" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    {canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}
-                    {branches?.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-amber-800">التاريخ</Label>
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-[140px] sm:w-[160px] bg-white border-amber-200 h-11 sm:h-10"
-                />
-              </div>
-              <div className="text-sm text-amber-700">
-                {format(new Date(selectedDate), "EEEE dd MMMM yyyy", { locale: ar })}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Daily Production Performance */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-          <Card className="border-r-4 border-r-green-500 bg-gradient-to-br from-green-50 to-white" data-testid="card-daily-qty">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white" dir="rtl">
+        <div className="p-4 md:p-6 space-y-6">
+          
+          {/* Header Section */}
+          <div className="bg-white rounded-2xl shadow-sm border p-4 md:p-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-200">
+                  <Factory className="h-7 w-7 text-white" />
+                </div>
                 <div>
-                  <p className="text-sm text-gray-600">إنتاج اليوم</p>
+                  <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-l from-amber-600 to-orange-600 bg-clip-text text-transparent" data-testid="page-title">
+                    لوحة الإنتاج
+                  </h1>
+                  <p className="text-gray-500 text-sm mt-1">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-2.5 border">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">الفرع</Label>
+                    <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
+                      <SelectTrigger className="w-[140px] h-8 text-sm bg-white border-slate-200">
+                        <SelectValue placeholder="كل الفروع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}
+                        {branches?.map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-px h-10 bg-slate-200" />
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">التاريخ</Label>
+                    <Input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="w-[130px] h-8 text-sm bg-white border-slate-200"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border">
+                  <Switch
+                    id="auto-refresh"
+                    checked={autoRefresh}
+                    onCheckedChange={setAutoRefresh}
+                    data-testid="switch-auto-refresh"
+                    className="data-[state=checked]:bg-amber-500"
+                  />
+                  <Label htmlFor="auto-refresh" className="text-xs text-slate-600 cursor-pointer whitespace-nowrap">
+                    تحديث تلقائي
+                  </Label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400" data-testid="text-last-updated">
+                    {formatLastUpdated()}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={handleRefresh} className="h-9 px-3" data-testid="btn-refresh">
+                    <RefreshCw className={`h-4 w-4 ${dailyLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                  <Link href="/advanced-production-orders/new">
+                    <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-9 shadow-md shadow-amber-200" data-testid="btn-new-order">
+                      <Plus className="h-4 w-4 ml-1" />
+                      أمر جديد
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-3 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              {format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}
+            </div>
+          </div>
+
+          {/* Main KPIs Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* Production Today */}
+            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-daily-qty">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-green-100 to-transparent rounded-bl-full" />
+              <CardContent className="p-4 relative">
+                <div className="flex items-start justify-between">
+                  <div className="h-10 w-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <Activity className="h-5 w-5 text-green-600" />
+                  </div>
+                  {prevDayStats && (prevDayStats.totalQuantity || 0) > 0 && qtyDiff.percentage > 0 && (
+                    <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-[10px] px-1.5 py-0.5">
+                      {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3 ml-0.5" /> : <TrendingDown className="h-3 w-3 ml-0.5" />}
+                      {qtyDiff.percentage}%
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="text-xs text-slate-500 font-medium">إنتاج اليوم</p>
                   {dailyLoading ? (
                     <Skeleton className="h-8 w-20 mt-1" />
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <p className="text-3xl font-bold text-green-700">{dailyStats?.totalQuantity || 0}</p>
-                      {prevDayStats && (prevDayStats.totalQuantity || 0) > 0 && (
-                        <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
-                          {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                          {qtyDiff.percentage}%
-                        </Badge>
-                      )}
-                    </div>
+                    <p className="text-2xl font-bold text-slate-800">{dailyStats?.totalQuantity || 0}</p>
                   )}
-                  <p className="text-xs text-gray-500">قطعة</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">قطعة</p>
                 </div>
-                <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <Activity className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="border-r-4 border-r-amber-500 bg-gradient-to-br from-amber-50 to-white" data-testid="card-daily-batches">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">دفعات اليوم</p>
+            {/* Batches Today */}
+            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-daily-batches">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-amber-100 to-transparent rounded-bl-full" />
+              <CardContent className="p-4 relative">
+                <div className="flex items-start justify-between">
+                  <div className="h-10 w-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                    <Package className="h-5 w-5 text-amber-600" />
+                  </div>
+                  {prevDayStats && (prevDayStats.totalBatches || 0) > 0 && batchDiff.percentage > 0 && (
+                    <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-[10px] px-1.5 py-0.5">
+                      {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3 ml-0.5" /> : <TrendingDown className="h-3 w-3 ml-0.5" />}
+                      {batchDiff.percentage}%
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="text-xs text-slate-500 font-medium">الدفعات</p>
                   {dailyLoading ? (
                     <Skeleton className="h-8 w-16 mt-1" />
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <p className="text-3xl font-bold text-amber-700">{dailyStats?.totalBatches || 0}</p>
-                      {prevDayStats && (prevDayStats.totalBatches || 0) > 0 && (
-                        <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
-                          {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                          {batchDiff.percentage}%
-                        </Badge>
-                      )}
-                    </div>
+                    <p className="text-2xl font-bold text-slate-800">{dailyStats?.totalBatches || 0}</p>
                   )}
-                  <p className="text-xs text-gray-500">دفعة</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">دفعة</p>
                 </div>
-                <div className="h-12 w-12 bg-amber-100 rounded-full flex items-center justify-center">
-                  <Package className="h-6 w-6 text-amber-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="border-r-4 border-r-blue-500 bg-gradient-to-br from-blue-50 to-white" data-testid="card-display">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">بار العرض</p>
+            {/* Display Bar */}
+            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-display">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-blue-100 to-transparent rounded-bl-full" />
+              <CardContent className="p-4 relative">
+                <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <ShoppingCart className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="mt-3">
+                  <p className="text-xs text-slate-500 font-medium">بار العرض</p>
                   {dailyLoading ? (
                     <Skeleton className="h-8 w-16 mt-1" />
                   ) : (
-                    <p className="text-3xl font-bold text-blue-700">{dailyStats?.byDestination?.display_bar || 0}</p>
+                    <p className="text-2xl font-bold text-slate-800">{dailyStats?.byDestination?.display_bar || 0}</p>
                   )}
-                  <p className="text-xs text-gray-500">قطعة</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">قطعة</p>
                 </div>
-                <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <ShoppingCart className="h-6 w-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="border-r-4 border-r-cyan-500 bg-gradient-to-br from-cyan-50 to-white" data-testid="card-storage">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">التخزين</p>
+            {/* Storage */}
+            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-storage">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-cyan-100 to-transparent rounded-bl-full" />
+              <CardContent className="p-4 relative">
+                <div className="h-10 w-10 bg-cyan-100 rounded-xl flex items-center justify-center">
+                  <Snowflake className="h-5 w-5 text-cyan-600" />
+                </div>
+                <div className="mt-3">
+                  <p className="text-xs text-slate-500 font-medium">التخزين</p>
                   {dailyLoading ? (
                     <Skeleton className="h-8 w-16 mt-1" />
                   ) : (
-                    <p className="text-3xl font-bold text-cyan-700">
+                    <p className="text-2xl font-bold text-slate-800">
                       {(dailyStats?.byDestination?.freezer || 0) + (dailyStats?.byDestination?.refrigerator || 0)}
                     </p>
                   )}
-                  <p className="text-xs text-gray-500">قطعة</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">قطعة</p>
                 </div>
-                <div className="h-12 w-12 bg-cyan-100 rounded-full flex items-center justify-center">
-                  <Snowflake className="h-6 w-6 text-cyan-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="border-r-4 border-r-purple-500 bg-gradient-to-br from-purple-50 to-white" data-testid="card-active-orders">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">أوامر نشطة</p>
+            {/* Active Orders */}
+            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-active-orders">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-purple-100 to-transparent rounded-bl-full" />
+              <CardContent className="p-4 relative">
+                <div className="h-10 w-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-purple-600" />
+                </div>
+                <div className="mt-3">
+                  <p className="text-xs text-slate-500 font-medium">أوامر نشطة</p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-16 mt-1" />
                   ) : (
-                    <p className="text-3xl font-bold text-purple-700">{activeOrders}</p>
+                    <p className="text-2xl font-bold text-slate-800">{activeOrders}</p>
                   )}
-                  <p className="text-xs text-gray-500">أمر</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">أمر</p>
                 </div>
-                <div className="h-12 w-12 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Clock className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        {/* Smart Production Dashboard - Target vs Actual */}
-        {hubData?.target && hubData.target.totalTarget > 0 && (
-          <Card className="border-2 border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50" data-testid="card-target-vs-actual">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-lg text-amber-800">
-                <Target className="h-5 w-5" />
-                لوحة الإنتاج الموحدة
-              </CardTitle>
-              <CardDescription>الهدف مقابل الإنتاج الفعلي</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Main stats row */}
-                <div className="grid grid-cols-4 gap-4 text-center">
-                  <div className="bg-white rounded-lg p-3 shadow-sm border">
-                    <p className="text-xs text-gray-500 mb-1">الهدف</p>
-                    <p className="text-2xl font-bold text-gray-800">{hubData.target.totalTarget}</p>
+          {/* Target Progress Card */}
+          {hubData?.target && hubData.target.totalTarget > 0 && (
+            <Card className="border-0 shadow-lg bg-gradient-to-r from-amber-50 via-white to-orange-50" data-testid="card-target-vs-actual">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-10 w-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                    <Target className="h-5 w-5 text-amber-600" />
                   </div>
-                  <div className="bg-white rounded-lg p-3 shadow-sm border">
-                    <p className="text-xs text-gray-500 mb-1">المُنتَج</p>
+                  <div>
+                    <h3 className="font-bold text-slate-800">الهدف مقابل الإنتاج الفعلي</h3>
+                    <p className="text-xs text-slate-500">متابعة تحقيق الأهداف اليومية</p>
+                  </div>
+                  <div className="mr-auto">
+                    {hubData.target.completionRate >= 100 && (
+                      <Badge className="bg-green-500 text-white">تم تحقيق الهدف</Badge>
+                    )}
+                    {hubData.target.completionRate >= 80 && hubData.target.completionRate < 100 && (
+                      <Badge className="bg-amber-500 text-white">قريب من الهدف</Badge>
+                    )}
+                    {hubData.target.completionRate < 80 && hubData.target.completionRate > 0 && (
+                      <Badge className="bg-red-500 text-white">يحتاج متابعة</Badge>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-slate-100">
+                    <p className="text-xs text-slate-500 mb-1">الهدف</p>
+                    <p className="text-2xl font-bold text-slate-800">{hubData.target.totalTarget}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-green-100">
+                    <p className="text-xs text-slate-500 mb-1">المُنتَج</p>
                     <p className="text-2xl font-bold text-green-600">{hubData.target.totalProduced}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-3 shadow-sm border">
-                    <p className="text-xs text-gray-500 mb-1">الفرق</p>
+                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-slate-100">
+                    <p className="text-xs text-slate-500 mb-1">الفرق</p>
                     <p className={`text-2xl font-bold ${hubData.target.gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {hubData.target.gap > 0 ? `-${hubData.target.gap}` : hubData.target.gap === 0 ? '0' : `+${Math.abs(hubData.target.gap)}`}
                     </p>
                   </div>
-                  <div className="bg-white rounded-lg p-3 shadow-sm border">
-                    <p className="text-xs text-gray-500 mb-1">نسبة الإنجاز</p>
-                    <p className={`text-2xl font-bold ${hubData.target.completionRate >= 100 ? 'text-green-600' : hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-amber-100">
+                    <p className="text-xs text-slate-500 mb-1">نسبة الإنجاز</p>
+                    <p className={`text-2xl font-bold ${
+                      hubData.target.completionRate >= 100 ? 'text-green-600' : 
+                      hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'
+                    }`}>
                       {hubData.target.completionRate}%
                     </p>
                   </div>
                 </div>
 
-                {/* Enhanced Progress bar with color coding */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600 flex items-center gap-2">
-                      التقدم نحو الهدف
-                      {hubData.target.completionRate >= 100 && (
-                        <Badge className="bg-green-100 text-green-700 text-xs">تم تحقيق الهدف</Badge>
-                      )}
-                      {hubData.target.completionRate >= 80 && hubData.target.completionRate < 100 && (
-                        <Badge className="bg-amber-100 text-amber-700 text-xs">قريب من الهدف</Badge>
-                      )}
-                      {hubData.target.completionRate < 80 && hubData.target.completionRate > 0 && (
-                        <Badge className="bg-red-100 text-red-700 text-xs">يحتاج متابعة</Badge>
-                      )}
-                    </span>
-                    <span className={`font-bold text-lg ${
-                      hubData.target.completionRate >= 100 ? 'text-green-600' : 
-                      hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'
-                    }`}>
-                      {hubData.target.completionRate}%
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <Progress 
-                      value={Math.min(hubData.target.completionRate, 100)} 
-                      className={`h-5 ${
-                        hubData.target.completionRate >= 100 ? '[&>div]:bg-green-500' : 
-                        hubData.target.completionRate >= 80 ? '[&>div]:bg-amber-500' : '[&>div]:bg-red-500'
-                      }`}
-                    />
-                    {hubData.target.completionRate > 100 && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xs font-medium text-white drop-shadow">
-                          +{hubData.target.completionRate - 100}% إضافي
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>0</span>
-                    <span>الهدف: {hubData.target.totalTarget} قطعة</span>
+                <div className="relative">
+                  <Progress 
+                    value={Math.min(hubData.target.completionRate, 100)} 
+                    className={`h-4 rounded-full ${
+                      hubData.target.completionRate >= 100 ? '[&>div]:bg-gradient-to-r [&>div]:from-green-500 [&>div]:to-emerald-500' : 
+                      hubData.target.completionRate >= 80 ? '[&>div]:bg-gradient-to-r [&>div]:from-amber-500 [&>div]:to-orange-500' : 
+                      '[&>div]:bg-gradient-to-r [&>div]:from-red-500 [&>div]:to-rose-500'
+                    }`}
+                  />
+                  <div className="flex justify-between text-xs text-slate-400 mt-2">
+                    <span>0%</span>
+                    <span>{hubData.target.totalTarget} قطعة</span>
                     <span>100%</span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
 
-                {/* Comparison with yesterday */}
-                <div className="flex items-center gap-4 pt-2 border-t">
-                  <div className="flex items-center gap-2 text-sm">
-                    {qtyDiff.direction === "up" ? (
-                      <TrendingUp className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4 text-red-600" />
-                    )}
-                    <span className="text-gray-600">مقارنة مع أمس:</span>
-                    <span className={`font-medium ${qtyDiff.direction === "up" ? 'text-green-600' : 'text-red-600'}`}>
-                      {qtyDiff.direction === "up" ? '+' : '-'}{qtyDiff.percentage}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Left Column - Charts & Command Center */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Command Center */}
+              <Card className="border-0 shadow-md" data-testid="card-command-center">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <LayoutDashboard className="h-5 w-5 text-slate-600" />
+                    مركز القيادة الموحد
+                  </CardTitle>
+                  <CardDescription>نظرة شاملة على جميع العمليات</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Cashier KPI */}
+                    <Link href="/cashier-journals" className="block group" data-testid="card-cashier-kpi">
+                      <div className="rounded-xl border-2 border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4 hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="h-10 w-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                            <CreditCard className="h-5 w-5 text-emerald-600" />
+                          </div>
+                          <ArrowUpRight className="h-4 w-4 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <h4 className="font-semibold text-emerald-800 mb-2">الكاشير</h4>
+                        {commandCenterLoading ? (
+                          <Skeleton className="h-12 w-full" />
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">المبيعات</span>
+                              <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.totalSales || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">المتوسط</span>
+                              <span className="font-medium text-slate-700">{formatCurrency(commandCenterData?.cashier?.averageTicket || 0)}</span>
+                            </div>
+                            {(commandCenterData?.cashier?.shortages || 0) > 0 && (
+                              <div className="flex justify-between text-sm text-red-600">
+                                <span>العجز</span>
+                                <span className="font-medium">{formatCurrency(commandCenterData?.cashier?.shortageAmount || 0)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </Link>
 
-        {/* Comparison Chart - Today vs Yesterday vs Target */}
-        {hubData && (dailyStats?.totalQuantity || prevDayStats?.totalQuantity || (hubData.target && hubData.target.totalTarget > 0)) && (
-          <Card className="border-indigo-200" data-testid="card-comparison-chart">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-lg text-indigo-800">
-                <BarChart3 className="h-5 w-5" />
-                مقارنة الإنتاج
-              </CardTitle>
-              <CardDescription>اليوم مقابل أمس والهدف</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart
-                  data={[
-                    {
-                      name: "الإجمالي",
-                      اليوم: dailyStats?.totalQuantity || 0,
-                      أمس: prevDayStats?.totalQuantity || 0,
-                      الهدف: hubData.target?.totalTarget || 0
-                    },
-                    {
-                      name: "بار العرض",
-                      اليوم: dailyStats?.byDestination?.display_bar || 0,
-                      أمس: prevDayStats?.byDestination?.display_bar || 0,
-                      الهدف: 0
-                    },
-                    {
-                      name: "التخزين",
-                      اليوم: (dailyStats?.byDestination?.freezer || 0) + (dailyStats?.byDestination?.refrigerator || 0),
-                      أمس: (prevDayStats?.byDestination?.freezer || 0) + (prevDayStats?.byDestination?.refrigerator || 0),
-                      الهدف: 0
-                    }
-                  ]}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="اليوم" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="أمس" fill="#6b7280" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="الهدف" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
+                    {/* Waste KPI */}
+                    <Link href="/waste-reports" className="block group" data-testid="card-waste-kpi">
+                      <div className="rounded-xl border-2 border-red-100 bg-gradient-to-br from-red-50 to-white p-4 hover:border-red-300 hover:shadow-md transition-all cursor-pointer">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="h-10 w-10 bg-red-100 rounded-xl flex items-center justify-center">
+                            <Trash2 className="h-5 w-5 text-red-600" />
+                          </div>
+                          <ArrowUpRight className="h-4 w-4 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <h4 className="font-semibold text-red-800 mb-2">الهدر</h4>
+                        {commandCenterLoading ? (
+                          <Skeleton className="h-12 w-full" />
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">التقارير</span>
+                              <span className="font-bold text-red-700">{commandCenterData?.waste?.totalReports || 0}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">الكمية</span>
+                              <span className="font-medium text-slate-700">{commandCenterData?.waste?.totalWastedQuantity || 0}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">القيمة</span>
+                              <span className="font-medium text-red-600">{formatCurrency(commandCenterData?.waste?.totalWastedValue || 0)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Link>
 
-        {/* Orders Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-slate-50 to-white" data-testid="card-total-orders">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center">
-                  <ClipboardList className="h-5 w-5 text-slate-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">إجمالي الأوامر</p>
-                  {statsLoading ? <Skeleton className="h-6 w-12" /> : (
-                    <p className="text-xl font-bold text-slate-700">{stats?.total || 0}</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-green-50 to-white" data-testid="card-completed">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">مكتملة</p>
-                  {statsLoading ? <Skeleton className="h-6 w-12" /> : (
-                    <p className="text-xl font-bold text-green-700">{stats?.completed || 0}</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-amber-50 to-white" data-testid="card-estimated-cost">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  <Target className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">التكلفة المتوقعة</p>
-                  {statsLoading ? <Skeleton className="h-6 w-20" /> : (
-                    <p className="text-lg font-bold text-amber-700">{formatCurrency(stats?.totalEstimatedCost || 0)}</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-indigo-50 to-white" data-testid="card-completion-rate">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <BarChart3 className="h-5 w-5 text-indigo-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-500">نسبة الإنجاز</p>
-                  {statsLoading ? <Skeleton className="h-6 w-12" /> : (
-                    <div className="flex items-center gap-2">
-                      <p className="text-xl font-bold text-indigo-700">{completionRate}%</p>
-                      <Progress value={completionRate} className="h-2 flex-1" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Unified Command Center - All Systems KPIs */}
-        <Card className="border border-slate-200 bg-slate-50/50" data-testid="card-command-center">
-          <CardHeader className="py-2 px-3">
-            <CardTitle className="flex items-center gap-1.5 text-xs text-slate-700">
-              <Activity className="h-3.5 w-3.5" />
-              مركز القيادة الموحد
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 pb-2 px-3">
-            <div className="grid grid-cols-3 gap-2">
-              {/* Cashier Stats - Ultra Compact */}
-              <Link href="/cashier-journals" className="block group" data-testid="card-cashier-kpi">
-                <div className="rounded-lg border border-emerald-200 bg-white/80 hover:bg-emerald-50/50 p-2 transition-all hover:shadow-sm cursor-pointer">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
-                    <span className="text-[10px] font-semibold text-emerald-800">الكاشير</span>
-                    <ArrowUpRight className="h-2.5 w-2.5 text-emerald-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  {commandCenterLoading ? (
-                    <Skeleton className="h-6 w-full" />
-                  ) : (
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
-                      <div><span className="text-gray-500">المبيعات:</span> <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.totalSales || 0)}</span></div>
-                      <div><span className="text-gray-500">المتوسط:</span> <span className="font-bold text-emerald-700">{formatCurrency(commandCenterData?.cashier?.averageTicket || 0)}</span></div>
-                      {(commandCenterData?.cashier?.shortages || 0) > 0 && (
-                        <div className="flex items-center gap-0.5 text-red-600">
-                          <TrendingDown className="h-2.5 w-2.5" />
-                          <span className="font-medium">{formatCurrency(commandCenterData?.cashier?.shortageAmount || 0)}</span>
+                    {/* Comparison KPI */}
+                    <div className="rounded-xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-4" data-testid="card-comparison-kpi">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="h-10 w-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                          <BarChart3 className="h-5 w-5 text-indigo-600" />
+                        </div>
+                      </div>
+                      <h4 className="font-semibold text-indigo-800 mb-2">المقارنات</h4>
+                      {commandCenterLoading ? (
+                        <Skeleton className="h-12 w-full" />
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-500">الإنتاج</span>
+                            <span className={`font-bold ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.productionVsYesterday || 0).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-500">المبيعات</span>
+                            <span className={`font-bold ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.salesVsYesterday || 0).toFixed(0)}%
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              </Link>
-
-              {/* Waste Stats - Ultra Compact */}
-              <Link href="/waste-reports" className="block group" data-testid="card-waste-kpi">
-                <div className="rounded-lg border border-red-200 bg-white/80 hover:bg-red-50/50 p-2 transition-all hover:shadow-sm cursor-pointer">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                    <span className="text-[10px] font-semibold text-red-800">الهدر</span>
-                    <ArrowUpRight className="h-2.5 w-2.5 text-red-400 mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  {commandCenterLoading ? (
-                    <Skeleton className="h-6 w-full" />
-                  ) : (
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
-                      <div><span className="text-gray-500">التقارير:</span> <span className="font-bold text-red-700">{commandCenterData?.waste?.totalReports || 0}</span></div>
-                      <div><span className="text-gray-500">الكمية:</span> <span className="font-bold text-red-700">{commandCenterData?.waste?.totalWastedQuantity || 0}</span></div>
-                      <div><span className="text-gray-500">القيمة:</span> <span className="font-bold text-red-700">{formatCurrency(commandCenterData?.waste?.totalWastedValue || 0)}</span></div>
-                    </div>
-                  )}
-                </div>
-              </Link>
+                </CardContent>
+              </Card>
 
-              {/* Comparison Stats - Ultra Compact */}
-              <div className="rounded-lg border border-indigo-200 bg-white/80 p-2" data-testid="card-comparison-kpi">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <BarChart3 className="h-3.5 w-3.5 text-indigo-600" />
-                  <span className="text-[10px] font-semibold text-indigo-800">المقارنات</span>
-                </div>
-                {commandCenterLoading ? (
-                  <Skeleton className="h-6 w-full" />
-                ) : (
-                  <div className="flex gap-3 text-[10px]">
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-500">الإنتاج:</span>
-                      <span className={`font-bold ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.productionVsYesterday || 0).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-500">المبيعات:</span>
-                      <span className={`font-bold ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.salesVsYesterday || 0).toFixed(0)}%
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* Comparison Chart */}
+              <Card className="border-0 shadow-md" data-testid="card-comparison-chart">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Layers className="h-5 w-5 text-indigo-600" />
+                    مقارنة الإنتاج
+                  </CardTitle>
+                  <CardDescription>اليوم مقابل أمس والهدف</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={comparisonData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                        }} 
+                      />
+                      <Legend />
+                      <Bar dataKey="اليوم" fill="#10b981" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="أمس" fill="#94a3b8" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="الهدف" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Card data-testid="card-quick-actions">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-amber-500" />
-                  الوصول السريع
-                </CardTitle>
-                <CardDescription>اختصارات لجميع وظائف الإنتاج</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {QUICK_ACTIONS.map((action, index) => (
-                    <Link key={index} href={action.href}>
-                      <Card 
-                        className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-0 overflow-hidden group"
-                        data-testid={`quick-action-${index}`}
-                      >
-                        <div className={`h-2 bg-gradient-to-r ${action.color}`} />
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className={`h-10 w-10 rounded-lg bg-gradient-to-r ${action.color} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
-                              <action.icon className="h-5 w-5 text-white" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold text-gray-900 text-sm truncate">{action.title}</h3>
-                                {action.badge && (
-                                  <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                                    {action.badge}
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">{action.description}</p>
-                            </div>
-                            <ArrowUpRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
+            {/* Right Column - Quick Actions & Order Status */}
+            <div className="space-y-6">
+              
+              {/* Quick Actions */}
+              <Card className="border-0 shadow-md" data-testid="card-quick-actions">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Zap className="h-5 w-5 text-amber-500" />
+                    الوصول السريع
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-3">
+                    {QUICK_ACTIONS.map((action, index) => (
+                      <Link key={index} href={action.href}>
+                        <div 
+                          className="group relative p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-md transition-all cursor-pointer bg-white"
+                          data-testid={`quick-action-${index}`}
+                        >
+                          <div className={`h-9 w-9 ${action.color} rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-sm`}>
+                            <action.icon className="h-4 w-4 text-white" />
                           </div>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card data-testid="card-order-status">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Package className="h-5 w-5 text-amber-500" />
-                  حالة الأوامر
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {statsLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3, 4].map((i) => (
-                      <Skeleton key={i} className="h-8 w-full" />
+                          <h4 className="text-xs font-semibold text-slate-700 mb-0.5">{action.title}</h4>
+                          <p className="text-[10px] text-slate-400 line-clamp-1">{action.description}</p>
+                          {action.badge && (
+                            <Badge className="absolute top-2 left-2 text-[9px] px-1.5 py-0 bg-purple-100 text-purple-700 border-0">
+                              {action.badge}
+                            </Badge>
+                          )}
+                        </div>
+                      </Link>
                     ))}
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full bg-gray-400" />
-                        <span className="text-sm">مسودة</span>
-                      </div>
-                      <Badge variant="secondary">{stats?.draft || 0}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-yellow-50">
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full bg-yellow-500" />
-                        <span className="text-sm">قيد الانتظار</span>
-                      </div>
-                      <Badge className="bg-yellow-100 text-yellow-800">{stats?.pending || 0}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50">
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full bg-blue-500" />
-                        <span className="text-sm">معتمد</span>
-                      </div>
-                      <Badge className="bg-blue-100 text-blue-800">{stats?.approved || 0}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-purple-50">
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full bg-purple-500" />
-                        <span className="text-sm">قيد التنفيذ</span>
-                      </div>
-                      <Badge className="bg-purple-100 text-purple-800">{stats?.inProgress || 0}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-green-50">
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full bg-green-500" />
-                        <span className="text-sm">مكتمل</span>
-                      </div>
-                      <Badge className="bg-green-100 text-green-800">{stats?.completed || 0}</Badge>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card data-testid="card-order-types">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-amber-500" />
-                  أنواع الأوامر
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {statsLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-8 w-full" />
-                    ))}
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-amber-50">
-                      <span className="text-sm">يومي</span>
-                      <Badge className="bg-amber-100 text-amber-800">{stats?.daily || 0}</Badge>
+              {/* Order Status with Pie Chart */}
+              <Card className="border-0 shadow-md" data-testid="card-order-status">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Settings2 className="h-5 w-5 text-slate-600" />
+                    حالة الأوامر
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {statsLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3, 4].map((i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                      ))}
                     </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-indigo-50">
-                      <span className="text-sm">أسبوعي</span>
-                      <Badge className="bg-indigo-100 text-indigo-800">{stats?.weekly || 0}</Badge>
+                  ) : (
+                    <>
+                      {orderStatusData.length > 0 && (
+                        <div className="h-40 mb-4">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={orderStatusData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={40}
+                                outerRadius={60}
+                                paddingAngle={3}
+                                dataKey="value"
+                              >
+                                {orderStatusData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-green-50 border border-green-100">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="text-sm text-slate-700">مكتمل</span>
+                          </div>
+                          <Badge className="bg-green-100 text-green-800 border-0">{stats?.completed || 0}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-purple-50 border border-purple-100">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-purple-600" />
+                            <span className="text-sm text-slate-700">قيد التنفيذ</span>
+                          </div>
+                          <Badge className="bg-purple-100 text-purple-800 border-0">{stats?.inProgress || 0}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 border border-blue-100">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-blue-600" />
+                            <span className="text-sm text-slate-700">معتمد</span>
+                          </div>
+                          <Badge className="bg-blue-100 text-blue-800 border-0">{stats?.approved || 0}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-100">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-amber-600" />
+                            <span className="text-sm text-slate-700">قيد الانتظار</span>
+                          </div>
+                          <Badge className="bg-amber-100 text-amber-800 border-0">{stats?.pending || 0}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-4 rounded-full bg-slate-400" />
+                            <span className="text-sm text-slate-700">مسودة</span>
+                          </div>
+                          <Badge className="bg-slate-100 text-slate-800 border-0">{stats?.draft || 0}</Badge>
+                        </div>
+                      </div>
+                      
+                      {/* Summary Stats */}
+                      <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3">
+                        <div className="text-center p-3 bg-slate-50 rounded-xl">
+                          <p className="text-xs text-slate-500">إجمالي الأوامر</p>
+                          <p className="text-xl font-bold text-slate-800">{stats?.total || 0}</p>
+                        </div>
+                        <div className="text-center p-3 bg-amber-50 rounded-xl">
+                          <p className="text-xs text-slate-500">نسبة الإنجاز</p>
+                          <p className="text-xl font-bold text-amber-700">{completionRate}%</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Order Types */}
+              <Card className="border-0 shadow-md" data-testid="card-order-types">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Calendar className="h-5 w-5 text-amber-500" />
+                    أنواع الأوامر
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {statsLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                      ))}
                     </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-teal-50">
-                      <span className="text-sm">طويل الأمد</span>
-                      <Badge className="bg-teal-100 text-teal-800">{stats?.longTerm || 0}</Badge>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 border border-amber-100">
+                        <span className="text-sm font-medium text-slate-700">يومي</span>
+                        <Badge className="bg-amber-100 text-amber-800 border-0">{stats?.daily || 0}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+                        <span className="text-sm font-medium text-slate-700">أسبوعي</span>
+                        <Badge className="bg-indigo-100 text-indigo-800 border-0">{stats?.weekly || 0}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-teal-50 border border-teal-100">
+                        <span className="text-sm font-medium text-slate-700">طويل المدى</span>
+                        <Badge className="bg-teal-100 text-teal-800 border-0">{stats?.longTerm || 0}</Badge>
+                      </div>
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
-
-        <Card data-testid="card-recent-uploads">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-5 w-5 text-amber-500" />
-                  آخر عمليات رفع البيانات
-                </CardTitle>
-                <CardDescription>أحدث ملفات المبيعات المرفوعة</CardDescription>
-              </div>
-              <Link href="/sales-data-uploads">
-                <Button variant="outline" size="sm" data-testid="btn-view-all-uploads">
-                  عرض الكل
-                  <ArrowUpRight className="h-4 w-4 mr-2" />
-                </Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {uploadsLoading ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : recentUploads && recentUploads.length > 0 ? (
-              <div className="space-y-2">
-                {recentUploads.slice(0, 5).map((upload) => (
-                  <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <FileSpreadsheet className="h-4 w-4 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{upload.fileName}</p>
-                        <p className="text-xs text-gray-500">{upload.branchId}</p>
-                      </div>
-                    </div>
-                    <div className="text-left">
-                      <Badge variant={upload.status === "processed" ? "default" : "secondary"}>
-                        {upload.status === "processed" ? "تمت المعالجة" : upload.status}
-                      </Badge>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {upload.createdAt ? format(new Date(upload.createdAt), "dd/MM/yyyy") : ""}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Upload className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                <p>لا توجد عمليات رفع حديثة</p>
-                <Link href="/sales-data-uploads">
-                  <Button variant="link" className="mt-2">رفع بيانات جديدة</Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </Layout>
   );
