@@ -622,32 +622,35 @@ export default function ProductionDashboardPage() {
                     </Link>
 
                     {/* Comparison KPI */}
-                    <div className="rounded-xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-4" data-testid="card-comparison-kpi">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="h-10 w-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                          <BarChart3 className="h-5 w-5 text-indigo-600" />
+                    <Link href="/production-comparisons">
+                      <div className="rounded-xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-4 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer" data-testid="card-comparison-kpi">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="h-10 w-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                            <BarChart3 className="h-5 w-5 text-indigo-600" />
+                          </div>
+                          <ArrowUpRight className="h-4 w-4 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
+                        <h4 className="font-semibold text-indigo-800 mb-2">المقارنات</h4>
+                        {commandCenterLoading ? (
+                          <Skeleton className="h-12 w-full" />
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">الإنتاج</span>
+                              <span className={`font-bold ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.productionVsYesterday || 0).toFixed(0)}%
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">المبيعات</span>
+                              <span className={`font-bold ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.salesVsYesterday || 0).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <h4 className="font-semibold text-indigo-800 mb-2">المقارنات</h4>
-                      {commandCenterLoading ? (
-                        <Skeleton className="h-12 w-full" />
-                      ) : (
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-slate-500">الإنتاج</span>
-                            <span className={`font-bold ${(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {(commandCenterData?.comparison?.productionVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.productionVsYesterday || 0).toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-slate-500">المبيعات</span>
-                            <span className={`font-bold ${(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {(commandCenterData?.comparison?.salesVsYesterday || 0) >= 0 ? '+' : ''}{(commandCenterData?.comparison?.salesVsYesterday || 0).toFixed(0)}%
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

@@ -4700,3 +4700,169 @@ export const PNL_LABELS = {
     poor: { label: "ضعيف", color: "#ef4444", icon: "🔴" },
   },
 } as const;
+
+// ==================== Production vs Sales Comparison System ====================
+
+// Daily Sales Data for Comparison - بيانات المبيعات اليومية للمقارنة
+export const dailySalesData = pgTable("daily_sales_data", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  salesDate: date("sales_date").notNull(),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  quantitySold: integer("quantity_sold").default(0),
+  salesValue: real("sales_value").default(0),
+  unitPrice: real("unit_price"),
+  uploadId: integer("upload_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_sales_branch").on(table.branchId),
+  index("idx_daily_sales_date").on(table.salesDate),
+  index("idx_daily_sales_product").on(table.productName),
+  index("idx_daily_sales_upload").on(table.uploadId),
+]);
+
+export const insertDailySalesDataSchema = createInsertSchema(dailySalesData).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DailySalesData = typeof dailySalesData.$inferSelect;
+export type InsertDailySalesData = z.infer<typeof insertDailySalesDataSchema>;
+
+// Production vs Sales Comparison Uploads - ملفات رفع المقارنات
+export const comparisonUploads = pgTable("comparison_uploads", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").default("excel"),
+  dataType: text("data_type").notNull(), // 'sales' or 'production'
+  periodStart: date("period_start"),
+  periodEnd: date("period_end"),
+  totalRecords: integer("total_records").default(0),
+  totalValue: real("total_value").default(0),
+  uniqueProducts: integer("unique_products").default(0),
+  status: text("status").default("pending"), // pending, processing, completed, failed
+  errorMessage: text("error_message"),
+  uploadedBy: varchar("uploaded_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_comparison_uploads_branch").on(table.branchId),
+  index("idx_comparison_uploads_type").on(table.dataType),
+  index("idx_comparison_uploads_status").on(table.status),
+]);
+
+export const insertComparisonUploadSchema = createInsertSchema(comparisonUploads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComparisonUpload = typeof comparisonUploads.$inferSelect;
+export type InsertComparisonUpload = z.infer<typeof insertComparisonUploadSchema>;
+
+// Daily Production vs Sales Comparison - مقارنة الإنتاج والمبيعات اليومية
+export const dailyComparisons = pgTable("daily_comparisons", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  comparisonDate: date("comparison_date").notNull(),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  producedQuantity: integer("produced_quantity").default(0),
+  soldQuantity: integer("sold_quantity").default(0),
+  difference: integer("difference").default(0), // produced - sold
+  differencePercent: real("difference_percent").default(0),
+  productionValue: real("production_value").default(0),
+  salesValue: real("sales_value").default(0),
+  valueDifference: real("value_difference").default(0),
+  isStorable: boolean("is_storable").default(false),
+  storageNotes: text("storage_notes"),
+  status: text("status").default("normal"), // normal, waste, shortage, stored
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_comparisons_branch").on(table.branchId),
+  index("idx_daily_comparisons_date").on(table.comparisonDate),
+  index("idx_daily_comparisons_product").on(table.productName),
+  index("idx_daily_comparisons_category").on(table.productCategory),
+  index("idx_daily_comparisons_status").on(table.status),
+]);
+
+export const insertDailyComparisonSchema = createInsertSchema(dailyComparisons).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DailyComparison = typeof dailyComparisons.$inferSelect;
+export type InsertDailyComparison = z.infer<typeof insertDailyComparisonSchema>;
+
+// Comparison Summary - ملخص المقارنات
+export const comparisonSummaries = pgTable("comparison_summaries", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull(), // daily, weekly, monthly
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  totalProduced: integer("total_produced").default(0),
+  totalSold: integer("total_sold").default(0),
+  totalWaste: integer("total_waste").default(0),
+  totalShortage: integer("total_shortage").default(0),
+  productionValue: real("production_value").default(0),
+  salesValue: real("sales_value").default(0),
+  wasteValue: real("waste_value").default(0),
+  wastePercent: real("waste_percent").default(0),
+  shortagePercent: real("shortage_percent").default(0),
+  efficiencyScore: real("efficiency_score").default(0),
+  topWasteProducts: jsonb("top_waste_products"),
+  topShortageProducts: jsonb("top_shortage_products"),
+  categoryBreakdown: jsonb("category_breakdown"),
+  recommendations: jsonb("recommendations"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_comparison_summaries_branch").on(table.branchId),
+  index("idx_comparison_summaries_period").on(table.periodType),
+  index("idx_comparison_summaries_dates").on(table.periodStart, table.periodEnd),
+]);
+
+export const insertComparisonSummarySchema = createInsertSchema(comparisonSummaries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComparisonSummary = typeof comparisonSummaries.$inferSelect;
+export type InsertComparisonSummary = z.infer<typeof insertComparisonSummarySchema>;
+
+// Product Storage Settings - إعدادات تخزين المنتجات
+export const productStorageSettings = pgTable("product_storage_settings", {
+  id: serial("id").primaryKey(),
+  productName: text("product_name").notNull().unique(),
+  productCategory: text("product_category"),
+  isStorable: boolean("is_storable").default(false),
+  maxStorageDays: integer("max_storage_days").default(0),
+  storageType: text("storage_type"), // freezer, refrigerator, room_temp
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedBy: varchar("updated_by"),
+}, (table) => [
+  index("idx_product_storage_name").on(table.productName),
+  index("idx_product_storage_category").on(table.productCategory),
+]);
+
+export const insertProductStorageSettingSchema = createInsertSchema(productStorageSettings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductStorageSetting = typeof productStorageSettings.$inferSelect;
+export type InsertProductStorageSetting = z.infer<typeof insertProductStorageSettingSchema>;
+
+// Comparison Categories Labels
+export const COMPARISON_CATEGORIES = ["إفطار", "مخبوزات", "حلويات", "بيتزا", "باريستا", "تجمعات", "أخرى"] as const;
+export type ComparisonCategory = typeof COMPARISON_CATEGORIES[number];
+
+export const COMPARISON_STATUS = {
+  normal: { label: "طبيعي", color: "green" },
+  waste: { label: "هدر", color: "red" },
+  shortage: { label: "نقص", color: "orange" },
+  stored: { label: "مخزن", color: "blue" },
+} as const;

@@ -3,13 +3,20 @@ import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, lte, sql } from "drizzle-orm";
 import { 
   branchDailyClosures, 
   branchDailyClosurePayments, 
   branchDailyClosureJournals,
   cashierSalesJournals,
-  cashierPaymentBreakdowns
+  cashierPaymentBreakdowns,
+  dailySalesData,
+  dailyComparisons,
+  comparisonUploads,
+  comparisonSummaries,
+  productStorageSettings,
+  advancedProductionOrders,
+  productionOrderItems
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -6475,6 +6482,451 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting order item:", error);
       res.status(500).json({ error: "Failed to delete item" });
+    }
+  });
+
+  // ==================== Production vs Sales Comparisons ====================
+  
+  // Get all comparisons with filters
+  app.get("/api/production-comparisons", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const { branchId, startDate, endDate, category } = req.query;
+      
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && !mandatoryBranch) {
+        return res.json([]);
+      }
+      
+      const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
+      
+      const conditions: any[] = [];
+      if (effectiveBranchId) {
+        conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
+      }
+      if (startDate) {
+        conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      }
+      if (endDate) {
+        conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      }
+      if (category && category !== "all") {
+        conditions.push(eq(dailyComparisons.productCategory, category as string));
+      }
+      
+      let query = db.select().from(dailyComparisons);
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as typeof query;
+      }
+      const comparisons = await query.orderBy(desc(dailyComparisons.comparisonDate));
+      
+      res.json(comparisons);
+    } catch (error) {
+      console.error("Error fetching comparisons:", error);
+      res.status(500).json({ error: "Failed to fetch comparisons" });
+    }
+  });
+
+  // Get comparison summary
+  app.get("/api/production-comparisons/summary", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const { branchId, startDate, endDate } = req.query;
+      
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
+      
+      const conditions: any[] = [];
+      if (effectiveBranchId) {
+        conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
+      }
+      if (startDate) {
+        conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
+      }
+      if (endDate) {
+        conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
+      }
+      
+      let query = db.select().from(dailyComparisons);
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as typeof query;
+      }
+      const comparisons = await query;
+      
+      const summary = {
+        totalProduced: comparisons.reduce((sum, c) => sum + (c.producedQuantity || 0), 0),
+        totalSold: comparisons.reduce((sum, c) => sum + (c.soldQuantity || 0), 0),
+        totalWaste: comparisons.filter(c => (c.difference || 0) > 0).reduce((sum, c) => sum + (c.difference || 0), 0),
+        totalShortage: comparisons.filter(c => (c.difference || 0) < 0).reduce((sum, c) => sum + Math.abs(c.difference || 0), 0),
+        productionValue: comparisons.reduce((sum, c) => sum + (c.productionValue || 0), 0),
+        salesValue: comparisons.reduce((sum, c) => sum + (c.salesValue || 0), 0),
+        recordCount: comparisons.length,
+      };
+      
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching comparison summary:", error);
+      res.status(500).json({ error: "Failed to fetch summary" });
+    }
+  });
+
+  // Upload sales file and process it
+  app.post("/api/production-comparisons/upload-sales", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
+    try {
+      const multer = (await import("multer")).default;
+      const XLSX = (await import("xlsx")).default;
+      
+      const upload = multer({ storage: multer.memoryStorage() });
+      
+      upload.single("file")(req, res, async (err: any) => {
+        if (err) {
+          return res.status(400).json({ error: "فشل رفع الملف" });
+        }
+        
+        const file = req.file;
+        const branchId = req.body.branchId;
+        
+        if (!file) {
+          return res.status(400).json({ error: "الملف مطلوب" });
+        }
+        if (!branchId) {
+          return res.status(400).json({ error: "الفرع مطلوب" });
+        }
+        
+        // SECURITY: Verify branch access for non-admins
+        if (!isUserAdmin(req)) {
+          const hasAccess = await canAccessBranch(req, branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح برفع ملفات لهذا الفرع" });
+          }
+        }
+        
+        try {
+          const workbook = XLSX.read(file.buffer, { type: "buffer" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+          
+          if (data.length === 0) {
+            return res.status(400).json({ error: "الملف فارغ أو بتنسيق غير صحيح" });
+          }
+          
+          // Create upload record
+          const [uploadRecord] = await db.insert(comparisonUploads).values({
+            branchId,
+            fileName: file.originalname,
+            fileType: "excel",
+            dataType: "sales",
+            totalRecords: data.length,
+            status: "processing",
+            uploadedBy: req.currentUser?.id,
+          }).returning();
+          
+          // Process each row
+          let importedCount = 0;
+          let totalValue = 0;
+          const uniqueProducts = new Set<string>();
+          let minDate: string | null = null;
+          let maxDate: string | null = null;
+          
+          for (const row of data) {
+            const dateValue = row["Date"] || row["التاريخ"] || row["date"] || row["تاريخ"];
+            const productName = row["Product Name"] || row["اسم المنتج"] || row["product"] || row["المنتج"] || row["Product"];
+            const quantity = parseInt(row["Quantity"] || row["الكمية"] || row["qty"] || row["كمية"] || "0", 10);
+            const salesValue = parseFloat(row["Sales Value"] || row["قيمة المبيعات"] || row["value"] || row["القيمة"] || "0");
+            const category = row["Category"] || row["الفئة"] || row["category"] || null;
+            
+            if (!productName || !dateValue) continue;
+            
+            // Parse date
+            let salesDate: string;
+            if (typeof dateValue === "number") {
+              const excelDate = new Date((dateValue - 25569) * 86400 * 1000);
+              salesDate = excelDate.toISOString().split("T")[0];
+            } else {
+              const parsed = new Date(dateValue);
+              salesDate = isNaN(parsed.getTime()) ? new Date().toISOString().split("T")[0] : parsed.toISOString().split("T")[0];
+            }
+            
+            // Track date range
+            if (!minDate || salesDate < minDate) minDate = salesDate;
+            if (!maxDate || salesDate > maxDate) maxDate = salesDate;
+            
+            await db.insert(dailySalesData).values({
+              branchId,
+              salesDate,
+              productName: productName.toString().trim(),
+              productCategory: category?.toString().trim() || null,
+              quantitySold: quantity || 0,
+              salesValue: salesValue || 0,
+              uploadId: uploadRecord.id,
+            });
+            
+            importedCount++;
+            totalValue += salesValue || 0;
+            uniqueProducts.add(productName.toString().trim());
+          }
+          
+          // Update upload record
+          await db.update(comparisonUploads)
+            .set({
+              totalRecords: importedCount,
+              totalValue,
+              uniqueProducts: uniqueProducts.size,
+              periodStart: minDate,
+              periodEnd: maxDate,
+              status: "completed",
+            })
+            .where(eq(comparisonUploads.id, uploadRecord.id));
+          
+          res.json({
+            success: true,
+            uploadId: uploadRecord.id,
+            recordsImported: importedCount,
+            totalValue,
+            uniqueProducts: uniqueProducts.size,
+            periodStart: minDate,
+            periodEnd: maxDate,
+          });
+        } catch (parseError) {
+          console.error("Error parsing Excel file:", parseError);
+          res.status(400).json({ error: "فشل قراءة الملف - تأكد من صحة التنسيق" });
+        }
+      });
+    } catch (error) {
+      console.error("Error uploading sales file:", error);
+      res.status(500).json({ error: "فشل رفع الملف" });
+    }
+  });
+
+  // Run comparison between production and sales
+  app.post("/api/production-comparisons/run", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
+    try {
+      const { branchId, startDate, endDate } = req.body;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "يجب تحديد نطاق التاريخ" });
+      }
+      
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || branchId;
+      
+      // SECURITY: Non-admins must have a valid branch to run comparisons
+      if (!isUserAdmin(req)) {
+        if (!effectiveBranchId) {
+          return res.status(403).json({ error: "يجب تحديد الفرع لإجراء المقارنات" });
+        }
+        const hasAccess = await canAccessBranch(req, effectiveBranchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإجراء مقارنات لهذا الفرع" });
+        }
+      }
+      
+      // Get sales data for the period
+      const salesConditions: any[] = [
+        gte(dailySalesData.salesDate, startDate),
+        lte(dailySalesData.salesDate, endDate),
+      ];
+      if (effectiveBranchId) {
+        salesConditions.push(eq(dailySalesData.branchId, effectiveBranchId));
+      }
+      
+      const salesData = await db
+        .select()
+        .from(dailySalesData)
+        .where(and(...salesConditions));
+      
+      // Get approved production orders for the period
+      const productionConditions: any[] = [
+        gte(advancedProductionOrders.productionDate, startDate),
+        lte(advancedProductionOrders.productionDate, endDate),
+        eq(advancedProductionOrders.status, "approved"),
+      ];
+      if (effectiveBranchId) {
+        productionConditions.push(eq(advancedProductionOrders.targetBranchId, effectiveBranchId));
+      }
+      
+      const productionOrders = await db
+        .select()
+        .from(advancedProductionOrders)
+        .where(and(...productionConditions));
+      
+      // Get production items for these orders
+      const orderIds = productionOrders.map(o => o.id);
+      let productionItems: any[] = [];
+      if (orderIds.length > 0) {
+        productionItems = await db
+          .select()
+          .from(productionOrderItems)
+          .where(inArray(productionOrderItems.orderId, orderIds));
+      }
+      
+      // Group sales by date + product + branch
+      const salesByKey = new Map<string, { quantity: number; value: number; category: string | null }>();
+      for (const sale of salesData) {
+        const key = `${sale.branchId}|${sale.salesDate}|${sale.productName}`;
+        const existing = salesByKey.get(key) || { quantity: 0, value: 0, category: sale.productCategory };
+        existing.quantity += sale.quantitySold || 0;
+        existing.value += sale.salesValue || 0;
+        salesByKey.set(key, existing);
+      }
+      
+      // Group production by date + product + branch
+      const productionByKey = new Map<string, { quantity: number; value: number; category: string | null }>();
+      for (const order of productionOrders) {
+        const orderItems = productionItems.filter(i => i.orderId === order.id);
+        for (const item of orderItems) {
+          const key = `${order.targetBranchId}|${order.productionDate}|${item.productName}`;
+          const existing = productionByKey.get(key) || { quantity: 0, value: 0, category: item.category };
+          existing.quantity += item.producedQuantity || item.plannedQuantity || 0;
+          existing.value += (item.producedQuantity || item.plannedQuantity || 0) * (item.unitPrice || 0);
+          productionByKey.set(key, existing);
+        }
+      }
+      
+      // Create comparisons
+      const allKeys = new Set([...salesByKey.keys(), ...productionByKey.keys()]);
+      let comparisonsCreated = 0;
+      
+      // Batch fetch all storage settings to avoid N+1 queries
+      const allStorageSettings = await db.select().from(productStorageSettings);
+      const storageSettingsMap = new Map(allStorageSettings.map(s => [s.productName, s]));
+      
+      // Prepare comparison records
+      const comparisonsToInsert: any[] = [];
+      const keysToDelete: { branchId: string; date: string; productName: string }[] = [];
+      
+      for (const key of allKeys) {
+        const [keyBranchId, date, productName] = key.split("|");
+        const sales = salesByKey.get(key) || { quantity: 0, value: 0, category: null };
+        const production = productionByKey.get(key) || { quantity: 0, value: 0, category: null };
+        
+        const difference = production.quantity - sales.quantity;
+        const differencePercent = production.quantity > 0 
+          ? ((difference / production.quantity) * 100) 
+          : 0;
+        
+        let status = "normal";
+        if (difference > 0) {
+          status = "waste";
+        } else if (difference < 0) {
+          status = "shortage";
+        }
+        
+        // Check if storable using pre-fetched map
+        const storageSetting = storageSettingsMap.get(productName);
+        const isStorable = storageSetting?.isStorable || false;
+        if (isStorable && difference > 0) {
+          status = "stored";
+        }
+        
+        keysToDelete.push({ branchId: keyBranchId, date, productName });
+        comparisonsToInsert.push({
+          branchId: keyBranchId,
+          comparisonDate: date,
+          productName,
+          productCategory: production.category || sales.category,
+          producedQuantity: production.quantity,
+          soldQuantity: sales.quantity,
+          difference,
+          differencePercent,
+          productionValue: production.value,
+          salesValue: sales.value,
+          valueDifference: production.value - sales.value,
+          isStorable,
+          status,
+        });
+        
+        comparisonsCreated++;
+      }
+      
+      // Delete existing and insert new comparisons in a transaction for atomicity
+      await db.transaction(async (tx) => {
+        for (const keyData of keysToDelete) {
+          await tx.delete(dailyComparisons)
+            .where(and(
+              eq(dailyComparisons.branchId, keyData.branchId),
+              eq(dailyComparisons.comparisonDate, keyData.date),
+              eq(dailyComparisons.productName, keyData.productName)
+            ));
+        }
+        
+        if (comparisonsToInsert.length > 0) {
+          await tx.insert(dailyComparisons).values(comparisonsToInsert);
+        }
+      });
+      
+      res.json({
+        success: true,
+        comparisonsCreated,
+        salesRecordsProcessed: salesData.length,
+        productionOrdersProcessed: productionOrders.length,
+      });
+    } catch (error) {
+      console.error("Error running comparison:", error);
+      res.status(500).json({ error: "فشل إجراء المقارنة" });
+    }
+  });
+
+  // Get product storage settings
+  app.get("/api/product-storage-settings", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      const settings = await db.select().from(productStorageSettings);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching storage settings:", error);
+      res.status(500).json({ error: "Failed to fetch storage settings" });
+    }
+  });
+
+  // Update product storage settings
+  app.post("/api/product-storage-settings", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { productName, productCategory, isStorable, maxStorageDays, storageType, notes } = req.body;
+      
+      if (!productName) {
+        return res.status(400).json({ error: "اسم المنتج مطلوب" });
+      }
+      
+      // Check if exists
+      const existing = await db
+        .select()
+        .from(productStorageSettings)
+        .where(eq(productStorageSettings.productName, productName))
+        .limit(1);
+      
+      if (existing.length > 0) {
+        // Update
+        const [updated] = await db
+          .update(productStorageSettings)
+          .set({
+            productCategory,
+            isStorable: isStorable || false,
+            maxStorageDays: maxStorageDays || 0,
+            storageType,
+            notes,
+            updatedBy: req.currentUser?.id,
+          })
+          .where(eq(productStorageSettings.productName, productName))
+          .returning();
+        res.json(updated);
+      } else {
+        // Insert
+        const [inserted] = await db
+          .insert(productStorageSettings)
+          .values({
+            productName,
+            productCategory,
+            isStorable: isStorable || false,
+            maxStorageDays: maxStorageDays || 0,
+            storageType,
+            notes,
+            updatedBy: req.currentUser?.id,
+          })
+          .returning();
+        res.status(201).json(inserted);
+      }
+    } catch (error) {
+      console.error("Error saving storage settings:", error);
+      res.status(500).json({ error: "فشل حفظ الإعدادات" });
     }
   });
 
