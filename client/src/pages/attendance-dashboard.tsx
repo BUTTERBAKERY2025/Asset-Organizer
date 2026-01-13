@@ -103,14 +103,6 @@ export default function AttendanceDashboardPage() {
       stats: stats?.reportsCount || 0,
       statsLabel: "تقرير",
     },
-    {
-      title: "سجل الحضور",
-      description: "سجل الحضور والانصراف التفصيلي",
-      icon: <FileText className="w-4 h-4" />,
-      href: "/attendance-check",
-      stats: stats?.schedulesCount || 0,
-      statsLabel: "سجل",
-    },
   ];
 
   const todayStats = [
