@@ -6763,8 +6763,8 @@ export async function registerRoutes(
       
       // Get approved production orders for the period
       const productionConditions: any[] = [
-        gte(advancedProductionOrders.productionDate, startDate),
-        lte(advancedProductionOrders.productionDate, endDate),
+        gte(advancedProductionOrders.startDate, startDate),
+        lte(advancedProductionOrders.startDate, endDate),
         eq(advancedProductionOrders.status, "approved"),
       ];
       if (effectiveBranchId) {
@@ -6801,7 +6801,7 @@ export async function registerRoutes(
       for (const order of productionOrders) {
         const orderItems = productionItems.filter(i => i.orderId === order.id);
         for (const item of orderItems) {
-          const key = `${order.targetBranchId}|${order.productionDate}|${item.productName}`;
+          const key = `${order.targetBranchId}|${order.startDate}|${item.productName}`;
           const existing = productionByKey.get(key) || { quantity: 0, value: 0, category: item.category };
           existing.quantity += item.producedQuantity || item.plannedQuantity || 0;
           existing.value += (item.producedQuantity || item.plannedQuantity || 0) * (item.unitPrice || 0);
