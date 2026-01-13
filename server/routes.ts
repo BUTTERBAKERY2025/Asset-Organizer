@@ -6650,12 +6650,24 @@ export async function registerRoutes(
                                           row["Total"] || row["الإجمالي"] || row["Amount"] || row["المبلغ"] ||
                                           row["Net Sales"] || row["صافي المبيعات"] || row["Gross Sales"] || row["إجمالي المبيعات"] ||
                                           row["Revenue"] || row["الإيراد"] || row["Sales"] || "0");
-            const category = row["Category"] || row["الفئة"] || row["category"] || 
+            let category = row["Category"] || row["الفئة"] || row["category"] || 
                              row["Product Category"] || row["فئة المنتج"] || row["Menu Category"] || row["فئة القائمة"] || null;
             
             if (!productName) {
               console.log("Skipping row - missing productName:", { productName, row });
               continue;
+            }
+            
+            // If no category from file, lookup from productStorageSettings
+            if (!category) {
+              const productNameTrimmed = productName.toString().trim();
+              const storageSetting = await db.select({ productCategory: productStorageSettings.productCategory })
+                .from(productStorageSettings)
+                .where(eq(productStorageSettings.productName, productNameTrimmed))
+                .limit(1);
+              if (storageSetting.length > 0 && storageSetting[0].productCategory) {
+                category = storageSetting[0].productCategory;
+              }
             }
             
             if (!dateValue) {
@@ -6963,6 +6975,113 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error saving storage settings:", error);
       res.status(500).json({ error: "فشل حفظ الإعدادات" });
+    }
+  });
+
+  // Get uncategorized products from daily sales data
+  app.get("/api/uncategorized-products", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+    try {
+      // Get distinct products from daily_sales_data without category
+      const uncategorized = await db
+        .selectDistinct({ productName: dailySalesData.productName })
+        .from(dailySalesData)
+        .where(or(
+          isNull(dailySalesData.productCategory),
+          eq(dailySalesData.productCategory, "")
+        ))
+        .limit(500);
+      
+      // Get products from comparisons without category
+      const comparisonUncategorized = await db
+        .selectDistinct({ productName: dailyComparisons.productName })
+        .from(dailyComparisons)
+        .where(or(
+          isNull(dailyComparisons.productCategory),
+          eq(dailyComparisons.productCategory, "")
+        ))
+        .limit(500);
+      
+      // Merge and dedupe
+      const allProducts = new Set<string>();
+      uncategorized.forEach(p => allProducts.add(p.productName));
+      comparisonUncategorized.forEach(p => allProducts.add(p.productName));
+      
+      // Get existing storage settings to filter out already-categorized
+      const existingSettings = await db.select().from(productStorageSettings);
+      const categorizedNames = new Set(existingSettings.filter(s => s.productCategory).map(s => s.productName));
+      
+      const result = Array.from(allProducts)
+        .filter(name => !categorizedNames.has(name))
+        .map(productName => ({ productName }));
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching uncategorized products:", error);
+      res.status(500).json({ error: "فشل جلب المنتجات غير المصنفة" });
+    }
+  });
+
+  // Bulk update product categories
+  app.post("/api/bulk-categorize-products", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+    try {
+      const { products } = req.body; // Array of { productName, productCategory }
+      
+      if (!products || !Array.isArray(products) || products.length === 0) {
+        return res.status(400).json({ error: "قائمة المنتجات مطلوبة" });
+      }
+      
+      let updated = 0;
+      
+      await db.transaction(async (tx) => {
+        for (const item of products) {
+          if (!item.productName || !item.productCategory) continue;
+          
+          // Check if exists in storage settings
+          const existing = await tx
+            .select()
+            .from(productStorageSettings)
+            .where(eq(productStorageSettings.productName, item.productName))
+            .limit(1);
+          
+          if (existing.length > 0) {
+            await tx
+              .update(productStorageSettings)
+              .set({ 
+                productCategory: item.productCategory,
+                updatedBy: req.currentUser?.id
+              })
+              .where(eq(productStorageSettings.productName, item.productName));
+          } else {
+            await tx
+              .insert(productStorageSettings)
+              .values({
+                productName: item.productName,
+                productCategory: item.productCategory,
+                isStorable: false,
+                updatedBy: req.currentUser?.id,
+              });
+          }
+          
+          // Also update existing daily_sales_data records
+          await tx
+            .update(dailySalesData)
+            .set({ productCategory: item.productCategory })
+            .where(eq(dailySalesData.productName, item.productName));
+          
+          // Update daily_comparisons records
+          await tx
+            .update(dailyComparisons)
+            .set({ productCategory: item.productCategory })
+            .where(eq(dailyComparisons.productName, item.productName));
+          
+          updated++;
+        }
+      });
+      
+      res.json({ success: true, updated });
+    } catch (error) {
+      console.error("Error bulk categorizing:", error);
+      res.status(500).json({ error: "فشل تحديث التصنيفات" });
     }
   });
 

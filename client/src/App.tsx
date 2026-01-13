@@ -77,6 +77,7 @@ import EmployeeReportsDashboardPage from "@/pages/employee-reports-dashboard";
 import PnLDashboardPage from "@/pages/pnl-dashboard";
 import SecurityManagementPage from "@/pages/security-management";
 import ProductionComparisonsPage from "@/pages/production-comparisons";
+import ProductCategoryManagementPage from "@/pages/product-category-management";
 import type { SystemModule } from "@shared/schema";
 
 function ModulePage({ component: Component, module }: { component: React.ComponentType; module: SystemModule }) {
@@ -133,6 +134,7 @@ function Router() {
       <Route path="/sales-data-uploads">{() => <ModulePage component={SalesDataUploadsPage} module="production" />}</Route>
       <Route path="/production-reports">{() => <ModulePage component={ProductionReportsPage} module="production" />}</Route>
       <Route path="/production-comparisons">{() => <ModulePage component={ProductionComparisonsPage} module="production" />}</Route>
+      <Route path="/product-category-management">{() => <ModulePage component={ProductCategoryManagementPage} module="production" />}</Route>
       <Route path="/production">{() => <ModulePage component={ProductionPage} module="production" />}</Route>
       
       {/* Operations - التشغيل */}

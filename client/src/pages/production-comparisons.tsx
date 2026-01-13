@@ -23,6 +23,7 @@ import {
   Clock,
   ChevronDown,
   Info,
+  Tag,
 } from "lucide-react";
 import {
   Card,
@@ -342,6 +343,15 @@ export default function ProductionComparisonsPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => navigate("/product-category-management")}
+              className="gap-2"
+              data-testid="button-manage-categories"
+            >
+              <Tag className="h-4 w-4" />
+              إدارة التصنيفات
+            </Button>
             <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700" data-testid="button-upload-sales">
