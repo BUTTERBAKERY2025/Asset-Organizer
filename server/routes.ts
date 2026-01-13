@@ -7374,8 +7374,8 @@ export async function registerRoutes(
           unitPrice = product.basePrice;
         }
         // 2. Second priority: Product price from database
-        else if (product?.price && product.price > 0) {
-          unitPrice = product.price;
+        else if ((product as any)?.price && (product as any).price > 0) {
+          unitPrice = (product as any).price;
         }
         // 3. Third priority: Calculate from historical sales data
         else if (item.historicalRevenue > 0 && item.historicalQuantity > 0) {
@@ -7391,16 +7391,23 @@ export async function registerRoutes(
           unitPrice = categoryDefaultPrices[category] || categoryDefaultPrices['عام'];
         }
         
+        // IMPORTANT: Recalculate quantity based on actual unit price to ensure
+        // totalValue matches the forecasted sales amount (target sales * ratio)
+        // This ensures the total order value equals the target sales value
+        const targetQuantity = unitPrice > 0 
+          ? Math.ceil(item.forecastedSalesAmount / unitPrice)
+          : item.forecastedQuantity;
+        
         return {
           productId: product?.id || null,
           productName: item.productName,
           productCategory: item.productCategory || product?.category || null,
-          targetQuantity: item.forecastedQuantity,
+          targetQuantity: Math.max(1, targetQuantity),
           originalQuantity: item.historicalQuantity,
           producedQuantity: 0,
           wastedQuantity: 0,
           unitPrice: Math.round(unitPrice * 100) / 100,
-          totalValue: Math.round(unitPrice * item.forecastedQuantity * 100) / 100,
+          totalValue: Math.round(unitPrice * targetQuantity * 100) / 100,
           status: 'pending' as const,
           priority: index + 1,
           notes: `نسبة المبيعات: ${item.salesRatio}%${!product ? ' (سعر تقديري)' : ''}`
