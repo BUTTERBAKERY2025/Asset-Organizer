@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle } from "lucide-react";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
@@ -296,6 +296,84 @@ export default function ShiftManagementPage() {
     });
     setHasUnsavedChanges(true);
     toast({ title: "تم تطبيق الوردية", description: `${profileName} (${startTime} - ${endTime})` });
+  };
+
+  // Calculate work hours for an employee this week
+  const calculateEmployeeWorkHours = (empId: string): number => {
+    const empSchedule = scheduleData[empId] || {};
+    let totalMinutes = 0;
+    Object.values(empSchedule).forEach(cell => {
+      if (!cell.isOff && cell.startTime && cell.endTime) {
+        const [startH, startM] = cell.startTime.split(':').map(Number);
+        const [endH, endM] = cell.endTime.split(':').map(Number);
+        let startMinutes = startH * 60 + startM;
+        let endMinutes = endH * 60 + endM;
+        if (endMinutes < startMinutes) endMinutes += 24 * 60; // overnight shift
+        totalMinutes += endMinutes - startMinutes;
+      }
+    });
+    return Math.round(totalMinutes / 60 * 10) / 10; // Round to 1 decimal
+  };
+
+  // Check if employee has any off days this week
+  const hasOffDays = (empId: string): boolean => {
+    const empSchedule = scheduleData[empId] || {};
+    return Object.values(empSchedule).some(cell => cell.isOff);
+  };
+
+  // Copy current week schedule to next week
+  const copyToNextWeek = async () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (Object.keys(scheduleData).length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد جدول لنسخه", variant: "destructive" });
+      return;
+    }
+
+    const nextWeekStart = addWeeks(currentWeekStart, 1);
+    const nextWeekDates = Array.from({ length: 7 }, (_, i) => addDays(nextWeekStart, i));
+    
+    const schedulesToSave: any[] = [];
+    
+    filteredEmployees.forEach(employee => {
+      const empIdStr = String(employee.id);
+      const empSchedule = scheduleData[empIdStr];
+      if (!empSchedule) return;
+
+      weekDates.forEach((currentDate, index) => {
+        const currentDateStr = format(currentDate, "yyyy-MM-dd");
+        const nextDateStr = format(nextWeekDates[index], "yyyy-MM-dd");
+        const cellData = empSchedule[currentDateStr];
+        
+        if (cellData) {
+          schedulesToSave.push({
+            employeeId: employee.linkedUserId || `branch_emp_${employee.id}`,
+            employeeName: employee.employeeName,
+            branchId: selectedBranch,
+            branchEmployeeId: employee.id,
+            scheduleDate: nextDateStr,
+            dayOfWeek: DAYS_ORDER[index],
+            isOff: cellData.isOff,
+            startTime: cellData.startTime,
+            endTime: cellData.endTime,
+            status: "scheduled"
+          });
+        }
+      });
+    });
+
+    try {
+      await apiRequest("POST", "/api/employee-schedules/bulk", { schedules: schedulesToSave });
+      toast({ 
+        title: "تم نسخ الجدول بنجاح", 
+        description: `تم نسخ ${schedulesToSave.length} جدول للأسبوع ${format(nextWeekStart, "dd/MM")} - ${format(addDays(nextWeekStart, 6), "dd/MM")}` 
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في نسخ الجدول", variant: "destructive" });
+    }
   };
 
   const exportWeeklyReport = () => {
@@ -1088,6 +1166,10 @@ export default function ShiftManagementPage() {
                       <Users className="w-4 h-4" />
                       تطبيق على الجميع
                     </Button>
+                    <Button variant="outline" onClick={copyToNextWeek} className="gap-2 h-11 sm:h-9" data-testid="btn-copy-next-week">
+                      <Copy className="w-4 h-4" />
+                      نسخ للأسبوع القادم
+                    </Button>
                     {hasUnsavedChanges && (
                       <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2 h-11 sm:h-9" data-testid="btn-save-schedule">
                         <Save className="w-4 h-4" />
@@ -1126,7 +1208,17 @@ export default function ShiftManagementPage() {
                             return (
                             <TableRow key={employee.id} data-testid={`row-employee-${employee.id}`}>
                               <TableCell className="font-medium sticky right-0 bg-background z-10 border-l min-w-[280px]">
-                                <div className="font-semibold">{employee.employeeName}</div>
+                                <div className="flex items-center justify-between">
+                                  <div className="font-semibold">{employee.employeeName}</div>
+                                  <div className="flex gap-1">
+                                    {!hasOffDays(empIdStr) && Object.keys(scheduleData[empIdStr] || {}).length > 0 && (
+                                      <Badge variant="destructive" className="text-[10px] px-1 py-0">بدون إجازة</Badge>
+                                    )}
+                                    {calculateEmployeeWorkHours(empIdStr) > 0 && (
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0">{calculateEmployeeWorkHours(empIdStr)}س</Badge>
+                                    )}
+                                  </div>
+                                </div>
                                 <div className="text-xs text-muted-foreground mb-2">{employee.jobTitle || "موظف"}</div>
                                 <div className="flex gap-1 items-center">
                                   <Select 
