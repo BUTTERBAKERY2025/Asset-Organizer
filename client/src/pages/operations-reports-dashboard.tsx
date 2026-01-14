@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1387,76 +1387,50 @@ export default function OperationsReportsDashboardPage() {
     printHtmlContent(htmlContent);
   };
 
-  // Apply additional client-side filters on cashier journals
-  const filteredCashierJournals = (cashierJournals || []).filter(journal => {
-    // Filter by cashier
-    if (filters.cashierId && journal.cashierId !== filters.cashierId) {
-      return false;
-    }
-    // Filter by journal status
-    if (filters.journalStatus !== "all" && journal.status !== filters.journalStatus) {
-      return false;
-    }
-    // Filter by discrepancy status
-    if (filters.discrepancyFilter !== "all" && journal.discrepancyStatus !== filters.discrepancyFilter) {
-      return false;
-    }
-    // Filter by shift type
-    if (filters.shiftType !== "all" && journal.shiftType !== filters.shiftType) {
-      return false;
-    }
-    // Filter by payment category - show journals that have transactions in selected category
-    if (filters.paymentCategory !== "all") {
-      const cashAmount = journal.cashTotal || 0;
-      const cardsAmount = journal.networkTotal || 0;
-      const deliveryAmount = journal.deliveryTotal || 0;
-      
-      if (filters.paymentCategory === "cash" && cashAmount <= 0) {
-        return false;
+  // OPTIMIZED: Apply additional client-side filters on cashier journals with useMemo
+  const filteredCashierJournals = useMemo(() => {
+    return (cashierJournals || []).filter(journal => {
+      if (filters.cashierId && journal.cashierId !== filters.cashierId) return false;
+      if (filters.journalStatus !== "all" && journal.status !== filters.journalStatus) return false;
+      if (filters.discrepancyFilter !== "all" && journal.discrepancyStatus !== filters.discrepancyFilter) return false;
+      if (filters.shiftType !== "all" && journal.shiftType !== filters.shiftType) return false;
+      if (filters.paymentCategory !== "all") {
+        const cashAmount = journal.cashTotal || 0;
+        const cardsAmount = journal.networkTotal || 0;
+        const deliveryAmount = journal.deliveryTotal || 0;
+        if (filters.paymentCategory === "cash" && cashAmount <= 0) return false;
+        if (filters.paymentCategory === "cards" && cardsAmount <= 0) return false;
+        if (filters.paymentCategory === "delivery" && deliveryAmount <= 0) return false;
       }
-      if (filters.paymentCategory === "cards" && cardsAmount <= 0) {
-        return false;
-      }
-      if (filters.paymentCategory === "delivery" && deliveryAmount <= 0) {
-        return false;
-      }
-    }
-    return true;
-  });
+      return true;
+    });
+  }, [cashierJournals, filters.cashierId, filters.journalStatus, filters.discrepancyFilter, filters.shiftType, filters.paymentCategory]);
 
-  // Calculate payment category totals for filtered journals
-  const paymentCategoryStats = {
+  // OPTIMIZED: Calculate payment category totals with useMemo
+  const paymentCategoryStats = useMemo(() => ({
     cash: filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0),
     cards: filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0),
     delivery: filteredCashierJournals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0),
-  };
+  }), [filteredCashierJournals]);
 
-  // Calculate weekly comparison data with proper date handling
-  const getWeeklyComparison = () => {
+  // OPTIMIZED: Calculate weekly comparison data with useMemo
+  const weeklyData = useMemo(() => {
     const weeks: { week: string; sales: number; transactions: number; journals: number }[] = [];
-    const journalsByWeek = new Map<string, typeof filteredCashierJournals>();
+    const journalsByWeek = new Map<string, CashierSalesJournal[]>();
     
     filteredCashierJournals.forEach(journal => {
       if (!journal.journalDate) return;
-      
       try {
         const dateParts = journal.journalDate.split('-');
         if (dateParts.length !== 3) return;
-        
         const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
         if (isNaN(date.getTime())) return;
-        
         const weekStart = new Date(date);
         weekStart.setDate(date.getDate() - date.getDay());
         const weekKey = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
-        
-        if (!journalsByWeek.has(weekKey)) {
-          journalsByWeek.set(weekKey, []);
-        }
+        if (!journalsByWeek.has(weekKey)) journalsByWeek.set(weekKey, []);
         journalsByWeek.get(weekKey)!.push(journal);
-      } catch {
-        return;
-      }
+      } catch { return; }
     });
     
     journalsByWeek.forEach((journals, weekKey) => {
@@ -1467,22 +1441,17 @@ export default function OperationsReportsDashboardPage() {
         journals: journals.length,
       });
     });
-    
     return weeks.sort((a, b) => a.week.localeCompare(b.week));
-  };
+  }, [filteredCashierJournals]);
 
-  // Calculate shift performance comparison
-  const getShiftPerformance = () => {
+  // OPTIMIZED: Calculate shift performance comparison with useMemo
+  const shiftPerformance = useMemo(() => {
     const shiftData = filteredCashierJournals.reduce((acc, j) => {
       const shift = j.shiftType || 'غير محدد';
-      if (!acc[shift]) {
-        acc[shift] = { shift, sales: 0, count: 0, avgTicket: 0, shortages: 0 };
-      }
+      if (!acc[shift]) acc[shift] = { shift, sales: 0, count: 0, avgTicket: 0, shortages: 0 };
       acc[shift].sales += (j.totalSales || 0);
       acc[shift].count += 1;
-      if (j.discrepancyStatus === 'shortage') {
-        acc[shift].shortages += 1;
-      }
+      if (j.discrepancyStatus === 'shortage') acc[shift].shortages += 1;
       return acc;
     }, {} as Record<string, { shift: string; sales: number; count: number; avgTicket: number; shortages: number }>);
     
@@ -1491,10 +1460,7 @@ export default function OperationsReportsDashboardPage() {
       avgTicket: s.count > 0 ? s.sales / s.count : 0,
       shiftLabel: s.shift === 'morning' ? 'صباحي' : s.shift === 'evening' ? 'مسائي' : s.shift === 'night' ? 'ليلي' : s.shift,
     }));
-  };
-
-  const weeklyData = getWeeklyComparison();
-  const shiftPerformance = getShiftPerformance();
+  }, [filteredCashierJournals]);
 
   const getVisibleTabs = () => {
     switch (filters.reportType) {
