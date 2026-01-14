@@ -2414,6 +2414,19 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
       ⚠️ يُشترط توقيع جميع أعضاء اللجنة على كافة صفحات هذا المحضر، كلٌّ حسب صفته الوظيفية
     </p>
     
+    <!-- إقرار استخدام الأدوات والمعدات -->
+    <div style="margin-top: 15px; padding: 10px; background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%); border: 2px solid #d4a853; border-radius: 6px;">
+      <p style="text-align: center; font-weight: bold; font-size: 10px; color: #8b6914; margin-bottom: 8px; border-bottom: 1px solid #d4a853; padding-bottom: 5px;">
+        ⚠️ إقرار الاطلاع والمسؤولية | Acknowledgment & Responsibility Statement ⚠️
+      </p>
+      <p style="font-size: 8px; text-align: justify; line-height: 1.6; color: #333; margin-bottom: 6px;">
+        <strong>باللغة العربية:</strong> يُشترط على جميع الموظفين المستخدمين للأدوات والمعدات (أدوات المطبخ، أدوات الباريستا، أدوات البيتزا، أدوات الكاشير، وكل ما هو مستخدم وملموس ويتم التعامل به بشكل يومي) التوقيع على هذا الإقرار. يلتزم الموظف بالاستخدام الصحيح والمحافظة على هذه الأدوات والمعدات. في حالة تبيُّن سوء استخدام أو إهمال أو ضياع أو فقدان لأي من هذه الأدوات، يتم محاسبة المتسبب مادياً وإدارياً، ويتحمل المسؤولية الكاملة عن التلف أو الفقدان.
+      </p>
+      <p style="font-size: 7px; text-align: justify; line-height: 1.5; color: #555; direction: ltr;">
+        <strong>In English:</strong> All employees using equipment and tools (kitchen tools, barista tools, pizza tools, cashier tools, and all tangible items used daily) are required to sign this acknowledgment. The employee commits to proper use and maintenance of these tools and equipment. In case of misuse, negligence, loss, or damage to any of these tools, the responsible person will be held financially and administratively accountable and bears full responsibility for damage or loss.
+      </p>
+    </div>
+    
     <!-- قسم التسليم والتسلم - مدمج مع جدول التوقيعات -->
     <div style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #999;">
       <p style="text-align: center; font-size: 10px; font-weight: bold; margin-bottom: 10px; color: #333;">
