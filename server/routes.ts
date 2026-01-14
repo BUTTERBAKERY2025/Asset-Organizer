@@ -636,11 +636,19 @@ export async function registerRoutes(
     try {
       const { items, branchId } = req.body;
       
+      console.log("[Import] Received branchId:", branchId);
+      console.log("[Import] Items received:", Array.isArray(items) ? items.length : 'NOT ARRAY');
+      if (Array.isArray(items) && items.length > 0) {
+        console.log("[Import] First item:", JSON.stringify(items[0], null, 2));
+      }
+      
       if (!Array.isArray(items) || items.length === 0) {
+        console.log("[Import] ERROR: No items provided or not array");
         return res.status(400).json({ error: "No items provided" });
       }
       
       if (!branchId) {
+        console.log("[Import] ERROR: No branchId");
         return res.status(400).json({ error: "Branch ID is required" });
       }
       
@@ -668,15 +676,20 @@ export async function registerRoutes(
             notes: item.notes || '',
           };
           
+          console.log("[Import] Processing item:", itemData.name, "quantity:", itemData.quantity);
+          
           const validatedData = insertInventoryItemSchema.parse(itemData);
           await storage.createInventoryItem(validatedData, userId);
           results.success++;
         } catch (err: any) {
           results.failed++;
-          results.errors.push(`Row ${results.success + results.failed}: ${err.message || 'Unknown error'}`);
+          const errorMsg = `Row ${results.success + results.failed}: ${err.message || 'Unknown error'}`;
+          console.log("[Import] Item failed:", errorMsg);
+          results.errors.push(errorMsg);
         }
       }
       
+      console.log("[Import] Final results:", results);
       res.json({ imported: results.success, failed: results.failed, errors: results.errors });
     } catch (error) {
       console.error("Error importing inventory:", error);
