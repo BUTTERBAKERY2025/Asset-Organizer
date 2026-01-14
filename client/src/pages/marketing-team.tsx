@@ -29,7 +29,6 @@ interface TeamMember {
   email?: string;
   phone?: string;
   role: string;
-  department?: string;
   isActive: boolean;
   tasksCount?: number;
   completedTasksCount?: number;
@@ -58,7 +57,6 @@ export default function MarketingTeamPage() {
     email: "",
     phone: "",
     role: "content_creator",
-    department: "marketing",
     isActive: true,
   });
 
@@ -128,7 +126,6 @@ export default function MarketingTeamPage() {
       email: "",
       phone: "",
       role: "content_creator",
-      department: "marketing",
       isActive: true,
     });
   };
