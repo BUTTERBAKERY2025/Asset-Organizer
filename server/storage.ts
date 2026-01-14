@@ -331,7 +331,7 @@ import {
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db } from "./db";
-import { eq, and, gte, lte, desc, or, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, desc, or, inArray, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export interface IStorage {
