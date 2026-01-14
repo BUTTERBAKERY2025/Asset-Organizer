@@ -166,6 +166,40 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
+        // Category mapping from English to Arabic
+        const CATEGORY_MAP: Record<string, string> = {
+          'pizza': 'بيتزا',
+          'Pizza': 'بيتزا',
+          'PIZZA': 'بيتزا',
+          'barista': 'باريستا',
+          'Barista': 'باريستا',
+          'BARISTA': 'باريستا',
+          'kitchen': 'المطبخ',
+          'Kitchen': 'المطبخ',
+          'KITCHEN': 'المطبخ',
+          'bakery': 'المخبز',
+          'Bakery': 'المخبز',
+          'BAKERY': 'المخبز',
+          'pastry': 'الحلويات',
+          'Pastry': 'الحلويات',
+          'PASTRY': 'الحلويات',
+          'equipment': 'المعدات',
+          'Equipment': 'المعدات',
+          'EQUIPMENT': 'المعدات',
+          'furniture': 'الأثاث',
+          'Furniture': 'الأثاث',
+          'FURNITURE': 'الأثاث',
+          'other': 'أخرى',
+          'Other': 'أخرى',
+          'OTHER': 'أخرى',
+          'cleaning': 'التنظيف',
+          'Cleaning': 'التنظيف',
+          'storage': 'التخزين',
+          'Storage': 'التخزين',
+          'display': 'العرض',
+          'Display': 'العرض',
+        };
+        
         const processedData: ImportRow[] = jsonData.map((row: any) => {
           const errors: string[] = [];
           
@@ -173,7 +207,9 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
           const name = row["اسم الصنف"] || row["الاسم"] || row["اسم"] || row["الصنف"] || row["name"] || row["Name"] || row["item"] || row["Item"] || "";
           const quantityRaw = row["الكمية"] || row["كمية"] || row["العدد"] || row["عدد"] || row["quantity"] || row["Quantity"] || row["qty"] || row["Qty"];
           const unit = row["الوحدة"] || row["وحدة"] || row["unit"] || row["Unit"] || "قطعة";
-          const category = row["التصنيف"] || row["تصنيف"] || row["الفئة"] || row["فئة"] || row["القسم"] || row["category"] || row["Category"] || "أخرى";
+          const rawCategory = row["التصنيف"] || row["تصنيف"] || row["الفئة"] || row["فئة"] || row["القسم"] || row["category"] || row["Category"] || "أخرى";
+          // Map English categories to Arabic
+          const category = CATEGORY_MAP[String(rawCategory).trim()] || String(rawCategory).trim();
           const priceRaw = row["السعر"] || row["سعر"] || row["price"] || row["Price"];
           const status = row["الحالة"] || row["حالة"] || row["status"] || row["Status"] || "good";
           const serialNumber = row["الرقم التسلسلي"] || row["رقم تسلسلي"] || row["serialNumber"] || row["SerialNumber"] || row["serial"] || "";
