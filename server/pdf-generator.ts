@@ -2234,6 +2234,8 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
       border: 2px solid #333;
       border-radius: 8px;
       padding: 20px;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     
     .committee-section h3 {
