@@ -12,8 +12,10 @@ import { Progress } from "@/components/ui/progress";
 import { 
   Printer, FileSpreadsheet, Package, AlertTriangle, TrendingUp, Building2, 
   BarChart3, PieChart, Image, Wrench, CheckCircle2, XCircle, MapPin,
-  Calendar, DollarSign, Layers, Eye, Camera, Filter, Download
+  Calendar, DollarSign, Layers, Eye, Camera, Filter, Download, ClipboardList, FileText
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -49,7 +51,9 @@ export default function ReportsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [reportType, setReportType] = useState<string>("overview");
   const [inventoryPage, setInventoryPage] = useState(1);
+  const [countReportDate, setCountReportDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const printRef = useRef<HTMLDivElement>(null);
+  const countReportRef = useRef<HTMLDivElement>(null);
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
   useEffect(() => {
@@ -371,7 +375,7 @@ export default function ReportsPage() {
           </div>
 
           <Tabs value={reportType} onValueChange={setReportType} className="print:hidden">
-            <TabsList className="grid grid-cols-6 w-full" data-testid="tabs-report-type">
+            <TabsList className="grid grid-cols-7 w-full" data-testid="tabs-report-type">
               <TabsTrigger value="overview" data-testid="tab-overview">
                 <BarChart3 className="w-4 h-4 ml-1" />
                 نظرة عامة
@@ -395,6 +399,10 @@ export default function ReportsPage() {
               <TabsTrigger value="details" data-testid="tab-details">
                 <Eye className="w-4 h-4 ml-1" />
                 التفاصيل
+              </TabsTrigger>
+              <TabsTrigger value="inventory-count" data-testid="tab-inventory-count">
+                <ClipboardList className="w-4 h-4 ml-1" />
+                محضر الجرد
               </TabsTrigger>
             </TabsList>
 
@@ -902,6 +910,254 @@ export default function ReportsPage() {
                     onPageChange={setInventoryPage}
                     data-testid="pagination-inventory"
                   />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="inventory-count" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <ClipboardList className="w-5 h-5" />
+                        محضر جرد الأصول والمعدات
+                      </CardTitle>
+                      <CardDescription>
+                        إنشاء محضر جرد رسمي للأصول والمعدات حسب الفرع
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="count-date" className="text-sm whitespace-nowrap">تاريخ الجرد:</Label>
+                        <Input
+                          id="count-date"
+                          type="date"
+                          value={countReportDate}
+                          onChange={(e) => setCountReportDate(e.target.value)}
+                          className="w-40"
+                          data-testid="input-count-date"
+                        />
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          const printWindow = window.open('', '_blank');
+                          if (printWindow && countReportRef.current) {
+                            const branchName = selectedBranch === "all" 
+                              ? "جميع الفروع" 
+                              : branches.find((b: any) => b.id === selectedBranch)?.name || selectedBranch;
+                            const categoryGroups: Record<string, any[]> = {};
+                            filteredInventory.forEach((item: any) => {
+                              const cat = item.category || "أخرى";
+                              if (!categoryGroups[cat]) categoryGroups[cat] = [];
+                              categoryGroups[cat].push(item);
+                            });
+                            
+                            printWindow.document.write(`
+                              <!DOCTYPE html>
+                              <html dir="rtl" lang="ar">
+                              <head>
+                                <meta charset="UTF-8">
+                                <title>محضر جرد الأصول والمعدات - ${branchName}</title>
+                                <style>
+                                  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                                  * { font-family: 'Cairo', sans-serif; box-sizing: border-box; }
+                                  body { padding: 20px; direction: rtl; background: #fff; }
+                                  .header { text-align: center; border-bottom: 3px double #d4a853; padding-bottom: 15px; margin-bottom: 20px; }
+                                  .logo { font-size: 28px; font-weight: bold; color: #d4a853; }
+                                  .title { font-size: 22px; font-weight: bold; margin: 10px 0; }
+                                  .subtitle { font-size: 14px; color: #666; }
+                                  .info-row { display: flex; justify-content: space-between; margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 5px; }
+                                  .info-item { display: flex; gap: 8px; }
+                                  .info-label { font-weight: bold; }
+                                  .category-header { background: #d4a853; color: white; padding: 8px 15px; font-weight: bold; margin-top: 20px; border-radius: 5px 5px 0 0; }
+                                  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                                  th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 12px; }
+                                  th { background: #f5f5f5; font-weight: bold; }
+                                  .count-cell { background: #fffde7; min-width: 60px; }
+                                  .notes-cell { min-width: 100px; }
+                                  .signature-section { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+                                  .signature-box { border: 1px solid #ddd; padding: 15px; text-align: center; border-radius: 5px; }
+                                  .signature-line { border-bottom: 1px solid #333; height: 40px; margin: 15px 0; }
+                                  .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 11px; color: #666; }
+                                  @media print { body { padding: 10px; } .no-print { display: none; } }
+                                </style>
+                              </head>
+                              <body>
+                                <div class="header">
+                                  <div class="logo">🧈 مخبز باتر</div>
+                                  <div class="title">محضر جرد الأصول والمعدات</div>
+                                  <div class="subtitle">Butter Bakery - Asset Inventory Count Report</div>
+                                </div>
+                                
+                                <div class="info-row">
+                                  <div class="info-item"><span class="info-label">الفرع:</span> <span>${branchName}</span></div>
+                                  <div class="info-item"><span class="info-label">تاريخ الجرد:</span> <span>${new Date(countReportDate).toLocaleDateString('ar-SA')}</span></div>
+                                  <div class="info-item"><span class="info-label">إجمالي الأصناف:</span> <span>${filteredInventory.length}</span></div>
+                                  <div class="info-item"><span class="info-label">إجمالي الكميات:</span> <span>${filteredInventory.reduce((s: number, i: any) => s + i.quantity, 0)}</span></div>
+                                </div>
+                                
+                                ${Object.entries(categoryGroups).map(([category, items]) => `
+                                  <div class="category-header">${category} (${items.length} صنف)</div>
+                                  <table>
+                                    <thead>
+                                      <tr>
+                                        <th style="width: 40px">#</th>
+                                        <th>اسم الصنف</th>
+                                        <th style="width: 80px">الحالة</th>
+                                        <th style="width: 70px">العدد بالنظام</th>
+                                        <th style="width: 70px" class="count-cell">العدد الفعلي</th>
+                                        <th style="width: 60px">الفرق</th>
+                                        <th class="notes-cell">ملاحظات</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      ${items.map((item: any, idx: number) => `
+                                        <tr>
+                                          <td>${idx + 1}</td>
+                                          <td style="text-align: right">${item.name}</td>
+                                          <td>${STATUS_LABELS[item.status] || item.status}</td>
+                                          <td>${item.quantity}</td>
+                                          <td class="count-cell"></td>
+                                          <td></td>
+                                          <td class="notes-cell"></td>
+                                        </tr>
+                                      `).join('')}
+                                    </tbody>
+                                  </table>
+                                `).join('')}
+                                
+                                <div class="signature-section">
+                                  <div class="signature-box">
+                                    <div>القائم بالجرد</div>
+                                    <div class="signature-line"></div>
+                                    <div>الاسم: ________________</div>
+                                  </div>
+                                  <div class="signature-box">
+                                    <div>المراجع</div>
+                                    <div class="signature-line"></div>
+                                    <div>الاسم: ________________</div>
+                                  </div>
+                                  <div class="signature-box">
+                                    <div>مدير الفرع</div>
+                                    <div class="signature-line"></div>
+                                    <div>الاسم: ________________</div>
+                                  </div>
+                                </div>
+                                
+                                <div class="footer">
+                                  <p>تم إنشاء هذا المحضر من نظام إدارة باتر - ${new Date().toLocaleString('ar-SA')}</p>
+                                </div>
+                                
+                                <script>window.onload = function() { window.print(); }</script>
+                              </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                          }
+                        }}
+                        className="h-9"
+                        data-testid="button-print-count"
+                      >
+                        <Printer className="w-4 h-4 ml-2" />
+                        طباعة PDF
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          const wb = XLSX.utils.book_new();
+                          const branchName = selectedBranch === "all" 
+                            ? "جميع الفروع" 
+                            : branches.find((b: any) => b.id === selectedBranch)?.name || selectedBranch;
+                          
+                          const data = filteredInventory.map((item: any, idx: number) => ({
+                            "#": idx + 1,
+                            "اسم الصنف": item.name,
+                            "التصنيف": item.category,
+                            "الحالة": STATUS_LABELS[item.status] || item.status,
+                            "العدد بالنظام": item.quantity,
+                            "العدد الفعلي": "",
+                            "الفرق": "",
+                            "ملاحظات": item.notes || "",
+                          }));
+                          
+                          const ws = XLSX.utils.json_to_sheet(data);
+                          XLSX.utils.book_append_sheet(wb, ws, "محضر الجرد");
+                          
+                          const summaryData = [
+                            { "البيان": "الفرع", "القيمة": branchName },
+                            { "البيان": "تاريخ الجرد", "القيمة": countReportDate },
+                            { "البيان": "إجمالي الأصناف", "القيمة": filteredInventory.length },
+                            { "البيان": "إجمالي الكميات", "القيمة": filteredInventory.reduce((s: number, i: any) => s + i.quantity, 0) },
+                          ];
+                          const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+                          XLSX.utils.book_append_sheet(wb, summaryWs, "ملخص");
+                          
+                          finalizeBrandedWorkbook(wb, "محضر جرد الأصول");
+                          XLSX.writeFile(wb, `محضر_جرد_${branchName}_${countReportDate}.xlsx`);
+                        }}
+                        className="h-9"
+                        data-testid="button-export-count-excel"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 ml-2" />
+                        تصدير Excel
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {selectedBranch && selectedBranch !== "all" ? (
+                    <div ref={countReportRef}>
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-amber-50">
+                              <TableHead className="w-12 text-center">#</TableHead>
+                              <TableHead>اسم الصنف</TableHead>
+                              <TableHead className="w-28">التصنيف</TableHead>
+                              <TableHead className="w-20 text-center">الحالة</TableHead>
+                              <TableHead className="w-24 text-center">العدد بالنظام</TableHead>
+                              <TableHead className="w-24 text-center bg-yellow-100">العدد الفعلي</TableHead>
+                              <TableHead className="w-20 text-center">الفرق</TableHead>
+                              <TableHead>ملاحظات</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredInventory.map((item: any, index: number) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="text-center text-muted-foreground">{index + 1}</TableCell>
+                                <TableCell className="font-medium">{item.name}</TableCell>
+                                <TableCell>{item.category}</TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className={STATUS_COLORS[item.status] || "bg-gray-100"} variant="secondary">
+                                    {STATUS_LABELS[item.status] || "غير محدد"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center font-bold">{item.quantity}</TableCell>
+                                <TableCell className="text-center bg-yellow-50">-</TableCell>
+                                <TableCell className="text-center">-</TableCell>
+                                <TableCell className="text-muted-foreground text-sm">{item.notes || "-"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div><span className="font-bold">إجمالي الأصناف:</span> {filteredInventory.length}</div>
+                          <div><span className="font-bold">إجمالي الكميات:</span> {filteredInventory.reduce((s: number, i: any) => s + i.quantity, 0)}</div>
+                          <div><span className="font-bold">بحالة جيدة:</span> {filteredInventory.filter((i: any) => i.status === "good").length}</div>
+                          <div><span className="font-bold">تحتاج متابعة:</span> {filteredInventory.filter((i: any) => i.status !== "good").length}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <ClipboardList className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                      <p className="text-lg font-medium">يرجى اختيار فرع محدد</p>
+                      <p className="text-sm">لإنشاء محضر الجرد، يجب تحديد فرع واحد من القائمة أعلاه</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
