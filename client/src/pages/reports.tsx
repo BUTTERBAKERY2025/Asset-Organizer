@@ -261,7 +261,7 @@ export default function ReportsPage() {
   });
 
   const filteredInventory = inventory.filter((item: any) => {
-    const branchMatch = selectedBranch === "all" || item.branchId === selectedBranch;
+    const branchMatch = selectedBranch === "all" || String(item.branchId) === String(selectedBranch);
     const categoryMatch = selectedCategory === "all" || item.category === selectedCategory;
     return branchMatch && categoryMatch;
   });
@@ -281,7 +281,7 @@ export default function ReportsPage() {
   };
 
   const branchStats = branches.map((branch: any) => {
-    const branchItems = inventory.filter((i: any) => i.branchId === branch.id);
+    const branchItems = inventory.filter((i: any) => String(i.branchId) === String(branch.id));
     return {
       id: branch.id,
       name: branch.name,
