@@ -2931,11 +2931,11 @@ export async function registerRoutes(
       // Use server-side filtered query with pagination
       const result = await storage.getCashierJournalsFiltered({
         branchId: effectiveBranchId,
-        startDate: date as string || startDate as string,
-        endDate: date as string || endDate as string,
-        status: status as string,
-        cashierId: effectiveCashierId || (cashierId as string),
-        discrepancyStatus: discrepancyStatus as string,
+        startDate: (date as string) || (startDate as string) || undefined,
+        endDate: (date as string) || (endDate as string) || undefined,
+        status: status ? (status as string) : undefined,
+        cashierId: effectiveCashierId || (cashierId ? (cashierId as string) : undefined),
+        discrepancyStatus: discrepancyStatus ? (discrepancyStatus as string) : undefined,
         limit: pageLimit,
         offset: pageOffset,
       });
