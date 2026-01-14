@@ -2200,10 +2200,10 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     }
     
     .unlisted-items-section {
-      margin-top: 30px;
+      margin-top: 20px;
       border: 2px solid #d4a853;
-      border-radius: 8px;
-      padding: 15px;
+      border-radius: 6px;
+      padding: 10px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -2211,14 +2211,14 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     .unlisted-items-section h3 {
       text-align: center;
       color: #d4a853;
-      margin-bottom: 10px;
-      font-size: 12px;
+      margin-bottom: 6px;
+      font-size: 10px;
     }
     
     .unlisted-items-section p {
-      font-size: 10px;
+      font-size: 8px;
       color: #666;
-      margin-bottom: 10px;
+      margin-bottom: 6px;
       text-align: center;
     }
     
@@ -2227,8 +2227,15 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     }
     
     .unlisted-items-table td {
-      height: 35px;
+      height: 20px;
       border: 1px solid #ddd;
+      font-size: 8px;
+      padding: 2px 4px;
+    }
+    
+    .unlisted-items-table th {
+      font-size: 8px;
+      padding: 4px;
     }
     
     .committee-section {
