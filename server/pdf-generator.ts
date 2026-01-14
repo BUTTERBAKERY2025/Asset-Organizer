@@ -2409,6 +2409,9 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     <p style="text-align: center; font-size: 9px; color: #666; margin-top: 15px;">
       نقر نحن الموقعين أعلاه بصحة البيانات الواردة في هذا المحضر وأن الجرد تم بشكل دقيق وشامل.
     </p>
+    <p style="text-align: center; font-size: 10px; color: #c00; font-weight: bold; margin-top: 10px; padding: 8px; background: #fff5f5; border: 1px solid #c00; border-radius: 4px;">
+      ⚠️ يُشترط توقيع جميع أعضاء اللجنة على كافة صفحات هذا المحضر، كلٌّ حسب صفته الوظيفية
+    </p>
   </div>
 </body>
 </html>`;
