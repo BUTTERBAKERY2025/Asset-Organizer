@@ -2413,37 +2413,25 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
       ⚠️ يُشترط توقيع جميع أعضاء اللجنة على كافة صفحات هذا المحضر، كلٌّ حسب صفته الوظيفية
     </p>
     
-    <!-- قسم التسليم والتسلم -->
-    <div style="margin-top: 25px; padding-top: 15px; border-top: 2px dashed #999;">
-      <p style="text-align: center; font-size: 11px; font-weight: bold; margin-bottom: 15px; color: #333;">
+    <!-- قسم التسليم والتسلم - مدمج مع جدول التوقيعات -->
+    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #999;">
+      <p style="text-align: center; font-size: 10px; font-weight: bold; margin-bottom: 10px; color: #333;">
         في حالة التسليم والتسلم يُشترط التوقيع من الطرفين:
       </p>
-      <table style="width: 100%; border-collapse: collapse;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
         <tr>
-          <td style="width: 50%; padding: 10px; vertical-align: top;">
-            <div style="border: 1px solid #ddd; border-radius: 6px; padding: 15px; background: #fafafa;">
-              <p style="font-weight: bold; margin-bottom: 10px; text-align: center; font-size: 11px;">المُسَلِّم (الطرف الأول)</p>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="font-size: 10px;">الاسم:</span>
-                <span style="border-bottom: 1px solid #999; width: 150px; display: inline-block;"></span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="font-size: 10px;">التوقيع:</span>
-                <span style="border-bottom: 1px solid #999; width: 150px; display: inline-block;"></span>
-              </div>
+          <td style="width: 50%; padding: 5px; vertical-align: top;">
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 8px; background: #fafafa;">
+              <p style="font-weight: bold; margin-bottom: 6px; text-align: center;">المُسَلِّم (الطرف الأول)</p>
+              <p style="margin: 4px 0;">الاسم: <span style="border-bottom: 1px solid #999; display: inline-block; width: 120px;"></span></p>
+              <p style="margin: 4px 0;">التوقيع: <span style="border-bottom: 1px solid #999; display: inline-block; width: 120px;"></span></p>
             </div>
           </td>
-          <td style="width: 50%; padding: 10px; vertical-align: top;">
-            <div style="border: 1px solid #ddd; border-radius: 6px; padding: 15px; background: #fafafa;">
-              <p style="font-weight: bold; margin-bottom: 10px; text-align: center; font-size: 11px;">المُسْتَلِم (الطرف الثاني)</p>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="font-size: 10px;">الاسم:</span>
-                <span style="border-bottom: 1px solid #999; width: 150px; display: inline-block;"></span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="font-size: 10px;">التوقيع:</span>
-                <span style="border-bottom: 1px solid #999; width: 150px; display: inline-block;"></span>
-              </div>
+          <td style="width: 50%; padding: 5px; vertical-align: top;">
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 8px; background: #fafafa;">
+              <p style="font-weight: bold; margin-bottom: 6px; text-align: center;">المُسْتَلِم (الطرف الثاني)</p>
+              <p style="margin: 4px 0;">الاسم: <span style="border-bottom: 1px solid #999; display: inline-block; width: 120px;"></span></p>
+              <p style="margin: 4px 0;">التوقيع: <span style="border-bottom: 1px solid #999; display: inline-block; width: 120px;"></span></p>
             </div>
           </td>
         </tr>
