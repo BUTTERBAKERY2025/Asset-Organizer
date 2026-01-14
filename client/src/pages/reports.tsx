@@ -22,6 +22,184 @@ import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, Cartes
 import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 import { TablePagination } from "@/components/ui/pagination";
+import { downloadArabicPdf } from "@/lib/pdfmake-arabic";
+
+async function imageToDataUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function generateInventoryCountPdf(
+  items: any[], 
+  branchName: string, 
+  countDate: string,
+  statusLabels: Record<string, string>
+) {
+  const categoryGroups: Record<string, any[]> = {};
+  items.forEach((item: any) => {
+    const cat = item.category || "أخرى";
+    if (!categoryGroups[cat]) categoryGroups[cat] = [];
+    categoryGroups[cat].push(item);
+  });
+
+  const imageCache: Record<string, string | null> = {};
+  for (const item of items) {
+    if (item.imageUrl && !imageCache[item.imageUrl]) {
+      imageCache[item.imageUrl] = await imageToDataUrl(item.imageUrl);
+    }
+  }
+
+  const content: any[] = [
+    { text: "مخبز باتر", style: "logo", alignment: "center" },
+    { text: "محضر جرد الأصول والمعدات", style: "title", alignment: "center", margin: [0, 5, 0, 3] },
+    { text: "Butter Bakery - Asset Inventory Count Report", style: "subtitle", alignment: "center", margin: [0, 0, 0, 15] },
+    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: "#d4a853" }], margin: [0, 0, 0, 15] },
+    {
+      columns: [
+        { text: [{ text: "الفرع: ", bold: true }, branchName], width: "*" },
+        { text: [{ text: "تاريخ الجرد: ", bold: true }, new Date(countDate).toLocaleDateString("ar-SA")], width: "*" },
+        { text: [{ text: "إجمالي الأصناف: ", bold: true }, items.length.toString()], width: "*" },
+        { text: [{ text: "إجمالي الكميات: ", bold: true }, items.reduce((s: number, i: any) => s + i.quantity, 0).toString()], width: "*" },
+      ],
+      margin: [0, 0, 0, 20],
+      style: "infoRow"
+    }
+  ];
+
+  for (const [category, categoryItems] of Object.entries(categoryGroups)) {
+    content.push({
+      table: {
+        widths: ["*"],
+        body: [[{ text: `${category} (${categoryItems.length} صنف)`, bold: true, color: "#fff", fillColor: "#d4a853", alignment: "center", margin: [5, 5, 5, 5] }]]
+      },
+      layout: "noBorders",
+      margin: [0, 15, 0, 5]
+    });
+
+    const tableBody: any[][] = [
+      [
+        { text: "#", style: "tableHeader", alignment: "center" },
+        { text: "الصورة", style: "tableHeader", alignment: "center" },
+        { text: "اسم الصنف", style: "tableHeader", alignment: "right" },
+        { text: "الحالة", style: "tableHeader", alignment: "center" },
+        { text: "العدد بالنظام", style: "tableHeader", alignment: "center" },
+        { text: "العدد الفعلي", style: "tableHeader", alignment: "center", fillColor: "#fffde7" },
+        { text: "الفرق", style: "tableHeader", alignment: "center" },
+        { text: "ملاحظات", style: "tableHeader", alignment: "center" }
+      ]
+    ];
+
+    for (let idx = 0; idx < categoryItems.length; idx++) {
+      const item = categoryItems[idx];
+      const imgData = item.imageUrl ? imageCache[item.imageUrl] : null;
+      
+      tableBody.push([
+        { text: (idx + 1).toString(), alignment: "center" },
+        imgData 
+          ? { image: imgData, width: 40, height: 40, alignment: "center" }
+          : { text: "-", alignment: "center", color: "#999" },
+        { text: item.name, alignment: "right" },
+        { text: statusLabels[item.status] || item.status, alignment: "center" },
+        { text: item.quantity.toString(), alignment: "center", bold: true },
+        { text: "", alignment: "center", fillColor: "#fffde7" },
+        { text: "", alignment: "center" },
+        { text: item.notes || "", alignment: "center", fontSize: 8 }
+      ]);
+    }
+
+    content.push({
+      table: {
+        headerRows: 1,
+        widths: [25, 50, "*", 50, 50, 50, 40, 80],
+        body: tableBody
+      },
+      layout: {
+        hLineWidth: () => 0.5,
+        vLineWidth: () => 0.5,
+        hLineColor: () => "#ddd",
+        vLineColor: () => "#ddd",
+        paddingLeft: () => 4,
+        paddingRight: () => 4,
+        paddingTop: () => 6,
+        paddingBottom: () => 6
+      }
+    });
+  }
+
+  content.push(
+    { text: "", margin: [0, 30, 0, 0] },
+    {
+      table: {
+        widths: ["*", "*", "*"],
+        body: [
+          [
+            { text: "القائم بالجرد", alignment: "center", bold: true, border: [true, true, true, false] },
+            { text: "المراجع", alignment: "center", bold: true, border: [true, true, true, false] },
+            { text: "مدير الفرع", alignment: "center", bold: true, border: [true, true, true, false] }
+          ],
+          [
+            { text: "\n\n\n", alignment: "center", border: [true, false, true, false] },
+            { text: "\n\n\n", alignment: "center", border: [true, false, true, false] },
+            { text: "\n\n\n", alignment: "center", border: [true, false, true, false] }
+          ],
+          [
+            { text: "____________________", alignment: "center", border: [true, false, true, false], margin: [0, 5, 0, 0] },
+            { text: "____________________", alignment: "center", border: [true, false, true, false], margin: [0, 5, 0, 0] },
+            { text: "____________________", alignment: "center", border: [true, false, true, false], margin: [0, 5, 0, 0] }
+          ],
+          [
+            { text: "الاسم:", alignment: "center", border: [true, false, true, true], margin: [0, 5, 0, 10] },
+            { text: "الاسم:", alignment: "center", border: [true, false, true, true], margin: [0, 5, 0, 10] },
+            { text: "الاسم:", alignment: "center", border: [true, false, true, true], margin: [0, 5, 0, 10] }
+          ]
+        ]
+      },
+      layout: {
+        hLineWidth: (i: number, node: any) => (i === 0 || i === node.table.body.length) ? 1 : 0,
+        vLineWidth: () => 1,
+        hLineColor: () => "#ddd",
+        vLineColor: () => "#ddd"
+      },
+      margin: [0, 20, 0, 0]
+    }
+  );
+
+  const docDefinition = {
+    pageSize: "A4",
+    pageOrientation: "portrait" as const,
+    pageMargins: [40, 40, 40, 60],
+    content,
+    footer: (currentPage: number, pageCount: number) => ({
+      columns: [
+        { text: `تم إنشاء هذا المحضر من نظام إدارة باتر - ${new Date().toLocaleString("ar-SA")}`, alignment: "center", fontSize: 8, color: "#666" },
+        { text: `صفحة ${currentPage} من ${pageCount}`, alignment: "left", fontSize: 8, color: "#666" }
+      ],
+      margin: [40, 20, 40, 0]
+    }),
+    styles: {
+      logo: { fontSize: 24, bold: true, color: "#d4a853" },
+      title: { fontSize: 18, bold: true },
+      subtitle: { fontSize: 10, color: "#666" },
+      infoRow: { fontSize: 10 },
+      categoryHeader: { fontSize: 12, bold: true, color: "#fff", fillColor: "#d4a853" },
+      tableHeader: { bold: true, fontSize: 9, fillColor: "#f5f5f5" }
+    },
+    defaultStyle: { font: "Roboto", fontSize: 9, alignment: "right" as const }
+  };
+
+  downloadArabicPdf(docDefinition, `محضر_جرد_${branchName}_${countDate}.pdf`);
+}
 
 const STATUS_LABELS: Record<string, string> = {
   good: "جيد",
@@ -941,128 +1119,21 @@ export default function ReportsPage() {
                       </div>
                       <Button 
                         variant="outline" 
-                        onClick={() => {
-                          const printWindow = window.open('', '_blank');
-                          if (printWindow && countReportRef.current) {
-                            const branchName = selectedBranch === "all" 
-                              ? "جميع الفروع" 
-                              : branches.find((b: any) => b.id === selectedBranch)?.name || selectedBranch;
-                            const categoryGroups: Record<string, any[]> = {};
-                            filteredInventory.forEach((item: any) => {
-                              const cat = item.category || "أخرى";
-                              if (!categoryGroups[cat]) categoryGroups[cat] = [];
-                              categoryGroups[cat].push(item);
-                            });
-                            
-                            printWindow.document.write(`
-                              <!DOCTYPE html>
-                              <html dir="rtl" lang="ar">
-                              <head>
-                                <meta charset="UTF-8">
-                                <title>محضر جرد الأصول والمعدات - ${branchName}</title>
-                                <style>
-                                  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                                  * { font-family: 'Cairo', sans-serif; box-sizing: border-box; }
-                                  body { padding: 20px; direction: rtl; background: #fff; }
-                                  .header { text-align: center; border-bottom: 3px double #d4a853; padding-bottom: 15px; margin-bottom: 20px; }
-                                  .logo { font-size: 28px; font-weight: bold; color: #d4a853; }
-                                  .title { font-size: 22px; font-weight: bold; margin: 10px 0; }
-                                  .subtitle { font-size: 14px; color: #666; }
-                                  .info-row { display: flex; justify-content: space-between; margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 5px; }
-                                  .info-item { display: flex; gap: 8px; }
-                                  .info-label { font-weight: bold; }
-                                  .category-header { background: #d4a853; color: white; padding: 8px 15px; font-weight: bold; margin-top: 20px; border-radius: 5px 5px 0 0; }
-                                  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                                  th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 12px; }
-                                  th { background: #f5f5f5; font-weight: bold; }
-                                  .count-cell { background: #fffde7; min-width: 60px; }
-                                  .notes-cell { min-width: 100px; }
-                                  .signature-section { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-                                  .signature-box { border: 1px solid #ddd; padding: 15px; text-align: center; border-radius: 5px; }
-                                  .signature-line { border-bottom: 1px solid #333; height: 40px; margin: 15px 0; }
-                                  .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 11px; color: #666; }
-                                  @media print { body { padding: 10px; } .no-print { display: none; } }
-                                </style>
-                              </head>
-                              <body>
-                                <div class="header">
-                                  <div class="logo">🧈 مخبز باتر</div>
-                                  <div class="title">محضر جرد الأصول والمعدات</div>
-                                  <div class="subtitle">Butter Bakery - Asset Inventory Count Report</div>
-                                </div>
-                                
-                                <div class="info-row">
-                                  <div class="info-item"><span class="info-label">الفرع:</span> <span>${branchName}</span></div>
-                                  <div class="info-item"><span class="info-label">تاريخ الجرد:</span> <span>${new Date(countReportDate).toLocaleDateString('ar-SA')}</span></div>
-                                  <div class="info-item"><span class="info-label">إجمالي الأصناف:</span> <span>${filteredInventory.length}</span></div>
-                                  <div class="info-item"><span class="info-label">إجمالي الكميات:</span> <span>${filteredInventory.reduce((s: number, i: any) => s + i.quantity, 0)}</span></div>
-                                </div>
-                                
-                                ${Object.entries(categoryGroups).map(([category, items]) => `
-                                  <div class="category-header">${category} (${items.length} صنف)</div>
-                                  <table>
-                                    <thead>
-                                      <tr>
-                                        <th style="width: 40px">#</th>
-                                        <th>اسم الصنف</th>
-                                        <th style="width: 80px">الحالة</th>
-                                        <th style="width: 70px">العدد بالنظام</th>
-                                        <th style="width: 70px" class="count-cell">العدد الفعلي</th>
-                                        <th style="width: 60px">الفرق</th>
-                                        <th class="notes-cell">ملاحظات</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      ${items.map((item: any, idx: number) => `
-                                        <tr>
-                                          <td>${idx + 1}</td>
-                                          <td style="text-align: right">${item.name}</td>
-                                          <td>${STATUS_LABELS[item.status] || item.status}</td>
-                                          <td>${item.quantity}</td>
-                                          <td class="count-cell"></td>
-                                          <td></td>
-                                          <td class="notes-cell"></td>
-                                        </tr>
-                                      `).join('')}
-                                    </tbody>
-                                  </table>
-                                `).join('')}
-                                
-                                <div class="signature-section">
-                                  <div class="signature-box">
-                                    <div>القائم بالجرد</div>
-                                    <div class="signature-line"></div>
-                                    <div>الاسم: ________________</div>
-                                  </div>
-                                  <div class="signature-box">
-                                    <div>المراجع</div>
-                                    <div class="signature-line"></div>
-                                    <div>الاسم: ________________</div>
-                                  </div>
-                                  <div class="signature-box">
-                                    <div>مدير الفرع</div>
-                                    <div class="signature-line"></div>
-                                    <div>الاسم: ________________</div>
-                                  </div>
-                                </div>
-                                
-                                <div class="footer">
-                                  <p>تم إنشاء هذا المحضر من نظام إدارة باتر - ${new Date().toLocaleString('ar-SA')}</p>
-                                </div>
-                                
-                                <script>window.onload = function() { window.print(); }</script>
-                              </body>
-                              </html>
-                            `);
-                            printWindow.document.close();
+                        onClick={async () => {
+                          try {
+                            const branchName = branches.find((b: any) => b.id === selectedBranch)?.name || selectedBranch;
+                            await generateInventoryCountPdf(filteredInventory, branchName, countReportDate, STATUS_LABELS);
+                          } catch (error) {
+                            console.error("PDF generation error:", error);
+                            alert("حدث خطأ أثناء إنشاء ملف PDF. يرجى المحاولة مرة أخرى.");
                           }
                         }}
                         className="h-9"
                         disabled={!selectedBranch || selectedBranch === "all"}
                         data-testid="button-print-count"
                       >
-                        <Printer className="w-4 h-4 ml-2" />
-                        طباعة PDF
+                        <Download className="w-4 h-4 ml-2" />
+                        تصدير PDF
                       </Button>
                       <Button 
                         disabled={!selectedBranch || selectedBranch === "all"}
@@ -1115,6 +1186,7 @@ export default function ReportsPage() {
                           <TableHeader>
                             <TableRow className="bg-amber-50">
                               <TableHead className="w-12 text-center">#</TableHead>
+                              <TableHead className="w-16 text-center">الصورة</TableHead>
                               <TableHead>اسم الصنف</TableHead>
                               <TableHead className="w-28">التصنيف</TableHead>
                               <TableHead className="w-20 text-center">الحالة</TableHead>
@@ -1128,6 +1200,15 @@ export default function ReportsPage() {
                             {filteredInventory.map((item: any, index: number) => (
                               <TableRow key={item.id}>
                                 <TableCell className="text-center text-muted-foreground">{index + 1}</TableCell>
+                                <TableCell className="text-center">
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt={item.name} className="w-10 h-10 object-cover rounded mx-auto" />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center mx-auto">
+                                      <Camera className="w-4 h-4 text-gray-400" />
+                                    </div>
+                                  )}
+                                </TableCell>
                                 <TableCell className="font-medium">{item.name}</TableCell>
                                 <TableCell>{item.category}</TableCell>
                                 <TableCell className="text-center">
