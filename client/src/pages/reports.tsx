@@ -22,183 +22,45 @@ import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, Cartes
 import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 import { TablePagination } from "@/components/ui/pagination";
-import { downloadArabicPdf } from "@/lib/pdfmake-arabic";
-
-async function imageToDataUrl(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
+// Server-side PDF generation for inventory count report (supports Arabic fonts)
 async function generateInventoryCountPdf(
   items: any[], 
   branchName: string, 
   countDate: string,
   statusLabels: Record<string, string>
 ) {
-  const categoryGroups: Record<string, any[]> = {};
-  items.forEach((item: any) => {
-    const cat = item.category || "أخرى";
-    if (!categoryGroups[cat]) categoryGroups[cat] = [];
-    categoryGroups[cat].push(item);
+  const response = await fetch("/api/reports/inventory-count-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      branchName,
+      countDate,
+      items: items.map(item => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        status: item.status,
+        quantity: item.quantity,
+        imageUrl: item.imageUrl,
+        notes: item.notes,
+      })),
+      statusLabels,
+    }),
   });
 
-  const imageCache: Record<string, string | null> = {};
-  for (const item of items) {
-    if (item.imageUrl && !imageCache[item.imageUrl]) {
-      imageCache[item.imageUrl] = await imageToDataUrl(item.imageUrl);
-    }
+  if (!response.ok) {
+    throw new Error("Failed to generate PDF");
   }
 
-  const content: any[] = [
-    { text: "مخبز باتر", style: "logo", alignment: "center" },
-    { text: "محضر جرد الأصول والمعدات", style: "title", alignment: "center", margin: [0, 5, 0, 3] },
-    { text: "Butter Bakery - Asset Inventory Count Report", style: "subtitle", alignment: "center", margin: [0, 0, 0, 15] },
-    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: "#d4a853" }], margin: [0, 0, 0, 15] },
-    {
-      columns: [
-        { text: [{ text: "الفرع: ", bold: true }, branchName], width: "*" },
-        { text: [{ text: "تاريخ الجرد: ", bold: true }, new Date(countDate).toLocaleDateString("ar-SA")], width: "*" },
-        { text: [{ text: "إجمالي الأصناف: ", bold: true }, items.length.toString()], width: "*" },
-        { text: [{ text: "إجمالي الكميات: ", bold: true }, items.reduce((s: number, i: any) => s + i.quantity, 0).toString()], width: "*" },
-      ],
-      margin: [0, 0, 0, 20],
-      style: "infoRow"
-    }
-  ];
-
-  for (const [category, categoryItems] of Object.entries(categoryGroups)) {
-    content.push({
-      table: {
-        widths: ["*"],
-        body: [[{ text: `${category} (${categoryItems.length} صنف)`, bold: true, color: "#fff", fillColor: "#d4a853", alignment: "center", margin: [5, 5, 5, 5] }]]
-      },
-      layout: "noBorders",
-      margin: [0, 15, 0, 5]
-    });
-
-    const tableBody: any[][] = [
-      [
-        { text: "#", style: "tableHeader", alignment: "center" },
-        { text: "الصورة", style: "tableHeader", alignment: "center" },
-        { text: "اسم الصنف", style: "tableHeader", alignment: "right" },
-        { text: "الحالة", style: "tableHeader", alignment: "center" },
-        { text: "العدد بالنظام", style: "tableHeader", alignment: "center" },
-        { text: "العدد الفعلي", style: "tableHeader", alignment: "center", fillColor: "#fffde7" },
-        { text: "الفرق", style: "tableHeader", alignment: "center" },
-        { text: "ملاحظات", style: "tableHeader", alignment: "center" }
-      ]
-    ];
-
-    for (let idx = 0; idx < categoryItems.length; idx++) {
-      const item = categoryItems[idx];
-      const imgData = item.imageUrl ? imageCache[item.imageUrl] : null;
-      
-      tableBody.push([
-        { text: (idx + 1).toString(), alignment: "center" },
-        imgData 
-          ? { image: imgData, width: 40, height: 40, alignment: "center" }
-          : { text: "-", alignment: "center", color: "#999" },
-        { text: item.name, alignment: "right" },
-        { text: statusLabels[item.status] || item.status, alignment: "center" },
-        { text: item.quantity.toString(), alignment: "center", bold: true },
-        { text: "", alignment: "center", fillColor: "#fffde7" },
-        { text: "", alignment: "center" },
-        { text: item.notes || "", alignment: "center", fontSize: 8 }
-      ]);
-    }
-
-    content.push({
-      table: {
-        headerRows: 1,
-        widths: [25, 50, "*", 50, 50, 50, 40, 80],
-        body: tableBody
-      },
-      layout: {
-        hLineWidth: () => 0.5,
-        vLineWidth: () => 0.5,
-        hLineColor: () => "#ddd",
-        vLineColor: () => "#ddd",
-        paddingLeft: () => 4,
-        paddingRight: () => 4,
-        paddingTop: () => 6,
-        paddingBottom: () => 6
-      }
-    });
-  }
-
-  content.push(
-    { text: "", margin: [0, 30, 0, 0] },
-    {
-      table: {
-        widths: ["*", "*", "*"],
-        body: [
-          [
-            { text: "القائم بالجرد", alignment: "center", bold: true, border: [true, true, true, false] },
-            { text: "المراجع", alignment: "center", bold: true, border: [true, true, true, false] },
-            { text: "مدير الفرع", alignment: "center", bold: true, border: [true, true, true, false] }
-          ],
-          [
-            { text: "\n\n\n", alignment: "center", border: [true, false, true, false] },
-            { text: "\n\n\n", alignment: "center", border: [true, false, true, false] },
-            { text: "\n\n\n", alignment: "center", border: [true, false, true, false] }
-          ],
-          [
-            { text: "____________________", alignment: "center", border: [true, false, true, false], margin: [0, 5, 0, 0] },
-            { text: "____________________", alignment: "center", border: [true, false, true, false], margin: [0, 5, 0, 0] },
-            { text: "____________________", alignment: "center", border: [true, false, true, false], margin: [0, 5, 0, 0] }
-          ],
-          [
-            { text: "الاسم:", alignment: "center", border: [true, false, true, true], margin: [0, 5, 0, 10] },
-            { text: "الاسم:", alignment: "center", border: [true, false, true, true], margin: [0, 5, 0, 10] },
-            { text: "الاسم:", alignment: "center", border: [true, false, true, true], margin: [0, 5, 0, 10] }
-          ]
-        ]
-      },
-      layout: {
-        hLineWidth: (i: number, node: any) => (i === 0 || i === node.table.body.length) ? 1 : 0,
-        vLineWidth: () => 1,
-        hLineColor: () => "#ddd",
-        vLineColor: () => "#ddd"
-      },
-      margin: [0, 20, 0, 0]
-    }
-  );
-
-  const docDefinition = {
-    pageSize: "A4",
-    pageOrientation: "portrait" as const,
-    pageMargins: [40, 40, 40, 60],
-    content,
-    footer: (currentPage: number, pageCount: number) => ({
-      columns: [
-        { text: `تم إنشاء هذا المحضر من نظام إدارة باتر - ${new Date().toLocaleString("ar-SA")}`, alignment: "center", fontSize: 8, color: "#666" },
-        { text: `صفحة ${currentPage} من ${pageCount}`, alignment: "left", fontSize: 8, color: "#666" }
-      ],
-      margin: [40, 20, 40, 0]
-    }),
-    styles: {
-      logo: { fontSize: 24, bold: true, color: "#d4a853" },
-      title: { fontSize: 18, bold: true },
-      subtitle: { fontSize: 10, color: "#666" },
-      infoRow: { fontSize: 10 },
-      categoryHeader: { fontSize: 12, bold: true, color: "#fff", fillColor: "#d4a853" },
-      tableHeader: { bold: true, fontSize: 9, fillColor: "#f5f5f5" }
-    },
-    defaultStyle: { font: "Roboto", fontSize: 9, alignment: "right" as const }
-  };
-
-  downloadArabicPdf(docDefinition, `محضر_جرد_${branchName}_${countDate}.pdf`);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `محضر_جرد_${branchName}_${countDate}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -247,9 +109,10 @@ export default function ReportsPage() {
   }, [userBranchId, canSelectBranch]);
 
   const { data: inventory = [] } = useQuery<any[]>({
-    queryKey: ["/api/inventory"],
+    queryKey: ["/api/inventory", "all"],
     queryFn: async () => {
-      const res = await fetch("/api/inventory");
+      // Request all inventory items (for admins) by passing branchId=all
+      const res = await fetch("/api/inventory?branchId=all");
       if (!res.ok) throw new Error("Failed to fetch inventory");
       return res.json();
     },

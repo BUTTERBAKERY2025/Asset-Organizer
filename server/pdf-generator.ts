@@ -1921,6 +1921,283 @@ export async function generateShiftSchedulePdf(data: ShiftSchedulePdfData): Prom
   return await generatePdfFromHtml(html, { landscape: false });
 }
 
+// Inventory Count Report PDF
+export interface InventoryCountItem {
+  id: number;
+  name: string;
+  category: string;
+  status: string;
+  quantity: number;
+  imageUrl?: string | null;
+  notes?: string | null;
+}
+
+export interface InventoryCountPdfData {
+  branchName: string;
+  countDate: string;
+  items: InventoryCountItem[];
+  statusLabels: Record<string, string>;
+}
+
+export async function generateInventoryCountPdf(data: InventoryCountPdfData): Promise<Buffer> {
+  const statusLabels = data.statusLabels;
+  const statusColors: Record<string, string> = {
+    good: '#22c55e',
+    maintenance: '#eab308',
+    damaged: '#ef4444',
+    missing: '#6b7280',
+  };
+
+  // Group items by category
+  const categoryGroups: Record<string, InventoryCountItem[]> = {};
+  data.items.forEach((item) => {
+    const cat = item.category || 'أخرى';
+    if (!categoryGroups[cat]) categoryGroups[cat] = [];
+    categoryGroups[cat].push(item);
+  });
+
+  // Generate category sections
+  let categoryHtml = '';
+  let globalIndex = 0;
+  
+  for (const [category, items] of Object.entries(categoryGroups)) {
+    const itemRows = items.map((item) => {
+      globalIndex++;
+      const statusColor = statusColors[item.status] || '#6b7280';
+      const imageCell = item.imageUrl 
+        ? `<img src="${item.imageUrl}" alt="${item.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" /><span style="display: none; color: #999;">-</span>`
+        : `<span style="color: #999;">-</span>`;
+      
+      return `
+        <tr>
+          <td style="text-align: center;">${globalIndex}</td>
+          <td style="text-align: center;">${imageCell}</td>
+          <td style="text-align: right;">${item.name}</td>
+          <td style="text-align: center;"><span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 8px;">${statusLabels[item.status] || item.status}</span></td>
+          <td style="text-align: center; font-weight: bold;">${item.quantity}</td>
+          <td style="text-align: center; background: #fffde7;"></td>
+          <td style="text-align: center;"></td>
+          <td style="text-align: center; font-size: 8px;">${item.notes || '-'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    categoryHtml += `
+      <div style="margin-top: 20px;">
+        <div style="background: #d4a853; color: white; padding: 8px 12px; font-weight: bold; text-align: center; border-radius: 4px 4px 0 0;">
+          ${category} (${items.length} صنف)
+        </div>
+        <table style="margin-top: 0;">
+          <thead>
+            <tr>
+              <th style="width: 30px;">#</th>
+              <th style="width: 50px;">الصورة</th>
+              <th>اسم الصنف</th>
+              <th style="width: 60px;">الحالة</th>
+              <th style="width: 60px;">العدد بالنظام</th>
+              <th style="width: 60px; background: #fffde7;">العدد الفعلي</th>
+              <th style="width: 50px;">الفرق</th>
+              <th style="width: 100px;">ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  const totalQuantity = data.items.reduce((sum, item) => sum + item.quantity, 0);
+  const goodCount = data.items.filter(i => i.status === 'good').length;
+  const needsFollowup = data.items.filter(i => i.status !== 'good').length;
+  const formattedDate = new Date(data.countDate).toLocaleDateString('ar-SA', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Cairo', sans-serif;
+      direction: rtl;
+      text-align: right;
+      padding: 20px;
+      font-size: 10px;
+    }
+    
+    ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
+    
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px;
+      background: #f9fafb;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    
+    .info-item {
+      text-align: center;
+    }
+    
+    .info-label {
+      font-weight: bold;
+      color: #666;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px 4px;
+      font-size: 9px;
+    }
+    
+    th {
+      background-color: #f3f4f6;
+      font-weight: bold;
+      text-align: center;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    
+    .summary-box {
+      margin-top: 30px;
+      padding: 15px;
+      background: #f3f4f6;
+      border-radius: 8px;
+    }
+    
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      text-align: center;
+    }
+    
+    .summary-item {
+      padding: 10px;
+      background: white;
+      border-radius: 4px;
+    }
+    
+    .summary-value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #d4a853;
+    }
+    
+    .signature-section {
+      margin-top: 40px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    
+    .signature-box {
+      border: 1px solid #ddd;
+      padding: 15px;
+      text-align: center;
+      border-radius: 4px;
+    }
+    
+    .signature-line {
+      margin-top: 40px;
+      border-top: 1px solid #999;
+      padding-top: 5px;
+    }
+    
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+  ${getPdfHeaderHtml('محضر جرد الأصول والمعدات', 'Asset Inventory Count Report')}
+  
+  <div class="info-row">
+    <div class="info-item">
+      <div class="info-label">الفرع</div>
+      <div>${data.branchName}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">تاريخ الجرد</div>
+      <div>${formattedDate}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">إجمالي الأصناف</div>
+      <div>${data.items.length}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">إجمالي الكميات</div>
+      <div>${totalQuantity}</div>
+    </div>
+  </div>
+  
+  ${categoryHtml}
+  
+  <div class="summary-box">
+    <h3 style="margin-bottom: 15px; text-align: center;">ملخص الجرد</h3>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="summary-value">${data.items.length}</div>
+        <div>إجمالي الأصناف</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-value">${totalQuantity}</div>
+        <div>إجمالي الكميات</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-value" style="color: #22c55e;">${goodCount}</div>
+        <div>بحالة جيدة</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-value" style="color: #eab308;">${needsFollowup}</div>
+        <div>تحتاج متابعة</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="signature-section">
+    <div class="signature-box">
+      <div style="font-weight: bold;">المسؤول عن الجرد</div>
+      <div class="signature-line">الاسم والتوقيع</div>
+    </div>
+    <div class="signature-box">
+      <div style="font-weight: bold;">مدير الفرع</div>
+      <div class="signature-line">الاسم والتوقيع</div>
+    </div>
+    <div class="signature-box">
+      <div style="font-weight: bold;">المراجع</div>
+      <div class="signature-line">الاسم والتوقيع</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return await generatePdfFromHtml(html, { landscape: true });
+}
+
 interface PdfOptions {
   landscape?: boolean;
   printedBy?: string;

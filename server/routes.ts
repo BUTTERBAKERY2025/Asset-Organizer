@@ -38,7 +38,8 @@ import {
   generateProductionReportPdf, type ProductionReportPdfData,
   generateProductionOrderPdf, type ProductionOrderPdfData,
   generateShiftSchedulePdf, type ShiftSchedulePdfData,
-  generateWeeklySchedulePdf, type WeeklySchedulePdfData
+  generateWeeklySchedulePdf, type WeeklySchedulePdfData,
+  generateInventoryCountPdf, type InventoryCountPdfData
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName } from "@shared/schema";
 import { z } from "zod";
@@ -354,10 +355,15 @@ export async function registerRoutes(
       const queryBranchId = req.query.branchId as string | undefined;
       const mandatoryBranch = getMandatoryBranchFilter(req);
       
-      // For non-admins, ignore query param and use mandatory branch filter
-      const effectiveBranchId = isUserAdmin(req) 
-        ? (queryBranchId || mandatoryBranch) 
-        : mandatoryBranch;
+      // For admins: "all" means no filter, specific ID means filter by that branch
+      // For non-admins: always use mandatory branch filter
+      let effectiveBranchId: string | null;
+      if (isUserAdmin(req)) {
+        // Admin can request all items with branchId=all or get all if no session branch
+        effectiveBranchId = queryBranchId === "all" ? null : (queryBranchId || mandatoryBranch);
+      } else {
+        effectiveBranchId = mandatoryBranch;
+      }
       
       // If non-admin has no branch assigned, return empty array
       if (!isUserAdmin(req) && !effectiveBranchId) {
@@ -14945,6 +14951,23 @@ export async function registerRoutes(
       res.send(pdfBuffer);
     } catch (error) {
       console.error("Error generating weekly schedule PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for inventory count report
+  app.post("/api/reports/inventory-count-pdf", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
+    try {
+      const data: InventoryCountPdfData = req.body;
+      if (!data.branchName || !data.countDate || !data.items || !Array.isArray(data.items) || !data.statusLabels) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      const pdfBuffer = await generateInventoryCountPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=inventory_count_${data.branchName}_${data.countDate}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating inventory count PDF:", error);
       res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
     }
   });
