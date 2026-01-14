@@ -3780,8 +3780,10 @@ export type InsertMarketingAsset = z.infer<typeof insertMarketingAssetSchema>;
 export const marketingTeamMembers = pgTable("marketing_team_members", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id")
-    .notNull()
     .references(() => users.id),
+  name: text("name"),
+  email: text("email"),
+  phone: text("phone"),
   role: text("role").notNull(), // manager, coordinator, designer, content_creator, analyst
   specialization: text("specialization"), // social_media, influencer_relations, content, analytics
   isTeamLead: boolean("is_team_lead").default(false).notNull(),
