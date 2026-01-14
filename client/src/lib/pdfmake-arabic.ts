@@ -1,31 +1,42 @@
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import { droidKufiRegularBase64, notoKufiArabicRegularBase64 } from "./fonts/arabic-fonts";
 
 // Initialize pdfMake with default fonts
-const vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || (pdfFonts as any).default?.pdfMake?.vfs || {};
+(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || (pdfFonts as any).default?.pdfMake?.vfs || {};
 
-// Add Arabic fonts to vfs
-vfs["DroidKufi-Regular.ttf"] = droidKufiRegularBase64;
-vfs["NotoKufiArabic-Regular.ttf"] = notoKufiArabicRegularBase64;
+let arabicFontsLoaded = false;
 
-(pdfMake as any).vfs = vfs;
-
-// Register Arabic font family
-(pdfMake as any).fonts = {
-  Roboto: {
-    normal: "Roboto-Regular.ttf",
-    bold: "Roboto-Medium.ttf",
-    italics: "Roboto-Italic.ttf",
-    bolditalics: "Roboto-MediumItalic.ttf"
-  },
-  Arabic: {
-    normal: "DroidKufi-Regular.ttf",
-    bold: "NotoKufiArabic-Regular.ttf",
-    italics: "DroidKufi-Regular.ttf",
-    bolditalics: "NotoKufiArabic-Regular.ttf"
+async function loadArabicFonts() {
+  if (arabicFontsLoaded) return;
+  
+  try {
+    const { droidKufiRegularBase64, notoKufiArabicRegularBase64 } = await import("./fonts/arabic-fonts");
+    
+    const vfs = (pdfMake as any).vfs || {};
+    vfs["DroidKufi-Regular.ttf"] = droidKufiRegularBase64;
+    vfs["NotoKufiArabic-Regular.ttf"] = notoKufiArabicRegularBase64;
+    (pdfMake as any).vfs = vfs;
+    
+    (pdfMake as any).fonts = {
+      Roboto: {
+        normal: "Roboto-Regular.ttf",
+        bold: "Roboto-Medium.ttf",
+        italics: "Roboto-Italic.ttf",
+        bolditalics: "Roboto-MediumItalic.ttf"
+      },
+      Arabic: {
+        normal: "DroidKufi-Regular.ttf",
+        bold: "NotoKufiArabic-Regular.ttf",
+        italics: "DroidKufi-Regular.ttf",
+        bolditalics: "NotoKufiArabic-Regular.ttf"
+      }
+    };
+    
+    arabicFontsLoaded = true;
+  } catch (error) {
+    console.error("Failed to load Arabic fonts:", error);
   }
-};
+}
 
 export function getArabicDefaultStyle() {
   return {
@@ -49,8 +60,11 @@ export function createArabicPdf(docDefinition: any): any {
   return pdfMake.createPdf(docDefinition);
 }
 
-export function downloadArabicPdf(docDefinition: any, filename: string): void {
+export async function downloadArabicPdf(docDefinition: any, filename: string): Promise<void> {
   try {
+    // Load Arabic fonts lazily
+    await loadArabicFonts();
+    
     // Ensure Arabic font is used by default
     if (!docDefinition.defaultStyle) {
       docDefinition.defaultStyle = {};
