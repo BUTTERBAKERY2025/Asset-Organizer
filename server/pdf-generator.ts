@@ -1968,14 +1968,21 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
   const uniqueUrls = Array.from(new Set(data.items.filter(i => i.imageUrl).map(i => i.imageUrl!)));
   
   // Fetch images in parallel (max 10 at a time to avoid overwhelming)
+  let successCount = 0;
+  let failCount = 0;
   for (let i = 0; i < uniqueUrls.length; i += 10) {
     const batch = uniqueUrls.slice(i, i + 10);
     const results = await Promise.all(batch.map(url => imageUrlToBase64(url)));
     batch.forEach((url, idx) => {
       imageCache[url] = results[idx];
+      if (results[idx]) {
+        successCount++;
+      } else {
+        failCount++;
+      }
     });
   }
-  console.log(`[PDF] Fetched ${Object.keys(imageCache).length} images`);
+  console.log(`[PDF] Image fetch results: ${successCount} success, ${failCount} failed out of ${uniqueUrls.length} total`);
 
   // Group items by category
   const categoryGroups: Record<string, InventoryCountItem[]> = {};
