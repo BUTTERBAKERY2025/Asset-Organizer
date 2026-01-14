@@ -14963,8 +14963,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات غير صالحة" });
       }
       const pdfBuffer = await generateInventoryCountPdf(data);
+      // Use ASCII filename with UTF-8 encoded fallback for Arabic support
+      const safeFilename = `inventory_count_${data.countDate}.pdf`;
+      const encodedFilename = encodeURIComponent(`محضر_جرد_${data.branchName}_${data.countDate}.pdf`);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=inventory_count_${data.branchName}_${data.countDate}.pdf`);
+      res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`);
       res.send(pdfBuffer);
     } catch (error) {
       console.error("Error generating inventory count PDF:", error);
