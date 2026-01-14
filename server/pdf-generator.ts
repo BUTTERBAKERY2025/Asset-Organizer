@@ -2261,25 +2261,25 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     
     .committee-table {
       width: 100%;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     
     .committee-table th {
       background: #f3f4f6;
-      padding: 5px;
-      font-size: 9px;
+      padding: 3px;
+      font-size: 8px;
     }
     
     .committee-table td {
-      padding: 6px 5px;
-      height: 28px;
+      padding: 3px 4px;
+      height: 18px;
       vertical-align: bottom;
-      font-size: 9px;
+      font-size: 8px;
     }
     
     .signature-line-bottom {
       border-bottom: 1px solid #999;
-      height: 22px;
+      height: 14px;
     }
     
     .page-break {
@@ -2432,40 +2432,40 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     </p>
     
     <!-- إقرار استخدام الأدوات والمعدات -->
-    <div style="margin-top: 15px; padding: 10px; background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%); border: 2px solid #d4a853; border-radius: 6px;">
-      <p style="text-align: center; font-weight: bold; font-size: 10px; color: #8b6914; margin-bottom: 8px; border-bottom: 1px solid #d4a853; padding-bottom: 5px;">
+    <div style="margin-top: 10px; padding: 8px; background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%); border: 1px solid #d4a853; border-radius: 4px;">
+      <p style="text-align: center; font-weight: bold; font-size: 8px; color: #8b6914; margin-bottom: 5px; border-bottom: 1px solid #d4a853; padding-bottom: 3px;">
         ⚠️ إقرار الاطلاع والمسؤولية | Acknowledgment & Responsibility Statement ⚠️
       </p>
-      <p style="font-size: 8px; text-align: justify; line-height: 1.6; color: #333; margin-bottom: 6px;">
+      <p style="font-size: 7px; text-align: justify; line-height: 1.4; color: #333; margin-bottom: 4px;">
         <strong>باللغة العربية:</strong> يُشترط على جميع الموظفين المستخدمين للأدوات والمعدات (أدوات المطبخ، أدوات الباريستا، أدوات البيتزا، أدوات الكاشير، وكل ما هو مستخدم وملموس ويتم التعامل به بشكل يومي) التوقيع على هذا الإقرار. يلتزم الموظف بالاستخدام الصحيح والمحافظة على هذه الأدوات والمعدات. في حالة تبيُّن سوء استخدام أو إهمال أو ضياع أو فقدان لأي من هذه الأدوات، يتم محاسبة المتسبب مادياً وإدارياً، ويتحمل المسؤولية الكاملة عن التلف أو الفقدان.
       </p>
-      <p style="font-size: 7px; text-align: justify; line-height: 1.5; color: #555; direction: ltr; margin-bottom: 8px;">
+      <p style="font-size: 6px; text-align: justify; line-height: 1.3; color: #555; direction: ltr; margin-bottom: 5px;">
         <strong>In English:</strong> All employees using equipment and tools (kitchen tools, barista tools, pizza tools, cashier tools, and all tangible items used daily) are required to sign this acknowledgment. The employee commits to proper use and maintenance of these tools and equipment. In case of misuse, negligence, loss, or damage to any of these tools, the responsible person will be held financially and administratively accountable and bears full responsibility for damage or loss.
       </p>
       
       <!-- جدول توقيعات الموظفين على الإقرار -->
-      <p style="text-align: center; font-size: 9px; font-weight: bold; color: #8b6914; margin-bottom: 5px;">توقيعات الموظفين المعنيين | Employee Signatures</p>
-      <table style="width: 100%; border-collapse: collapse; font-size: 8px; border: 1px solid #d4a853;">
+      <p style="text-align: center; font-size: 7px; font-weight: bold; color: #8b6914; margin-bottom: 3px;">توقيعات الموظفين المعنيين | Employee Signatures</p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 7px; border: 1px solid #d4a853;">
         <thead>
           <tr style="background: #d4a853; color: white;">
-            <th style="padding: 4px; width: 25px; border: 1px solid #c49b48;">م</th>
-            <th style="padding: 4px; border: 1px solid #c49b48;">اسم الموظف</th>
-            <th style="padding: 4px; width: 80px; border: 1px solid #c49b48;">القسم</th>
-            <th style="padding: 4px; width: 80px; border: 1px solid #c49b48;">التوقيع</th>
-            <th style="padding: 4px; width: 60px; border: 1px solid #c49b48;">التاريخ</th>
+            <th style="padding: 2px; width: 20px; border: 1px solid #c49b48;">م</th>
+            <th style="padding: 2px; border: 1px solid #c49b48;">اسم الموظف</th>
+            <th style="padding: 2px; width: 60px; border: 1px solid #c49b48;">القسم</th>
+            <th style="padding: 2px; width: 60px; border: 1px solid #c49b48;">التوقيع</th>
+            <th style="padding: 2px; width: 50px; border: 1px solid #c49b48;">التاريخ</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">1</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">2</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">3</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">4</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">5</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">6</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">7</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">8</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">9</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
-          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">10</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">1</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">2</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">3</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">4</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">5</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">6</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">7</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">8</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">9</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 16px;">10</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
         </tbody>
       </table>
     </div>
