@@ -266,6 +266,11 @@ export default function ReportsPage() {
     return branchMatch && categoryMatch;
   });
 
+  // For inventory count report - filter only by branch, not category
+  const branchInventory = inventory.filter((item: any) => {
+    return selectedBranch === "all" || String(item.branchId) === String(selectedBranch);
+  });
+
   const allCategories = Array.from(new Set(inventory.map((item: any) => item.category))).sort();
 
   const overallStats = {
@@ -1122,7 +1127,7 @@ export default function ReportsPage() {
                         onClick={async () => {
                           try {
                             const branchName = branches.find((b: any) => b.id === selectedBranch)?.name || selectedBranch;
-                            await generateInventoryCountPdf(filteredInventory, branchName, countReportDate, STATUS_LABELS);
+                            await generateInventoryCountPdf(branchInventory, branchName, countReportDate, STATUS_LABELS);
                           } catch (error) {
                             console.error("PDF generation error:", error);
                             alert("حدث خطأ أثناء إنشاء ملف PDF. يرجى المحاولة مرة أخرى.");
@@ -1143,7 +1148,7 @@ export default function ReportsPage() {
                             ? "جميع الفروع" 
                             : branches.find((b: any) => b.id === selectedBranch)?.name || selectedBranch;
                           
-                          const data = filteredInventory.map((item: any, idx: number) => ({
+                          const data = branchInventory.map((item: any, idx: number) => ({
                             "#": idx + 1,
                             "اسم الصنف": item.name,
                             "التصنيف": item.category,
@@ -1160,8 +1165,8 @@ export default function ReportsPage() {
                           const summaryData = [
                             { "البيان": "الفرع", "القيمة": branchName },
                             { "البيان": "تاريخ الجرد", "القيمة": countReportDate },
-                            { "البيان": "إجمالي الأصناف", "القيمة": filteredInventory.length },
-                            { "البيان": "إجمالي الكميات", "القيمة": filteredInventory.reduce((s: number, i: any) => s + i.quantity, 0) },
+                            { "البيان": "إجمالي الأصناف", "القيمة": branchInventory.length },
+                            { "البيان": "إجمالي الكميات", "القيمة": branchInventory.reduce((s: number, i: any) => s + i.quantity, 0) },
                           ];
                           const summaryWs = XLSX.utils.json_to_sheet(summaryData);
                           XLSX.utils.book_append_sheet(wb, summaryWs, "ملخص");
@@ -1197,7 +1202,7 @@ export default function ReportsPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {filteredInventory.map((item: any, index: number) => (
+                            {branchInventory.map((item: any, index: number) => (
                               <TableRow key={item.id}>
                                 <TableCell className="text-center text-muted-foreground">{index + 1}</TableCell>
                                 <TableCell className="text-center">
@@ -1227,10 +1232,10 @@ export default function ReportsPage() {
                       </div>
                       <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div><span className="font-bold">إجمالي الأصناف:</span> {filteredInventory.length}</div>
-                          <div><span className="font-bold">إجمالي الكميات:</span> {filteredInventory.reduce((s: number, i: any) => s + i.quantity, 0)}</div>
-                          <div><span className="font-bold">بحالة جيدة:</span> {filteredInventory.filter((i: any) => i.status === "good").length}</div>
-                          <div><span className="font-bold">تحتاج متابعة:</span> {filteredInventory.filter((i: any) => i.status !== "good").length}</div>
+                          <div><span className="font-bold">إجمالي الأصناف:</span> {branchInventory.length}</div>
+                          <div><span className="font-bold">إجمالي الكميات:</span> {branchInventory.reduce((s: number, i: any) => s + i.quantity, 0)}</div>
+                          <div><span className="font-bold">بحالة جيدة:</span> {branchInventory.filter((i: any) => i.status === "good").length}</div>
+                          <div><span className="font-bold">تحتاج متابعة:</span> {branchInventory.filter((i: any) => i.status !== "good").length}</div>
                         </div>
                       </div>
                     </div>

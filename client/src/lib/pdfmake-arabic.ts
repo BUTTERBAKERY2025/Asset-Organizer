@@ -1,8 +1,8 @@
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
+import pdfMake from "@digicole/pdfmake-rtl/build/pdfmake";
+import pdfFonts from "@digicole/pdfmake-rtl/build/vfs_fonts";
 
-// Initialize pdfMake with default fonts
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || (pdfFonts as any).default?.pdfMake?.vfs || {};
+// Initialize pdfMake with RTL-enabled fonts
+(pdfMake as any).vfs = pdfFonts;
 
 export function getArabicDefaultStyle() {
   return {
