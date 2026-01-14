@@ -2361,6 +2361,13 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
         <tr><td>6</td><td></td><td></td><td></td><td></td><td></td></tr>
         <tr><td>7</td><td></td><td></td><td></td><td></td><td></td></tr>
         <tr><td>8</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>9</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>10</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>11</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>12</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>13</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>14</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>15</td><td></td><td></td><td></td><td></td><td></td></tr>
       </tbody>
     </table>
   </div>
@@ -2448,6 +2455,10 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
           <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">4</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
           <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">5</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
           <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">6</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">7</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">8</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">9</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">10</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
         </tbody>
       </table>
     </div>
