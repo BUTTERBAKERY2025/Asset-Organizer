@@ -225,8 +225,8 @@ export default function ProductionComparisonsPage() {
         credentials: "include",
       });
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "فشل رفع الملف");
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || "فشل رفع الملف");
       }
       return response.json();
     },
