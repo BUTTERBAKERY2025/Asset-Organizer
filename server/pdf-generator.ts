@@ -2204,6 +2204,8 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
       border: 2px solid #d4a853;
       border-radius: 8px;
       padding: 15px;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     
     .unlisted-items-section h3 {
@@ -2234,6 +2236,7 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
       border: 2px solid #333;
       border-radius: 6px;
       padding: 12px;
+      page-break-before: always;
       page-break-inside: avoid;
       break-inside: avoid;
     }
