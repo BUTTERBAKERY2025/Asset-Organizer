@@ -678,6 +678,7 @@ export async function registerRoutes(
             status: item.status || 'good',
             branchId: branchId,
             notes: item.notes || '',
+            imageUrl: item.imageUrl || undefined,
           };
           
           console.log("[Import] Processing item:", itemData.name, "id:", uniqueId);

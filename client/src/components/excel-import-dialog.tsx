@@ -26,6 +26,7 @@ interface ImportRow {
   status?: string;
   serialNumber?: string;
   notes?: string;
+  imageUrl?: string;
   isValid: boolean;
   errors: string[];
 }
@@ -39,6 +40,7 @@ const TEMPLATE_COLUMNS = [
   { key: "status", label: "الحالة", required: false },
   { key: "serialNumber", label: "الرقم التسلسلي", required: false },
   { key: "notes", label: "ملاحظات", required: false },
+  { key: "imageUrl", label: "رابط الصورة", required: false },
 ];
 
 const VALID_STATUSES = ["good", "maintenance", "damaged", "missing"];
@@ -214,6 +216,7 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
           const status = row["الحالة"] || row["حالة"] || row["status"] || row["Status"] || "good";
           const serialNumber = row["الرقم التسلسلي"] || row["رقم تسلسلي"] || row["serialNumber"] || row["SerialNumber"] || row["serial"] || "";
           const notes = row["ملاحظات"] || row["ملاحظة"] || row["notes"] || row["Notes"] || "";
+          const imageUrl = row["رابط الصورة"] || row["الصورة"] || row["صورة"] || row["imageUrl"] || row["ImageUrl"] || row["image"] || row["Image"] || "";
 
           if (!name || name.includes("مطلوب") || name.includes("مثال")) errors.push("اسم الصنف مطلوب");
           
@@ -242,6 +245,7 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
             status: VALID_STATUSES.includes(normalizedStatus) ? normalizedStatus : "good",
             serialNumber: String(serialNumber).trim(),
             notes: String(notes).trim(),
+            imageUrl: String(imageUrl).trim() || undefined,
             isValid: errors.length === 0,
             errors,
           };
