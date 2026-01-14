@@ -57,7 +57,11 @@ import {
   Calendar,
   FileSpreadsheet,
   Download,
+  AlertTriangle,
+  AlertCircle,
+  Bell,
 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Link } from "wouter";
 import type { CampaignExpense, MarketingCampaign, MarketingInfluencer } from "@shared/schema";
 import {
@@ -291,6 +295,24 @@ export default function MarketingExpensesPage() {
   const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
   const paidExpenses = filteredExpenses.filter((e) => e.status === "paid").reduce((sum, e) => sum + e.amount, 0);
   const pendingExpenses = filteredExpenses.filter((e) => e.status === "pending").reduce((sum, e) => sum + e.amount, 0);
+
+  const budgetAlerts = campaigns.map((campaign) => {
+    const campaignExpenses = expenses.filter((e) => e.campaignId === campaign.id);
+    const spent = campaignExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const budget = campaign.totalBudget || 0;
+    const percentage = budget > 0 ? (spent / budget) * 100 : 0;
+    return {
+      campaign,
+      spent,
+      budget,
+      percentage,
+      isOverBudget: spent > budget && budget > 0,
+      isNearBudget: percentage >= 80 && percentage < 100 && budget > 0,
+    };
+  }).filter((alert) => alert.isOverBudget || alert.isNearBudget);
+
+  const overBudgetCount = budgetAlerts.filter((a) => a.isOverBudget).length;
+  const nearBudgetCount = budgetAlerts.filter((a) => a.isNearBudget).length;
 
   const expensesByCategory = CAMPAIGN_EXPENSE_CATEGORIES.map((cat) => ({
     name: CAMPAIGN_EXPENSE_CATEGORY_LABELS[cat],
@@ -568,6 +590,52 @@ export default function MarketingExpensesPage() {
             )}
           </div>
         </div>
+
+        {budgetAlerts.length > 0 && (
+          <Card className="border-2 border-amber-300 bg-amber-50/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-amber-700">
+                <Bell className="w-5 h-5" />
+                تحذيرات الميزانية ({budgetAlerts.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {budgetAlerts.map((alert) => (
+                  <Alert 
+                    key={alert.campaign.id} 
+                    variant={alert.isOverBudget ? "destructive" : "default"}
+                    className={alert.isOverBudget ? "" : "border-amber-400 bg-amber-100/50"}
+                  >
+                    {alert.isOverBudget ? (
+                      <AlertTriangle className="h-4 w-4" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                    )}
+                    <AlertTitle className={alert.isOverBudget ? "" : "text-amber-800"}>
+                      {alert.campaign.nameAr || alert.campaign.name}
+                    </AlertTitle>
+                    <AlertDescription className={alert.isOverBudget ? "" : "text-amber-700"}>
+                      {alert.isOverBudget ? (
+                        <>تجاوز الميزانية بمقدار <strong>{new Intl.NumberFormat("en-US").format(alert.spent - alert.budget)} ر.س</strong> ({alert.percentage.toFixed(1)}% من الميزانية)</>
+                      ) : (
+                        <>استخدم <strong>{alert.percentage.toFixed(1)}%</strong> من الميزانية ({new Intl.NumberFormat("en-US").format(alert.spent)} من {new Intl.NumberFormat("en-US").format(alert.budget)} ر.س)</>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+              <div className="mt-3 flex gap-4 text-sm">
+                {overBudgetCount > 0 && (
+                  <Badge variant="destructive">{overBudgetCount} تجاوز الميزانية</Badge>
+                )}
+                {nearBudgetCount > 0 && (
+                  <Badge className="bg-amber-500">{nearBudgetCount} اقترب من الميزانية</Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="list" className="w-full">
           <TabsList className="grid w-full grid-cols-2">

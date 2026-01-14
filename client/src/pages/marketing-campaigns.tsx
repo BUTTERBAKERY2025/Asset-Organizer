@@ -44,7 +44,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Loader2, Megaphone, Calendar, DollarSign, ArrowRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, Megaphone, Calendar, DollarSign, ArrowRight, LayoutGrid, List, GanttChart } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
 import type { MarketingCampaign } from "@shared/schema";
 import {
@@ -82,6 +83,198 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-500",
 };
 
+const STATUS_BORDER_COLORS: Record<string, string> = {
+  draft: "border-gray-400",
+  planned: "border-blue-400",
+  active: "border-green-400",
+  paused: "border-yellow-400",
+  completed: "border-purple-400",
+  cancelled: "border-red-400",
+};
+
+function CampaignTimeline({ 
+  campaigns, 
+  isLoading, 
+  canEdit, 
+  onEdit 
+}: { 
+  campaigns: MarketingCampaign[]; 
+  isLoading: boolean; 
+  canEdit: boolean;
+  onEdit: (campaign: MarketingCampaign) => void;
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (campaigns.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <Megaphone className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">لا توجد حملات تسويقية</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const sortedCampaigns = [...campaigns].sort((a, b) => 
+    new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  );
+
+  const allDates = campaigns.flatMap(c => [new Date(c.startDate), new Date(c.endDate)]);
+  const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+  const totalDays = Math.max((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24), 1);
+  const today = new Date();
+
+  const getBarPosition = (startDate: string, endDate: string) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const startOffset = Math.max(0, (start.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
+    const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    const leftPercent = (startOffset / totalDays) * 100;
+    const widthPercent = Math.max((duration / totalDays) * 100, 2);
+    return { left: `${leftPercent}%`, width: `${widthPercent}%` };
+  };
+
+  const getCampaignProgress = (startDate: string, endDate: string) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (today < start) return 0;
+    if (today > end) return 100;
+    const total = end.getTime() - start.getTime();
+    const elapsed = today.getTime() - start.getTime();
+    return Math.round((elapsed / total) * 100);
+  };
+
+  const formatShortDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("ar-SA", { day: "numeric", month: "short" });
+  };
+
+  const months: string[] = [];
+  const tempDate = new Date(minDate);
+  while (tempDate <= maxDate) {
+    months.push(tempDate.toLocaleDateString("ar-SA", { month: "short", year: "numeric" }));
+    tempDate.setMonth(tempDate.getMonth() + 1);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <GanttChart className="w-5 h-5" />
+          الجدول الزمني للحملات
+        </CardTitle>
+        <CardDescription>عرض مرئي لفترات الحملات التسويقية</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4 flex gap-4 text-xs flex-wrap">
+          {Object.entries(CAMPAIGN_STATUS_LABELS).map(([key, label]) => (
+            <div key={key} className="flex items-center gap-1.5">
+              <div className={`w-3 h-3 rounded ${STATUS_COLORS[key]}`} />
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="overflow-x-auto">
+          <div className="min-w-[800px]">
+            <div className="flex border-b pb-2 mb-4 text-xs text-muted-foreground">
+              {months.map((month, idx) => (
+                <div key={idx} className="flex-1 text-center border-r last:border-r-0">
+                  {month}
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              {sortedCampaigns.map((campaign) => {
+                const pos = getBarPosition(campaign.startDate, campaign.endDate);
+                const progress = getCampaignProgress(campaign.startDate, campaign.endDate);
+                const statusColor = STATUS_COLORS[campaign.status] || STATUS_COLORS.draft;
+                const borderColor = STATUS_BORDER_COLORS[campaign.status] || STATUS_BORDER_COLORS.draft;
+
+                return (
+                  <div key={campaign.id} className="relative group">
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="w-48 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm truncate">{campaign.nameAr || campaign.name}</span>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => onEdit(campaign)}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatShortDate(campaign.startDate)} - {formatShortDate(campaign.endDate)}
+                        </div>
+                      </div>
+                      <div className="flex-1 relative h-8 bg-gray-100 rounded-lg overflow-hidden">
+                        <div
+                          className={`absolute h-full ${statusColor} rounded-lg transition-all border-2 ${borderColor}`}
+                          style={{ left: pos.left, width: pos.width }}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs text-white font-medium drop-shadow-sm truncate px-2">
+                              {CAMPAIGN_STATUS_LABELS[campaign.status as keyof typeof CAMPAIGN_STATUS_LABELS]}
+                            </span>
+                          </div>
+                          {campaign.status === "active" && (
+                            <div 
+                              className="absolute top-0 left-0 h-full bg-white/30"
+                              style={{ width: `${progress}%` }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-3 bg-gray-50 rounded-lg text-center">
+            <p className="text-2xl font-bold">{campaigns.length}</p>
+            <p className="text-xs text-muted-foreground">إجمالي الحملات</p>
+          </div>
+          <div className="p-3 bg-green-50 rounded-lg text-center">
+            <p className="text-2xl font-bold text-green-600">
+              {campaigns.filter(c => c.status === "active").length}
+            </p>
+            <p className="text-xs text-muted-foreground">حملات نشطة</p>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-lg text-center">
+            <p className="text-2xl font-bold text-blue-600">
+              {campaigns.filter(c => c.status === "planned").length}
+            </p>
+            <p className="text-xs text-muted-foreground">حملات مخططة</p>
+          </div>
+          <div className="p-3 bg-purple-50 rounded-lg text-center">
+            <p className="text-2xl font-bold text-purple-600">
+              {campaigns.filter(c => c.status === "completed").length}
+            </p>
+            <p className="text-xs text-muted-foreground">حملات مكتملة</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function MarketingCampaignsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -91,6 +284,7 @@ export default function MarketingCampaignsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<MarketingCampaign | null>(null);
+  const [viewMode, setViewMode] = useState<"table" | "timeline">("table");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -282,12 +476,36 @@ export default function MarketingCampaignsPage() {
               <p className="text-sm text-muted-foreground">إدارة ومتابعة الحملات التسويقية</p>
             </div>
           </div>
-          {canEdit && (
-            <Button className="h-11 sm:h-9" onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-campaign">
-              <Plus className="w-4 h-4 ml-2" />
-              إضافة حملة جديدة
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none h-9"
+                onClick={() => setViewMode("table")}
+                data-testid="button-view-table"
+              >
+                <List className="w-4 h-4 ml-1" />
+                جدول
+              </Button>
+              <Button
+                variant={viewMode === "timeline" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none h-9"
+                onClick={() => setViewMode("timeline")}
+                data-testid="button-view-timeline"
+              >
+                <GanttChart className="w-4 h-4 ml-1" />
+                Timeline
+              </Button>
+            </div>
+            {canEdit && (
+              <Button className="h-11 sm:h-9" onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-campaign">
+                <Plus className="w-4 h-4 ml-2" />
+                إضافة حملة جديدة
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4">
@@ -342,6 +560,9 @@ export default function MarketingCampaignsPage() {
           </Select>
         </div>
 
+        {viewMode === "timeline" ? (
+          <CampaignTimeline campaigns={filteredCampaigns} isLoading={isLoading} canEdit={canEdit} onEdit={openEditDialog} />
+        ) : (
         <Card>
           <CardHeader>
             <CardTitle>قائمة الحملات</CardTitle>
@@ -441,6 +662,7 @@ export default function MarketingCampaignsPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         <Dialog
           open={isAddDialogOpen || isEditDialogOpen}

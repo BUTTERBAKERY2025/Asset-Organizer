@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight, ListTodo, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
@@ -26,6 +27,36 @@ interface CalendarEvent {
   branchId?: string;
   color?: string;
   notes?: string;
+}
+
+interface MarketingCampaign {
+  id: number;
+  name: string;
+  nameAr?: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  objective?: string;
+}
+
+interface MarketingTask {
+  id: number;
+  title: string;
+  status: string;
+  priority: string;
+  dueDate?: string;
+  assignedTo?: string;
+}
+
+interface UnifiedCalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  endDate?: string;
+  type: "event" | "campaign_start" | "campaign_end" | "task";
+  color: string;
+  source: "calendar" | "campaign" | "task";
+  originalData?: any;
 }
 
 const EVENT_TYPES = [
@@ -52,6 +83,11 @@ export default function MarketingCalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showCampaigns, setShowCampaigns] = useState(true);
+  const [showTasks, setShowTasks] = useState(true);
+  const [showEvents, setShowEvents] = useState(true);
+  const [selectedDayEvents, setSelectedDayEvents] = useState<UnifiedCalendarEvent[]>([]);
+  const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -62,7 +98,7 @@ export default function MarketingCalendarPage() {
     notes: "",
   });
 
-  const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
+  const { data: events = [], isLoading: eventsLoading } = useQuery<CalendarEvent[]>({
     queryKey: ["/api/marketing/calendar-events"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/calendar-events");
@@ -70,6 +106,96 @@ export default function MarketingCalendarPage() {
       return res.json();
     },
   });
+
+  const { data: campaigns = [], isLoading: campaignsLoading } = useQuery<MarketingCampaign[]>({
+    queryKey: ["/api/marketing/campaigns"],
+    queryFn: async () => {
+      const res = await fetch("/api/marketing/campaigns");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<MarketingTask[]>({
+    queryKey: ["/api/marketing/tasks"],
+    queryFn: async () => {
+      const res = await fetch("/api/marketing/tasks");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const isLoading = eventsLoading || campaignsLoading || tasksLoading;
+
+  const unifiedEvents = useMemo(() => {
+    const unified: UnifiedCalendarEvent[] = [];
+
+    if (showEvents) {
+      events.forEach(event => {
+        if (!event.startDate) return;
+        const typeInfo = EVENT_TYPES.find(t => t.value === event.eventType) || EVENT_TYPES[EVENT_TYPES.length - 1];
+        unified.push({
+          id: `event-${event.id}`,
+          title: event.title,
+          date: event.startDate,
+          endDate: event.endDate || undefined,
+          type: "event",
+          color: typeInfo.color,
+          source: "calendar",
+          originalData: event,
+        });
+      });
+    }
+
+    if (showCampaigns) {
+      campaigns.forEach(campaign => {
+        if (campaign.startDate) {
+          unified.push({
+            id: `campaign-start-${campaign.id}`,
+            title: `بداية: ${campaign.nameAr || campaign.name}`,
+            date: campaign.startDate,
+            type: "campaign_start",
+            color: "bg-green-500",
+            source: "campaign",
+            originalData: campaign,
+          });
+        }
+        if (campaign.endDate) {
+          unified.push({
+            id: `campaign-end-${campaign.id}`,
+            title: `نهاية: ${campaign.nameAr || campaign.name}`,
+            date: campaign.endDate,
+            type: "campaign_end",
+            color: "bg-red-500",
+            source: "campaign",
+            originalData: campaign,
+          });
+        }
+      });
+    }
+
+    if (showTasks) {
+      tasks.filter(t => t.dueDate && t.status !== "completed").forEach(task => {
+        const priorityColors: Record<string, string> = {
+          urgent: "bg-red-600",
+          high: "bg-orange-500",
+          medium: "bg-blue-500",
+          low: "bg-gray-500",
+        };
+        unified.push({
+          id: `task-${task.id}`,
+          title: `مهمة: ${task.title}`,
+          date: task.dueDate!,
+          type: "task",
+          color: priorityColors[task.priority] || "bg-blue-500",
+          source: "task",
+          originalData: task,
+        });
+      });
+    }
+
+    return unified.filter(e => e.date && !isNaN(new Date(e.date).getTime()));
+  }, [events, campaigns, tasks, showEvents, showCampaigns, showTasks]);
 
   const createEventMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -118,7 +244,7 @@ export default function MarketingCalendarPage() {
 
   const getEventsForDate = (day: number) => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return events.filter(e => e.startDate.startsWith(dateStr));
+    return unifiedEvents.filter(e => e.date && e.date.startsWith(dateStr));
   };
 
   const goToPrevMonth = () => {
@@ -135,9 +261,24 @@ export default function MarketingCalendarPage() {
 
   const handleDayClick = (day: number) => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    setSelectedDate(dateStr);
-    setFormData(prev => ({ ...prev, startDate: dateStr }));
-    setIsAddDialogOpen(true);
+    const dayEvents = getEventsForDate(day);
+    if (dayEvents.length > 0) {
+      setSelectedDate(dateStr);
+      setSelectedDayEvents(dayEvents);
+      setIsDayDialogOpen(true);
+    } else {
+      setSelectedDate(dateStr);
+      setFormData(prev => ({ ...prev, startDate: dateStr }));
+      setIsAddDialogOpen(true);
+    }
+  };
+
+  const handleAddEventFromDay = () => {
+    setIsDayDialogOpen(false);
+    if (selectedDate) {
+      setFormData(prev => ({ ...prev, startDate: selectedDate }));
+      setIsAddDialogOpen(true);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -160,6 +301,32 @@ export default function MarketingCalendarPage() {
            today.getDate() === day;
   };
 
+  const getSourceIcon = (source: string) => {
+    switch (source) {
+      case "campaign": return <Megaphone className="w-3 h-3" />;
+      case "task": return <ListTodo className="w-3 h-3" />;
+      default: return <Calendar className="w-3 h-3" />;
+    }
+  };
+
+  const upcomingEvents = unifiedEvents
+    .filter(e => {
+      if (!e.date) return false;
+      const eventDate = new Date(e.date);
+      return !isNaN(eventDate.getTime()) && eventDate >= new Date();
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 5);
+
+  const campaignCount = campaigns.filter(c => c.status === "active").length;
+  const pendingTasksCount = tasks.filter(t => t.status !== "completed" && t.dueDate).length;
+  const thisMonthEvents = unifiedEvents.filter(e => {
+    if (!e.date) return false;
+    const eventDate = new Date(e.date);
+    if (isNaN(eventDate.getTime())) return false;
+    return eventDate.getMonth() === currentDate.getMonth() && eventDate.getFullYear() === currentDate.getFullYear();
+  }).length;
+
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
@@ -172,7 +339,7 @@ export default function MarketingCalendarPage() {
             </Link>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">تقويم التسويق</h1>
-              <p className="text-sm text-muted-foreground">جدولة الحملات والفعاليات التسويقية</p>
+              <p className="text-sm text-muted-foreground">عرض موحد للحملات والمهام والفعاليات</p>
             </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -257,23 +424,92 @@ export default function MarketingCalendarPage() {
           </Dialog>
         </div>
 
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Megaphone className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{campaignCount}</p>
+                  <p className="text-sm text-muted-foreground">حملات نشطة</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <ListTodo className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{pendingTasksCount}</p>
+                  <p className="text-sm text-muted-foreground">مهام قادمة</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Calendar className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{thisMonthEvents}</p>
+                  <p className="text-sm text-muted-foreground">أحداث هذا الشهر</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <CheckCircle2 className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{events.length}</p>
+                  <p className="text-sm text-muted-foreground">أحداث مسجلة</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <Card>
           <CardHeader className="pb-2">
-            <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToNextMonth} data-testid="button-next-month">
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToPrevMonth} data-testid="button-prev-month">
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={goToToday} data-testid="button-today">
-                  اليوم
-                </Button>
-              </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <CardTitle className="text-lg sm:text-xl">
                 {MONTHS_AR[currentDate.getMonth()]} {currentDate.getFullYear()}
               </CardTitle>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Switch checked={showCampaigns} onCheckedChange={setShowCampaigns} id="show-campaigns" />
+                  <Label htmlFor="show-campaigns" className="text-sm cursor-pointer">الحملات</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={showTasks} onCheckedChange={setShowTasks} id="show-tasks" />
+                  <Label htmlFor="show-tasks" className="text-sm cursor-pointer">المهام</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={showEvents} onCheckedChange={setShowEvents} id="show-events" />
+                  <Label htmlFor="show-events" className="text-sm cursor-pointer">الأحداث</Label>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToNextMonth} data-testid="button-next-month">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToPrevMonth} data-testid="button-prev-month">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={goToToday} data-testid="button-today">
+                اليوم
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -308,18 +544,16 @@ export default function MarketingCalendarPage() {
                           {day}
                         </div>
                         <div className="space-y-1">
-                          {dayEvents.slice(0, 3).map((event) => {
-                            const typeInfo = getEventTypeInfo(event.eventType);
-                            return (
-                              <div
-                                key={event.id}
-                                className={`text-xs p-1 rounded truncate text-white ${typeInfo.color}`}
-                                title={event.title}
-                              >
-                                {event.title}
-                              </div>
-                            );
-                          })}
+                          {dayEvents.slice(0, 3).map((event) => (
+                            <div
+                              key={event.id}
+                              className={`text-xs p-1 rounded truncate text-white ${event.color} flex items-center gap-1`}
+                              title={event.title}
+                            >
+                              {getSourceIcon(event.source)}
+                              <span className="truncate">{event.title}</span>
+                            </div>
+                          ))}
                           {dayEvents.length > 3 && (
                             <div className="text-xs text-muted-foreground">
                               +{dayEvents.length - 3} أخرى
@@ -335,14 +569,95 @@ export default function MarketingCalendarPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {EVENT_TYPES.slice(0, 4).map((type) => (
-            <div key={type.value} className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded ${type.color}`} />
-              <span className="text-sm">{type.label}</span>
-            </div>
-          ))}
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">الأحداث القادمة</CardTitle>
+              <CardDescription>أقرب 5 أحداث قادمة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {upcomingEvents.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">لا توجد أحداث قادمة</p>
+              ) : (
+                <div className="space-y-3">
+                  {upcomingEvents.map((event) => (
+                    <div key={event.id} className="flex items-center gap-3 p-2 border rounded-lg">
+                      <div className={`w-3 h-3 rounded-full ${event.color}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{event.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(event.date).toLocaleDateString("ar-SA")}
+                        </p>
+                      </div>
+                      {getSourceIcon(event.source)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">دليل الألوان</CardTitle>
+              <CardDescription>معنى الألوان في التقويم</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span className="text-sm">بداية حملة</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                  <span className="text-sm">نهاية حملة</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <span className="text-sm">مهمة عادية</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-orange-500" />
+                  <span className="text-sm">مهمة عاجلة</span>
+                </div>
+                {EVENT_TYPES.slice(0, 4).map((type) => (
+                  <div key={type.value} className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${type.color}`} />
+                    <span className="text-sm">{type.label}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
+        <Dialog open={isDayDialogOpen} onOpenChange={setIsDayDialogOpen}>
+          <DialogContent className="max-w-md" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>
+                أحداث {selectedDate ? new Date(selectedDate).toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long" }) : ""}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {selectedDayEvents.map((event) => (
+                <div key={event.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                  <div className={`w-3 h-3 rounded-full ${event.color}`} />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{event.title}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {event.source === "campaign" ? "حملة" : event.source === "task" ? "مهمة" : "حدث"}
+                    </p>
+                  </div>
+                  {getSourceIcon(event.source)}
+                </div>
+              ))}
+            </div>
+            <Button className="w-full mt-4" onClick={handleAddEventFromDay}>
+              <Plus className="w-4 h-4 ml-2" />
+              إضافة حدث جديد
+            </Button>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

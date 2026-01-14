@@ -154,6 +154,14 @@ function formatFollowerCount(count: number | null): string {
   return count.toString();
 }
 
+function getInfluencerTier(followers: number | null): { tier: string; label: string; labelAr: string; color: string; bgColor: string } {
+  const count = followers || 0;
+  if (count >= 1000000) return { tier: 'mega', label: 'Mega', labelAr: 'ضخم', color: 'text-purple-700', bgColor: 'bg-purple-100' };
+  if (count >= 100000) return { tier: 'macro', label: 'Macro', labelAr: 'كبير', color: 'text-blue-700', bgColor: 'bg-blue-100' };
+  if (count >= 10000) return { tier: 'micro', label: 'Micro', labelAr: 'متوسط', color: 'text-green-700', bgColor: 'bg-green-100' };
+  return { tier: 'nano', label: 'Nano', labelAr: 'صغير', color: 'text-gray-700', bgColor: 'bg-gray-100' };
+}
+
 function formatCurrency(amount: number | null | undefined): string {
   if (amount === null || amount === undefined || amount === 0) return "-";
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount) + " ر.س";
@@ -414,11 +422,10 @@ export default function MarketingInfluencersPage() {
       if (followerRangeFilter === "all") return true;
       const count = influencer.followerCount || 0;
       switch (followerRangeFilter) {
-        case "micro": return count < 10000;
-        case "small": return count >= 10000 && count < 50000;
-        case "medium": return count >= 50000 && count < 100000;
-        case "large": return count >= 100000 && count < 500000;
-        case "mega": return count >= 500000;
+        case "nano": return count < 10000;
+        case "micro": return count >= 10000 && count < 100000;
+        case "macro": return count >= 100000 && count < 1000000;
+        case "mega": return count >= 1000000;
         default: return true;
       }
     })();
@@ -445,6 +452,10 @@ export default function MarketingInfluencersPage() {
       : "0",
     withBankInfo: filteredInfluencers.filter(i => i.bankAccountNumber && i.bankName).length,
     totalFollowers: filteredInfluencers.reduce((sum, i) => sum + (i.followerCount || 0), 0),
+    tierNano: filteredInfluencers.filter(i => (i.followerCount || 0) < 10000).length,
+    tierMicro: filteredInfluencers.filter(i => (i.followerCount || 0) >= 10000 && (i.followerCount || 0) < 100000).length,
+    tierMacro: filteredInfluencers.filter(i => (i.followerCount || 0) >= 100000 && (i.followerCount || 0) < 1000000).length,
+    tierMega: filteredInfluencers.filter(i => (i.followerCount || 0) >= 1000000).length,
   };
 
   const exportToExcel = async () => {
@@ -1024,6 +1035,57 @@ export default function MarketingInfluencersPage() {
           </Card>
         </div>
 
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">توزيع المؤثرين حسب الفئة</CardTitle>
+            <CardDescription>تصنيف المؤثرين بناءً على عدد المتابعين</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                  <div>
+                    <p className="text-sm font-medium">Nano</p>
+                    <p className="text-xs text-muted-foreground">&lt;10K</p>
+                  </div>
+                </div>
+                <span className="text-lg font-bold text-gray-700">{kpiStats.tierNano}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <div>
+                    <p className="text-sm font-medium">Micro</p>
+                    <p className="text-xs text-muted-foreground">10K-100K</p>
+                  </div>
+                </div>
+                <span className="text-lg font-bold text-green-700">{kpiStats.tierMicro}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <div>
+                    <p className="text-sm font-medium">Macro</p>
+                    <p className="text-xs text-muted-foreground">100K-1M</p>
+                  </div>
+                </div>
+                <span className="text-lg font-bold text-blue-700">{kpiStats.tierMacro}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-purple-50 border border-purple-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  <div>
+                    <p className="text-sm font-medium">Mega</p>
+                    <p className="text-xs text-muted-foreground">&gt;1M</p>
+                  </div>
+                </div>
+                <span className="text-lg font-bold text-purple-700">{kpiStats.tierMega}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
@@ -1104,11 +1166,10 @@ export default function MarketingInfluencersPage() {
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="all">جميع الفئات</SelectItem>
-                  <SelectItem value="micro">مايكرو (&lt;10K)</SelectItem>
-                  <SelectItem value="small">صغير (10K-50K)</SelectItem>
-                  <SelectItem value="medium">متوسط (50K-100K)</SelectItem>
-                  <SelectItem value="large">كبير (100K-500K)</SelectItem>
-                  <SelectItem value="mega">ضخم (&gt;500K)</SelectItem>
+                  <SelectItem value="nano">Nano - صغير (&lt;10K)</SelectItem>
+                  <SelectItem value="micro">Micro - متوسط (10K-100K)</SelectItem>
+                  <SelectItem value="macro">Macro - كبير (100K-1M)</SelectItem>
+                  <SelectItem value="mega">Mega - ضخم (&gt;1M)</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={bankInfoFilter} onValueChange={setBankInfoFilter}>
@@ -1200,9 +1261,19 @@ export default function MarketingInfluencersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Users className="w-4 h-4 text-muted-foreground" />
-                          <span>{formatFollowerCount(influencer.followerCount)}</span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1">
+                            <Users className="w-4 h-4 text-muted-foreground" />
+                            <span className="font-medium">{formatFollowerCount(influencer.followerCount)}</span>
+                          </div>
+                          {(() => {
+                            const tier = getInfluencerTier(influencer.followerCount);
+                            return (
+                              <Badge className={`text-xs ${tier.bgColor} ${tier.color} border-0 w-fit`}>
+                                {tier.label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell>

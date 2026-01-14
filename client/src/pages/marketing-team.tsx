@@ -10,9 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 import { 
   Plus, Users, Mail, Phone, Briefcase, 
-  MoreVertical, Edit, Trash2, CheckCircle, Clock, ArrowRight
+  MoreVertical, Edit, Trash2, CheckCircle, Clock, ArrowRight,
+  Target, TrendingUp, AlertCircle, ListTodo
 } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +36,15 @@ interface TeamMember {
   completedTasksCount?: number;
 }
 
+interface MarketingTask {
+  id: number;
+  title: string;
+  status: string;
+  priority: string;
+  assignedTo?: string;
+  dueDate?: string;
+}
+
 const TEAM_ROLES = [
   { value: "marketing_manager", label: "مدير تسويق" },
   { value: "content_creator", label: "صانع محتوى" },
@@ -47,11 +58,19 @@ const TEAM_ROLES = [
   { value: "other", label: "أخرى" },
 ];
 
+const PRIORITY_LABELS: Record<string, string> = {
+  low: "منخفضة",
+  medium: "متوسطة",
+  high: "عالية",
+  urgent: "عاجل",
+};
+
 export default function MarketingTeamPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -64,6 +83,15 @@ export default function MarketingTeamPage() {
     queryKey: ["/api/marketing/team"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/team");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: allTasks = [] } = useQuery<MarketingTask[]>({
+    queryKey: ["/api/marketing/tasks"],
+    queryFn: async () => {
+      const res = await fetch("/api/marketing/tasks");
       if (!res.ok) return [];
       return res.json();
     },
@@ -136,7 +164,23 @@ export default function MarketingTeamPage() {
       toast({ title: "يرجى إدخال اسم العضو", variant: "destructive" });
       return;
     }
-    createMemberMutation.mutate(formData);
+    if (editingMember) {
+      updateMemberMutation.mutate({ id: editingMember.id, data: formData });
+    } else {
+      createMemberMutation.mutate(formData);
+    }
+  };
+
+  const openEditDialog = (member: TeamMember) => {
+    setFormData({
+      name: member.name,
+      email: member.email || "",
+      phone: member.phone || "",
+      role: member.role,
+      isActive: member.isActive,
+    });
+    setEditingMember(member);
+    setIsAddDialogOpen(true);
   };
 
   const getRoleLabel = (role: string) => {
@@ -147,8 +191,36 @@ export default function MarketingTeamPage() {
     return name.split(" ").map(n => n[0]).join("").slice(0, 2);
   };
 
+  const getMemberTasks = (memberName: string) => {
+    return allTasks.filter(t => t.assignedTo?.toLowerCase().includes(memberName.toLowerCase()));
+  };
+
+  const getMemberWorkload = (memberName: string) => {
+    const tasks = getMemberTasks(memberName);
+    const pending = tasks.filter(t => t.status === "pending").length;
+    const inProgress = tasks.filter(t => t.status === "in_progress").length;
+    const completed = tasks.filter(t => t.status === "completed").length;
+    const total = tasks.length;
+    const completionRate = total > 0 ? (completed / total) * 100 : 0;
+    const urgentCount = tasks.filter(t => t.priority === "urgent" || t.priority === "high").filter(t => t.status !== "completed").length;
+    
+    return { pending, inProgress, completed, total, completionRate, urgentCount };
+  };
+
+  const getWorkloadLevel = (total: number) => {
+    if (total === 0) return { level: "free", label: "متاح", color: "text-green-600", bgColor: "bg-green-100" };
+    if (total <= 3) return { level: "light", label: "خفيف", color: "text-blue-600", bgColor: "bg-blue-100" };
+    if (total <= 6) return { level: "moderate", label: "متوسط", color: "text-amber-600", bgColor: "bg-amber-100" };
+    return { level: "heavy", label: "مرتفع", color: "text-red-600", bgColor: "bg-red-100" };
+  };
+
   const activeMembers = teamMembers.filter(m => m.isActive);
   const inactiveMembers = teamMembers.filter(m => !m.isActive);
+
+  const totalAssignedTasks = allTasks.filter(t => t.assignedTo).length;
+  const totalPendingTasks = allTasks.filter(t => t.status === "pending" || t.status === "in_progress").length;
+  const totalCompletedTasks = allTasks.filter(t => t.status === "completed").length;
+  const avgTasksPerMember = activeMembers.length > 0 ? (totalAssignedTasks / activeMembers.length).toFixed(1) : "0";
 
   const roleColors: Record<string, string> = {
     marketing_manager: "bg-purple-100 text-purple-700",
@@ -175,10 +247,16 @@ export default function MarketingTeamPage() {
             </Link>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">فريق التسويق</h1>
-              <p className="text-sm text-muted-foreground">إدارة أعضاء فريق التسويق ومهامهم</p>
+              <p className="text-sm text-muted-foreground">إدارة أعضاء فريق التسويق وتتبع عبء العمل</p>
             </div>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open);
+            if (!open) {
+              setEditingMember(null);
+              resetForm();
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="h-11 sm:h-9" data-testid="button-add-member">
                 <Plus className="w-4 h-4 ml-2" />
@@ -187,7 +265,7 @@ export default function MarketingTeamPage() {
             </DialogTrigger>
             <DialogContent className="max-w-md" dir="rtl">
               <DialogHeader>
-                <DialogTitle>إضافة عضو جديد</DialogTitle>
+                <DialogTitle>{editingMember ? "تعديل العضو" : "إضافة عضو جديد"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -237,11 +315,15 @@ export default function MarketingTeamPage() {
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" className="h-11 sm:h-9" onClick={() => setIsAddDialogOpen(false)}>
+                  <Button type="button" variant="outline" className="h-11 sm:h-9" onClick={() => {
+                    setIsAddDialogOpen(false);
+                    setEditingMember(null);
+                    resetForm();
+                  }}>
                     إلغاء
                   </Button>
-                  <Button type="submit" className="h-11 sm:h-9" disabled={createMemberMutation.isPending} data-testid="button-submit-member">
-                    {createMemberMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+                  <Button type="submit" className="h-11 sm:h-9" disabled={createMemberMutation.isPending || updateMemberMutation.isPending} data-testid="button-submit-member">
+                    {(createMemberMutation.isPending || updateMemberMutation.isPending) ? "جاري الحفظ..." : "حفظ"}
                   </Button>
                 </div>
               </form>
@@ -279,12 +361,12 @@ export default function MarketingTeamPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-purple-600" />
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <ListTodo className="w-5 h-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{new Set(teamMembers.map(m => m.role)).size}</p>
-                  <p className="text-sm text-muted-foreground">أدوار مختلفة</p>
+                  <p className="text-2xl font-bold">{totalPendingTasks}</p>
+                  <p className="text-sm text-muted-foreground">مهام قيد التنفيذ</p>
                 </div>
               </div>
             </CardContent>
@@ -292,17 +374,88 @@ export default function MarketingTeamPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <Clock className="w-5 h-5 text-amber-600" />
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{teamMembers.reduce((sum, m) => sum + (m.tasksCount || 0), 0)}</p>
-                  <p className="text-sm text-muted-foreground">مهام قيد التنفيذ</p>
+                  <p className="text-2xl font-bold">{avgTasksPerMember}</p>
+                  <p className="text-sm text-muted-foreground">متوسط المهام/عضو</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">عبء العمل حسب العضو</CardTitle>
+            <CardDescription>توزيع المهام ونسبة الإنجاز لكل عضو</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {activeMembers.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">لا يوجد أعضاء نشطين</p>
+            ) : (
+              <div className="space-y-4">
+                {activeMembers.map((member) => {
+                  const workload = getMemberWorkload(member.name);
+                  const workloadLevel = getWorkloadLevel(workload.total - workload.completed);
+                  return (
+                    <div key={member.id} className="p-3 border rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="w-8 h-8">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                              {getInitials(member.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-sm">{member.name}</p>
+                            <p className="text-xs text-muted-foreground">{getRoleLabel(member.role)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={`${workloadLevel.bgColor} ${workloadLevel.color} border-0`}>
+                            {workloadLevel.label}
+                          </Badge>
+                          {workload.urgentCount > 0 && (
+                            <Badge variant="destructive" className="text-xs">
+                              <AlertCircle className="w-3 h-3 ml-1" />
+                              {workload.urgentCount} عاجل
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 text-center text-xs mb-2">
+                        <div className="p-2 bg-gray-50 rounded">
+                          <p className="font-bold text-gray-700">{workload.pending}</p>
+                          <p className="text-muted-foreground">معلقة</p>
+                        </div>
+                        <div className="p-2 bg-blue-50 rounded">
+                          <p className="font-bold text-blue-700">{workload.inProgress}</p>
+                          <p className="text-muted-foreground">قيد التنفيذ</p>
+                        </div>
+                        <div className="p-2 bg-green-50 rounded">
+                          <p className="font-bold text-green-700">{workload.completed}</p>
+                          <p className="text-muted-foreground">مكتملة</p>
+                        </div>
+                        <div className="p-2 bg-purple-50 rounded">
+                          <p className="font-bold text-purple-700">{workload.total}</p>
+                          <p className="text-muted-foreground">الإجمالي</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Progress value={workload.completionRate} className="h-2 flex-1" />
+                        <span className="text-xs text-muted-foreground w-12 text-left">
+                          {workload.completionRate.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {isLoading ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -323,71 +476,82 @@ export default function MarketingTeamPage() {
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teamMembers.map((member) => (
-              <Card key={member.id} className="hover:shadow-md transition-shadow" data-testid={`member-card-${member.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-12 h-12">
-                        <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                          {getInitials(member.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <h3 className="font-medium">{member.name}</h3>
-                        <Badge className={roleColors[member.role] || roleColors.other}>
-                          {getRoleLabel(member.role)}
-                        </Badge>
+            {teamMembers.map((member) => {
+              const workload = getMemberWorkload(member.name);
+              const workloadLevel = getWorkloadLevel(workload.total - workload.completed);
+              return (
+                <Card key={member.id} className="hover:shadow-md transition-shadow" data-testid={`member-card-${member.id}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-12 h-12">
+                          <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                            {getInitials(member.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h3 className="font-medium">{member.name}</h3>
+                          <Badge className={roleColors[member.role] || roleColors.other}>
+                            {getRoleLabel(member.role)}
+                          </Badge>
+                        </div>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid={`button-member-menu-${member.id}`}>
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditDialog(member)}>
+                            <Edit className="w-4 h-4 ml-2" />
+                            تعديل
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-red-600"
+                            onClick={() => deleteMemberMutation.mutate(member.id)}
+                          >
+                            <Trash2 className="w-4 h-4 ml-2" />
+                            حذف
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid={`button-member-menu-${member.id}`}>
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditingMember(member)}>
-                          <Edit className="w-4 h-4 ml-2" />
-                          تعديل
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-red-600"
-                          onClick={() => deleteMemberMutation.mutate(member.id)}
-                        >
-                          <Trash2 className="w-4 h-4 ml-2" />
-                          حذف
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <div className="mt-4 space-y-2 text-sm">
-                    {member.email && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Mail className="w-4 h-4" />
-                        <span>{member.email}</span>
+                    <div className="mt-4 space-y-2 text-sm">
+                      {member.email && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Mail className="w-4 h-4" />
+                          <span className="truncate">{member.email}</span>
+                        </div>
+                      )}
+                      {member.phone && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="w-4 h-4" />
+                          <span>{member.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-4 pt-3 border-t">
+                      <div className="flex items-center justify-between text-sm mb-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={member.isActive ? "default" : "secondary"}>
+                            {member.isActive ? "نشط" : "غير نشط"}
+                          </Badge>
+                          <Badge className={`${workloadLevel.bgColor} ${workloadLevel.color} border-0`}>
+                            {workloadLevel.label}
+                          </Badge>
+                        </div>
                       </div>
-                    )}
-                    {member.phone && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="w-4 h-4" />
-                        <span>{member.phone}</span>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{workload.completed}/{workload.total} مهام مكتملة</span>
+                        <span>{workload.completionRate.toFixed(0)}%</span>
                       </div>
-                    )}
-                  </div>
-                  <div className="mt-4 flex items-center justify-between text-sm">
-                    <Badge variant={member.isActive ? "default" : "secondary"}>
-                      {member.isActive ? "نشط" : "غير نشط"}
-                    </Badge>
-                    {member.tasksCount !== undefined && (
-                      <span className="text-muted-foreground">
-                        {member.completedTasksCount || 0}/{member.tasksCount} مهام
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      <Progress value={workload.completionRate} className="h-1.5 mt-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
