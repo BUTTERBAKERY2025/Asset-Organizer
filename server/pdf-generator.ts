@@ -2042,6 +2042,27 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     ${getPdfHeaderStyles()}
     ${getPdfFooterStyles()}
     
+    .report-intro {
+      border: 2px solid #d4a853;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 25px;
+      background: linear-gradient(to bottom, #fffdf7, #fff);
+    }
+    
+    .report-intro h2 {
+      text-align: center;
+      color: #d4a853;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    
+    .report-intro p {
+      line-height: 1.8;
+      font-size: 11px;
+      text-align: justify;
+    }
+    
     .info-row {
       display: flex;
       justify-content: space-between;
@@ -2107,24 +2128,74 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
       color: #d4a853;
     }
     
-    .signature-section {
-      margin-top: 40px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-    }
-    
-    .signature-box {
-      border: 1px solid #ddd;
+    .unlisted-items-section {
+      margin-top: 30px;
+      border: 2px solid #d4a853;
+      border-radius: 8px;
       padding: 15px;
-      text-align: center;
-      border-radius: 4px;
     }
     
-    .signature-line {
+    .unlisted-items-section h3 {
+      text-align: center;
+      color: #d4a853;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    
+    .unlisted-items-section p {
+      font-size: 10px;
+      color: #666;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    
+    .unlisted-items-table {
+      width: 100%;
+    }
+    
+    .unlisted-items-table td {
+      height: 35px;
+      border: 1px solid #ddd;
+    }
+    
+    .committee-section {
       margin-top: 40px;
-      border-top: 1px solid #999;
-      padding-top: 5px;
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    
+    .committee-section h3 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 13px;
+      background: #333;
+      color: white;
+      padding: 8px;
+      margin: -20px -20px 20px -20px;
+      border-radius: 6px 6px 0 0;
+    }
+    
+    .committee-table {
+      width: 100%;
+      margin-bottom: 20px;
+    }
+    
+    .committee-table th {
+      background: #f3f4f6;
+      padding: 10px;
+      font-size: 10px;
+    }
+    
+    .committee-table td {
+      padding: 15px 10px;
+      height: 50px;
+      vertical-align: bottom;
+    }
+    
+    .signature-line-bottom {
+      border-bottom: 1px solid #999;
+      height: 40px;
     }
     
     .page-break {
@@ -2134,6 +2205,17 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
 </head>
 <body>
   ${getPdfHeaderHtml('محضر جرد الأصول والمعدات', 'Asset Inventory Count Report')}
+  
+  <!-- نص المحضر الرسمي -->
+  <div class="report-intro">
+    <h2>محضر جرد الأصول والمعدات</h2>
+    <p>
+      نحن الموقعين أدناه، أعضاء لجنة الجرد المكلفة من إدارة <strong>مخبز باتر</strong>، قمنا بتاريخ <strong>${formattedDate}</strong> 
+      بإجراء جرد شامل لجميع الأصول والمعدات الموجودة في فرع <strong>${data.branchName}</strong>.
+      وقد تم حصر عدد <strong>${data.items.length}</strong> صنفاً بإجمالي كمية <strong>${totalQuantity}</strong> وحدة.
+      وفيما يلي تفصيل الأصناف المجرودة حسب التصنيف، مع بيان حالة كل صنف والعدد الفعلي المتوفر.
+    </p>
+  </div>
   
   <div class="info-row">
     <div class="info-item">
@@ -2178,19 +2260,82 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     </div>
   </div>
   
-  <div class="signature-section">
-    <div class="signature-box">
-      <div style="font-weight: bold;">المسؤول عن الجرد</div>
-      <div class="signature-line">الاسم والتوقيع</div>
-    </div>
-    <div class="signature-box">
-      <div style="font-weight: bold;">مدير الفرع</div>
-      <div class="signature-line">الاسم والتوقيع</div>
-    </div>
-    <div class="signature-box">
-      <div style="font-weight: bold;">المراجع</div>
-      <div class="signature-line">الاسم والتوقيع</div>
-    </div>
+  <!-- مربع الأصناف غير المذكورة -->
+  <div class="unlisted-items-section">
+    <h3>أصناف غير مذكورة في النظام تم إيجادها بالفرع</h3>
+    <p>في حالة وجود أصناف لم تذكر في قائمة الجرد أعلاه وتم إيجادها أو إرسالها للفرع، يرجى تسجيلها هنا:</p>
+    <table class="unlisted-items-table">
+      <thead>
+        <tr>
+          <th style="width: 30px;">#</th>
+          <th>اسم الصنف</th>
+          <th style="width: 80px;">التصنيف</th>
+          <th style="width: 60px;">العدد</th>
+          <th style="width: 60px;">الحالة</th>
+          <th>ملاحظات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>2</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>3</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>4</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>5</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>6</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>7</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>8</td><td></td><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- قسم لجنة الجرد والتوقيعات -->
+  <div class="committee-section">
+    <h3>أعضاء لجنة الجرد والتوقيعات</h3>
+    <table class="committee-table">
+      <thead>
+        <tr>
+          <th style="width: 30px;">م</th>
+          <th>المسمى الوظيفي</th>
+          <th>الاسم (بخط اليد)</th>
+          <th style="width: 120px;">التوقيع</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align: center;">1</td>
+          <td>رئيس لجنة الجرد</td>
+          <td><div class="signature-line-bottom"></div></td>
+          <td><div class="signature-line-bottom"></div></td>
+        </tr>
+        <tr>
+          <td style="text-align: center;">2</td>
+          <td>عضو اللجنة</td>
+          <td><div class="signature-line-bottom"></div></td>
+          <td><div class="signature-line-bottom"></div></td>
+        </tr>
+        <tr>
+          <td style="text-align: center;">3</td>
+          <td>عضو اللجنة</td>
+          <td><div class="signature-line-bottom"></div></td>
+          <td><div class="signature-line-bottom"></div></td>
+        </tr>
+        <tr>
+          <td style="text-align: center;">4</td>
+          <td>مدير الفرع</td>
+          <td><div class="signature-line-bottom"></div></td>
+          <td><div class="signature-line-bottom"></div></td>
+        </tr>
+        <tr>
+          <td style="text-align: center;">5</td>
+          <td>المراجع / المدقق</td>
+          <td><div class="signature-line-bottom"></div></td>
+          <td><div class="signature-line-bottom"></div></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="text-align: center; font-size: 9px; color: #666; margin-top: 15px;">
+      نقر نحن الموقعين أعلاه بصحة البيانات الواردة في هذا المحضر وأن الجرد تم بشكل دقيق وشامل.
+    </p>
   </div>
 </body>
 </html>`;
