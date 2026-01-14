@@ -665,7 +665,11 @@ export async function registerRoutes(
       
       for (const item of items) {
         try {
+          // Generate unique ID for each item
+          const uniqueId = `IMP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          
           const itemData = {
+            id: uniqueId,
             name: item.name || '',
             category: item.category || 'other',
             quantity: parseInt(item.quantity) || 1,
@@ -676,7 +680,7 @@ export async function registerRoutes(
             notes: item.notes || '',
           };
           
-          console.log("[Import] Processing item:", itemData.name, "quantity:", itemData.quantity);
+          console.log("[Import] Processing item:", itemData.name, "id:", uniqueId);
           
           const validatedData = insertInventoryItemSchema.parse(itemData);
           await storage.createInventoryItem(validatedData, userId);
