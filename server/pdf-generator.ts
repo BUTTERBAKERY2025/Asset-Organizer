@@ -1,5 +1,7 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import * as fs from 'fs';
+import * as path from 'path';
 import { 
   getPdfHeaderHtml, 
   getPdfHeaderStyles, 
@@ -1939,12 +1941,39 @@ export interface InventoryCountPdfData {
   statusLabels: Record<string, string>;
 }
 
-// Helper function to convert image URL to base64 data URL
-async function imageUrlToBase64(url: string): Promise<string | null> {
+// Helper function to convert image path to base64 data URL
+async function imageUrlToBase64(imageUrl: string): Promise<string | null> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    // Handle relative paths (local files)
+    if (imageUrl.startsWith('/')) {
+      // Remove leading slash and resolve to project root
+      const relativePath = imageUrl.slice(1);
+      const filePath = path.resolve(process.cwd(), relativePath);
+      
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
+      
+      const buffer = fs.readFileSync(filePath);
+      const base64 = buffer.toString('base64');
+      
+      // Determine content type from extension
+      const ext = path.extname(filePath).toLowerCase();
+      const contentTypes: Record<string, string> = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+      };
+      const contentType = contentTypes[ext] || 'image/jpeg';
+      
+      return `data:${contentType};base64,${base64}`;
+    }
+    
+    // Handle full URLs (http/https)
+    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
     if (!response.ok) {
-      console.log(`[PDF] Image fetch failed for ${url}: HTTP ${response.status}`);
       return null;
     }
     const buffer = await response.arrayBuffer();
@@ -1952,7 +1981,6 @@ async function imageUrlToBase64(url: string): Promise<string | null> {
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     return `data:${contentType};base64,${base64}`;
   } catch (err: any) {
-    console.log(`[PDF] Image fetch error for ${url}: ${err.message}`);
     return null;
   }
 }
