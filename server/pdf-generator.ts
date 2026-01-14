@@ -1942,13 +1942,17 @@ export interface InventoryCountPdfData {
 // Helper function to convert image URL to base64 data URL
 async function imageUrlToBase64(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return null;
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) {
+      console.log(`[PDF] Image fetch failed for ${url}: HTTP ${response.status}`);
+      return null;
+    }
     const buffer = await response.arrayBuffer();
     const base64 = Buffer.from(buffer).toString('base64');
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     return `data:${contentType};base64,${base64}`;
-  } catch {
+  } catch (err: any) {
+    console.log(`[PDF] Image fetch error for ${url}: ${err.message}`);
     return null;
   }
 }
@@ -1966,6 +1970,9 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
   console.log("[PDF] Pre-fetching images for inventory count report...");
   const imageCache: Record<string, string | null> = {};
   const uniqueUrls = Array.from(new Set(data.items.filter(i => i.imageUrl).map(i => i.imageUrl!)));
+  if (uniqueUrls.length > 0) {
+    console.log(`[PDF] Sample image URLs: ${uniqueUrls.slice(0, 3).join(', ')}`);
+  }
   
   // Fetch images in parallel (max 10 at a time to avoid overwhelming)
   let successCount = 0;
