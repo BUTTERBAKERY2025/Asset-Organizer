@@ -2230,45 +2230,46 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     }
     
     .committee-section {
-      margin-top: 40px;
+      margin-top: 25px;
       border: 2px solid #333;
-      border-radius: 8px;
-      padding: 20px;
+      border-radius: 6px;
+      padding: 12px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
     
     .committee-section h3 {
       text-align: center;
-      margin-bottom: 20px;
-      font-size: 13px;
+      margin-bottom: 10px;
+      font-size: 11px;
       background: #333;
       color: white;
-      padding: 8px;
-      margin: -20px -20px 20px -20px;
-      border-radius: 6px 6px 0 0;
+      padding: 6px;
+      margin: -12px -12px 12px -12px;
+      border-radius: 4px 4px 0 0;
     }
     
     .committee-table {
       width: 100%;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     }
     
     .committee-table th {
       background: #f3f4f6;
-      padding: 10px;
-      font-size: 10px;
+      padding: 5px;
+      font-size: 9px;
     }
     
     .committee-table td {
-      padding: 15px 10px;
-      height: 50px;
+      padding: 6px 5px;
+      height: 28px;
       vertical-align: bottom;
+      font-size: 9px;
     }
     
     .signature-line-bottom {
       border-bottom: 1px solid #999;
-      height: 40px;
+      height: 22px;
     }
     
     .page-break {
