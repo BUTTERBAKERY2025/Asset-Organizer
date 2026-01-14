@@ -659,14 +659,14 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
 export default function OperationsReportsDashboardPage() {
   const [, setLocation] = useLocation();
   const today = new Date().toISOString().split("T")[0];
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   
   const [filters, setFilters] = useState({
     branchId: "",
-    startDate: thirtyDaysAgo,
+    startDate: sevenDaysAgo,
     endDate: today,
     reportType: "all",
-    periodType: "custom" as "daily" | "weekly" | "monthly" | "custom",
+    periodType: "weekly" as "daily" | "weekly" | "monthly" | "custom",
     journalStatus: "all" as "all" | "draft" | "submitted" | "approved" | "posted" | "rejected",
     discrepancyFilter: "all" as "all" | "balanced" | "shortage" | "surplus",
     shiftType: "all" as "all" | "morning" | "evening" | "night",
@@ -1799,10 +1799,10 @@ export default function OperationsReportsDashboardPage() {
                   variant="outline"
                   onClick={() => setFilters({ 
                     branchId: "", 
-                    startDate: thirtyDaysAgo, 
+                    startDate: sevenDaysAgo, 
                     endDate: today, 
                     reportType: "all",
-                    periodType: "custom",
+                    periodType: "weekly",
                     journalStatus: "all",
                     discrepancyFilter: "all",
                     shiftType: "all",
