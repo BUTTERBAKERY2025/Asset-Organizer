@@ -1058,12 +1058,14 @@ export default function ReportsPage() {
                           }
                         }}
                         className="h-9"
+                        disabled={!selectedBranch || selectedBranch === "all"}
                         data-testid="button-print-count"
                       >
                         <Printer className="w-4 h-4 ml-2" />
                         طباعة PDF
                       </Button>
                       <Button 
+                        disabled={!selectedBranch || selectedBranch === "all"}
                         onClick={() => {
                           const wb = XLSX.utils.book_new();
                           const branchName = selectedBranch === "all" 

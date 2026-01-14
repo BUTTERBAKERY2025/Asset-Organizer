@@ -31,6 +31,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // Serve attached_assets statically for inventory images
+// Note: These are non-sensitive equipment photos, not confidential business data
 app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
 declare module "http" {
