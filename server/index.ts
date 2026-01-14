@@ -30,8 +30,8 @@ if (process.env.NODE_ENV === "production") {
   }));
 }
 
-// SECURITY: attached_assets is NOT served statically to prevent data exposure
-// Files should be served through authenticated API endpoints instead
+// Serve attached_assets statically for inventory images
+app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
 declare module "http" {
   interface IncomingMessage {
