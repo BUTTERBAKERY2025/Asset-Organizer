@@ -12170,6 +12170,64 @@ export async function registerRoutes(
     }
   });
 
+  // Import influencers from Excel - استيراد المؤثرين من Excel
+  app.post("/api/marketing/influencers/import", isAuthenticated, async (req: any, res) => {
+    try {
+      const { items } = req.body;
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "لا توجد بيانات للاستيراد" });
+      }
+
+      let imported = 0;
+      const errors: { row: number; error: string }[] = [];
+
+      for (let i = 0; i < items.length; i++) {
+        try {
+          const item = items[i];
+          const platformsArray = item.platforms ? item.platforms.split(",").map((p: string) => p.trim()).filter(Boolean) : [];
+          
+          const influencerData = {
+            name: item.name,
+            nameAr: item.nameAr || null,
+            email: item.email || null,
+            phone: item.phone || null,
+            accountUrl: item.accountUrl || null,
+            coverageUrl: null,
+            specialty: item.specialty || null,
+            platforms: platformsArray,
+            contentTypes: [],
+            followerCount: item.followerCount || 0,
+            followerCountText: null,
+            engagementRate: item.engagementRate || 0,
+            viewRating: null,
+            avgViews: null,
+            pricePerPost: item.pricePerPost || 0,
+            pricePerStory: item.pricePerStory || 0,
+            pricePerVideo: item.pricePerVideo || 0,
+            city: item.city || null,
+            region: item.region || null,
+            bankAccountNumber: item.bankAccountNumber || null,
+            bankAccountHolder: item.bankAccountHolder || null,
+            bankName: item.bankName || null,
+            bestCollaborationTimes: null,
+            notes: item.notes || null,
+            isActive: true,
+          };
+
+          await storage.createMarketingInfluencer(influencerData);
+          imported++;
+        } catch (err: any) {
+          errors.push({ row: i + 1, error: err.message || "خطأ غير معروف" });
+        }
+      }
+
+      res.json({ imported, errors, total: items.length });
+    } catch (error) {
+      console.error("Error importing influencers:", error);
+      res.status(500).json({ error: "فشل في استيراد المؤثرين" });
+    }
+  });
+
   // Influencer Campaign Links - روابط المؤثرين بالحملات
   app.get("/api/marketing/influencer-links", isAuthenticated, async (req: any, res) => {
     try {

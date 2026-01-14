@@ -89,6 +89,7 @@ import {
   CAMPAIGN_EXPENSE_STATUS_LABELS,
 } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { InfluencerExcelImportDialog } from "@/components/influencer-excel-import-dialog";
 
 interface InfluencerFormData {
   name: string;
@@ -174,6 +175,7 @@ export default function MarketingInfluencersPage() {
   const [selectedInfluencer, setSelectedInfluencer] = useState<MarketingInfluencer | null>(null);
   const [formData, setFormData] = useState<InfluencerFormData>(defaultFormData);
   const [isExporting, setIsExporting] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -907,6 +909,15 @@ export default function MarketingInfluencersPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-11 sm:h-9"
+              onClick={() => setIsImportDialogOpen(true)}
+              data-testid="button-import-excel"
+            >
+              <FileSpreadsheet className="w-4 h-4 ml-2" />
+              استيراد Excel
+            </Button>
             <Button
               variant="outline"
               className="h-11 sm:h-9"
@@ -1747,6 +1758,11 @@ export default function MarketingInfluencersPage() {
             )}
           </SheetContent>
         </Sheet>
+
+        <InfluencerExcelImportDialog
+          open={isImportDialogOpen}
+          onOpenChange={setIsImportDialogOpen}
+        />
       </div>
     </Layout>
   );
