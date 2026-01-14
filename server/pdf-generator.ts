@@ -1939,6 +1939,20 @@ export interface InventoryCountPdfData {
   statusLabels: Record<string, string>;
 }
 
+// Helper function to convert image URL to base64 data URL
+async function imageUrlToBase64(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return null;
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    return `data:${contentType};base64,${base64}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateInventoryCountPdf(data: InventoryCountPdfData): Promise<Buffer> {
   const statusLabels = data.statusLabels;
   const statusColors: Record<string, string> = {
@@ -1947,6 +1961,21 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     damaged: '#ef4444',
     missing: '#6b7280',
   };
+
+  // Pre-fetch and cache images as base64
+  console.log("[PDF] Pre-fetching images for inventory count report...");
+  const imageCache: Record<string, string | null> = {};
+  const uniqueUrls = Array.from(new Set(data.items.filter(i => i.imageUrl).map(i => i.imageUrl!)));
+  
+  // Fetch images in parallel (max 10 at a time to avoid overwhelming)
+  for (let i = 0; i < uniqueUrls.length; i += 10) {
+    const batch = uniqueUrls.slice(i, i + 10);
+    const results = await Promise.all(batch.map(url => imageUrlToBase64(url)));
+    batch.forEach((url, idx) => {
+      imageCache[url] = results[idx];
+    });
+  }
+  console.log(`[PDF] Fetched ${Object.keys(imageCache).length} images`);
 
   // Group items by category
   const categoryGroups: Record<string, InventoryCountItem[]> = {};
@@ -1964,8 +1993,9 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     const itemRows = items.map((item) => {
       globalIndex++;
       const statusColor = statusColors[item.status] || '#6b7280';
-      const imageCell = item.imageUrl 
-        ? `<img src="${item.imageUrl}" alt="${item.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" /><span style="display: none; color: #999;">-</span>`
+      const cachedImage = item.imageUrl ? imageCache[item.imageUrl] : null;
+      const imageCell = cachedImage 
+        ? `<img src="${cachedImage}" alt="${item.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />`
         : `<span style="color: #999;">-</span>`;
       
       return `
@@ -2011,11 +2041,10 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
   const totalQuantity = data.items.reduce((sum, item) => sum + item.quantity, 0);
   const goodCount = data.items.filter(i => i.status === 'good').length;
   const needsFollowup = data.items.filter(i => i.status !== 'good').length;
-  const formattedDate = new Date(data.countDate).toLocaleDateString('ar-SA', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
+  
+  // Use English date format and numerals
+  const dateObj = new Date(data.countDate);
+  const formattedDateEn = `${dateObj.getFullYear()}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}`;
 
   const html = `
 <!DOCTYPE html>
@@ -2210,7 +2239,7 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
   <div class="report-intro">
     <h2>محضر جرد الأصول والمعدات</h2>
     <p>
-      نحن الموقعين أدناه، أعضاء لجنة الجرد المكلفة من إدارة <strong>مخبز باتر</strong>، قمنا بتاريخ <strong>${formattedDate}</strong> 
+      نحن الموقعين أدناه، أعضاء لجنة الجرد المكلفة من إدارة <strong>BUTTER BAKERY</strong>، قمنا بتاريخ <strong>${formattedDateEn}</strong> 
       بإجراء جرد شامل لجميع الأصول والمعدات الموجودة في فرع <strong>${data.branchName}</strong>.
       وقد تم حصر عدد <strong>${data.items.length}</strong> صنفاً بإجمالي كمية <strong>${totalQuantity}</strong> وحدة.
       وفيما يلي تفصيل الأصناف المجرودة حسب التصنيف، مع بيان حالة كل صنف والعدد الفعلي المتوفر.
@@ -2224,7 +2253,7 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
     </div>
     <div class="info-item">
       <div class="info-label">تاريخ الجرد</div>
-      <div>${formattedDate}</div>
+      <div>${formattedDateEn}</div>
     </div>
     <div class="info-item">
       <div class="info-label">إجمالي الأصناف</div>
