@@ -2422,9 +2422,31 @@ export async function generateInventoryCountPdf(data: InventoryCountPdfData): Pr
       <p style="font-size: 8px; text-align: justify; line-height: 1.6; color: #333; margin-bottom: 6px;">
         <strong>باللغة العربية:</strong> يُشترط على جميع الموظفين المستخدمين للأدوات والمعدات (أدوات المطبخ، أدوات الباريستا، أدوات البيتزا، أدوات الكاشير، وكل ما هو مستخدم وملموس ويتم التعامل به بشكل يومي) التوقيع على هذا الإقرار. يلتزم الموظف بالاستخدام الصحيح والمحافظة على هذه الأدوات والمعدات. في حالة تبيُّن سوء استخدام أو إهمال أو ضياع أو فقدان لأي من هذه الأدوات، يتم محاسبة المتسبب مادياً وإدارياً، ويتحمل المسؤولية الكاملة عن التلف أو الفقدان.
       </p>
-      <p style="font-size: 7px; text-align: justify; line-height: 1.5; color: #555; direction: ltr;">
+      <p style="font-size: 7px; text-align: justify; line-height: 1.5; color: #555; direction: ltr; margin-bottom: 8px;">
         <strong>In English:</strong> All employees using equipment and tools (kitchen tools, barista tools, pizza tools, cashier tools, and all tangible items used daily) are required to sign this acknowledgment. The employee commits to proper use and maintenance of these tools and equipment. In case of misuse, negligence, loss, or damage to any of these tools, the responsible person will be held financially and administratively accountable and bears full responsibility for damage or loss.
       </p>
+      
+      <!-- جدول توقيعات الموظفين على الإقرار -->
+      <p style="text-align: center; font-size: 9px; font-weight: bold; color: #8b6914; margin-bottom: 5px;">توقيعات الموظفين المعنيين | Employee Signatures</p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 8px; border: 1px solid #d4a853;">
+        <thead>
+          <tr style="background: #d4a853; color: white;">
+            <th style="padding: 4px; width: 25px; border: 1px solid #c49b48;">م</th>
+            <th style="padding: 4px; border: 1px solid #c49b48;">اسم الموظف</th>
+            <th style="padding: 4px; width: 80px; border: 1px solid #c49b48;">القسم</th>
+            <th style="padding: 4px; width: 80px; border: 1px solid #c49b48;">التوقيع</th>
+            <th style="padding: 4px; width: 60px; border: 1px solid #c49b48;">التاريخ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">1</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">2</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">3</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">4</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">5</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+          <tr><td style="text-align: center; border: 1px solid #d4a853; height: 22px;">6</td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td><td style="border: 1px solid #d4a853;"></td></tr>
+        </tbody>
+      </table>
     </div>
     
     <!-- قسم التسليم والتسلم - مدمج مع جدول التوقيعات -->
