@@ -169,22 +169,24 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
         const processedData: ImportRow[] = jsonData.map((row: any) => {
           const errors: string[] = [];
           
-          const name = row["اسم الصنف"] || row["name"] || "";
-          const quantityRaw = row["الكمية"] || row["quantity"];
-          const unit = row["الوحدة"] || row["unit"] || "";
-          const category = row["التصنيف"] || row["category"] || "";
-          const priceRaw = row["السعر"] || row["price"];
-          const status = row["الحالة"] || row["status"] || "good";
-          const serialNumber = row["الرقم التسلسلي"] || row["serialNumber"] || "";
-          const notes = row["ملاحظات"] || row["notes"] || "";
+          // More flexible column name matching (Arabic and English variations)
+          const name = row["اسم الصنف"] || row["الاسم"] || row["اسم"] || row["الصنف"] || row["name"] || row["Name"] || row["item"] || row["Item"] || "";
+          const quantityRaw = row["الكمية"] || row["كمية"] || row["العدد"] || row["عدد"] || row["quantity"] || row["Quantity"] || row["qty"] || row["Qty"];
+          const unit = row["الوحدة"] || row["وحدة"] || row["unit"] || row["Unit"] || "قطعة";
+          const category = row["التصنيف"] || row["تصنيف"] || row["الفئة"] || row["فئة"] || row["القسم"] || row["category"] || row["Category"] || "أخرى";
+          const priceRaw = row["السعر"] || row["سعر"] || row["price"] || row["Price"];
+          const status = row["الحالة"] || row["حالة"] || row["status"] || row["Status"] || "good";
+          const serialNumber = row["الرقم التسلسلي"] || row["رقم تسلسلي"] || row["serialNumber"] || row["SerialNumber"] || row["serial"] || "";
+          const notes = row["ملاحظات"] || row["ملاحظة"] || row["notes"] || row["Notes"] || "";
 
-          if (!name || name.includes("مطلوب")) errors.push("اسم الصنف مطلوب");
+          if (!name || name.includes("مطلوب") || name.includes("مثال")) errors.push("اسم الصنف مطلوب");
           
-          const quantity = parseInt(quantityRaw);
+          const quantity = quantityRaw !== undefined && quantityRaw !== "" ? parseInt(quantityRaw) : 1;
           if (isNaN(quantity) || quantity < 0) errors.push("الكمية غير صحيحة");
           
-          if (!unit || unit.includes("مطلوب")) errors.push("الوحدة مطلوبة");
-          if (!category || category.includes("مطلوب")) errors.push("التصنيف مطلوب");
+          // Unit and category are optional - use defaults if not provided
+          // if (!unit || unit.includes("مطلوب")) errors.push("الوحدة مطلوبة");
+          // if (!category || category.includes("مطلوب")) errors.push("التصنيف مطلوب");
           
           const price = priceRaw ? parseFloat(priceRaw) : undefined;
           if (priceRaw && isNaN(price!)) errors.push("السعر غير صحيح");
