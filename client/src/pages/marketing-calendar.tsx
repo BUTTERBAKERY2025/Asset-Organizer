@@ -17,7 +17,8 @@ import {
   Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight, 
   ListTodo, CheckCircle2, Clock, AlertCircle, Sun, Moon, GraduationCap, Flag, Heart,
   Sparkles, ShoppingBag, Palmtree, Snowflake, Crown, Building2, Cake, PartyPopper,
-  CalendarDays, Eye, EyeOff, Filter, TrendingUp
+  CalendarDays, Eye, EyeOff, Filter, TrendingUp, Download, Bell, DollarSign, Target,
+  Zap, Copy, ExternalLink, AlertTriangle, Info
 } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -67,6 +68,16 @@ interface SaudiOccasion {
   icon: any;
   color: string;
   isOfficial: boolean;
+  preparationDays: number;
+  suggestedBudget: { min: number; max: number; currency: string };
+  impactLevel: "high" | "medium" | "low";
+  targetAudience: string[];
+  campaignTemplates: {
+    name: string;
+    type: string;
+    duration: number;
+    channels: string[];
+  }[];
 }
 
 interface UnifiedCalendarEvent {
@@ -111,6 +122,8 @@ const MONTHS_AR = [
 
 const DAYS_AR = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
 
+const formatNum = (n: number): string => n.toLocaleString('en-US');
+
 const getSaudiOccasions = (year: number): SaudiOccasion[] => {
   return [
     {
@@ -124,6 +137,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Crown,
       color: "bg-green-600",
       isOfficial: true,
+      preparationDays: 21,
+      suggestedBudget: { min: 15000, max: 50000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["العائلات", "الشباب", "المهتمين بالتراث"],
+      campaignTemplates: [
+        { name: "حملة التراث السعودي", type: "awareness", duration: 14, channels: ["social", "influencers", "outdoor"] },
+        { name: "عروض يوم التأسيس", type: "promotional", duration: 7, channels: ["social", "email", "sms"] },
+      ],
     },
     {
       id: "ramadan-start",
@@ -137,6 +158,15 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Moon,
       color: "bg-emerald-500",
       isOfficial: true,
+      preparationDays: 30,
+      suggestedBudget: { min: 50000, max: 200000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["العائلات", "ربات البيوت", "الشباب"],
+      campaignTemplates: [
+        { name: "حملة رمضان الخير", type: "awareness", duration: 30, channels: ["tv", "social", "influencers"] },
+        { name: "عروض الإفطار", type: "promotional", duration: 30, channels: ["social", "email", "app"] },
+        { name: "حملة التبرعات", type: "csr", duration: 30, channels: ["social", "email"] },
+      ],
     },
     {
       id: "eid-fitr",
@@ -150,6 +180,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: PartyPopper,
       color: "bg-amber-500",
       isOfficial: true,
+      preparationDays: 21,
+      suggestedBudget: { min: 30000, max: 100000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["العائلات", "الأطفال", "الشباب"],
+      campaignTemplates: [
+        { name: "حملة عيدكم مبارك", type: "awareness", duration: 10, channels: ["social", "influencers", "outdoor"] },
+        { name: "عروض العيد", type: "promotional", duration: 7, channels: ["social", "email", "sms"] },
+      ],
     },
     {
       id: "summer-vacation-start",
@@ -163,6 +201,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: GraduationCap,
       color: "bg-blue-500",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 20000, max: 80000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["العائلات", "الأطفال", "الطلاب"],
+      campaignTemplates: [
+        { name: "صيف ممتع", type: "awareness", duration: 60, channels: ["social", "influencers"] },
+        { name: "عروض الصيف", type: "promotional", duration: 30, channels: ["social", "email"] },
+      ],
     },
     {
       id: "summer-season",
@@ -176,6 +222,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Sun,
       color: "bg-orange-500",
       isOfficial: false,
+      preparationDays: 21,
+      suggestedBudget: { min: 25000, max: 100000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["العائلات", "الشباب", "المسافرين"],
+      campaignTemplates: [
+        { name: "استمتع بصيفك", type: "awareness", duration: 90, channels: ["social", "outdoor"] },
+      ],
     },
     {
       id: "eid-adha",
@@ -189,6 +242,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: PartyPopper,
       color: "bg-amber-600",
       isOfficial: true,
+      preparationDays: 21,
+      suggestedBudget: { min: 30000, max: 100000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["العائلات", "الحجاج", "المضحين"],
+      campaignTemplates: [
+        { name: "عيد أضحى مبارك", type: "awareness", duration: 10, channels: ["social", "influencers"] },
+        { name: "عروض الأضاحي", type: "promotional", duration: 14, channels: ["social", "email", "sms"] },
+      ],
     },
     {
       id: "hajj-season",
@@ -202,6 +263,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Building2,
       color: "bg-teal-600",
       isOfficial: false,
+      preparationDays: 30,
+      suggestedBudget: { min: 15000, max: 50000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["الحجاج", "العائلات"],
+      campaignTemplates: [
+        { name: "موسم الحج", type: "awareness", duration: 14, channels: ["social"] },
+      ],
     },
     {
       id: "back-to-school",
@@ -215,6 +283,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: GraduationCap,
       color: "bg-indigo-500",
       isOfficial: false,
+      preparationDays: 21,
+      suggestedBudget: { min: 30000, max: 120000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["الآباء", "الطلاب", "المعلمين"],
+      campaignTemplates: [
+        { name: "عودة موفقة", type: "awareness", duration: 21, channels: ["social", "influencers", "outdoor"] },
+        { name: "عروض المدارس", type: "promotional", duration: 14, channels: ["social", "email", "sms"] },
+      ],
     },
     {
       id: "national-day",
@@ -227,6 +303,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Flag,
       color: "bg-green-600",
       isOfficial: true,
+      preparationDays: 30,
+      suggestedBudget: { min: 40000, max: 150000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["الجميع", "العائلات", "الشباب"],
+      campaignTemplates: [
+        { name: "همة حتى القمة", type: "awareness", duration: 14, channels: ["tv", "social", "influencers", "outdoor"] },
+        { name: "عروض 93", type: "promotional", duration: 7, channels: ["social", "email", "sms"] },
+      ],
     },
     {
       id: "riyadh-season",
@@ -240,6 +324,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Sparkles,
       color: "bg-purple-600",
       isOfficial: false,
+      preparationDays: 45,
+      suggestedBudget: { min: 50000, max: 300000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["السياح", "العائلات", "الشباب"],
+      campaignTemplates: [
+        { name: "موسم الرياض", type: "awareness", duration: 120, channels: ["tv", "social", "influencers", "outdoor"] },
+        { name: "عروض الموسم", type: "promotional", duration: 60, channels: ["social", "email", "app"] },
+      ],
     },
     {
       id: "singles-day",
@@ -252,6 +344,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: ShoppingBag,
       color: "bg-red-500",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 20000, max: 80000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["المتسوقين", "الشباب"],
+      campaignTemplates: [
+        { name: "عروض 11.11", type: "promotional", duration: 3, channels: ["social", "email", "sms", "app"] },
+      ],
     },
     {
       id: "black-friday",
@@ -265,6 +364,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: ShoppingBag,
       color: "bg-gray-900",
       isOfficial: false,
+      preparationDays: 21,
+      suggestedBudget: { min: 40000, max: 150000, currency: "SAR" },
+      impactLevel: "high",
+      targetAudience: ["المتسوقين", "الجميع"],
+      campaignTemplates: [
+        { name: "الجمعة البيضاء", type: "promotional", duration: 7, channels: ["social", "email", "sms", "influencers"] },
+        { name: "تيزر الجمعة البيضاء", type: "awareness", duration: 7, channels: ["social", "email"] },
+      ],
     },
     {
       id: "winter-season",
@@ -278,6 +385,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Snowflake,
       color: "bg-cyan-500",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 15000, max: 60000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["العائلات", "محبي الطبيعة", "المغامرين"],
+      campaignTemplates: [
+        { name: "شتاء دافئ", type: "awareness", duration: 90, channels: ["social", "influencers"] },
+      ],
     },
     {
       id: "year-end",
@@ -290,6 +404,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Calendar,
       color: "bg-amber-500",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 20000, max: 80000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["المتسوقين", "الشركات"],
+      campaignTemplates: [
+        { name: "تصفيات نهاية السنة", type: "promotional", duration: 14, channels: ["social", "email", "sms"] },
+      ],
     },
     {
       id: "mothers-day",
@@ -302,6 +423,14 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Heart,
       color: "bg-pink-500",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 10000, max: 40000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["الأبناء", "العائلات"],
+      campaignTemplates: [
+        { name: "شكراً أمي", type: "awareness", duration: 7, channels: ["social", "influencers"] },
+        { name: "هدايا يوم الأم", type: "promotional", duration: 7, channels: ["social", "email"] },
+      ],
     },
     {
       id: "fathers-day",
@@ -314,6 +443,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Heart,
       color: "bg-blue-600",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 8000, max: 30000, currency: "SAR" },
+      impactLevel: "low",
+      targetAudience: ["الأبناء", "العائلات"],
+      campaignTemplates: [
+        { name: "شكراً أبي", type: "awareness", duration: 7, channels: ["social"] },
+      ],
     },
     {
       id: "spring-break",
@@ -327,6 +463,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: Palmtree,
       color: "bg-lime-500",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 15000, max: 50000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["العائلات", "الطلاب"],
+      campaignTemplates: [
+        { name: "إجازة ممتعة", type: "awareness", duration: 10, channels: ["social", "influencers"] },
+      ],
     },
     {
       id: "midyear-sale",
@@ -340,6 +483,13 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       icon: ShoppingBag,
       color: "bg-rose-500",
       isOfficial: false,
+      preparationDays: 14,
+      suggestedBudget: { min: 25000, max: 100000, currency: "SAR" },
+      impactLevel: "medium",
+      targetAudience: ["المتسوقين", "الجميع"],
+      campaignTemplates: [
+        { name: "تخفيضات منتصف العام", type: "promotional", duration: 15, channels: ["social", "email", "sms"] },
+      ],
     },
   ];
 };
@@ -652,9 +802,9 @@ export default function MarketingCalendarPage() {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
     const date = new Date(dateStr);
-    const day = date.getDate();
+    const day = formatNum(date.getDate());
     const month = MONTHS_AR[date.getMonth()];
-    const year = date.getFullYear();
+    const year = formatNum(date.getFullYear());
     return `${day} ${month} ${year}`;
   };
 
@@ -856,7 +1006,7 @@ export default function MarketingCalendarPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full sm:w-auto grid grid-cols-3 h-auto">
+          <TabsList className="w-full sm:w-auto grid grid-cols-4 h-auto">
             <TabsTrigger value="calendar" className="gap-2 py-2">
               <Calendar className="w-4 h-4" />
               <span className="hidden sm:inline">التقويم</span>
@@ -868,6 +1018,10 @@ export default function MarketingCalendarPage() {
             <TabsTrigger value="upcoming" className="gap-2 py-2">
               <TrendingUp className="w-4 h-4" />
               <span className="hidden sm:inline">القادمة</span>
+            </TabsTrigger>
+            <TabsTrigger value="compare" className="gap-2 py-2">
+              <CalendarDays className="w-4 h-4" />
+              <span className="hidden sm:inline">مقارنة</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1014,7 +1168,7 @@ export default function MarketingCalendarPage() {
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium truncate">{occasion.title}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  {daysUntil === 0 ? "اليوم" : daysUntil === 1 ? "غداً" : `بعد ${daysUntil} يوم`}
+                                  {daysUntil === 0 ? "اليوم" : daysUntil === 1 ? "غداً" : `بعد ${formatNum(daysUntil)} يوم`}
                                 </p>
                               </div>
                             </div>
@@ -1034,7 +1188,7 @@ export default function MarketingCalendarPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <CardTitle className="flex items-center gap-2">
                     <Star className="w-5 h-5 text-amber-500" />
-                    تقويم المناسبات السعودية {currentYear}
+                    تقويم المناسبات السعودية {formatNum(currentYear)}
                   </CardTitle>
                   <Select value={occasionFilter} onValueChange={setOccasionFilter}>
                     <SelectTrigger className="w-full sm:w-48">
@@ -1084,7 +1238,7 @@ export default function MarketingCalendarPage() {
                               </Badge>
                               {!isPast && (
                                 <p className="text-xs text-muted-foreground mt-2">
-                                  {daysUntil === 0 ? "🎉 اليوم!" : daysUntil === 1 ? "⏰ غداً" : `📅 بعد ${daysUntil} يوم`}
+                                  {daysUntil === 0 ? "🎉 اليوم!" : daysUntil === 1 ? "⏰ غداً" : `📅 بعد ${formatNum(daysUntil)} يوم`}
                                 </p>
                               )}
                             </div>
@@ -1133,7 +1287,7 @@ export default function MarketingCalendarPage() {
                                   <div className="flex items-center justify-between">
                                     <h4 className="font-medium">{occasion.title}</h4>
                                     <Badge variant={daysUntil <= 30 ? "destructive" : "secondary"} className="text-xs">
-                                      {daysUntil === 0 ? "اليوم" : `${daysUntil} يوم`}
+                                      {daysUntil === 0 ? "اليوم" : `${formatNum(daysUntil)} يوم`}
                                     </Badge>
                                   </div>
                                   <p className="text-xs text-muted-foreground">{formatDate(occasion.date)}</p>
@@ -1187,7 +1341,7 @@ export default function MarketingCalendarPage() {
                                   <div>
                                     <h4 className="font-medium text-sm">{occasion.title}</h4>
                                     <p className="text-xs text-muted-foreground">
-                                      ابدأ التحضير {prepDays > 0 ? `خلال ${prepDays} يوم` : "الآن!"}
+                                      ابدأ التحضير {prepDays > 0 ? `خلال ${formatNum(prepDays)} يوم` : "الآن!"}
                                     </p>
                                   </div>
                                 </div>
@@ -1223,6 +1377,96 @@ export default function MarketingCalendarPage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="compare" className="mt-4">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <CardTitle className="flex items-center gap-2">
+                    <CalendarDays className="w-5 h-5 text-blue-500" />
+                    مقارنة المناسبات بين السنوات
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{formatNum(currentYear - 1)}</Badge>
+                    <span className="text-muted-foreground">vs</span>
+                    <Badge variant="outline">{formatNum(currentYear)}</Badge>
+                    <span className="text-muted-foreground">vs</span>
+                    <Badge variant="outline">{formatNum(currentYear + 1)}</Badge>
+                  </div>
+                </div>
+                <CardDescription>
+                  قارن تواريخ المناسبات عبر السنوات للتخطيط المسبق
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[500px]">
+                  <div className="space-y-4">
+                    {saudiOccasions.map((occasion) => {
+                      const Icon = occasion.icon;
+                      const prevYearOccasions = getSaudiOccasions(currentYear - 1);
+                      const nextYearOccasions = getSaudiOccasions(currentYear + 1);
+                      const prevOccasion = prevYearOccasions.find(o => o.id === occasion.id);
+                      const nextOccasion = nextYearOccasions.find(o => o.id === occasion.id);
+                      
+                      return (
+                        <Card key={occasion.id} className="overflow-hidden">
+                          <div className={`${occasion.color} p-3 flex items-center gap-3`}>
+                            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+                              <Icon className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-white">{occasion.title}</h4>
+                              <p className="text-xs text-white/80">{occasion.titleEn}</p>
+                            </div>
+                            <div className="mr-auto">
+                              <Badge variant={occasion.impactLevel === 'high' ? 'destructive' : 'secondary'} className="bg-white/20 text-white border-0">
+                                {occasion.impactLevel === 'high' ? 'تأثير عالي' : occasion.impactLevel === 'medium' ? 'تأثير متوسط' : 'تأثير منخفض'}
+                              </Badge>
+                            </div>
+                          </div>
+                          <CardContent className="p-4">
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="text-center p-3 rounded-lg bg-muted/30">
+                                <p className="text-xs text-muted-foreground mb-1">{formatNum(currentYear - 1)}</p>
+                                <p className="font-medium text-sm">{prevOccasion ? formatDate(prevOccasion.date) : '-'}</p>
+                                {prevOccasion?.endDate && (
+                                  <p className="text-xs text-muted-foreground">حتى {formatDate(prevOccasion.endDate)}</p>
+                                )}
+                              </div>
+                              <div className="text-center p-3 rounded-lg bg-primary/10 border-2 border-primary/20">
+                                <p className="text-xs text-primary font-medium mb-1">{formatNum(currentYear)} (الحالي)</p>
+                                <p className="font-bold text-sm">{formatDate(occasion.date)}</p>
+                                {occasion.endDate && (
+                                  <p className="text-xs text-muted-foreground">حتى {formatDate(occasion.endDate)}</p>
+                                )}
+                              </div>
+                              <div className="text-center p-3 rounded-lg bg-muted/30">
+                                <p className="text-xs text-muted-foreground mb-1">{formatNum(currentYear + 1)}</p>
+                                <p className="font-medium text-sm">{nextOccasion ? formatDate(nextOccasion.date) : '-'}</p>
+                                {nextOccasion?.endDate && (
+                                  <p className="text-xs text-muted-foreground">حتى {formatDate(nextOccasion.endDate)}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="mt-4 flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <DollarSign className="w-3 h-3" />
+                                <span>الميزانية المقترحة: {occasion.suggestedBudget.min.toLocaleString('en-US')} - {occasion.suggestedBudget.max.toLocaleString('en-US')} {occasion.suggestedBudget.currency}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                <span>ابدأ قبل {formatNum(occasion.preparationDays)} يوم</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
 
@@ -1278,34 +1522,88 @@ export default function MarketingCalendarPage() {
         </Dialog>
 
         <Dialog open={isOccasionDialogOpen} onOpenChange={setIsOccasionDialogOpen}>
-          <DialogContent className="max-w-lg" dir="rtl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
             {selectedOccasion && (
               <>
                 <DialogHeader>
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl ${selectedOccasion.color} flex items-center justify-center`}>
-                      <selectedOccasion.icon className="w-6 h-6 text-white" />
+                    <div className={`w-14 h-14 rounded-xl ${selectedOccasion.color} flex items-center justify-center`}>
+                      <selectedOccasion.icon className="w-7 h-7 text-white" />
                     </div>
                     <div>
-                      <DialogTitle>{selectedOccasion.title}</DialogTitle>
+                      <DialogTitle className="text-xl">{selectedOccasion.title}</DialogTitle>
                       <DialogDescription>{selectedOccasion.titleEn}</DialogDescription>
                     </div>
                   </div>
                 </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm font-medium mb-1">التاريخ</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatDate(selectedOccasion.date)}
-                      {selectedOccasion.endDate && ` - ${formatDate(selectedOccasion.endDate)}`}
-                    </p>
-                  </div>
+
+                <div className="grid md:grid-cols-2 gap-4 mt-4">
+                  <Card className="bg-muted/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Calendar className="w-4 h-4" />
+                        التاريخ
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDate(selectedOccasion.date)}
+                        {selectedOccasion.endDate && ` - ${formatDate(selectedOccasion.endDate)}`}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Badge className={`${getCategoryInfo(selectedOccasion.category).color} text-white`}>
+                          {getCategoryInfo(selectedOccasion.category).label}
+                        </Badge>
+                        {selectedOccasion.isOfficial && (
+                          <Badge variant="outline">إجازة رسمية</Badge>
+                        )}
+                        <Badge variant={selectedOccasion.impactLevel === 'high' ? 'destructive' : selectedOccasion.impactLevel === 'medium' ? 'default' : 'secondary'}>
+                          تأثير {selectedOccasion.impactLevel === 'high' ? 'عالي' : selectedOccasion.impactLevel === 'medium' ? 'متوسط' : 'منخفض'}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-muted/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <DollarSign className="w-4 h-4" />
+                        الميزانية المقترحة
+                      </div>
+                      <div className="text-lg font-bold text-primary">
+                        {selectedOccasion.suggestedBudget.min.toLocaleString('en-US')} - {selectedOccasion.suggestedBudget.max.toLocaleString('en-US')} {selectedOccasion.suggestedBudget.currency}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        ابدأ التحضير قبل {formatNum(selectedOccasion.preparationDays)} يوم
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="space-y-4 mt-4">
                   <div>
                     <p className="text-sm font-medium mb-1">الوصف</p>
                     <p className="text-sm text-muted-foreground">{selectedOccasion.description}</p>
                   </div>
+
                   <div>
-                    <p className="text-sm font-medium mb-2">أفكار تسويقية</p>
+                    <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Target className="w-4 h-4" />
+                      الجمهور المستهدف
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedOccasion.targetAudience.map((audience, i) => (
+                        <Badge key={i} variant="outline" className="text-xs">
+                          {audience}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      أفكار تسويقية
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       {selectedOccasion.marketingTips.map((tip, i) => (
                         <Badge key={i} variant="secondary" className="text-xs">
@@ -1314,16 +1612,116 @@ export default function MarketingCalendarPage() {
                       ))}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={`${getCategoryInfo(selectedOccasion.category).color} text-white`}>
-                      {getCategoryInfo(selectedOccasion.category).label}
-                    </Badge>
-                    {selectedOccasion.isOfficial && (
-                      <Badge variant="outline">إجازة رسمية</Badge>
-                    )}
+
+                  <div>
+                    <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Megaphone className="w-4 h-4" />
+                      قوالب الحملات الجاهزة
+                    </p>
+                    <div className="space-y-2">
+                      {selectedOccasion.campaignTemplates.map((template, i) => (
+                        <Card key={i} className="bg-white border">
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-sm">{template.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    {template.type === 'awareness' ? 'توعية' : template.type === 'promotional' ? 'ترويجي' : template.type === 'csr' ? 'مسؤولية اجتماعية' : template.type}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">{formatNum(template.duration)} يوم</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {template.channels.map((ch, ci) => (
+                                    <span key={ci} className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                      {ch === 'social' ? 'سوشيال' : ch === 'email' ? 'إيميل' : ch === 'sms' ? 'رسائل' : ch === 'influencers' ? 'مؤثرين' : ch === 'outdoor' ? 'خارجي' : ch === 'tv' ? 'تلفزيون' : ch === 'app' ? 'التطبيق' : ch}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  const startDate = new Date(selectedOccasion.date);
+                                  startDate.setDate(startDate.getDate() - template.duration);
+                                  setFormData({
+                                    title: template.name,
+                                    description: `حملة ${selectedOccasion.title} - ${template.type === 'awareness' ? 'توعية' : template.type === 'promotional' ? 'ترويجي' : template.type}`,
+                                    eventType: template.type === 'promotional' ? 'promotion' : 'campaign_launch',
+                                    startDate: startDate.toISOString().split('T')[0],
+                                    endDate: selectedOccasion.date,
+                                    allDay: true,
+                                    notes: `القنوات: ${template.channels.join(', ')}\nالمدة: ${formatNum(template.duration)} يوم`,
+                                  });
+                                  setIsOccasionDialogOpen(false);
+                                  setIsAddDialogOpen(true);
+                                }}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
+
+                  <Card className="bg-amber-50 border-amber-200">
+                    <CardContent className="p-3">
+                      <div className="flex items-start gap-2">
+                        <Bell className="w-4 h-4 text-amber-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-amber-800">تنبيه التحضير</p>
+                          <p className="text-xs text-amber-700">
+                            يُنصح ببدء التحضير للحملة قبل {formatNum(selectedOccasion.preparationDays)} يوم من المناسبة
+                            {getDaysUntil(selectedOccasion.date) > 0 && getDaysUntil(selectedOccasion.date) <= selectedOccasion.preparationDays && (
+                              <span className="font-bold text-amber-900"> - حان وقت البدء الآن!</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
+
                 <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const uid = `${selectedOccasion.id}-${Date.now()}@butter-bakery`;
+                      const dtstamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+                      const dtstart = selectedOccasion.date.replace(/-/g, '');
+                      const dtend = selectedOccasion.endDate 
+                        ? new Date(new Date(selectedOccasion.endDate).getTime() + 86400000).toISOString().split('T')[0].replace(/-/g, '')
+                        : new Date(new Date(selectedOccasion.date).getTime() + 86400000).toISOString().split('T')[0].replace(/-/g, '');
+                      const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Butter Bakery//Marketing Calendar//AR
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:${uid}
+DTSTAMP:${dtstamp}
+DTSTART;VALUE=DATE:${dtstart}
+DTEND;VALUE=DATE:${dtend}
+SUMMARY:${selectedOccasion.title}
+DESCRIPTION:${selectedOccasion.description.replace(/\n/g, '\\n')}
+END:VEVENT
+END:VCALENDAR`;
+                      const blob = new Blob([icsContent], { type: 'text/calendar' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${selectedOccasion.id}.ics`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast({ title: "تم تصدير المناسبة للتقويم" });
+                    }}
+                  >
+                    <Download className="w-4 h-4 ml-1" />
+                    تصدير
+                  </Button>
                   <Button variant="outline" className="flex-1" onClick={() => setIsOccasionDialogOpen(false)}>
                     إغلاق
                   </Button>
