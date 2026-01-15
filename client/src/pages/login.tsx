@@ -67,6 +67,10 @@ export default function LoginPage() {
               This is Butter Bakery.
             </p>
 
+            <p className="text-stone-400 text-base lg:text-lg mt-4">
+              Your smart gateway to manage the entire Butter Bakery world.
+            </p>
+
             <p className="text-stone-400 text-sm tracking-widest pt-4">
               www.butterbakery.co
             </p>
