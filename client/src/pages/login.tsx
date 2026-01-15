@@ -49,7 +49,7 @@ export default function LoginPage() {
                 <span className="text-[#e67e22]">Butter</span> Bakery
               </h1>
               <h2 className="text-xl 2xl:text-2xl text-[#1a3a2f]/80 font-light">
-                Specialty Coffee
+                CEO COMMAND
               </h2>
               <div className="w-16 h-1 bg-[#e67e22] rounded-full"></div>
             </div>
