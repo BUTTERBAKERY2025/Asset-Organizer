@@ -98,7 +98,7 @@ const EVENT_TYPES = [
   { value: "influencer_post", label: "نشر مؤثر", color: "bg-blue-500" },
   { value: "content_deadline", label: "موعد تسليم محتوى", color: "bg-purple-500" },
   { value: "meeting", label: "اجتماع", color: "bg-green-500" },
-  { value: "event", label: "فعالية", color: "bg-pink-500" },
+  { value: "event", label: "فعالية", color: "bg-teal-500" },
   { value: "holiday", label: "مناسبة", color: "bg-orange-500" },
   { value: "promotion", label: "عرض ترويجي", color: "bg-cyan-500" },
   { value: "other", label: "أخرى", color: "bg-gray-500" },
@@ -112,7 +112,7 @@ const OCCASION_CATEGORIES = [
   { value: "season", label: "مواسم", color: "bg-orange-500", icon: Sun },
   { value: "education", label: "تعليم ومدارس", color: "bg-blue-500", icon: GraduationCap },
   { value: "commercial", label: "تجارية وتسوق", color: "bg-purple-500", icon: ShoppingBag },
-  { value: "social", label: "اجتماعية", color: "bg-pink-500", icon: Heart },
+  { value: "social", label: "اجتماعية", color: "bg-rose-500", icon: Heart },
 ];
 
 const MONTHS_AR = [
@@ -421,7 +421,7 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       description: "يوم تكريم الأمهات",
       marketingTips: ["هدايا للأمهات", "باقات ورود", "عروض سبا", "حلويات خاصة"],
       icon: Heart,
-      color: "bg-pink-500",
+      color: "bg-rose-500",
       isOfficial: false,
       preparationDays: 14,
       suggestedBudget: { min: 10000, max: 40000, currency: "SAR" },

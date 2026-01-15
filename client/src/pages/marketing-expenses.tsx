@@ -551,7 +551,7 @@ export default function MarketingExpensesPage() {
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
+      <div className="space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
@@ -581,7 +581,7 @@ export default function MarketingExpensesPage() {
                   setSelectedExpense(null);
                   setIsAddDialogOpen(true);
                 }}
-                className="h-11 sm:h-9 bg-pink-500 hover:bg-pink-600"
+                className="h-11 sm:h-9 bg-amber-500 hover:bg-amber-600"
                 data-testid="button-add-expense"
               >
                 <Plus className="w-4 h-4 ml-2" />

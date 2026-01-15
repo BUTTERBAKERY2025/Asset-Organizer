@@ -225,7 +225,7 @@ export default function MarketingTeamPage() {
   const roleColors: Record<string, string> = {
     marketing_manager: "bg-purple-100 text-purple-700",
     content_creator: "bg-blue-100 text-blue-700",
-    social_media_specialist: "bg-pink-100 text-pink-700",
+    social_media_specialist: "bg-blue-100 text-blue-700",
     graphic_designer: "bg-green-100 text-green-700",
     video_editor: "bg-orange-100 text-orange-700",
     copywriter: "bg-amber-100 text-amber-700",
@@ -237,7 +237,7 @@ export default function MarketingTeamPage() {
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
+      <div className="space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">

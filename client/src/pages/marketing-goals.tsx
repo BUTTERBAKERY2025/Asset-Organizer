@@ -158,14 +158,14 @@ export default function MarketingGoalsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center" dir="rtl">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center" dir="rtl">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-100 p-6" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-amber-100 p-4" dir="rtl">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
@@ -183,7 +183,7 @@ export default function MarketingGoalsPage() {
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-pink-500 hover:bg-pink-600 gap-2 h-11 sm:h-9" data-testid="button-add-goal">
+              <Button className="bg-amber-500 hover:bg-amber-600 gap-2 h-11 sm:h-9" data-testid="button-add-goal">
                 <Plus className="h-4 w-4" />
                 إضافة هدف
               </Button>
@@ -272,7 +272,7 @@ export default function MarketingGoalsPage() {
                 <Button
                   onClick={() => createGoalMutation.mutate(formData)}
                   disabled={!formData.campaignId || createGoalMutation.isPending}
-                  className="w-full bg-pink-500 hover:bg-pink-600 h-11 sm:h-9"
+                  className="w-full bg-amber-500 hover:bg-amber-600 h-11 sm:h-9"
                   data-testid="button-submit-goal"
                 >
                   {createGoalMutation.isPending ? "جاري الإنشاء..." : "إنشاء الهدف"}
@@ -307,7 +307,7 @@ export default function MarketingGoalsPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-pink-500" />
+                    <Target className="h-5 w-5 text-amber-500" />
                     <CardTitle className="text-lg">{goalTypeLabels[goal.goalType] || goal.goalType}</CardTitle>
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[goal.status]}`}>

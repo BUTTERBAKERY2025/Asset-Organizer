@@ -417,7 +417,7 @@ export default function MarketingReportsPage() {
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
+      <div className="space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
@@ -435,7 +435,7 @@ export default function MarketingReportsPage() {
               <RefreshCw className="w-4 h-4 ml-2" />
               إعادة تعيين
             </Button>
-            <Button className="h-11 sm:h-9 bg-pink-500 hover:bg-pink-600" onClick={exportToExcel} data-testid="button-export">
+            <Button className="h-11 sm:h-9 bg-amber-500 hover:bg-amber-600" onClick={exportToExcel} data-testid="button-export">
               <Download className="w-4 h-4 ml-2" />
               تصدير Excel
             </Button>
@@ -448,7 +448,7 @@ export default function MarketingReportsPage() {
               <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Filter className="w-5 h-5 text-pink-500" />
+                    <Filter className="w-5 h-5 text-amber-500" />
                     فلاتر التقارير المتقدمة
                   </CardTitle>
                   <ChevronDown className={`w-5 h-5 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
@@ -619,7 +619,7 @@ export default function MarketingReportsPage() {
                 </div>
                 <div className="flex justify-end mt-4 pt-4 border-t gap-2">
                   <Button 
-                    className="bg-pink-500 hover:bg-pink-600" 
+                    className="bg-amber-500 hover:bg-amber-600" 
                     onClick={() => setReportDialogOpen(true)}
                     data-testid="button-view-report"
                   >
@@ -641,11 +641,11 @@ export default function MarketingReportsPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <Card className="border-pink-200" data-testid="kpi-total-campaigns">
+              <Card className="border-amber-200" data-testid="kpi-total-campaigns">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <Megaphone className="w-5 h-5 text-pink-500" />
-                    <Badge variant="outline" className="text-pink-600">{stats.activeCampaigns} نشطة</Badge>
+                    <Megaphone className="w-5 h-5 text-amber-500" />
+                    <Badge variant="outline" className="text-amber-600">{stats.activeCampaigns} نشطة</Badge>
                   </div>
                   <p className="text-2xl font-bold">{stats.totalCampaigns}</p>
                   <p className="text-sm text-muted-foreground">إجمالي الحملات</p>
@@ -716,7 +716,7 @@ export default function MarketingReportsPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <PieChart className="w-5 h-5 text-pink-500" />
+                        <PieChart className="w-5 h-5 text-amber-500" />
                         توزيع المصروفات حسب الفئة
                       </CardTitle>
                     </CardHeader>
@@ -750,7 +750,7 @@ export default function MarketingReportsPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5 text-pink-500" />
+                        <BarChart3 className="w-5 h-5 text-amber-500" />
                         حالة المصروفات
                       </CardTitle>
                     </CardHeader>
@@ -796,14 +796,14 @@ export default function MarketingReportsPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Eye className="w-5 h-5 text-pink-500" />
+                      <Eye className="w-5 h-5 text-amber-500" />
                       مقاييس التفاعل للمؤثرين
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <Eye className="w-6 h-6 mx-auto mb-2 text-pink-500" />
+                        <Eye className="w-6 h-6 mx-auto mb-2 text-amber-500" />
                         <p className="text-xl font-bold">{formatNumber(stats.totalReach)}</p>
                         <p className="text-xs text-muted-foreground">الوصول الإجمالي</p>
                       </div>
@@ -866,7 +866,7 @@ export default function MarketingReportsPage() {
                                 </div>
                                 <div className="text-left">
                                   <p className="font-bold">{formatCurrency(campaign.totalBudget || 0)}</p>
-                                  <p className="text-sm text-pink-600">صرف: {formatCurrency(campaign.spentBudget || 0)}</p>
+                                  <p className="text-sm text-amber-600">صرف: {formatCurrency(campaign.spentBudget || 0)}</p>
                                 </div>
                               </div>
                             ))}
@@ -902,13 +902,13 @@ export default function MarketingReportsPage() {
                                 <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                                   <span>الحملة: {getCampaignName(expense.campaignId)}</span>
                                   {expense.influencerId && (
-                                    <span className="text-pink-600">• المؤثر: {getInfluencerName(expense.influencerId)}</span>
+                                    <span className="text-amber-600">• المؤثر: {getInfluencerName(expense.influencerId)}</span>
                                   )}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">{expense.expenseDate}</p>
                               </div>
                               <div className="text-left">
-                                <p className="font-bold text-pink-600">{formatCurrency(expense.amount)}</p>
+                                <p className="font-bold text-amber-600">{formatCurrency(expense.amount)}</p>
                                 <Badge variant={
                                   expense.status === 'paid' ? 'default' : 
                                   expense.status === 'approved' ? 'secondary' : 
@@ -959,8 +959,8 @@ export default function MarketingReportsPage() {
                               return (
                                 <div key={influencer.id} className="flex items-center justify-between p-3 border rounded-lg">
                                   <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center">
-                                      <User className="w-5 h-5 text-pink-600" />
+                                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                                      <User className="w-5 h-5 text-amber-600" />
                                     </div>
                                     <div>
                                       <h4 className="font-medium">{influencer.nameAr || influencer.name}</h4>
@@ -971,7 +971,7 @@ export default function MarketingReportsPage() {
                                   </div>
                                   <div className="text-left">
                                     <p className="font-bold">{formatNumber(influencer.followerCount || 0)} متابع</p>
-                                    <p className="text-sm text-pink-600">مدفوعات: {formatCurrency(totalPaid)}</p>
+                                    <p className="text-sm text-amber-600">مدفوعات: {formatCurrency(totalPaid)}</p>
                                   </div>
                                 </div>
                               );
@@ -993,12 +993,12 @@ export default function MarketingReportsPage() {
                     <CardContent>
                       <div className="space-y-6">
                         <div className="text-center">
-                          <p className="text-6xl font-bold text-pink-600">{stats.budgetUtilization}%</p>
+                          <p className="text-6xl font-bold text-amber-600">{stats.budgetUtilization}%</p>
                           <p className="text-muted-foreground">نسبة الاستخدام</p>
                         </div>
                         <div className="h-6 bg-muted rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all duration-500"
+                            className="h-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-500"
                             style={{ width: `${stats.budgetUtilization}%` }}
                           />
                         </div>
@@ -1094,7 +1094,7 @@ export default function MarketingReportsPage() {
       <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-pink-600">
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
               <FileText className="w-5 h-5" />
               تقرير أداء التسويق
             </DialogTitle>
@@ -1125,7 +1125,7 @@ export default function MarketingReportsPage() {
           <ScrollArea className="h-[60vh]">
             <div ref={reportRef} className="p-4 space-y-6 bg-white" dir="rtl">
               <div className="text-center border-b pb-4">
-                <h2 className="text-2xl font-bold text-pink-600">تقرير أداء التسويق الشامل</h2>
+                <h2 className="text-2xl font-bold text-amber-600">تقرير أداء التسويق الشامل</h2>
                 <p className="text-sm text-muted-foreground">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
                 {hasActiveFilters() && (
                   <p className="text-xs text-muted-foreground mt-1">الفلاتر: {getActiveFiltersDescription()}</p>
@@ -1133,7 +1133,7 @@ export default function MarketingReportsPage() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">ملخص الأداء</h3>
+                <h3 className="text-lg font-bold text-amber-600 border-b pb-2">ملخص الأداء</h3>
                 <div className="grid grid-cols-4 gap-4 text-center">
                   <div className="p-4 border rounded-lg">
                     <p className="text-2xl font-bold">{stats.totalCampaigns}</p>
@@ -1148,14 +1148,14 @@ export default function MarketingReportsPage() {
                     <p className="text-sm text-muted-foreground">المصروف</p>
                   </div>
                   <div className="p-4 border rounded-lg">
-                    <p className="text-2xl font-bold text-pink-600">{stats.budgetUtilization}%</p>
+                    <p className="text-2xl font-bold text-amber-600">{stats.budgetUtilization}%</p>
                     <p className="text-sm text-muted-foreground">نسبة الاستخدام</p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">الحملات ({filteredCampaigns.length})</h3>
+                <h3 className="text-lg font-bold text-amber-600 border-b pb-2">الحملات ({filteredCampaigns.length})</h3>
                 {filteredCampaigns.length === 0 ? (
                   <p className="text-center text-muted-foreground py-4">لا توجد حملات مطابقة للفلاتر</p>
                 ) : (
@@ -1189,7 +1189,7 @@ export default function MarketingReportsPage() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">المصروفات ({filteredExpenses.length})</h3>
+                <h3 className="text-lg font-bold text-amber-600 border-b pb-2">المصروفات ({filteredExpenses.length})</h3>
                 {filteredExpenses.length === 0 ? (
                   <p className="text-center text-muted-foreground py-4">لا توجد مصروفات مطابقة للفلاتر</p>
                 ) : (
@@ -1227,7 +1227,7 @@ export default function MarketingReportsPage() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-pink-600 border-b pb-2">المؤثرين ({filteredInfluencers.length})</h3>
+                <h3 className="text-lg font-bold text-amber-600 border-b pb-2">المؤثرين ({filteredInfluencers.length})</h3>
                 {filteredInfluencers.length === 0 ? (
                   <p className="text-center text-muted-foreground py-4">لا يوجد مؤثرين مطابقين للفلاتر</p>
                 ) : (
