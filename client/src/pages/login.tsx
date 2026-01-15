@@ -44,15 +44,17 @@ export default function LoginPage() {
       <div className="flex-1 relative z-10 flex flex-col xl:flex-row items-center justify-center xl:justify-between gap-6 sm:gap-8 lg:gap-12 p-4 sm:p-6 md:p-8 lg:p-12">
         
         <div className="hidden xl:flex flex-1 flex-col items-center justify-center max-w-xl">
-          <div className="text-center space-y-8">
-            <div className="inline-block">
-              <img src={logo} alt="Butter Bakery" className="h-44 2xl:h-52 w-auto drop-shadow-2xl mx-auto" />
-            </div>
-            
-            <div className="space-y-3">
+          <div className="text-center space-y-6">
+            <div className="space-y-4">
+              <div className="inline-block">
+                <img src={logo} alt="Butter Bakery" className="h-36 2xl:h-44 w-auto drop-shadow-2xl mx-auto" />
+              </div>
               <h1 className="text-4xl 2xl:text-5xl font-bold text-white leading-tight">
                 <span className="text-amber-400">Butter</span> Bakery
               </h1>
+            </div>
+            
+            <div className="space-y-3">
               <h2 className="text-2xl 2xl:text-3xl text-amber-200/90 font-light tracking-wide">
                 Specialty Coffee
               </h2>
