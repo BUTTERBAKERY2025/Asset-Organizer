@@ -54,12 +54,17 @@ export default function LoginPage() {
               />
             </div>
             
-            <div className="space-y-4 mt-8">
-              <h2 className="text-3xl font-bold text-white drop-shadow-md">
-                نظام إدارة باتر بيكري
+            <div className="space-y-4 mt-8 text-center">
+              <h2 className="text-2xl font-bold text-white drop-shadow-md">
+                Specialty Coffee
               </h2>
-              <p className="text-white/90 text-lg max-w-sm mx-auto">
-                إدارة شاملة للمشروعات والأصول والصيانة
+              <div className="text-white/90 text-lg max-w-sm mx-auto space-y-1 italic">
+                <p>Mornings start with bakery aromas</p>
+                <p>Days flow with specialty coffee</p>
+                <p>Nights end with sweet desserts</p>
+              </div>
+              <p className="text-white font-semibold text-xl mt-4 underline underline-offset-4">
+                This is Butter Bakery.
               </p>
             </div>
 
