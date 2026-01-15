@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Loader2, Wheat, Heart, Award, Coffee } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
-import welcomeGraphic from "@assets/generated_images/person_at_computer_seamless_cream_bg.png";
+import welcomeGraphic from "@assets/generated_images/person_computer_transparent_bg.png";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -40,7 +40,7 @@ export default function LoginPage() {
         
         <div className="hidden xl:flex flex-1 flex-col items-start justify-center max-w-2xl">
           <div className="relative">
-            <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-lg rounded-lg" />
+            <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-lg" />
             <div className="absolute top-4 left-4">
               <img src={logo} alt="Butter Bakery" className="h-20 w-auto drop-shadow-lg" />
             </div>
