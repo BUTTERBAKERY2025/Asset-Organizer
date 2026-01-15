@@ -39,11 +39,23 @@ export default function LoginPage() {
   useEffect(() => {
     const hasPlayedSound = sessionStorage.getItem('loginSoundPlayed');
     if (!hasPlayedSound) {
-      const timer = setTimeout(() => {
+      const handleFirstInteraction = () => {
         playWelcomeSound();
         sessionStorage.setItem('loginSoundPlayed', 'true');
-      }, 500);
-      return () => clearTimeout(timer);
+        document.removeEventListener('click', handleFirstInteraction);
+        document.removeEventListener('touchstart', handleFirstInteraction);
+        document.removeEventListener('keydown', handleFirstInteraction);
+      };
+      
+      document.addEventListener('click', handleFirstInteraction);
+      document.addEventListener('touchstart', handleFirstInteraction);
+      document.addEventListener('keydown', handleFirstInteraction);
+      
+      return () => {
+        document.removeEventListener('click', handleFirstInteraction);
+        document.removeEventListener('touchstart', handleFirstInteraction);
+        document.removeEventListener('keydown', handleFirstInteraction);
+      };
     }
   }, []);
 
