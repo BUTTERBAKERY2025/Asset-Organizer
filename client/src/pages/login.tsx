@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Loader2, Wheat, Heart, Award, Coffee } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
-import welcomeGraphic from "@assets/generated_images/man_stubble_computer_line_art.png";
+import welcomeGraphic from "@assets/generated_images/man_short_beard_laptop_art.png";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
