@@ -43,31 +43,35 @@ export default function LoginPage() {
 
       <div className="flex-1 relative z-10 flex flex-col xl:flex-row items-center justify-center xl:justify-between gap-6 sm:gap-8 lg:gap-12 p-4 sm:p-6 md:p-8 lg:p-12">
         
-        <div className="hidden xl:flex flex-1 flex-col items-start justify-center space-y-6 max-w-xl" dir="rtl">
-          <img src={logo} alt="Butter Bakery" className="h-36 2xl:h-44 w-auto drop-shadow-2xl" />
-          
-          <div className="space-y-3">
-            <h1 className="text-4xl 2xl:text-5xl font-bold text-white leading-tight">
-              <span className="text-amber-400">Butter</span> Bakery
-            </h1>
-            <h2 className="text-xl 2xl:text-2xl text-amber-200/90 font-light">
-              Specialty Coffee
-            </h2>
+        <div className="hidden xl:flex flex-1 flex-col items-center justify-center max-w-xl">
+          <div className="text-center space-y-8">
+            <div className="inline-block">
+              <img src={logo} alt="Butter Bakery" className="h-44 2xl:h-52 w-auto drop-shadow-2xl mx-auto" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl 2xl:text-3xl text-amber-200/90 font-light tracking-wide">
+                Specialty Coffee
+              </h2>
+              <div className="w-24 h-0.5 bg-amber-500/50 mx-auto rounded-full"></div>
+            </div>
+
+            <div className="space-y-2 text-stone-300 text-lg 2xl:text-xl font-light italic">
+              <p>Mornings start with bakery aromas</p>
+              <p>Days flow with specialty coffee</p>
+              <p>Nights end with sweet desserts</p>
+            </div>
+
+            <div className="pt-2">
+              <p className="text-amber-400 text-xl 2xl:text-2xl font-bold tracking-wide">
+                "This is Butter Bakery"
+              </p>
+            </div>
+
+            <p className="text-stone-500 text-sm tracking-[0.3em] pt-4">
+              www.butterbakery.co
+            </p>
           </div>
-
-          <div className="space-y-1.5 text-stone-300 text-base 2xl:text-lg font-light">
-            <p>Mornings start with bakery aromas</p>
-            <p>Days flow with specialty coffee</p>
-            <p>Nights end with sweet desserts</p>
-          </div>
-
-          <p className="text-amber-400 text-lg font-semibold italic border-b-2 border-amber-400/50 inline-block pb-1">
-            This is Butter Bakery.
-          </p>
-
-          <p className="text-stone-500 text-sm tracking-widest">
-            www.butterbakery.co
-          </p>
         </div>
 
         <div className="w-full max-w-[360px] sm:max-w-md xl:max-w-sm 2xl:max-w-md">
