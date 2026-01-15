@@ -129,6 +129,7 @@ export default function MarketingExpensesPage() {
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>("all");
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -244,10 +245,15 @@ export default function MarketingExpensesPage() {
     },
   });
 
-  const filteredExpenses = expenses.filter((expense) =>
-    expense.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    expense.vendor?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Get unique branch names from expenses
+  const uniqueBranches = Array.from(new Set(expenses.map((e) => (e as any).branchName).filter(Boolean)));
+
+  const filteredExpenses = expenses.filter((expense) => {
+    const matchesSearch = expense.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      expense.vendor?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesBranch = branchFilter === "all" || (expense as any).branchName === branchFilter;
+    return matchesSearch && matchesBranch;
+  });
 
   const getCampaignName = (id: number) => {
     const campaign = campaigns.find((c) => c.id === id);
@@ -753,22 +759,41 @@ export default function MarketingExpensesPage() {
                       <SelectItem value="rejected">مرفوض</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input
-                    type="date"
-                    value={startDateFilter}
-                    onChange={(e) => setStartDateFilter(e.target.value)}
-                    placeholder="من تاريخ"
-                    dir="ltr"
-                    data-testid="filter-start-date"
-                  />
-                  <Input
-                    type="date"
-                    value={endDateFilter}
-                    onChange={(e) => setEndDateFilter(e.target.value)}
-                    placeholder="إلى تاريخ"
-                    dir="ltr"
-                    data-testid="filter-end-date"
-                  />
+                  <Select value={branchFilter} onValueChange={setBranchFilter}>
+                    <SelectTrigger data-testid="filter-branch">
+                      <SelectValue placeholder="الفرع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الفروع</SelectItem>
+                      {uniqueBranches.map((branch) => (
+                        <SelectItem key={branch} value={branch}>
+                          {branch}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <Label className="mb-2 block text-sm">من تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={startDateFilter}
+                      onChange={(e) => setStartDateFilter(e.target.value)}
+                      dir="ltr"
+                      data-testid="filter-start-date"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-2 block text-sm">إلى تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={endDateFilter}
+                      onChange={(e) => setEndDateFilter(e.target.value)}
+                      dir="ltr"
+                      data-testid="filter-end-date"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -779,6 +804,7 @@ export default function MarketingExpensesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>الفرع</TableHead>
                         <TableHead>الحملة</TableHead>
                         <TableHead>الفئة</TableHead>
                         <TableHead>الوصف</TableHead>
@@ -792,19 +818,20 @@ export default function MarketingExpensesPage() {
                     <TableBody>
                       {isLoading ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8">
+                          <TableCell colSpan={9} className="text-center py-8">
                             <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                           </TableCell>
                         </TableRow>
                       ) : filteredExpenses.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                             لا توجد مصروفات
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredExpenses.map((expense) => (
                           <TableRow key={expense.id} data-testid={`row-expense-${expense.id}`}>
+                            <TableCell className="font-medium">{(expense as any).branchName || "-"}</TableCell>
                             <TableCell className="font-medium">{getCampaignName(expense.campaignId)}</TableCell>
                             <TableCell>
                               <Badge variant="outline">
