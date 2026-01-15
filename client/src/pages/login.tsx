@@ -92,7 +92,7 @@ export default function LoginPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-[#1a3a2f] text-center">
               <span className="text-[#e67e22]">Butter</span> Bakery
             </h1>
-            <p className="text-[#1a3a2f]/70 text-sm mt-1">Specialty Coffee</p>
+            <p className="text-[#1a3a2f]/70 text-sm mt-1">CEO COMMAND</p>
           </div>
 
           <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-xl border border-[#1a3a2f]/10">
@@ -192,7 +192,7 @@ export default function LoginPage() {
             <div className="w-px h-4 bg-white/20 hidden md:block"></div>
             <div className="flex items-center gap-2 hidden sm:flex">
               <Coffee className="w-4 h-4 text-[#e67e22]" />
-              <span className="text-white text-xs font-medium">Specialty Coffee</span>
+              <span className="text-white text-xs font-medium">CEO COMMAND</span>
             </div>
           </div>
         </div>
