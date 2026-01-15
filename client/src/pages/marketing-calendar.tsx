@@ -651,11 +651,11 @@ export default function MarketingCalendarPage() {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("ar-SA", { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    const date = new Date(dateStr);
+    const day = date.getDate();
+    const month = MONTHS_AR[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
   };
 
   const getDaysUntil = (dateStr: string) => {
