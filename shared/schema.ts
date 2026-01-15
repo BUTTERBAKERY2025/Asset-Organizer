@@ -5145,6 +5145,7 @@ export const socialPosts = pgTable("social_posts", {
   failedReason: text("failed_reason"),
   campaignId: integer("campaign_id").references(() => marketingCampaigns.id),
   calendarEventId: integer("calendar_event_id").references(() => marketingCalendarEvents.id),
+  influencerId: integer("influencer_id").references(() => marketingInfluencers.id),
   createdBy: varchar("created_by").references(() => users.id),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),

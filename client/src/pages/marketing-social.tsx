@@ -16,15 +16,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Instagram, Facebook, Twitter, Youtube, Music, Ghost,
   Plus, Link2, Unlink, RefreshCw, Calendar, FileEdit,
-  BarChart3, Eye, Heart, Share2, Video,
+  BarChart3, Eye, Heart, Share2, Video, Image, Upload, X,
   TrendingUp, Users, Clock, CheckCircle, XCircle, AlertCircle,
-  Megaphone, FileText, Hash, Target,
+  Megaphone, FileText, Hash, Target, UserCheck, Briefcase,
   Sparkles, Layout as LayoutIcon, Copy, Trash2, Edit2, Play
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
 } from "recharts";
+import { downloadArabicPdf, getArabicDefaultStyle } from "@/lib/pdfmake-arabic";
 
 const formatNum = (num: number | string): string => {
   return Number(num).toLocaleString('en-US');
@@ -91,6 +92,37 @@ interface SocialPost {
   publishedAt?: string;
   createdAt: string;
   postType?: string;
+  campaignId?: number;
+  influencerId?: number;
+  campaign?: { id: number; name: string };
+  influencer?: { id: number; name: string };
+}
+
+interface Campaign {
+  id: number;
+  name: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+}
+
+interface Influencer {
+  id: number;
+  name: string;
+  nameAr?: string;
+  instagramHandle?: string;
+  tiktokHandle?: string;
+  twitterHandle?: string;
+  category?: string;
+}
+
+interface CalendarEvent {
+  id: number;
+  title: string;
+  eventType: string;
+  startDate: string;
+  endDate?: string;
+  campaignId?: number;
 }
 
 interface ContentTemplate {
@@ -153,7 +185,13 @@ export default function MarketingSocialPage() {
     scheduledAt: "",
     postType: "regular",
     hashtags: "",
+    campaignId: null as number | null,
+    influencerId: null as number | null,
+    mediaUrls: [] as string[],
+    mediaTypes: [] as string[],
   });
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [isUploading, setIsUploading] = useState(false);
 
   // Fetch data from API
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<SocialAccount[]>({
@@ -168,6 +206,18 @@ export default function MarketingSocialPage() {
     queryKey: ["/api/social-templates"],
   });
 
+  const { data: campaigns = [] } = useQuery<Campaign[]>({
+    queryKey: ["/api/marketing-campaigns"],
+  });
+
+  const { data: influencers = [] } = useQuery<Influencer[]>({
+    queryKey: ["/api/marketing-influencers"],
+  });
+
+  const { data: calendarEvents = [] } = useQuery<CalendarEvent[]>({
+    queryKey: ["/api/marketing-calendar-events"],
+  });
+
   const analytics = calculateAnalytics(accounts, posts);
   const isLoading = accountsLoading || postsLoading || templatesLoading;
 
@@ -180,7 +230,7 @@ export default function MarketingSocialPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/social-posts"] });
       toast({ title: "تم إنشاء المنشور", description: "تم حفظ المنشور بنجاح" });
       setShowPostDialog(false);
-      setNewPost({ content: "", platforms: [], scheduledAt: "", postType: "regular", hashtags: "" });
+      setNewPost({ content: "", platforms: [], scheduledAt: "", postType: "regular", hashtags: "", campaignId: null, influencerId: null, mediaUrls: [], mediaTypes: [] });
     },
     onError: () => {
       toast({ title: "خطأ", description: "فشل في إنشاء المنشور", variant: "destructive" });
@@ -227,10 +277,6 @@ export default function MarketingSocialPage() {
     },
   });
 
-  const filteredPosts = postFilter === "all" 
-    ? posts 
-    : posts.filter(p => p.status === postFilter);
-
   const getPlatformInfo = (platformId: string) => {
     return PLATFORMS.find(p => p.id === platformId) || PLATFORMS[0];
   };
@@ -248,8 +294,177 @@ export default function MarketingSocialPage() {
       hashtags: newPost.hashtags.split(/[\s,]+/).filter(Boolean),
       status: newPost.scheduledAt ? "scheduled" : "draft",
       scheduledAt: newPost.scheduledAt || null,
+      campaignId: newPost.campaignId,
+      influencerId: newPost.influencerId,
+      mediaUrls: newPost.mediaUrls,
+      mediaTypes: newPost.mediaTypes,
     };
     createPostMutation.mutate(postData);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setIsUploading(true);
+    const formData = new FormData();
+    Array.from(files).forEach(file => {
+      formData.append('files', file);
+    });
+    
+    try {
+      const response = await fetch('/api/social-media/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'فشل رفع الملفات');
+      }
+      
+      const data = await response.json();
+      const newUrls = data.files.map((f: any) => f.url);
+      const newTypes = data.files.map((f: any) => f.type);
+      
+      setNewPost(prev => ({
+        ...prev,
+        mediaUrls: [...prev.mediaUrls, ...newUrls],
+        mediaTypes: [...prev.mediaTypes, ...newTypes],
+      }));
+      
+      toast({ title: "تم الرفع", description: `تم رفع ${files.length} ملف بنجاح` });
+    } catch (error: any) {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveMedia = (index: number) => {
+    setNewPost(prev => ({
+      ...prev,
+      mediaUrls: prev.mediaUrls.filter((_, i) => i !== index),
+      mediaTypes: prev.mediaTypes.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleExportPDF = () => {
+    const date = new Date();
+    const today = `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+    
+    const docDefinition = {
+      pageOrientation: 'portrait' as const,
+      content: [
+        { text: 'تقرير أداء السوشيال ميديا', style: 'header', alignment: 'center' },
+        { text: `التاريخ: ${today}`, style: 'subheader', alignment: 'center', margin: [0, 0, 0, 20] },
+        
+        { text: 'ملخص الأداء', style: 'sectionHeader' },
+        {
+          table: {
+            widths: ['*', '*', '*', '*'],
+            body: [
+              [
+                { text: 'إجمالي المتابعين', style: 'tableHeader' },
+                { text: 'الوصول', style: 'tableHeader' },
+                { text: 'التفاعل', style: 'tableHeader' },
+                { text: 'معدل التفاعل', style: 'tableHeader' },
+              ],
+              [
+                { text: formatNum(analytics.totalFollowers), alignment: 'center' },
+                { text: formatNum(analytics.totalReach), alignment: 'center' },
+                { text: formatNum(analytics.totalEngagement), alignment: 'center' },
+                { text: `${formatNum(analytics.engagementRate)}%`, alignment: 'center' },
+              ],
+            ],
+          },
+          margin: [0, 0, 0, 20],
+        },
+        
+        { text: 'أداء المنصات', style: 'sectionHeader' },
+        {
+          table: {
+            widths: ['*', '*', '*', '*'],
+            body: [
+              [
+                { text: 'المنصة', style: 'tableHeader' },
+                { text: 'المتابعين', style: 'tableHeader' },
+                { text: 'التفاعل', style: 'tableHeader' },
+                { text: 'الوصول', style: 'tableHeader' },
+              ],
+              ...analytics.platformData.map(p => [
+                { text: p.platform, alignment: 'center' },
+                { text: formatNum(p.followers), alignment: 'center' },
+                { text: formatNum(p.engagement), alignment: 'center' },
+                { text: formatNum(p.reach), alignment: 'center' },
+              ]),
+            ],
+          },
+          margin: [0, 0, 0, 20],
+        },
+        
+        { text: 'الحسابات المتصلة', style: 'sectionHeader' },
+        {
+          table: {
+            widths: ['*', '*', '*', '*'],
+            body: [
+              [
+                { text: 'المنصة', style: 'tableHeader' },
+                { text: 'الحساب', style: 'tableHeader' },
+                { text: 'المتابعين', style: 'tableHeader' },
+                { text: 'الحالة', style: 'tableHeader' },
+              ],
+              ...accounts.map(a => [
+                { text: PLATFORMS.find(p => p.id === a.platform)?.name || a.platform, alignment: 'center' },
+                { text: a.accountHandle || a.accountName, alignment: 'center' },
+                { text: formatNum(a.followersCount), alignment: 'center' },
+                { text: a.isConnected ? 'متصل' : 'غير متصل', alignment: 'center' },
+              ]),
+            ],
+          },
+          margin: [0, 0, 0, 20],
+        },
+        
+        { text: 'إحصائيات المنشورات', style: 'sectionHeader' },
+        {
+          ul: [
+            `إجمالي المنشورات: ${formatNum(posts.length)}`,
+            `منشورات منشورة: ${formatNum(posts.filter(p => p.status === 'published').length)}`,
+            `منشورات مجدولة: ${formatNum(posts.filter(p => p.status === 'scheduled').length)}`,
+            `مسودات: ${formatNum(posts.filter(p => p.status === 'draft').length)}`,
+          ],
+        },
+      ],
+      styles: {
+        header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+        subheader: { fontSize: 12, color: 'gray' },
+        sectionHeader: { fontSize: 14, bold: true, margin: [0, 10, 0, 10] },
+        tableHeader: { bold: true, fontSize: 10, fillColor: '#f3f4f6', alignment: 'center' as const },
+      },
+      defaultStyle: getArabicDefaultStyle(),
+    };
+    
+    downloadArabicPdf(docDefinition, `تقرير-السوشيال-ميديا-${today}.pdf`);
+    toast({ title: "تم التصدير", description: "تم تصدير التقرير بنجاح" });
+  };
+
+  // Get upcoming calendar events for suggestions
+  const upcomingEvents = calendarEvents
+    .filter(e => new Date(e.startDate) >= new Date())
+    .slice(0, 5);
+
+  // Filter posts by campaign
+  const getFilteredPosts = () => {
+    let filtered = posts;
+    if (postFilter !== "all") {
+      filtered = filtered.filter(p => p.status === postFilter);
+    }
+    if (campaignFilter !== "all") {
+      filtered = filtered.filter(p => p.campaignId === parseInt(campaignFilter));
+    }
+    return filtered;
   };
 
   const handleUseTemplate = (template: ContentTemplate) => {
@@ -556,8 +771,8 @@ export default function MarketingSocialPage() {
           </TabsContent>
 
           <TabsContent value="posts" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
                 {[
                   { value: 'all', label: 'الكل' },
                   { value: 'draft', label: 'مسودات' },
@@ -581,14 +796,29 @@ export default function MarketingSocialPage() {
                   </Button>
                 ))}
               </div>
-              <Button onClick={() => setShowPostDialog(true)} data-testid="button-new-post-posts-tab">
-                <Plus className="h-4 w-4 ml-1" />
-                منشور جديد
-              </Button>
+              <div className="flex gap-2 items-center">
+                <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-campaign-filter">
+                    <SelectValue placeholder="تصفية بالحملة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الحملات</SelectItem>
+                    {campaigns.map((campaign) => (
+                      <SelectItem key={campaign.id} value={campaign.id.toString()}>
+                        {campaign.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={() => setShowPostDialog(true)} data-testid="button-new-post-posts-tab">
+                  <Plus className="h-4 w-4 ml-1" />
+                  منشور جديد
+                </Button>
+              </div>
             </div>
 
             <div className="grid gap-4">
-              {filteredPosts.map((post) => {
+              {getFilteredPosts().map((post) => {
                 const statusInfo = POST_STATUSES[post.status as keyof typeof POST_STATUSES];
                 const StatusIcon = statusInfo?.icon || FileEdit;
                 
@@ -629,7 +859,7 @@ export default function MarketingSocialPage() {
                             </div>
                           )}
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 flex-wrap">
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 {post.status === 'scheduled' && post.scheduledAt 
@@ -644,6 +874,18 @@ export default function MarketingSocialPage() {
                                   {post.postType === 'regular' ? 'منشور عادي' : 
                                    post.postType === 'story' ? 'ستوري' :
                                    post.postType === 'reel' ? 'ريلز' : 'كاروسيل'}
+                                </Badge>
+                              )}
+                              {post.campaignId && (
+                                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700" data-testid={`badge-campaign-${post.id}`}>
+                                  <Briefcase className="h-3 w-3 ml-1" />
+                                  {campaigns.find(c => c.id === post.campaignId)?.name || 'حملة'}
+                                </Badge>
+                              )}
+                              {post.influencerId && (
+                                <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700" data-testid={`badge-influencer-${post.id}`}>
+                                  <UserCheck className="h-3 w-3 ml-1" />
+                                  {influencers.find(i => i.id === post.influencerId)?.name || 'مؤثر'}
                                 </Badge>
                               )}
                             </div>
@@ -669,6 +911,16 @@ export default function MarketingSocialPage() {
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold">تحليلات الأداء</h3>
+                <p className="text-sm text-muted-foreground">إحصائيات شاملة لحساباتك على منصات التواصل</p>
+              </div>
+              <Button onClick={handleExportPDF} variant="outline" className="gap-2" data-testid="button-export-pdf">
+                <FileText className="h-4 w-4" />
+                تصدير PDF
+              </Button>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card>
                 <CardHeader>
@@ -901,6 +1153,64 @@ export default function MarketingSocialPage() {
                   {formatNum(newPost.content.length)} / {formatNum(2200)} حرف
                 </p>
               </div>
+
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Image className="h-4 w-4" />
+                  الوسائط (صور/فيديو)
+                </Label>
+                <div className="mt-2">
+                  {newPost.mediaUrls.length > 0 && (
+                    <div className="grid grid-cols-4 gap-2 mb-3">
+                      {newPost.mediaUrls.map((url, index) => (
+                        <div key={index} className="relative group">
+                          {newPost.mediaTypes[index] === 'video' ? (
+                            <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                              <Video className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                          ) : (
+                            <img 
+                              src={url} 
+                              alt={`Media ${index + 1}`}
+                              className="aspect-square object-cover rounded-lg"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMedia(index)}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            data-testid={`button-remove-media-${index}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,video/*"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      disabled={isUploading}
+                      data-testid="input-media-upload"
+                    />
+                    {isUploading ? (
+                      <span className="text-sm text-muted-foreground">جاري الرفع...</span>
+                    ) : (
+                      <>
+                        <Upload className="h-5 w-5 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">اضغط لرفع الصور أو الفيديو</span>
+                      </>
+                    )}
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    الحد الأقصى: 10 ملفات، 50 ميجابايت لكل ملف
+                  </p>
+                </div>
+              </div>
               
               <div>
                 <Label>الهاشتاقات</Label>
@@ -913,6 +1223,60 @@ export default function MarketingSocialPage() {
                   data-testid="input-hashtags"
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>الحملة التسويقية</Label>
+                  <Select 
+                    value={newPost.campaignId?.toString() || "none"} 
+                    onValueChange={(v) => setNewPost(prev => ({ ...prev, campaignId: v === "none" ? null : parseInt(v) }))}
+                  >
+                    <SelectTrigger data-testid="select-campaign">
+                      <SelectValue placeholder="اختر حملة (اختياري)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون حملة</SelectItem>
+                      {campaigns.filter(c => c.status === 'active' || c.status === 'planned').map((campaign) => (
+                        <SelectItem key={campaign.id} value={campaign.id.toString()}>
+                          {campaign.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>المؤثر</Label>
+                  <Select 
+                    value={newPost.influencerId?.toString() || "none"} 
+                    onValueChange={(v) => setNewPost(prev => ({ ...prev, influencerId: v === "none" ? null : parseInt(v) }))}
+                  >
+                    <SelectTrigger data-testid="select-influencer">
+                      <SelectValue placeholder="اختر مؤثر (اختياري)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون مؤثر</SelectItem>
+                      {influencers.map((influencer) => (
+                        <SelectItem key={influencer.id} value={influencer.id.toString()}>
+                          {influencer.nameAr || influencer.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {upcomingEvents.length > 0 && (
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm font-medium text-blue-700 mb-2">مناسبات قادمة للإلهام:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {upcomingEvents.map((event) => (
+                      <Badge key={event.id} variant="secondary" className="text-xs">
+                        {event.title} ({event.startDate})
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <div>
                 <Label>وقت النشر</Label>
@@ -944,6 +1308,82 @@ export default function MarketingSocialPage() {
                   />
                 )}
               </div>
+
+              {newPost.content && newPost.platforms.length > 0 && (
+                <div className="border-t pt-4">
+                  <Label className="flex items-center gap-2 mb-3">
+                    <Eye className="h-4 w-4" />
+                    معاينة المنشور
+                  </Label>
+                  <div className="grid gap-3">
+                    {newPost.platforms.map((platformId) => {
+                      const platform = getPlatformInfo(platformId);
+                      const Icon = platform.icon;
+                      const charLimit = platformId === 'twitter' ? 280 : platformId === 'instagram' ? 2200 : 500;
+                      const isOverLimit = newPost.content.length > charLimit;
+                      
+                      return (
+                        <div key={platformId} className="border rounded-lg overflow-hidden" data-testid={`preview-${platformId}`}>
+                          <div className={`${platform.color} ${platform.textColor} p-2 flex items-center gap-2`}>
+                            <Icon className="h-4 w-4" />
+                            <span className="text-sm font-medium">{platform.name}</span>
+                            <span className={`text-xs mr-auto ${isOverLimit ? 'text-red-200' : ''}`}>
+                              {formatNum(newPost.content.length)}/{formatNum(charLimit)} حرف
+                            </span>
+                          </div>
+                          <div className="p-3 bg-white">
+                            <div className="flex gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 flex items-center justify-center text-white font-bold text-sm">
+                                B
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-sm">Butter Bakery</p>
+                                <p className="text-xs text-muted-foreground">@butterbakery</p>
+                              </div>
+                            </div>
+                            {newPost.mediaUrls.length > 0 && (
+                              <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg overflow-hidden">
+                                {newPost.mediaUrls.slice(0, 4).map((url, idx) => (
+                                  <div key={idx} className="aspect-square relative">
+                                    {newPost.mediaTypes[idx] === 'video' ? (
+                                      <div className="w-full h-full bg-muted flex items-center justify-center">
+                                        <Video className="h-6 w-6 text-muted-foreground" />
+                                      </div>
+                                    ) : (
+                                      <img src={url} alt="" className="w-full h-full object-cover" />
+                                    )}
+                                    {idx === 3 && newPost.mediaUrls.length > 4 && (
+                                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold">
+                                        +{newPost.mediaUrls.length - 4}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <p className="mt-2 text-sm text-right whitespace-pre-wrap" dir="rtl">
+                              {newPost.content.slice(0, charLimit)}
+                              {isOverLimit && <span className="text-red-500">...</span>}
+                            </p>
+                            {newPost.hashtags && (
+                              <p className="mt-2 text-xs text-blue-600 text-right" dir="rtl">
+                                {newPost.hashtags.split(/[\s,]+/).filter(Boolean).map(tag => 
+                                  tag.startsWith('#') ? tag : `#${tag}`
+                                ).join(' ')}
+                              </p>
+                            )}
+                            <div className="flex gap-4 mt-3 pt-2 border-t text-muted-foreground text-xs">
+                              <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> إعجاب</span>
+                              <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> تعليق</span>
+                              <span className="flex items-center gap-1"><Share2 className="h-3 w-3" /> مشاركة</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowPostDialog(false)} data-testid="button-cancel-post">إلغاء</Button>

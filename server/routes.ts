@@ -16011,6 +16011,68 @@ export async function registerRoutes(
     }
   });
 
+  // Social Media File Upload
+  app.post("/api/social-media/upload", isAuthenticated, async (req: any, res) => {
+    try {
+      const multer = (await import("multer")).default;
+      const path = await import("path");
+      const fs = await import("fs");
+      
+      const uploadDir = path.join(process.cwd(), "uploads", "social-media");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      
+      const storage_multer = multer.diskStorage({
+        destination: (req, file, cb) => {
+          cb(null, uploadDir);
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+          const ext = path.extname(file.originalname);
+          cb(null, 'social-' + uniqueSuffix + ext);
+        }
+      });
+      
+      const upload = multer({ 
+        storage: storage_multer,
+        limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+        fileFilter: (req, file, cb) => {
+          const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm'];
+          if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+          } else {
+            cb(new Error('نوع الملف غير مدعوم'));
+          }
+        }
+      });
+      
+      upload.array("files", 10)(req, res, async (err: any) => {
+        if (err) {
+          console.error("Upload error:", err);
+          return res.status(400).json({ error: err.message || "فشل رفع الملف" });
+        }
+        
+        const files = req.files as Express.Multer.File[];
+        if (!files || files.length === 0) {
+          return res.status(400).json({ error: "لم يتم تحديد ملفات" });
+        }
+        
+        const uploadedFiles = files.map(file => ({
+          url: `/uploads/social-media/${file.filename}`,
+          type: file.mimetype.startsWith('video/') ? 'video' : 'image',
+          originalName: file.originalname,
+          size: file.size
+        }));
+        
+        res.json({ files: uploadedFiles });
+      });
+    } catch (error) {
+      console.error("Error in file upload:", error);
+      res.status(500).json({ error: "فشل في رفع الملفات" });
+    }
+  });
+
   // Social Templates
   app.get("/api/social-templates", isAuthenticated, async (req, res) => {
     try {

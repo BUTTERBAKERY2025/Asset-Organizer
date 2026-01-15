@@ -34,6 +34,9 @@ if (process.env.NODE_ENV === "production") {
 // Note: These are non-sensitive equipment photos, not confidential business data
 app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
+// Serve uploads directory for social media files
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
