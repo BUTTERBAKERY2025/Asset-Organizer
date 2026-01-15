@@ -327,6 +327,18 @@ import {
   type InsertPermissionCheckLog,
   type RoleTemplate,
   type InsertRoleTemplate,
+  socialAccounts,
+  type SocialAccount,
+  type InsertSocialAccount,
+  socialPosts,
+  type SocialPost,
+  type InsertSocialPost,
+  socialContentTemplates,
+  type SocialContentTemplate,
+  type InsertSocialContentTemplate,
+  socialPostMetrics,
+  type SocialPostMetric,
+  type InsertSocialPostMetric,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -905,6 +917,34 @@ export interface IStorage {
   // Transfer History - سجل النقل
   getTransferHistory(transferId: number): Promise<TransferHistory[]>;
   createTransferHistoryEntry(entry: { transferId: number; eventType: string; performedBy?: string; details?: any }): Promise<TransferHistory>;
+
+  // ==========================================
+  // Social Media Module - إدارة وسائل التواصل الاجتماعي
+  // ==========================================
+
+  // Social Accounts
+  getAllSocialAccounts(): Promise<SocialAccount[]>;
+  getSocialAccount(id: number): Promise<SocialAccount | undefined>;
+  getSocialAccountByPlatform(platform: string): Promise<SocialAccount | undefined>;
+  createSocialAccount(account: InsertSocialAccount): Promise<SocialAccount>;
+  updateSocialAccount(id: number, account: Partial<InsertSocialAccount>): Promise<SocialAccount | undefined>;
+  deleteSocialAccount(id: number): Promise<boolean>;
+
+  // Social Posts
+  getAllSocialPosts(): Promise<SocialPost[]>;
+  getSocialPost(id: number): Promise<SocialPost | undefined>;
+  getSocialPostsByStatus(status: string): Promise<SocialPost[]>;
+  createSocialPost(post: InsertSocialPost): Promise<SocialPost>;
+  updateSocialPost(id: number, post: Partial<InsertSocialPost>): Promise<SocialPost | undefined>;
+  deleteSocialPost(id: number): Promise<boolean>;
+
+  // Social Templates
+  getAllSocialTemplates(): Promise<SocialContentTemplate[]>;
+  getSocialTemplate(id: number): Promise<SocialContentTemplate | undefined>;
+  createSocialTemplate(template: InsertSocialContentTemplate): Promise<SocialContentTemplate>;
+  updateSocialTemplate(id: number, template: Partial<InsertSocialContentTemplate>): Promise<SocialContentTemplate | undefined>;
+  deleteSocialTemplate(id: number): Promise<boolean>;
+  incrementTemplateUsage(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -7561,6 +7601,132 @@ export class DatabaseStorage implements IStorage {
     }
 
     return rankings.sort((a, b) => b.value - a.value);
+  }
+
+  // ==========================================
+  // Social Media Module - إدارة وسائل التواصل الاجتماعي
+  // ==========================================
+
+  // Social Accounts
+  async getAllSocialAccounts(): Promise<SocialAccount[]> {
+    return await db.select().from(socialAccounts);
+  }
+
+  async getSocialAccount(id: number): Promise<SocialAccount | undefined> {
+    const [account] = await db.select().from(socialAccounts)
+      .where(eq(socialAccounts.id, id));
+    return account || undefined;
+  }
+
+  async getSocialAccountByPlatform(platform: string): Promise<SocialAccount | undefined> {
+    const [account] = await db.select().from(socialAccounts)
+      .where(eq(socialAccounts.platform, platform));
+    return account || undefined;
+  }
+
+  async createSocialAccount(account: InsertSocialAccount): Promise<SocialAccount> {
+    const [created] = await db.insert(socialAccounts)
+      .values(account)
+      .returning();
+    return created;
+  }
+
+  async updateSocialAccount(id: number, account: Partial<InsertSocialAccount>): Promise<SocialAccount | undefined> {
+    const [updated] = await db.update(socialAccounts)
+      .set({ ...account, updatedAt: new Date() })
+      .where(eq(socialAccounts.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSocialAccount(id: number): Promise<boolean> {
+    const result = await db.delete(socialAccounts)
+      .where(eq(socialAccounts.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  // Social Posts
+  async getAllSocialPosts(): Promise<SocialPost[]> {
+    return await db.select().from(socialPosts)
+      .orderBy(desc(socialPosts.createdAt));
+  }
+
+  async getSocialPost(id: number): Promise<SocialPost | undefined> {
+    const [post] = await db.select().from(socialPosts)
+      .where(eq(socialPosts.id, id));
+    return post || undefined;
+  }
+
+  async getSocialPostsByStatus(status: string): Promise<SocialPost[]> {
+    return await db.select().from(socialPosts)
+      .where(eq(socialPosts.status, status))
+      .orderBy(desc(socialPosts.createdAt));
+  }
+
+  async createSocialPost(post: InsertSocialPost): Promise<SocialPost> {
+    const [created] = await db.insert(socialPosts)
+      .values(post)
+      .returning();
+    return created;
+  }
+
+  async updateSocialPost(id: number, post: Partial<InsertSocialPost>): Promise<SocialPost | undefined> {
+    const [updated] = await db.update(socialPosts)
+      .set({ ...post, updatedAt: new Date() })
+      .where(eq(socialPosts.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSocialPost(id: number): Promise<boolean> {
+    const result = await db.delete(socialPosts)
+      .where(eq(socialPosts.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  // Social Templates
+  async getAllSocialTemplates(): Promise<SocialContentTemplate[]> {
+    return await db.select().from(socialContentTemplates)
+      .orderBy(desc(socialContentTemplates.usageCount));
+  }
+
+  async getSocialTemplate(id: number): Promise<SocialContentTemplate | undefined> {
+    const [template] = await db.select().from(socialContentTemplates)
+      .where(eq(socialContentTemplates.id, id));
+    return template || undefined;
+  }
+
+  async createSocialTemplate(template: InsertSocialContentTemplate): Promise<SocialContentTemplate> {
+    const [created] = await db.insert(socialContentTemplates)
+      .values(template)
+      .returning();
+    return created;
+  }
+
+  async updateSocialTemplate(id: number, template: Partial<InsertSocialContentTemplate>): Promise<SocialContentTemplate | undefined> {
+    const [updated] = await db.update(socialContentTemplates)
+      .set({ ...template, updatedAt: new Date() })
+      .where(eq(socialContentTemplates.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSocialTemplate(id: number): Promise<boolean> {
+    const result = await db.delete(socialContentTemplates)
+      .where(eq(socialContentTemplates.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async incrementTemplateUsage(id: number): Promise<void> {
+    await db.update(socialContentTemplates)
+      .set({ 
+        usageCount: sql`${socialContentTemplates.usageCount} + 1`,
+        updatedAt: new Date()
+      })
+      .where(eq(socialContentTemplates.id, id));
   }
 }
 

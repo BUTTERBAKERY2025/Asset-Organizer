@@ -15882,5 +15882,206 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // Social Media Management Routes
+  // ==========================================
+
+  // Social Accounts
+  app.get("/api/social-accounts", isAuthenticated, async (req, res) => {
+    try {
+      const accounts = await storage.getAllSocialAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching social accounts:", error);
+      res.status(500).json({ error: "فشل في جلب الحسابات" });
+    }
+  });
+
+  app.get("/api/social-accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const account = await storage.getSocialAccount(parseInt(req.params.id));
+      if (!account) {
+        return res.status(404).json({ error: "الحساب غير موجود" });
+      }
+      res.json(account);
+    } catch (error) {
+      console.error("Error fetching social account:", error);
+      res.status(500).json({ error: "فشل في جلب الحساب" });
+    }
+  });
+
+  app.post("/api/social-accounts", isAuthenticated, async (req, res) => {
+    try {
+      const account = await storage.createSocialAccount(req.body);
+      res.status(201).json(account);
+    } catch (error) {
+      console.error("Error creating social account:", error);
+      res.status(500).json({ error: "فشل في إنشاء الحساب" });
+    }
+  });
+
+  app.patch("/api/social-accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const account = await storage.updateSocialAccount(parseInt(req.params.id), req.body);
+      if (!account) {
+        return res.status(404).json({ error: "الحساب غير موجود" });
+      }
+      res.json(account);
+    } catch (error) {
+      console.error("Error updating social account:", error);
+      res.status(500).json({ error: "فشل في تحديث الحساب" });
+    }
+  });
+
+  app.delete("/api/social-accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const success = await storage.deleteSocialAccount(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ error: "الحساب غير موجود" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting social account:", error);
+      res.status(500).json({ error: "فشل في حذف الحساب" });
+    }
+  });
+
+  // Social Posts
+  app.get("/api/social-posts", isAuthenticated, async (req, res) => {
+    try {
+      const { status } = req.query;
+      const posts = status 
+        ? await storage.getSocialPostsByStatus(status as string)
+        : await storage.getAllSocialPosts();
+      res.json(posts);
+    } catch (error) {
+      console.error("Error fetching social posts:", error);
+      res.status(500).json({ error: "فشل في جلب المنشورات" });
+    }
+  });
+
+  app.get("/api/social-posts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const post = await storage.getSocialPost(parseInt(req.params.id));
+      if (!post) {
+        return res.status(404).json({ error: "المنشور غير موجود" });
+      }
+      res.json(post);
+    } catch (error) {
+      console.error("Error fetching social post:", error);
+      res.status(500).json({ error: "فشل في جلب المنشور" });
+    }
+  });
+
+  app.post("/api/social-posts", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.id;
+      const postData = { ...req.body, createdBy: userId };
+      const post = await storage.createSocialPost(postData);
+      res.status(201).json(post);
+    } catch (error) {
+      console.error("Error creating social post:", error);
+      res.status(500).json({ error: "فشل في إنشاء المنشور" });
+    }
+  });
+
+  app.patch("/api/social-posts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const post = await storage.updateSocialPost(parseInt(req.params.id), req.body);
+      if (!post) {
+        return res.status(404).json({ error: "المنشور غير موجود" });
+      }
+      res.json(post);
+    } catch (error) {
+      console.error("Error updating social post:", error);
+      res.status(500).json({ error: "فشل في تحديث المنشور" });
+    }
+  });
+
+  app.delete("/api/social-posts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const success = await storage.deleteSocialPost(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ error: "المنشور غير موجود" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting social post:", error);
+      res.status(500).json({ error: "فشل في حذف المنشور" });
+    }
+  });
+
+  // Social Templates
+  app.get("/api/social-templates", isAuthenticated, async (req, res) => {
+    try {
+      const templates = await storage.getAllSocialTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching social templates:", error);
+      res.status(500).json({ error: "فشل في جلب القوالب" });
+    }
+  });
+
+  app.get("/api/social-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const template = await storage.getSocialTemplate(parseInt(req.params.id));
+      if (!template) {
+        return res.status(404).json({ error: "القالب غير موجود" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching social template:", error);
+      res.status(500).json({ error: "فشل في جلب القالب" });
+    }
+  });
+
+  app.post("/api/social-templates", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.id;
+      const templateData = { ...req.body, createdBy: userId };
+      const template = await storage.createSocialTemplate(templateData);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating social template:", error);
+      res.status(500).json({ error: "فشل في إنشاء القالب" });
+    }
+  });
+
+  app.patch("/api/social-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const template = await storage.updateSocialTemplate(parseInt(req.params.id), req.body);
+      if (!template) {
+        return res.status(404).json({ error: "القالب غير موجود" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating social template:", error);
+      res.status(500).json({ error: "فشل في تحديث القالب" });
+    }
+  });
+
+  app.delete("/api/social-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const success = await storage.deleteSocialTemplate(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ error: "القالب غير موجود" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting social template:", error);
+      res.status(500).json({ error: "فشل في حذف القالب" });
+    }
+  });
+
+  app.post("/api/social-templates/:id/use", isAuthenticated, async (req, res) => {
+    try {
+      await storage.incrementTemplateUsage(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error incrementing template usage:", error);
+      res.status(500).json({ error: "فشل في تحديث الاستخدام" });
+    }
+  });
+
   return httpServer;
 }
