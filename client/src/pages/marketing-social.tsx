@@ -1,38 +1,44 @@
 import { Layout } from "../components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { 
   Instagram, Facebook, Twitter, Youtube, Music, Ghost,
-  Plus, Link2, Unlink, RefreshCw, Calendar, Send, FileEdit,
-  BarChart3, Eye, Heart, MessageCircle, Share2, Bookmark,
+  Plus, Link2, Unlink, RefreshCw, Calendar, FileEdit,
+  BarChart3, Eye, Heart, Share2, Video,
   TrendingUp, Users, Clock, CheckCircle, XCircle, AlertCircle,
-  Megaphone, Image, Video, FileText, Hash, Target, ChevronLeft,
+  Megaphone, FileText, Hash, Target,
   Sparkles, Layout as LayoutIcon, Copy, Trash2, Edit2, Play
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area, Legend, LineChart, Line
+  PieChart, Pie, Cell, AreaChart, Area
 } from "recharts";
 
 const formatNum = (num: number | string): string => {
   return Number(num).toLocaleString('en-US');
 };
 
+const formatDateTime = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const day = formatNum(date.getDate());
+  const month = formatNum(date.getMonth() + 1);
+  const year = formatNum(date.getFullYear());
+  const hours = formatNum(date.getHours()).padStart(2, '0');
+  const minutes = formatNum(date.getMinutes()).padStart(2, '0');
+  return `${year}/${month}/${day} ${hours}:${minutes}`;
+};
+
 const PLATFORMS = [
-  { id: "instagram", name: "انستقرام", icon: Instagram, color: "bg-gradient-to-r from-purple-500 to-pink-500", textColor: "text-white" },
+  { id: "instagram", name: "انستقرام", icon: Instagram, color: "bg-gradient-to-r from-purple-500 to-rose-500", textColor: "text-white" },
   { id: "facebook", name: "فيسبوك", icon: Facebook, color: "bg-blue-600", textColor: "text-white" },
   { id: "twitter", name: "تويتر/X", icon: Twitter, color: "bg-black", textColor: "text-white" },
   { id: "tiktok", name: "تيك توك", icon: Music, color: "bg-black", textColor: "text-white" },
@@ -143,7 +149,6 @@ const COLORS = ['#8b5cf6', '#3b82f6', '#000000', '#eab308'];
 
 export default function MarketingSocialPage() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("accounts");
   const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [showPostDialog, setShowPostDialog] = useState(false);
@@ -205,7 +210,7 @@ export default function MarketingSocialPage() {
       <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-2 rounded-lg">
+            <div className="bg-gradient-to-r from-purple-500 to-rose-500 p-2 rounded-lg">
               <Share2 className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -213,7 +218,7 @@ export default function MarketingSocialPage() {
               <p className="text-muted-foreground text-sm">إدارة حساباتك ومنشوراتك على منصات التواصل الاجتماعي</p>
             </div>
           </div>
-          <Button onClick={() => setShowPostDialog(true)} className="gap-2">
+          <Button onClick={() => setShowPostDialog(true)} className="gap-2" data-testid="button-new-post">
             <Plus className="h-4 w-4" />
             منشور جديد
           </Button>
@@ -228,7 +233,7 @@ export default function MarketingSocialPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">إجمالي المتابعين</p>
-                  <p className="text-xl font-bold">{formatNum(analytics.totalFollowers)}</p>
+                  <p className="text-xl font-bold" data-testid="text-total-followers">{formatNum(analytics.totalFollowers)}</p>
                   <p className="text-xs text-green-600">+{formatNum(analytics.followersGrowth)}%</p>
                 </div>
               </div>
@@ -242,7 +247,7 @@ export default function MarketingSocialPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">الوصول</p>
-                  <p className="text-xl font-bold">{formatNum(analytics.totalReach)}</p>
+                  <p className="text-xl font-bold" data-testid="text-total-reach">{formatNum(analytics.totalReach)}</p>
                 </div>
               </div>
             </CardContent>
@@ -255,7 +260,7 @@ export default function MarketingSocialPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">التفاعل</p>
-                  <p className="text-xl font-bold">{formatNum(analytics.totalEngagement)}</p>
+                  <p className="text-xl font-bold" data-testid="text-total-engagement">{formatNum(analytics.totalEngagement)}</p>
                 </div>
               </div>
             </CardContent>
@@ -268,7 +273,7 @@ export default function MarketingSocialPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">معدل التفاعل</p>
-                  <p className="text-xl font-bold">{formatNum(analytics.engagementRate)}%</p>
+                  <p className="text-xl font-bold" data-testid="text-engagement-rate">{formatNum(analytics.engagementRate)}%</p>
                 </div>
               </div>
             </CardContent>
@@ -277,23 +282,23 @@ export default function MarketingSocialPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-5 h-auto">
-            <TabsTrigger value="accounts" className="flex items-center gap-2 py-2">
+            <TabsTrigger value="accounts" className="flex items-center gap-2 py-2" data-testid="tab-accounts">
               <Link2 className="h-4 w-4" />
               <span className="hidden sm:inline">الحسابات</span>
             </TabsTrigger>
-            <TabsTrigger value="calendar" className="flex items-center gap-2 py-2">
+            <TabsTrigger value="calendar" className="flex items-center gap-2 py-2" data-testid="tab-calendar">
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">الجدولة</span>
             </TabsTrigger>
-            <TabsTrigger value="posts" className="flex items-center gap-2 py-2">
+            <TabsTrigger value="posts" className="flex items-center gap-2 py-2" data-testid="tab-posts">
               <FileEdit className="h-4 w-4" />
               <span className="hidden sm:inline">المنشورات</span>
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2 py-2">
+            <TabsTrigger value="analytics" className="flex items-center gap-2 py-2" data-testid="tab-analytics">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">التحليلات</span>
             </TabsTrigger>
-            <TabsTrigger value="templates" className="flex items-center gap-2 py-2">
+            <TabsTrigger value="templates" className="flex items-center gap-2 py-2" data-testid="tab-templates">
               <LayoutIcon className="h-4 w-4" />
               <span className="hidden sm:inline">القوالب</span>
             </TabsTrigger>
@@ -306,7 +311,7 @@ export default function MarketingSocialPage() {
                 const Icon = platform.icon;
                 
                 return (
-                  <Card key={platform.id} className={`${!account?.isConnected ? 'opacity-70' : ''}`}>
+                  <Card key={platform.id} className={`${!account?.isConnected ? 'opacity-70' : ''}`} data-testid={`card-platform-${platform.id}`}>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -320,7 +325,7 @@ export default function MarketingSocialPage() {
                             )}
                           </div>
                         </div>
-                        <Badge variant={account?.isConnected ? "default" : "secondary"}>
+                        <Badge variant={account?.isConnected ? "default" : "secondary"} data-testid={`badge-status-${platform.id}-${account?.isConnected ? 'connected' : 'disconnected'}`}>
                           {account?.isConnected ? "متصل" : "غير متصل"}
                         </Badge>
                       </div>
@@ -343,13 +348,13 @@ export default function MarketingSocialPage() {
                             </div>
                           </div>
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>آخر مزامنة: {account.lastSyncAt ? new Date(account.lastSyncAt).toLocaleString('ar-SA') : 'لم يتم'}</span>
-                            <Button size="sm" variant="ghost" className="h-7 px-2">
+                            <span>آخر مزامنة: {account.lastSyncAt ? formatDateTime(account.lastSyncAt) : 'لم يتم'}</span>
+                            <Button size="sm" variant="ghost" className="h-7 px-2" data-testid={`button-sync-${platform.id}`}>
                               <RefreshCw className="h-3 w-3" />
                             </Button>
                           </div>
                           <div className="flex gap-2">
-                            <Button size="sm" variant="outline" className="flex-1 text-xs">
+                            <Button size="sm" variant="outline" className="flex-1 text-xs" data-testid={`button-disconnect-${platform.id}`}>
                               <Unlink className="h-3 w-3 ml-1" />
                               إلغاء الربط
                             </Button>
@@ -366,6 +371,7 @@ export default function MarketingSocialPage() {
                           <Button 
                             className={`w-full ${platform.color} ${platform.textColor}`}
                             onClick={() => handleConnectPlatform(platform.id)}
+                            data-testid={`button-connect-${platform.id}`}
                           >
                             <Link2 className="h-4 w-4 ml-2" />
                             ربط الحساب
@@ -387,7 +393,7 @@ export default function MarketingSocialPage() {
                     <CardTitle>تقويم النشر</CardTitle>
                     <CardDescription>جدولة ومتابعة المنشورات</CardDescription>
                   </div>
-                  <Button onClick={() => setShowPostDialog(true)} size="sm">
+                  <Button onClick={() => setShowPostDialog(true)} size="sm" data-testid="button-schedule-post">
                     <Plus className="h-4 w-4 ml-1" />
                     جدولة منشور
                   </Button>
@@ -409,6 +415,7 @@ export default function MarketingSocialPage() {
                       <div 
                         key={i} 
                         className={`aspect-square border rounded-lg p-1 text-center cursor-pointer hover:bg-muted/50 transition-colors ${hasPost ? 'bg-purple-50 border-purple-200' : ''}`}
+                        data-testid={`calendar-day-${i}`}
                       >
                         <span className="text-sm">{formatNum(dayNum)}</span>
                         {hasPost && (
@@ -424,7 +431,7 @@ export default function MarketingSocialPage() {
                 <div className="mt-6 space-y-3">
                   <h4 className="font-medium">المنشورات المجدولة القادمة</h4>
                   {posts.filter(p => p.status === 'scheduled').map((post) => (
-                    <div key={post.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                    <div key={post.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg" data-testid={`scheduled-post-${post.id}`}>
                       <div className="flex gap-1">
                         {post.platforms.map(p => {
                           const platform = getPlatformInfo(p);
@@ -439,14 +446,14 @@ export default function MarketingSocialPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{post.title || post.content.slice(0, 50)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {post.scheduledAt && new Date(post.scheduledAt).toLocaleString('ar-SA')}
+                          {post.scheduledAt && formatDateTime(post.scheduledAt)}
                         </p>
                       </div>
                       <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" data-testid={`button-edit-scheduled-${post.id}`}>
                           <Edit2 className="h-3 w-3" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500">
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" data-testid={`button-delete-scheduled-${post.id}`}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -472,17 +479,18 @@ export default function MarketingSocialPage() {
                     variant={postFilter === filter.value ? "default" : "outline"}
                     size="sm"
                     onClick={() => setPostFilter(filter.value)}
+                    data-testid={`button-filter-${filter.value}`}
                   >
                     {filter.label}
                     {filter.value !== 'all' && (
-                      <Badge variant="secondary" className="mr-1 h-5 px-1.5">
+                      <Badge variant="secondary" className="mr-1 h-5 px-1.5" data-testid={`badge-count-${filter.value}`}>
                         {formatNum(posts.filter(p => p.status === filter.value).length)}
                       </Badge>
                     )}
                   </Button>
                 ))}
               </div>
-              <Button onClick={() => setShowPostDialog(true)}>
+              <Button onClick={() => setShowPostDialog(true)} data-testid="button-new-post-posts-tab">
                 <Plus className="h-4 w-4 ml-1" />
                 منشور جديد
               </Button>
@@ -494,7 +502,7 @@ export default function MarketingSocialPage() {
                 const StatusIcon = statusInfo?.icon || FileEdit;
                 
                 return (
-                  <Card key={post.id}>
+                  <Card key={post.id} data-testid={`card-post-${post.id}`}>
                     <CardContent className="p-4">
                       <div className="flex gap-4">
                         <div className="flex-shrink-0 flex flex-col gap-1">
@@ -514,7 +522,7 @@ export default function MarketingSocialPage() {
                               {post.title && <h4 className="font-medium">{post.title}</h4>}
                               <p className="text-sm text-muted-foreground line-clamp-2">{post.content}</p>
                             </div>
-                            <Badge className={statusInfo?.color}>
+                            <Badge className={statusInfo?.color} data-testid={`badge-status-${post.status}-${post.id}`}>
                               <StatusIcon className="h-3 w-3 ml-1" />
                               {statusInfo?.label}
                             </Badge>
@@ -534,14 +542,14 @@ export default function MarketingSocialPage() {
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 {post.status === 'scheduled' && post.scheduledAt 
-                                  ? `مجدول: ${new Date(post.scheduledAt).toLocaleString('ar-SA')}`
+                                  ? `مجدول: ${formatDateTime(post.scheduledAt)}`
                                   : post.status === 'published' && post.publishedAt
-                                  ? `نُشر: ${new Date(post.publishedAt).toLocaleString('ar-SA')}`
-                                  : `أُنشئ: ${new Date(post.createdAt).toLocaleString('ar-SA')}`
+                                  ? `نُشر: ${formatDateTime(post.publishedAt)}`
+                                  : `أُنشئ: ${formatDateTime(post.createdAt)}`
                                 }
                               </span>
                               {post.postType && (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" className="text-xs" data-testid={`badge-posttype-${post.id}`}>
                                   {post.postType === 'regular' ? 'منشور عادي' : 
                                    post.postType === 'story' ? 'ستوري' :
                                    post.postType === 'reel' ? 'ريلز' : 'كاروسيل'}
@@ -549,13 +557,13 @@ export default function MarketingSocialPage() {
                               )}
                             </div>
                             <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" data-testid={`button-edit-post-${post.id}`}>
                                 <Edit2 className="h-3 w-3" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" data-testid={`button-copy-post-${post.id}`}>
                                 <Copy className="h-3 w-3" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" data-testid={`button-delete-post-${post.id}`}>
                                 <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
@@ -668,7 +676,7 @@ export default function MarketingSocialPage() {
                 <h3 className="font-medium">قوالب المحتوى</h3>
                 <p className="text-sm text-muted-foreground">قوالب جاهزة لتسريع إنشاء المحتوى</p>
               </div>
-              <Button onClick={() => setShowTemplateDialog(true)}>
+              <Button onClick={() => setShowTemplateDialog(true)} data-testid="button-new-template">
                 <Plus className="h-4 w-4 ml-1" />
                 قالب جديد
               </Button>
@@ -680,7 +688,7 @@ export default function MarketingSocialPage() {
                 const CategoryIcon = category?.icon || FileText;
                 
                 return (
-                  <Card key={template.id} className="hover:shadow-md transition-shadow">
+                  <Card key={template.id} className="hover:shadow-md transition-shadow" data-testid={`card-template-${template.id}`}>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -692,7 +700,7 @@ export default function MarketingSocialPage() {
                             <CardDescription className="text-xs">{category?.name}</CardDescription>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-xs" data-testid={`badge-usage-${template.id}`}>
                           {formatNum(template.usageCount)} استخدام
                         </Badge>
                       </div>
@@ -719,11 +727,12 @@ export default function MarketingSocialPage() {
                           size="sm" 
                           className="flex-1"
                           onClick={() => handleUseTemplate(template)}
+                          data-testid={`button-use-template-${template.id}`}
                         >
                           <Play className="h-3 w-3 ml-1" />
                           استخدام
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" data-testid={`button-edit-template-${template.id}`}>
                           <Edit2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -762,6 +771,7 @@ export default function MarketingSocialPage() {
                               : [...prev.platforms, platform.id]
                           }));
                         }}
+                        data-testid={`button-select-platform-${platform.id}`}
                       >
                         <Icon className="h-4 w-4 ml-1" />
                         {platform.name}
@@ -774,14 +784,14 @@ export default function MarketingSocialPage() {
               <div>
                 <Label>نوع المنشور</Label>
                 <Select value={newPost.postType} onValueChange={(v) => setNewPost(prev => ({ ...prev, postType: v }))}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-post-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="regular">منشور عادي</SelectItem>
-                    <SelectItem value="story">ستوري</SelectItem>
-                    <SelectItem value="reel">ريلز/فيديو قصير</SelectItem>
-                    <SelectItem value="carousel">كاروسيل (صور متعددة)</SelectItem>
+                    <SelectItem value="regular" data-testid="select-item-regular">منشور عادي</SelectItem>
+                    <SelectItem value="story" data-testid="select-item-story">ستوري</SelectItem>
+                    <SelectItem value="reel" data-testid="select-item-reel">ريلز/فيديو قصير</SelectItem>
+                    <SelectItem value="carousel" data-testid="select-item-carousel">كاروسيل (صور متعددة)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -794,6 +804,7 @@ export default function MarketingSocialPage() {
                   placeholder="اكتب محتوى المنشور هنا..."
                   className="min-h-[120px] text-right"
                   dir="rtl"
+                  data-testid="input-content"
                 />
                 <p className="text-xs text-muted-foreground mt-1 text-left">
                   {formatNum(newPost.content.length)} / {formatNum(2200)} حرف
@@ -808,6 +819,7 @@ export default function MarketingSocialPage() {
                   placeholder="#باتر #حلويات #مخبوزات"
                   className="text-right"
                   dir="rtl"
+                  data-testid="input-hashtags"
                 />
               </div>
               
@@ -818,6 +830,7 @@ export default function MarketingSocialPage() {
                     variant={!newPost.scheduledAt ? "default" : "outline"}
                     size="sm"
                     onClick={() => setNewPost(prev => ({ ...prev, scheduledAt: "" }))}
+                    data-testid="button-publish-now"
                   >
                     نشر فوري
                   </Button>
@@ -825,6 +838,7 @@ export default function MarketingSocialPage() {
                     variant={newPost.scheduledAt ? "default" : "outline"}
                     size="sm"
                     onClick={() => setNewPost(prev => ({ ...prev, scheduledAt: new Date().toISOString().slice(0, 16) }))}
+                    data-testid="button-schedule"
                   >
                     جدولة
                   </Button>
@@ -835,13 +849,14 @@ export default function MarketingSocialPage() {
                     value={newPost.scheduledAt}
                     onChange={(e) => setNewPost(prev => ({ ...prev, scheduledAt: e.target.value }))}
                     className="mt-2"
+                    data-testid="input-scheduled-datetime"
                   />
                 )}
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowPostDialog(false)}>إلغاء</Button>
-              <Button onClick={handleCreatePost} disabled={!newPost.content || newPost.platforms.length === 0}>
+              <Button variant="outline" onClick={() => setShowPostDialog(false)} data-testid="button-cancel-post">إلغاء</Button>
+              <Button onClick={handleCreatePost} disabled={!newPost.content || newPost.platforms.length === 0} data-testid="button-submit-post">
                 {newPost.scheduledAt ? 'جدولة المنشور' : 'نشر الآن'}
               </Button>
             </DialogFooter>
@@ -871,14 +886,14 @@ export default function MarketingSocialPage() {
               </p>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowConnectDialog(false)}>إلغاء</Button>
+              <Button variant="outline" onClick={() => setShowConnectDialog(false)} data-testid="button-cancel-connect">إلغاء</Button>
               <Button onClick={() => {
                 toast({
                   title: "جاري الربط...",
                   description: "سيتم توجيهك لصفحة تسجيل الدخول",
                 });
                 setShowConnectDialog(false);
-              }}>
+              }} data-testid="button-confirm-connect">
                 متابعة الربط
               </Button>
             </DialogFooter>
