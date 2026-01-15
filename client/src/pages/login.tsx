@@ -39,7 +39,7 @@ export default function LoginPage() {
       <div className="flex-1 relative flex flex-col xl:flex-row items-center justify-center gap-8 lg:gap-16 p-4 sm:p-6 md:p-8 lg:p-12">
         
         <div className="hidden xl:flex flex-1 flex-col items-start justify-center max-w-2xl">
-          <div className="relative">
+          <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white/50">
             <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-lg" />
             <div className="absolute top-4 left-4">
               <img src={logo} alt="Butter Bakery" className="h-20 w-auto drop-shadow-lg" />
