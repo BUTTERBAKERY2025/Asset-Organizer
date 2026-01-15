@@ -7,11 +7,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight, ListTodo, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight, 
+  ListTodo, CheckCircle2, Clock, AlertCircle, Sun, Moon, GraduationCap, Flag, Heart,
+  Sparkles, ShoppingBag, Palmtree, Snowflake, Crown, Building2, Cake, PartyPopper,
+  CalendarDays, Eye, EyeOff, Filter, TrendingUp
+} from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
@@ -48,15 +55,30 @@ interface MarketingTask {
   assignedTo?: string;
 }
 
+interface SaudiOccasion {
+  id: string;
+  title: string;
+  titleEn: string;
+  date: string;
+  endDate?: string;
+  category: "holiday" | "national" | "religious" | "season" | "education" | "commercial" | "social";
+  description: string;
+  marketingTips: string[];
+  icon: any;
+  color: string;
+  isOfficial: boolean;
+}
+
 interface UnifiedCalendarEvent {
   id: string;
   title: string;
   date: string;
   endDate?: string;
-  type: "event" | "campaign_start" | "campaign_end" | "task";
+  type: "event" | "campaign_start" | "campaign_end" | "task" | "occasion";
   color: string;
-  source: "calendar" | "campaign" | "task";
+  source: "calendar" | "campaign" | "task" | "saudi_occasion";
   originalData?: any;
+  category?: string;
 }
 
 const EVENT_TYPES = [
@@ -67,7 +89,19 @@ const EVENT_TYPES = [
   { value: "meeting", label: "اجتماع", color: "bg-green-500" },
   { value: "event", label: "فعالية", color: "bg-pink-500" },
   { value: "holiday", label: "مناسبة", color: "bg-orange-500" },
+  { value: "promotion", label: "عرض ترويجي", color: "bg-cyan-500" },
   { value: "other", label: "أخرى", color: "bg-gray-500" },
+];
+
+const OCCASION_CATEGORIES = [
+  { value: "all", label: "الكل", color: "bg-gray-500" },
+  { value: "holiday", label: "إجازات رسمية", color: "bg-red-500", icon: Calendar },
+  { value: "national", label: "مناسبات وطنية", color: "bg-green-600", icon: Flag },
+  { value: "religious", label: "مناسبات دينية", color: "bg-emerald-500", icon: Moon },
+  { value: "season", label: "مواسم", color: "bg-orange-500", icon: Sun },
+  { value: "education", label: "تعليم ومدارس", color: "bg-blue-500", icon: GraduationCap },
+  { value: "commercial", label: "تجارية وتسوق", color: "bg-purple-500", icon: ShoppingBag },
+  { value: "social", label: "اجتماعية", color: "bg-pink-500", icon: Heart },
 ];
 
 const MONTHS_AR = [
@@ -75,7 +109,240 @@ const MONTHS_AR = [
   "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
 ];
 
-const DAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const DAYS_AR = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+
+const getSaudiOccasions = (year: number): SaudiOccasion[] => {
+  return [
+    {
+      id: "founding-day",
+      title: "يوم التأسيس",
+      titleEn: "Founding Day",
+      date: `${year}-02-22`,
+      category: "national",
+      description: "ذكرى تأسيس الدولة السعودية الأولى عام 1727م",
+      marketingTips: ["عروض خاصة بالتراث السعودي", "منتجات بألوان العلم", "حملات الفخر الوطني"],
+      icon: Crown,
+      color: "bg-green-600",
+      isOfficial: true,
+    },
+    {
+      id: "ramadan-start",
+      title: "بداية شهر رمضان",
+      titleEn: "Ramadan Start",
+      date: `${year}-03-10`,
+      endDate: `${year}-04-09`,
+      category: "religious",
+      description: "شهر الصيام المبارك",
+      marketingTips: ["عروض رمضانية", "منتجات الإفطار", "حملات التبرع والخير", "ساعات عمل خاصة"],
+      icon: Moon,
+      color: "bg-emerald-500",
+      isOfficial: true,
+    },
+    {
+      id: "eid-fitr",
+      title: "عيد الفطر المبارك",
+      titleEn: "Eid Al-Fitr",
+      date: `${year}-04-10`,
+      endDate: `${year}-04-13`,
+      category: "religious",
+      description: "إجازة عيد الفطر",
+      marketingTips: ["عروض العيد", "هدايا العيد", "ملابس العيد", "حلويات ومعمول"],
+      icon: PartyPopper,
+      color: "bg-amber-500",
+      isOfficial: true,
+    },
+    {
+      id: "summer-vacation-start",
+      title: "بداية الإجازة الصيفية",
+      titleEn: "Summer Vacation Start",
+      date: `${year}-06-20`,
+      endDate: `${year}-08-25`,
+      category: "education",
+      description: "إجازة الصيف للمدارس",
+      marketingTips: ["عروض السفر", "أنشطة الأطفال", "دورات صيفية", "منتجات الترفيه"],
+      icon: GraduationCap,
+      color: "bg-blue-500",
+      isOfficial: false,
+    },
+    {
+      id: "summer-season",
+      title: "موسم الصيف",
+      titleEn: "Summer Season",
+      date: `${year}-06-21`,
+      endDate: `${year}-09-21`,
+      category: "season",
+      description: "فصل الصيف - ذروة السفر والسياحة",
+      marketingTips: ["عروض السفر الداخلي", "منتجات الصيف", "مشروبات باردة", "حملات الترفيه"],
+      icon: Sun,
+      color: "bg-orange-500",
+      isOfficial: false,
+    },
+    {
+      id: "eid-adha",
+      title: "عيد الأضحى المبارك",
+      titleEn: "Eid Al-Adha",
+      date: `${year}-06-16`,
+      endDate: `${year}-06-20`,
+      category: "religious",
+      description: "إجازة عيد الأضحى وموسم الحج",
+      marketingTips: ["عروض الأضاحي", "هدايا العيد", "ملابس العيد", "لحوم ومنتجات غذائية"],
+      icon: PartyPopper,
+      color: "bg-amber-600",
+      isOfficial: true,
+    },
+    {
+      id: "hajj-season",
+      title: "موسم الحج",
+      titleEn: "Hajj Season",
+      date: `${year}-06-06`,
+      endDate: `${year}-06-20`,
+      category: "religious",
+      description: "موسم الحج المبارك",
+      marketingTips: ["منتجات الحجاج", "خدمات الضيافة", "هدايا تذكارية"],
+      icon: Building2,
+      color: "bg-teal-600",
+      isOfficial: false,
+    },
+    {
+      id: "back-to-school",
+      title: "العودة للمدارس",
+      titleEn: "Back to School",
+      date: `${year}-08-25`,
+      endDate: `${year}-09-15`,
+      category: "education",
+      description: "موسم العودة للمدارس",
+      marketingTips: ["أدوات مدرسية", "ملابس مدرسية", "حقائب وأجهزة", "عروض الطلاب"],
+      icon: GraduationCap,
+      color: "bg-indigo-500",
+      isOfficial: false,
+    },
+    {
+      id: "national-day",
+      title: "اليوم الوطني السعودي",
+      titleEn: "Saudi National Day",
+      date: `${year}-09-23`,
+      category: "national",
+      description: "ذكرى توحيد المملكة العربية السعودية",
+      marketingTips: ["عروض وطنية", "منتجات بألوان العلم", "فعاليات احتفالية", "خصومات 23%"],
+      icon: Flag,
+      color: "bg-green-600",
+      isOfficial: true,
+    },
+    {
+      id: "riyadh-season",
+      title: "موسم الرياض",
+      titleEn: "Riyadh Season",
+      date: `${year}-10-15`,
+      endDate: `${year + 1}-02-28`,
+      category: "commercial",
+      description: "أكبر موسم ترفيهي في المملكة",
+      marketingTips: ["شراكات مع الفعاليات", "عروض خاصة", "تجارب تفاعلية", "حملات رقمية مكثفة"],
+      icon: Sparkles,
+      color: "bg-purple-600",
+      isOfficial: false,
+    },
+    {
+      id: "singles-day",
+      title: "يوم العزاب 11.11",
+      titleEn: "Singles Day",
+      date: `${year}-11-11`,
+      category: "commercial",
+      description: "أكبر يوم تسوق في العالم",
+      marketingTips: ["خصومات كبيرة", "عروض فلاش", "شحن مجاني", "حملات رقمية"],
+      icon: ShoppingBag,
+      color: "bg-red-500",
+      isOfficial: false,
+    },
+    {
+      id: "black-friday",
+      title: "الجمعة البيضاء",
+      titleEn: "White Friday",
+      date: `${year}-11-29`,
+      endDate: `${year}-12-02`,
+      category: "commercial",
+      description: "موسم التخفيضات الكبرى",
+      marketingTips: ["خصومات ضخمة", "عروض محدودة", "حملات إعلانية مكثفة", "تسويق عبر المؤثرين"],
+      icon: ShoppingBag,
+      color: "bg-gray-900",
+      isOfficial: false,
+    },
+    {
+      id: "winter-season",
+      title: "موسم الشتاء",
+      titleEn: "Winter Season",
+      date: `${year}-12-21`,
+      endDate: `${year + 1}-03-20`,
+      category: "season",
+      description: "فصل الشتاء - موسم التخييم والرحلات البرية",
+      marketingTips: ["منتجات التخييم", "ملابس شتوية", "مشروبات ساخنة", "رحلات برية"],
+      icon: Snowflake,
+      color: "bg-cyan-500",
+      isOfficial: false,
+    },
+    {
+      id: "year-end",
+      title: "نهاية السنة الميلادية",
+      titleEn: "Year End",
+      date: `${year}-12-31`,
+      category: "commercial",
+      description: "تصفيات نهاية العام",
+      marketingTips: ["تصفيات المخزون", "عروض نهاية السنة", "ملخص العام", "خطط السنة الجديدة"],
+      icon: Calendar,
+      color: "bg-amber-500",
+      isOfficial: false,
+    },
+    {
+      id: "mothers-day",
+      title: "يوم الأم",
+      titleEn: "Mother's Day",
+      date: `${year}-03-21`,
+      category: "social",
+      description: "يوم تكريم الأمهات",
+      marketingTips: ["هدايا للأمهات", "باقات ورود", "عروض سبا", "حلويات خاصة"],
+      icon: Heart,
+      color: "bg-pink-500",
+      isOfficial: false,
+    },
+    {
+      id: "fathers-day",
+      title: "يوم الأب",
+      titleEn: "Father's Day",
+      date: `${year}-06-21`,
+      category: "social",
+      description: "يوم تكريم الآباء",
+      marketingTips: ["هدايا للآباء", "منتجات رجالية", "تجارب خاصة"],
+      icon: Heart,
+      color: "bg-blue-600",
+      isOfficial: false,
+    },
+    {
+      id: "spring-break",
+      title: "إجازة الربيع",
+      titleEn: "Spring Break",
+      date: `${year}-03-15`,
+      endDate: `${year}-03-25`,
+      category: "education",
+      description: "إجازة منتصف العام الدراسي",
+      marketingTips: ["أنشطة عائلية", "رحلات قصيرة", "فعاليات ترفيهية"],
+      icon: Palmtree,
+      color: "bg-lime-500",
+      isOfficial: false,
+    },
+    {
+      id: "midyear-sale",
+      title: "تخفيضات منتصف العام",
+      titleEn: "Mid-Year Sale",
+      date: `${year}-06-15`,
+      endDate: `${year}-06-30`,
+      category: "commercial",
+      description: "موسم تخفيضات منتصف السنة",
+      marketingTips: ["تصفيات صيفية", "عروض موسمية", "خصومات متدرجة"],
+      icon: ShoppingBag,
+      color: "bg-rose-500",
+      isOfficial: false,
+    },
+  ];
+};
 
 export default function MarketingCalendarPage() {
   const { toast } = useToast();
@@ -86,8 +353,13 @@ export default function MarketingCalendarPage() {
   const [showCampaigns, setShowCampaigns] = useState(true);
   const [showTasks, setShowTasks] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
+  const [showOccasions, setShowOccasions] = useState(true);
+  const [occasionFilter, setOccasionFilter] = useState("all");
   const [selectedDayEvents, setSelectedDayEvents] = useState<UnifiedCalendarEvent[]>([]);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
+  const [selectedOccasion, setSelectedOccasion] = useState<SaudiOccasion | null>(null);
+  const [isOccasionDialogOpen, setIsOccasionDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("calendar");
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -97,6 +369,9 @@ export default function MarketingCalendarPage() {
     allDay: true,
     notes: "",
   });
+
+  const currentYear = currentDate.getFullYear();
+  const saudiOccasions = useMemo(() => getSaudiOccasions(currentYear), [currentYear]);
 
   const { data: events = [], isLoading: eventsLoading } = useQuery<CalendarEvent[]>({
     queryKey: ["/api/marketing/calendar-events"],
@@ -127,8 +402,29 @@ export default function MarketingCalendarPage() {
 
   const isLoading = eventsLoading || campaignsLoading || tasksLoading;
 
+  const filteredOccasions = useMemo(() => {
+    if (occasionFilter === "all") return saudiOccasions;
+    return saudiOccasions.filter(o => o.category === occasionFilter);
+  }, [saudiOccasions, occasionFilter]);
+
   const unifiedEvents = useMemo(() => {
     const unified: UnifiedCalendarEvent[] = [];
+
+    if (showOccasions) {
+      filteredOccasions.forEach(occasion => {
+        unified.push({
+          id: `occasion-${occasion.id}`,
+          title: occasion.title,
+          date: occasion.date,
+          endDate: occasion.endDate,
+          type: "occasion",
+          color: occasion.color,
+          source: "saudi_occasion",
+          originalData: occasion,
+          category: occasion.category,
+        });
+      });
+    }
 
     if (showEvents) {
       events.forEach(event => {
@@ -195,7 +491,7 @@ export default function MarketingCalendarPage() {
     }
 
     return unified.filter(e => e.date && !isNaN(new Date(e.date).getTime()));
-  }, [events, campaigns, tasks, showEvents, showCampaigns, showTasks]);
+  }, [events, campaigns, tasks, filteredOccasions, showEvents, showCampaigns, showTasks, showOccasions]);
 
   const createEventMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -244,7 +540,18 @@ export default function MarketingCalendarPage() {
 
   const getEventsForDate = (day: number) => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return unifiedEvents.filter(e => e.date && e.date.startsWith(dateStr));
+    return unifiedEvents.filter(e => {
+      if (!e.date) return false;
+      const startMatch = e.date.startsWith(dateStr);
+      if (startMatch) return true;
+      if (e.endDate) {
+        const eventStart = new Date(e.date);
+        const eventEnd = new Date(e.endDate);
+        const checkDate = new Date(dateStr);
+        return checkDate >= eventStart && checkDate <= eventEnd;
+      }
+      return false;
+    });
   };
 
   const goToPrevMonth = () => {
@@ -290,6 +597,29 @@ export default function MarketingCalendarPage() {
     createEventMutation.mutate(formData);
   };
 
+  const handleOccasionClick = (occasion: SaudiOccasion) => {
+    setSelectedOccasion(occasion);
+    setIsOccasionDialogOpen(true);
+  };
+
+  const createCampaignFromOccasion = () => {
+    if (selectedOccasion) {
+      const startDate = new Date(selectedOccasion.date);
+      startDate.setDate(startDate.getDate() - 14);
+      setFormData({
+        title: `حملة ${selectedOccasion.title}`,
+        description: selectedOccasion.description,
+        eventType: "campaign_launch",
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: selectedOccasion.date,
+        allDay: true,
+        notes: selectedOccasion.marketingTips.join('\n'),
+      });
+      setIsOccasionDialogOpen(false);
+      setIsAddDialogOpen(true);
+    }
+  };
+
   const getEventTypeInfo = (type: string) => {
     return EVENT_TYPES.find(t => t.value === type) || EVENT_TYPES[EVENT_TYPES.length - 1];
   };
@@ -301,35 +631,57 @@ export default function MarketingCalendarPage() {
            today.getDate() === day;
   };
 
-  const getSourceIcon = (source: string) => {
+  const getSourceIcon = (source: string, data?: any) => {
+    if (source === "saudi_occasion" && data?.icon) {
+      const Icon = data.icon;
+      return <Icon className="w-3 h-3" />;
+    }
     switch (source) {
       case "campaign": return <Megaphone className="w-3 h-3" />;
       case "task": return <ListTodo className="w-3 h-3" />;
+      case "saudi_occasion": return <Star className="w-3 h-3" />;
       default: return <Calendar className="w-3 h-3" />;
     }
   };
 
-  const upcomingEvents = unifiedEvents
-    .filter(e => {
-      if (!e.date) return false;
-      const eventDate = new Date(e.date);
-      return !isNaN(eventDate.getTime()) && eventDate >= new Date();
-    })
+  const upcomingOccasions = saudiOccasions
+    .filter(o => new Date(o.date) >= new Date())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 5);
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleDateString("ar-SA", { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
+  const getDaysUntil = (dateStr: string) => {
+    const eventDate = new Date(dateStr);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
+    const diffTime = eventDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
   const campaignCount = campaigns.filter(c => c.status === "active").length;
   const pendingTasksCount = tasks.filter(t => t.status !== "completed" && t.dueDate).length;
-  const thisMonthEvents = unifiedEvents.filter(e => {
-    if (!e.date) return false;
-    const eventDate = new Date(e.date);
-    if (isNaN(eventDate.getTime())) return false;
-    return eventDate.getMonth() === currentDate.getMonth() && eventDate.getFullYear() === currentDate.getFullYear();
-  }).length;
+  const thisMonthOccasions = filteredOccasions.filter(o => {
+    const date = new Date(o.date);
+    return date.getMonth() === currentDate.getMonth() && date.getFullYear() === currentDate.getFullYear();
+  });
+
+  const getCategoryInfo = (category: string) => {
+    return OCCASION_CATEGORIES.find(c => c.value === category) || OCCASION_CATEGORIES[0];
+  };
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
+      <div className="space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
@@ -338,324 +690,650 @@ export default function MarketingCalendarPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">تقويم التسويق</h1>
-              <p className="text-sm text-muted-foreground">عرض موحد للحملات والمهام والفعاليات</p>
+              <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">التقويم التسويقي</h1>
+              <p className="text-sm text-muted-foreground">المناسبات والمواسم والحملات</p>
             </div>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="h-11 sm:h-9" data-testid="button-add-event">
-                <Plus className="w-4 h-4 ml-2" />
-                إضافة حدث
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md" dir="rtl">
-              <DialogHeader>
-                <DialogTitle>إضافة حدث جديد</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>عنوان الحدث *</Label>
-                  <Input
-                    className="h-11 sm:h-10"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="أدخل عنوان الحدث"
-                    data-testid="input-event-title"
-                  />
+          <div className="flex items-center gap-2">
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="h-11 sm:h-9" data-testid="button-add-event">
+                  <Plus className="w-4 h-4 ml-2" />
+                  إضافة حدث
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md" dir="rtl">
+                <DialogHeader>
+                  <DialogTitle>إضافة حدث جديد</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>عنوان الحدث *</Label>
+                    <Input
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="أدخل عنوان الحدث"
+                      data-testid="input-event-title"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>نوع الحدث</Label>
+                      <Select value={formData.eventType} onValueChange={(v) => setFormData({ ...formData, eventType: v })}>
+                        <SelectTrigger data-testid="select-event-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {EVENT_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${type.color}`} />
+                                {type.label}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>طوال اليوم</Label>
+                      <div className="flex items-center gap-2 h-10">
+                        <Switch
+                          checked={formData.allDay}
+                          onCheckedChange={(checked) => setFormData({ ...formData, allDay: checked })}
+                        />
+                        <span className="text-sm">{formData.allDay ? "نعم" : "لا"}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>تاريخ البداية *</Label>
+                      <Input
+                        type="date"
+                        value={formData.startDate}
+                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                        data-testid="input-event-start-date"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>تاريخ النهاية</Label>
+                      <Input
+                        type="date"
+                        value={formData.endDate}
+                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                        data-testid="input-event-end-date"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>الوصف</Label>
+                    <Textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="وصف الحدث"
+                      rows={2}
+                      data-testid="input-event-description"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>ملاحظات</Label>
+                    <Textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="ملاحظات إضافية"
+                      rows={2}
+                      data-testid="input-event-notes"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      إلغاء
+                    </Button>
+                    <Button type="submit" disabled={createEventMutation.isPending} data-testid="button-submit-event">
+                      {createEventMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
+                  <Flag className="w-5 h-5 text-white" />
                 </div>
-                <div className="space-y-2">
-                  <Label>نوع الحدث</Label>
-                  <Select value={formData.eventType} onValueChange={(v) => setFormData({ ...formData, eventType: v })}>
-                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-event-type">
-                      <SelectValue />
+                <div>
+                  <div className="text-xl font-bold text-green-700">{thisMonthOccasions.length}</div>
+                  <div className="text-xs text-muted-foreground">مناسبات هذا الشهر</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center">
+                  <Megaphone className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-amber-700">{campaignCount}</div>
+                  <div className="text-xs text-muted-foreground">حملات نشطة</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                  <ListTodo className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-blue-700">{pendingTasksCount}</div>
+                  <div className="text-xs text-muted-foreground">مهام معلقة</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
+                  <CalendarDays className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-purple-700">{events.length}</div>
+                  <div className="text-xs text-muted-foreground">أحداث مخصصة</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="w-full sm:w-auto grid grid-cols-3 h-auto">
+            <TabsTrigger value="calendar" className="gap-2 py-2">
+              <Calendar className="w-4 h-4" />
+              <span className="hidden sm:inline">التقويم</span>
+            </TabsTrigger>
+            <TabsTrigger value="occasions" className="gap-2 py-2">
+              <Star className="w-4 h-4" />
+              <span className="hidden sm:inline">المناسبات</span>
+            </TabsTrigger>
+            <TabsTrigger value="upcoming" className="gap-2 py-2">
+              <TrendingUp className="w-4 h-4" />
+              <span className="hidden sm:inline">القادمة</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="calendar" className="mt-4">
+            <div className="grid lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" onClick={goToPrevMonth} data-testid="button-prev-month">
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={goToToday} data-testid="button-today">
+                          اليوم
+                        </Button>
+                        <Button variant="outline" size="icon" onClick={goToNextMonth} data-testid="button-next-month">
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <h2 className="text-lg font-bold">
+                        {MONTHS_AR[currentDate.getMonth()]} {currentDate.getFullYear()}
+                      </h2>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <Skeleton className="h-96 w-full" />
+                    ) : (
+                      <div className="border rounded-lg overflow-hidden">
+                        <div className="grid grid-cols-7 bg-muted/50">
+                          {DAYS_AR.map((day) => (
+                            <div key={day} className="p-2 text-center text-xs font-medium border-b">
+                              {day}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-7">
+                          {Array.from({ length: startingDay }).map((_, i) => (
+                            <div key={`empty-${i}`} className="min-h-[80px] p-1 border-b border-l bg-muted/20" />
+                          ))}
+                          {Array.from({ length: daysInMonth }).map((_, i) => {
+                            const day = i + 1;
+                            const dayEvents = getEventsForDate(day);
+                            const hasOccasion = dayEvents.some(e => e.source === "saudi_occasion");
+                            return (
+                              <div
+                                key={day}
+                                onClick={() => handleDayClick(day)}
+                                className={`min-h-[80px] p-1 border-b border-l cursor-pointer transition-colors hover:bg-muted/50 ${
+                                  isToday(day) ? "bg-amber-50 ring-2 ring-amber-400 ring-inset" : ""
+                                } ${hasOccasion ? "bg-green-50/50" : ""}`}
+                                data-testid={`calendar-day-${day}`}
+                              >
+                                <div className={`text-sm font-medium mb-1 ${isToday(day) ? "text-amber-600" : ""}`}>
+                                  {day}
+                                </div>
+                                <div className="space-y-0.5">
+                                  {dayEvents.slice(0, 3).map((event) => (
+                                    <div
+                                      key={event.id}
+                                      className={`text-[10px] px-1 py-0.5 rounded truncate text-white flex items-center gap-1 ${event.color}`}
+                                      title={event.title}
+                                    >
+                                      {getSourceIcon(event.source, event.originalData)}
+                                      <span className="truncate">{event.title}</span>
+                                    </div>
+                                  ))}
+                                  {dayEvents.length > 3 && (
+                                    <div className="text-[10px] text-muted-foreground text-center">
+                                      +{dayEvents.length - 3} المزيد
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Filter className="w-4 h-4" />
+                      فلترة العرض
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Star className="w-4 h-4 text-green-600" />
+                        <span className="text-sm">المناسبات السعودية</span>
+                      </div>
+                      <Switch checked={showOccasions} onCheckedChange={setShowOccasions} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Megaphone className="w-4 h-4 text-amber-600" />
+                        <span className="text-sm">الحملات</span>
+                      </div>
+                      <Switch checked={showCampaigns} onCheckedChange={setShowCampaigns} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ListTodo className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm">المهام</span>
+                      </div>
+                      <Switch checked={showTasks} onCheckedChange={setShowTasks} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm">الأحداث</span>
+                      </div>
+                      <Switch checked={showEvents} onCheckedChange={setShowEvents} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">المناسبات القادمة</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {upcomingOccasions.map((occasion) => {
+                        const daysUntil = getDaysUntil(occasion.date);
+                        const Icon = occasion.icon;
+                        return (
+                          <div
+                            key={occasion.id}
+                            onClick={() => handleOccasionClick(occasion)}
+                            className="p-2 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={`w-8 h-8 rounded-lg ${occasion.color} flex items-center justify-center`}>
+                                <Icon className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{occasion.title}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {daysUntil === 0 ? "اليوم" : daysUntil === 1 ? "غداً" : `بعد ${daysUntil} يوم`}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="occasions" className="mt-4">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <CardTitle className="flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-500" />
+                    تقويم المناسبات السعودية {currentYear}
+                  </CardTitle>
+                  <Select value={occasionFilter} onValueChange={setOccasionFilter}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="تصفية حسب النوع" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-60 overflow-y-auto">
-                      {EVENT_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
+                    <SelectContent>
+                      {OCCASION_CATEGORIES.map((cat) => (
+                        <SelectItem key={cat.value} value={cat.value}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${cat.color}`} />
+                            {cat.label}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>تاريخ البداية *</Label>
-                    <Input
-                      className="h-11 sm:h-10"
-                      type="date"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      data-testid="input-start-date"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>تاريخ النهاية</Label>
-                    <Input
-                      className="h-11 sm:h-10"
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      data-testid="input-end-date"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>الوصف</Label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="وصف الحدث"
-                    rows={3}
-                    data-testid="input-event-description"
-                  />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" className="h-11 sm:h-9" onClick={() => setIsAddDialogOpen(false)}>
-                    إلغاء
-                  </Button>
-                  <Button type="submit" className="h-11 sm:h-9" disabled={createEventMutation.isPending} data-testid="button-submit-event">
-                    {createEventMutation.isPending ? "جاري الحفظ..." : "حفظ"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Megaphone className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{campaignCount}</p>
-                  <p className="text-sm text-muted-foreground">حملات نشطة</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <ListTodo className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{pendingTasksCount}</p>
-                  <p className="text-sm text-muted-foreground">مهام قادمة</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <Calendar className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{thisMonthEvents}</p>
-                  <p className="text-sm text-muted-foreground">أحداث هذا الشهر</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{events.length}</p>
-                  <p className="text-sm text-muted-foreground">أحداث مسجلة</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <CardTitle className="text-lg sm:text-xl">
-                {MONTHS_AR[currentDate.getMonth()]} {currentDate.getFullYear()}
-              </CardTitle>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Switch checked={showCampaigns} onCheckedChange={setShowCampaigns} id="show-campaigns" />
-                  <Label htmlFor="show-campaigns" className="text-sm cursor-pointer">الحملات</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={showTasks} onCheckedChange={setShowTasks} id="show-tasks" />
-                  <Label htmlFor="show-tasks" className="text-sm cursor-pointer">المهام</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={showEvents} onCheckedChange={setShowEvents} id="show-events" />
-                  <Label htmlFor="show-events" className="text-sm cursor-pointer">الأحداث</Label>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToNextMonth} data-testid="button-next-month">
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={goToPrevMonth} data-testid="button-prev-month">
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={goToToday} data-testid="button-today">
-                اليوم
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-96 w-full" />
-            ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-7 bg-muted">
-                  {DAYS_AR.map((day) => (
-                    <div key={day} className="p-2 text-center text-sm font-medium border-b">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7">
-                  {Array.from({ length: startingDay }).map((_, i) => (
-                    <div key={`empty-${i}`} className="min-h-24 border-b border-l bg-muted/30" />
-                  ))}
-                  {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const dayEvents = getEventsForDate(day);
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredOccasions.map((occasion) => {
+                    const Icon = occasion.icon;
+                    const daysUntil = getDaysUntil(occasion.date);
+                    const isPast = daysUntil < 0;
+                    const categoryInfo = getCategoryInfo(occasion.category);
                     return (
-                      <div
-                        key={day}
-                        className={`min-h-24 border-b border-l p-1 cursor-pointer hover:bg-muted/50 transition-colors ${
-                          isToday(day) ? "bg-primary/10" : ""
-                        }`}
-                        onClick={() => handleDayClick(day)}
-                        data-testid={`calendar-day-${day}`}
+                      <Card
+                        key={occasion.id}
+                        onClick={() => handleOccasionClick(occasion)}
+                        className={`cursor-pointer hover:shadow-md transition-all ${isPast ? "opacity-60" : ""}`}
                       >
-                        <div className={`text-sm font-medium mb-1 ${isToday(day) ? "text-primary" : ""}`}>
-                          {day}
-                        </div>
-                        <div className="space-y-1">
-                          {dayEvents.slice(0, 3).map((event) => (
-                            <div
-                              key={event.id}
-                              className={`text-xs p-1 rounded truncate text-white ${event.color} flex items-center gap-1`}
-                              title={event.title}
-                            >
-                              {getSourceIcon(event.source)}
-                              <span className="truncate">{event.title}</span>
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className={`w-12 h-12 rounded-xl ${occasion.color} flex items-center justify-center flex-shrink-0`}>
+                              <Icon className="w-6 h-6 text-white" />
                             </div>
-                          ))}
-                          {dayEvents.length > 3 && (
-                            <div className="text-xs text-muted-foreground">
-                              +{dayEvents.length - 3} أخرى
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold truncate">{occasion.title}</h3>
+                                {occasion.isOfficial && (
+                                  <Badge variant="secondary" className="text-xs">رسمي</Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mb-2">{formatDate(occasion.date)}</p>
+                              <Badge className={`${categoryInfo.color} text-white text-xs`}>
+                                {categoryInfo.label}
+                              </Badge>
+                              {!isPast && (
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  {daysUntil === 0 ? "🎉 اليوم!" : daysUntil === 1 ? "⏰ غداً" : `📅 بعد ${daysUntil} يوم`}
+                                </p>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     );
                   })}
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">الأحداث القادمة</CardTitle>
-              <CardDescription>أقرب 5 أحداث قادمة</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {upcomingEvents.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">لا توجد أحداث قادمة</p>
-              ) : (
-                <div className="space-y-3">
-                  {upcomingEvents.map((event) => (
-                    <div key={event.id} className="flex items-center gap-3 p-2 border rounded-lg">
-                      <div className={`w-3 h-3 rounded-full ${event.color}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(event.date).toLocaleDateString("ar-SA")}
-                        </p>
-                      </div>
-                      {getSourceIcon(event.source)}
+          <TabsContent value="upcoming" className="mt-4">
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-green-500" />
+                    الفرص التسويقية القادمة
+                  </CardTitle>
+                  <CardDescription>
+                    خطط حملاتك مسبقاً استناداً للمناسبات القادمة
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-3">
+                      {saudiOccasions
+                        .filter(o => getDaysUntil(o.date) >= 0)
+                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                        .map((occasion) => {
+                          const Icon = occasion.icon;
+                          const daysUntil = getDaysUntil(occasion.date);
+                          return (
+                            <div
+                              key={occasion.id}
+                              onClick={() => handleOccasionClick(occasion)}
+                              className="p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/50 cursor-pointer transition-all"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-lg ${occasion.color} flex items-center justify-center`}>
+                                  <Icon className="w-5 h-5 text-white" />
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="font-medium">{occasion.title}</h4>
+                                    <Badge variant={daysUntil <= 30 ? "destructive" : "secondary"} className="text-xs">
+                                      {daysUntil === 0 ? "اليوم" : `${daysUntil} يوم`}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{formatDate(occasion.date)}</p>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {occasion.marketingTips.slice(0, 3).map((tip, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {tip}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">دليل الألوان</CardTitle>
-              <CardDescription>معنى الألوان في التقويم</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-sm">بداية حملة</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500" />
-                  <span className="text-sm">نهاية حملة</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
-                  <span className="text-sm">مهمة عادية</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-orange-500" />
-                  <span className="text-sm">مهمة عاجلة</span>
-                </div>
-                {EVENT_TYPES.slice(0, 4).map((type) => (
-                  <div key={type.value} className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${type.color}`} />
-                    <span className="text-sm">{type.label}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Megaphone className="w-5 h-5 text-amber-500" />
+                    توصيات الحملات
+                  </CardTitle>
+                  <CardDescription>
+                    اقتراحات حملات بناءً على المناسبات القريبة
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-4">
+                      {saudiOccasions
+                        .filter(o => {
+                          const days = getDaysUntil(o.date);
+                          return days >= 0 && days <= 60;
+                        })
+                        .slice(0, 5)
+                        .map((occasion) => {
+                          const Icon = occasion.icon;
+                          const daysUntil = getDaysUntil(occasion.date);
+                          const prepDays = Math.max(0, daysUntil - 14);
+                          return (
+                            <Card key={occasion.id} className="bg-muted/30">
+                              <CardContent className="p-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className={`w-8 h-8 rounded-lg ${occasion.color} flex items-center justify-center`}>
+                                    <Icon className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-medium text-sm">{occasion.title}</h4>
+                                    <p className="text-xs text-muted-foreground">
+                                      ابدأ التحضير {prepDays > 0 ? `خلال ${prepDays} يوم` : "الآن!"}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-xs font-medium text-muted-foreground">أفكار للحملة:</p>
+                                  <ul className="text-xs space-y-1">
+                                    {occasion.marketingTips.map((tip, i) => (
+                                      <li key={i} className="flex items-center gap-2">
+                                        <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                        {tip}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  className="w-full mt-3"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedOccasion(occasion);
+                                    createCampaignFromOccasion();
+                                  }}
+                                >
+                                  <Plus className="w-3 h-3 ml-1" />
+                                  إنشاء حملة
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         <Dialog open={isDayDialogOpen} onOpenChange={setIsDayDialogOpen}>
           <DialogContent className="max-w-md" dir="rtl">
             <DialogHeader>
-              <DialogTitle>
-                أحداث {selectedDate ? new Date(selectedDate).toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long" }) : ""}
-              </DialogTitle>
+              <DialogTitle>أحداث يوم {selectedDate ? formatDate(selectedDate) : ""}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              {selectedDayEvents.map((event) => (
-                <div key={event.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                  <div className={`w-3 h-3 rounded-full ${event.color}`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{event.title}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {event.source === "campaign" ? "حملة" : event.source === "task" ? "مهمة" : "حدث"}
+            <ScrollArea className="max-h-[400px]">
+              <div className="space-y-3">
+                {selectedDayEvents.map((event) => (
+                  <div key={event.id} className="p-3 rounded-lg border">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-lg ${event.color} flex items-center justify-center`}>
+                        {getSourceIcon(event.source, event.originalData)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{event.title}</p>
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {event.source === "saudi_occasion" ? "مناسبة سعودية" :
+                           event.source === "campaign" ? "حملة" :
+                           event.source === "task" ? "مهمة" : "حدث"}
+                        </p>
+                      </div>
+                    </div>
+                    {event.source === "saudi_occasion" && event.originalData && (
+                      <div className="mt-2">
+                        <p className="text-xs text-muted-foreground">{event.originalData.description}</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 w-full"
+                          onClick={() => {
+                            setIsDayDialogOpen(false);
+                            handleOccasionClick(event.originalData);
+                          }}
+                        >
+                          عرض التفاصيل
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            <div className="flex justify-end">
+              <Button onClick={handleAddEventFromDay}>
+                <Plus className="w-4 h-4 ml-2" />
+                إضافة حدث
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isOccasionDialogOpen} onOpenChange={setIsOccasionDialogOpen}>
+          <DialogContent className="max-w-lg" dir="rtl">
+            {selectedOccasion && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl ${selectedOccasion.color} flex items-center justify-center`}>
+                      <selectedOccasion.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <DialogTitle>{selectedOccasion.title}</DialogTitle>
+                      <DialogDescription>{selectedOccasion.titleEn}</DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium mb-1">التاريخ</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(selectedOccasion.date)}
+                      {selectedOccasion.endDate && ` - ${formatDate(selectedOccasion.endDate)}`}
                     </p>
                   </div>
-                  {getSourceIcon(event.source)}
+                  <div>
+                    <p className="text-sm font-medium mb-1">الوصف</p>
+                    <p className="text-sm text-muted-foreground">{selectedOccasion.description}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">أفكار تسويقية</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedOccasion.marketingTips.map((tip, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs">
+                          {tip}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={`${getCategoryInfo(selectedOccasion.category).color} text-white`}>
+                      {getCategoryInfo(selectedOccasion.category).label}
+                    </Badge>
+                    {selectedOccasion.isOfficial && (
+                      <Badge variant="outline">إجازة رسمية</Badge>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
-            <Button className="w-full mt-4" onClick={handleAddEventFromDay}>
-              <Plus className="w-4 h-4 ml-2" />
-              إضافة حدث جديد
-            </Button>
+                <div className="flex gap-2 mt-4">
+                  <Button variant="outline" className="flex-1" onClick={() => setIsOccasionDialogOpen(false)}>
+                    إغلاق
+                  </Button>
+                  <Button className="flex-1" onClick={createCampaignFromOccasion}>
+                    <Plus className="w-4 h-4 ml-2" />
+                    إنشاء حملة
+                  </Button>
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       </div>
