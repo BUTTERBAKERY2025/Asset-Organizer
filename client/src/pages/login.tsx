@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Loader2, Wheat, Heart, Award, Coffee } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
+import welcomeGraphic from "@assets/generated_images/person_computer_cream_background.png";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -37,23 +38,24 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col bg-[#EAE6DB]">
       <div className="flex-1 relative flex flex-col xl:flex-row items-center justify-center gap-8 lg:gap-16 p-4 sm:p-6 md:p-8 lg:p-12">
         
-        <div className="hidden xl:flex flex-1 flex-col items-center justify-center max-w-xl">
-          <div className="text-center space-y-6">
-            <div className="space-y-2">
-              <img src={logo} alt="Butter Bakery" className="h-48 2xl:h-56 w-auto drop-shadow-2xl mx-auto" />
+        <div className="hidden xl:flex flex-1 flex-col items-start justify-center max-w-2xl">
+          <div className="relative">
+            <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-lg" />
+            <div className="absolute top-4 left-4">
+              <img src={logo} alt="Butter Bakery" className="h-20 w-auto drop-shadow-lg" />
             </div>
+          </div>
           
-            <div className="space-y-4">
-              <h1 className="text-4xl 2xl:text-5xl font-bold text-[#1a3a2f] leading-tight">
-                <span className="text-[#e67e22]">Butter</span> Bakery
-              </h1>
-              <h2 className="text-xl 2xl:text-2xl text-[#1a3a2f]/80 font-light">
-                Specialty Coffee
-              </h2>
-              <div className="w-16 h-1 bg-[#e67e22] rounded-full mx-auto"></div>
-            </div>
+          <div className="mt-8 space-y-4">
+            <h1 className="text-4xl 2xl:text-5xl font-bold text-[#1a3a2f] leading-tight">
+              <span className="text-[#e67e22]">Butter</span> Bakery
+            </h1>
+            <h2 className="text-xl 2xl:text-2xl text-[#1a3a2f]/80 font-light">
+              Specialty Coffee
+            </h2>
+            <div className="w-16 h-1 bg-[#e67e22] rounded-full"></div>
             
-            <div className="flex items-center justify-center gap-6 pt-4 text-[#1a3a2f]">
+            <div className="flex items-center gap-6 pt-4 text-[#1a3a2f]">
               <div className="text-center">
                 <p className="text-[#e67e22] text-xl mb-1">☀</p>
                 <p className="text-xs font-medium">Mornings</p>
