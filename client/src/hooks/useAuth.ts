@@ -29,7 +29,10 @@ export function useAuth() {
       return data;
     },
     retry: false,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   const loginMutation = useMutation({
