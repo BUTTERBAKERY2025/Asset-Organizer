@@ -21,7 +21,8 @@ export function NotificationsDropdown() {
       if (!res.ok) return [];
       return res.json();
     },
-    refetchInterval: 60000,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: maintenanceItems = [] } = useQuery<InventoryItem[]>({
@@ -31,7 +32,8 @@ export function NotificationsDropdown() {
       if (!res.ok) return [];
       return res.json();
     },
-    refetchInterval: 60000,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const totalAlerts = lowQuantityItems.length + maintenanceItems.length;

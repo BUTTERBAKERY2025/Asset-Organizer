@@ -151,7 +151,8 @@ export default function PlatformHomePage() {
       return res.json();
     },
     enabled: isAuthenticated,
-    refetchInterval: 60000,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: branchesCount } = useQuery({
@@ -163,6 +164,8 @@ export default function PlatformHomePage() {
       return branches.length;
     },
     enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: employeesCount } = useQuery({
@@ -174,6 +177,8 @@ export default function PlatformHomePage() {
       return employees.length;
     },
     enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const modules: (ModuleCardProps & { module?: SystemModule })[] = [

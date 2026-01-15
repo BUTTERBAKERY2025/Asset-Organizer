@@ -169,7 +169,8 @@ export default function DailyProductionPage() {
       return res.json();
     },
     enabled: !!branchId,
-    refetchInterval: autoRefresh ? 60000 : false,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: stats } = useQuery<DailyStats>({
@@ -181,7 +182,8 @@ export default function DailyProductionPage() {
       return res.json();
     },
     enabled: !!branchId && !!selectedDate,
-    refetchInterval: autoRefresh ? 60000 : false,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   // Previous day stats for comparison

@@ -77,7 +77,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     format(new Date(), "yyyy-MM-dd"),
   );
   const [selectedShift, setSelectedShift] = useState<string>("");
-  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -104,11 +104,11 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         throw new Error("Failed to fetch command center data");
       }
-      setLastUpdated(new Date());
       return res.json();
     },
-    refetchInterval: autoRefresh ? 60000 : false,
-    staleTime: 30000,
+    refetchInterval: autoRefresh ? 300000 : false,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const handleRefetch = useCallback(() => {
