@@ -894,6 +894,68 @@ export default function MarketingExpensesPage() {
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-6 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>تصفية التقارير</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="mb-2 block text-sm">من تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={startDateFilter}
+                      onChange={(e) => setStartDateFilter(e.target.value)}
+                      dir="ltr"
+                      data-testid="reports-filter-start-date"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-2 block text-sm">إلى تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={endDateFilter}
+                      onChange={(e) => setEndDateFilter(e.target.value)}
+                      dir="ltr"
+                      data-testid="reports-filter-end-date"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-2 block text-sm">الفرع</Label>
+                    <Select value={branchFilter} onValueChange={setBranchFilter}>
+                      <SelectTrigger data-testid="reports-filter-branch">
+                        <SelectValue placeholder="كل الفروع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">كل الفروع</SelectItem>
+                        {uniqueBranches.map((branch) => (
+                          <SelectItem key={branch} value={branch}>
+                            {branch}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="mb-2 block text-sm">النوع/الفئة</Label>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger data-testid="reports-filter-category">
+                        <SelectValue placeholder="كل الفئات" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">كل الفئات</SelectItem>
+                        {CAMPAIGN_EXPENSE_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {CAMPAIGN_EXPENSE_CATEGORY_LABELS[cat]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
