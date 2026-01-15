@@ -3371,14 +3371,16 @@ export const CAMPAIGN_EXPENSE_CATEGORY_LABELS: Record<string, string> = {
 export const campaignExpenses = pgTable("campaign_expenses", {
   id: serial("id").primaryKey(),
   campaignId: integer("campaign_id")
-    .notNull()
     .references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  branchName: text("branch_name"), // اسم الفرع للعرض
   influencerId: integer("influencer_id").references(() => marketingInfluencers.id, { onDelete: "set null" }),
   category: text("category").notNull(), // from CAMPAIGN_EXPENSE_CATEGORIES
   description: text("description").notNull(),
   amount: real("amount").notNull(),
   currency: text("currency").default("SAR").notNull(),
   expenseDate: text("expense_date").notNull(), // YYYY-MM-DD
+  expenseMonth: text("expense_month"), // YYYY-MM for filtering
   paymentMethod: text("payment_method"), // bank_transfer, cash, check, credit_card
   referenceNumber: text("reference_number"),
   invoiceNumber: text("invoice_number"),
