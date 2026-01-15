@@ -89,9 +89,9 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <p className="text-stone-500 text-sm tracking-[0.3em] pt-2">
+            <a href="https://www.butterbakery.co" target="_blank" rel="noopener noreferrer" className="text-stone-500 text-sm tracking-[0.3em] pt-2 hover:text-amber-400 transition-colors">
               www.butterbakery.co
-            </p>
+            </a>
           </div>
         </div>
 
@@ -175,9 +175,9 @@ export default function LoginPage() {
             </form>
           </div>
 
-          <p className="xl:hidden text-stone-500 text-xs text-center mt-4 tracking-widest">
+          <a href="https://www.butterbakery.co" target="_blank" rel="noopener noreferrer" className="xl:hidden text-stone-500 text-xs text-center mt-4 tracking-widest hover:text-amber-400 transition-colors block">
             www.butterbakery.co
-          </p>
+          </a>
         </div>
       </div>
 
