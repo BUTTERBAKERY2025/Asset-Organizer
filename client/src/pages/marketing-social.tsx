@@ -10,6 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Instagram, Facebook, Twitter, Youtube, Music, Ghost,
   Plus, Link2, Unlink, RefreshCw, Calendar, FileEdit,
@@ -100,55 +103,43 @@ interface ContentTemplate {
   usageCount: number;
 }
 
-const mockAccounts: SocialAccount[] = [
-  { id: 1, platform: "instagram", accountName: "Butter Bakery", accountHandle: "@butterbakery_sa", followersCount: 125000, followingCount: 450, postsCount: 892, isConnected: true, lastSyncAt: "2026-01-15T10:30:00" },
-  { id: 2, platform: "twitter", accountName: "Butter Bakery SA", accountHandle: "@ButterBakerySA", followersCount: 45000, followingCount: 320, postsCount: 1245, isConnected: true, lastSyncAt: "2026-01-15T09:00:00" },
-  { id: 3, platform: "tiktok", accountName: "ButterBakerySA", accountHandle: "@butterbakerysa", followersCount: 89000, followingCount: 50, postsCount: 156, isConnected: true, lastSyncAt: "2026-01-14T18:00:00" },
-  { id: 4, platform: "snapchat", accountName: "ButterBakery", accountHandle: "@butterbakery", followersCount: 67000, followingCount: 0, postsCount: 0, isConnected: false, connectionError: "انتهت صلاحية الاتصال" },
-];
-
-const mockPosts: SocialPost[] = [
-  { id: 1, title: "عرض نهاية الأسبوع", content: "استمتعوا بخصم 20% على جميع الكيكات هذا الأسبوع! 🎂✨", hashtags: ["عروض_باتر", "كيك", "حلويات"], status: "published", platforms: ["instagram", "twitter"], publishedAt: "2026-01-14T12:00:00", createdAt: "2026-01-13T10:00:00", postType: "regular" },
-  { id: 2, title: "وصفة جديدة", content: "تعرفوا على أحدث إضافاتنا: كيكة الفستق بالكراميل المملح 😋", hashtags: ["وصفات_جديدة", "فستق", "كراميل"], status: "scheduled", platforms: ["instagram", "tiktok"], scheduledAt: "2026-01-16T15:00:00", createdAt: "2026-01-15T08:00:00", postType: "reel" },
-  { id: 3, title: "كواليس المطبخ", content: "شاهدوا كيف نصنع الكرواسون الطازج كل صباح! 🥐", hashtags: ["كواليس", "كرواسون", "مخبوزات"], status: "draft", platforms: ["instagram"], createdAt: "2026-01-15T11:00:00", postType: "story" },
-  { id: 4, content: "منشور تجريبي فشل في النشر", status: "failed", platforms: ["twitter"], createdAt: "2026-01-14T09:00:00", postType: "regular" },
-];
-
-const mockTemplates: ContentTemplate[] = [
-  { id: 1, name: "عرض خصم", category: "promotion", content: "🎉 عرض خاص! خصم {discount}% على {product}\nالعرض ساري حتى {end_date}\n#عروض_باتر #حلويات", defaultHashtags: ["عروض_باتر", "خصم"], suitablePlatforms: ["instagram", "twitter"], usageCount: 45 },
-  { id: 2, name: "إطلاق منتج جديد", category: "product_launch", content: "✨ جديد في باتر!\nتعرفوا على {product_name}\n{description}\nمتوفر الآن في جميع فروعنا", defaultHashtags: ["جديد_باتر", "منتج_جديد"], suitablePlatforms: ["instagram", "tiktok"], usageCount: 23 },
-  { id: 3, name: "تهنئة مناسبة", category: "holiday", content: "🌙 كل عام وأنتم بخير بمناسبة {occasion}\nنتمنى لكم {wishes}", defaultHashtags: ["باتر", "مناسبات"], suitablePlatforms: ["instagram", "twitter", "snapchat"], usageCount: 18 },
-];
-
-const mockAnalytics = {
-  totalReach: 450000,
-  totalEngagement: 28500,
-  totalFollowers: 326000,
-  followersGrowth: 12.5,
-  engagementRate: 4.2,
-  bestPostingTime: "18:00",
-  topPlatform: "instagram",
-  platformData: [
-    { platform: "انستقرام", followers: 125000, engagement: 15000, reach: 250000 },
-    { platform: "تويتر", followers: 45000, engagement: 5500, reach: 80000 },
-    { platform: "تيك توك", followers: 89000, engagement: 7000, reach: 100000 },
-    { platform: "سناب شات", followers: 67000, engagement: 1000, reach: 20000 },
-  ],
-  weeklyEngagement: [
-    { day: "السبت", engagement: 4200 },
-    { day: "الأحد", engagement: 3800 },
-    { day: "الاثنين", engagement: 3200 },
-    { day: "الثلاثاء", engagement: 4500 },
-    { day: "الأربعاء", engagement: 5100 },
-    { day: "الخميس", engagement: 4800 },
-    { day: "الجمعة", engagement: 2900 },
-  ],
-};
-
 const COLORS = ['#8b5cf6', '#3b82f6', '#000000', '#eab308'];
+
+const calculateAnalytics = (accounts: SocialAccount[], posts: SocialPost[]) => {
+  const totalFollowers = accounts.reduce((sum, a) => sum + (a.followersCount || 0), 0);
+  const totalPosts = accounts.reduce((sum, a) => sum + (a.postsCount || 0), 0);
+  const connectedAccounts = accounts.filter(a => a.isConnected).length;
+  const publishedPosts = posts.filter(p => p.status === 'published').length;
+  
+  return {
+    totalReach: totalFollowers * 3,
+    totalEngagement: Math.round(totalFollowers * 0.042),
+    totalFollowers,
+    followersGrowth: 5.2,
+    engagementRate: 4.2,
+    bestPostingTime: "18:00",
+    topPlatform: accounts.length > 0 ? accounts.sort((a, b) => (b.followersCount || 0) - (a.followersCount || 0))[0]?.platform || 'instagram' : 'instagram',
+    platformData: accounts.map(a => ({
+      platform: PLATFORMS.find(p => p.id === a.platform)?.name || a.platform,
+      followers: a.followersCount || 0,
+      engagement: Math.round((a.followersCount || 0) * 0.04),
+      reach: Math.round((a.followersCount || 0) * 2),
+    })),
+    weeklyEngagement: [
+      { day: "السبت", engagement: 4200 },
+      { day: "الأحد", engagement: 3800 },
+      { day: "الاثنين", engagement: 3200 },
+      { day: "الثلاثاء", engagement: 4500 },
+      { day: "الأربعاء", engagement: 5100 },
+      { day: "الخميس", engagement: 4800 },
+      { day: "الجمعة", engagement: 2900 },
+    ],
+  };
+};
 
 export default function MarketingSocialPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("accounts");
   const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [showPostDialog, setShowPostDialog] = useState(false);
@@ -164,10 +155,77 @@ export default function MarketingSocialPage() {
     hashtags: "",
   });
 
-  const accounts = mockAccounts;
-  const posts = mockPosts;
-  const templates = mockTemplates;
-  const analytics = mockAnalytics;
+  // Fetch data from API
+  const { data: accounts = [], isLoading: accountsLoading } = useQuery<SocialAccount[]>({
+    queryKey: ["/api/social-accounts"],
+  });
+
+  const { data: posts = [], isLoading: postsLoading } = useQuery<SocialPost[]>({
+    queryKey: ["/api/social-posts"],
+  });
+
+  const { data: templates = [], isLoading: templatesLoading } = useQuery<ContentTemplate[]>({
+    queryKey: ["/api/social-templates"],
+  });
+
+  const analytics = calculateAnalytics(accounts, posts);
+  const isLoading = accountsLoading || postsLoading || templatesLoading;
+
+  // Mutations
+  const createPostMutation = useMutation({
+    mutationFn: async (postData: any) => {
+      return apiRequest("POST", "/api/social-posts", postData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/social-posts"] });
+      toast({ title: "تم إنشاء المنشور", description: "تم حفظ المنشور بنجاح" });
+      setShowPostDialog(false);
+      setNewPost({ content: "", platforms: [], scheduledAt: "", postType: "regular", hashtags: "" });
+    },
+    onError: () => {
+      toast({ title: "خطأ", description: "فشل في إنشاء المنشور", variant: "destructive" });
+    },
+  });
+
+  const deletePostMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/social-posts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/social-posts"] });
+      toast({ title: "تم الحذف", description: "تم حذف المنشور بنجاح" });
+    },
+  });
+
+  const createAccountMutation = useMutation({
+    mutationFn: async (accountData: any) => {
+      return apiRequest("POST", "/api/social-accounts", accountData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/social-accounts"] });
+      toast({ title: "تم ربط الحساب", description: "تم إضافة الحساب بنجاح" });
+      setShowConnectDialog(false);
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/social-accounts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/social-accounts"] });
+      toast({ title: "تم إلغاء الربط", description: "تم فصل الحساب بنجاح" });
+    },
+  });
+
+  const useTemplateMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("POST", `/api/social-templates/${id}/use`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/social-templates"] });
+    },
+  });
 
   const filteredPosts = postFilter === "all" 
     ? posts 
@@ -183,15 +241,19 @@ export default function MarketingSocialPage() {
   };
 
   const handleCreatePost = () => {
-    toast({
-      title: "تم إنشاء المنشور",
-      description: "تم حفظ المنشور بنجاح",
-    });
-    setShowPostDialog(false);
-    setNewPost({ content: "", platforms: [], scheduledAt: "", postType: "regular", hashtags: "" });
+    const postData = {
+      content: newPost.content,
+      platforms: newPost.platforms,
+      postType: newPost.postType,
+      hashtags: newPost.hashtags.split(/[\s,]+/).filter(Boolean),
+      status: newPost.scheduledAt ? "scheduled" : "draft",
+      scheduledAt: newPost.scheduledAt || null,
+    };
+    createPostMutation.mutate(postData);
   };
 
   const handleUseTemplate = (template: ContentTemplate) => {
+    useTemplateMutation.mutate(template.id);
     setNewPost(prev => ({
       ...prev,
       content: template.content,
@@ -203,6 +265,29 @@ export default function MarketingSocialPage() {
       title: "تم تحميل القالب",
       description: `تم استخدام قالب "${template.name}"`,
     });
+  };
+
+  const handleConnectAccount = () => {
+    if (!selectedPlatform) return;
+    const platformInfo = getPlatformInfo(selectedPlatform);
+    const accountData = {
+      platform: selectedPlatform,
+      accountName: `Butter Bakery ${platformInfo.name}`,
+      accountHandle: `@butterbakery_${selectedPlatform}`,
+      isConnected: true,
+      followersCount: 0,
+      followingCount: 0,
+      postsCount: 0,
+    };
+    createAccountMutation.mutate(accountData);
+  };
+
+  const handleDisconnectAccount = (accountId: number) => {
+    deleteAccountMutation.mutate(accountId);
+  };
+
+  const handleDeletePost = (postId: number) => {
+    deletePostMutation.mutate(postId);
   };
 
   return (
@@ -354,7 +439,13 @@ export default function MarketingSocialPage() {
                             </Button>
                           </div>
                           <div className="flex gap-2">
-                            <Button size="sm" variant="outline" className="flex-1 text-xs" data-testid={`button-disconnect-${platform.id}`}>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="flex-1 text-xs" 
+                              data-testid={`button-disconnect-${platform.id}`}
+                              onClick={() => account && handleDisconnectAccount(account.id)}
+                            >
                               <Unlink className="h-3 w-3 ml-1" />
                               إلغاء الربط
                             </Button>
@@ -563,7 +654,7 @@ export default function MarketingSocialPage() {
                               <Button size="icon" variant="ghost" className="h-7 w-7" data-testid={`button-copy-post-${post.id}`}>
                                 <Copy className="h-3 w-3" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" data-testid={`button-delete-post-${post.id}`}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" data-testid={`button-delete-post-${post.id}`} onClick={() => handleDeletePost(post.id)}>
                                 <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
@@ -887,13 +978,7 @@ export default function MarketingSocialPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowConnectDialog(false)} data-testid="button-cancel-connect">إلغاء</Button>
-              <Button onClick={() => {
-                toast({
-                  title: "جاري الربط...",
-                  description: "سيتم توجيهك لصفحة تسجيل الدخول",
-                });
-                setShowConnectDialog(false);
-              }} data-testid="button-confirm-connect">
+              <Button onClick={handleConnectAccount} data-testid="button-confirm-connect">
                 متابعة الربط
               </Button>
             </DialogFooter>
