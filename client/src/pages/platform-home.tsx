@@ -66,19 +66,60 @@ function QuickStat({ title, value, icon: Icon, color, trend, href }: QuickStatPr
 }
 
 function ModuleCard({ title, description, icon: Icon, href, color, badge }: ModuleCardProps) {
+  const getGradientColor = (baseColor: string) => {
+    const gradients: Record<string, string> = {
+      'bg-amber-500': 'bg-gradient-to-br from-amber-400 to-orange-600',
+      'bg-blue-500': 'bg-gradient-to-br from-blue-400 to-blue-600',
+      'bg-emerald-500': 'bg-gradient-to-br from-emerald-400 to-green-600',
+      'bg-purple-500': 'bg-gradient-to-br from-purple-400 to-purple-600',
+      'bg-rose-500': 'bg-gradient-to-br from-rose-400 to-rose-600',
+      'bg-teal-500': 'bg-gradient-to-br from-teal-400 to-teal-600',
+      'bg-indigo-500': 'bg-gradient-to-br from-indigo-400 to-indigo-600',
+      'bg-orange-500': 'bg-gradient-to-br from-orange-400 to-orange-600',
+      'bg-cyan-500': 'bg-gradient-to-br from-cyan-400 to-cyan-600',
+      'bg-pink-500': 'bg-gradient-to-br from-pink-400 to-pink-600',
+      'bg-slate-600': 'bg-gradient-to-br from-slate-500 to-slate-700',
+      'bg-green-500': 'bg-gradient-to-br from-green-400 to-green-600',
+      'bg-red-500': 'bg-gradient-to-br from-red-400 to-red-600',
+      'bg-yellow-500': 'bg-gradient-to-br from-yellow-400 to-yellow-600',
+    };
+    return gradients[baseColor] || 'bg-gradient-to-br from-amber-400 to-orange-600';
+  };
+
+  const getBorderColor = (baseColor: string) => {
+    const borders: Record<string, string> = {
+      'bg-amber-500': 'border-t-amber-500',
+      'bg-blue-500': 'border-t-blue-500',
+      'bg-emerald-500': 'border-t-emerald-500',
+      'bg-purple-500': 'border-t-purple-500',
+      'bg-rose-500': 'border-t-rose-500',
+      'bg-teal-500': 'border-t-teal-500',
+      'bg-indigo-500': 'border-t-indigo-500',
+      'bg-orange-500': 'border-t-orange-500',
+      'bg-cyan-500': 'border-t-cyan-500',
+      'bg-pink-500': 'border-t-pink-500',
+      'bg-slate-600': 'border-t-slate-600',
+      'bg-green-500': 'border-t-green-500',
+      'bg-red-500': 'border-t-red-500',
+      'bg-yellow-500': 'border-t-yellow-500',
+    };
+    return borders[baseColor] || 'border-t-amber-500';
+  };
+
   return (
     <Link href={href}>
       <div 
-        className="group relative p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-md transition-all cursor-pointer bg-white"
+        className={`group relative p-4 rounded-xl border-t-4 ${getBorderColor(color)} bg-[#FFF8EF] hover:shadow-lg hover:shadow-amber-100/50 transition-all duration-300 cursor-pointer h-full`}
+        style={{ boxShadow: '0 4px 15px rgba(245, 158, 11, 0.1)' }}
         data-testid={`module-card-${href.replace('/', '')}`}
       >
-        <div className={`h-9 w-9 ${color} rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-sm`}>
-          <Icon className="h-4 w-4 text-white" />
+        <div className={`h-12 w-12 ${getGradientColor(color)} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-md`}>
+          <Icon className="h-6 w-6 text-white" />
         </div>
-        <h4 className="text-xs font-semibold text-slate-700 mb-0.5">{title}</h4>
-        <p className="text-[10px] text-slate-400 line-clamp-1">{description}</p>
+        <h4 className="text-sm font-bold text-slate-800 mb-1">{title}</h4>
+        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{description}</p>
         {badge && (
-          <Badge className="absolute top-2 left-2 text-[9px] px-1.5 py-0 bg-purple-100 text-purple-700 border-0">
+          <Badge className="absolute top-3 left-3 text-[10px] px-2 py-0.5 bg-purple-100 text-purple-700 border-0 font-medium">
             {badge}
           </Badge>
         )}
@@ -411,7 +452,7 @@ export default function PlatformHomePage() {
             <LayoutDashboard className="w-5 h-5 text-primary" />
             أقسام النظام
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {accessibleModules.map((module, index) => (
               <ModuleCard key={index} {...module} />
             ))}
