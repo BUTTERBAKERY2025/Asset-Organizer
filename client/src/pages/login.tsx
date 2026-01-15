@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Loader2, Wheat, Heart, Award, Coffee } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
-import welcomeGraphic from "@assets/generated_images/person_computer_cream_background.png";
+import welcomeGraphic from "@assets/generated_images/line_art_person_computer_beige.png";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -35,7 +35,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#EAE6DB]">
+    <div className="min-h-screen flex flex-col bg-[#F5F0E6]">
       <div className="flex-1 relative flex flex-col xl:flex-row items-center justify-center gap-8 lg:gap-16 p-4 sm:p-6 md:p-8 lg:p-12">
         
         <div className="hidden xl:flex flex-1 flex-col items-start justify-center max-w-2xl">
@@ -109,7 +109,7 @@ export default function LoginPage() {
                   placeholder="اسم المستخدم"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="h-12 bg-[#EAE6DB] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
+                  className="h-12 bg-[#F5F0E6] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
                   data-testid="input-username"
                   required
                 />
@@ -122,7 +122,7 @@ export default function LoginPage() {
                   placeholder="كلمة المرور"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 bg-[#EAE6DB] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
+                  className="h-12 bg-[#F5F0E6] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
                   data-testid="input-password"
                   required
                 />
