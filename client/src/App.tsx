@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,6 +9,17 @@ import { OfflineIndicator } from "@/components/offline-indicator";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
 import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Loader2 } from "lucide-react";
+
+function AppLoadingFallback() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F5F0E6]" dir="rtl">
+      <Loader2 className="w-10 h-10 text-[#e67e22] animate-spin" />
+      <p className="mt-4 text-[#1a3a2f] text-sm">جاري تحميل النظام...</p>
+    </div>
+  );
+}
 import NotFound from "@/pages/not-found";
 import PlatformHomePage from "@/pages/platform-home";
 import DashboardPage from "@/pages/dashboard";
@@ -211,17 +223,21 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ProductionProvider>
-        <TooltipProvider>
-          <Toaster />
-          <InactivityLogout />
-          <Router />
-          <PWAInstallPrompt />
-          <OfflineIndicator />
-        </TooltipProvider>
-      </ProductionProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ProductionProvider>
+          <TooltipProvider>
+            <Suspense fallback={<AppLoadingFallback />}>
+              <Toaster />
+              <InactivityLogout />
+              <Router />
+              <PWAInstallPrompt />
+              <OfflineIndicator />
+            </Suspense>
+          </TooltipProvider>
+        </ProductionProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
