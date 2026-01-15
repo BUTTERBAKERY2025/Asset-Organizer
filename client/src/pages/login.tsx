@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Loader2, Wheat, Heart, Award, Coffee } from "lucide-react";
-import logo from "@assets/logo_-5_1765206843638.png";
+import logo from "@assets/logo_butter_bakery__1768502624540.png";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -44,14 +44,11 @@ export default function LoginPage() {
 
         <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between h-full p-6 lg:p-12 gap-8">
           <div className="flex-1 text-center lg:text-right space-y-8 max-w-2xl" dir="rtl">
-            <div className="flex items-center justify-center lg:justify-start gap-4">
-              <img src={logo} alt="Butter Bakery" className="h-16 w-auto" />
+            <div className="flex items-center justify-center lg:justify-start">
+              <img src={logo} alt="Butter Bakery" className="h-40 lg:h-52 w-auto drop-shadow-2xl" />
             </div>
 
             <div className="space-y-4">
-              <h1 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-white leading-tight">
-                <span className="text-amber-400">Butter</span> Bakery
-              </h1>
               <h2 className="text-2xl lg:text-3xl text-amber-200/90 font-light">
                 Specialty Coffee
               </h2>
