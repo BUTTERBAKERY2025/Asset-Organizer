@@ -49,6 +49,9 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-4">
+              <h1 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-white leading-tight">
+                <span className="text-amber-400">Butter</span> Bakery
+              </h1>
               <h2 className="text-2xl lg:text-3xl text-amber-200/90 font-light">
                 Specialty Coffee
               </h2>
