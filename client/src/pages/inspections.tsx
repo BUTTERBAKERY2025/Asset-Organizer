@@ -30,7 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar, AlertTriangle, CheckCircle2, Clock, Loader2, Bell, CalendarDays } from "lucide-react";
+import { Calendar, AlertTriangle, CheckCircle2, Clock, Loader2, Bell, CalendarDays, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import type { Branch, InventoryItem } from "@shared/schema";
 
@@ -179,11 +180,19 @@ export default function InspectionsPage() {
     <Layout>
       <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
-              جدولة الفحص الدوري
-            </h1>
-            <p className="text-muted-foreground mt-1">إدارة مواعيد فحص الأصول وتتبع التنبيهات</p>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
+                <ArrowRight className="h-4 w-4" />
+                لوحة الأصول
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+                جدولة الفحص الدوري
+              </h1>
+              <p className="text-muted-foreground mt-1">إدارة مواعيد فحص الأصول وتتبع التنبيهات</p>
+            </div>
           </div>
           <Select value={filterBranch} onValueChange={setFilterBranch}>
             <SelectTrigger className="w-full sm:w-[200px] h-11 sm:h-10" data-testid="select-filter-branch" disabled={!canSelectBranch}>

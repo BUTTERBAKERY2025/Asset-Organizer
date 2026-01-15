@@ -19,7 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2, Upload } from "lucide-react";
+import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2, Upload, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
@@ -466,9 +467,17 @@ export default function InventoryPage() {
     <Layout>
       <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4 print:space-y-0" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
-            <p className="text-muted-foreground mt-1 text-sm sm:text-base">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
+                <ArrowRight className="h-4 w-4" />
+                لوحة الأصول
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" className="gap-2 h-11 sm:h-9" onClick={handlePrint} data-testid="button-print">

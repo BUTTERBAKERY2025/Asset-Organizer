@@ -12,8 +12,9 @@ import { Progress } from "@/components/ui/progress";
 import { 
   Printer, FileSpreadsheet, Package, AlertTriangle, TrendingUp, Building2, 
   BarChart3, PieChart, Image, Wrench, CheckCircle2, XCircle, MapPin,
-  Calendar, DollarSign, Layers, Eye, Camera, Filter, Download, ClipboardList, FileText
+  Calendar, DollarSign, Layers, Eye, Camera, Filter, Download, ClipboardList, FileText, ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useReactToPrint } from "react-to-print";
@@ -296,9 +297,17 @@ export default function ReportsPage() {
     <Layout>
       <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">تقارير الأصول والمعدات</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">تقارير شاملة ومتطورة لجميع أصول ومعدات الفروع</p>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
+                <ArrowRight className="h-4 w-4" />
+                لوحة الأصول
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">تقارير الأصول والمعدات</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">تقارير شاملة ومتطورة لجميع أصول ومعدات الفروع</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>

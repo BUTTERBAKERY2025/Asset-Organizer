@@ -40,7 +40,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
-import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye, Upload, Download, Camera } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye, Upload, Download, Camera, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import * as XLSX from "xlsx";
 import type { InventoryItem } from "@shared/schema";
 import { AssetDetailsDialog } from "@/components/asset-details-dialog";
@@ -578,9 +579,17 @@ export default function ManagePage() {
     <Layout>
       <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">إدارة الأصول</h1>
-            <p className="text-muted-foreground mt-1">إضافة وتعديل وحذف الأصول والمعدات</p>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
+                <ArrowRight className="h-4 w-4" />
+                لوحة الأصول
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">إدارة الأصول</h1>
+              <p className="text-muted-foreground mt-1">إضافة وتعديل وحذف الأصول والمعدات</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>

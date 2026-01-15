@@ -14,7 +14,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Printer, AlertTriangle, XCircle, HelpCircle, Download } from "lucide-react";
+import { Loader2, Printer, AlertTriangle, XCircle, HelpCircle, Download, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
@@ -141,9 +142,17 @@ export default function MaintenancePage() {
     <Layout>
       <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-maintenance-title">تقرير الصيانة</h1>
-            <p className="text-muted-foreground mt-1">الأصناف التي تحتاج صيانة أو تالفة أو مفقودة</p>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
+                <ArrowRight className="h-4 w-4" />
+                لوحة الأصول
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-maintenance-title">تقرير الصيانة</h1>
+              <p className="text-muted-foreground mt-1">الأصناف التي تحتاج صيانة أو تالفة أو مفقودة</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handlePrint()} className="gap-2 h-11 sm:h-9" data-testid="button-print-maintenance">
