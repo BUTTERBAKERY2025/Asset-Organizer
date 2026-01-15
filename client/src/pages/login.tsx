@@ -35,7 +35,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f0ebe0]">
+    <div className="min-h-screen flex flex-col bg-[#EAE6DB]">
       <div className="flex-1 relative flex flex-col xl:flex-row items-center justify-center gap-8 lg:gap-16 p-4 sm:p-6 md:p-8 lg:p-12">
         
         <div className="hidden xl:flex flex-1 flex-col items-start justify-center max-w-2xl">
@@ -109,7 +109,7 @@ export default function LoginPage() {
                   placeholder="اسم المستخدم"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="h-12 bg-[#f0ebe0] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
+                  className="h-12 bg-[#EAE6DB] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
                   data-testid="input-username"
                   required
                 />
@@ -122,7 +122,7 @@ export default function LoginPage() {
                   placeholder="كلمة المرور"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 bg-[#f0ebe0] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
+                  className="h-12 bg-[#EAE6DB] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right"
                   data-testid="input-password"
                   required
                 />
