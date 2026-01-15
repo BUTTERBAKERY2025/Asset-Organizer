@@ -181,36 +181,36 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="relative z-10 bg-orange-900/90 backdrop-blur-sm border-t border-orange-800">
+      <div className="relative z-10 bg-orange-500 backdrop-blur-sm border-t border-orange-400">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
             <div className="text-center space-y-1.5 sm:space-y-2 md:space-y-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto">
-                <Wheat className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-amber-500" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto">
+                <Wheat className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white" />
               </div>
               <h4 className="text-white font-semibold text-xs sm:text-sm md:text-base">Freshly Baked</h4>
-              <p className="text-stone-500 text-[10px] sm:text-xs md:text-sm hidden sm:block">خبز طازج يومياً</p>
+              <p className="text-orange-100 text-[10px] sm:text-xs md:text-sm hidden sm:block">خبز طازج يومياً</p>
             </div>
             <div className="text-center space-y-1.5 sm:space-y-2 md:space-y-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto">
-                <Heart className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-amber-500" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto">
+                <Heart className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white" />
               </div>
               <h4 className="text-white font-semibold text-xs sm:text-sm md:text-base">Healthy Options</h4>
-              <p className="text-stone-500 text-[10px] sm:text-xs md:text-sm hidden sm:block">خيارات صحية</p>
+              <p className="text-orange-100 text-[10px] sm:text-xs md:text-sm hidden sm:block">خيارات صحية</p>
             </div>
             <div className="text-center space-y-1.5 sm:space-y-2 md:space-y-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto">
-                <Award className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-amber-500" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto">
+                <Award className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white" />
               </div>
               <h4 className="text-white font-semibold text-xs sm:text-sm md:text-base">Quality Ingredients</h4>
-              <p className="text-stone-500 text-[10px] sm:text-xs md:text-sm hidden sm:block">مكونات عالية الجودة</p>
+              <p className="text-orange-100 text-[10px] sm:text-xs md:text-sm hidden sm:block">مكونات عالية الجودة</p>
             </div>
             <div className="text-center space-y-1.5 sm:space-y-2 md:space-y-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto">
-                <Coffee className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-amber-500" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto">
+                <Coffee className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white" />
               </div>
               <h4 className="text-white font-semibold text-xs sm:text-sm md:text-base">Specialty Coffee</h4>
-              <p className="text-stone-500 text-[10px] sm:text-xs md:text-sm hidden sm:block">قهوة مختصة</p>
+              <p className="text-orange-100 text-[10px] sm:text-xs md:text-sm hidden sm:block">قهوة مختصة</p>
             </div>
           </div>
         </div>
