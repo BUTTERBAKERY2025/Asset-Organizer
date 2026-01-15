@@ -65,52 +65,25 @@ function QuickStat({ title, value, icon: Icon, color, trend, href }: QuickStatPr
   return content;
 }
 
-function ModuleCard({ title, description, icon: Icon, href, color, badge, items }: ModuleCardProps) {
-  const [, navigate] = useLocation();
-  
+function ModuleCard({ title, description, icon: Icon, href, color, badge }: ModuleCardProps) {
   return (
-    <Card 
-      className="group hover:shadow-md transition-all duration-300 cursor-pointer border hover:border-primary/30 overflow-hidden h-full"
-      onClick={() => navigate(href)}
-      data-testid={`module-card-${href.replace('/', '')}`}
-    >
-      <CardHeader className="p-3 pb-2">
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color} transition-transform group-hover:scale-110 shrink-0`}>
-            <Icon className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-sm font-semibold truncate">{title}</CardTitle>
-          </div>
-          {badge && (
-            <Badge variant="secondary" className="text-[10px] shrink-0">{badge}</Badge>
-          )}
+    <Link href={href}>
+      <div 
+        className="group relative p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-md transition-all cursor-pointer bg-white"
+        data-testid={`module-card-${href.replace('/', '')}`}
+      >
+        <div className={`h-9 w-9 ${color} rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-sm`}>
+          <Icon className="h-4 w-4 text-white" />
         </div>
-        <CardDescription className="text-xs leading-snug line-clamp-2 mt-1">{description}</CardDescription>
-      </CardHeader>
-      {items && items.length > 0 && (
-        <CardContent className="p-3 pt-0">
-          <div className="flex flex-wrap gap-1">
-            {items.slice(0, 3).map((item, index) => (
-              <Link key={index} href={item.href} onClick={(e) => e.stopPropagation()}>
-                <Badge 
-                  variant="outline" 
-                  className="flex items-center gap-1 hover:bg-secondary cursor-pointer transition-colors text-[10px] px-1.5 py-0.5"
-                >
-                  <item.icon className="w-2.5 h-2.5" />
-                  {item.label}
-                </Badge>
-              </Link>
-            ))}
-            {items.length > 3 && (
-              <Badge variant="outline" className="text-[10px] text-muted-foreground px-1.5 py-0.5">
-                +{items.length - 3}
-              </Badge>
-            )}
-          </div>
-        </CardContent>
-      )}
-    </Card>
+        <h4 className="text-xs font-semibold text-slate-700 mb-0.5">{title}</h4>
+        <p className="text-[10px] text-slate-400 line-clamp-1">{description}</p>
+        {badge && (
+          <Badge className="absolute top-2 left-2 text-[9px] px-1.5 py-0 bg-purple-100 text-purple-700 border-0">
+            {badge}
+          </Badge>
+        )}
+      </div>
+    </Link>
   );
 }
 
@@ -438,7 +411,7 @@ export default function PlatformHomePage() {
             <LayoutDashboard className="w-5 h-5 text-primary" />
             أقسام النظام
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
             {accessibleModules.map((module, index) => (
               <ModuleCard key={index} {...module} />
             ))}
