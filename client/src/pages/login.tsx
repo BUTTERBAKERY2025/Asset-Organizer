@@ -59,19 +59,21 @@ export default function LoginPage() {
               <div className="w-24 h-0.5 bg-amber-500/50 mx-auto rounded-full"></div>
             </div>
 
-            <div className="space-y-2 text-stone-300 text-lg 2xl:text-xl font-light italic">
-              <p>Mornings start with bakery aromas</p>
-              <p>Days flow with specialty coffee</p>
-              <p>Nights end with sweet desserts</p>
+            <div className="flex items-center justify-center gap-3 text-stone-300 text-base 2xl:text-lg font-light">
+              <span className="italic">Mornings start with bakery aromas</span>
+              <span className="text-amber-500">•</span>
+              <span className="italic">Days flow with specialty coffee</span>
+              <span className="text-amber-500">•</span>
+              <span className="italic">Nights end with sweet desserts</span>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-4">
               <p className="text-amber-400 text-xl 2xl:text-2xl font-bold tracking-wide">
                 "This is Butter Bakery"
               </p>
             </div>
 
-            <p className="text-stone-500 text-sm tracking-[0.3em] pt-4">
+            <p className="text-stone-500 text-sm tracking-[0.3em] pt-2">
               www.butterbakery.co
             </p>
           </div>
