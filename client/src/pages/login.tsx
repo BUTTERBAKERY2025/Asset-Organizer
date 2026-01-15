@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Loader2, Wheat, Heart, Award, Coffee } from "lucide-react";
+import { Loader2, Settings, BarChart3, Building2, Coffee } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
 import welcomeGraphic from "@assets/generated_images/man_beard_imac_facing_left.png";
 
@@ -176,18 +176,18 @@ export default function LoginPage() {
         <div className="max-w-5xl mx-auto px-4 py-3">
           <div className="flex items-center justify-center gap-8 sm:gap-12 md:gap-16">
             <div className="flex items-center gap-2">
-              <Wheat className="w-4 h-4 text-[#e67e22]" />
-              <span className="text-white text-xs font-medium">Freshly Baked</span>
+              <Settings className="w-4 h-4 text-[#e67e22]" />
+              <span className="text-white text-xs font-medium">Operations Management</span>
             </div>
             <div className="w-px h-4 bg-white/20 hidden sm:block"></div>
             <div className="flex items-center gap-2">
-              <Heart className="w-4 h-4 text-[#e67e22]" />
-              <span className="text-white text-xs font-medium">Healthy Options</span>
+              <BarChart3 className="w-4 h-4 text-[#e67e22]" />
+              <span className="text-white text-xs font-medium">Executive Analytics</span>
             </div>
             <div className="w-px h-4 bg-white/20 hidden sm:block"></div>
             <div className="flex items-center gap-2 hidden md:flex">
-              <Award className="w-4 h-4 text-[#e67e22]" />
-              <span className="text-white text-xs font-medium">Quality Ingredients</span>
+              <Building2 className="w-4 h-4 text-[#e67e22]" />
+              <span className="text-white text-xs font-medium">Administrative Control</span>
             </div>
             <div className="w-px h-4 bg-white/20 hidden md:block"></div>
             <div className="flex items-center gap-2 hidden sm:flex">
