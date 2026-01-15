@@ -75,7 +75,7 @@ export default function MarketingTasksPage() {
     description: "",
     status: "pending",
     priority: "medium",
-    assignedTo: "",
+    assignedTo: "none",
     dueDate: "",
   });
 
@@ -170,7 +170,7 @@ export default function MarketingTasksPage() {
       description: "",
       status: "pending",
       priority: "medium",
-      assignedTo: "",
+      assignedTo: "none",
       dueDate: "",
     });
   };
@@ -181,10 +181,14 @@ export default function MarketingTasksPage() {
       toast({ title: "يرجى إدخال عنوان المهمة", variant: "destructive" });
       return;
     }
+    const submitData = {
+      ...formData,
+      assignedTo: formData.assignedTo === "none" ? "" : formData.assignedTo,
+    };
     if (editingTask) {
-      updateTaskMutation.mutate({ id: editingTask.id, data: formData });
+      updateTaskMutation.mutate({ id: editingTask.id, data: submitData });
     } else {
-      createTaskMutation.mutate(formData);
+      createTaskMutation.mutate(submitData);
     }
   };
 
@@ -194,8 +198,8 @@ export default function MarketingTasksPage() {
       description: task.description || "",
       status: task.status,
       priority: task.priority,
-      assignedTo: task.assignedTo || "",
-      dueDate: task.dueDate || "",
+      assignedTo: task.assignedTo || "none",
+      dueDate: task.dueDate ? task.dueDate.split('T')[0] : "",
     });
     setEditingTask(task);
     setIsEditDialogOpen(true);
@@ -435,10 +439,10 @@ export default function MarketingTasksPage() {
               <SelectValue placeholder="اختر المسؤول" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">بدون تعيين</SelectItem>
+              <SelectItem value="none">بدون تعيين</SelectItem>
               {teamMembers.filter(m => m.isActive).map((member) => (
-                <SelectItem key={member.id} value={member.name}>
-                  {member.name}
+                <SelectItem key={member.id} value={member.name || `member-${member.id}`}>
+                  {member.name || `عضو ${member.id}`}
                 </SelectItem>
               ))}
             </SelectContent>
