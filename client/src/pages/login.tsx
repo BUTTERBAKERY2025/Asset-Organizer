@@ -49,42 +49,42 @@ export default function LoginPage() {
               <div className="inline-block">
                 <img src={logo} alt="Butter Bakery" className="h-48 2xl:h-56 w-auto drop-shadow-2xl mx-auto" />
               </div>
-              <h1 className="text-4xl 2xl:text-5xl font-bold text-white leading-tight">
-                <span className="text-amber-400">Butter</span> Bakery
+              <h1 className="text-4xl 2xl:text-5xl font-bold text-orange-800 leading-tight">
+                <span className="text-orange-600">Butter</span> Bakery
               </h1>
             </div>
             
             <div className="space-y-3">
-              <h2 className="text-2xl 2xl:text-3xl text-amber-200/90 font-light tracking-wide">
+              <h2 className="text-2xl 2xl:text-3xl text-orange-700 font-light tracking-wide">
                 Specialty Coffee
               </h2>
-              <div className="w-24 h-0.5 bg-amber-500/50 mx-auto rounded-full"></div>
+              <div className="w-24 h-0.5 bg-orange-600/50 mx-auto rounded-full"></div>
             </div>
 
-            <div className="bg-stone-800/30 backdrop-blur-sm rounded-2xl px-8 py-6 border border-stone-700/30">
-              <div className="flex items-center justify-center gap-8 text-stone-200">
+            <div className="bg-orange-800/80 backdrop-blur-sm rounded-2xl px-8 py-6 border border-orange-700/50">
+              <div className="flex items-center justify-center gap-8 text-white">
                 <div className="text-center">
-                  <p className="text-amber-400 text-2xl mb-1">☀</p>
+                  <p className="text-amber-300 text-2xl mb-1">☀</p>
                   <p className="text-sm font-medium">Mornings</p>
-                  <p className="text-xs text-stone-400">bakery aromas</p>
+                  <p className="text-xs text-orange-200">bakery aromas</p>
                 </div>
-                <div className="w-px h-12 bg-amber-500/30"></div>
+                <div className="w-px h-12 bg-orange-400/50"></div>
                 <div className="text-center">
-                  <p className="text-amber-400 text-2xl mb-1">☕</p>
+                  <p className="text-amber-300 text-2xl mb-1">☕</p>
                   <p className="text-sm font-medium">Days</p>
-                  <p className="text-xs text-stone-400">specialty coffee</p>
+                  <p className="text-xs text-orange-200">specialty coffee</p>
                 </div>
-                <div className="w-px h-12 bg-amber-500/30"></div>
+                <div className="w-px h-12 bg-orange-400/50"></div>
                 <div className="text-center">
-                  <p className="text-amber-400 text-2xl mb-1">🌙</p>
+                  <p className="text-amber-300 text-2xl mb-1">🌙</p>
                   <p className="text-sm font-medium">Nights</p>
-                  <p className="text-xs text-stone-400">sweet desserts</p>
+                  <p className="text-xs text-orange-200">sweet desserts</p>
                 </div>
               </div>
             </div>
 
             <div className="pt-4">
-              <p className="text-amber-400 text-xl 2xl:text-2xl font-semibold tracking-wider uppercase">
+              <p className="text-orange-800 text-xl 2xl:text-2xl font-semibold tracking-wider uppercase">
                 This is Butter Bakery
               </p>
             </div>
@@ -98,10 +98,10 @@ export default function LoginPage() {
         <div className="w-full max-w-[360px] sm:max-w-md xl:max-w-sm 2xl:max-w-md">
           <div className="xl:hidden flex flex-col items-center mb-6 sm:mb-8">
             <img src={logo} alt="Butter Bakery" className="h-24 sm:h-32 md:h-36 w-auto drop-shadow-2xl mb-4" />
-            <h1 className="text-2xl sm:text-3xl font-bold text-white text-center">
-              <span className="text-amber-400">Butter</span> Bakery
+            <h1 className="text-2xl sm:text-3xl font-bold text-orange-800 text-center">
+              <span className="text-orange-600">Butter</span> Bakery
             </h1>
-            <p className="text-amber-200/80 text-sm sm:text-base mt-1">Specialty Coffee</p>
+            <p className="text-orange-700 text-sm sm:text-base mt-1">Specialty Coffee</p>
           </div>
 
           <div className="bg-stone-800/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl border border-stone-700/50">
