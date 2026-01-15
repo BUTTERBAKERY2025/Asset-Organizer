@@ -165,8 +165,8 @@ export default function MarketingGoalsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-amber-100 p-4" dir="rtl">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-amber-100" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/marketing">
