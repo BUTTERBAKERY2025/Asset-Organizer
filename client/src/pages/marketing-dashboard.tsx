@@ -294,7 +294,7 @@ export default function MarketingDashboardPage() {
     { title: "الأهداف", href: "/marketing-goals", icon: Award, bgColor: "bg-gradient-to-br from-rose-400 to-rose-600", iconBg: "bg-rose-100", iconColor: "text-rose-600", count: null },
     { title: "الأصول", href: "/marketing-assets", icon: FolderOpen, bgColor: "bg-gradient-to-br from-cyan-400 to-cyan-600", iconBg: "bg-cyan-100", iconColor: "text-cyan-600", count: null },
     { title: "التنبيهات", href: "/marketing-alerts", icon: Bell, bgColor: "bg-gradient-to-br from-red-400 to-red-600", iconBg: "bg-red-100", iconColor: "text-red-600", count: null },
-    { title: "السوشيال ميديا", href: "/marketing/social", icon: Share2, bgColor: "bg-gradient-to-br from-violet-400 to-violet-600", iconBg: "bg-violet-100", iconColor: "text-violet-600", count: null },
+    { title: "السوشيال ميديا", href: "/marketing-social", icon: Share2, bgColor: "bg-gradient-to-br from-violet-400 to-violet-600", iconBg: "bg-violet-100", iconColor: "text-violet-600", count: null },
   ];
 
   return (
