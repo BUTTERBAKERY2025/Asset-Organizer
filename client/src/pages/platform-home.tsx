@@ -74,36 +74,36 @@ function ModuleCard({ title, description, icon: Icon, href, color, badge, items 
       onClick={() => navigate(href)}
       data-testid={`module-card-${href.replace('/', '')}`}
     >
-      <CardHeader className="p-3 pb-2">
+      <CardHeader className="p-2.5 pb-1.5">
         <div className="flex items-center gap-2">
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color} transition-transform group-hover:scale-110 shrink-0`}>
-            <Icon className="w-4 h-4 text-white" />
+          <div className={`w-8 h-8 rounded-md flex items-center justify-center ${color} transition-transform group-hover:scale-110 shrink-0`}>
+            <Icon className="w-3.5 h-3.5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-sm font-semibold truncate">{title}</CardTitle>
+            <CardTitle className="text-xs font-semibold truncate">{title}</CardTitle>
           </div>
           {badge && (
-            <Badge variant="secondary" className="text-[11px] shrink-0">{badge}</Badge>
+            <Badge variant="secondary" className="text-[9px] shrink-0">{badge}</Badge>
           )}
         </div>
-        <CardDescription className="text-xs leading-snug line-clamp-2 mt-1">{description}</CardDescription>
+        <CardDescription className="text-[11px] leading-snug line-clamp-2 mt-1">{description}</CardDescription>
       </CardHeader>
       {items && items.length > 0 && (
-        <CardContent className="p-3 pt-0">
+        <CardContent className="p-2.5 pt-0">
           <div className="flex flex-wrap gap-1">
             {items.slice(0, 3).map((item, index) => (
               <Link key={index} href={item.href} onClick={(e) => e.stopPropagation()}>
                 <Badge 
                   variant="outline" 
-                  className="flex items-center gap-1 hover:bg-secondary cursor-pointer transition-colors text-[10px] px-1.5 py-0.5"
+                  className="flex items-center gap-0.5 hover:bg-secondary cursor-pointer transition-colors text-[9px] px-1 py-0"
                 >
-                  <item.icon className="w-2.5 h-2.5" />
+                  <item.icon className="w-2 h-2" />
                   {item.label}
                 </Badge>
               </Link>
             ))}
             {items.length > 3 && (
-              <Badge variant="outline" className="text-[10px] text-muted-foreground px-1.5 py-0.5">
+              <Badge variant="outline" className="text-[9px] text-muted-foreground px-1 py-0">
                 +{items.length - 3}
               </Badge>
             )}
