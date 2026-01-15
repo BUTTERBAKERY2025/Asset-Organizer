@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,25 @@ import { Loader2, Settings, BarChart3, Building2, Briefcase } from "lucide-react
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
 import welcomeGraphic from "@assets/generated_images/man_beard_imac_facing_left.png";
 
+const playWelcomeSound = () => {
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  
+  oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime);
+  oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1);
+  oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2);
+  
+  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+  
+  oscillator.start(audioContext.currentTime);
+  oscillator.stop(audioContext.currentTime + 0.4);
+};
+
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login, isLoggingIn, isAuthenticated } = useAuth();
@@ -16,6 +35,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const hasPlayedSound = sessionStorage.getItem('loginSoundPlayed');
+    if (!hasPlayedSound) {
+      const timer = setTimeout(() => {
+        playWelcomeSound();
+        sessionStorage.setItem('loginSoundPlayed', 'true');
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   if (isAuthenticated) {
     setLocation("/");
