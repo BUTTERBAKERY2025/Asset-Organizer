@@ -47,7 +47,7 @@ export default function LoginPage() {
           <div className="text-center space-y-6">
             <div className="space-y-1">
               <div className="inline-block">
-                <img src={logo} alt="Butter Bakery" className="h-36 2xl:h-44 w-auto drop-shadow-2xl mx-auto" />
+                <img src={logo} alt="Butter Bakery" className="h-48 2xl:h-56 w-auto drop-shadow-2xl mx-auto" />
               </div>
               <h1 className="text-4xl 2xl:text-5xl font-bold text-white leading-tight">
                 <span className="text-amber-400">Butter</span> Bakery
