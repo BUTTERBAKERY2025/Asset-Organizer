@@ -67,10 +67,6 @@ export default function LoginPage() {
               This is Butter Bakery.
             </p>
 
-            <p className="text-stone-400 text-base lg:text-lg mt-4">
-              Your smart gateway to manage the entire Butter Bakery world.
-            </p>
-
             <p className="text-stone-400 text-sm tracking-widest pt-4">
               www.butterbakery.co
             </p>
@@ -80,7 +76,8 @@ export default function LoginPage() {
             <div className="bg-stone-800/80 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-stone-700/50">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-white mb-2">Login</h3>
-                <p className="text-stone-400">Only Authorized Persons</p>
+                <p className="text-amber-400/80 text-sm font-medium tracking-wide">Your Gateway to Butter Bakery</p>
+                <p className="text-stone-500 text-xs mt-1">Only Authorized Persons</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5" dir="rtl">
