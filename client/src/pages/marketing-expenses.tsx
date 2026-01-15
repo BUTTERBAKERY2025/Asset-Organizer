@@ -334,6 +334,15 @@ export default function MarketingExpensesPage() {
     };
   }).filter((item) => item.expenses > 0 || item.budget > 0);
 
+  // المصروفات حسب الفرع
+  const expensesByBranch = uniqueBranches.map((branch) => {
+    const branchExpenses = filteredExpenses.filter((e) => (e as any).branchName === branch);
+    return {
+      name: branch,
+      value: branchExpenses.reduce((sum, e) => sum + e.amount, 0),
+    };
+  }).filter((item) => item.value > 0);
+
   const handleExportExcel = async () => {
     try {
       const xlsx = await import("xlsx");
@@ -890,6 +899,43 @@ export default function MarketingExpensesPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <PieChart className="w-5 h-5" />
+                    المصروفات حسب الفرع
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {expensesByBranch.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <RechartsPieChart>
+                        <Pie
+                          data={expensesByBranch}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {expensesByBranch.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `${new Intl.NumberFormat("en-US").format(value)} ر.س`} />
+                        <Legend />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                      لا توجد بيانات
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PieChart className="w-5 h-5" />
                     المصروفات حسب الفئة
                   </CardTitle>
                 </CardHeader>
@@ -914,6 +960,34 @@ export default function MarketingExpensesPage() {
                         <Tooltip formatter={(value: number) => `${new Intl.NumberFormat("en-US").format(value)} ر.س`} />
                         <Legend />
                       </RechartsPieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                      لا توجد بيانات
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" />
+                    المصروفات حسب الفرع (أعمدة)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {expensesByBranch.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={expensesByBranch} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
+                        <Tooltip formatter={(value: number) => `${new Intl.NumberFormat("en-US").format(value)} ر.س`} />
+                        <Bar dataKey="value" name="المصروف" fill="#f59e0b" />
+                      </BarChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex items-center justify-center h-[300px] text-muted-foreground">
