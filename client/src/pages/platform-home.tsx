@@ -415,24 +415,6 @@ export default function PlatformHomePage() {
           </div>
         )}
 
-        {isAuthenticated && quickActions.length > 0 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-amber-500" />
-                <CardTitle className="text-lg">إجراءات سريعة</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-                {quickActions.map((action, index) => (
-                  <QuickActionButton key={index} {...action} />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         <div>
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <LayoutDashboard className="w-5 h-5 text-primary" />
