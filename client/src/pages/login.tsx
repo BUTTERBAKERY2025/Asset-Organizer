@@ -39,20 +39,26 @@ export default function LoginPage() {
       <div className="flex-1 relative flex flex-col xl:flex-row items-center justify-center gap-8 lg:gap-16 p-4 sm:p-6 md:p-8 lg:p-12">
         
         <div className="hidden xl:flex flex-1 flex-col items-start justify-center max-w-2xl">
-          <div className="rounded-2xl overflow-hidden shadow-xl border-2 border-white/40">
-            <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-[280px]" />
+          <div className="relative">
+            <div className="rounded-2xl overflow-hidden shadow-xl border-2 border-white/40">
+              <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-[280px]" />
+            </div>
+            
+            <div className="mt-2 space-y-1" style={{ fontFamily: "'Caveat', cursive" }}>
+              <h1 className="text-3xl 2xl:text-4xl text-[#1a3a2f] leading-tight" style={{ fontFamily: "'Caveat', cursive" }}>
+                <span className="text-[#e67e22]">Butter</span> Bakery
+              </h1>
+              <h2 className="text-lg 2xl:text-xl text-[#1a3a2f]/70" style={{ fontFamily: "'Caveat', cursive" }}>
+                Specialty Coffee
+              </h2>
+              <svg className="w-20 h-2 mt-1" viewBox="0 0 80 8">
+                <path d="M0,4 Q20,0 40,4 T80,4" stroke="#e67e22" strokeWidth="2" fill="none" strokeLinecap="round"/>
+              </svg>
+            </div>
           </div>
           
-          <div className="mt-8 space-y-4">
-            <h1 className="text-4xl 2xl:text-5xl font-bold text-[#1a3a2f] leading-tight">
-              <span className="text-[#e67e22]">Butter</span> Bakery
-            </h1>
-            <h2 className="text-xl 2xl:text-2xl text-[#1a3a2f]/80 font-light">
-              Specialty Coffee
-            </h2>
-            <div className="w-16 h-1 bg-[#e67e22] rounded-full"></div>
-            
-            <div className="flex items-center gap-6 pt-4 text-[#1a3a2f]">
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center gap-6 text-[#1a3a2f]">
               <div className="text-center">
                 <p className="text-[#e67e22] text-xl mb-1">☀</p>
                 <p className="text-xs font-medium">Mornings</p>
@@ -72,7 +78,7 @@ export default function LoginPage() {
               </div>
             </div>
             
-            <p className="text-[#1a3a2f] text-lg font-semibold tracking-wide uppercase pt-4">
+            <p className="text-[#1a3a2f] text-sm font-medium tracking-wide uppercase pt-2" style={{ fontFamily: "'Caveat', cursive", fontSize: '1.1rem' }}>
               This is Butter Bakery
             </p>
             
