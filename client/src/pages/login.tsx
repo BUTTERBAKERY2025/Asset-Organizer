@@ -34,11 +34,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-neutral-600 via-stone-400 to-orange-400">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-100 via-orange-200 to-orange-400">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-[300px] sm:w-[400px] lg:w-[600px] h-[300px] sm:h-[400px] lg:h-[600px] bg-orange-300/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4"></div>
-        <div className="absolute bottom-0 left-0 w-[200px] sm:w-[300px] lg:w-[400px] h-[200px] sm:h-[300px] lg:h-[400px] bg-amber-200/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
-        <div className="absolute top-1/2 left-1/2 w-[150px] sm:w-[200px] lg:w-[300px] h-[150px] sm:h-[200px] lg:h-[300px] bg-orange-400/10 rounded-full blur-2xl -translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute top-0 right-0 w-[300px] sm:w-[400px] lg:w-[600px] h-[300px] sm:h-[400px] lg:h-[600px] bg-orange-300/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4"></div>
+        <div className="absolute bottom-0 left-0 w-[200px] sm:w-[300px] lg:w-[400px] h-[200px] sm:h-[300px] lg:h-[400px] bg-amber-300/30 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
+        <div className="absolute top-1/2 left-1/2 w-[150px] sm:w-[200px] lg:w-[300px] h-[150px] sm:h-[200px] lg:h-[300px] bg-orange-400/20 rounded-full blur-2xl -translate-x-1/2 -translate-y-1/2"></div>
       </div>
 
       <div className="flex-1 relative z-10 flex flex-col xl:flex-row items-center justify-center xl:justify-between gap-6 sm:gap-8 lg:gap-12 p-4 sm:p-6 md:p-8 lg:p-12">
@@ -181,7 +181,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="relative z-10 bg-neutral-800/95 backdrop-blur-sm border-t border-neutral-700">
+      <div className="relative z-10 bg-orange-900/90 backdrop-blur-sm border-t border-orange-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
             <div className="text-center space-y-1.5 sm:space-y-2 md:space-y-3">
