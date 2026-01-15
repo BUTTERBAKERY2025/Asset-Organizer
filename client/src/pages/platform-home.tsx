@@ -39,20 +39,20 @@ interface QuickStatProps {
 function QuickStat({ title, value, icon: Icon, color, trend, href }: QuickStatProps) {
   const content = (
     <Card className={`${href ? 'hover:shadow-md cursor-pointer transition-all hover:border-primary/30' : ''}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold">{value}</p>
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="space-y-0.5 min-w-0">
+            <p className="text-[10px] text-muted-foreground truncate">{title}</p>
+            <p className="text-lg font-bold truncate">{value}</p>
             {trend && (
-              <div className={`flex items-center gap-1 text-xs ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                <TrendingUp className={`w-3 h-3 ${!trend.isPositive && 'rotate-180'}`} />
+              <div className={`flex items-center gap-1 text-[10px] ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                <TrendingUp className={`w-2.5 h-2.5 ${!trend.isPositive && 'rotate-180'}`} />
                 <span>{trend.value}%</span>
               </div>
             )}
           </div>
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
-            <Icon className="w-6 h-6 text-white" />
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
+            <Icon className="w-4 h-4 text-white" />
           </div>
         </div>
       </CardContent>
@@ -70,39 +70,41 @@ function ModuleCard({ title, description, icon: Icon, href, color, badge, items 
   
   return (
     <Card 
-      className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-2 hover:border-primary/30 overflow-hidden h-full"
+      className="group hover:shadow-md transition-all duration-300 cursor-pointer border hover:border-primary/30 overflow-hidden h-full"
       onClick={() => navigate(href)}
       data-testid={`module-card-${href.replace('/', '')}`}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color} transition-transform group-hover:scale-110`}>
-            <Icon className="w-6 h-6 text-white" />
+      <CardHeader className="p-3 pb-2">
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color} transition-transform group-hover:scale-110 shrink-0`}>
+            <Icon className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-sm font-semibold truncate">{title}</CardTitle>
           </div>
           {badge && (
-            <Badge variant="secondary" className="text-xs">{badge}</Badge>
+            <Badge variant="secondary" className="text-[10px] shrink-0">{badge}</Badge>
           )}
         </div>
-        <CardTitle className="text-lg mt-3">{title}</CardTitle>
-        <CardDescription className="text-sm leading-relaxed">{description}</CardDescription>
+        <CardDescription className="text-xs leading-snug line-clamp-2 mt-1">{description}</CardDescription>
       </CardHeader>
       {items && items.length > 0 && (
-        <CardContent className="pt-0">
-          <div className="flex flex-wrap gap-2">
-            {items.slice(0, 4).map((item, index) => (
+        <CardContent className="p-3 pt-0">
+          <div className="flex flex-wrap gap-1">
+            {items.slice(0, 3).map((item, index) => (
               <Link key={index} href={item.href} onClick={(e) => e.stopPropagation()}>
                 <Badge 
                   variant="outline" 
-                  className="flex items-center gap-1 hover:bg-secondary cursor-pointer transition-colors text-xs"
+                  className="flex items-center gap-1 hover:bg-secondary cursor-pointer transition-colors text-[10px] px-1.5 py-0.5"
                 >
-                  <item.icon className="w-3 h-3" />
+                  <item.icon className="w-2.5 h-2.5" />
                   {item.label}
                 </Badge>
               </Link>
             ))}
-            {items.length > 4 && (
-              <Badge variant="outline" className="text-xs text-muted-foreground">
-                +{items.length - 4} أخرى
+            {items.length > 3 && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground px-1.5 py-0.5">
+                +{items.length - 3}
               </Badge>
             )}
           </div>
@@ -125,11 +127,11 @@ function QuickActionButton({
 }) {
   return (
     <Link href={href}>
-      <Button variant="outline" className="h-auto py-3 px-4 flex flex-col items-center gap-2 hover:border-primary/50 transition-all min-h-[44px]">
-        <div className={`w-10 h-10 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon className="w-5 h-5 text-white" />
+      <Button variant="outline" className="h-auto py-2 px-3 flex flex-col items-center gap-1.5 hover:border-primary/50 transition-all min-h-[40px]">
+        <div className={`w-7 h-7 rounded-md flex items-center justify-center ${color}`}>
+          <Icon className="w-3.5 h-3.5 text-white" />
         </div>
-        <span className="text-xs font-medium">{label}</span>
+        <span className="text-[10px] font-medium">{label}</span>
       </Button>
     </Link>
   );
@@ -436,7 +438,7 @@ export default function PlatformHomePage() {
             <LayoutDashboard className="w-5 h-5 text-primary" />
             أقسام النظام
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
             {accessibleModules.map((module, index) => (
               <ModuleCard key={index} {...module} />
             ))}
