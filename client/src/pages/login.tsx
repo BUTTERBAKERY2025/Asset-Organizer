@@ -49,7 +49,10 @@ export default function LoginPage() {
               <img src={logo} alt="Butter Bakery" className="h-44 2xl:h-52 w-auto drop-shadow-2xl mx-auto" />
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-3">
+              <h1 className="text-4xl 2xl:text-5xl font-bold text-white leading-tight">
+                <span className="text-amber-400">Butter</span> Bakery
+              </h1>
               <h2 className="text-2xl 2xl:text-3xl text-amber-200/90 font-light tracking-wide">
                 Specialty Coffee
               </h2>
