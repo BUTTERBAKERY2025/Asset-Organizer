@@ -34,11 +34,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-100 via-orange-200 to-orange-400">
+    <div className="min-h-screen flex flex-col bg-[#f8f6f1]">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-[300px] sm:w-[400px] lg:w-[600px] h-[300px] sm:h-[400px] lg:h-[600px] bg-orange-300/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4"></div>
-        <div className="absolute bottom-0 left-0 w-[200px] sm:w-[300px] lg:w-[400px] h-[200px] sm:h-[300px] lg:h-[400px] bg-amber-300/30 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
-        <div className="absolute top-1/2 left-1/2 w-[150px] sm:w-[200px] lg:w-[300px] h-[150px] sm:h-[200px] lg:h-[300px] bg-orange-400/20 rounded-full blur-2xl -translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute top-0 left-0 right-0 h-12 sm:h-14 bg-[#1e3a5f]"></div>
+        <div className="absolute top-12 sm:top-14 left-0 right-0 h-8 sm:h-10 bg-[#e8e0d0]"></div>
+        <svg className="absolute top-16 sm:top-20 left-0 w-full h-16 sm:h-20" viewBox="0 0 1440 80" preserveAspectRatio="none">
+          <path d="M0,40 Q360,80 720,40 T1440,40 L1440,0 L0,0 Z" fill="#c9a961" opacity="0.6"/>
+          <path d="M0,50 Q360,10 720,50 T1440,50 L1440,80 L0,80 Z" fill="#e8e0d0" opacity="0.4"/>
+        </svg>
+        <svg className="absolute bottom-12 sm:bottom-14 left-0 w-full h-16 sm:h-20" viewBox="0 0 1440 80" preserveAspectRatio="none">
+          <path d="M0,40 Q360,0 720,40 T1440,40 L1440,80 L0,80 Z" fill="#c9a961" opacity="0.5"/>
+          <path d="M0,30 Q360,70 720,30 T1440,30 L1440,0 L0,0 Z" fill="#e8e0d0" opacity="0.4"/>
+        </svg>
+        <div className="absolute bottom-0 left-0 right-0 h-12 sm:h-14 bg-[#1e3a5f]"></div>
       </div>
 
       <div className="flex-1 relative z-10 flex flex-col xl:flex-row items-center justify-center xl:justify-between gap-6 sm:gap-8 lg:gap-12 p-4 sm:p-6 md:p-8 lg:p-12">
@@ -49,47 +57,47 @@ export default function LoginPage() {
               <div className="inline-block">
                 <img src={logo} alt="Butter Bakery" className="h-48 2xl:h-56 w-auto drop-shadow-2xl mx-auto" />
               </div>
-              <h1 className="text-4xl 2xl:text-5xl font-bold text-orange-800 leading-tight">
-                <span className="text-orange-600">Butter</span> Bakery
+              <h1 className="text-4xl 2xl:text-5xl font-bold text-[#1e3a5f] leading-tight">
+                <span className="text-[#c9a961]">Butter</span> Bakery
               </h1>
             </div>
             
             <div className="space-y-3">
-              <h2 className="text-2xl 2xl:text-3xl text-orange-700 font-light tracking-wide">
+              <h2 className="text-2xl 2xl:text-3xl text-[#1e3a5f]/80 font-light tracking-wide">
                 Specialty Coffee
               </h2>
-              <div className="w-24 h-0.5 bg-orange-600/50 mx-auto rounded-full"></div>
+              <div className="w-24 h-0.5 bg-[#c9a961] mx-auto rounded-full"></div>
             </div>
 
-            <div className="bg-orange-800/80 backdrop-blur-sm rounded-2xl px-8 py-6 border border-orange-700/50">
+            <div className="bg-[#1e3a5f]/90 backdrop-blur-sm rounded-2xl px-8 py-6 border border-[#c9a961]/30">
               <div className="flex items-center justify-center gap-8 text-white">
                 <div className="text-center">
-                  <p className="text-amber-300 text-2xl mb-1">☀</p>
+                  <p className="text-[#c9a961] text-2xl mb-1">☀</p>
                   <p className="text-sm font-medium">Mornings</p>
-                  <p className="text-xs text-orange-200">bakery aromas</p>
+                  <p className="text-xs text-[#e8e0d0]">bakery aromas</p>
                 </div>
-                <div className="w-px h-12 bg-orange-400/50"></div>
+                <div className="w-px h-12 bg-[#c9a961]/40"></div>
                 <div className="text-center">
-                  <p className="text-amber-300 text-2xl mb-1">☕</p>
+                  <p className="text-[#c9a961] text-2xl mb-1">☕</p>
                   <p className="text-sm font-medium">Days</p>
-                  <p className="text-xs text-orange-200">specialty coffee</p>
+                  <p className="text-xs text-[#e8e0d0]">specialty coffee</p>
                 </div>
-                <div className="w-px h-12 bg-orange-400/50"></div>
+                <div className="w-px h-12 bg-[#c9a961]/40"></div>
                 <div className="text-center">
-                  <p className="text-amber-300 text-2xl mb-1">🌙</p>
+                  <p className="text-[#c9a961] text-2xl mb-1">🌙</p>
                   <p className="text-sm font-medium">Nights</p>
-                  <p className="text-xs text-orange-200">sweet desserts</p>
+                  <p className="text-xs text-[#e8e0d0]">sweet desserts</p>
                 </div>
               </div>
             </div>
 
             <div className="pt-4">
-              <p className="text-orange-800 text-xl 2xl:text-2xl font-semibold tracking-wider uppercase">
+              <p className="text-[#1e3a5f] text-xl 2xl:text-2xl font-semibold tracking-wider uppercase">
                 This is Butter Bakery
               </p>
             </div>
 
-            <a href="https://www.butterbakery.co" target="_blank" rel="noopener noreferrer" className="text-neutral-700 text-sm tracking-[0.3em] pt-2 hover:text-orange-600 transition-colors">
+            <a href="https://www.butterbakery.co" target="_blank" rel="noopener noreferrer" className="text-[#1e3a5f]/70 text-sm tracking-[0.3em] pt-2 hover:text-[#c9a961] transition-colors">
               www.butterbakery.co
             </a>
           </div>
@@ -98,17 +106,17 @@ export default function LoginPage() {
         <div className="w-full max-w-[360px] sm:max-w-md xl:max-w-sm 2xl:max-w-md">
           <div className="xl:hidden flex flex-col items-center mb-6 sm:mb-8">
             <img src={logo} alt="Butter Bakery" className="h-24 sm:h-32 md:h-36 w-auto drop-shadow-2xl mb-4" />
-            <h1 className="text-2xl sm:text-3xl font-bold text-orange-800 text-center">
-              <span className="text-orange-600">Butter</span> Bakery
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#1e3a5f] text-center">
+              <span className="text-[#c9a961]">Butter</span> Bakery
             </h1>
-            <p className="text-orange-700 text-sm sm:text-base mt-1">Specialty Coffee</p>
+            <p className="text-[#1e3a5f]/80 text-sm sm:text-base mt-1">Specialty Coffee</p>
           </div>
 
-          <div className="bg-stone-800/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl border border-stone-700/50">
+          <div className="bg-[#1e3a5f]/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl border border-[#c9a961]/30">
             <div className="text-center mb-5 sm:mb-6 md:mb-8">
               <h3 className="text-xl sm:text-2xl font-bold text-white mb-1.5 sm:mb-2">Login</h3>
-              <p className="text-amber-400/80 text-xs sm:text-sm font-medium tracking-wide">Our Smart Portal For Managing Our Business</p>
-              <p className="text-stone-500 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Only Authorized Persons</p>
+              <p className="text-[#c9a961] text-xs sm:text-sm font-medium tracking-wide">Our Smart Portal For Managing Our Business</p>
+              <p className="text-[#e8e0d0]/70 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Only Authorized Persons</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" dir="rtl">
@@ -119,7 +127,7 @@ export default function LoginPage() {
                   placeholder="اسم المستخدم"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="h-11 sm:h-12 bg-stone-700/50 border-stone-600 text-white placeholder:text-stone-400 focus:border-amber-500 focus:ring-amber-500/20 rounded-lg sm:rounded-xl text-right text-sm sm:text-base"
+                  className="h-11 sm:h-12 bg-[#2a4a6f] border-[#3a5a7f] text-white placeholder:text-[#e8e0d0]/60 focus:border-[#c9a961] focus:ring-[#c9a961]/20 rounded-lg sm:rounded-xl text-right text-sm sm:text-base"
                   data-testid="input-username"
                   required
                 />
@@ -132,7 +140,7 @@ export default function LoginPage() {
                   placeholder="كلمة المرور"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 sm:h-12 bg-stone-700/50 border-stone-600 text-white placeholder:text-stone-400 focus:border-amber-500 focus:ring-amber-500/20 rounded-lg sm:rounded-xl text-right text-sm sm:text-base"
+                  className="h-11 sm:h-12 bg-[#2a4a6f] border-[#3a5a7f] text-white placeholder:text-[#e8e0d0]/60 focus:border-[#c9a961] focus:ring-[#c9a961]/20 rounded-lg sm:rounded-xl text-right text-sm sm:text-base"
                   data-testid="input-password"
                   required
                 />
@@ -143,10 +151,10 @@ export default function LoginPage() {
                   id="rememberMe"
                   checked={rememberMe}
                   onCheckedChange={(checked) => setRememberMe(checked === true)}
-                  className="h-4 w-4 sm:h-5 sm:w-5 border-stone-500 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                  className="h-4 w-4 sm:h-5 sm:w-5 border-[#c9a961]/50 data-[state=checked]:bg-[#c9a961] data-[state=checked]:border-[#c9a961]"
                   data-testid="checkbox-remember-me"
                 />
-                <Label htmlFor="rememberMe" className="text-stone-400 cursor-pointer text-xs sm:text-sm">
+                <Label htmlFor="rememberMe" className="text-[#e8e0d0]/80 cursor-pointer text-xs sm:text-sm">
                   تذكرني
                 </Label>
               </div>
@@ -159,7 +167,7 @@ export default function LoginPage() {
 
               <Button 
                 type="submit" 
-                className="w-full h-11 sm:h-12 text-base sm:text-lg font-bold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg sm:rounded-xl shadow-lg shadow-amber-500/25 transition-all duration-300" 
+                className="w-full h-11 sm:h-12 text-base sm:text-lg font-bold bg-[#c9a961] hover:bg-[#b8984f] text-[#1e3a5f] rounded-lg sm:rounded-xl shadow-lg shadow-[#c9a961]/25 transition-all duration-300" 
                 disabled={isLoggingIn}
                 data-testid="button-login"
               >
@@ -175,32 +183,32 @@ export default function LoginPage() {
             </form>
           </div>
 
-          <a href="https://www.butterbakery.co" target="_blank" rel="noopener noreferrer" className="xl:hidden text-neutral-700 text-xs text-center mt-4 tracking-widest hover:text-orange-600 transition-colors block">
+          <a href="https://www.butterbakery.co" target="_blank" rel="noopener noreferrer" className="xl:hidden text-[#1e3a5f]/70 text-xs text-center mt-4 tracking-widest hover:text-[#c9a961] transition-colors block">
             www.butterbakery.co
           </a>
         </div>
       </div>
 
-      <div className="relative z-10 bg-orange-500 border-t border-orange-400">
+      <div className="relative z-10 bg-[#1e3a5f] border-t border-[#c9a961]/30">
         <div className="max-w-5xl mx-auto px-4 py-2.5 sm:py-3">
           <div className="flex items-center justify-center gap-6 sm:gap-10 md:gap-14">
             <div className="flex items-center gap-2">
-              <Wheat className="w-4 h-4 text-white/90" />
+              <Wheat className="w-4 h-4 text-[#c9a961]" />
               <span className="text-white text-[11px] sm:text-xs font-medium">Freshly Baked</span>
             </div>
-            <div className="w-px h-4 bg-white/30 hidden sm:block"></div>
+            <div className="w-px h-4 bg-[#c9a961]/30 hidden sm:block"></div>
             <div className="flex items-center gap-2">
-              <Heart className="w-4 h-4 text-white/90" />
+              <Heart className="w-4 h-4 text-[#c9a961]" />
               <span className="text-white text-[11px] sm:text-xs font-medium">Healthy Options</span>
             </div>
-            <div className="w-px h-4 bg-white/30 hidden sm:block"></div>
+            <div className="w-px h-4 bg-[#c9a961]/30 hidden sm:block"></div>
             <div className="flex items-center gap-2 hidden md:flex">
-              <Award className="w-4 h-4 text-white/90" />
+              <Award className="w-4 h-4 text-[#c9a961]" />
               <span className="text-white text-[11px] sm:text-xs font-medium">Quality Ingredients</span>
             </div>
-            <div className="w-px h-4 bg-white/30 hidden md:block"></div>
+            <div className="w-px h-4 bg-[#c9a961]/30 hidden md:block"></div>
             <div className="flex items-center gap-2 hidden sm:flex">
-              <Coffee className="w-4 h-4 text-white/90" />
+              <Coffee className="w-4 h-4 text-[#c9a961]" />
               <span className="text-white text-[11px] sm:text-xs font-medium">Specialty Coffee</span>
             </div>
           </div>
