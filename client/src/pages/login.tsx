@@ -40,7 +40,7 @@ export default function LoginPage() {
         
         <div className="hidden xl:flex flex-1 flex-col items-start justify-center max-w-2xl">
           <div className="rounded-2xl overflow-hidden shadow-xl border-2 border-white/40">
-            <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-xs" />
+            <img src={welcomeGraphic} alt="Welcome" className="w-full max-w-[280px]" />
           </div>
           
           <div className="mt-8 space-y-4">
