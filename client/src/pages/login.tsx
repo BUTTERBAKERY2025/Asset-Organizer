@@ -48,7 +48,7 @@ export default function LoginPage() {
               <h1 className="text-4xl 2xl:text-5xl font-bold text-[#1a3a2f] leading-tight">
                 <span className="text-[#e67e22]">Butter</span> Bakery
               </h1>
-              <h2 className="text-xl 2xl:text-2xl text-[#1a3a2f]/80 font-light">
+              <h2 className="text-base 2xl:text-lg text-[#1a3a2f]/80 font-light">
                 CEO COMMAND
               </h2>
               <div className="w-16 h-1 bg-[#e67e22] rounded-full"></div>
