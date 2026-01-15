@@ -308,6 +308,21 @@ export default function MarketingDashboardPage() {
           </p>
         </div>
 
+        {/* Quick Access - Compact at top */}
+        <div className="flex flex-wrap gap-2">
+          {quickAccessCards.map((card, index) => (
+            <Link key={index} href={card.href}>
+              <div className={`group flex items-center gap-2 px-3 py-2 rounded-lg ${card.bgColor} hover:shadow-md transition-all cursor-pointer`}>
+                <card.icon className="w-4 h-4 text-white" />
+                <span className="text-sm font-medium text-white">{card.title}</span>
+                {card.count !== null && card.count > 0 && (
+                  <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded-full text-white">{card.count}</span>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
+
         {/* Primary Stats Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Card className="bg-amber-50/50 border-amber-100">
@@ -670,34 +685,6 @@ export default function MarketingDashboardPage() {
               )}
             </CardContent>
           </Card>
-        </div>
-
-        {/* Quick Access */}
-        <div>
-          <h2 className="text-base font-semibold mb-4">الوصول السريع</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-            {quickAccessCards.map((card, index) => (
-              <Link key={index} href={card.href}>
-                <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-0 shadow-sm hover:-translate-y-1 h-full overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className={`${card.bgColor} p-4 flex justify-center`}>
-                      <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center transition-transform group-hover:scale-110 group-hover:rotate-3">
-                        <card.icon className="w-7 h-7 text-white" />
-                      </div>
-                    </div>
-                    <div className="p-3 text-center bg-white">
-                      <p className="font-semibold text-gray-800">{card.title}</p>
-                      {card.count !== null && card.count > 0 && (
-                        <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full ${card.iconBg}`}>
-                          <span className={`text-xs font-medium ${card.iconColor}`}>{formatNumber(card.count)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
         </div>
       </div>
     </Layout>
