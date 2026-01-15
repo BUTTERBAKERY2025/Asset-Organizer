@@ -217,7 +217,7 @@ export default function AttendanceCheckPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto p-6 space-y-6">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button

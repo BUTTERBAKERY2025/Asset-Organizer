@@ -179,7 +179,7 @@ export default function AdvancedProductionOrdersPage() {
 
   return (
     <Layout>
-      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/production-dashboard">

@@ -341,7 +341,7 @@ export default function PlatformHomePage() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-3 sm:p-4 md:p-6" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-4 sm:p-6">
           <div className="space-y-2">
             <div className="flex items-center gap-3">

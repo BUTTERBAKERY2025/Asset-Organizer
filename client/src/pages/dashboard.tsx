@@ -92,7 +92,7 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div className="flex flex-col space-y-6">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة الأصول</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">ملخص شامل لأصول جميع الفروع</p>

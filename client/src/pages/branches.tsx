@@ -116,7 +116,7 @@ export default function BranchesPage() {
 
   return (
     <Layout>
-      <div className="flex flex-col space-y-6">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-branches-title">إدارة الفروع</h1>

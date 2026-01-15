@@ -485,7 +485,7 @@ export default function SettingsDashboardPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto py-6 px-4 max-w-7xl" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
             <div className="p-2 sm:p-3 bg-primary/10 rounded-xl w-fit">

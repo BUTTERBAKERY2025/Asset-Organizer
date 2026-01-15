@@ -263,7 +263,7 @@ export default function SecurityManagementPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto py-6 px-4" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb
           currentPage="إدارة الأمان"
           currentIcon={Shield}

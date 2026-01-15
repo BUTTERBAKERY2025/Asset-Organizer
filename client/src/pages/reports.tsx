@@ -294,7 +294,7 @@ export default function ReportsPage() {
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">تقارير الأصول والمعدات</h1>

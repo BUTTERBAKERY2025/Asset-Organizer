@@ -362,7 +362,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-yellow-50 border-yellow-200">

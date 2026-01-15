@@ -576,7 +576,7 @@ export default function ManagePage() {
 
   return (
     <Layout>
-      <div className="flex flex-col space-y-6">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">إدارة الأصول</h1>
