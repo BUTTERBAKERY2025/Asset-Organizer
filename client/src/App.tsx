@@ -108,7 +108,7 @@ function AdminPage({ component: Component, module }: { component: React.Componen
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={PlatformHomePage} />
+      <Route path="/">{() => <ProtectedRoute><PlatformHomePage /></ProtectedRoute>}</Route>
       <Route path="/login">
         {() => (
           <PublicOnlyRoute>
