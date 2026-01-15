@@ -124,7 +124,46 @@ const DAYS_AR = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خمي
 
 const formatNum = (n: number): string => n.toLocaleString('en-US');
 
+// تواريخ المناسبات الإسلامية المتغيرة حسب السنة (التقويم الهجري يتقدم ~10-11 يوم سنوياً)
+const getIslamicDates = (year: number) => {
+  const dates: Record<number, { ramadanStart: string; ramadanEnd: string; eidFitrStart: string; eidFitrEnd: string; hajjStart: string; hajjEnd: string; eidAdhaStart: string; eidAdhaEnd: string }> = {
+    2025: {
+      ramadanStart: "2025-03-01", ramadanEnd: "2025-03-30",
+      eidFitrStart: "2025-03-30", eidFitrEnd: "2025-04-02",
+      hajjStart: "2025-06-04", hajjEnd: "2025-06-09",
+      eidAdhaStart: "2025-06-06", eidAdhaEnd: "2025-06-10",
+    },
+    2026: {
+      ramadanStart: "2026-02-18", ramadanEnd: "2026-03-19",
+      eidFitrStart: "2026-03-20", eidFitrEnd: "2026-03-23",
+      hajjStart: "2026-05-24", hajjEnd: "2026-05-29",
+      eidAdhaStart: "2026-05-26", eidAdhaEnd: "2026-05-30",
+    },
+    2027: {
+      ramadanStart: "2027-02-08", ramadanEnd: "2027-03-09",
+      eidFitrStart: "2027-03-09", eidFitrEnd: "2027-03-12",
+      hajjStart: "2027-05-13", hajjEnd: "2027-05-18",
+      eidAdhaStart: "2027-05-15", eidAdhaEnd: "2027-05-19",
+    },
+    2028: {
+      ramadanStart: "2028-01-28", ramadanEnd: "2028-02-26",
+      eidFitrStart: "2028-02-26", eidFitrEnd: "2028-03-01",
+      hajjStart: "2028-05-02", hajjEnd: "2028-05-07",
+      eidAdhaStart: "2028-05-04", eidAdhaEnd: "2028-05-08",
+    },
+  };
+  // Default fallback with approximate calculation
+  return dates[year] || {
+    ramadanStart: `${year}-03-01`, ramadanEnd: `${year}-03-30`,
+    eidFitrStart: `${year}-03-30`, eidFitrEnd: `${year}-04-02`,
+    hajjStart: `${year}-06-04`, hajjEnd: `${year}-06-09`,
+    eidAdhaStart: `${year}-06-06`, eidAdhaEnd: `${year}-06-10`,
+  };
+};
+
 const getSaudiOccasions = (year: number): SaudiOccasion[] => {
+  const islamicDates = getIslamicDates(year);
+  
   return [
     {
       id: "founding-day",
@@ -150,8 +189,8 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       id: "ramadan-start",
       title: "بداية شهر رمضان",
       titleEn: "Ramadan Start",
-      date: `${year}-03-10`,
-      endDate: `${year}-04-09`,
+      date: islamicDates.ramadanStart,
+      endDate: islamicDates.ramadanEnd,
       category: "religious",
       description: "شهر الصيام المبارك",
       marketingTips: ["عروض رمضانية", "منتجات الإفطار", "حملات التبرع والخير", "ساعات عمل خاصة"],
@@ -172,8 +211,8 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       id: "eid-fitr",
       title: "عيد الفطر المبارك",
       titleEn: "Eid Al-Fitr",
-      date: `${year}-04-10`,
-      endDate: `${year}-04-13`,
+      date: islamicDates.eidFitrStart,
+      endDate: islamicDates.eidFitrEnd,
       category: "religious",
       description: "إجازة عيد الفطر",
       marketingTips: ["عروض العيد", "هدايا العيد", "ملابس العيد", "حلويات ومعمول"],
@@ -234,8 +273,8 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       id: "eid-adha",
       title: "عيد الأضحى المبارك",
       titleEn: "Eid Al-Adha",
-      date: `${year}-06-16`,
-      endDate: `${year}-06-20`,
+      date: islamicDates.eidAdhaStart,
+      endDate: islamicDates.eidAdhaEnd,
       category: "religious",
       description: "إجازة عيد الأضحى وموسم الحج",
       marketingTips: ["عروض الأضاحي", "هدايا العيد", "ملابس العيد", "لحوم ومنتجات غذائية"],
@@ -255,8 +294,8 @@ const getSaudiOccasions = (year: number): SaudiOccasion[] => {
       id: "hajj-season",
       title: "موسم الحج",
       titleEn: "Hajj Season",
-      date: `${year}-06-06`,
-      endDate: `${year}-06-20`,
+      date: islamicDates.hajjStart,
+      endDate: islamicDates.hajjEnd,
       category: "religious",
       description: "موسم الحج المبارك",
       marketingTips: ["منتجات الحجاج", "خدمات الضيافة", "هدايا تذكارية"],
