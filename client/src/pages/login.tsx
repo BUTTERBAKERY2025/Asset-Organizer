@@ -59,17 +59,31 @@ export default function LoginPage() {
               <div className="w-24 h-0.5 bg-amber-500/50 mx-auto rounded-full"></div>
             </div>
 
-            <div className="flex items-center justify-center gap-3 text-stone-300 text-base 2xl:text-lg font-light">
-              <span className="italic">Mornings start with bakery aromas</span>
-              <span className="text-amber-500">•</span>
-              <span className="italic">Days flow with specialty coffee</span>
-              <span className="text-amber-500">•</span>
-              <span className="italic">Nights end with sweet desserts</span>
+            <div className="bg-stone-800/30 backdrop-blur-sm rounded-2xl px-8 py-6 border border-stone-700/30">
+              <div className="flex items-center justify-center gap-8 text-stone-200">
+                <div className="text-center">
+                  <p className="text-amber-400 text-2xl mb-1">☀</p>
+                  <p className="text-sm font-medium">Mornings</p>
+                  <p className="text-xs text-stone-400">bakery aromas</p>
+                </div>
+                <div className="w-px h-12 bg-amber-500/30"></div>
+                <div className="text-center">
+                  <p className="text-amber-400 text-2xl mb-1">☕</p>
+                  <p className="text-sm font-medium">Days</p>
+                  <p className="text-xs text-stone-400">specialty coffee</p>
+                </div>
+                <div className="w-px h-12 bg-amber-500/30"></div>
+                <div className="text-center">
+                  <p className="text-amber-400 text-2xl mb-1">🌙</p>
+                  <p className="text-sm font-medium">Nights</p>
+                  <p className="text-xs text-stone-400">sweet desserts</p>
+                </div>
+              </div>
             </div>
 
             <div className="pt-4">
-              <p className="text-amber-400 text-xl 2xl:text-2xl font-bold tracking-wide">
-                "This is Butter Bakery"
+              <p className="text-amber-400 text-xl 2xl:text-2xl font-semibold tracking-wider uppercase">
+                This is Butter Bakery
               </p>
             </div>
 
