@@ -66,6 +66,7 @@ import MarketingGoalsPage from "@/pages/marketing-goals";
 import MarketingAssetsPage from "@/pages/marketing-assets";
 import MarketingAlertsPage from "@/pages/marketing-alerts";
 import MarketingExpensesPage from "@/pages/marketing-expenses";
+import MarketingSocialPage from "@/pages/marketing-social";
 import SettingsDashboardPage from "@/pages/settings-dashboard";
 import ShiftManagementPage from "@/pages/shift-management";
 import AttendanceCheckPage from "@/pages/attendance-check";
@@ -183,6 +184,7 @@ function Router() {
       {/* Marketing - التسويق */}
       <Route path="/marketing">{() => <ModulePage component={MarketingDashboardPage} module="marketing" />}</Route>
       <Route path="/marketing-campaigns">{() => <ModulePage component={MarketingCampaignsPage} module="marketing_campaigns" />}</Route>
+      <Route path="/marketing-social">{() => <ModulePage component={MarketingSocialPage} module="marketing" />}</Route>
       <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
       <Route path="/marketing-calendar">{() => <ModulePage component={MarketingCalendarPage} module="marketing" />}</Route>
       <Route path="/marketing-tasks">{() => <ModulePage component={MarketingTasksPage} module="marketing_tasks" />}</Route>

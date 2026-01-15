@@ -5089,3 +5089,193 @@ export const ALERT_STATUS = {
   acknowledged: { label: "تم الاطلاع", color: "yellow" },
   resolved: { label: "تم الحل", color: "green" },
 } as const;
+
+// ==========================================
+// نظام إدارة السوشيال ميديا - Social Media Management System
+// ==========================================
+
+// Social Accounts - حسابات السوشيال ميديا المرتبطة
+export const socialAccounts = pgTable("social_accounts", {
+  id: serial("id").primaryKey(),
+  platform: text("platform").notNull(), // instagram, facebook, twitter, tiktok, snapchat, youtube
+  accountId: text("account_id"), // Platform-specific account ID
+  accountName: text("account_name").notNull(),
+  accountHandle: text("account_handle"), // @username
+  pageId: text("page_id"), // For Facebook pages
+  profileImageUrl: text("profile_image_url"),
+  followersCount: integer("followers_count").default(0),
+  followingCount: integer("following_count").default(0),
+  postsCount: integer("posts_count").default(0),
+  accessToken: text("access_token"), // Encrypted
+  refreshToken: text("refresh_token"), // Encrypted
+  tokenExpiresAt: timestamp("token_expires_at"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  isConnected: boolean("is_connected").default(false).notNull(),
+  lastSyncAt: timestamp("last_sync_at"),
+  connectionError: text("connection_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_accounts_platform").on(table.platform),
+  index("idx_social_accounts_branch").on(table.branchId),
+]);
+
+export const insertSocialAccountSchema = createInsertSchema(socialAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialAccount = typeof socialAccounts.$inferSelect;
+export type InsertSocialAccount = z.infer<typeof insertSocialAccountSchema>;
+
+// Social Posts - المنشورات
+export const socialPosts = pgTable("social_posts", {
+  id: serial("id").primaryKey(),
+  title: text("title"),
+  content: text("content").notNull(),
+  contentAr: text("content_ar"), // Arabic version
+  mediaUrls: text("media_urls").array(), // Array of image/video URLs
+  mediaTypes: text("media_types").array(), // image, video, carousel
+  hashtags: text("hashtags").array(),
+  status: text("status").default("draft").notNull(), // draft, scheduled, published, failed
+  platforms: text("platforms").array().notNull(), // Target platforms
+  scheduledAt: timestamp("scheduled_at"),
+  publishedAt: timestamp("published_at"),
+  failedReason: text("failed_reason"),
+  campaignId: integer("campaign_id").references(() => marketingCampaigns.id),
+  calendarEventId: integer("calendar_event_id").references(() => marketingCalendarEvents.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  postType: text("post_type").default("regular"), // regular, story, reel, carousel
+  linkUrl: text("link_url"),
+  callToAction: text("call_to_action"),
+  targetAudience: text("target_audience"),
+  isPromoted: boolean("is_promoted").default(false),
+  promotionBudget: real("promotion_budget"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_posts_status").on(table.status),
+  index("idx_social_posts_scheduled").on(table.scheduledAt),
+  index("idx_social_posts_campaign").on(table.campaignId),
+]);
+
+export const insertSocialPostSchema = createInsertSchema(socialPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialPost = typeof socialPosts.$inferSelect;
+export type InsertSocialPost = z.infer<typeof insertSocialPostSchema>;
+
+// Social Post Metrics - إحصائيات المنشورات
+export const socialPostMetrics = pgTable("social_post_metrics", {
+  id: serial("id").primaryKey(),
+  postId: integer("post_id").notNull().references(() => socialPosts.id, { onDelete: "cascade" }),
+  platform: text("platform").notNull(),
+  platformPostId: text("platform_post_id"), // Post ID on the platform
+  impressions: integer("impressions").default(0),
+  reach: integer("reach").default(0),
+  engagements: integer("engagements").default(0),
+  likes: integer("likes").default(0),
+  comments: integer("comments").default(0),
+  shares: integer("shares").default(0),
+  saves: integer("saves").default(0),
+  clicks: integer("clicks").default(0),
+  videoViews: integer("video_views").default(0),
+  engagementRate: real("engagement_rate").default(0),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_metrics_post").on(table.postId),
+  index("idx_social_metrics_platform").on(table.platform),
+]);
+
+export const insertSocialPostMetricSchema = createInsertSchema(socialPostMetrics).omit({
+  id: true,
+  fetchedAt: true,
+});
+
+export type SocialPostMetric = typeof socialPostMetrics.$inferSelect;
+export type InsertSocialPostMetric = z.infer<typeof insertSocialPostMetricSchema>;
+
+// Social Content Templates - قوالب المحتوى
+export const socialContentTemplates = pgTable("social_content_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // product_launch, promotion, holiday, engagement, announcement
+  content: text("content").notNull(),
+  contentAr: text("content_ar"),
+  defaultHashtags: text("default_hashtags").array(),
+  defaultMediaType: text("default_media_type"), // image, video, carousel
+  placeholderFields: text("placeholder_fields").array(), // e.g., ["product_name", "price", "discount"]
+  suitablePlatforms: text("suitable_platforms").array(),
+  usageCount: integer("usage_count").default(0),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_content_templates_category").on(table.category),
+]);
+
+export const insertSocialContentTemplateSchema = createInsertSchema(socialContentTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialContentTemplate = typeof socialContentTemplates.$inferSelect;
+export type InsertSocialContentTemplate = z.infer<typeof insertSocialContentTemplateSchema>;
+
+// Social Schedule Slots - أوقات النشر المفضلة
+export const socialScheduleSlots = pgTable("social_schedule_slots", {
+  id: serial("id").primaryKey(),
+  platform: text("platform").notNull(),
+  dayOfWeek: integer("day_of_week").notNull(), // 0-6 (Sunday-Saturday)
+  timeSlot: text("time_slot").notNull(), // HH:MM format
+  priority: integer("priority").default(1), // 1 = primary, 2 = secondary
+  engagementScore: real("engagement_score").default(0), // Historical performance
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_schedule_slots_platform").on(table.platform),
+  index("idx_schedule_slots_day").on(table.dayOfWeek),
+]);
+
+export const insertSocialScheduleSlotSchema = createInsertSchema(socialScheduleSlots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SocialScheduleSlot = typeof socialScheduleSlots.$inferSelect;
+export type InsertSocialScheduleSlot = z.infer<typeof insertSocialScheduleSlotSchema>;
+
+// Social Platform Constants
+export const SOCIAL_PLATFORMS = {
+  instagram: { label: "انستقرام", icon: "instagram", color: "bg-gradient-to-r from-purple-500 to-pink-500" },
+  facebook: { label: "فيسبوك", icon: "facebook", color: "bg-blue-600" },
+  twitter: { label: "تويتر/X", icon: "twitter", color: "bg-black" },
+  tiktok: { label: "تيك توك", icon: "music", color: "bg-black" },
+  snapchat: { label: "سناب شات", icon: "ghost", color: "bg-yellow-400" },
+  youtube: { label: "يوتيوب", icon: "youtube", color: "bg-red-600" },
+} as const;
+
+export const POST_STATUS = {
+  draft: { label: "مسودة", color: "gray" },
+  scheduled: { label: "مجدول", color: "blue" },
+  published: { label: "منشور", color: "green" },
+  failed: { label: "فشل", color: "red" },
+} as const;
+
+export const CONTENT_CATEGORIES = {
+  product_launch: { label: "إطلاق منتج", icon: "rocket" },
+  promotion: { label: "عرض ترويجي", icon: "tag" },
+  holiday: { label: "مناسبة", icon: "calendar" },
+  engagement: { label: "تفاعل", icon: "heart" },
+  announcement: { label: "إعلان", icon: "megaphone" },
+  behind_scenes: { label: "كواليس", icon: "camera" },
+  user_content: { label: "محتوى المستخدمين", icon: "users" },
+} as const;

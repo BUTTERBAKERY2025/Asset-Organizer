@@ -9,7 +9,7 @@ import {
   FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, 
   ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, 
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
-  Receipt, PieChart, Lock, Layers, PieChartIcon
+  Receipt, PieChart, Lock, Layers, PieChartIcon, Share2
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -207,6 +207,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: [
           { href: "/marketing", label: "لوحة التسويق", icon: LayoutDashboard, module: "marketing", isHeader: true },
           { href: "/marketing-campaigns", label: "الحملات التسويقية", icon: Target, module: "marketing_campaigns", indent: true },
+          { href: "/marketing-social", label: "السوشيال ميديا", icon: Share2, module: "marketing", indent: true },
           { href: "/marketing-influencers", label: "المؤثرين والبلوجرز", icon: UserCheck, module: "marketing_influencers", indent: true },
           { href: "/marketing-calendar", label: "تقويم التسويق", icon: Calendar, module: "marketing", indent: true },
           { href: "/marketing-tasks", label: "مهام التسويق", icon: ClipboardCheck, module: "marketing_tasks", indent: true },
