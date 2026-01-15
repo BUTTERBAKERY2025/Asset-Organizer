@@ -75,7 +75,7 @@ export default function LoginPage() {
           <div className="w-full max-w-md">
             <div className="bg-stone-800/80 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-stone-700/50">
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-white mb-2">تسجيل الدخول</h3>
+                <h3 className="text-2xl font-bold text-white mb-2">Login</h3>
                 <p className="text-stone-400">Only Authorized Persons</p>
               </div>
 
@@ -134,10 +134,10 @@ export default function LoginPage() {
                   {isLoggingIn ? (
                     <>
                       <Loader2 className="ml-2 h-5 w-5 animate-spin" />
-                      جاري الدخول...
+                      Logging in...
                     </>
                   ) : (
-                    "تسجيل الدخول"
+                    "Login"
                   )}
                 </Button>
               </form>
