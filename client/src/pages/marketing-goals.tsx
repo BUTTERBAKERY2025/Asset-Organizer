@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -158,15 +159,17 @@ export default function MarketingGoalsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center" dir="rtl">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
-      </div>
+      <Layout>
+        <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4 flex items-center justify-center min-h-[60vh]" dir="rtl">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-amber-100" dir="rtl">
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
+    <Layout>
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/marketing">
@@ -368,6 +371,6 @@ export default function MarketingGoalsPage() {
           </Card>
         )}
       </div>
-    </div>
+    </Layout>
   );
 }
