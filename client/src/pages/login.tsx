@@ -82,7 +82,7 @@ export default function LoginPage() {
           <div className="bg-stone-800/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl border border-stone-700/50">
             <div className="text-center mb-5 sm:mb-6 md:mb-8">
               <h3 className="text-xl sm:text-2xl font-bold text-white mb-1.5 sm:mb-2">Login</h3>
-              <p className="text-amber-400/80 text-xs sm:text-sm font-medium tracking-wide">Your Gateway to Butter Bakery</p>
+              <p className="text-amber-400/80 text-xs sm:text-sm font-medium tracking-wide">Our Smart Portal For Managing Our Business</p>
               <p className="text-stone-500 text-[10px] sm:text-xs mt-0.5 sm:mt-1">Only Authorized Persons</p>
             </div>
 
