@@ -5,22 +5,19 @@ import { Link } from "wouter";
 import { 
   Megaphone, Users, Target, Calendar, TrendingUp, FileBarChart, Clock, DollarSign,
   ChevronLeft, CheckCircle2, AlertCircle, BarChart3, Award, FolderOpen, Bell,
-  ArrowUpRight, ListTodo, UserCheck, Activity, Percent, Star
+  ArrowUpRight, ArrowDownRight, Percent, Eye, Star, UserCheck, Activity
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell, AreaChart, Area, Legend
 } from "recharts";
 
 interface MarketingCampaign {
   id: number;
   name: string;
-  nameAr?: string;
   status: string;
   totalBudget?: number;
   spentBudget?: number;
@@ -33,8 +30,9 @@ interface Influencer {
   name: string;
   isActive: boolean;
   followerCount?: number;
-  platforms?: string[];
+  platform?: string;
   specialty?: string;
+  region?: string;
   rating?: number;
 }
 
@@ -44,7 +42,6 @@ interface MarketingTask {
   status: string;
   priority?: string;
   dueDate?: string;
-  assignedTo?: string;
 }
 
 interface TeamMember {
@@ -65,27 +62,30 @@ interface CampaignExpense {
   id: number;
   amount: number;
   category: string;
+  expenseDate: string;
 }
 
-const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ef4444', '#ec4899'];
+const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ef4444', '#ec4899', '#06b6d4'];
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  draft: { label: 'مسودة', color: 'bg-gray-100 text-gray-700' },
-  planned: { label: 'مخططة', color: 'bg-blue-100 text-blue-700' },
-  active: { label: 'نشطة', color: 'bg-green-100 text-green-700' },
-  paused: { label: 'متوقفة', color: 'bg-amber-100 text-amber-700' },
-  completed: { label: 'مكتملة', color: 'bg-emerald-100 text-emerald-700' },
-  cancelled: { label: 'ملغية', color: 'bg-red-100 text-red-700' },
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: 'انستقرام',
+  tiktok: 'تيك توك',
+  snapchat: 'سناب شات',
+  twitter: 'تويتر',
+  youtube: 'يوتيوب',
 };
 
-const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
-  low: { label: 'منخفضة', color: 'text-gray-500' },
-  medium: { label: 'متوسطة', color: 'text-blue-500' },
-  high: { label: 'عالية', color: 'text-orange-500' },
-  urgent: { label: 'عاجل', color: 'text-red-500' },
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'مسودة',
+  planned: 'مخططة',
+  active: 'نشطة',
+  paused: 'متوقفة',
+  completed: 'مكتملة',
+  cancelled: 'ملغية',
 };
 
 export default function MarketingDashboardPage() {
+  // Fetch all campaigns
   const { data: allCampaigns = [], isLoading: campaignsLoading } = useQuery<MarketingCampaign[]>({
     queryKey: ["/api/marketing/campaigns"],
     queryFn: async () => {
@@ -95,6 +95,7 @@ export default function MarketingDashboardPage() {
     },
   });
 
+  // Fetch all influencers
   const { data: allInfluencers = [], isLoading: influencersLoading } = useQuery<Influencer[]>({
     queryKey: ["/api/marketing/influencers"],
     queryFn: async () => {
@@ -104,6 +105,7 @@ export default function MarketingDashboardPage() {
     },
   });
 
+  // Fetch all tasks
   const { data: allTasks = [], isLoading: tasksLoading } = useQuery<MarketingTask[]>({
     queryKey: ["/api/marketing/tasks"],
     queryFn: async () => {
@@ -113,7 +115,8 @@ export default function MarketingDashboardPage() {
     },
   });
 
-  const { data: teamMembers = [] } = useQuery<TeamMember[]>({
+  // Fetch team members
+  const { data: teamMembers = [], isLoading: teamLoading } = useQuery<TeamMember[]>({
     queryKey: ["/api/marketing/team"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/team");
@@ -122,7 +125,8 @@ export default function MarketingDashboardPage() {
     },
   });
 
-  const { data: calendarEvents = [] } = useQuery<CalendarEvent[]>({
+  // Fetch calendar events
+  const { data: calendarEvents = [], isLoading: calendarLoading } = useQuery<CalendarEvent[]>({
     queryKey: ["/api/marketing/calendar-events"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/calendar-events");
@@ -131,6 +135,7 @@ export default function MarketingDashboardPage() {
     },
   });
 
+  // Fetch expenses
   const { data: allExpenses = [] } = useQuery<CampaignExpense[]>({
     queryKey: ["/api/marketing/expenses"],
     queryFn: async () => {
@@ -140,24 +145,36 @@ export default function MarketingDashboardPage() {
     },
   });
 
-  const isLoading = campaignsLoading || influencersLoading || tasksLoading;
+  const isLoading = campaignsLoading || influencersLoading || tasksLoading || teamLoading || calendarLoading;
 
-  // Stats
+  // Calculate statistics
   const activeCampaigns = allCampaigns.filter(c => c.status === "active");
   const completedCampaigns = allCampaigns.filter(c => c.status === "completed");
   const pendingTasks = allTasks.filter(t => t.status === "pending" || t.status === "in_progress");
   const completedTasks = allTasks.filter(t => t.status === "completed");
-  const urgentTasks = allTasks.filter(t => (t.priority === 'urgent' || t.priority === 'high') && t.status !== 'completed');
   const activeInfluencers = allInfluencers.filter(i => i.isActive);
+  const activeTeamMembers = teamMembers.filter(m => m.isActive);
 
   const totalBudget = allCampaigns.reduce((sum, c) => sum + (c.totalBudget || 0), 0);
   const spentBudget = allCampaigns.reduce((sum, c) => sum + (c.spentBudget || 0), 0);
   const totalExpenses = allExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const totalFollowers = allInfluencers.reduce((sum, i) => sum + (i.followerCount || 0), 0);
-  const budgetUtilization = totalBudget > 0 ? (spentBudget / totalBudget) * 100 : 0;
-  const taskCompletionRate = allTasks.length > 0 ? (completedTasks.length / allTasks.length) * 100 : 0;
 
-  // Influencer tiers
+  // Advanced KPIs
+  const budgetUtilization = totalBudget > 0 ? (spentBudget / totalBudget) * 100 : 0;
+  const campaignCompletionRate = allCampaigns.length > 0 ? (completedCampaigns.length / allCampaigns.length) * 100 : 0;
+  const taskCompletionRate = allTasks.length > 0 ? (completedTasks.length / allTasks.length) * 100 : 0;
+  const avgFollowersPerInfluencer = allInfluencers.length > 0 ? totalFollowers / allInfluencers.length : 0;
+  const costPerInfluencer = activeInfluencers.length > 0 ? totalExpenses / activeInfluencers.length : 0;
+
+  // Influencer tier classification
+  const getInfluencerTier = (followers: number) => {
+    if (followers >= 1000000) return { tier: 'mega', label: 'Mega', color: 'bg-purple-500' };
+    if (followers >= 100000) return { tier: 'macro', label: 'Macro', color: 'bg-blue-500' };
+    if (followers >= 10000) return { tier: 'micro', label: 'Micro', color: 'bg-green-500' };
+    return { tier: 'nano', label: 'Nano', color: 'bg-gray-500' };
+  };
+
   const influencersByTier = {
     mega: allInfluencers.filter(i => (i.followerCount || 0) >= 1000000).length,
     macro: allInfluencers.filter(i => (i.followerCount || 0) >= 100000 && (i.followerCount || 0) < 1000000).length,
@@ -165,39 +182,64 @@ export default function MarketingDashboardPage() {
     nano: allInfluencers.filter(i => (i.followerCount || 0) < 10000).length,
   };
 
-  // Campaign status for chart
-  const campaignStatusData = Object.entries(
-    allCampaigns.reduce((acc, c) => {
-      acc[c.status] = (acc[c.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  ).map(([status, value]) => ({
-    name: STATUS_CONFIG[status]?.label || status,
+  // Platform distribution
+  const platformData = allInfluencers.reduce((acc, i) => {
+    const platform = i.platform || 'other';
+    acc[platform] = (acc[platform] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const platformChartData = Object.entries(platformData).map(([name, value]) => ({
+    name: PLATFORM_LABELS[name] || name,
     value,
   }));
 
-  // Recent campaigns
-  const recentCampaigns = [...allCampaigns]
-    .sort((a, b) => new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime())
-    .slice(0, 4);
+  // Campaign status distribution
+  const campaignStatusData = allCampaigns.reduce((acc, c) => {
+    acc[c.status] = (acc[c.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
-  // Top influencers
+  const campaignStatusChartData = Object.entries(campaignStatusData).map(([name, value]) => ({
+    name: STATUS_LABELS[name] || name,
+    value,
+  }));
+
+  // Top influencers by followers
   const topInfluencers = [...allInfluencers]
     .sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0))
-    .slice(0, 4);
+    .slice(0, 5);
 
-  // Upcoming events
+  // Upcoming events (next 7 days)
   const today = new Date();
+  const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
   const upcomingEvents = calendarEvents
-    .filter(e => e.startDate && new Date(e.startDate) >= today)
+    .filter(e => {
+      const eventDate = new Date(e.startDate);
+      return eventDate >= today && eventDate <= nextWeek;
+    })
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-    .slice(0, 4);
+    .slice(0, 5);
 
+  // Urgent tasks
+  const urgentTasks = allTasks
+    .filter(t => t.priority === 'urgent' || t.priority === 'high')
+    .filter(t => t.status !== 'completed')
+    .slice(0, 5);
+
+  // Format currency with English numerals
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount) + " ر.س";
+    return new Intl.NumberFormat("en-US", { 
+      style: "currency", 
+      currency: "SAR", 
+      maximumFractionDigits: 0 
+    }).format(amount).replace("SAR", "").trim() + " ر.س";
   };
 
-  const formatNumber = (num: number) => new Intl.NumberFormat("en-US").format(num);
+  // Format number with English numerals
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat("en-US").format(num);
+  };
 
   const formatCompactNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -206,417 +248,457 @@ export default function MarketingDashboardPage() {
   };
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' });
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' });
   };
 
-  // Quick links
-  const quickLinks = [
-    { title: "الحملات", href: "/marketing-campaigns", icon: Megaphone, color: "text-amber-600 bg-amber-50" },
-    { title: "المؤثرين", href: "/marketing-influencers", icon: Users, color: "text-blue-600 bg-blue-50" },
-    { title: "المهام", href: "/marketing-tasks", icon: ListTodo, color: "text-orange-600 bg-orange-50" },
-    { title: "التقويم", href: "/marketing-calendar", icon: Calendar, color: "text-purple-600 bg-purple-50" },
-    { title: "الفريق", href: "/marketing-team", icon: UserCheck, color: "text-indigo-600 bg-indigo-50" },
-    { title: "المصروفات", href: "/marketing-expenses", icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
-    { title: "التقارير", href: "/marketing-reports", icon: FileBarChart, color: "text-green-600 bg-green-50" },
-    { title: "الأهداف", href: "/marketing-goals", icon: Target, color: "text-rose-600 bg-rose-50" },
-    { title: "الأصول", href: "/marketing-assets", icon: FolderOpen, color: "text-cyan-600 bg-cyan-50" },
-    { title: "التنبيهات", href: "/marketing-alerts", icon: Bell, color: "text-red-600 bg-red-50" },
+  const kpiCards = [
+    {
+      title: "معدل استخدام الميزانية",
+      value: `${budgetUtilization.toFixed(1)}%`,
+      trend: budgetUtilization > 80 ? 'warning' : budgetUtilization > 50 ? 'normal' : 'good',
+      icon: Percent,
+      description: `${formatCurrency(spentBudget)} من ${formatCurrency(totalBudget)}`,
+    },
+    {
+      title: "معدل إنجاز الحملات",
+      value: `${campaignCompletionRate.toFixed(0)}%`,
+      trend: campaignCompletionRate > 50 ? 'good' : 'normal',
+      icon: CheckCircle2,
+      description: `${completedCampaigns.length} من ${allCampaigns.length} حملة`,
+    },
+    {
+      title: "معدل إنجاز المهام",
+      value: `${taskCompletionRate.toFixed(0)}%`,
+      trend: taskCompletionRate > 70 ? 'good' : taskCompletionRate > 40 ? 'normal' : 'warning',
+      icon: Target,
+      description: `${completedTasks.length} من ${allTasks.length} مهمة`,
+    },
+    {
+      title: "متوسط تكلفة المؤثر",
+      value: formatCurrency(costPerInfluencer),
+      trend: 'normal',
+      icon: UserCheck,
+      description: `إجمالي المصروفات: ${formatCurrency(totalExpenses)}`,
+    },
   ];
 
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="space-y-6" dir="rtl">
-          <Skeleton className="h-10 w-64" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-28" />)}
-          </div>
-          <Skeleton className="h-64" />
-        </div>
-      </Layout>
-    );
-  }
+  const quickAccessCards = [
+    { title: "الحملات", href: "/marketing-campaigns", icon: Megaphone, bgColor: "bg-gradient-to-br from-amber-400 to-amber-600", iconBg: "bg-amber-100", iconColor: "text-amber-600", count: allCampaigns.length },
+    { title: "المؤثرين", href: "/marketing-influencers", icon: Users, bgColor: "bg-gradient-to-br from-blue-400 to-blue-600", iconBg: "bg-blue-100", iconColor: "text-blue-600", count: allInfluencers.length },
+    { title: "المهام", href: "/marketing-tasks", icon: Target, bgColor: "bg-gradient-to-br from-orange-400 to-orange-600", iconBg: "bg-orange-100", iconColor: "text-orange-600", count: allTasks.length },
+    { title: "التقويم", href: "/marketing-calendar", icon: Calendar, bgColor: "bg-gradient-to-br from-purple-400 to-purple-600", iconBg: "bg-purple-100", iconColor: "text-purple-600", count: calendarEvents.length },
+    { title: "الفريق", href: "/marketing-team", icon: UserCheck, bgColor: "bg-gradient-to-br from-indigo-400 to-indigo-600", iconBg: "bg-indigo-100", iconColor: "text-indigo-600", count: teamMembers.length },
+    { title: "المصروفات", href: "/marketing-expenses", icon: DollarSign, bgColor: "bg-gradient-to-br from-emerald-400 to-emerald-600", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", count: allExpenses.length },
+    { title: "التقارير", href: "/marketing-reports", icon: FileBarChart, bgColor: "bg-gradient-to-br from-green-400 to-green-600", iconBg: "bg-green-100", iconColor: "text-green-600", count: null },
+    { title: "الأهداف", href: "/marketing-goals", icon: Award, bgColor: "bg-gradient-to-br from-rose-400 to-rose-600", iconBg: "bg-rose-100", iconColor: "text-rose-600", count: null },
+    { title: "الأصول", href: "/marketing-assets", icon: FolderOpen, bgColor: "bg-gradient-to-br from-cyan-400 to-cyan-600", iconBg: "bg-cyan-100", iconColor: "text-cyan-600", count: null },
+    { title: "التنبيهات", href: "/marketing-alerts", icon: Bell, bgColor: "bg-gradient-to-br from-red-400 to-red-600", iconBg: "bg-red-100", iconColor: "text-red-600", count: null },
+  ];
 
   return (
     <Layout>
       <div className="space-y-6" dir="rtl">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="page-title">لوحة تحكم التسويق</h1>
-          <p className="text-muted-foreground">نظرة شاملة على أنشطة وحملات التسويق</p>
+        <div className="flex flex-col gap-2">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="page-title">
+            لوحة تحكم التسويق
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            نظرة شاملة على جميع أنشطة وحملات التسويق
+          </p>
         </div>
 
-        {/* Quick Navigation */}
-        <div className="flex flex-wrap gap-2">
-          {quickLinks.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <Button variant="outline" size="sm" className="h-9 gap-2">
-                <link.icon className="w-4 h-4" />
-                {link.title}
-              </Button>
-            </Link>
+        {/* Primary Stats Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="bg-amber-50/50 border-amber-100">
+            <CardContent className="p-4">
+              {isLoading ? <Skeleton className="h-16" /> : (
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
+                    <Megaphone className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-amber-700">{formatNumber(allCampaigns.length)}</div>
+                    <div className="text-xs text-muted-foreground">إجمالي الحملات</div>
+                    <Badge variant="secondary" className="mt-1 text-xs">{activeCampaigns.length} نشطة</Badge>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-blue-50/50 border-blue-100">
+            <CardContent className="p-4">
+              {isLoading ? <Skeleton className="h-16" /> : (
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <Users className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-blue-700">{formatNumber(allInfluencers.length)}</div>
+                    <div className="text-xs text-muted-foreground">المؤثرين</div>
+                    <Badge variant="secondary" className="mt-1 text-xs">{formatCompactNumber(totalFollowers)} متابع</Badge>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-green-50/50 border-green-100">
+            <CardContent className="p-4">
+              {isLoading ? <Skeleton className="h-16" /> : (
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
+                    <DollarSign className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-green-700">{formatCurrency(totalBudget)}</div>
+                    <div className="text-xs text-muted-foreground">الميزانية</div>
+                    <Badge variant="secondary" className="mt-1 text-xs">{formatCurrency(spentBudget)} مصروف</Badge>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className={`${pendingTasks.length > 0 ? 'bg-orange-50/50 border-orange-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
+            <CardContent className="p-4">
+              {isLoading ? <Skeleton className="h-16" /> : (
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-lg ${pendingTasks.length > 0 ? 'bg-orange-100' : 'bg-emerald-100'} flex items-center justify-center`}>
+                    <Clock className={`w-6 h-6 ${pendingTasks.length > 0 ? 'text-orange-600' : 'text-emerald-600'}`} />
+                  </div>
+                  <div>
+                    <div className={`text-2xl font-bold ${pendingTasks.length > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
+                      {formatNumber(allTasks.length)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">المهام</div>
+                    <Badge variant="secondary" className="mt-1 text-xs">{pendingTasks.length} قيد التنفيذ</Badge>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {kpiCards.map((kpi, index) => (
+            <Card key={index} className="relative overflow-hidden">
+              <CardContent className="p-4">
+                {isLoading ? <Skeleton className="h-20" /> : (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <kpi.icon className={`w-5 h-5 ${
+                        kpi.trend === 'good' ? 'text-green-500' : 
+                        kpi.trend === 'warning' ? 'text-orange-500' : 'text-blue-500'
+                      }`} />
+                      <Badge variant={kpi.trend === 'good' ? 'default' : kpi.trend === 'warning' ? 'destructive' : 'secondary'} className="text-xs">
+                        {kpi.trend === 'good' ? 'جيد' : kpi.trend === 'warning' ? 'تحذير' : 'متوسط'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{kpi.value}</div>
+                    <div className="text-xs text-muted-foreground">{kpi.title}</div>
+                    <div className="text-xs text-muted-foreground/80 mt-1">{kpi.description}</div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
           ))}
         </div>
 
-        {/* Main Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Influencer Tiers */}
           <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">الحملات النشطة</p>
-                  <p className="text-3xl font-bold mt-1">{activeCampaigns.length}</p>
-                  <p className="text-xs text-muted-foreground mt-1">من أصل {allCampaigns.length} حملة</p>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-100">
-                  <Megaphone className="w-6 h-6 text-amber-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">المؤثرين</p>
-                  <p className="text-3xl font-bold mt-1">{activeInfluencers.length}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{formatCompactNumber(totalFollowers)} متابع</p>
-                </div>
-                <div className="p-3 rounded-xl bg-blue-100">
-                  <Users className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">الميزانية</p>
-                  <p className="text-3xl font-bold mt-1">{formatCurrency(totalBudget)}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Progress value={budgetUtilization} className="h-1.5 w-16" />
-                    <span className="text-xs text-muted-foreground">{budgetUtilization.toFixed(0)}%</span>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">تصنيف المؤثرين</CardTitle>
+              <CardDescription>توزيع المؤثرين حسب عدد المتابعين</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Skeleton className="h-48" /> : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                      <span className="text-sm">Mega (+1M)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{influencersByTier.mega}</span>
+                      <Progress value={(influencersByTier.mega / allInfluencers.length) * 100} className="w-24 h-2" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      <span className="text-sm">Macro (100K-1M)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{influencersByTier.macro}</span>
+                      <Progress value={(influencersByTier.macro / allInfluencers.length) * 100} className="w-24 h-2" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      <span className="text-sm">Micro (10K-100K)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{influencersByTier.micro}</span>
+                      <Progress value={(influencersByTier.micro / allInfluencers.length) * 100} className="w-24 h-2" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                      <span className="text-sm">Nano (&lt;10K)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{influencersByTier.nano}</span>
+                      <Progress value={(influencersByTier.nano / allInfluencers.length) * 100} className="w-24 h-2" />
+                    </div>
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-green-100">
-                  <DollarSign className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
+          {/* Platform Distribution */}
           <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">المهام</p>
-                  <p className="text-3xl font-bold mt-1">{pendingTasks.length}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {urgentTasks.length > 0 && (
-                      <span className="text-red-500">{urgentTasks.length} عاجلة</span>
-                    )}
-                    {urgentTasks.length === 0 && `${completedTasks.length} مكتملة`}
-                  </p>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">توزيع المنصات</CardTitle>
+              <CardDescription>المؤثرين حسب المنصة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Skeleton className="h-48" /> : platformChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={platformChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={70}
+                      paddingAngle={2}
+                      dataKey="value"
+                      label={({ name, value }) => `${name}: ${value}`}
+                    >
+                      {platformChartData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-muted-foreground">
+                  لا توجد بيانات
                 </div>
-                <div className={`p-3 rounded-xl ${urgentTasks.length > 0 ? 'bg-red-100' : 'bg-orange-100'}`}>
-                  <ListTodo className={`w-6 h-6 ${urgentTasks.length > 0 ? 'text-red-600' : 'text-orange-600'}`} />
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Main Content with Tabs */}
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
-            <TabsTrigger value="campaigns">الحملات</TabsTrigger>
-            <TabsTrigger value="influencers">المؤثرين</TabsTrigger>
-          </TabsList>
+        {/* Campaign Status & Budget */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Campaign Status */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">حالة الحملات</CardTitle>
+              <CardDescription>توزيع الحملات حسب الحالة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Skeleton className="h-48" /> : campaignStatusChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={campaignStatusChartData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-muted-foreground">
+                  لا توجد حملات
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* KPIs */}
-              <Card className="lg:col-span-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">مؤشرات الأداء</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">استخدام الميزانية</span>
-                        <span className="text-sm font-medium">{budgetUtilization.toFixed(0)}%</span>
-                      </div>
-                      <Progress value={budgetUtilization} className="h-2" />
-                      <p className="text-xs text-muted-foreground">{formatCurrency(spentBudget)} من {formatCurrency(totalBudget)}</p>
+          {/* Budget Utilization */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">استخدام الميزانية</CardTitle>
+              <CardDescription>نسبة الصرف من الميزانية المخصصة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Skeleton className="h-48" /> : (
+                <div className="space-y-4">
+                  <div className="text-center py-4">
+                    <div className="text-4xl font-bold text-amber-600">{budgetUtilization.toFixed(1)}%</div>
+                    <div className="text-sm text-muted-foreground mt-1">نسبة الاستخدام</div>
+                  </div>
+                  <Progress value={budgetUtilization} className="h-3" />
+                  <div className="flex justify-between text-sm">
+                    <div>
+                      <div className="text-muted-foreground">المصروف</div>
+                      <div className="font-semibold text-red-600">{formatCurrency(spentBudget)}</div>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">إنجاز المهام</span>
-                        <span className="text-sm font-medium">{taskCompletionRate.toFixed(0)}%</span>
-                      </div>
-                      <Progress value={taskCompletionRate} className="h-2" />
-                      <p className="text-xs text-muted-foreground">{completedTasks.length} من {allTasks.length} مهمة</p>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">الحملات المكتملة</span>
-                        <span className="text-sm font-medium">{completedCampaigns.length}/{allCampaigns.length}</span>
-                      </div>
-                      <Progress value={allCampaigns.length > 0 ? (completedCampaigns.length / allCampaigns.length) * 100 : 0} className="h-2" />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">إجمالي المصروفات</span>
-                        <span className="text-sm font-medium">{formatCurrency(totalExpenses)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Activity className="w-3 h-3" />
-                        <span>{allExpenses.length} عملية</span>
-                      </div>
+                    <div className="text-left">
+                      <div className="text-muted-foreground">المتبقي</div>
+                      <div className="font-semibold text-green-600">{formatCurrency(totalBudget - spentBudget)}</div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-              {/* Upcoming Events */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">المواعيد القادمة</CardTitle>
-                    <Link href="/marketing-calendar">
-                      <Button variant="ghost" size="sm" className="h-8 text-xs">
-                        عرض الكل
-                        <ChevronLeft className="w-3 h-3 mr-1" />
-                      </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {upcomingEvents.length > 0 ? (
-                    <div className="space-y-3">
-                      {upcomingEvents.map((event) => (
-                        <div key={event.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
-                          <div className="p-2 rounded-lg bg-purple-100">
-                            <Calendar className="w-4 h-4 text-purple-600" />
+        {/* Top Influencers & Upcoming Events */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Top Influencers */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">أفضل المؤثرين</CardTitle>
+                <Link href="/marketing-influencers">
+                  <Badge variant="outline" className="cursor-pointer hover:bg-muted">
+                    عرض الكل
+                  </Badge>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Skeleton className="h-48" /> : topInfluencers.length > 0 ? (
+                <div className="space-y-3">
+                  {topInfluencers.map((influencer, index) => {
+                    const tier = getInfluencerTier(influencer.followerCount || 0);
+                    return (
+                      <div key={influencer.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-bold text-sm">
+                            {index + 1}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{event.title}</p>
-                            <p className="text-xs text-muted-foreground">{formatDate(event.startDate)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">لا توجد مواعيد قادمة</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Urgent Tasks */}
-            {urgentTasks.length > 0 && (
-              <Card className="border-red-200 bg-red-50/30">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-500" />
-                    <CardTitle className="text-lg text-red-700">مهام عاجلة</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {urgentTasks.slice(0, 6).map((task) => (
-                      <div key={task.id} className="flex items-center gap-3 p-3 rounded-lg bg-white border">
-                        <div className={`w-2 h-2 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : 'bg-orange-500'}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{task.title}</p>
-                          {task.dueDate && (
-                            <p className="text-xs text-muted-foreground">{formatDate(task.dueDate)}</p>
-                          )}
-                        </div>
-                        <Badge variant="outline" className={PRIORITY_CONFIG[task.priority || 'medium']?.color}>
-                          {PRIORITY_CONFIG[task.priority || 'medium']?.label}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                  <Link href="/marketing-tasks">
-                    <Button variant="outline" size="sm" className="w-full mt-3">
-                      عرض كل المهام
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Campaigns Tab */}
-          <TabsContent value="campaigns" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Campaign Status Chart */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">حالة الحملات</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {campaignStatusData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={campaignStatusData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={50}
-                          outerRadius={80}
-                          paddingAngle={3}
-                          dataKey="value"
-                        >
-                          {campaignStatusData.map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-48 flex items-center justify-center text-muted-foreground">
-                      لا توجد حملات
-                    </div>
-                  )}
-                  <div className="flex flex-wrap justify-center gap-3 mt-2">
-                    {campaignStatusData.map((item, index) => (
-                      <div key={item.name} className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span className="text-xs">{item.name}: {item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Recent Campaigns */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">أحدث الحملات</CardTitle>
-                    <Link href="/marketing-campaigns">
-                      <Button variant="ghost" size="sm" className="h-8 text-xs">
-                        عرض الكل
-                        <ChevronLeft className="w-3 h-3 mr-1" />
-                      </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {recentCampaigns.map((campaign) => {
-                      const statusConfig = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
-                      const progress = campaign.totalBudget ? ((campaign.spentBudget || 0) / campaign.totalBudget) * 100 : 0;
-                      return (
-                        <div key={campaign.id} className="p-3 rounded-lg border">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-medium truncate">{campaign.nameAr || campaign.name}</p>
-                            <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
-                          </div>
-                          {campaign.totalBudget && campaign.totalBudget > 0 && (
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>الميزانية</span>
-                                <span>{progress.toFixed(0)}%</span>
-                              </div>
-                              <Progress value={progress} className="h-1.5" />
+                          <div>
+                            <div className="font-medium text-sm">{influencer.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {PLATFORM_LABELS[influencer.platform || ''] || influencer.platform}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {recentCampaigns.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">لا توجد حملات</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Influencers Tab */}
-          <TabsContent value="influencers" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Influencer Tiers */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">تصنيف المؤثرين</CardTitle>
-                  <CardDescription>حسب عدد المتابعين</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {[
-                      { tier: 'mega', label: 'Mega (+1M)', color: 'bg-purple-500', count: influencersByTier.mega },
-                      { tier: 'macro', label: 'Macro (100K-1M)', color: 'bg-blue-500', count: influencersByTier.macro },
-                      { tier: 'micro', label: 'Micro (10K-100K)', color: 'bg-green-500', count: influencersByTier.micro },
-                      { tier: 'nano', label: 'Nano (<10K)', color: 'bg-gray-400', count: influencersByTier.nano },
-                    ].map((item) => (
-                      <div key={item.tier} className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                        <span className="text-sm flex-1">{item.label}</span>
-                        <span className="font-semibold">{item.count}</span>
-                        <Progress 
-                          value={allInfluencers.length > 0 ? (item.count / allInfluencers.length) * 100 : 0} 
-                          className="w-20 h-2" 
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Top Influencers */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">أفضل المؤثرين</CardTitle>
-                    <Link href="/marketing-influencers">
-                      <Button variant="ghost" size="sm" className="h-8 text-xs">
-                        عرض الكل
-                        <ChevronLeft className="w-3 h-3 mr-1" />
-                      </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {topInfluencers.map((influencer, index) => (
-                      <div key={influencer.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{influencer.name}</p>
-                          <p className="text-xs text-muted-foreground">{formatCompactNumber(influencer.followerCount || 0)} متابع</p>
-                        </div>
-                        {influencer.rating && (
-                          <div className="flex items-center gap-1">
-                            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                            <span className="text-sm">{influencer.rating.toFixed(1)}</span>
                           </div>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={tier.color + ' text-white text-xs'}>
+                            {tier.label}
+                          </Badge>
+                          <span className="text-sm font-semibold">
+                            {formatCompactNumber(influencer.followerCount || 0)}
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                    {topInfluencers.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">لا يوجد مؤثرين</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-muted-foreground">
+                  لا يوجد مؤثرين
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Events & Urgent Tasks */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">المواعيد والمهام العاجلة</CardTitle>
+                <Link href="/marketing-calendar">
+                  <Badge variant="outline" className="cursor-pointer hover:bg-muted">
+                    عرض التقويم
+                  </Badge>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Skeleton className="h-48" /> : (
+                <div className="space-y-4">
+                  {upcomingEvents.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-muted-foreground mb-2">المواعيد القادمة</div>
+                      <div className="space-y-2">
+                        {upcomingEvents.map(event => (
+                          <div key={event.id} className="flex items-center justify-between p-2 rounded-lg bg-purple-50">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-purple-600" />
+                              <span className="text-sm">{event.title}</span>
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {formatDate(event.startDate)}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {urgentTasks.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-muted-foreground mb-2">المهام العاجلة</div>
+                      <div className="space-y-2">
+                        {urgentTasks.map(task => (
+                          <div key={task.id} className="flex items-center justify-between p-2 rounded-lg bg-red-50">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 text-red-600" />
+                              <span className="text-sm">{task.title}</span>
+                            </div>
+                            <Badge variant="destructive" className="text-xs">
+                              {task.priority === 'urgent' ? 'عاجل' : 'مهم'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {upcomingEvents.length === 0 && urgentTasks.length === 0 && (
+                    <div className="h-32 flex items-center justify-center text-muted-foreground">
+                      لا توجد مواعيد أو مهام عاجلة
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Access */}
+        <div>
+          <h2 className="text-base font-semibold mb-4">الوصول السريع</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            {quickAccessCards.map((card, index) => (
+              <Link key={index} href={card.href}>
+                <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-0 shadow-sm hover:-translate-y-1 h-full overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className={`${card.bgColor} p-4 flex justify-center`}>
+                      <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center transition-transform group-hover:scale-110 group-hover:rotate-3">
+                        <card.icon className="w-7 h-7 text-white" />
+                      </div>
+                    </div>
+                    <div className="p-3 text-center bg-white">
+                      <p className="font-semibold text-gray-800">{card.title}</p>
+                      {card.count !== null && card.count > 0 && (
+                        <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full ${card.iconBg}`}>
+                          <span className={`text-xs font-medium ${card.iconColor}`}>{formatNumber(card.count)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
     </Layout>
   );
