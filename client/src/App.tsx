@@ -11,15 +11,6 @@ import { ProductionProvider } from "@/contexts/ProductionContext";
 import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
-
-function AppLoadingFallback() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F5F0E6]" dir="rtl">
-      <Loader2 className="w-10 h-10 text-[#e67e22] animate-spin" />
-      <p className="mt-4 text-[#1a3a2f] text-sm">جاري تحميل النظام...</p>
-    </div>
-  );
-}
 import NotFound from "@/pages/not-found";
 import PlatformHomePage from "@/pages/platform-home";
 import DashboardPage from "@/pages/dashboard";
@@ -93,6 +84,15 @@ import ProductionComparisonsPage from "@/pages/production-comparisons";
 import ProductionComparisonReportsPage from "@/pages/production-comparison-reports";
 import ProductCategoryManagementPage from "@/pages/product-category-management";
 import type { SystemModule } from "@shared/schema";
+
+function AppLoadingFallback() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F5F0E6]" dir="rtl">
+      <Loader2 className="w-10 h-10 text-[#e67e22] animate-spin" />
+      <p className="mt-4 text-[#1a3a2f] text-sm">جاري تحميل النظام...</p>
+    </div>
+  );
+}
 
 function ModulePage({ component: Component, module }: { component: React.ComponentType; module: SystemModule }) {
   return (
