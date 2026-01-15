@@ -1623,7 +1623,7 @@ export default function BranchEmployeesPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
