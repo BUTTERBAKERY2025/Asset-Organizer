@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { 
   Megaphone, Users, Target, Calendar, TrendingUp, FileBarChart, Clock, DollarSign,
   ChevronLeft, CheckCircle2, AlertCircle, BarChart3, Award, FolderOpen, Bell,
-  ArrowUpRight, ArrowDownRight, Percent, Eye, Star, UserCheck, Activity, Share2
+  ArrowUpRight, ArrowDownRight, Percent, Eye, Star, UserCheck, Activity, Share2, FileText
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -286,6 +286,7 @@ export default function MarketingDashboardPage() {
   const quickAccessCards = [
     { title: "الحملات", href: "/marketing-campaigns", icon: Megaphone, bgColor: "bg-gradient-to-br from-amber-400 to-amber-600", iconBg: "bg-amber-100", iconColor: "text-amber-600", count: allCampaigns.length },
     { title: "المؤثرين", href: "/marketing-influencers", icon: Users, bgColor: "bg-gradient-to-br from-blue-400 to-blue-600", iconBg: "bg-blue-100", iconColor: "text-blue-600", count: allInfluencers.length },
+    { title: "عقود المؤثرين", href: "/influencer-contracts", icon: FileText, bgColor: "bg-gradient-to-br from-teal-400 to-teal-600", iconBg: "bg-teal-100", iconColor: "text-teal-600", count: null },
     { title: "المهام", href: "/marketing-tasks", icon: Target, bgColor: "bg-gradient-to-br from-orange-400 to-orange-600", iconBg: "bg-orange-100", iconColor: "text-orange-600", count: allTasks.length },
     { title: "التقويم", href: "/marketing-calendar", icon: Calendar, bgColor: "bg-gradient-to-br from-purple-400 to-purple-600", iconBg: "bg-purple-100", iconColor: "text-purple-600", count: calendarEvents.length },
     { title: "الفريق", href: "/marketing-team", icon: UserCheck, bgColor: "bg-gradient-to-br from-indigo-400 to-indigo-600", iconBg: "bg-indigo-100", iconColor: "text-indigo-600", count: teamMembers.length },
