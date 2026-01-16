@@ -6,6 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
+import { changeLanguage, getCurrentLanguage } from "@/lib/i18n";
 import { 
   Package, Hammer, Settings, Users, ArrowLeftRight, Building2, 
   FileSignature, Wallet, Calculator, Boxes, AlertTriangle, CalendarCheck, 
@@ -13,7 +15,7 @@ import {
   ChevronLeft, Factory, Clock, CheckCircle, Megaphone, UserCheck, Calendar, 
   Target, UsersRound, ClipboardList, Receipt, TrendingUp, Brain, Upload,
   FileBarChart, Gift, PieChart, Shield, Building, Briefcase, BarChart3,
-  Zap, Sun, Moon, CloudSun, Loader2, RefreshCw
+  Zap, Sun, Moon, CloudSun, Loader2, RefreshCw, Languages
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
@@ -141,6 +143,13 @@ function QuickActionButton({
 export default function PlatformHomePage() {
   const { user, isAuthenticated, activeBranch } = useAuth();
   const { canView } = usePermissions();
+  const { t, i18n } = useTranslation('platformHome');
+  const currentLang = i18n.language as 'ar' | 'en';
+
+  const toggleLanguage = () => {
+    const newLang = currentLang === 'ar' ? 'en' : 'ar';
+    changeLanguage(newLang);
+  };
   const [, navigate] = useLocation();
 
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -184,131 +193,131 @@ export default function PlatformHomePage() {
 
   const modules: (ModuleCardProps & { module?: SystemModule })[] = [
     {
-      title: "الموارد البشرية",
-      description: "إدارة الموظفين والهيكل التنظيمي والحضور والورديات",
+      title: t('modules.hr.title'),
+      description: t('modules.hr.description'),
       icon: UsersRound,
       href: "/attendance-dashboard",
       color: "bg-teal-500",
       module: "branch_employees",
       items: [
-        { label: "موظفو الفروع", href: "/branch-employees", icon: Users },
-        { label: "الهيكل التنظيمي", href: "/organizational-structure", icon: Building },
-        { label: "الحضور", href: "/attendance-dashboard", icon: UserCheck },
-        { label: "الورديات", href: "/shift-management", icon: Calendar },
-        { label: "التايم شيت", href: "/timesheet", icon: Clock },
+        { label: t('subItems.branchEmployees'), href: "/branch-employees", icon: Users },
+        { label: t('subItems.orgStructure'), href: "/organizational-structure", icon: Building },
+        { label: t('subItems.attendance'), href: "/attendance-dashboard", icon: UserCheck },
+        { label: t('subItems.shifts'), href: "/shift-management", icon: Calendar },
+        { label: t('subItems.timesheet'), href: "/timesheet", icon: Clock },
       ],
     },
     {
-      title: "الإنتاج",
-      description: "إدارة أوامر الإنتاج والتخطيط الذكي والتقارير",
+      title: t('modules.production.title'),
+      description: t('modules.production.description'),
       icon: ClipboardList,
       href: "/production-dashboard",
       color: "bg-blue-500",
       module: "production",
       items: [
-        { label: "لوحة الإنتاج", href: "/production-dashboard", icon: LayoutDashboard },
-        { label: "أوامر الإنتاج", href: "/advanced-production-orders", icon: ClipboardEdit },
-        { label: "الإنتاج اليومي", href: "/daily-production", icon: CheckCircle },
-                { label: "تقارير الإنتاج", href: "/production-reports", icon: FileBarChart },
+        { label: t('subItems.productionDashboard'), href: "/production-dashboard", icon: LayoutDashboard },
+        { label: t('subItems.productionOrders'), href: "/advanced-production-orders", icon: ClipboardEdit },
+        { label: t('subItems.dailyProduction'), href: "/daily-production", icon: CheckCircle },
+        { label: t('subItems.productionReports'), href: "/production-reports", icon: FileBarChart },
       ],
     },
     {
-      title: "التشغيل",
-      description: "إدارة العمليات اليومية والمنتجات ومراقبة الجودة",
+      title: t('modules.operations.title'),
+      description: t('modules.operations.description'),
       icon: Factory,
       href: "/operations",
       color: "bg-indigo-500",
       module: "operations",
       items: [
-        { label: "لوحة التشغيل", href: "/operations", icon: LayoutDashboard },
-        { label: "المنتجات", href: "/products", icon: Package },
-        { label: "مراقبة الجودة", href: "/quality-control", icon: CheckCircle },
-        { label: "بار العرض", href: "/display-bar-waste", icon: Boxes },
+        { label: t('subItems.operationsDashboard'), href: "/operations", icon: LayoutDashboard },
+        { label: t('subItems.products'), href: "/products", icon: Package },
+        { label: t('subItems.qualityControl'), href: "/quality-control", icon: CheckCircle },
+        { label: t('subItems.displayBar'), href: "/display-bar-waste", icon: Boxes },
       ],
     },
     {
-      title: "المبيعات والكاشير",
-      description: "يومية الكاشير والأهداف والحوافز وتحليلات المبيعات",
+      title: t('modules.sales.title'),
+      description: t('modules.sales.description'),
       icon: Receipt,
       href: "/cashier-journals",
       color: "bg-emerald-500",
       module: "cashier_journal",
       items: [
-        { label: "يومية الكاشير", href: "/cashier-journals", icon: Wallet },
-        { label: "تحليلات المبيعات", href: "/sales-analytics", icon: PieChart },
-        { label: "الأهداف", href: "/targets-dashboard", icon: Target },
-        { label: "الحوافز", href: "/incentives-management", icon: Gift },
-        { label: "P&L", href: "/pnl-dashboard", icon: TrendingUp },
+        { label: t('subItems.cashierJournal'), href: "/cashier-journals", icon: Wallet },
+        { label: t('subItems.salesAnalytics'), href: "/sales-analytics", icon: PieChart },
+        { label: t('subItems.targets'), href: "/targets-dashboard", icon: Target },
+        { label: t('subItems.incentives'), href: "/incentives-management", icon: Gift },
+        { label: t('subItems.pnl'), href: "/pnl-dashboard", icon: TrendingUp },
       ],
     },
     {
-      title: "الأصول والجرد",
-      description: "إدارة ومتابعة جميع أصول الشركة والمعدات والمخزون",
+      title: t('modules.assets.title'),
+      description: t('modules.assets.description'),
       icon: Package,
       href: "/inventory",
       color: "bg-amber-500",
       module: "inventory",
       items: [
-        { label: "جرد الأصول", href: "/inventory", icon: Boxes },
-        { label: "إدارة الأصول", href: "/manage", icon: ClipboardEdit },
-        { label: "التحويلات", href: "/asset-transfers", icon: ArrowLeftRight },
-        { label: "الفروع", href: "/branches", icon: Building2 },
-        { label: "الصيانة", href: "/maintenance", icon: AlertTriangle },
+        { label: t('subItems.inventory'), href: "/inventory", icon: Boxes },
+        { label: t('subItems.assetManagement'), href: "/manage", icon: ClipboardEdit },
+        { label: t('subItems.transfers'), href: "/asset-transfers", icon: ArrowLeftRight },
+        { label: t('subItems.branches'), href: "/branches", icon: Building2 },
+        { label: t('subItems.maintenance'), href: "/maintenance", icon: AlertTriangle },
       ],
     },
     {
-      title: "المشاريع والإنشاءات",
-      description: "تتبع مشاريع البناء والتجديد والمقاولين والميزانيات",
+      title: t('modules.projects.title'),
+      description: t('modules.projects.description'),
       icon: Hammer,
       href: "/construction-projects",
       color: "bg-orange-500",
       module: "construction_projects",
       items: [
-        { label: "المشاريع", href: "/construction-projects", icon: Briefcase },
-        { label: "المقاولون", href: "/contractors", icon: HardHat },
-        { label: "العقود", href: "/contracts", icon: FileSignature },
-        { label: "طلبات الدفع", href: "/payment-requests", icon: Wallet },
-        { label: "الميزانية", href: "/budget-planning", icon: Calculator },
+        { label: t('subItems.constructionProjects'), href: "/construction-projects", icon: Briefcase },
+        { label: t('subItems.contractors'), href: "/contractors", icon: HardHat },
+        { label: t('subItems.contracts'), href: "/contracts", icon: FileSignature },
+        { label: t('subItems.paymentRequests'), href: "/payment-requests", icon: Wallet },
+        { label: t('subItems.budgetPlanning'), href: "/budget-planning", icon: Calculator },
       ],
     },
     {
-      title: "التسويق",
-      description: "إدارة الحملات التسويقية والمؤثرين وتحليل الأداء",
+      title: t('modules.marketing.title'),
+      description: t('modules.marketing.description'),
       icon: Megaphone,
       href: "/marketing",
       color: "bg-pink-500",
       module: "marketing",
       items: [
-        { label: "لوحة التسويق", href: "/marketing", icon: LayoutDashboard },
-        { label: "الحملات", href: "/marketing-campaigns", icon: Target },
-        { label: "المؤثرين", href: "/marketing-influencers", icon: UserCheck },
-        { label: "فريق التسويق", href: "/marketing-team", icon: Users },
+        { label: t('subItems.marketingDashboard'), href: "/marketing", icon: LayoutDashboard },
+        { label: t('subItems.campaigns'), href: "/marketing-campaigns", icon: Target },
+        { label: t('subItems.influencers'), href: "/marketing-influencers", icon: UserCheck },
+        { label: t('subItems.marketingTeam'), href: "/marketing-team", icon: Users },
       ],
     },
     {
-      title: "الإعدادات والنظام",
-      description: "إدارة الأمان والمستخدمين والصلاحيات والنسخ الاحتياطية",
+      title: t('modules.settings.title'),
+      description: t('modules.settings.description'),
       icon: Settings,
       href: "/settings",
       color: "bg-slate-500",
       module: "settings",
       items: [
-        { label: "لوحة الإعدادات", href: "/settings", icon: Settings },
-        { label: "الأمان", href: "/security-management", icon: Shield },
-        { label: "المستخدمين", href: "/users", icon: Users },
-        { label: "الصلاحيات", href: "/rbac-management", icon: Shield },
-        { label: "النسخ الاحتياطي", href: "/backups", icon: HardDrive },
+        { label: t('subItems.settingsDashboard'), href: "/settings", icon: Settings },
+        { label: t('subItems.security'), href: "/security-management", icon: Shield },
+        { label: t('subItems.users'), href: "/users", icon: Users },
+        { label: t('subItems.permissions'), href: "/rbac-management", icon: Shield },
+        { label: t('subItems.backups'), href: "/backups", icon: HardDrive },
       ],
     },
   ];
 
   const allQuickActions: { icon: React.ComponentType<{ className?: string }>; label: string; href: string; color: string; module: SystemModule }[] = [
-    { icon: Users, label: "إضافة موظف", href: "/branch-employees", color: "bg-teal-500", module: "branch_employees" },
-    { icon: ClipboardEdit, label: "أمر إنتاج", href: "/advanced-production-orders", color: "bg-blue-500", module: "production" },
-    { icon: Wallet, label: "يومية كاشير", href: "/cashier-journals", color: "bg-emerald-500", module: "cashier_journal" },
-    { icon: UserCheck, label: "تسجيل حضور", href: "/attendance-check", color: "bg-purple-500", module: "shifts" },
-    { icon: Boxes, label: "جرد الأصول", href: "/inventory", color: "bg-amber-500", module: "inventory" },
-    { icon: FileBarChart, label: "التقارير", href: "/reports", color: "bg-indigo-500", module: "reports" },
+    { icon: Users, label: t('quickActions.addEmployee'), href: "/branch-employees", color: "bg-teal-500", module: "branch_employees" },
+    { icon: ClipboardEdit, label: t('quickActions.productionOrder'), href: "/advanced-production-orders", color: "bg-blue-500", module: "production" },
+    { icon: Wallet, label: t('quickActions.cashierJournal'), href: "/cashier-journals", color: "bg-emerald-500", module: "cashier_journal" },
+    { icon: UserCheck, label: t('quickActions.recordAttendance'), href: "/attendance-check", color: "bg-purple-500", module: "shifts" },
+    { icon: Boxes, label: t('quickActions.inventoryCheck'), href: "/inventory", color: "bg-amber-500", module: "inventory" },
+    { icon: FileBarChart, label: t('quickActions.reports'), href: "/reports", color: "bg-indigo-500", module: "reports" },
   ];
 
   // Filter quick actions by permissions
@@ -321,9 +330,9 @@ export default function PlatformHomePage() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return { text: "صباح الخير", icon: Sun, color: "text-amber-500" };
-    if (hour >= 12 && hour < 17) return { text: "مساء الخير", icon: CloudSun, color: "text-orange-500" };
-    return { text: "مساء الخير", icon: Moon, color: "text-indigo-500" };
+    if (hour >= 5 && hour < 12) return { text: t('greeting.morning'), icon: Sun, color: "text-amber-500" };
+    if (hour >= 12 && hour < 17) return { text: t('greeting.afternoon'), icon: CloudSun, color: "text-orange-500" };
+    return { text: t('greeting.evening'), icon: Moon, color: "text-indigo-500" };
   };
 
   const greeting = getGreeting();
@@ -336,11 +345,11 @@ export default function PlatformHomePage() {
       month: 'long', 
       day: 'numeric' 
     };
-    return new Date().toLocaleDateString('ar-SA', options);
+    return new Date().toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US', options);
   };
 
   const formatTime = () => {
-    return new Date().toLocaleTimeString('ar-SA', { 
+    return new Date().toLocaleTimeString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { 
       hour: '2-digit', 
       minute: '2-digit',
       hour12: true 
@@ -349,8 +358,8 @@ export default function PlatformHomePage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-4 sm:p-6">
+      <div className={`p-4 md:p-6 max-w-7xl mx-auto space-y-4`} dir={currentLang === 'ar' ? 'rtl' : 'ltr'}>
+        <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-4 sm:p-6`}>
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <GreetingIcon className={`w-6 h-6 sm:w-8 sm:h-8 ${greeting.color}`} />
@@ -359,16 +368,26 @@ export default function PlatformHomePage() {
               </h1>
             </div>
             <p className="text-muted-foreground">
-              مرحباً بك في منصة بتر بيكري الشاملة
+              {t('welcome')}
             </p>
             {activeBranch && (
               <Badge variant="outline" className="text-xs">
-                <Building2 className="w-3 h-3 ml-1" />
+                <Building2 className={`w-3 h-3 ${currentLang === 'ar' ? 'ml-1' : 'mr-1'}`} />
                 {activeBranch.name}
               </Badge>
             )}
           </div>
-          <div className="flex flex-col items-end gap-1 text-muted-foreground">
+          <div className={`flex flex-col ${currentLang === 'ar' ? 'items-end' : 'items-start'} gap-1 text-muted-foreground`}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleLanguage}
+              className="mb-2 gap-2"
+              data-testid="button-toggle-language"
+            >
+              <Languages className="w-4 h-4" />
+              {t('switchLanguage')}
+            </Button>
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="w-4 h-4" />
               <span>{formatDate()}</span>
@@ -384,7 +403,7 @@ export default function PlatformHomePage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {canView("branches") && (
               <QuickStat
-                title="الفروع"
+                title={t('stats.branches')}
                 value={branchesCount || 0}
                 icon={Building2}
                 color="bg-amber-500"
@@ -393,7 +412,7 @@ export default function PlatformHomePage() {
             )}
             {canView("branch_employees") && (
               <QuickStat
-                title="الموظفين"
+                title={t('stats.employees')}
                 value={employeesCount || 0}
                 icon={Users}
                 color="bg-teal-500"
@@ -402,7 +421,7 @@ export default function PlatformHomePage() {
             )}
             {canView("production") && (
               <QuickStat
-                title="أوامر الإنتاج اليوم"
+                title={t('stats.todayOrders')}
                 value={stats?.productionOrders || 0}
                 icon={ClipboardList}
                 color="bg-blue-500"
@@ -411,8 +430,8 @@ export default function PlatformHomePage() {
             )}
             {canView("cashier_journal") && (
               <QuickStat
-                title="مبيعات اليوم"
-                value={stats?.todaySales ? `${stats.todaySales.toLocaleString()} ر.س` : "0 ر.س"}
+                title={t('todaySales')}
+                value={stats?.todaySales ? `${stats.todaySales.toLocaleString()} ${t('currency')}` : `0 ${t('currency')}`}
                 icon={Receipt}
                 color="bg-emerald-500"
                 href="/cashier-journals"
@@ -424,7 +443,7 @@ export default function PlatformHomePage() {
         <div>
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <LayoutDashboard className="w-5 h-5 text-primary" />
-            أقسام النظام
+            {t('systemModules')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {accessibleModules.map((module, index) => (
@@ -437,16 +456,16 @@ export default function PlatformHomePage() {
           <div className="text-center py-8">
             <Card className="max-w-md mx-auto">
               <CardHeader>
-                <CardTitle className="text-lg">تسجيل الدخول مطلوب</CardTitle>
+                <CardTitle className="text-lg">{t('loginRequired')}</CardTitle>
                 <CardDescription>
-                  للوصول إلى جميع ميزات المنصة، يرجى تسجيل الدخول أولاً
+                  {t('loginRequiredDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Link href="/login">
                   <Button className="w-full h-11 sm:h-9" data-testid="button-login-home">
-                    <ChevronLeft className="w-4 h-4 ml-2" />
-                    تسجيل الدخول
+                    <ChevronLeft className={`w-4 h-4 ${currentLang === 'ar' ? 'ml-2' : 'mr-2'}`} />
+                    {t('login')}
                   </Button>
                 </Link>
               </CardContent>

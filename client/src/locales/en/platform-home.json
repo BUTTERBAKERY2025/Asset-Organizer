@@ -5,6 +5,12 @@
     "evening": "Good Evening"
   },
   "welcome": "Welcome to Butter Bakery Management Platform",
+  "systemModules": "System Modules",
+  "loginRequired": "Login Required",
+  "loginRequiredDesc": "To access all platform features, please login first",
+  "login": "Login",
+  "todaySales": "Today's Sales",
+  "currency": "SAR",
   "modules": {
     "hr": {
       "title": "Human Resources",
