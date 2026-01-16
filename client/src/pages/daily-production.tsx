@@ -1491,10 +1491,10 @@ export default function DailyProductionPage() {
                           </TableBody>
                         </Table>
                       </div>
-                      {batches.length > itemsPerPage && (
+                      {(batches?.length || 0) > itemsPerPage && (
                         <TablePagination
                           currentPage={currentPage}
-                          totalItems={batches.length}
+                          totalItems={batches?.length || 0}
                           itemsPerPage={itemsPerPage}
                           onPageChange={setCurrentPage}
                         />
@@ -1831,7 +1831,7 @@ export default function DailyProductionPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {batches.map((batch, index) => {
+                          {(batches || []).map((batch, index) => {
                             const destInfo = getDestinationInfo(batch.destination);
                             const DestIcon = destInfo.icon;
                             return (
