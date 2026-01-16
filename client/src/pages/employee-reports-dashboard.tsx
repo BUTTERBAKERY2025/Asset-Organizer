@@ -3034,7 +3034,7 @@ export default function EmployeeReportsDashboardPage() {
                       <p className={`text-4xl font-bold ${dataQualityMetrics.qualityScore >= 80 ? "text-green-700" : dataQualityMetrics.qualityScore >= 60 ? "text-yellow-700" : "text-red-700"}`}>
                         {dataQualityMetrics.qualityScore}%
                       </p>
-                      <p className="text-sm text-gray-600">مؤشر جودة البيانات</p>
+                      <p className="text-sm text-gray-600">{isRTL ? "مؤشر جودة البيانات" : "Data Quality Index"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -3042,7 +3042,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-orange-700">{dataQualityMetrics.employeesWithMissingAttendance.length}</p>
-                      <p className="text-sm text-orange-600">حضور ناقص</p>
+                      <p className="text-sm text-orange-600">{isRTL ? "حضور ناقص" : "Missing Attendance"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -3050,7 +3050,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-red-700">{dataQualityMetrics.employeesWithMissingSalary.length}</p>
-                      <p className="text-sm text-red-600">رواتب غير مدخلة</p>
+                      <p className="text-sm text-red-600">{isRTL ? "رواتب غير مدخلة" : "Missing Salaries"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -3058,7 +3058,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-purple-700">{dataQualityMetrics.employeesWithAnomalies.length}</p>
-                      <p className="text-sm text-purple-600">قيم غير منطقية</p>
+                      <p className="text-sm text-purple-600">{isRTL ? "قيم غير منطقية" : "Anomalies"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -3069,15 +3069,15 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-orange-700">
                       <AlertCircle className="w-5 h-5" />
-                      موظفين بحضور ناقص
+                      {isRTL ? "موظفين بحضور ناقص" : "Employees with Missing Attendance"}
                     </CardTitle>
-                    <CardDescription>موظفين لديهم أكثر من 5 أيام حضور مفقودة</CardDescription>
+                    <CardDescription>{isRTL ? "موظفين لديهم أكثر من 5 أيام حضور مفقودة" : "Employees with more than 5 missing attendance days"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {dataQualityMetrics.employeesWithMissingAttendance.length === 0 ? (
                       <div className="text-center py-8 text-green-600">
                         <CheckCircle className="w-12 h-12 mx-auto mb-2" />
-                        جميع سجلات الحضور مكتملة
+                        {isRTL ? "جميع سجلات الحضور مكتملة" : "All attendance records are complete"}
                       </div>
                     ) : (
                       <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -3087,7 +3087,7 @@ export default function EmployeeReportsDashboardPage() {
                               <p className="font-medium text-sm">{emp.employeeName}</p>
                               <p className="text-xs text-gray-500">{getBranchName(emp.branchId)}</p>
                             </div>
-                            <Badge className="bg-orange-100 text-orange-800">{missingDays} يوم ({percentage}%)</Badge>
+                            <Badge className="bg-orange-100 text-orange-800">{isRTL ? `${missingDays} يوم (${percentage}%)` : `${missingDays} days (${percentage}%)`}</Badge>
                           </div>
                         ))}
                       </div>
@@ -3099,15 +3099,15 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-purple-700">
                       <XCircle className="w-5 h-5" />
-                      قيم غير منطقية
+                      {isRTL ? "قيم غير منطقية" : "Anomalies"}
                     </CardTitle>
-                    <CardDescription>بيانات تحتاج مراجعة وتصحيح</CardDescription>
+                    <CardDescription>{isRTL ? "بيانات تحتاج مراجعة وتصحيح" : "Data that needs review and correction"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {dataQualityMetrics.employeesWithAnomalies.length === 0 ? (
                       <div className="text-center py-8 text-green-600">
                         <CheckCircle className="w-12 h-12 mx-auto mb-2" />
-                        لا توجد قيم غير منطقية
+                        {isRTL ? "لا توجد قيم غير منطقية" : "No anomalies found"}
                       </div>
                     ) : (
                       <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -3118,7 +3118,7 @@ export default function EmployeeReportsDashboardPage() {
                               <p className="text-xs text-gray-500">{item.issue}</p>
                             </div>
                             <Badge className={`${item.severity === "high" ? "bg-red-100 text-red-800" : item.severity === "medium" ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-800"}`}>
-                              {item.severity === "high" ? "عالي" : item.severity === "medium" ? "متوسط" : "منخفض"}
+                              {item.severity === "high" ? (isRTL ? "عالي" : "High") : item.severity === "medium" ? (isRTL ? "متوسط" : "Medium") : (isRTL ? "منخفض" : "Low")}
                             </Badge>
                           </div>
                         ))}
@@ -3138,16 +3138,16 @@ export default function EmployeeReportsDashboardPage() {
                       <p className={`text-4xl font-bold ${complianceMetrics.saudizationStatus === "green" ? "text-green-700" : complianceMetrics.saudizationStatus === "yellow" ? "text-yellow-700" : "text-red-700"}`}>
                         {complianceMetrics.saudizationRate}%
                       </p>
-                      <p className="text-sm text-gray-600">نسبة السعودة</p>
-                      <p className="text-xs text-gray-500">المطلوب: {complianceMetrics.requiredSaudization}%</p>
+                      <p className="text-sm text-gray-600">{isRTL ? "نسبة السعودة" : "Saudization Rate"}</p>
+                      <p className="text-xs text-gray-500">{isRTL ? `المطلوب: ${complianceMetrics.requiredSaudization}%` : `Required: ${complianceMetrics.requiredSaudization}%`}</p>
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="bg-blue-50 border-blue-200">
                   <CardContent className="pt-4">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosi)}</p>
-                      <p className="text-sm text-blue-600">إجمالي التأمينات</p>
+                      <p className="text-3xl font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosi, isRTL)}</p>
+                      <p className="text-sm text-blue-600">{isRTL ? "إجمالي التأمينات" : "Total Insurance"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -3155,7 +3155,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-teal-700">{complianceMetrics.saudiEmployees}</p>
-                      <p className="text-sm text-teal-600">موظفين سعوديين</p>
+                      <p className="text-sm text-teal-600">{isRTL ? "موظفين سعوديين" : "Saudi Employees"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -3163,7 +3163,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className={`text-3xl font-bold ${complianceMetrics.criticalExpiries > 0 ? "text-red-700" : "text-green-700"}`}>{complianceMetrics.expiringContracts.length}</p>
-                      <p className={`text-sm ${complianceMetrics.criticalExpiries > 0 ? "text-red-600" : "text-green-600"}`}>وثائق تنتهي قريباً</p>
+                      <p className={`text-sm ${complianceMetrics.criticalExpiries > 0 ? "text-red-600" : "text-green-600"}`}>{isRTL ? "وثائق تنتهي قريباً" : "Expiring Documents"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -3174,43 +3174,43 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <DollarSign className="w-5 h-5 text-blue-600" />
-                      تقرير التأمينات الاجتماعية (GOSI)
+                      {isRTL ? "تقرير التأمينات الاجتماعية (GOSI)" : "Social Insurance Report (GOSI)"}
                     </CardTitle>
-                    <CardDescription>حصة الموظف 9.75% + حصة صاحب العمل 11.75%</CardDescription>
+                    <CardDescription>{isRTL ? "حصة الموظف 9.75% + حصة صاحب العمل 11.75%" : "Employee share 9.75% + Employer share 11.75%"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       <div className="grid grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
                         <div className="text-center">
-                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployee)}</p>
-                          <p className="text-xs text-blue-600">حصة الموظف (9.75%)</p>
+                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployee, isRTL)}</p>
+                          <p className="text-xs text-blue-600">{isRTL ? "حصة الموظف (9.75%)" : "Employee Share (9.75%)"}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployer)}</p>
-                          <p className="text-xs text-blue-600">حصة صاحب العمل (11.75%)</p>
+                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployer, isRTL)}</p>
+                          <p className="text-xs text-blue-600">{isRTL ? "حصة صاحب العمل (11.75%)" : "Employer Share (11.75%)"}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-lg font-bold text-blue-800">{formatCurrency(complianceMetrics.totalGosi)}</p>
-                          <p className="text-xs text-blue-600">الإجمالي</p>
+                          <p className="text-lg font-bold text-blue-800">{formatCurrency(complianceMetrics.totalGosi, isRTL)}</p>
+                          <p className="text-xs text-blue-600">{isRTL ? "الإجمالي" : "Total"}</p>
                         </div>
                       </div>
                       <div className="max-h-48 overflow-y-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right">الموظف</TableHead>
-                              <TableHead className="text-center">الراتب الأساسي</TableHead>
-                              <TableHead className="text-center">حصة الموظف</TableHead>
-                              <TableHead className="text-center">حصة صاحب العمل</TableHead>
+                              <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الموظف" : "Employee"}</TableHead>
+                              <TableHead className="text-center">{isRTL ? "الراتب الأساسي" : "Base Salary"}</TableHead>
+                              <TableHead className="text-center">{isRTL ? "حصة الموظف" : "Employee Share"}</TableHead>
+                              <TableHead className="text-center">{isRTL ? "حصة صاحب العمل" : "Employer Share"}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {complianceMetrics.gosiReport.slice(0, 10).map(row => (
                               <TableRow key={row.emp.id}>
-                                <TableCell className="text-right">{row.emp.employeeName}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(row.baseSalary)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(row.employeeContribution)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(row.employerContribution)}</TableCell>
+                                <TableCell className={isRTL ? "text-right" : "text-left"}>{row.emp.employeeName}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(row.baseSalary, isRTL)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(row.employeeContribution, isRTL)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(row.employerContribution, isRTL)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -3224,15 +3224,15 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-red-600" />
-                      وثائق تنتهي خلال 60 يوم
+                      {isRTL ? "وثائق تنتهي خلال 60 يوم" : "Documents Expiring Within 60 Days"}
                     </CardTitle>
-                    <CardDescription>إقامات وجوازات تحتاج تجديد</CardDescription>
+                    <CardDescription>{isRTL ? "إقامات وجوازات تحتاج تجديد" : "Residencies and passports needing renewal"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {complianceMetrics.expiringContracts.length === 0 ? (
                       <div className="text-center py-8 text-green-600">
                         <CheckCircle className="w-12 h-12 mx-auto mb-2" />
-                        لا توجد وثائق تنتهي قريباً
+                        {isRTL ? "لا توجد وثائق تنتهي قريباً" : "No documents expiring soon"}
                       </div>
                     ) : (
                       <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -3241,11 +3241,14 @@ export default function EmployeeReportsDashboardPage() {
                             <div>
                               <p className="font-medium text-sm">{item.emp.employeeName}</p>
                               <p className="text-xs text-gray-500">
-                                {item.type === "iqama" ? "إقامة" : item.type === "passport" ? "جواز" : "عقد"} - ينتهي: {formatDate(item.expiryDate)}
+                                {isRTL 
+                                  ? `${item.type === "iqama" ? "إقامة" : item.type === "passport" ? "جواز" : "عقد"} - ينتهي: ${formatDate(item.expiryDate)}`
+                                  : `${item.type === "iqama" ? "Iqama" : item.type === "passport" ? "Passport" : "Contract"} - Expires: ${formatDate(item.expiryDate)}`
+                                }
                               </p>
                             </div>
                             <Badge className={`${item.daysLeft <= 30 ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
-                              {item.daysLeft} يوم
+                              {isRTL ? `${item.daysLeft} يوم` : `${item.daysLeft} days`}
                             </Badge>
                           </div>
                         ))}
@@ -3260,10 +3263,12 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-orange-500" />
-                    تكاليف الموظفين غير السعوديين على صاحب العمل
+                    {isRTL ? "تكاليف الموظفين غير السعوديين على صاحب العمل" : "Non-Saudi Employee Costs for Employer"}
                   </CardTitle>
                   <CardDescription>
-                    تأمين إصابات العمل (2%) + رسوم رخصة العمل (66 ريال/شهر) + رسوم الإقامة (54 ريال/شهر)
+                    {isRTL 
+                      ? "تأمين إصابات العمل (2%) + رسوم رخصة العمل (66 ريال/شهر) + رسوم الإقامة (54 ريال/شهر)" 
+                      : "Work injury insurance (2%) + Work permit fees (66 SAR/month) + Residency fees (54 SAR/month)"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -3271,23 +3276,23 @@ export default function EmployeeReportsDashboardPage() {
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                     <div className="text-center p-3 bg-orange-50 rounded-lg">
                       <p className="text-2xl font-bold text-orange-600">{formatNumber(complianceMetrics.totalNonSaudiCount)}</p>
-                      <p className="text-xs text-gray-600">غير سعودي</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "غير سعودي" : "Non-Saudi"}</p>
                     </div>
                     <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <p className="text-xl font-bold text-blue-600">{formatCurrency(complianceMetrics.totalNonSaudiInsurance)}</p>
-                      <p className="text-xs text-gray-600">تأمين 2%</p>
+                      <p className="text-xl font-bold text-blue-600">{formatCurrency(complianceMetrics.totalNonSaudiInsurance, isRTL)}</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "تأمين 2%" : "Insurance 2%"}</p>
                     </div>
                     <div className="text-center p-3 bg-purple-50 rounded-lg">
-                      <p className="text-xl font-bold text-purple-600">{formatCurrency(complianceMetrics.totalNonSaudiWorkPermit)}</p>
-                      <p className="text-xs text-gray-600">رخصة العمل</p>
+                      <p className="text-xl font-bold text-purple-600">{formatCurrency(complianceMetrics.totalNonSaudiWorkPermit, isRTL)}</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "رخصة العمل" : "Work Permit"}</p>
                     </div>
                     <div className="text-center p-3 bg-teal-50 rounded-lg">
-                      <p className="text-xl font-bold text-teal-600">{formatCurrency(complianceMetrics.totalNonSaudiIqama)}</p>
-                      <p className="text-xs text-gray-600">رسوم الإقامة</p>
+                      <p className="text-xl font-bold text-teal-600">{formatCurrency(complianceMetrics.totalNonSaudiIqama, isRTL)}</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "رسوم الإقامة" : "Residency Fees"}</p>
                     </div>
                     <div className="text-center p-3 bg-red-50 rounded-lg">
-                      <p className="text-xl font-bold text-red-600">{formatCurrency(complianceMetrics.totalNonSaudiMonthlyCost)}</p>
-                      <p className="text-xs text-gray-600">إجمالي شهري</p>
+                      <p className="text-xl font-bold text-red-600">{formatCurrency(complianceMetrics.totalNonSaudiMonthlyCost, isRTL)}</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "إجمالي شهري" : "Monthly Total"}</p>
                     </div>
                   </div>
 
@@ -3297,25 +3302,25 @@ export default function EmployeeReportsDashboardPage() {
                       <Table className="table-fixed w-full">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-right w-[100px]">الجنسية</TableHead>
-                            <TableHead className="text-center w-[60px]">العدد</TableHead>
-                            <TableHead className="text-center w-[100px]">الراتب+السكن</TableHead>
-                            <TableHead className="text-center w-[80px]">تأمين 2%</TableHead>
-                            <TableHead className="text-center w-[80px]">رخصة العمل</TableHead>
-                            <TableHead className="text-center w-[80px]">الإقامة</TableHead>
-                            <TableHead className="text-center w-[100px]">إجمالي التكلفة</TableHead>
+                            <TableHead className={`${isRTL ? "text-right" : "text-left"} w-[100px]`}>{isRTL ? "الجنسية" : "Nationality"}</TableHead>
+                            <TableHead className="text-center w-[60px]">{isRTL ? "العدد" : "Count"}</TableHead>
+                            <TableHead className="text-center w-[100px]">{isRTL ? "الراتب+السكن" : "Salary+Housing"}</TableHead>
+                            <TableHead className="text-center w-[80px]">{isRTL ? "تأمين 2%" : "Insurance 2%"}</TableHead>
+                            <TableHead className="text-center w-[80px]">{isRTL ? "رخصة العمل" : "Work Permit"}</TableHead>
+                            <TableHead className="text-center w-[80px]">{isRTL ? "الإقامة" : "Residency"}</TableHead>
+                            <TableHead className="text-center w-[100px]">{isRTL ? "إجمالي التكلفة" : "Total Cost"}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {complianceMetrics.nonSaudiCostAnalysis.map((nat, i) => (
                             <TableRow key={i}>
-                              <TableCell className="font-medium text-right">{nat.nationality}</TableCell>
+                              <TableCell className={`font-medium ${isRTL ? "text-right" : "text-left"}`}>{nat.nationality}</TableCell>
                               <TableCell className="text-center">{formatNumber(nat.count)}</TableCell>
-                              <TableCell className="text-center">{formatCurrency(nat.insurableSalary)}</TableCell>
-                              <TableCell className="text-center text-blue-600">{formatCurrency(nat.insuranceCost)}</TableCell>
-                              <TableCell className="text-center text-purple-600">{formatCurrency(nat.workPermitCost)}</TableCell>
-                              <TableCell className="text-center text-teal-600">{formatCurrency(nat.iqamaCost)}</TableCell>
-                              <TableCell className="text-center font-bold text-red-600">{formatCurrency(nat.totalMonthlyCost)}</TableCell>
+                              <TableCell className="text-center">{formatCurrency(nat.insurableSalary, isRTL)}</TableCell>
+                              <TableCell className="text-center text-blue-600">{formatCurrency(nat.insuranceCost, isRTL)}</TableCell>
+                              <TableCell className="text-center text-purple-600">{formatCurrency(nat.workPermitCost, isRTL)}</TableCell>
+                              <TableCell className="text-center text-teal-600">{formatCurrency(nat.iqamaCost, isRTL)}</TableCell>
+                              <TableCell className="text-center font-bold text-red-600">{formatCurrency(nat.totalMonthlyCost, isRTL)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -3325,22 +3330,22 @@ export default function EmployeeReportsDashboardPage() {
 
                   {/* مقارنة التكاليف */}
                   <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-bold mb-3 text-gray-700">مقارنة تكاليف صاحب العمل الشهرية</h4>
+                    <h4 className="font-bold mb-3 text-gray-700">{isRTL ? "مقارنة تكاليف صاحب العمل الشهرية" : "Monthly Employer Cost Comparison"}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="p-3 bg-green-100 rounded-lg text-center">
-                        <p className="text-lg font-bold text-green-700">{formatCurrency(complianceMetrics.totalEmployerCostSaudi)}</p>
-                        <p className="text-xs text-green-600">السعوديين (11.75%)</p>
-                        <p className="text-xs text-gray-500">{complianceMetrics.saudiEmployees} موظف</p>
+                        <p className="text-lg font-bold text-green-700">{formatCurrency(complianceMetrics.totalEmployerCostSaudi, isRTL)}</p>
+                        <p className="text-xs text-green-600">{isRTL ? "السعوديين (11.75%)" : "Saudis (11.75%)"}</p>
+                        <p className="text-xs text-gray-500">{isRTL ? `${complianceMetrics.saudiEmployees} موظف` : `${complianceMetrics.saudiEmployees} employees`}</p>
                       </div>
                       <div className="p-3 bg-orange-100 rounded-lg text-center">
-                        <p className="text-lg font-bold text-orange-700">{formatCurrency(complianceMetrics.totalEmployerCostNonSaudi)}</p>
-                        <p className="text-xs text-orange-600">غير السعوديين (2%+رسوم)</p>
-                        <p className="text-xs text-gray-500">{complianceMetrics.totalNonSaudiCount} موظف</p>
+                        <p className="text-lg font-bold text-orange-700">{formatCurrency(complianceMetrics.totalEmployerCostNonSaudi, isRTL)}</p>
+                        <p className="text-xs text-orange-600">{isRTL ? "غير السعوديين (2%+رسوم)" : "Non-Saudis (2%+fees)"}</p>
+                        <p className="text-xs text-gray-500">{isRTL ? `${complianceMetrics.totalNonSaudiCount} موظف` : `${complianceMetrics.totalNonSaudiCount} employees`}</p>
                       </div>
                       <div className="p-3 bg-blue-100 rounded-lg text-center">
-                        <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalEmployerCost)}</p>
-                        <p className="text-xs text-blue-600">الإجمالي الشهري</p>
-                        <p className="text-xs text-gray-500">{complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} موظف</p>
+                        <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalEmployerCost, isRTL)}</p>
+                        <p className="text-xs text-blue-600">{isRTL ? "الإجمالي الشهري" : "Monthly Total"}</p>
+                        <p className="text-xs text-gray-500">{isRTL ? `${complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} موظف` : `${complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} employees`}</p>
                       </div>
                     </div>
                   </div>
@@ -3353,9 +3358,12 @@ export default function EmployeeReportsDashboardPage() {
                     <div className="flex items-center gap-4">
                       <AlertCircle className="w-8 h-8 text-red-600" />
                       <div>
-                        <p className="font-bold text-red-800">تحذير: نسبة السعودة أقل من المطلوب</p>
+                        <p className="font-bold text-red-800">{isRTL ? "تحذير: نسبة السعودة أقل من المطلوب" : "Warning: Saudization rate is below required"}</p>
                         <p className="text-sm text-red-600">
-                          يجب توظيف {Math.ceil((complianceMetrics.requiredSaudization / 100 * (complianceMetrics.saudiEmployees + complianceMetrics.nonSaudiEmployees)) - complianceMetrics.saudiEmployees)} موظف سعودي إضافي للوصول للنسبة المطلوبة ({complianceMetrics.requiredSaudization}%)
+                          {isRTL 
+                            ? `يجب توظيف ${Math.ceil((complianceMetrics.requiredSaudization / 100 * (complianceMetrics.saudiEmployees + complianceMetrics.nonSaudiEmployees)) - complianceMetrics.saudiEmployees)} موظف سعودي إضافي للوصول للنسبة المطلوبة (${complianceMetrics.requiredSaudization}%)`
+                            : `Need to hire ${Math.ceil((complianceMetrics.requiredSaudization / 100 * (complianceMetrics.saudiEmployees + complianceMetrics.nonSaudiEmployees)) - complianceMetrics.saudiEmployees)} additional Saudi employees to reach required rate (${complianceMetrics.requiredSaudization}%)`
+                          }
                         </p>
                       </div>
                     </div>
@@ -3368,27 +3376,27 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertCircle className="w-5 h-5 text-orange-500" />
-                    تحذيرات الشهادات الصحية
+                    {isRTL ? "تحذيرات الشهادات الصحية" : "Health Certificate Warnings"}
                   </CardTitle>
-                  <CardDescription>الشهادات المنتهية أو القريبة من الانتهاء</CardDescription>
+                  <CardDescription>{isRTL ? "الشهادات المنتهية أو القريبة من الانتهاء" : "Expired or soon-to-expire certificates"}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.expired > 0 ? "bg-red-50" : "bg-green-50"}`}>
                       <p className={`text-2xl font-bold ${healthCertificateAnalysis.expired > 0 ? "text-red-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.expired)}</p>
-                      <p className="text-xs text-gray-600">منتهية</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "منتهية" : "Expired"}</p>
                     </div>
                     <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.expiringWithin30.length > 0 ? "bg-orange-50" : "bg-green-50"}`}>
                       <p className={`text-2xl font-bold ${healthCertificateAnalysis.expiringWithin30.length > 0 ? "text-orange-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.expiringWithin30.length)}</p>
-                      <p className="text-xs text-gray-600">تنتهي خلال 30 يوم</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "تنتهي خلال 30 يوم" : "Expiring in 30 days"}</p>
                     </div>
                     <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.none > 0 ? "bg-yellow-50" : "bg-green-50"}`}>
                       <p className={`text-2xl font-bold ${healthCertificateAnalysis.none > 0 ? "text-yellow-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.none)}</p>
-                      <p className="text-xs text-gray-600">بدون شهادة</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "بدون شهادة" : "No Certificate"}</p>
                     </div>
                     <div className="text-center p-3 rounded-lg bg-green-50">
                       <p className="text-2xl font-bold text-green-600">{healthCertificateAnalysis.complianceRate}%</p>
-                      <p className="text-xs text-gray-600">نسبة الامتثال</p>
+                      <p className="text-xs text-gray-600">{isRTL ? "نسبة الامتثال" : "Compliance Rate"}</p>
                     </div>
                   </div>
                   {(healthCertificateAnalysis.expired > 0 || healthCertificateAnalysis.expiringWithin30.length > 0) && (
@@ -3400,7 +3408,7 @@ export default function EmployeeReportsDashboardPage() {
                             <p className="text-xs text-gray-500">{branches?.find(b => b.id === item.emp.branchId)?.name || item.emp.branchId}</p>
                           </div>
                           <Badge className={`${item.daysLeft <= 0 ? "bg-red-100 text-red-800" : item.daysLeft <= 30 ? "bg-orange-100 text-orange-800" : "bg-yellow-100 text-yellow-800"}`}>
-                            {item.daysLeft <= 0 ? "منتهية" : `${item.daysLeft} يوم`}
+                            {item.daysLeft <= 0 ? (isRTL ? "منتهية" : "Expired") : (isRTL ? `${item.daysLeft} يوم` : `${item.daysLeft} days`)}
                           </Badge>
                         </div>
                       ))}
@@ -3414,13 +3422,13 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-teal-500" />
-                    نسبة السعودة حسب الفرع
+                    {isRTL ? "نسبة السعودة حسب الفرع" : "Saudization Rate by Branch"}
                   </CardTitle>
-                  <CardDescription>المطلوب: {complianceMetrics.requiredSaudization}% لكل فرع</CardDescription>
+                  <CardDescription>{isRTL ? `المطلوب: ${complianceMetrics.requiredSaudization}% لكل فرع` : `Required: ${complianceMetrics.requiredSaudization}% per branch`}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {complianceMetrics.branchSaudization.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
+                    <div className="text-center py-8 text-gray-500">{isRTL ? "لا توجد بيانات" : "No data available"}</div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {complianceMetrics.branchSaudization.map(branch => (
@@ -3433,20 +3441,20 @@ export default function EmployeeReportsDashboardPage() {
                           </div>
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-gray-600">إجمالي الموظفين:</span>
+                              <span className="text-gray-600">{isRTL ? "إجمالي الموظفين:" : "Total Employees:"}</span>
                               <span className="font-medium">{formatNumber(branch.total)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-green-600">سعوديين:</span>
+                              <span className="text-green-600">{isRTL ? "سعوديين:" : "Saudis:"}</span>
                               <span className="font-medium text-green-700">{formatNumber(branch.saudis)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-orange-600">غير سعوديين:</span>
+                              <span className="text-orange-600">{isRTL ? "غير سعوديين:" : "Non-Saudis:"}</span>
                               <span className="font-medium text-orange-700">{formatNumber(branch.nonSaudis)}</span>
                             </div>
                             {branch.neededSaudis > 0 && (
                               <div className="flex justify-between pt-1 border-t">
-                                <span className="text-red-600">المطلوب توظيفهم:</span>
+                                <span className="text-red-600">{isRTL ? "المطلوب توظيفهم:" : "Needed to hire:"}</span>
                                 <span className="font-bold text-red-700">{formatNumber(branch.neededSaudis)}</span>
                               </div>
                             )}
