@@ -38,6 +38,16 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **P&L Dashboard Enhancements**: Includes advanced financial KPIs such as EBITDA, contribution margin, labor productivity, and operating profit.
 - **Marketing Influencers Enhancement**: Management of influencer data including social media metrics and bank details.
 - **Branch Employee Integration**: Features for linking employees to user accounts, tracking attendance, schedules, and timesheets.
+- **Influencer Contracts Management**: Contract generation with PDF export, auto-generated contract numbers (BTR-INF-YYYY-####), deliverables tracking, exclusivity clauses, dual signatures, and financial approval workflow.
+
+### Performance Optimization
+- **Tiered Caching Strategy**: Three-tier cache system based on data volatility:
+  - STATIC (1 hour): Branches, permissions - rarely changing data
+  - MEDIUM (10 minutes): Marketing campaigns, influencers, inventory - moderately changing data  
+  - DYNAMIC (2 minutes): Dashboard stats - frequently updating data
+- **Prefetch on Hover**: Navigation links prefetch API data on mouse hover to reduce perceived load time
+- **Static Data Prefetching**: Branches and permissions are prefetched on authentication
+- **Smart Cache Guards**: Prefetching checks query state to avoid redundant requests for in-flight or fresh data
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema ensures type consistency between frontend and backend.

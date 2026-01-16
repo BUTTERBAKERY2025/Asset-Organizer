@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "@/lib/i18n";
+import { prefetchStaticData, prefetchQuery } from "@/lib/queryClient";
 import { 
   LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, 
   CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, 
@@ -70,6 +71,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      prefetchStaticData();
+    }
+  }, [isAuthenticated]);
+
+  const handleLinkHover = useCallback((href: string) => {
+    const apiMap: Record<string, string[]> = {
+      "/marketing": ["/api/marketing/campaigns", "/api/marketing/influencers"],
+      "/marketing-campaigns": ["/api/marketing/campaigns"],
+      "/marketing-influencers": ["/api/marketing/influencers"],
+      "/influencer-contracts": ["/api/marketing/influencer-contracts"],
+      "/inventory": ["/api/inventory"],
+      "/dashboard": ["/api/dashboard/stats"],
+      "/construction-projects": ["/api/construction-projects"],
+      "/operations": ["/api/operations/products"],
+    };
+    const queries = apiMap[href];
+    if (queries) {
+      queries.forEach(q => prefetchQuery([q]));
+    }
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -277,6 +301,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
         )}
         data-testid={`nav-link-${item.href.replace(/\//g, '') || 'home'}`}
+        onMouseEnter={() => handleLinkHover(item.href)}
       >
         <item.icon className={cn("flex-shrink-0", item.indent ? "w-3.5 h-3.5" : "w-4 h-4")} />
         <span>{item.label}</span>
