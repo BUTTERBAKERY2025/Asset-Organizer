@@ -70,17 +70,18 @@ function ModuleCard({ title, description, icon: Icon, href, color, badge, items 
   
   return (
     <Card 
-      className="group hover:shadow-md transition-all duration-300 cursor-pointer border hover:border-primary/30 overflow-hidden h-full"
+      className="group relative hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500 cursor-pointer border hover:border-primary/40 overflow-hidden h-full hover:scale-[1.02] hover:-translate-y-1 before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/80 before:to-primary/5 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-500 before:backdrop-blur-sm before:z-0"
       onClick={() => navigate(href)}
       data-testid={`module-card-${href.replace('/', '')}`}
     >
-      <CardHeader className="p-2.5 pb-1.5">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+      <CardHeader className="p-2.5 pb-1.5 relative z-10">
         <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-md flex items-center justify-center ${color} transition-transform group-hover:scale-110 shrink-0`}>
+          <div className={`w-8 h-8 rounded-md flex items-center justify-center ${color} transition-all duration-300 group-hover:scale-125 group-hover:rotate-3 group-hover:shadow-lg shrink-0`}>
             <Icon className="w-3.5 h-3.5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-xs font-semibold truncate">{title}</CardTitle>
+            <CardTitle className="text-xs font-semibold truncate group-hover:text-primary transition-colors duration-300">{title}</CardTitle>
           </div>
           {badge && (
             <Badge variant="secondary" className="text-[9px] shrink-0">{badge}</Badge>
@@ -89,7 +90,7 @@ function ModuleCard({ title, description, icon: Icon, href, color, badge, items 
         <CardDescription className="text-[11px] leading-snug line-clamp-2 mt-1">{description}</CardDescription>
       </CardHeader>
       {items && items.length > 0 && (
-        <CardContent className="p-2.5 pt-0">
+        <CardContent className="p-2.5 pt-0 relative z-10">
           <div className="flex flex-wrap gap-1">
             {items.slice(0, 3).map((item, index) => (
               <Link key={index} href={item.href} onClick={(e) => e.stopPropagation()}>
