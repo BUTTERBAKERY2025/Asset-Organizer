@@ -9362,16 +9362,71 @@ export async function registerRoutes(
   // Get all batches with optional filters
   app.get("/api/daily-production/batches", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
-      const { branchId, date, destination } = req.query;
+      const { branchId, date, destination, status, chefId, category } = req.query;
       const batches = await storage.getAllDailyProductionBatches({
         branchId: branchId as string,
         date: date as string,
         destination: destination as string,
+        status: status as string,
+        chefId: chefId as string,
+        category: category as string,
       });
       res.json(batches);
     } catch (error) {
       console.error("Error fetching daily production batches:", error);
       res.status(500).json({ error: "فشل في جلب دفعات الإنتاج اليومي" });
+    }
+  });
+
+  // Get unfinished batches (for carry-over panel)
+  app.get("/api/daily-production/unfinished", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.query;
+      const batches = await storage.getUnfinishedBatches(branchId as string);
+      res.json(batches);
+    } catch (error) {
+      console.error("Error fetching unfinished batches:", error);
+      res.status(500).json({ error: "فشل في جلب الدفعات غير المكتملة" });
+    }
+  });
+
+  // Mark batch as finished
+  app.post("/api/daily-production/batches/:id/finish", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const batch = await storage.finishBatch(id);
+      if (!batch) {
+        return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+      }
+      res.json(batch);
+    } catch (error) {
+      console.error("Error finishing batch:", error);
+      res.status(500).json({ error: "فشل في إكمال الدفعة" });
+    }
+  });
+
+  // Carry over batch to next day
+  app.post("/api/daily-production/batches/:id/carry-over", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const { newDate, additionalQuantity } = req.body;
+      if (!newDate) {
+        return res.status(400).json({ error: "التاريخ الجديد مطلوب" });
+      }
+      const batch = await storage.carryOverBatch(id, new Date(newDate), additionalQuantity);
+      if (!batch) {
+        return res.status(404).json({ error: "دفعة الإنتاج المصدر غير موجودة" });
+      }
+      res.status(201).json(batch);
+    } catch (error) {
+      console.error("Error carrying over batch:", error);
+      res.status(500).json({ error: "فشل في ترحيل الدفعة" });
     }
   });
 
@@ -9397,7 +9452,7 @@ export async function registerRoutes(
   app.post("/api/daily-production/batches", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const user = (req as any).user;
-      const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt } = req.body;
+      const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt, status, chefId, chefName, sourceBatchId } = req.body;
       
       // Validate required fields
       if (!branchId || typeof branchId !== 'string') {
@@ -9418,6 +9473,12 @@ export async function registerRoutes(
       if (!validDestinations.includes(destination)) {
         return res.status(400).json({ error: "الوجهة غير صالحة" });
       }
+
+      // Validate status value if provided
+      const validStatuses = ['finished', 'in_progress'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ error: "الحالة غير صالحة" });
+      }
       
       const batchData = {
         branchId,
@@ -9431,6 +9492,10 @@ export async function registerRoutes(
         recordedBy: user?.id || null,
         recorderName: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || null,
         producedAt: producedAt ? new Date(producedAt) : new Date(),
+        status: status || 'finished',
+        chefId: chefId || null,
+        chefName: chefName || null,
+        sourceBatchId: sourceBatchId ? Number(sourceBatchId) : null,
       };
       
       const batch = await storage.createDailyProductionBatch(batchData);
@@ -9450,7 +9515,7 @@ export async function registerRoutes(
       }
       
       // Validate allowed update fields
-      const allowedFields = ['productName', 'productCategory', 'quantity', 'unit', 'destination', 'notes'];
+      const allowedFields = ['productName', 'productCategory', 'quantity', 'unit', 'destination', 'notes', 'status', 'chefId', 'chefName'];
       const updateData: any = {};
       
       for (const field of allowedFields) {
@@ -9465,6 +9530,12 @@ export async function registerRoutes(
             const validDestinations = ['display_bar', 'kitchen_trolley', 'freezer', 'refrigerator'];
             if (!validDestinations.includes(req.body[field])) {
               return res.status(400).json({ error: "الوجهة غير صالحة" });
+            }
+            updateData[field] = req.body[field];
+          } else if (field === 'status') {
+            const validStatuses = ['finished', 'in_progress'];
+            if (!validStatuses.includes(req.body[field])) {
+              return res.status(400).json({ error: "الحالة غير صالحة" });
             }
             updateData[field] = req.body[field];
           } else {
