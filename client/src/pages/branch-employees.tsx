@@ -2218,15 +2218,15 @@ export default function BranchEmployeesPage() {
                   }}
                   data-testid="btn-clear-advanced"
                 >
-                  مسح الفلاتر المتقدمة
+                  {isRTL ? "مسح الفلاتر المتقدمة" : "Clear Advanced Filters"}
                 </Button>
               </div>
             </PopoverContent>
           </Popover>
           {hasActiveFilters && (
             <Button variant="ghost" onClick={resetFilters} className="text-red-600 h-11 sm:h-9" data-testid="btn-reset-all-filters">
-              <X className="w-4 h-4 ml-1" />
-              مسح جميع الفلاتر
+              <X className={`w-4 h-4 ${isRTL ? 'ml-1' : 'mr-1'}`} />
+              {isRTL ? "مسح جميع الفلاتر" : "Clear All Filters"}
             </Button>
           )}
         </div>
@@ -2234,8 +2234,8 @@ export default function BranchEmployeesPage() {
         <div ref={printRef}>
         <Card>
           <CardHeader>
-            <CardTitle>قائمة الموظفين</CardTitle>
-            <CardDescription>عرض {formatNumber(filteredEmployees.length)} موظف</CardDescription>
+            <CardTitle>{isRTL ? "قائمة الموظفين" : "Employee List"}</CardTitle>
+            <CardDescription>{isRTL ? `عرض ${formatNumber(filteredEmployees.length)} موظف` : `Showing ${formatNumber(filteredEmployees.length)} employees`}</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -2245,21 +2245,21 @@ export default function BranchEmployeesPage() {
             ) : filteredEmployees.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>لا يوجد موظفين</p>
+                <p>{t("branchEmployees.noEmployees")}</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-right">الرقم الوظيفي</TableHead>
-                    <TableHead className="text-right">الاسم</TableHead>
-                    <TableHead className="text-right">الفرع</TableHead>
-                    <TableHead className="text-right">الوظيفة</TableHead>
-                    <TableHead className="text-right">الجنسية</TableHead>
-                    <TableHead className="text-right">الراتب الإجمالي</TableHead>
-                    <TableHead className="text-right">الشهادة الصحية</TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
-                    <TableHead className="text-right">الإجراءات</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.jobTitle")}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.nationality")}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.totalPackage")}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الشهادة الصحية" : "Health Cert."}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.status")}</TableHead>
+                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2280,10 +2280,10 @@ export default function BranchEmployeesPage() {
                       <TableCell>{getStatusBadge(emp.status)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => handleViewDetails(emp)} data-testid={`button-view-${emp.id}`} title="عرض التفاصيل">
+                          <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => handleViewDetails(emp)} data-testid={`button-view-${emp.id}`} title={t("branchEmployees.view")}>
                             <Eye className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => handleEdit(emp)} data-testid={`button-edit-${emp.id}`} title="تعديل">
+                          <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => handleEdit(emp)} data-testid={`button-edit-${emp.id}`} title={t("branchEmployees.edit")}>
                             <Edit className="w-4 h-4" />
                           </Button>
                           {user?.role === "admin" && (
@@ -2293,7 +2293,7 @@ export default function BranchEmployeesPage() {
                               className="text-red-600 hover:text-red-700 h-11 w-11 sm:h-8 sm:w-8"
                               onClick={() => handleDeleteClick(emp)}
                               data-testid={`button-delete-${emp.id}`}
-                              title="حذف (مدير النظام فقط)"
+                              title={t("branchEmployees.delete")}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -2308,7 +2308,10 @@ export default function BranchEmployeesPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">
                 <div className="text-sm text-gray-500">
-                  عرض {formatNumber(startIndex + 1)} - {formatNumber(Math.min(startIndex + pageSize, filteredEmployees.length))} من {formatNumber(filteredEmployees.length)}
+                  {isRTL 
+                    ? `عرض ${formatNumber(startIndex + 1)} - ${formatNumber(Math.min(startIndex + pageSize, filteredEmployees.length))} من ${formatNumber(filteredEmployees.length)}`
+                    : `Showing ${formatNumber(startIndex + 1)} - ${formatNumber(Math.min(startIndex + pageSize, filteredEmployees.length))} of ${formatNumber(filteredEmployees.length)}`
+                  }
                 </div>
                 <div className="flex items-center gap-2">
                   <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
@@ -2332,7 +2335,7 @@ export default function BranchEmployeesPage() {
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm">صفحة {formatNumber(currentPage)} من {formatNumber(totalPages)}</span>
+                  <span className="text-sm">{isRTL ? `صفحة ${formatNumber(currentPage)} من ${formatNumber(totalPages)}` : `Page ${formatNumber(currentPage)} of ${formatNumber(totalPages)}`}</span>
                   <Button
                     variant="outline"
                     size="icon"
@@ -2356,7 +2359,7 @@ export default function BranchEmployeesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Globe className="w-5 h-5" />
-                  توزيع الجنسيات
+                  {isRTL ? "توزيع الجنسيات" : "Nationality Distribution"}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -2374,7 +2377,7 @@ export default function BranchEmployeesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Briefcase className="w-5 h-5" />
-                  توزيع الوظائف
+                  {isRTL ? "توزيع الوظائف" : "Job Title Distribution"}
                 </CardTitle>
               </CardHeader>
               <CardContent>
