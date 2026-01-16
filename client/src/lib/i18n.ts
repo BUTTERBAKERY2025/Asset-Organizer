@@ -6,6 +6,9 @@ import enPlatformHome from '@/locales/en/platform-home.json';
 
 const savedLanguage = localStorage.getItem('language') || 'ar';
 
+document.documentElement.dir = savedLanguage === 'ar' ? 'rtl' : 'ltr';
+document.documentElement.lang = savedLanguage;
+
 i18n
   .use(initReactI18next)
   .init({
