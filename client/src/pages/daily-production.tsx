@@ -1204,7 +1204,7 @@ export default function DailyProductionPage() {
                       </div>
                       {showCarryOverPanel && (
                         <div className="space-y-2">
-                          {unfinishedBatches.slice(0, 5).map((batch) => (
+                          {(unfinishedBatches || []).slice(0, 5).map((batch) => (
                             <div
                               key={batch.id}
                               className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-200"
@@ -1240,9 +1240,9 @@ export default function DailyProductionPage() {
                               </div>
                             </div>
                           ))}
-                          {unfinishedBatches.length > 5 && (
+                          {(unfinishedBatches?.length || 0) > 5 && (
                             <p className="text-xs text-muted-foreground text-center">
-                              +{unfinishedBatches.length - 5} دفعة أخرى
+                              +{(unfinishedBatches?.length || 0) - 5} دفعة أخرى
                             </p>
                           )}
                         </div>
