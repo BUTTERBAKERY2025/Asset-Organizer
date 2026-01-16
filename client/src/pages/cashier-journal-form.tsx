@@ -1767,67 +1767,62 @@ export default function CashierJournalFormPage() {
               </CardHeader>
               
               {showReturns && (
-                <CardContent className="space-y-2 pt-2 px-3 pb-3">
-                  {/* Compact Row: Amount + Payment Method side by side */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-red-700 font-medium">مبلغ المرتجع (ر.س)</Label>
+                <CardContent className="space-y-1.5 pt-1.5 px-2 pb-2">
+                  {/* Ultra Compact: All 4 fields in one row on larger screens */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <div className="space-y-0.5">
+                      <Label className="text-[10px] text-red-700 font-medium">المبلغ</Label>
                       <Input
                         type="number"
                         value={returnData.returnAmount || ""}
                         onChange={(e) => setReturnData(prev => ({ ...prev, returnAmount: parseNumericValue(e.target.value) }))}
                         onWheel={preventWheelChange}
-                        className="h-10 border-red-200 text-base font-bold text-center"
+                        className="h-7 border-red-200 text-xs font-bold text-center"
                         placeholder="0.00"
                         disabled={isReadOnly}
                         data-testid="input-return-amount"
                       />
-                      <p className="text-[10px] text-red-500">يُخصم من إجمالي المبيعات</p>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-red-700 font-medium">طريقة الاسترداد</Label>
+                    <div className="space-y-0.5">
+                      <Label className="text-[10px] text-red-700 font-medium">الاسترداد</Label>
                       <Select
                         value={returnData.returnPaymentMethod}
                         onValueChange={(v) => setReturnData(prev => ({ ...prev, returnPaymentMethod: v }))}
                         disabled={isReadOnly}
                       >
-                        <SelectTrigger className="h-10 border-red-200 text-sm" data-testid="select-return-method">
+                        <SelectTrigger className="h-7 border-red-200 text-[10px]" data-testid="select-return-method">
                           <SelectValue placeholder="اختر" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cash">نقداً</SelectItem>
-                          <SelectItem value="mada">مدى</SelectItem>
-                          <SelectItem value="visa">فيزا</SelectItem>
-                          <SelectItem value="mastercard">ماستركارد</SelectItem>
-                          <SelectItem value="amex">أمريكان إكسبريس</SelectItem>
-                          <SelectItem value="card_other">بطاقة أخرى</SelectItem>
+                          <SelectItem value="cash" className="text-xs">نقداً</SelectItem>
+                          <SelectItem value="mada" className="text-xs">مدى</SelectItem>
+                          <SelectItem value="visa" className="text-xs">فيزا</SelectItem>
+                          <SelectItem value="mastercard" className="text-xs">ماستركارد</SelectItem>
+                          <SelectItem value="amex" className="text-xs">أمريكان إكسبريس</SelectItem>
+                          <SelectItem value="card_other" className="text-xs">بطاقة أخرى</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-[10px] text-gray-500">طريقة الدفع الأصلية</p>
                     </div>
-                  </div>
-                  {/* Compact Row: Reference + Reason (smaller) */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-gray-500">رقم الفاتورة (اختياري)</Label>
+                    <div className="space-y-0.5">
+                      <Label className="text-[10px] text-gray-500">الفاتورة</Label>
                       <Input
                         type="text"
                         value={returnData.returnReference || ""}
                         onChange={(e) => setReturnData(prev => ({ ...prev, returnReference: e.target.value }))}
-                        className="h-8 text-xs"
-                        placeholder="INV-2024-001234"
+                        className="h-7 text-[10px]"
+                        placeholder="INV-001234"
                         disabled={isReadOnly}
                         data-testid="input-return-reference"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-gray-500">السبب (اختياري)</Label>
+                    <div className="space-y-0.5">
+                      <Label className="text-[10px] text-gray-500">السبب</Label>
                       <Input
                         type="text"
                         value={returnData.returnReason || ""}
                         onChange={(e) => setReturnData(prev => ({ ...prev, returnReason: e.target.value }))}
-                        className="h-8 text-xs"
-                        placeholder="المنتج غير مطابق"
+                        className="h-7 text-[10px]"
+                        placeholder="غير مطابق"
                         disabled={isReadOnly}
                         data-testid="input-return-reason"
                       />
@@ -1836,17 +1831,16 @@ export default function CashierJournalFormPage() {
                   
                   {/* Compact Impact Summary */}
                   {returnData.returnAmount > 0 && (
-                    <div className="flex items-center gap-2 text-xs bg-red-100 border border-red-200 rounded px-2 py-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span className="text-gray-600">{formData.totalSales.toFixed(2)} ر.س</span>
+                    <div className="flex items-center gap-1.5 text-[10px] bg-red-100 border border-red-200 rounded px-1.5 py-1">
+                      <AlertCircle className="w-3 h-3 text-red-600 shrink-0" />
+                      <div className="flex flex-wrap items-center gap-0.5">
+                        <span className="text-gray-600">{formData.totalSales.toFixed(2)}</span>
                         <span>-</span>
-                        <span className="text-red-600 font-medium">{returnData.returnAmount.toFixed(2)} ر.س</span>
+                        <span className="text-red-600 font-medium">{returnData.returnAmount.toFixed(2)}</span>
                         <span>=</span>
                         <span className="font-bold text-red-700">{getNetSales().toFixed(2)} ر.س</span>
-                        <span className="text-gray-500">(صافي)</span>
                         {returnData.returnPaymentMethod === "cash" && (
-                          <span className="text-red-600 bg-red-200 px-1 rounded text-[10px]">⚠️ يُخصم من النقد</span>
+                          <span className="text-red-600 bg-red-200 px-0.5 rounded text-[9px]">⚠️ نقد</span>
                         )}
                       </div>
                     </div>
