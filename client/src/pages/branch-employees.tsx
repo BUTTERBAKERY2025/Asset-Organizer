@@ -73,18 +73,32 @@ import { CheckCircle, XCircle, ArrowRight, History, TrendingUp } from "lucide-re
 
 // تمت إزالة JOB_TITLES و NATIONALITIES - الآن يتم استخدام البيانات من قاعدة البيانات
 
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS_AR = [
   { value: "active", label: "نشط" },
   { value: "inactive", label: "غير نشط" },
   { value: "terminated", label: "منتهي" },
   { value: "on_leave", label: "في إجازة" },
 ];
 
-const HEALTH_CERT_OPTIONS = [
+const STATUS_OPTIONS_EN = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "terminated", label: "Terminated" },
+  { value: "on_leave", label: "On Leave" },
+];
+
+const HEALTH_CERT_OPTIONS_AR = [
   { value: "none", label: "لا يوجد" },
   { value: "valid", label: "ساري" },
   { value: "expired", label: "منتهي" },
   { value: "pending", label: "قيد التجديد" },
+];
+
+const HEALTH_CERT_OPTIONS_EN = [
+  { value: "none", label: "None" },
+  { value: "valid", label: "Valid" },
+  { value: "expired", label: "Expired" },
+  { value: "pending", label: "Pending" },
 ];
 
 const employeeFormSchema = z.object({
@@ -119,41 +133,56 @@ const employeeFormSchema = z.object({
 
 type EmployeeFormData = z.infer<typeof employeeFormSchema>;
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, isRTL: boolean = true) {
   const variants: Record<string, string> = {
     active: "bg-green-100 text-green-800",
     inactive: "bg-gray-100 text-gray-800",
     terminated: "bg-red-100 text-red-800",
     on_leave: "bg-yellow-100 text-yellow-800",
   };
-  const labels: Record<string, string> = {
+  const labelsAr: Record<string, string> = {
     active: "نشط",
     inactive: "غير نشط",
     terminated: "منتهي",
     on_leave: "في إجازة",
   };
+  const labelsEn: Record<string, string> = {
+    active: "Active",
+    inactive: "Inactive",
+    terminated: "Terminated",
+    on_leave: "On Leave",
+  };
+  const labels = isRTL ? labelsAr : labelsEn;
   return <Badge className={variants[status] || variants.active}>{labels[status] || status}</Badge>;
 }
 
-function getHealthBadge(status: string) {
+function getHealthBadge(status: string, isRTL: boolean = true) {
   const variants: Record<string, string> = {
     valid: "bg-green-100 text-green-800",
     expired: "bg-red-100 text-red-800",
     pending: "bg-yellow-100 text-yellow-800",
     none: "bg-gray-100 text-gray-800",
   };
-  const labels: Record<string, string> = {
+  const labelsAr: Record<string, string> = {
     valid: "ساري",
     expired: "منتهي",
     pending: "قيد التجديد",
     none: "لا يوجد",
   };
+  const labelsEn: Record<string, string> = {
+    valid: "Valid",
+    expired: "Expired",
+    pending: "Pending",
+    none: "None",
+  };
+  const labels = isRTL ? labelsAr : labelsEn;
   return <Badge className={variants[status] || variants.none}>{labels[status] || status}</Badge>;
 }
 
-function formatCurrency(value: number | null | undefined): string {
+function formatCurrency(value: number | null | undefined, isRTL: boolean = true): string {
   if (value == null) return "--";
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value) + " ريال";
+  const suffix = isRTL ? " ريال" : " SAR";
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value) + suffix;
 }
 
 function formatNumber(value: number | null | undefined): string {
@@ -161,27 +190,41 @@ function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat('en-US').format(value);
 }
 
-const getHealthLabel = (status: string): string => {
-  const labels: Record<string, string> = {
+const getHealthLabel = (status: string, isRTL: boolean = true): string => {
+  const labelsAr: Record<string, string> = {
     valid: "ساري",
     expired: "منتهي",
     pending: "قيد التجديد",
     none: "لا يوجد",
   };
+  const labelsEn: Record<string, string> = {
+    valid: "Valid",
+    expired: "Expired",
+    pending: "Pending",
+    none: "None",
+  };
+  const labels = isRTL ? labelsAr : labelsEn;
   return labels[status] || status;
 };
 
-const getStatusLabel = (status: string): string => {
-  const labels: Record<string, string> = {
+const getStatusLabel = (status: string, isRTL: boolean = true): string => {
+  const labelsAr: Record<string, string> = {
     active: "نشط",
     inactive: "غير نشط",
     terminated: "منتهي",
     on_leave: "في إجازة",
   };
+  const labelsEn: Record<string, string> = {
+    active: "Active",
+    inactive: "Inactive",
+    terminated: "Terminated",
+    on_leave: "On Leave",
+  };
+  const labels = isRTL ? labelsAr : labelsEn;
   return labels[status] || status;
 };
 
-const TRANSFER_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+const TRANSFER_STATUS_LABELS_AR: Record<string, { label: string; color: string }> = {
   pending: { label: "في انتظار موافقة مدير الفرع المصدر", color: "bg-yellow-100 text-yellow-800" },
   source_approved: { label: "موافق عليه من الفرع المصدر", color: "bg-blue-100 text-blue-800" },
   dest_approved: { label: "موافق عليه من الفرع الوجهة", color: "bg-indigo-100 text-indigo-800" },
@@ -191,7 +234,20 @@ const TRANSFER_STATUS_LABELS: Record<string, { label: string; color: string }> =
   cancelled: { label: "ملغي", color: "bg-gray-100 text-gray-800" },
 };
 
+const TRANSFER_STATUS_LABELS_EN: Record<string, { label: string; color: string }> = {
+  pending: { label: "Pending Source Manager Approval", color: "bg-yellow-100 text-yellow-800" },
+  source_approved: { label: "Approved by Source Branch", color: "bg-blue-100 text-blue-800" },
+  dest_approved: { label: "Approved by Destination Branch", color: "bg-indigo-100 text-indigo-800" },
+  hr_approved: { label: "Approved by HR", color: "bg-green-100 text-green-800" },
+  completed: { label: "Completed", color: "bg-green-100 text-green-800" },
+  rejected: { label: "Rejected", color: "bg-red-100 text-red-800" },
+  cancelled: { label: "Cancelled", color: "bg-gray-100 text-gray-800" },
+};
+
 function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmployee[]; branches: Branch[] }) {
+  const { t, i18n } = useTranslation("hr");
+  const isRTL = i18n.language === "ar";
+  const TRANSFER_STATUS_LABELS = isRTL ? TRANSFER_STATUS_LABELS_AR : TRANSFER_STATUS_LABELS_EN;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -226,7 +282,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "فشل في إنشاء طلب النقل");
+        throw new Error(err.error || (isRTL ? "فشل في إنشاء طلب النقل" : "Failed to create transfer request"));
       }
       return res.json();
     },
@@ -234,10 +290,10 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
       queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
       setIsCreateDialogOpen(false);
       resetForm();
-      toast({ title: "تم إنشاء طلب النقل بنجاح" });
+      toast({ title: isRTL ? "تم إنشاء طلب النقل بنجاح" : "Transfer request created successfully" });
     },
     onError: (error: Error) => {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      toast({ title: isRTL ? "خطأ" : "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -248,13 +304,13 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approverRole, notes }),
       });
-      if (!res.ok) throw new Error("فشل في الموافقة");
+      if (!res.ok) throw new Error(isRTL ? "فشل في الموافقة" : "Failed to approve");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
       setIsDetailsDialogOpen(false);
-      toast({ title: "تمت الموافقة بنجاح" });
+      toast({ title: isRTL ? "تمت الموافقة بنجاح" : "Approved successfully" });
     },
   });
 
@@ -265,13 +321,13 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approverRole, rejectionReason }),
       });
-      if (!res.ok) throw new Error("فشل في الرفض");
+      if (!res.ok) throw new Error(isRTL ? "فشل في الرفض" : "Failed to reject");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
       setIsDetailsDialogOpen(false);
-      toast({ title: "تم رفض الطلب" });
+      toast({ title: isRTL ? "تم رفض الطلب" : "Request rejected" });
     },
   });
 
@@ -281,14 +337,14 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (!res.ok) throw new Error("فشل في إتمام النقل");
+      if (!res.ok) throw new Error(isRTL ? "فشل في إتمام النقل" : "Failed to complete transfer");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
       setIsDetailsDialogOpen(false);
-      toast({ title: "تم تنفيذ النقل بنجاح" });
+      toast({ title: isRTL ? "تم تنفيذ النقل بنجاح" : "Transfer completed successfully" });
     },
   });
 
@@ -313,7 +369,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
 
   const getEmployeeName = (employeeId: number) => {
     const emp = employees.find(e => e.id === employeeId);
-    return emp?.employeeName || "غير معروف";
+    return emp?.employeeName || (isRTL ? "غير معروف" : "Unknown");
   };
 
   const getBranchName = (branchId: string) => {
@@ -327,7 +383,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
 
   const handleCreateTransfer = () => {
     if (!selectedEmployee || !destinationBranch || !effectiveDate || !reason) {
-      toast({ title: "خطأ", description: "جميع الحقول المطلوبة يجب أن تكون موجودة", variant: "destructive" });
+      toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "جميع الحقول المطلوبة يجب أن تكون موجودة" : "All required fields must be filled", variant: "destructive" });
       return;
     }
     
@@ -363,14 +419,14 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-yellow-50 border-yellow-200">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-yellow-600">معلقة</p>
+                <p className="text-sm text-yellow-600">{isRTL ? "معلقة" : "Pending"}</p>
                 <p className="text-2xl font-bold text-yellow-800">{stats.pending}</p>
               </div>
               <Clock className="w-8 h-8 text-yellow-500" />
@@ -381,7 +437,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-green-600">معتمدة</p>
+                <p className="text-sm text-green-600">{isRTL ? "معتمدة" : "Approved"}</p>
                 <p className="text-2xl font-bold text-green-800">{stats.approved}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-500" />
@@ -392,7 +448,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-blue-600">مكتملة</p>
+                <p className="text-sm text-blue-600">{isRTL ? "مكتملة" : "Completed"}</p>
                 <p className="text-2xl font-bold text-blue-800">{stats.completed}</p>
               </div>
               <ArrowRight className="w-8 h-8 text-blue-500" />
@@ -403,7 +459,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-red-600">مرفوضة</p>
+                <p className="text-sm text-red-600">{isRTL ? "مرفوضة" : "Rejected"}</p>
                 <p className="text-2xl font-bold text-red-800">{stats.rejected}</p>
               </div>
               <XCircle className="w-8 h-8 text-red-500" />
@@ -418,26 +474,26 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Network className="w-5 h-5" />
-              طلبات نقل الموظفين
+              {isRTL ? "طلبات نقل الموظفين" : "Employee Transfer Requests"}
             </CardTitle>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-amber-600 hover:bg-amber-700" data-testid="btn-create-transfer">
                   <Plus className="w-4 h-4 ml-2" />
-                  طلب نقل جديد
+                  {isRTL ? "طلب نقل جديد" : "New Transfer Request"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md" dir="rtl">
+              <DialogContent className="max-w-md" dir={isRTL ? "rtl" : "ltr"}>
                 <DialogHeader>
-                  <DialogTitle>إنشاء طلب نقل موظف</DialogTitle>
-                  <DialogDescription>اختر الموظف والفرع الجديد ومعلومات النقل</DialogDescription>
+                  <DialogTitle>{isRTL ? "إنشاء طلب نقل موظف" : "Create Employee Transfer Request"}</DialogTitle>
+                  <DialogDescription>{isRTL ? "اختر الموظف والفرع الجديد ومعلومات النقل" : "Select the employee, new branch, and transfer details"}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>الموظف * (ابحث بالاسم أو رقم الموظف)</Label>
+                    <Label>{isRTL ? "الموظف * (ابحث بالاسم أو رقم الموظف)" : "Employee * (search by name or number)"}</Label>
                     <div className="relative">
                       <div className="relative">
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
                         <Input
                           value={selectedEmployee ? `${getSelectedEmployee()?.employeeName} (${getSelectedEmployee()?.employeeNumber || ""})` : employeeSearchQuery}
                           onChange={(e) => {
@@ -446,8 +502,8 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                             setIsEmployeeDropdownOpen(true);
                           }}
                           onFocus={() => setIsEmployeeDropdownOpen(true)}
-                          placeholder="ابحث باسم الموظف أو رقمه..."
-                          className="pr-10"
+                          placeholder={isRTL ? "ابحث باسم الموظف أو رقمه..." : "Search by name or number..."}
+                          className={isRTL ? "pr-10" : "pl-10"}
                           data-testid="input-employee-search"
                         />
                         {selectedEmployee && (
@@ -469,7 +525,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                         <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
                           {filteredEmployees.length === 0 ? (
                             <div className="p-3 text-center text-gray-500 text-sm">
-                              لا يوجد موظفين مطابقين
+                              {isRTL ? "لا يوجد موظفين مطابقين" : "No matching employees"}
                             </div>
                           ) : (
                             filteredEmployees.slice(0, 20).map(emp => (
@@ -498,7 +554,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                           )}
                           {filteredEmployees.length > 20 && (
                             <div className="p-2 text-center text-gray-400 text-xs bg-gray-50">
-                              يوجد {filteredEmployees.length - 20} موظف آخر - حدد البحث للمزيد
+                              {isRTL ? `يوجد ${filteredEmployees.length - 20} موظف آخر - حدد البحث للمزيد` : `${filteredEmployees.length - 20} more employees - refine search`}
                             </div>
                           )}
                         </div>
@@ -510,22 +566,22 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                     <div className="p-3 bg-amber-50 rounded-lg text-sm border border-amber-200">
                       <div className="flex items-center gap-2 mb-2">
                         <UserCheck className="w-4 h-4 text-amber-600" />
-                        <span className="font-medium text-amber-800">الموظف المختار</span>
+                        <span className="font-medium text-amber-800">{isRTL ? "الموظف المختار" : "Selected Employee"}</span>
                       </div>
-                      <p><strong>الاسم:</strong> {getSelectedEmployee()?.employeeName}</p>
+                      <p><strong>{isRTL ? "الاسم:" : "Name:"}</strong> {getSelectedEmployee()?.employeeName}</p>
                       {getSelectedEmployee()?.employeeNumber && (
-                        <p><strong>رقم الموظف:</strong> {getSelectedEmployee()?.employeeNumber}</p>
+                        <p><strong>{isRTL ? "رقم الموظف:" : "Employee #:"}</strong> {getSelectedEmployee()?.employeeNumber}</p>
                       )}
-                      <p><strong>الفرع الحالي:</strong> {getBranchName(getSelectedEmployee()?.branchId || "")}</p>
-                      <p><strong>الوظيفة:</strong> {getSelectedEmployee()?.jobTitle}</p>
+                      <p><strong>{isRTL ? "الفرع الحالي:" : "Current Branch:"}</strong> {getBranchName(getSelectedEmployee()?.branchId || "")}</p>
+                      <p><strong>{isRTL ? "الوظيفة:" : "Job Title:"}</strong> {getSelectedEmployee()?.jobTitle}</p>
                     </div>
                   )}
                   
                   <div className="space-y-2">
-                    <Label>الفرع الجديد *</Label>
+                    <Label>{isRTL ? "الفرع الجديد *" : "New Branch *"}</Label>
                     <Select value={destinationBranch} onValueChange={setDestinationBranch}>
                       <SelectTrigger data-testid="select-destination">
-                        <SelectValue placeholder="اختر الفرع الجديد" />
+                        <SelectValue placeholder={isRTL ? "اختر الفرع الجديد" : "Select new branch"} />
                       </SelectTrigger>
                       <SelectContent>
                         {branches
@@ -538,7 +594,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>تاريخ النقل المطلوب *</Label>
+                    <Label>{isRTL ? "تاريخ النقل المطلوب *" : "Requested Transfer Date *"}</Label>
                     <Input 
                       type="date" 
                       value={effectiveDate} 
@@ -548,27 +604,27 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>سبب النقل *</Label>
+                    <Label>{isRTL ? "سبب النقل *" : "Transfer Reason *"}</Label>
                     <Textarea 
                       value={reason} 
                       onChange={(e) => setReason(e.target.value)}
-                      placeholder="اشرح سبب طلب النقل"
+                      placeholder={isRTL ? "اشرح سبب طلب النقل" : "Explain the reason for transfer"}
                       data-testid="input-reason"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>ملاحظات إضافية</Label>
+                    <Label>{isRTL ? "ملاحظات إضافية" : "Additional Notes"}</Label>
                     <Textarea 
                       value={notes} 
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="أي ملاحظات إضافية (اختياري)"
+                      placeholder={isRTL ? "أي ملاحظات إضافية (اختياري)" : "Any additional notes (optional)"}
                       data-testid="input-notes"
                     />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>إلغاء</Button>
+                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>{isRTL ? "إلغاء" : "Cancel"}</Button>
                   <Button 
                     onClick={handleCreateTransfer}
                     className="bg-amber-600 hover:bg-amber-700"
@@ -576,7 +632,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                     data-testid="btn-submit-transfer"
                   >
                     {createMutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
-                    إرسال الطلب
+                    {isRTL ? "إرسال الطلب" : "Submit Request"}
                   </Button>
                 </div>
               </DialogContent>
@@ -585,16 +641,16 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
           <div className="flex items-center gap-4 mt-4">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[200px]" data-testid="select-status-filter">
-                <SelectValue placeholder="فلترة حسب الحالة" />
+                <SelectValue placeholder={isRTL ? "فلترة حسب الحالة" : "Filter by Status"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع الحالات</SelectItem>
-                <SelectItem value="pending">معلق</SelectItem>
-                <SelectItem value="source_approved">موافق من المصدر</SelectItem>
-                <SelectItem value="dest_approved">موافق من الوجهة</SelectItem>
-                <SelectItem value="hr_approved">معتمد</SelectItem>
-                <SelectItem value="completed">مكتمل</SelectItem>
-                <SelectItem value="rejected">مرفوض</SelectItem>
+                <SelectItem value="all">{isRTL ? "جميع الحالات" : "All Statuses"}</SelectItem>
+                <SelectItem value="pending">{isRTL ? "معلق" : "Pending"}</SelectItem>
+                <SelectItem value="source_approved">{isRTL ? "موافق من المصدر" : "Source Approved"}</SelectItem>
+                <SelectItem value="dest_approved">{isRTL ? "موافق من الوجهة" : "Dest. Approved"}</SelectItem>
+                <SelectItem value="hr_approved">{isRTL ? "معتمد" : "HR Approved"}</SelectItem>
+                <SelectItem value="completed">{isRTL ? "مكتمل" : "Completed"}</SelectItem>
+                <SelectItem value="rejected">{isRTL ? "مرفوض" : "Rejected"}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -607,18 +663,18 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
           ) : filteredTransfers.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Network className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>لا توجد طلبات نقل</p>
+              <p>{isRTL ? "لا توجد طلبات نقل" : "No transfer requests"}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-right">الموظف</TableHead>
-                  <TableHead className="text-right">من</TableHead>
-                  <TableHead className="text-right">إلى</TableHead>
-                  <TableHead className="text-right">تاريخ النقل</TableHead>
-                  <TableHead className="text-right">الحالة</TableHead>
-                  <TableHead className="text-right">إجراءات</TableHead>
+                  <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الموظف" : "Employee"}</TableHead>
+                  <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "من" : "From"}</TableHead>
+                  <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "إلى" : "To"}</TableHead>
+                  <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "تاريخ النقل" : "Transfer Date"}</TableHead>
+                  <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الحالة" : "Status"}</TableHead>
+                  <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "إجراءات" : "Actions"}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -656,56 +712,56 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
 
       {/* Transfer Details Dialog */}
       <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-        <DialogContent className="max-w-lg" dir="rtl">
+        <DialogContent className="max-w-lg" dir={isRTL ? "rtl" : "ltr"}>
           <DialogHeader>
-            <DialogTitle>تفاصيل طلب النقل</DialogTitle>
+            <DialogTitle>{isRTL ? "تفاصيل طلب النقل" : "Transfer Request Details"}</DialogTitle>
           </DialogHeader>
           {viewingTransfer && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-gray-500">الموظف</p>
+                  <p className="text-gray-500">{isRTL ? "الموظف" : "Employee"}</p>
                   <p className="font-medium">{getEmployeeName(viewingTransfer.employeeId)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">الحالة</p>
+                  <p className="text-gray-500">{isRTL ? "الحالة" : "Status"}</p>
                   <Badge className={TRANSFER_STATUS_LABELS[viewingTransfer.status]?.color}>
                     {TRANSFER_STATUS_LABELS[viewingTransfer.status]?.label}
                   </Badge>
                 </div>
                 <div>
-                  <p className="text-gray-500">من فرع</p>
+                  <p className="text-gray-500">{isRTL ? "من فرع" : "From Branch"}</p>
                   <p className="font-medium">{getBranchName(viewingTransfer.sourceBranchId)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">إلى فرع</p>
+                  <p className="text-gray-500">{isRTL ? "إلى فرع" : "To Branch"}</p>
                   <p className="font-medium">{getBranchName(viewingTransfer.destinationBranchId)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">تاريخ النقل</p>
+                  <p className="text-gray-500">{isRTL ? "تاريخ النقل" : "Transfer Date"}</p>
                   <p className="font-medium">{viewingTransfer.effectiveDate}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">تاريخ الطلب</p>
-                  <p className="font-medium">{new Date(viewingTransfer.requestedAt).toLocaleDateString("ar-SA")}</p>
+                  <p className="text-gray-500">{isRTL ? "تاريخ الطلب" : "Request Date"}</p>
+                  <p className="font-medium">{new Date(viewingTransfer.requestedAt).toLocaleDateString(isRTL ? "ar-SA" : "en-US")}</p>
                 </div>
               </div>
               
               <div>
-                <p className="text-gray-500 text-sm">سبب النقل</p>
+                <p className="text-gray-500 text-sm">{isRTL ? "سبب النقل" : "Transfer Reason"}</p>
                 <p className="font-medium bg-gray-50 p-2 rounded">{viewingTransfer.reason}</p>
               </div>
               
               {viewingTransfer.notes && (
                 <div>
-                  <p className="text-gray-500 text-sm">ملاحظات</p>
+                  <p className="text-gray-500 text-sm">{isRTL ? "ملاحظات" : "Notes"}</p>
                   <p className="bg-gray-50 p-2 rounded">{viewingTransfer.notes}</p>
                 </div>
               )}
               
               {viewingTransfer.rejectionReason && (
                 <div className="p-3 bg-red-50 rounded-lg">
-                  <p className="text-red-600 text-sm font-medium">سبب الرفض</p>
+                  <p className="text-red-600 text-sm font-medium">{isRTL ? "سبب الرفض" : "Rejection Reason"}</p>
                   <p className="text-red-800">{viewingTransfer.rejectionReason}</p>
                 </div>
               )}
@@ -713,13 +769,13 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
               {/* Approval Actions */}
               {["pending", "source_approved", "dest_approved"].includes(viewingTransfer.status) && (
                 <div className="border-t pt-4 space-y-3">
-                  <p className="font-medium">إجراءات الموافقة</p>
+                  <p className="font-medium">{isRTL ? "إجراءات الموافقة" : "Approval Actions"}</p>
                   <div className="space-y-2">
-                    <Label>ملاحظات الموافقة (اختياري)</Label>
+                    <Label>{isRTL ? "ملاحظات الموافقة (اختياري)" : "Approval Notes (optional)"}</Label>
                     <Input 
                       value={approvalNotes} 
                       onChange={(e) => setApprovalNotes(e.target.value)}
-                      placeholder="أدخل ملاحظات الموافقة"
+                      placeholder={isRTL ? "أدخل ملاحظات الموافقة" : "Enter approval notes"}
                     />
                   </div>
                   <div className="flex gap-2">
@@ -733,27 +789,27 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                       disabled={approveMutation.isPending}
                       data-testid="btn-approve"
                     >
-                      <CheckCircle className="w-4 h-4 ml-2" />
-                      موافقة
+                      <CheckCircle className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                      {isRTL ? "موافقة" : "Approve"}
                     </Button>
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button variant="destructive" data-testid="btn-reject">
-                          <XCircle className="w-4 h-4 ml-2" />
-                          رفض
+                          <XCircle className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                          {isRTL ? "رفض" : "Reject"}
                         </Button>
                       </DialogTrigger>
-                      <DialogContent dir="rtl">
+                      <DialogContent dir={isRTL ? "rtl" : "ltr"}>
                         <DialogHeader>
-                          <DialogTitle>رفض طلب النقل</DialogTitle>
+                          <DialogTitle>{isRTL ? "رفض طلب النقل" : "Reject Transfer Request"}</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                           <div className="space-y-2">
-                            <Label>سبب الرفض *</Label>
+                            <Label>{isRTL ? "سبب الرفض *" : "Rejection Reason *"}</Label>
                             <Textarea 
                               value={rejectionReason}
                               onChange={(e) => setRejectionReason(e.target.value)}
-                              placeholder="أدخل سبب رفض الطلب"
+                              placeholder={isRTL ? "أدخل سبب رفض الطلب" : "Enter rejection reason"}
                             />
                           </div>
                           <Button 
@@ -766,7 +822,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                             })}
                             disabled={!rejectionReason || rejectMutation.isPending}
                           >
-                            تأكيد الرفض
+                            {isRTL ? "تأكيد الرفض" : "Confirm Rejection"}
                           </Button>
                         </div>
                       </DialogContent>
@@ -784,9 +840,9 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                     disabled={completeMutation.isPending}
                     data-testid="btn-complete"
                   >
-                    {completeMutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                    تنفيذ النقل
+                    {completeMutation.isPending && <Loader2 className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} animate-spin`} />}
+                    <ArrowRight className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                    {isRTL ? "تنفيذ النقل" : "Execute Transfer"}
                   </Button>
                 </div>
               )}
@@ -1721,7 +1777,7 @@ export default function BranchEmployeesPage() {
                             <SelectValue placeholder="اختر الحالة" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {STATUS_OPTIONS.map((opt) => (
+                            {(isRTL ? STATUS_OPTIONS_AR : STATUS_OPTIONS_EN).map((opt) => (
                               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                             ))}
                           </SelectContent>
@@ -1900,7 +1956,7 @@ export default function BranchEmployeesPage() {
                             <SelectValue placeholder="اختر الحالة" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {HEALTH_CERT_OPTIONS.map((opt) => (
+                            {(isRTL ? HEALTH_CERT_OPTIONS_AR : HEALTH_CERT_OPTIONS_EN).map((opt) => (
                               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                             ))}
                           </SelectContent>
@@ -2054,7 +2110,7 @@ export default function BranchEmployeesPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
-                  <p className="text-2xl font-bold" data-testid="text-total-salaries">{formatCurrency(stats?.totalSalaries)}</p>
+                  <p className="text-2xl font-bold" data-testid="text-total-salaries">{formatCurrency(stats?.totalSalaries, isRTL)}</p>
                 </div>
               </div>
             </CardContent>
@@ -2275,9 +2331,9 @@ export default function BranchEmployeesPage() {
                       <TableCell>{getBranchName(emp.branchId)}</TableCell>
                       <TableCell>{emp.jobTitle}</TableCell>
                       <TableCell>{emp.nationality}</TableCell>
-                      <TableCell className="font-medium">{formatCurrency(emp.totalSalary || emp.salary)}</TableCell>
-                      <TableCell>{getHealthBadge(emp.healthCertificate || "none")}</TableCell>
-                      <TableCell>{getStatusBadge(emp.status)}</TableCell>
+                      <TableCell className="font-medium">{formatCurrency(emp.totalSalary || emp.salary, isRTL)}</TableCell>
+                      <TableCell>{getHealthBadge(emp.healthCertificate || "none", isRTL)}</TableCell>
+                      <TableCell>{getStatusBadge(emp.status, isRTL)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => handleViewDetails(emp)} data-testid={`button-view-${emp.id}`} title={t("branchEmployees.view")}>
@@ -2584,20 +2640,20 @@ export default function BranchEmployeesPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
-                تفاصيل الموظف: {viewingEmployee?.employeeName}
+                {isRTL ? `تفاصيل الموظف: ${viewingEmployee?.employeeName}` : `Employee Details: ${viewingEmployee?.employeeName}`}
               </DialogTitle>
               <DialogDescription>
-                عرض سجلات الحضور والجداول والدوام المرتبطة بالموظف
+                {isRTL ? "عرض سجلات الحضور والجداول والدوام المرتبطة بالموظف" : "View attendance records, schedules, and timesheets for this employee"}
               </DialogDescription>
             </DialogHeader>
             
             {viewingEmployee && (
               <Tabs defaultValue="info" className="w-full">
                 <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="info">معلومات الموظف</TabsTrigger>
-                  <TabsTrigger value="attendance">سجلات الحضور</TabsTrigger>
-                  <TabsTrigger value="schedules">جداول الدوام</TabsTrigger>
-                  <TabsTrigger value="timesheets">تقارير كشوف الدوام</TabsTrigger>
+                  <TabsTrigger value="info">{isRTL ? "معلومات الموظف" : "Employee Info"}</TabsTrigger>
+                  <TabsTrigger value="attendance">{isRTL ? "سجلات الحضور" : "Attendance"}</TabsTrigger>
+                  <TabsTrigger value="schedules">{isRTL ? "جداول الدوام" : "Schedules"}</TabsTrigger>
+                  <TabsTrigger value="timesheets">{isRTL ? "تقارير كشوف الدوام" : "Timesheets"}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="info" className="space-y-4">
@@ -2606,17 +2662,17 @@ export default function BranchEmployeesPage() {
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
                           <UserCheck className="w-4 h-4" />
-                          البيانات الأساسية
+                          {isRTL ? "البيانات الأساسية" : "Basic Information"}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-500">الاسم:</span><span>{viewingEmployee.employeeName}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">الفرع:</span><span>{getBranchName(viewingEmployee.branchId)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">الوظيفة:</span><span>{viewingEmployee.jobTitle}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">الجنسية:</span><span>{viewingEmployee.nationality}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">الحالة:</span>{getStatusBadge(viewingEmployee.status)}</div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الاسم:" : "Name:"}</span><span>{viewingEmployee.employeeName}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الفرع:" : "Branch:"}</span><span>{getBranchName(viewingEmployee.branchId)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الوظيفة:" : "Job Title:"}</span><span>{viewingEmployee.jobTitle}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الجنسية:" : "Nationality:"}</span><span>{viewingEmployee.nationality}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الحالة:" : "Status:"}</span>{getStatusBadge(viewingEmployee.status, isRTL)}</div>
                         {viewingEmployee.linkedUserId && (
-                          <div className="flex justify-between"><span className="text-gray-500">مرتبط بالنظام:</span><Badge className="bg-blue-100 text-blue-800">نعم</Badge></div>
+                          <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "مرتبط بالنظام:" : "Linked to System:"}</span><Badge className="bg-blue-100 text-blue-800">{isRTL ? "نعم" : "Yes"}</Badge></div>
                         )}
                       </CardContent>
                     </Card>
@@ -2624,21 +2680,21 @@ export default function BranchEmployeesPage() {
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
                           <DollarSign className="w-4 h-4" />
-                          بيانات الراتب
+                          {isRTL ? "بيانات الراتب" : "Salary Details"}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-500">الراتب الأساسي:</span><span>{formatCurrency(viewingEmployee.salary)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">بدل السكن:</span><span>{formatCurrency(viewingEmployee.housingAllowance)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">بدل المواصلات:</span><span>{formatCurrency(viewingEmployee.transportAllowance)}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">بدل الطعام:</span><span>{formatCurrency(viewingEmployee.foodAllowance)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الراتب الأساسي:" : "Base Salary:"}</span><span>{formatCurrency(viewingEmployee.salary, isRTL)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "بدل السكن:" : "Housing:"}</span><span>{formatCurrency(viewingEmployee.housingAllowance, isRTL)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "بدل المواصلات:" : "Transport:"}</span><span>{formatCurrency(viewingEmployee.transportAllowance, isRTL)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "بدل الطعام:" : "Food:"}</span><span>{formatCurrency(viewingEmployee.foodAllowance, isRTL)}</span></div>
                         {viewingEmployee.nationality === "سعودي" && (viewingEmployee.socialInsuranceDeduction || 0) > 0 && (
                           <div className="flex justify-between text-red-600">
-                            <span>خصم التأمينات الاجتماعية:</span>
-                            <span>- {formatCurrency(viewingEmployee.socialInsuranceDeduction)}</span>
+                            <span>{isRTL ? "خصم التأمينات الاجتماعية:" : "Social Insurance:"}</span>
+                            <span>- {formatCurrency(viewingEmployee.socialInsuranceDeduction, isRTL)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between font-bold border-t pt-2"><span>صافي الراتب:</span><span>{formatCurrency(viewingEmployee.totalSalary)}</span></div>
+                        <div className="flex justify-between font-bold border-t pt-2"><span>{isRTL ? "صافي الراتب:" : "Net Salary:"}</span><span>{formatCurrency(viewingEmployee.totalSalary, isRTL)}</span></div>
                       </CardContent>
                     </Card>
                   </div>
