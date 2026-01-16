@@ -9380,6 +9380,11 @@ export async function registerRoutes(
   // Get all batches with optional filters
   app.get("/api/daily-production/batches", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
+      // Disable caching for this endpoint
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       const { branchId, date, destination, status, chefId, category } = req.query;
       const batches = await storage.getAllDailyProductionBatches({
         branchId: branchId as string,
@@ -9399,6 +9404,10 @@ export async function registerRoutes(
   // Get unfinished batches (for carry-over panel)
   app.get("/api/daily-production/unfinished", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       const { branchId } = req.query;
       const batches = await storage.getUnfinishedBatches(branchId as string);
       res.json(batches);
@@ -9598,6 +9607,10 @@ export async function registerRoutes(
   // Get daily stats
   app.get("/api/daily-production/stats", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       const { branchId, date } = req.query;
       if (!branchId || !date) {
         return res.status(400).json({ error: "الفرع والتاريخ مطلوبان" });
