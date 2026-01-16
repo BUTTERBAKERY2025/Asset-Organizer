@@ -83,13 +83,13 @@ function ModuleCard({ title, description, icon: Icon, href, color, badge, items 
             <Icon className="w-3.5 h-3.5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-xs font-semibold truncate group-hover:text-primary transition-colors duration-300">{title}</CardTitle>
+            <CardTitle className="text-base font-bold truncate group-hover:text-primary transition-colors duration-300">{title}</CardTitle>
           </div>
           {badge && (
             <Badge variant="secondary" className="text-[9px] shrink-0">{badge}</Badge>
           )}
         </div>
-        <CardDescription className="text-[11px] leading-snug line-clamp-2 mt-1">{description}</CardDescription>
+        <CardDescription className="text-[10px] leading-snug line-clamp-2 mt-1 text-muted-foreground/80">{description}</CardDescription>
       </CardHeader>
       {items && items.length > 0 && (
         <CardContent className="p-2.5 pt-0 relative z-10">
