@@ -108,7 +108,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       }
       return res.json();
     },
-    enabled: isAuthenticated && !!selectedDate,
+    enabled: isAuthenticated && !!selectedDate && !!selectedBranch,
     refetchInterval: autoRefresh ? 300000 : false,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
