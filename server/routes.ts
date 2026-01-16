@@ -41,7 +41,7 @@ import {
   generateWeeklySchedulePdf, type WeeklySchedulePdfData,
   generateInventoryCountPdf, type InventoryCountPdfData
 } from "./pdf-generator";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, getMandatoryBranchFilter, isUserAdmin } from "./auth";
 
@@ -12480,6 +12480,316 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting influencer payment:", error);
       res.status(500).json({ error: "فشل في حذف المدفوعة" });
+    }
+  });
+
+  // Influencer Contracts - عقود المؤثرين
+  app.get("/api/marketing/influencer-contracts", isAuthenticated, async (req: any, res) => {
+    try {
+      const { status, influencerId, branchId, paymentStatus } = req.query;
+      const filters: { status?: string; influencerId?: number; branchId?: string; paymentStatus?: string } = {};
+      if (status) filters.status = status as string;
+      if (influencerId) filters.influencerId = parseInt(influencerId as string);
+      if (branchId) filters.branchId = branchId as string;
+      if (paymentStatus) filters.paymentStatus = paymentStatus as string;
+      
+      const contracts = await storage.getAllInfluencerContracts(filters);
+      res.json(contracts);
+    } catch (error) {
+      console.error("Error fetching influencer contracts:", error);
+      res.status(500).json({ error: "فشل في جلب العقود" });
+    }
+  });
+
+  app.get("/api/marketing/influencer-contracts/generate-number", isAuthenticated, async (req, res) => {
+    try {
+      const contractNumber = await storage.generateContractNumber();
+      res.json({ contractNumber });
+    } catch (error) {
+      console.error("Error generating contract number:", error);
+      res.status(500).json({ error: "فشل في توليد رقم العقد" });
+    }
+  });
+
+  app.get("/api/marketing/influencer-contracts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const contract = await storage.getInfluencerContract(id);
+      if (!contract) {
+        return res.status(404).json({ error: "العقد غير موجود" });
+      }
+      res.json(contract);
+    } catch (error) {
+      console.error("Error fetching influencer contract:", error);
+      res.status(500).json({ error: "فشل في جلب العقد" });
+    }
+  });
+
+  app.post("/api/marketing/influencer-contracts", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = req.currentUser;
+      const data = { ...req.body, createdBy: currentUser?.id };
+      const validatedData = insertInfluencerContractSchema.parse(data);
+      const contract = await storage.createInfluencerContract(validatedData);
+      res.status(201).json(contract);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating influencer contract:", error);
+      res.status(500).json({ error: "فشل في إنشاء العقد" });
+    }
+  });
+
+  app.patch("/api/marketing/influencer-contracts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const contract = await storage.updateInfluencerContract(id, req.body);
+      if (!contract) {
+        return res.status(404).json({ error: "العقد غير موجود" });
+      }
+      res.json(contract);
+    } catch (error) {
+      console.error("Error updating influencer contract:", error);
+      res.status(500).json({ error: "فشل في تحديث العقد" });
+    }
+  });
+
+  app.delete("/api/marketing/influencer-contracts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const success = await storage.deleteInfluencerContract(id);
+      if (!success) {
+        return res.status(404).json({ error: "العقد غير موجود" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting influencer contract:", error);
+      res.status(500).json({ error: "فشل في حذف العقد" });
+    }
+  });
+
+  // Export Contract as PDF
+  app.get("/api/marketing/influencer-contracts/:id/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const contract = await storage.getInfluencerContract(id);
+      if (!contract) {
+        return res.status(404).json({ error: "العقد غير موجود" });
+      }
+
+      const { generatePdfFromHtml } = await import("./pdf-generator");
+      const { getLogoDataUrl } = await import("./pdf-assets");
+      const logoBase64 = getLogoDataUrl();
+
+      const formatDate = (dateStr: string | null) => {
+        if (!dateStr) return "-";
+        return new Date(dateStr).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" });
+      };
+
+      const formatCurrency = (amount: number | null) => {
+        if (!amount) return "-";
+        return new Intl.NumberFormat("ar-SA").format(amount) + " ريال سعودي";
+      };
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Cairo', sans-serif; font-size: 12px; line-height: 1.6; color: #333; background: white; }
+            .container { max-width: 800px; margin: 0 auto; padding: 40px; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #e67e22; padding-bottom: 20px; margin-bottom: 30px; }
+            .logo { height: 60px; }
+            .company-info { text-align: left; }
+            .company-name { font-size: 18px; font-weight: bold; color: #1a3a2f; }
+            .contract-title { text-align: center; margin: 30px 0; }
+            .contract-title h1 { font-size: 24px; color: #1a3a2f; margin-bottom: 10px; }
+            .contract-number { font-size: 14px; color: #666; }
+            .section { margin-bottom: 25px; }
+            .section-title { font-size: 16px; font-weight: bold; color: #e67e22; border-bottom: 2px solid #f5e6d3; padding-bottom: 5px; margin-bottom: 15px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+            .info-item { display: flex; flex-direction: column; }
+            .info-label { font-weight: bold; color: #666; font-size: 11px; }
+            .info-value { font-size: 13px; color: #333; }
+            .terms-list { list-style-type: decimal; padding-right: 20px; }
+            .terms-list li { margin-bottom: 10px; }
+            .deliverables { display: flex; flex-wrap: wrap; gap: 8px; }
+            .deliverable-tag { background: #f5e6d3; color: #1a3a2f; padding: 4px 12px; border-radius: 15px; font-size: 11px; }
+            .signatures { display: flex; justify-content: space-between; margin-top: 50px; padding-top: 30px; border-top: 1px dashed #ccc; }
+            .signature-box { width: 45%; text-align: center; }
+            .signature-line { border-bottom: 1px solid #333; height: 60px; margin-bottom: 10px; }
+            .signature-label { font-weight: bold; }
+            .amount-box { background: #f5e6d3; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; }
+            .amount-value { font-size: 24px; font-weight: bold; color: #e67e22; }
+            .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <img src="${logoBase64}" alt="Butter Bakery" class="logo" />
+              <div class="company-info">
+                <div class="company-name">Butter Bakery</div>
+                <div>مخبز باتر</div>
+              </div>
+            </div>
+
+            <div class="contract-title">
+              <h1>عقد تعاون تسويقي</h1>
+              <div class="contract-number">رقم العقد: ${contract.contractNumber}</div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">بيانات المؤثر / المعلن</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">الاسم</span>
+                  <span class="info-value">${contract.influencerName}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">رقم الهاتف</span>
+                  <span class="info-value">${contract.influencerPhone || "-"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">البريد الإلكتروني</span>
+                  <span class="info-value">${contract.influencerEmail || "-"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">رقم الهوية</span>
+                  <span class="info-value">${contract.nationalId || "-"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">المعلومات البنكية</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">اسم البنك</span>
+                  <span class="info-value">${contract.bankName || "-"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">رقم الحساب</span>
+                  <span class="info-value">${contract.bankAccountNumber || "-"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">اسم صاحب الحساب</span>
+                  <span class="info-value">${contract.bankAccountHolder || "-"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">رقم الآيبان</span>
+                  <span class="info-value">${contract.iban || "-"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">تفاصيل الحملة / التغطية</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">اسم الحملة</span>
+                  <span class="info-value">${contract.campaignName}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">الفرع</span>
+                  <span class="info-value">${contract.branchName || "-"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">موقع التغطية</span>
+                  <span class="info-value">${contract.coverageLocation || "-"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">تاريخ التغطية</span>
+                  <span class="info-value">${formatDate(contract.coverageDate)}</span>
+                </div>
+              </div>
+              ${contract.campaignDescription ? `<p style="margin-top: 15px;">${contract.campaignDescription}</p>` : ""}
+            </div>
+
+            <div class="amount-box">
+              <div style="font-size: 14px; margin-bottom: 5px;">قيمة العقد</div>
+              <div class="amount-value">${formatCurrency(contract.contractAmount)}</div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">المخرجات المطلوبة</div>
+              <div class="deliverables">
+                ${(contract.deliverables || []).map((d: string) => `<span class="deliverable-tag">${d}</span>`).join("")}
+              </div>
+              ${contract.contentRequirements ? `<p style="margin-top: 15px;">${contract.contentRequirements}</p>` : ""}
+            </div>
+
+            <div class="section">
+              <div class="section-title">مدة العقد</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">تاريخ البداية</span>
+                  <span class="info-value">${formatDate(contract.contractStartDate)}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">تاريخ النهاية</span>
+                  <span class="info-value">${formatDate(contract.contractEndDate)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">الشروط والأحكام</div>
+              <ol class="terms-list">
+                <li>يلتزم الطرف الثاني (المؤثر) بتقديم المحتوى المتفق عليه وفق المعايير والجودة المطلوبة.</li>
+                <li>يجب أن يتضمن المحتوى ذكر العلامة التجارية "باتر" بشكل واضح.</li>
+                <li>لا يحق للمؤثر نقل حقوق هذا العقد لطرف آخر دون موافقة خطية.</li>
+                <li>يتم الدفع بعد تسليم المحتوى والموافقة عليه من قبل إدارة التسويق.</li>
+                ${contract.exclusivityClause ? "<li>يلتزم المؤثر بعدم الترويج لمنتجات منافسة خلال فترة العقد.</li>" : ""}
+                <li>في حالة عدم الالتزام بالشروط، يحق للشركة إلغاء العقد دون تعويض.</li>
+              </ol>
+            </div>
+
+            <div class="signatures">
+              <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">توقيع المؤثر</div>
+                <div>${contract.influencerName}</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">توقيع الشركة</div>
+                <div>مخبز باتر</div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>هذا العقد صادر من نظام إدارة مخبز باتر</p>
+              <p>تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const pdfBuffer = await generatePdfFromHtml(htmlContent);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="contract-${contract.contractNumber}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating contract PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
     }
   });
 
