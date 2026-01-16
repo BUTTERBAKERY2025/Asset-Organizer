@@ -1169,41 +1169,40 @@ export default function CashierJournalFormPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
+      <div className="p-3 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/cashier-journals">
-              <Button variant="ghost" size="sm" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
+              <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-primary" data-testid="page-title">
                 {isEdit ? "تعديل يومية المبيعات" : "يومية مبيعات جديدة"}
               </h1>
             </div>
           </div>
           {isEdit && (
-            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700 h-11 sm:h-9" data-testid="button-export-pdf">
+            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700 h-9 sm:h-8 text-sm" data-testid="button-export-pdf">
               <FileDown className="w-4 h-4" />
               تصدير PDF
             </Button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="lg:col-span-2 space-y-3">
             <Card>
-              <CardHeader>
-                <CardTitle>معلومات اليومية</CardTitle>
-                <CardDescription>بيانات الوردية والكاشير</CardDescription>
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="text-base">معلومات اليومية</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 p-3 sm:p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-2">
-                    <Label>الفرع *</Label>
+              <CardContent className="space-y-2 p-3 pt-0">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">الفرع *</Label>
                     <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly || !canSelectBranch}>
-                      <SelectTrigger className="h-12 text-base" data-testid="select-branch">
+                      <SelectTrigger className="h-9 text-sm" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -1215,21 +1214,21 @@ export default function CashierJournalFormPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>التاريخ *</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">التاريخ *</Label>
                     <Input
                       type="date"
                       value={formData.journalDate}
                       onChange={(e) => setFormData({ ...formData, journalDate: e.target.value })}
                       disabled={isReadOnly}
-                      className="h-12 text-base"
+                      className="h-9 text-sm"
                       data-testid="input-date"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>الوردية *</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">الوردية *</Label>
                     <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-12 text-base" data-testid="select-shift">
+                      <SelectTrigger className="h-9 text-sm" data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -1241,47 +1240,45 @@ export default function CashierJournalFormPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>اسم الكاشير *</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">اسم الكاشير *</Label>
                     <Input
                       value={formData.cashierName}
                       readOnly
-                      className="bg-muted cursor-not-allowed h-12 text-base"
+                      className="bg-muted cursor-not-allowed h-9 text-sm"
                       placeholder="اسم الكاشير"
                       data-testid="input-cashier-name"
                     />
-                    <p className="text-xs text-muted-foreground">يتم تحديد اسم الكاشير تلقائياً من حساب المستخدم الحالي</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-primary/20">
-              <CardHeader className="bg-primary/5">
-                <CardTitle className="flex items-center gap-2">
-                  <Receipt className="w-5 h-5" />
+            <Card className="border border-primary/20">
+              <CardHeader className="bg-primary/5 py-2 px-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Receipt className="w-4 h-4" />
                   إجمالي المبيعات من تقرير الشفت
                 </CardTitle>
-                <CardDescription>أدخل إجمالي المبيعات كما يظهر في تقرير الكاشير أو تقرير نهاية الوردية</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 pt-4 p-3 sm:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-base sm:text-lg font-semibold">إجمالي المبيعات (ر.س) *</Label>
+              <CardContent className="space-y-2 p-3 pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">إجمالي المبيعات (ر.س) *</Label>
                     <Input
                       type="number"
                       value={formData.totalSales ?? ""}
                       onChange={(e) => setFormData({ ...formData, totalSales: parseNumericValue(e.target.value) })}
                       onWheel={preventWheelChange}
-                      className="text-lg sm:text-xl font-bold h-12 sm:h-14 min-h-[48px]"
+                      className="text-base font-bold h-10"
                       placeholder="0.00"
                       disabled={isReadOnly}
                       data-testid="input-total-sales"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <Users className="w-4 h-4" />
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-xs">
+                      <Users className="w-3 h-3" />
                       عدد الفواتير *
                     </Label>
                     <Input
@@ -1289,56 +1286,55 @@ export default function CashierJournalFormPage() {
                       value={formData.transactionCount ?? ""}
                       onChange={(e) => setFormData({ ...formData, transactionCount: parseNumericValue(e.target.value, false) })}
                       onWheel={preventWheelChange}
-                      className="h-12 sm:h-14 min-h-[48px]"
+                      className="h-10"
                       placeholder="0"
                       disabled={isReadOnly}
                       data-testid="input-transaction-count"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <Calculator className="w-4 h-4" />
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-xs">
+                      <Calculator className="w-3 h-3" />
                       متوسط الفاتورة
                     </Label>
-                    <div className="h-14 flex items-center justify-center bg-muted rounded-md px-4">
-                      <span className="text-xl font-bold text-primary" data-testid="text-average-ticket">
+                    <div className="h-10 flex items-center justify-center bg-muted rounded-md px-2">
+                      <span className="text-sm font-bold text-primary" data-testid="text-average-ticket">
                         {averageTicket.toFixed(2)} ر.س
                       </span>
                     </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>رصيد سابق للدرج (عهدة)</Label>
-                  <Input
-                    type="number"
-                    value={formData.openingBalance ?? ""}
-                    onChange={(e) => setFormData({ ...formData, openingBalance: parseNumericValue(e.target.value) })}
-                    onWheel={preventWheelChange}
-                    placeholder="0.00"
-                    disabled={isReadOnly}
-                    className="h-11 sm:h-10"
-                    data-testid="input-opening-balance"
-                  />
+                  <div className="space-y-1">
+                    <Label className="text-xs">رصيد سابق للدرج (عهدة)</Label>
+                    <Input
+                      type="number"
+                      value={formData.openingBalance ?? ""}
+                      onChange={(e) => setFormData({ ...formData, openingBalance: parseNumericValue(e.target.value) })}
+                      onWheel={preventWheelChange}
+                      placeholder="0.00"
+                      disabled={isReadOnly}
+                      className="h-10"
+                      data-testid="input-opening-balance"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <CardHeader className="py-2 px-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
-                    <CardTitle className="text-lg">تفصيل المبيعات حسب طريقة الدفع</CardTitle>
-                    <CardDescription>أدخل المبيعات لكل طريقة دفع</CardDescription>
+                    <CardTitle className="text-base">تفصيل المبيعات حسب طريقة الدفع</CardTitle>
                   </div>
                   {!isReadOnly && (
-                    <Button variant="outline" size="lg" className="h-12 px-4 gap-2" onClick={addPaymentBreakdown} data-testid="button-add-payment">
-                      <Plus className="w-5 h-5" />
+                    <Button variant="outline" size="sm" className="h-8 px-3 gap-1 text-sm" onClick={addPaymentBreakdown} data-testid="button-add-payment">
+                      <Plus className="w-4 h-4" />
                       إضافة طريقة دفع
                     </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-2 p-3 pt-2">
                 {paymentBreakdowns.map((breakdown, index) => {
                   const method = PAYMENT_METHODS.find((m) => m.value === breakdown.paymentMethod);
                   const Icon = method?.icon || Wallet;
@@ -1904,15 +1900,14 @@ export default function CashierJournalFormPage() {
               if (bankSummary.bankPayments.length === 0 && actualCash === 0) return null;
               
               return (
-                <Card className="border-2 border-purple-200">
-                  <CardHeader className="bg-purple-50">
-                    <CardTitle className="flex items-center gap-2">
-                      <Calculator className="w-5 h-5" />
+                <Card className="border border-purple-200">
+                  <CardHeader className="bg-purple-50 py-2 px-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Calculator className="w-4 h-4" />
                       ملخص التسوية الشاملة
                     </CardTitle>
-                    <CardDescription>مقارنة المبيعات المسجلة بالمحصل الفعلي (نقد + بنك) - تطبيقات التوصيل آجلة</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4 pt-4">
+                  <CardContent className="space-y-2 p-3 pt-2">
                     {/* Main Calculation */}
                     <div className="space-y-3">
                       {/* Show sales breakdown with apps deduction */}
@@ -2025,30 +2020,30 @@ export default function CashierJournalFormPage() {
             })()}
 
             <Card>
-              <CardHeader>
-                <CardTitle>ملاحظات</CardTitle>
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="text-base">ملاحظات</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 pt-0">
                 <Textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="أي ملاحظات إضافية..."
-                  rows={3}
+                  rows={2}
                   disabled={isReadOnly}
+                  className="text-sm"
                   data-testid="input-notes"
                 />
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-orange-200">
-              <CardHeader className="bg-orange-50">
-                <CardTitle className="flex items-center gap-2">
-                  <Camera className="w-5 h-5" />
+            <Card className="border border-orange-200">
+              <CardHeader className="bg-orange-50 py-2 px-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Camera className="w-4 h-4" />
                   المرفقات والصور
                 </CardTitle>
-                <CardDescription>التقط صور من تقرير فوديكس وجهاز الشبكة</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 pt-4">
+              <CardContent className="space-y-2 p-3 pt-2">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -2060,17 +2055,17 @@ export default function CashierJournalFormPage() {
                 />
                 
                 {!isReadOnly && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     {ATTACHMENT_TYPES.map((type) => (
                       <Button
                         key={type}
                         variant="outline"
-                        className="h-16 sm:h-20 min-h-[64px] flex flex-col items-center justify-center gap-2"
+                        className="h-12 flex flex-col items-center justify-center gap-1 text-xs"
                         onClick={() => handleFileSelect(type)}
                         data-testid={`button-upload-${type}`}
                       >
-                        <Camera className="w-6 h-6" />
-                        <span className="text-sm">{ATTACHMENT_TYPE_LABELS[type]}</span>
+                        <Camera className="w-4 h-4" />
+                        <span>{ATTACHMENT_TYPE_LABELS[type]}</span>
                       </Button>
                     ))}
                   </div>
@@ -2147,32 +2142,31 @@ export default function CashierJournalFormPage() {
             </Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-3">
             <Card className={!hasSignature && !isEdit ? "border-red-300 bg-red-50/50" : ""}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="flex items-center gap-2 text-sm">
                   التوقيع الإلكتروني
                   {!hasSignature && !isEdit && (
-                    <span className="text-xs font-normal text-red-600 bg-red-100 px-2 py-1 rounded">مطلوب</span>
+                    <span className="text-[10px] font-normal text-red-600 bg-red-100 px-1.5 py-0.5 rounded">مطلوب</span>
                   )}
                   {hasSignature && (
-                    <span className="text-xs font-normal text-green-600 bg-green-100 px-2 py-1 rounded">تم التوقيع ✓</span>
+                    <span className="text-[10px] font-normal text-green-600 bg-green-100 px-1.5 py-0.5 rounded">تم ✓</span>
                   )}
                 </CardTitle>
-                <CardDescription>وقّع لتأكيد صحة البيانات</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-2 p-3 pt-0">
                 {!hasSignature && !isEdit && (
-                  <div className="bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>يجب التوقيع الإلكتروني قبل حفظ اليومية</span>
+                  <div className="bg-red-100 border border-red-300 text-red-700 px-2 py-1.5 rounded text-xs flex items-center gap-1.5">
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>يجب التوقيع قبل حفظ اليومية</span>
                   </div>
                 )}
                 <div className={`border-2 rounded-lg overflow-hidden ${!hasSignature && !isEdit ? "border-red-300" : "border-amber-400"}`}>
                   <canvas
                     ref={signatureCanvasRef}
                     width={280}
-                    height={150}
+                    height={120}
                     className="w-full cursor-crosshair bg-white touch-none"
                     style={{ touchAction: 'none' }}
                     onMouseDown={startDrawing}
@@ -2186,18 +2180,17 @@ export default function CashierJournalFormPage() {
                     data-testid="canvas-signature"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">يدعم اللمس على الأجهزة اللوحية</p>
-                <Button variant="outline" size="lg" onClick={clearSignature} className="w-full h-12" data-testid="button-clear-signature">
+                <Button variant="outline" size="sm" onClick={clearSignature} className="w-full h-8 text-xs" data-testid="button-clear-signature">
                   مسح التوقيع
                 </Button>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-primary/5 to-primary/10">
-              <CardHeader>
-                <CardTitle>ملخص اليومية</CardTitle>
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="text-sm">ملخص اليومية</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-2 p-3 pt-0">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">إجمالي المبيعات</span>
                   <span className="font-bold text-lg">{getBreakdownTotal().toFixed(2)} ر.س</span>
@@ -2571,7 +2564,7 @@ export default function CashierJournalFormPage() {
         </div>
         
         {/* Spacer for sticky bar */}
-        <div className="h-44 md:h-36" />
+        <div className="h-36 md:h-28" />
       </div>
 
       {/* Variance Confirmation Dialog - for posting with mismatch */}
