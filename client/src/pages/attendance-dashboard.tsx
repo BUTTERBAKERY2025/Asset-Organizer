@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getQueryFn } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "react-i18next";
 import {
   Calendar,
   Clock,
@@ -36,6 +37,8 @@ interface QuickAction {
 export default function AttendanceDashboardPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
+  const { t, i18n } = useTranslation("hr");
+  const isRTL = i18n.language === "ar";
 
   const { data: stats, isLoading } = useQuery<{
     totalEmployees: number;
@@ -56,30 +59,30 @@ export default function AttendanceDashboardPage() {
 
   const quickActions: QuickAction[] = [
     {
-      title: "تسجيل الحضور والانصراف",
-      description: "تسجيل حضور وانصراف الموظفين مع التوقيع الإلكتروني",
+      title: t("actions.attendanceCheck.title"),
+      description: t("actions.attendanceCheck.description"),
       icon: <Fingerprint className="w-6 h-6" />,
       href: "/attendance-check",
       color: "bg-green-500",
-      badge: "الأكثر استخداماً",
+      badge: t("mostUsed"),
     },
     {
-      title: "إدارة الورديات",
-      description: "إنشاء وإدارة قوالب الورديات وجداول العمل",
+      title: t("actions.shiftManagement.title"),
+      description: t("actions.shiftManagement.description"),
       icon: <CalendarClock className="w-6 h-6" />,
       href: "/shift-management",
       color: "bg-blue-500",
     },
     {
-      title: "تقارير التايم شيت",
-      description: "إنشاء تقارير الدوام الشهرية مع التوقيعات",
+      title: t("actions.timesheet.title"),
+      description: t("actions.timesheet.description"),
       icon: <FileSignature className="w-6 h-6" />,
       href: "/timesheet",
       color: "bg-purple-500",
     },
     {
-      title: "موظفي الفروع",
-      description: "إدارة بيانات الموظفين والرواتب والمستندات",
+      title: t("actions.branchEmployees.title"),
+      description: t("actions.branchEmployees.description"),
       icon: <Users className="w-6 h-6" />,
       href: "/branch-employees",
       color: "bg-amber-500",
@@ -88,41 +91,41 @@ export default function AttendanceDashboardPage() {
 
   const managementCards = [
     {
-      title: "الهيكل التنظيمي",
-      description: "الإدارات والأقسام والمناصب",
+      title: t("management.orgStructure.title"),
+      description: t("management.orgStructure.description"),
       icon: <ClipboardCheck className="w-4 h-4" />,
       href: "/organizational-structure",
       stats: stats?.totalEmployees || 0,
-      statsLabel: "موظف",
+      statsLabel: t("stats.employee"),
     },
     {
-      title: "التقارير الشاملة",
-      description: "تقارير تحليلية وإغلاق الرواتب",
+      title: t("management.reports.title"),
+      description: t("management.reports.description"),
       icon: <BarChart3 className="w-4 h-4" />,
       href: "/employee-reports",
       stats: stats?.reportsCount || 0,
-      statsLabel: "تقرير",
+      statsLabel: t("stats.report"),
     },
   ];
 
   const todayStats = [
     {
-      label: "إجمالي الموظفين",
+      label: t("stats.totalEmployees"),
       value: stats?.totalEmployees || 0,
       icon: <Users className="w-5 h-5 text-blue-500" />,
     },
     {
-      label: "الحاضرون اليوم",
+      label: t("stats.presentToday"),
       value: stats?.presentToday || 0,
       icon: <UserCheck className="w-5 h-5 text-green-500" />,
     },
     {
-      label: "المتأخرون",
+      label: t("stats.lateToday"),
       value: stats?.lateToday || 0,
       icon: <Timer className="w-5 h-5 text-amber-500" />,
     },
     {
-      label: "الغائبون",
+      label: t("stats.absentToday"),
       value: stats?.absentToday || 0,
       icon: <Clock className="w-5 h-5 text-red-500" />,
     },
@@ -130,7 +133,7 @@ export default function AttendanceDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -144,10 +147,10 @@ export default function AttendanceDashboardPage() {
             </Button>
             <div>
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">
-                إدارة موظفي الفروع الشاملة
+                {t("pageTitle")}
               </h1>
               <p className="text-muted-foreground">
-                إدارة شاملة لموظفي الفروع والورديات والحضور وتقارير التايم شيت
+                {t("pageDescription")}
               </p>
             </div>
           </div>
@@ -172,7 +175,7 @@ export default function AttendanceDashboardPage() {
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold mb-3">الإجراءات السريعة</h2>
+              <h2 className="text-lg font-semibold mb-3">{t("quickActions")}</h2>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {quickActions.map((action, index) => (
                   <Card
@@ -207,7 +210,7 @@ export default function AttendanceDashboardPage() {
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold mb-3">الإدارة والتقارير</h2>
+              <h2 className="text-lg font-semibold mb-3">{t("managementReports")}</h2>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {managementCards.map((card, index) => (
                   <Card
@@ -233,8 +236,8 @@ export default function AttendanceDashboardPage() {
               <CardContent className="py-3">
                 <div className="flex items-center gap-2 text-sm">
                   <ListChecks className="w-4 h-4 text-amber-600" />
-                  <span className="font-medium text-amber-800">دليل سريع:</span>
-                  <span className="text-amber-700">إعداد الورديات ← تسجيل الحضور ← إنشاء تقارير التايم شيت</span>
+                  <span className="font-medium text-amber-800">{t("quickGuide")}</span>
+                  <span className="text-amber-700">{t("quickGuideSteps")}</span>
                 </div>
               </CardContent>
             </Card>
