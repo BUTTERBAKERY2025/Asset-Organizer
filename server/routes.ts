@@ -9811,9 +9811,51 @@ export async function registerRoutes(
       });
       
       const productQuantities: Record<string, number> = {};
+      const statusCounts: Record<string, number> = {};
+      const chefStats: Record<string, { batches: number; quantity: number }> = {};
+      const destinationCounts: Record<string, number> = {};
+      const categoryCounts: Record<string, number> = {};
+      const hourCounts: Record<string, number> = {};
+      
       for (const entry of entriesInRange) {
         const productName = entry.productName || 'غير محدد';
         productQuantities[productName] = (productQuantities[productName] || 0) + (entry.quantity || 0);
+        
+        // Count by destination
+        const dest = entry.destination || 'غير محدد';
+        destinationCounts[dest] = (destinationCounts[dest] || 0) + (entry.quantity || 0);
+        
+        // Count by category
+        const cat = entry.category || 'غير محدد';
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + (entry.quantity || 0);
+        
+        // Count by hour
+        if (entry.producedAt) {
+          const hour = new Date(entry.producedAt).getHours();
+          const hourKey = `${hour}:00`;
+          hourCounts[hourKey] = (hourCounts[hourKey] || 0) + (entry.quantity || 0);
+        }
+        
+        // Count by status - handle null/undefined explicitly
+        const rawStatus = (entry as any).status;
+        let status: string;
+        if (rawStatus === 'finished') {
+          status = 'مكتمل';
+        } else if (rawStatus === 'in_progress') {
+          status = 'قيد التنفيذ';
+        } else {
+          status = 'غير محدد';
+        }
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+        
+        // Count by chef - handle null/undefined explicitly
+        const chefName = (entry as any).chefName;
+        const chefKey = chefName || 'غير معين';
+        if (!chefStats[chefKey]) {
+          chefStats[chefKey] = { batches: 0, quantity: 0 };
+        }
+        chefStats[chefKey].batches += 1;
+        chefStats[chefKey].quantity += entry.quantity || 0;
       }
       
       const totalProductionQty = Object.values(productQuantities).reduce((a, b) => a + b, 0);
@@ -9932,14 +9974,20 @@ export async function registerRoutes(
         })
       );
       
+      // Calculate totals from entriesInRange for consistency across date ranges
+      const totalBatchesInRange = entriesInRange.length;
+      const totalQuantityInRange = Object.values(productQuantities).reduce((a, b) => a + b, 0);
+      
       res.json({
         dailySummary: {
-          totalBatches: prodStats.totalBatches,
-          totalQuantity: prodStats.totalQuantity,
-          avgBatchSize: prodStats.totalBatches > 0 ? prodStats.totalQuantity / prodStats.totalBatches : 0,
-          byDestination: prodStats.byDestination,
-          byCategory: prodStats.byCategory,
-          byHour: prodStats.byHour,
+          totalBatches: totalBatchesInRange,
+          totalQuantity: totalQuantityInRange,
+          avgBatchSize: totalBatchesInRange > 0 ? totalQuantityInRange / totalBatchesInRange : 0,
+          byDestination: destinationCounts,
+          byCategory: categoryCounts,
+          byHour: hourCounts,
+          byStatus: statusCounts,
+          byChef: chefStats,
         },
         targetComparison: {
           target: targetData.totalTarget,

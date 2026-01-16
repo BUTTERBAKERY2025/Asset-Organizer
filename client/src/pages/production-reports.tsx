@@ -71,6 +71,8 @@ interface ReportData {
     byDestination: Record<string, number>;
     byCategory: Record<string, number>;
     byHour: Record<string, number>;
+    byStatus: Record<string, number>;
+    byChef: Record<string, { batches: number; quantity: number }>;
   };
   targetComparison: {
     target: number;
@@ -860,6 +862,63 @@ export default function ProductionReportsPage() {
                             ))}
                           </div>
                         </>
+                      ) : (
+                        <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                  
+                  {/* Status Distribution Card */}
+                  <Card>
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="text-sm">توزيع حسب الحالة</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      {Object.entries(reportData?.dailySummary.byStatus || {}).length > 0 ? (
+                        <div className="space-y-2" data-testid="status-distribution-list">
+                          {Object.entries(reportData?.dailySummary.byStatus || {}).map(([status, count], i) => (
+                            <div key={status} className="flex justify-between items-center p-2 rounded-lg bg-gray-50" data-testid={`row-status-${i}`}>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full ${status === 'مكتمل' ? 'bg-green-500' : status === 'قيد التنفيذ' ? 'bg-amber-500' : 'bg-gray-400'}`} />
+                                <span className="text-sm">{status}</span>
+                              </div>
+                              <Badge variant={status === 'مكتمل' ? 'default' : 'secondary'} className="text-xs">
+                                {count}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                  
+                  {/* Chef Productivity Card */}
+                  <Card>
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="text-sm">إنتاجية الشيفات</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      {Object.entries(reportData?.dailySummary.byChef || {}).length > 0 ? (
+                        <div className="space-y-2" data-testid="chef-productivity-list">
+                          {Object.entries(reportData?.dailySummary.byChef || {})
+                            .sort((a, b) => b[1].quantity - a[1].quantity)
+                            .map(([chef, stats], i) => (
+                            <div key={chef} className="flex justify-between items-center p-2 rounded-lg bg-gray-50" data-testid={`row-chef-${i}`}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-medium text-amber-700">
+                                  {i + 1}
+                                </div>
+                                <span className="text-sm font-medium">{chef}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs">{stats.batches} دفعة</Badge>
+                                <Badge className="text-xs bg-green-600">{stats.quantity} وحدة</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات</p>
                       )}
