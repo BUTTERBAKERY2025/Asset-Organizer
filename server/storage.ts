@@ -153,6 +153,8 @@ import {
   type InsertInfluencerContact,
   type InfluencerPayment,
   type InsertInfluencerPayment,
+  type InfluencerContract,
+  type InsertInfluencerContract,
   type MarketingTask,
   type InsertMarketingTask,
   type MarketingTaskActivity,
@@ -245,6 +247,7 @@ import {
   influencerCampaignLinks,
   influencerContacts,
   influencerPayments,
+  influencerContracts,
   marketingTasks,
   marketingTaskActivities,
   marketingPerformanceReports,
@@ -945,6 +948,15 @@ export interface IStorage {
   updateSocialTemplate(id: number, template: Partial<InsertSocialContentTemplate>): Promise<SocialContentTemplate | undefined>;
   deleteSocialTemplate(id: number): Promise<boolean>;
   incrementTemplateUsage(id: number): Promise<void>;
+
+  // Influencer Contracts - عقود المؤثرين
+  getAllInfluencerContracts(filters?: { status?: string; influencerId?: number; branchId?: string; paymentStatus?: string }): Promise<InfluencerContract[]>;
+  getInfluencerContract(id: number): Promise<InfluencerContract | undefined>;
+  getInfluencerContractByNumber(contractNumber: string): Promise<InfluencerContract | undefined>;
+  createInfluencerContract(contract: InsertInfluencerContract): Promise<InfluencerContract>;
+  updateInfluencerContract(id: number, contract: Partial<InsertInfluencerContract>): Promise<InfluencerContract | undefined>;
+  deleteInfluencerContract(id: number): Promise<boolean>;
+  generateContractNumber(): Promise<string>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -7727,6 +7739,52 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(socialContentTemplates.id, id));
+  }
+
+  // Influencer Contracts - عقود المؤثرين
+  async getAllInfluencerContracts(filters?: { status?: string; influencerId?: number; branchId?: string; paymentStatus?: string }): Promise<InfluencerContract[]> {
+    const conditions = [];
+    if (filters?.status) conditions.push(eq(influencerContracts.status, filters.status));
+    if (filters?.influencerId) conditions.push(eq(influencerContracts.influencerId, filters.influencerId));
+    if (filters?.branchId) conditions.push(eq(influencerContracts.branchId, filters.branchId));
+    if (filters?.paymentStatus) conditions.push(eq(influencerContracts.paymentStatus, filters.paymentStatus));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(influencerContracts).where(and(...conditions)).orderBy(desc(influencerContracts.createdAt));
+    }
+    return await db.select().from(influencerContracts).orderBy(desc(influencerContracts.createdAt));
+  }
+
+  async getInfluencerContract(id: number): Promise<InfluencerContract | undefined> {
+    const [contract] = await db.select().from(influencerContracts).where(eq(influencerContracts.id, id));
+    return contract || undefined;
+  }
+
+  async getInfluencerContractByNumber(contractNumber: string): Promise<InfluencerContract | undefined> {
+    const [contract] = await db.select().from(influencerContracts).where(eq(influencerContracts.contractNumber, contractNumber));
+    return contract || undefined;
+  }
+
+  async createInfluencerContract(contract: InsertInfluencerContract): Promise<InfluencerContract> {
+    const [created] = await db.insert(influencerContracts).values(contract).returning();
+    return created;
+  }
+
+  async updateInfluencerContract(id: number, contract: Partial<InsertInfluencerContract>): Promise<InfluencerContract | undefined> {
+    const [updated] = await db.update(influencerContracts).set({ ...contract, updatedAt: new Date() }).where(eq(influencerContracts.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteInfluencerContract(id: number): Promise<boolean> {
+    const result = await db.delete(influencerContracts).where(eq(influencerContracts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async generateContractNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const [result] = await db.select({ count: sql<number>`count(*)` }).from(influencerContracts);
+    const nextNum = (result?.count || 0) + 1;
+    return `BTR-INF-${year}-${String(nextNum).padStart(4, '0')}`;
   }
 }
 
