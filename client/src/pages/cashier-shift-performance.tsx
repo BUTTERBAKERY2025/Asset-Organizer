@@ -244,7 +244,7 @@ export default function CashierShiftPerformance() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+      <div className="p-3 sm:p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Link href="/targets-dashboard">

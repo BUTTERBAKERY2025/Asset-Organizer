@@ -435,7 +435,7 @@ export default function ProductionComparisonsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">

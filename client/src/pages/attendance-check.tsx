@@ -221,7 +221,7 @@ export default function AttendanceCheckPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button

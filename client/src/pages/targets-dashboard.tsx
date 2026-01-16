@@ -475,7 +475,7 @@ export default function TargetsDashboard() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">

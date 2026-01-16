@@ -2494,7 +2494,7 @@ export default function EmployeeReportsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl" ref={printRef}>
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl" ref={printRef}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">

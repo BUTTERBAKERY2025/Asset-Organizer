@@ -297,7 +297,7 @@ export default function ContractsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">إدارة العقود</h1>

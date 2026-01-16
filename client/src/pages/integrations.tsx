@@ -51,7 +51,7 @@ export default function IntegrationsPage() {
   });
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+    <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
       <SettingsBreadcrumb currentPage="التكاملات" currentIcon={Link2} />
       <div className="flex justify-between items-center mb-6">
         <div>

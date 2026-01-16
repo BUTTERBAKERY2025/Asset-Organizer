@@ -152,7 +152,7 @@ export default function BackupsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="النسخ الاحتياطية" currentIcon={HardDrive} />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

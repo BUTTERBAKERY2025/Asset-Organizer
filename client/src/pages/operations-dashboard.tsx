@@ -60,7 +60,7 @@ export default function OperationsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">

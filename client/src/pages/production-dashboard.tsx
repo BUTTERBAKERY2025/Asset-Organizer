@@ -273,7 +273,7 @@ export default function ProductionDashboardPage() {
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white" dir="rtl">
-        <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
+        <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4">
           
           {/* Header Section */}
           <div className="bg-white rounded-2xl shadow-sm border p-4 md:p-6">
