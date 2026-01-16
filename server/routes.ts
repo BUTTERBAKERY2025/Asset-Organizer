@@ -12775,7 +12775,7 @@ export async function registerRoutes(
             </div>
 
             <div class="footer">
-              <p>هذا العقد صادر من نظام إدارة مخبز باتر</p>
+              <p>هذا العقد صادر من نظام منصة بتر بيكري الشاملة</p>
               <p>تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}</p>
             </div>
           </div>
