@@ -801,7 +801,7 @@ export default function DailyProductionPage() {
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-2 min-w-[200px]">
             <Label>الفرع *</Label>
-            <Select value={branchId} onValueChange={setBranchId} disabled={!canSelectBranch}>
+            <Select value={branchId || undefined} onValueChange={setBranchId} disabled={!canSelectBranch}>
               <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
@@ -824,7 +824,7 @@ export default function DailyProductionPage() {
           </div>
           <div className="space-y-2">
             <Label>الوردية</Label>
-            <Select value={selectedShift} onValueChange={setSelectedShift}>
+            <Select value={selectedShift || undefined} onValueChange={setSelectedShift}>
               <SelectTrigger className="w-[140px] h-11 sm:h-10">
                 <SelectValue placeholder="الوردية" />
               </SelectTrigger>
@@ -999,7 +999,7 @@ export default function DailyProductionPage() {
                           className="pr-10 h-11 sm:h-10"
                         />
                       </div>
-                      <Select value={productName} onValueChange={(val) => {
+                      <Select value={productName || undefined} onValueChange={(val) => {
                         setProductName(val);
                         const prod = products?.find(p => p.name === val);
                         if (prod?.category) setProductCategory(prod.category);
@@ -1026,7 +1026,7 @@ export default function DailyProductionPage() {
 
                     <div className="space-y-2">
                       <Label>الفئة</Label>
-                      <Select value={productCategory} onValueChange={setProductCategory}>
+                      <Select value={productCategory || undefined} onValueChange={setProductCategory}>
                         <SelectTrigger data-testid="select-category" className="h-11 sm:h-10">
                           <SelectValue placeholder="اختر الفئة" />
                         </SelectTrigger>
@@ -1097,7 +1097,7 @@ export default function DailyProductionPage() {
                         <ChefHat className="h-4 w-4" />
                         الشيف المنتج
                       </Label>
-                      <Select value={selectedChefId} onValueChange={handleChefSelect}>
+                      <Select value={selectedChefId || undefined} onValueChange={handleChefSelect}>
                         <SelectTrigger data-testid="select-chef" className="h-11 sm:h-10">
                           <SelectValue placeholder="اختر الشيف (اختياري)" />
                         </SelectTrigger>
