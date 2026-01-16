@@ -179,50 +179,54 @@ export default function ProductionPage() {
                 أمر إنتاج جديد
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{editingOrder ? "تعديل أمر الإنتاج" : "أمر إنتاج جديد"}</DialogTitle>
                 <DialogDescription>أدخل بيانات أمر الإنتاج</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <div>
-                  <Label>الفرع *</Label>
-                  <Select value={formData.branchId || userBranchId || ""} onValueChange={v => setFormData({ ...formData, branchId: v })} disabled={!canSelectBranch}>
-                    <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
-                      <SelectValue placeholder="اختر الفرع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches?.map(branch => (
-                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>الفرع *</Label>
+                    <Select value={formData.branchId || userBranchId || ""} onValueChange={v => setFormData({ ...formData, branchId: v })} disabled={!canSelectBranch}>
+                      <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
+                        <SelectValue placeholder="اختر الفرع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches?.map(branch => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>المنتج *</Label>
+                    <Select value={formData.productId} onValueChange={v => setFormData({ ...formData, productId: v })}>
+                      <SelectTrigger data-testid="select-product" className="h-11 sm:h-10">
+                        <SelectValue placeholder="اختر المنتج">
+                          {formData.productId && products?.find(p => p.id.toString() === formData.productId)?.name}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products?.filter(p => p.isActive === 'true').map(product => (
+                          <SelectItem key={product.id} value={product.id.toString()}>{product.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label>المنتج *</Label>
-                  <Select value={formData.productId} onValueChange={v => setFormData({ ...formData, productId: v })}>
-                    <SelectTrigger data-testid="select-product" className="h-11 sm:h-10">
-                      <SelectValue placeholder="اختر المنتج" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products?.filter(p => p.isActive === 'true').map(product => (
-                        <SelectItem key={product.id} value={product.id.toString()}>{product.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>الكمية المطلوبة *</Label>
-                  <Input
-                    type="number"
-                    value={formData.targetQuantity}
-                    onChange={e => setFormData({ ...formData, targetQuantity: e.target.value })}
-                    placeholder="مثال: 100"
-                    data-testid="input-quantity"
-                    className="h-11 sm:h-10"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label>الكمية المطلوبة *</Label>
+                    <Input
+                      type="number"
+                      value={formData.targetQuantity}
+                      onChange={e => setFormData({ ...formData, targetQuantity: e.target.value })}
+                      placeholder="مثال: 100"
+                      data-testid="input-quantity"
+                      className="h-11 sm:h-10"
+                    />
+                  </div>
                   <div>
                     <Label>التاريخ *</Label>
                     <Input
@@ -242,27 +246,29 @@ export default function ProductionPage() {
                     />
                   </div>
                 </div>
-                <div>
-                  <Label>الأولوية</Label>
-                  <Select value={formData.priority} onValueChange={v => setFormData({ ...formData, priority: v })}>
-                    <SelectTrigger className="h-11 sm:h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(PRIORITY).map(([value, { label }]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>الخباز المسؤول</Label>
-                  <Input
-                    value={formData.assignedTo}
-                    onChange={e => setFormData({ ...formData, assignedTo: e.target.value })}
-                    placeholder="اسم الخباز"
-                    className="h-11 sm:h-10"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>الأولوية</Label>
+                    <Select value={formData.priority} onValueChange={v => setFormData({ ...formData, priority: v })}>
+                      <SelectTrigger className="h-11 sm:h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PRIORITY).map(([value, { label }]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>الخباز المسؤول</Label>
+                    <Input
+                      value={formData.assignedTo}
+                      onChange={e => setFormData({ ...formData, assignedTo: e.target.value })}
+                      placeholder="اسم الخباز"
+                      className="h-11 sm:h-10"
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label>ملاحظات</Label>
