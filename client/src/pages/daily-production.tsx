@@ -25,7 +25,7 @@ import {
   BarChart3, TrendingUp, FileSpreadsheet, User, Shield, FileText,
   Printer, AlertTriangle, Timer, Activity, PieChart, Search, Zap,
   Sun, Moon, Sunset, Edit2, X, Check, ArrowUpDown, TrendingDown,
-  Repeat, CheckCircle
+  Repeat, CheckCircle, FileDown
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -630,6 +630,10 @@ export default function DailyProductionPage() {
       "الكمية": b.quantity,
       "الوحدة": b.unit || "قطعة",
       "الوجهة": getDestinationInfo(b.destination).label,
+      "الحالة": b.status === 'finished' ? 'مكتمل' : b.status === 'in_progress' ? 'قيد التحضير' : '-',
+      "الشيف المنتج": b.chefName || "-",
+      "تاريخ الاكتمال": b.finishedAt ? format(new Date(b.finishedAt), "yyyy/MM/dd HH:mm") : '-',
+      "من أكمل الدفعة": b.finishedByName || "-",
       "المسجل": b.recorderName || "-",
       "ملاحظات": b.notes || "-",
     }));
@@ -723,6 +727,10 @@ export default function DailyProductionPage() {
               <th>الفئة</th>
               <th>الكمية</th>
               <th>الوجهة</th>
+              <th>الحالة</th>
+              <th>الشيف</th>
+              <th>تاريخ الاكتمال</th>
+              <th>من أكمل</th>
               <th>المسجل</th>
               <th>ملاحظات</th>
             </tr>
@@ -736,6 +744,10 @@ export default function DailyProductionPage() {
                 <td>${b.productCategory || "-"}</td>
                 <td style="text-align: center; font-weight: bold;">${b.quantity}</td>
                 <td>${getDestinationInfo(b.destination).label}</td>
+                <td>${b.status === 'finished' ? '<span style="color:green;">مكتمل</span>' : b.status === 'in_progress' ? '<span style="color:orange;">قيد التحضير</span>' : '-'}</td>
+                <td>${b.chefName || "-"}</td>
+                <td>${b.finishedAt ? format(new Date(b.finishedAt), "HH:mm dd/MM", { locale: ar }) : '-'}</td>
+                <td>${b.finishedByName || "-"}</td>
                 <td><span class="recorder-badge">${b.recorderName || "-"}</span></td>
                 <td>${b.notes || "-"}</td>
               </tr>
@@ -870,6 +882,10 @@ export default function DailyProductionPage() {
             <Button variant="outline" size="sm" onClick={exportToExcel} disabled={!batches?.length} data-testid="btn-export">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-pdf">
+              <FileDown className="h-4 w-4 ml-2" />
+              PDF
             </Button>
             <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-print">
               <Printer className="h-4 w-4 ml-2" />
