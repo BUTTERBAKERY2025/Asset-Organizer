@@ -5072,7 +5072,7 @@ export default function EmployeeReportsDashboardPage() {
                                 <Cell key={`cell-${index}`} fill={entry.color} />
                               ))}
                             </Pie>
-                            <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                            <Tooltip formatter={(value) => formatCurrency(Number(value), isRTL)} />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="grid grid-cols-2 gap-2 mt-4">
@@ -5080,13 +5080,13 @@ export default function EmployeeReportsDashboardPage() {
                             <div key={item.name} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
                               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                               <span className="text-sm flex-1">{item.name}</span>
-                              <span className="font-bold text-sm">{formatCurrency(item.value)}</span>
+                              <span className="font-bold text-sm">{formatCurrency(item.value, isRTL)}</span>
                             </div>
                           ))}
                         </div>
                       </>
                     ) : (
-                      <div className="text-center py-10 text-gray-500">لا توجد بدلات مسجلة</div>
+                      <div className="text-center py-10 text-gray-500">{isRTL ? "لا توجد بدلات مسجلة" : "No allowances recorded"}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -5095,15 +5095,15 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <TrendingUp className="w-5 h-5" />
-                      ملخص التأمينات الاجتماعية
+                      {isRTL ? "ملخص التأمينات الاجتماعية" : "Social Insurance Summary"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg" data-testid="text-total-insurance">
                         <div>
-                          <p className="text-sm text-purple-600">إجمالي التأمينات</p>
-                          <p className="text-2xl font-bold text-purple-700">{formatCurrency(overviewStats.totalInsurance)}</p>
+                          <p className="text-sm text-purple-600">{isRTL ? "إجمالي التأمينات" : "Total Insurance"}</p>
+                          <p className="text-2xl font-bold text-purple-700">{formatCurrency(overviewStats.totalInsurance, isRTL)}</p>
                         </div>
                         <div className="p-3 bg-purple-100 rounded-full">
                           <Wallet className="w-8 h-8 text-purple-600" />
@@ -5112,11 +5112,11 @@ export default function EmployeeReportsDashboardPage() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-3 bg-gray-50 rounded-lg text-center" data-testid="text-saudi-count">
                           <p className="text-lg font-bold">{formatNumber(overviewStats.saudiEmployees)}</p>
-                          <p className="text-xs text-gray-500">موظف سعودي</p>
+                          <p className="text-xs text-gray-500">{isRTL ? "موظف سعودي" : "Saudi Employees"}</p>
                         </div>
                         <div className="p-3 bg-gray-50 rounded-lg text-center" data-testid="text-avg-insurance">
-                          <p className="text-lg font-bold">{formatCurrency(overviewStats.saudiEmployees > 0 ? Math.round(overviewStats.totalInsurance / overviewStats.saudiEmployees) : 0)}</p>
-                          <p className="text-xs text-gray-500">متوسط التأمينات</p>
+                          <p className="text-lg font-bold">{formatCurrency(overviewStats.saudiEmployees > 0 ? Math.round(overviewStats.totalInsurance / overviewStats.saudiEmployees) : 0, isRTL)}</p>
+                          <p className="text-xs text-gray-500">{isRTL ? "متوسط التأمينات" : "Avg. Insurance"}</p>
                         </div>
                       </div>
                     </div>
@@ -5127,7 +5127,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Building2 className="w-5 h-5" />
-                      ملخص الفروع
+                      {isRTL ? "ملخص الفروع" : "Branches Summary"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -5139,10 +5139,10 @@ export default function EmployeeReportsDashboardPage() {
                           </span>
                           <div className="flex-1">
                             <p className="font-medium">{branch.branchName}</p>
-                            <p className="text-xs text-gray-500">{branch.employeeCount} موظف</p>
+                            <p className="text-xs text-gray-500">{branch.employeeCount} {isRTL ? "موظف" : "employees"}</p>
                           </div>
                           <div className="text-left">
-                            <p className="font-bold text-sm">{formatCurrency(branch.totalSalary)}</p>
+                            <p className="font-bold text-sm">{formatCurrency(branch.totalSalary, isRTL)}</p>
                             <Badge className={branch.attendanceRate >= 80 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
                               {branch.attendanceRate}%
                             </Badge>
@@ -5161,15 +5161,15 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
                   <CardTitle className="flex items-center gap-2 text-indigo-800">
                     <TrendingUp className="w-5 h-5" />
-                    مؤشرات الأداء المقارنة
+                    {isRTL ? "مؤشرات الأداء المقارنة" : "Comparative Performance Metrics"}
                   </CardTitle>
-                  <CardDescription>مقارنة الشهر الحالي بالشهر السابق</CardDescription>
+                  <CardDescription>{isRTL ? "مقارنة الشهر الحالي بالشهر السابق" : "Current month vs previous month comparison"}</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
                       <p className="text-2xl font-bold text-blue-700">{formatNumber(overviewStats.totalEmployees)}</p>
-                      <p className="text-xs text-blue-600">إجمالي الموظفين</p>
+                      <p className="text-xs text-blue-600">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
                       {previousMonthStats && (
                         <div className={`text-xs mt-1 flex items-center justify-center gap-1 ${getChangeIndicator(overviewStats.totalEmployees, previousMonthStats.totalEmployees).isPositive ? "text-green-600" : "text-red-600"}`}>
                           {getChangeIndicator(overviewStats.totalEmployees, previousMonthStats.totalEmployees).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
@@ -5179,7 +5179,7 @@ export default function EmployeeReportsDashboardPage() {
                     </div>
                     <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg text-center">
                       <p className="text-2xl font-bold text-green-700">{overviewStats.attendanceRate}%</p>
-                      <p className="text-xs text-green-600">نسبة الحضور</p>
+                      <p className="text-xs text-green-600">{isRTL ? "نسبة الحضور" : "Attendance Rate"}</p>
                       {previousMonthStats && (
                         <div className={`text-xs mt-1 flex items-center justify-center gap-1 ${getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? "text-green-600" : "text-red-600"}`}>
                           {getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
@@ -5188,8 +5188,8 @@ export default function EmployeeReportsDashboardPage() {
                       )}
                     </div>
                     <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg text-center">
-                      <p className="text-2xl font-bold text-amber-700">{formatCurrency(overviewStats.totalSalaries)}</p>
-                      <p className="text-xs text-amber-600">إجمالي الرواتب</p>
+                      <p className="text-2xl font-bold text-amber-700">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
+                      <p className="text-xs text-amber-600">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
                       {previousMonthStats && (
                         <div className={`text-xs mt-1 flex items-center justify-center gap-1 ${getChangeIndicator(overviewStats.totalSalaries, previousMonthStats.totalSalaries).isPositive ? "text-green-600" : "text-red-600"}`}>
                           {getChangeIndicator(overviewStats.totalSalaries, previousMonthStats.totalSalaries).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
@@ -5198,23 +5198,23 @@ export default function EmployeeReportsDashboardPage() {
                       )}
                     </div>
                     <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg text-center">
-                      <p className="text-2xl font-bold text-purple-700">{formatCurrency(productivityMetrics.avgCostPerEmployee)}</p>
-                      <p className="text-xs text-purple-600">متوسط تكلفة الموظف</p>
+                      <p className="text-2xl font-bold text-purple-700">{formatCurrency(productivityMetrics.avgCostPerEmployee, isRTL)}</p>
+                      <p className="text-xs text-purple-600">{isRTL ? "متوسط تكلفة الموظف" : "Avg. Employee Cost"}</p>
                     </div>
                   </div>
 
                   {/* Salary Trend Chart (6 Months) */}
                   <div className="mt-4">
-                    <h4 className="font-medium text-gray-700 mb-3">اتجاه الرواتب خلال 6 أشهر</h4>
+                    <h4 className="font-medium text-gray-700 mb-3">{isRTL ? "اتجاه الرواتب خلال 6 أشهر" : "Salary Trend Over 6 Months"}</h4>
                     <ResponsiveContainer width="100%" height={200}>
                       <LineChart data={salaryTrends}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                         <YAxis tickFormatter={(value) => formatNumber(value)} />
-                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value), isRTL)} />
                         <Legend />
-                        <Line type="monotone" dataKey="totalSalary" stroke="#f59e0b" name="إجمالي الرواتب" strokeWidth={2} />
-                        <Line type="monotone" dataKey="avgSalary" stroke="#10b981" name="متوسط الراتب" strokeWidth={2} />
+                        <Line type="monotone" dataKey="totalSalary" stroke="#f59e0b" name={isRTL ? "إجمالي الرواتب" : "Total Salaries"} strokeWidth={2} />
+                        <Line type="monotone" dataKey="avgSalary" stroke="#10b981" name={isRTL ? "متوسط الراتب" : "Average Salary"} strokeWidth={2} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -5227,26 +5227,26 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="bg-gradient-to-r from-cyan-50 to-teal-50 border-b">
                     <CardTitle className="flex items-center gap-2 text-cyan-800">
                       <Clock className="w-5 h-5" />
-                      مؤشرات الإنتاجية
+                      {isRTL ? "مؤشرات الإنتاجية" : "Productivity Metrics"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg text-center">
                         <p className="text-2xl font-bold text-cyan-700">{formatNumber(productivityMetrics.totalWorkingHours)}</p>
-                        <p className="text-xs text-cyan-600">إجمالي ساعات العمل</p>
+                        <p className="text-xs text-cyan-600">{isRTL ? "إجمالي ساعات العمل" : "Total Working Hours"}</p>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg text-center">
                         <p className="text-2xl font-bold text-teal-700">{productivityMetrics.avgHoursPerEmployee}</p>
-                        <p className="text-xs text-teal-600">متوسط ساعات/موظف</p>
+                        <p className="text-xs text-teal-600">{isRTL ? "متوسط ساعات/موظف" : "Avg. Hours/Employee"}</p>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-blue-700">{formatCurrency(productivityMetrics.costPerHour)}</p>
-                        <p className="text-xs text-blue-600">تكلفة الساعة</p>
+                        <p className="text-2xl font-bold text-blue-700">{formatCurrency(productivityMetrics.costPerHour, isRTL)}</p>
+                        <p className="text-xs text-blue-600">{isRTL ? "تكلفة الساعة" : "Cost Per Hour"}</p>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-indigo-700">{formatCurrency(productivityMetrics.avgCostPerEmployee)}</p>
-                        <p className="text-xs text-indigo-600">تكلفة الموظف الشهرية</p>
+                        <p className="text-2xl font-bold text-indigo-700">{formatCurrency(productivityMetrics.avgCostPerEmployee, isRTL)}</p>
+                        <p className="text-xs text-indigo-600">{isRTL ? "تكلفة الموظف الشهرية" : "Monthly Employee Cost"}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -5257,26 +5257,26 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
                     <CardTitle className="flex items-center gap-2 text-orange-800">
                       <RefreshCw className="w-5 h-5" />
-                      مؤشرات الدوران الوظيفي
+                      {isRTL ? "مؤشرات الدوران الوظيفي" : "Turnover Metrics"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg text-center">
                         <p className="text-2xl font-bold text-green-700">{turnoverMetrics.newEmployees}</p>
-                        <p className="text-xs text-green-600">موظفين جدد هذا الشهر</p>
+                        <p className="text-xs text-green-600">{isRTL ? "موظفين جدد هذا الشهر" : "New Employees This Month"}</p>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg text-center">
                         <p className="text-2xl font-bold text-red-700">{turnoverMetrics.terminatedEmployees}</p>
-                        <p className="text-xs text-red-600">مستقيلين/منتهية عقودهم</p>
+                        <p className="text-xs text-red-600">{isRTL ? "مستقيلين/منتهية عقودهم" : "Resigned/Terminated"}</p>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
                         <p className="text-2xl font-bold text-blue-700">{turnoverMetrics.stabilityRate}%</p>
-                        <p className="text-xs text-blue-600">معدل الاستقرار</p>
+                        <p className="text-xs text-blue-600">{isRTL ? "معدل الاستقرار" : "Stability Rate"}</p>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg text-center">
                         <p className="text-2xl font-bold text-purple-700">{turnoverMetrics.avgTenureMonths}</p>
-                        <p className="text-xs text-purple-600">متوسط مدة الخدمة (شهر)</p>
+                        <p className="text-xs text-purple-600">{isRTL ? "متوسط مدة الخدمة (شهر)" : "Avg. Tenure (months)"}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -5288,33 +5288,33 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader className="bg-gradient-to-r from-emerald-50 to-green-50 border-b">
                   <CardTitle className="flex items-center gap-2 text-emerald-800">
                     <DollarSign className="w-5 h-5" />
-                    تحليل التكاليف
+                    {isRTL ? "تحليل التكاليف" : "Cost Analysis"}
                   </CardTitle>
-                  <CardDescription>توزيع تكاليف الموظفين</CardDescription>
+                  <CardDescription>{isRTL ? "توزيع تكاليف الموظفين" : "Employee cost distribution"}</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg text-center">
-                      <p className="text-xl font-bold text-green-700">{formatCurrency(costAnalysis.baseSalaries)}</p>
-                      <p className="text-xs text-green-600">الرواتب الأساسية</p>
+                      <p className="text-xl font-bold text-green-700">{formatCurrency(costAnalysis.baseSalaries, isRTL)}</p>
+                      <p className="text-xs text-green-600">{isRTL ? "الرواتب الأساسية" : "Base Salaries"}</p>
                     </div>
                     <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-center">
-                      <p className="text-xl font-bold text-blue-700">{formatCurrency(costAnalysis.totalAllowances)}</p>
-                      <p className="text-xs text-blue-600">البدلات ({costAnalysis.allowancePercentage}%)</p>
+                      <p className="text-xl font-bold text-blue-700">{formatCurrency(costAnalysis.totalAllowances, isRTL)}</p>
+                      <p className="text-xs text-blue-600">{isRTL ? `البدلات (${costAnalysis.allowancePercentage}%)` : `Allowances (${costAnalysis.allowancePercentage}%)`}</p>
                     </div>
                     <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg text-center">
-                      <p className="text-xl font-bold text-purple-700">{formatCurrency(costAnalysis.totalInsurance)}</p>
-                      <p className="text-xs text-purple-600">التأمينات ({costAnalysis.insurancePercentage}%)</p>
+                      <p className="text-xl font-bold text-purple-700">{formatCurrency(costAnalysis.totalInsurance, isRTL)}</p>
+                      <p className="text-xs text-purple-600">{isRTL ? `التأمينات (${costAnalysis.insurancePercentage}%)` : `Insurance (${costAnalysis.insurancePercentage}%)`}</p>
                     </div>
                     <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg text-center">
-                      <p className="text-xl font-bold text-orange-700">{formatCurrency(costAnalysis.overtimeCost)}</p>
-                      <p className="text-xs text-orange-600">العمل الإضافي ({costAnalysis.overtimeHours} ساعة)</p>
+                      <p className="text-xl font-bold text-orange-700">{formatCurrency(costAnalysis.overtimeCost, isRTL)}</p>
+                      <p className="text-xs text-orange-600">{isRTL ? `العمل الإضافي (${costAnalysis.overtimeHours} ساعة)` : `Overtime (${costAnalysis.overtimeHours} hrs)`}</p>
                     </div>
                   </div>
 
                   {/* Cost Distribution by Job Title */}
                   <div>
-                    <h4 className="font-medium text-gray-700 mb-3">توزيع التكاليف حسب الوظيفة</h4>
+                    <h4 className="font-medium text-gray-700 mb-3">{isRTL ? "توزيع التكاليف حسب الوظيفة" : "Cost Distribution by Job Title"}</h4>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {costAnalysis.costDistribution.map((item, index) => (
                         <div key={item.jobTitle} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
@@ -5323,10 +5323,10 @@ export default function EmployeeReportsDashboardPage() {
                           </span>
                           <div className="flex-1">
                             <p className="font-medium text-sm">{item.jobTitle}</p>
-                            <p className="text-xs text-gray-500">{item.count} موظف - متوسط: {formatCurrency(item.avgCost)}</p>
+                            <p className="text-xs text-gray-500">{item.count} {isRTL ? "موظف" : "employees"} - {isRTL ? "متوسط" : "avg"}: {formatCurrency(item.avgCost, isRTL)}</p>
                           </div>
                           <div className="text-left">
-                            <p className="font-bold text-sm">{formatCurrency(item.totalCost)}</p>
+                            <p className="font-bold text-sm">{formatCurrency(item.totalCost, isRTL)}</p>
                             <Badge className="bg-gray-100 text-gray-800">{item.percentage}%</Badge>
                           </div>
                         </div>
@@ -5343,7 +5343,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b">
                     <CardTitle className="flex items-center gap-2 text-violet-800">
                       <BarChart3 className="w-5 h-5" />
-                      مقارنة الحضور بين الفروع
+                      {isRTL ? "مقارنة الحضور بين الفروع" : "Branch Attendance Comparison"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-6">
@@ -5353,7 +5353,7 @@ export default function EmployeeReportsDashboardPage() {
                         <XAxis dataKey="branchName" tick={{ fontSize: 9 }} />
                         <YAxis />
                         <Tooltip />
-                        <Bar dataKey="attendanceRate" fill="#8b5cf6" name="نسبة الحضور %" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="attendanceRate" fill="#8b5cf6" name={isRTL ? "نسبة الحضور %" : "Attendance Rate %"} radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -5364,7 +5364,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="bg-gradient-to-r from-pink-50 to-rose-50 border-b">
                     <CardTitle className="flex items-center gap-2 text-pink-800">
                       <CalendarDays className="w-5 h-5" />
-                      توزيع الموظفين حسب سنوات الخبرة
+                      {isRTL ? "توزيع الموظفين حسب سنوات الخبرة" : "Employee Distribution by Experience"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-6">
@@ -5395,16 +5395,16 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b">
                   <CardTitle className="flex items-center gap-2 text-red-800">
                     <AlertCircle className="w-5 h-5" />
-                    التنبيهات الذكية
+                    {isRTL ? "التنبيهات الذكية" : "Smart Alerts"}
                   </CardTitle>
-                  <CardDescription>تنبيهات تحتاج انتباهك</CardDescription>
+                  <CardDescription>{isRTL ? "تنبيهات تحتاج انتباهك" : "Alerts that need your attention"}</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
                   {smartAlerts.length === 0 ? (
                     <div className="text-center py-8 text-green-600">
                       <CheckCircle className="w-12 h-12 mx-auto mb-2" />
-                      <p className="font-medium">لا توجد تنبيهات حالياً</p>
-                      <p className="text-sm text-gray-500">جميع المؤشرات ضمن المعدل الطبيعي</p>
+                      <p className="font-medium">{isRTL ? "لا توجد تنبيهات حالياً" : "No alerts currently"}</p>
+                      <p className="text-sm text-gray-500">{isRTL ? "جميع المؤشرات ضمن المعدل الطبيعي" : "All metrics are within normal range"}</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -5511,7 +5511,7 @@ export default function EmployeeReportsDashboardPage() {
                     <div className="text-center">
                       <CheckCircle className="w-8 h-8 mx-auto text-green-600 mb-2" />
                       <p className="text-3xl font-bold text-green-700">{formatNumber(healthCertificateAnalysis.valid)}</p>
-                      <p className="text-sm text-green-600">شهادات صالحة</p>
+                      <p className="text-sm text-green-600">{isRTL ? "شهادات صالحة" : "Valid Certificates"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -5520,7 +5520,7 @@ export default function EmployeeReportsDashboardPage() {
                     <div className="text-center">
                       <XCircle className="w-8 h-8 mx-auto text-red-600 mb-2" />
                       <p className="text-3xl font-bold text-red-700">{formatNumber(healthCertificateAnalysis.expired)}</p>
-                      <p className="text-sm text-red-600">شهادات منتهية</p>
+                      <p className="text-sm text-red-600">{isRTL ? "شهادات منتهية" : "Expired Certificates"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -5529,7 +5529,7 @@ export default function EmployeeReportsDashboardPage() {
                     <div className="text-center">
                       <AlertCircle className="w-8 h-8 mx-auto text-gray-600 mb-2" />
                       <p className="text-3xl font-bold text-gray-700">{formatNumber(healthCertificateAnalysis.none)}</p>
-                      <p className="text-sm text-gray-600">بدون شهادة</p>
+                      <p className="text-sm text-gray-600">{isRTL ? "بدون شهادة" : "No Certificate"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -5538,7 +5538,7 @@ export default function EmployeeReportsDashboardPage() {
                     <div className="text-center">
                       <TrendingUp className={`w-8 h-8 mx-auto mb-2 ${healthCertificateAnalysis.complianceRate >= 80 ? "text-teal-600" : healthCertificateAnalysis.complianceRate >= 50 ? "text-yellow-600" : "text-red-600"}`} />
                       <p className={`text-3xl font-bold ${healthCertificateAnalysis.complianceRate >= 80 ? "text-teal-700" : healthCertificateAnalysis.complianceRate >= 50 ? "text-yellow-700" : "text-red-700"}`}>{healthCertificateAnalysis.complianceRate}%</p>
-                      <p className={`text-sm ${healthCertificateAnalysis.complianceRate >= 80 ? "text-teal-600" : healthCertificateAnalysis.complianceRate >= 50 ? "text-yellow-600" : "text-red-600"}`}>نسبة الامتثال</p>
+                      <p className={`text-sm ${healthCertificateAnalysis.complianceRate >= 80 ? "text-teal-600" : healthCertificateAnalysis.complianceRate >= 50 ? "text-yellow-600" : "text-red-600"}`}>{isRTL ? "نسبة الامتثال" : "Compliance Rate"}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -5550,7 +5550,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-red-700 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
-                      تنتهي خلال 30 يوم
+                      {isRTL ? "تنتهي خلال 30 يوم" : "Expiring in 30 days"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -5558,7 +5558,7 @@ export default function EmployeeReportsDashboardPage() {
                     {healthCertificateAnalysis.expiringWithin30.length > 0 && (
                       <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
                         {healthCertificateAnalysis.expiringWithin30.map((item, i) => (
-                          <p key={i} className="text-xs text-red-600">{item.emp.employeeName} ({item.daysLeft} يوم)</p>
+                          <p key={i} className="text-xs text-red-600">{item.emp.employeeName} ({item.daysLeft} {isRTL ? "يوم" : "days"})</p>
                         ))}
                       </div>
                     )}
@@ -5568,7 +5568,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-yellow-700 flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      تنتهي خلال 60 يوم
+                      {isRTL ? "تنتهي خلال 60 يوم" : "Expiring in 60 days"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -5576,7 +5576,7 @@ export default function EmployeeReportsDashboardPage() {
                     {healthCertificateAnalysis.expiringWithin60.length > 0 && (
                       <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
                         {healthCertificateAnalysis.expiringWithin60.map((item, i) => (
-                          <p key={i} className="text-xs text-yellow-600">{item.emp.employeeName} ({item.daysLeft} يوم)</p>
+                          <p key={i} className="text-xs text-yellow-600">{item.emp.employeeName} ({item.daysLeft} {isRTL ? "يوم" : "days"})</p>
                         ))}
                       </div>
                     )}
@@ -5586,7 +5586,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
                       <Calendar className="w-4 h-4" />
-                      تنتهي خلال 90 يوم
+                      {isRTL ? "تنتهي خلال 90 يوم" : "Expiring in 90 days"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -5594,7 +5594,7 @@ export default function EmployeeReportsDashboardPage() {
                     {healthCertificateAnalysis.expiringWithin90.length > 0 && (
                       <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
                         {healthCertificateAnalysis.expiringWithin90.map((item, i) => (
-                          <p key={i} className="text-xs text-blue-600">{item.emp.employeeName} ({item.daysLeft} يوم)</p>
+                          <p key={i} className="text-xs text-blue-600">{item.emp.employeeName} ({item.daysLeft} {isRTL ? "يوم" : "days"})</p>
                         ))}
                       </div>
                     )}
@@ -5608,7 +5608,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Building2 className="w-5 h-5" />
-                      نسبة الامتثال حسب الفرع
+                      {isRTL ? "نسبة الامتثال حسب الفرع" : "Compliance Rate by Branch"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -5619,7 +5619,7 @@ export default function EmployeeReportsDashboardPage() {
                           <XAxis type="number" domain={[0, 100]} />
                           <YAxis dataKey="branchName" type="category" width={100} />
                           <Tooltip formatter={(value) => `${value}%`} />
-                          <Bar dataKey="rate" fill="#10b981" name="نسبة الامتثال">
+                          <Bar dataKey="rate" fill="#10b981" name={isRTL ? "نسبة الامتثال" : "Compliance Rate"}>
                             {healthCertificateAnalysis.branchCompliance.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.rate >= 80 ? "#10b981" : entry.rate >= 50 ? "#f59e0b" : "#ef4444"} />
                             ))}
@@ -5627,7 +5627,7 @@ export default function EmployeeReportsDashboardPage() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="text-center py-10 text-gray-500">لا توجد بيانات</div>
+                      <div className="text-center py-10 text-gray-500">{isRTL ? "لا توجد بيانات" : "No data available"}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -5636,7 +5636,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Users className="w-5 h-5" />
-                      نسبة الامتثال حسب الوظيفة
+                      {isRTL ? "نسبة الامتثال حسب الوظيفة" : "Compliance Rate by Job Title"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -5646,7 +5646,7 @@ export default function EmployeeReportsDashboardPage() {
                           <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                             <div>
                               <p className="font-medium text-sm">{job.job}</p>
-                              <p className="text-xs text-gray-500">{job.valid}/{job.total} موظف</p>
+                              <p className="text-xs text-gray-500">{job.valid}/{job.total} {isRTL ? "موظف" : "employees"}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="w-20 bg-gray-200 rounded-full h-2">
@@ -5663,7 +5663,7 @@ export default function EmployeeReportsDashboardPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-10 text-gray-500">لا توجد بيانات</div>
+                      <div className="text-center py-10 text-gray-500">{isRTL ? "لا توجد بيانات" : "No data available"}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -5674,9 +5674,9 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertCircle className="w-5 h-5 text-amber-500" />
-                    الموظفين الذين يحتاجون تجديد الشهادة الصحية
+                    {isRTL ? "الموظفين الذين يحتاجون تجديد الشهادة الصحية" : "Employees Needing Health Certificate Renewal"}
                   </CardTitle>
-                  <CardDescription>شهادات منتهية أو غير موجودة أو تنتهي خلال 30 يوم</CardDescription>
+                  <CardDescription>{isRTL ? "شهادات منتهية أو غير موجودة أو تنتهي خلال 30 يوم" : "Expired, missing, or expiring within 30 days"}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {healthCertificateAnalysis.needsRenewal.length > 0 ? (
@@ -5684,12 +5684,12 @@ export default function EmployeeReportsDashboardPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-right">الموظف</TableHead>
-                            <TableHead className="text-right">الفرع</TableHead>
-                            <TableHead className="text-right">الوظيفة</TableHead>
-                            <TableHead className="text-right">الحالة</TableHead>
-                            <TableHead className="text-right">تاريخ الانتهاء</TableHead>
-                            <TableHead className="text-right">الجوال</TableHead>
+                            <TableHead className="text-right">{isRTL ? "الموظف" : "Employee"}</TableHead>
+                            <TableHead className="text-right">{isRTL ? "الفرع" : "Branch"}</TableHead>
+                            <TableHead className="text-right">{isRTL ? "الوظيفة" : "Job Title"}</TableHead>
+                            <TableHead className="text-right">{isRTL ? "الحالة" : "Status"}</TableHead>
+                            <TableHead className="text-right">{isRTL ? "تاريخ الانتهاء" : "Expiry Date"}</TableHead>
+                            <TableHead className="text-right">{isRTL ? "الجوال" : "Phone"}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -5704,8 +5704,8 @@ export default function EmployeeReportsDashboardPage() {
                                   emp.healthCertificate === "none" || !emp.healthCertificate ? "bg-gray-100 text-gray-800" :
                                   "bg-yellow-100 text-yellow-800"
                                 }>
-                                  {emp.healthCertificate === "expired" ? "منتهية" : 
-                                   emp.healthCertificate === "none" || !emp.healthCertificate ? "لا توجد" : "تنتهي قريباً"}
+                                  {emp.healthCertificate === "expired" ? (isRTL ? "منتهية" : "Expired") : 
+                                   emp.healthCertificate === "none" || !emp.healthCertificate ? (isRTL ? "لا توجد" : "None") : (isRTL ? "تنتهي قريباً" : "Expiring Soon")}
                                 </Badge>
                               </TableCell>
                               <TableCell>{emp.healthCertificateExpiry || "--"}</TableCell>
@@ -5718,7 +5718,7 @@ export default function EmployeeReportsDashboardPage() {
                   ) : (
                     <div className="text-center py-10 text-green-600">
                       <CheckCircle className="w-12 h-12 mx-auto mb-2" />
-                      جميع الموظفين لديهم شهادات صحية سارية
+                      {isRTL ? "جميع الموظفين لديهم شهادات صحية سارية" : "All employees have valid health certificates"}
                     </div>
                   )}
                 </CardContent>
@@ -5845,31 +5845,31 @@ export default function EmployeeReportsDashboardPage() {
                     <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                       <CardContent className="pt-4 text-center">
                         <p className="text-2xl font-bold text-blue-700">{formatNumber(comprehensiveComparisons.summary.totalBranches)}</p>
-                        <p className="text-sm text-blue-600">عدد الفروع</p>
+                        <p className="text-sm text-blue-600">{isRTL ? "عدد الفروع" : "Total Branches"}</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
                       <CardContent className="pt-4 text-center">
                         <p className="text-2xl font-bold text-green-700">{formatNumber(comprehensiveComparisons.summary.totalActiveEmployees)}</p>
-                        <p className="text-sm text-green-600">موظف نشط</p>
+                        <p className="text-sm text-green-600">{isRTL ? "موظف نشط" : "Active Employees"}</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
                       <CardContent className="pt-4 text-center">
-                        <p className="text-2xl font-bold text-amber-700">{formatCurrency(comprehensiveComparisons.summary.overallAvgSalary)}</p>
-                        <p className="text-sm text-amber-600">متوسط الراتب</p>
+                        <p className="text-2xl font-bold text-amber-700">{formatCurrency(comprehensiveComparisons.summary.overallAvgSalary, isRTL)}</p>
+                        <p className="text-sm text-amber-600">{isRTL ? "متوسط الراتب" : "Average Salary"}</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
                       <CardContent className="pt-4 text-center">
                         <p className="text-lg font-bold text-teal-700">{comprehensiveComparisons.summary.highestAvgBranch}</p>
-                        <p className="text-sm text-teal-600">أعلى متوسط</p>
+                        <p className="text-sm text-teal-600">{isRTL ? "أعلى متوسط" : "Highest Average"}</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
                       <CardContent className="pt-4 text-center">
                         <p className="text-lg font-bold text-purple-700">{comprehensiveComparisons.summary.lowestAvgBranch}</p>
-                        <p className="text-sm text-purple-600">أقل متوسط</p>
+                        <p className="text-sm text-purple-600">{isRTL ? "أقل متوسط" : "Lowest Average"}</p>
                       </CardContent>
                     </Card>
                   </div>
@@ -5879,23 +5879,23 @@ export default function EmployeeReportsDashboardPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Building2 className="w-5 h-5" />
-                        مقارنة الرواتب حسب الفروع
+                        {isRTL ? "مقارنة الرواتب حسب الفروع" : "Salary Comparison by Branch"}
                       </CardTitle>
-                      <CardDescription>أعلى وأقل راتب في كل فرع مع المتوسط</CardDescription>
+                      <CardDescription>{isRTL ? "أعلى وأقل راتب في كل فرع مع المتوسط" : "Highest and lowest salary in each branch with average"}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
                         <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right w-[120px]">الفرع</TableHead>
-                              <TableHead className="text-center w-[80px]">عدد الموظفين</TableHead>
-                              <TableHead className="text-center w-[100px]">إجمالي الرواتب</TableHead>
-                              <TableHead className="text-center w-[90px]">متوسط الراتب</TableHead>
-                              <TableHead className="text-center w-[80px]">أعلى راتب</TableHead>
-                              <TableHead className="text-center w-[80px]">أقل راتب</TableHead>
-                              <TableHead className="text-center w-[140px]">الأعلى راتباً</TableHead>
-                              <TableHead className="text-center w-[140px]">الأقل راتباً</TableHead>
+                              <TableHead className="text-right w-[120px]">{isRTL ? "الفرع" : "Branch"}</TableHead>
+                              <TableHead className="text-center w-[80px]">{isRTL ? "عدد الموظفين" : "Employees"}</TableHead>
+                              <TableHead className="text-center w-[100px]">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</TableHead>
+                              <TableHead className="text-center w-[90px]">{isRTL ? "متوسط الراتب" : "Avg. Salary"}</TableHead>
+                              <TableHead className="text-center w-[80px]">{isRTL ? "أعلى راتب" : "Max Salary"}</TableHead>
+                              <TableHead className="text-center w-[80px]">{isRTL ? "أقل راتب" : "Min Salary"}</TableHead>
+                              <TableHead className="text-center w-[140px]">{isRTL ? "الأعلى راتباً" : "Highest Paid"}</TableHead>
+                              <TableHead className="text-center w-[140px]">{isRTL ? "الأقل راتباً" : "Lowest Paid"}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -5903,10 +5903,10 @@ export default function EmployeeReportsDashboardPage() {
                               <TableRow key={i}>
                                 <TableCell className="font-medium text-right">{branch.branchName}</TableCell>
                                 <TableCell className="text-center">{formatNumber(branch.employeeCount)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(branch.totalSalary)}</TableCell>
-                                <TableCell className="text-center font-bold text-amber-600">{formatCurrency(branch.avgSalary)}</TableCell>
-                                <TableCell className="text-center text-green-600">{formatCurrency(branch.maxSalary)}</TableCell>
-                                <TableCell className="text-center text-red-600">{formatCurrency(branch.minSalary)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.totalSalary, isRTL)}</TableCell>
+                                <TableCell className="text-center font-bold text-amber-600">{formatCurrency(branch.avgSalary, isRTL)}</TableCell>
+                                <TableCell className="text-center text-green-600">{formatCurrency(branch.maxSalary, isRTL)}</TableCell>
+                                <TableCell className="text-center text-red-600">{formatCurrency(branch.minSalary, isRTL)}</TableCell>
                                 <TableCell className="text-center">{branch.highestPaid}</TableCell>
                                 <TableCell className="text-center">{branch.lowestPaid}</TableCell>
                               </TableRow>
@@ -5923,7 +5923,7 @@ export default function EmployeeReportsDashboardPage() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Users className="w-5 h-5" />
-                          مقارنة حسب الجنسيات
+                          {isRTL ? "مقارنة حسب الجنسيات" : "Comparison by Nationality"}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -5933,7 +5933,7 @@ export default function EmployeeReportsDashboardPage() {
                             <XAxis dataKey="nationality" />
                             <YAxis />
                             <Tooltip formatter={(value) => formatNumber(Number(value))} />
-                            <Bar dataKey="count" fill="#f59e0b" name="العدد" />
+                            <Bar dataKey="count" fill="#f59e0b" name={isRTL ? "العدد" : "Count"} />
                           </BarChart>
                         </ResponsiveContainer>
                         <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
@@ -5945,7 +5945,7 @@ export default function EmployeeReportsDashboardPage() {
                               </div>
                               <div className="text-left">
                                 <span className="font-bold">{formatNumber(nat.count)}</span>
-                                <span className="text-xs text-gray-500 mr-2">متوسط: {formatCurrency(nat.avgSalary)}</span>
+                                <span className="text-xs text-gray-500 mr-2">{isRTL ? "متوسط" : "avg"}: {formatCurrency(nat.avgSalary, isRTL)}</span>
                               </div>
                             </div>
                           ))}
@@ -5958,7 +5958,7 @@ export default function EmployeeReportsDashboardPage() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Building2 className="w-5 h-5" />
-                          عدد الموظفين حسب الفرع
+                          {isRTL ? "عدد الموظفين حسب الفرع" : "Employees by Branch"}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -5969,9 +5969,9 @@ export default function EmployeeReportsDashboardPage() {
                             <YAxis dataKey="branchName" type="category" width={80} />
                             <Tooltip />
                             <Legend />
-                            <Bar dataKey="active" stackId="a" fill="#10b981" name="نشط" />
-                            <Bar dataKey="onLeave" stackId="a" fill="#f59e0b" name="إجازة" />
-                            <Bar dataKey="terminated" stackId="a" fill="#ef4444" name="منتهي" />
+                            <Bar dataKey="active" stackId="a" fill="#10b981" name={isRTL ? "نشط" : "Active"} />
+                            <Bar dataKey="onLeave" stackId="a" fill="#f59e0b" name={isRTL ? "إجازة" : "On Leave"} />
+                            <Bar dataKey="terminated" stackId="a" fill="#ef4444" name={isRTL ? "منتهي" : "Terminated"} />
                           </BarChart>
                         </ResponsiveContainer>
                       </CardContent>
@@ -5983,21 +5983,21 @@ export default function EmployeeReportsDashboardPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <DollarSign className="w-5 h-5" />
-                        مقارنة الوظائف عبر الفروع
+                        {isRTL ? "مقارنة الوظائف عبر الفروع" : "Job Comparison Across Branches"}
                       </CardTitle>
-                      <CardDescription>متوسط الراتب لكل وظيفة مع الفرق بين الفروع</CardDescription>
+                      <CardDescription>{isRTL ? "متوسط الراتب لكل وظيفة مع الفرق بين الفروع" : "Average salary per job title with branch differences"}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto max-h-96">
                         <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right w-[120px]">الوظيفة</TableHead>
-                              <TableHead className="text-center w-[70px]">العدد</TableHead>
-                              <TableHead className="text-center w-[100px]">متوسط الراتب</TableHead>
-                              <TableHead className="text-center w-[120px]">أعلى فرع</TableHead>
-                              <TableHead className="text-center w-[120px]">أقل فرع</TableHead>
-                              <TableHead className="text-center w-[90px]">فجوة الراتب</TableHead>
+                              <TableHead className="text-right w-[120px]">{isRTL ? "الوظيفة" : "Job Title"}</TableHead>
+                              <TableHead className="text-center w-[70px]">{isRTL ? "العدد" : "Count"}</TableHead>
+                              <TableHead className="text-center w-[100px]">{isRTL ? "متوسط الراتب" : "Avg. Salary"}</TableHead>
+                              <TableHead className="text-center w-[120px]">{isRTL ? "أعلى فرع" : "Highest Branch"}</TableHead>
+                              <TableHead className="text-center w-[120px]">{isRTL ? "أقل فرع" : "Lowest Branch"}</TableHead>
+                              <TableHead className="text-center w-[90px]">{isRTL ? "فجوة الراتب" : "Salary Gap"}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -6005,12 +6005,12 @@ export default function EmployeeReportsDashboardPage() {
                               <TableRow key={i}>
                                 <TableCell className="font-medium text-right">{job.jobTitle}</TableCell>
                                 <TableCell className="text-center">{formatNumber(job.totalCount)}</TableCell>
-                                <TableCell className="text-center font-bold text-amber-600">{formatCurrency(job.overallAvgSalary)}</TableCell>
+                                <TableCell className="text-center font-bold text-amber-600">{formatCurrency(job.overallAvgSalary, isRTL)}</TableCell>
                                 <TableCell className="text-center text-green-600">{job.highestPayingBranch}</TableCell>
                                 <TableCell className="text-center text-red-600">{job.lowestPayingBranch}</TableCell>
                                 <TableCell className="text-center">
                                   <Badge className={job.salaryGap > 1000 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}>
-                                    {formatCurrency(job.salaryGap)}
+                                    {formatCurrency(job.salaryGap, isRTL)}
                                   </Badge>
                                 </TableCell>
                               </TableRow>
@@ -6026,7 +6026,7 @@ export default function EmployeeReportsDashboardPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Wallet className="w-5 h-5" />
-                        توزيع الرواتب
+                        {isRTL ? "توزيع الرواتب" : "Salary Distribution"}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -6036,7 +6036,7 @@ export default function EmployeeReportsDashboardPage() {
                           <XAxis dataKey="range" />
                           <YAxis />
                           <Tooltip />
-                          <Bar dataKey="count" fill="#8b5cf6" name="عدد الموظفين" />
+                          <Bar dataKey="count" fill="#8b5cf6" name={isRTL ? "عدد الموظفين" : "Employee Count"} />
                         </BarChart>
                       </ResponsiveContainer>
                     </CardContent>
@@ -6048,9 +6048,9 @@ export default function EmployeeReportsDashboardPage() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Clock className="w-5 h-5" />
-                          توزيع الموظفين حسب مدة الخدمة
+                          {isRTL ? "توزيع الموظفين حسب مدة الخدمة" : "Employee Distribution by Tenure"}
                         </CardTitle>
-                        <CardDescription>متوسط مدة الخدمة: {comprehensiveComparisons.summary.avgTenure} سنة</CardDescription>
+                        <CardDescription>{isRTL ? `متوسط مدة الخدمة: ${comprehensiveComparisons.summary.avgTenure} سنة` : `Average tenure: ${comprehensiveComparisons.summary.avgTenure} years`}</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={200}>
@@ -6059,14 +6059,14 @@ export default function EmployeeReportsDashboardPage() {
                             <XAxis dataKey="range" />
                             <YAxis />
                             <Tooltip />
-                            <Bar dataKey="count" fill="#10b981" name="عدد الموظفين" />
+                            <Bar dataKey="count" fill="#10b981" name={isRTL ? "عدد الموظفين" : "Employee Count"} />
                           </BarChart>
                         </ResponsiveContainer>
                         <div className="mt-4 grid grid-cols-2 gap-2">
                           {comprehensiveComparisons.tenureRanges.map((range, i) => (
                             <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                               <span className="text-sm font-medium">{range.range}</span>
-                              <Badge variant="secondary">{formatNumber(range.count)} موظف</Badge>
+                              <Badge variant="secondary">{formatNumber(range.count)} {isRTL ? "موظف" : "employees"}</Badge>
                             </div>
                           ))}
                         </div>
@@ -6077,7 +6077,7 @@ export default function EmployeeReportsDashboardPage() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Building2 className="w-5 h-5" />
-                          متوسط مدة الخدمة حسب الفرع
+                          {isRTL ? "متوسط مدة الخدمة حسب الفرع" : "Average Tenure by Branch"}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -6086,7 +6086,7 @@ export default function EmployeeReportsDashboardPage() {
                             <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                               <div>
                                 <span className="font-medium">{branch.branchName}</span>
-                                <span className="text-xs text-gray-500 mr-2">({branch.count} موظف)</span>
+                                <span className="text-xs text-gray-500 mr-2">({branch.count} {isRTL ? "موظف" : "employees"})</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -6100,7 +6100,7 @@ export default function EmployeeReportsDashboardPage() {
                                   branch.avgTenure >= 1 ? "bg-yellow-100 text-yellow-800" :
                                   "bg-red-100 text-red-800"
                                 }>
-                                  {branch.avgTenure} سنة
+                                  {branch.avgTenure} {isRTL ? "سنة" : "yrs"}
                                 </Badge>
                               </div>
                             </div>
@@ -6115,9 +6115,9 @@ export default function EmployeeReportsDashboardPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-red-500" />
-                        تحليل الفجوة الراتبية بين الجنسيات لنفس الوظيفة
+                        {isRTL ? "تحليل الفجوة الراتبية بين الجنسيات لنفس الوظيفة" : "Salary Gap Analysis by Nationality per Job"}
                       </CardTitle>
-                      <CardDescription>الوظائف التي بها فرق في الراتب بين الجنسيات المختلفة</CardDescription>
+                      <CardDescription>{isRTL ? "الوظائف التي بها فرق في الراتب بين الجنسيات المختلفة" : "Jobs with salary differences between nationalities"}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {comprehensiveComparisons.salaryGapByJob.length > 0 ? (
@@ -6125,11 +6125,11 @@ export default function EmployeeReportsDashboardPage() {
                           <Table className="table-fixed w-full">
                             <TableHeader>
                               <TableRow>
-                                <TableHead className="text-right w-[100px]">الوظيفة</TableHead>
-                                <TableHead className="text-center w-[250px]">الجنسيات والرواتب</TableHead>
-                                <TableHead className="text-center w-[90px]">أعلى جنسية</TableHead>
-                                <TableHead className="text-center w-[90px]">أقل جنسية</TableHead>
-                                <TableHead className="text-center w-[90px]">فجوة الراتب</TableHead>
+                                <TableHead className="text-right w-[100px]">{isRTL ? "الوظيفة" : "Job Title"}</TableHead>
+                                <TableHead className="text-center w-[250px]">{isRTL ? "الجنسيات والرواتب" : "Nationalities & Salaries"}</TableHead>
+                                <TableHead className="text-center w-[90px]">{isRTL ? "أعلى جنسية" : "Highest Nat."}</TableHead>
+                                <TableHead className="text-center w-[90px]">{isRTL ? "أقل جنسية" : "Lowest Nat."}</TableHead>
+                                <TableHead className="text-center w-[90px]">{isRTL ? "فجوة الراتب" : "Salary Gap"}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -6140,7 +6140,7 @@ export default function EmployeeReportsDashboardPage() {
                                     <div className="flex flex-wrap gap-1 justify-center">
                                       {job.nationalityComparisons.map((nat, j) => (
                                         <Badge key={j} variant="outline" className="text-xs">
-                                          {nat.nationality}: {formatCurrency(nat.avgSalary)} ({nat.count})
+                                          {nat.nationality}: {formatCurrency(nat.avgSalary, isRTL)} ({nat.count})
                                         </Badge>
                                       ))}
                                     </div>
@@ -6153,7 +6153,7 @@ export default function EmployeeReportsDashboardPage() {
                                       job.maxGap > 1000 ? "bg-yellow-100 text-yellow-800" :
                                       "bg-green-100 text-green-800"
                                     }>
-                                      {formatCurrency(job.maxGap)}
+                                      {formatCurrency(job.maxGap, isRTL)}
                                     </Badge>
                                   </TableCell>
                                 </TableRow>
@@ -6164,7 +6164,7 @@ export default function EmployeeReportsDashboardPage() {
                       ) : (
                         <div className="text-center py-8 text-gray-500">
                           <CheckCircle className="w-10 h-10 mx-auto mb-2 text-green-500" />
-                          لا توجد فجوات راتبية ملحوظة بين الجنسيات
+                          {isRTL ? "لا توجد فجوات راتبية ملحوظة بين الجنسيات" : "No notable salary gaps between nationalities"}
                         </div>
                       )}
                     </CardContent>
@@ -6175,9 +6175,9 @@ export default function EmployeeReportsDashboardPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Wallet className="w-5 h-5 text-blue-500" />
-                        تحليل البدلات حسب الفرع
+                        {isRTL ? "تحليل البدلات حسب الفرع" : "Allowances Analysis by Branch"}
                       </CardTitle>
-                      <CardDescription>مقارنة بدل السكن والنقل والطعام بين الفروع</CardDescription>
+                      <CardDescription>{isRTL ? "مقارنة بدل السكن والنقل والطعام بين الفروع" : "Housing, transport, and food allowance comparison across branches"}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={250}>
@@ -6185,24 +6185,24 @@ export default function EmployeeReportsDashboardPage() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="branchName" />
                           <YAxis />
-                          <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                          <Tooltip formatter={(value) => formatCurrency(Number(value), isRTL)} />
                           <Legend />
-                          <Bar dataKey="housingAllowance" stackId="a" fill="#3b82f6" name="بدل السكن" />
-                          <Bar dataKey="transportAllowance" stackId="a" fill="#10b981" name="بدل النقل" />
-                          <Bar dataKey="foodAllowance" stackId="a" fill="#f59e0b" name="بدل الطعام" />
-                          <Bar dataKey="otherAllowances" stackId="a" fill="#8b5cf6" name="بدلات أخرى" />
+                          <Bar dataKey="housingAllowance" stackId="a" fill="#3b82f6" name={isRTL ? "بدل السكن" : "Housing"} />
+                          <Bar dataKey="transportAllowance" stackId="a" fill="#10b981" name={isRTL ? "بدل النقل" : "Transport"} />
+                          <Bar dataKey="foodAllowance" stackId="a" fill="#f59e0b" name={isRTL ? "بدل الطعام" : "Food"} />
+                          <Bar dataKey="otherAllowances" stackId="a" fill="#8b5cf6" name={isRTL ? "بدلات أخرى" : "Other"} />
                         </BarChart>
                       </ResponsiveContainer>
                       <div className="mt-4 overflow-x-auto">
                         <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right w-[120px]">الفرع</TableHead>
-                              <TableHead className="text-center w-[80px]">الموظفين</TableHead>
-                              <TableHead className="text-center w-[100px]">بدل السكن</TableHead>
-                              <TableHead className="text-center w-[100px]">بدل النقل</TableHead>
-                              <TableHead className="text-center w-[110px]">إجمالي البدلات</TableHead>
-                              <TableHead className="text-center w-[100px]">متوسط/موظف</TableHead>
+                              <TableHead className="text-right w-[120px]">{isRTL ? "الفرع" : "Branch"}</TableHead>
+                              <TableHead className="text-center w-[80px]">{isRTL ? "الموظفين" : "Employees"}</TableHead>
+                              <TableHead className="text-center w-[100px]">{isRTL ? "بدل السكن" : "Housing"}</TableHead>
+                              <TableHead className="text-center w-[100px]">{isRTL ? "بدل النقل" : "Transport"}</TableHead>
+                              <TableHead className="text-center w-[110px]">{isRTL ? "إجمالي البدلات" : "Total Allow."}</TableHead>
+                              <TableHead className="text-center w-[100px]">{isRTL ? "متوسط/موظف" : "Avg/Employee"}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -6210,10 +6210,10 @@ export default function EmployeeReportsDashboardPage() {
                               <TableRow key={i}>
                                 <TableCell className="font-medium text-right">{branch.branchName}</TableCell>
                                 <TableCell className="text-center">{formatNumber(branch.employeeCount)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(branch.housingAllowance)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(branch.transportAllowance)}</TableCell>
-                                <TableCell className="text-center font-bold text-blue-600">{formatCurrency(branch.totalAllowances)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(branch.avgAllowancePerEmployee)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.housingAllowance, isRTL)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.transportAllowance, isRTL)}</TableCell>
+                                <TableCell className="text-center font-bold text-blue-600">{formatCurrency(branch.totalAllowances, isRTL)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.avgAllowancePerEmployee, isRTL)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -6227,13 +6227,12 @@ export default function EmployeeReportsDashboardPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <DollarSign className="w-5 h-5 text-green-500" />
-                        التكلفة الشهرية الإجمالية لكل فرع
+                        {isRTL ? "التكلفة الشهرية الإجمالية لكل فرع" : "Total Monthly Cost by Branch"}
                       </CardTitle>
                       <CardDescription>
-                        إجمالي التكاليف: {formatCurrency(comprehensiveComparisons.summary.grandTotalCost || 0)} 
-                        (رواتب: {formatCurrency(comprehensiveComparisons.summary.grandTotalSalaries || 0)} + 
-                        بدلات: {formatCurrency(comprehensiveComparisons.summary.grandTotalAllowances || 0)} + 
-                        تأمينات: {formatCurrency(comprehensiveComparisons.summary.grandTotalInsurance || 0)})
+                        {isRTL 
+                          ? `إجمالي التكاليف: ${formatCurrency(comprehensiveComparisons.summary.grandTotalCost || 0, isRTL)} (رواتب: ${formatCurrency(comprehensiveComparisons.summary.grandTotalSalaries || 0, isRTL)} + بدلات: ${formatCurrency(comprehensiveComparisons.summary.grandTotalAllowances || 0, isRTL)} + تأمينات: ${formatCurrency(comprehensiveComparisons.summary.grandTotalInsurance || 0, isRTL)})`
+                          : `Total costs: ${formatCurrency(comprehensiveComparisons.summary.grandTotalCost || 0, isRTL)} (Salaries: ${formatCurrency(comprehensiveComparisons.summary.grandTotalSalaries || 0, isRTL)} + Allowances: ${formatCurrency(comprehensiveComparisons.summary.grandTotalAllowances || 0, isRTL)} + Insurance: ${formatCurrency(comprehensiveComparisons.summary.grandTotalInsurance || 0, isRTL)})`}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -6242,24 +6241,24 @@ export default function EmployeeReportsDashboardPage() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis type="number" tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
                           <YAxis dataKey="branchName" type="category" width={100} />
-                          <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                          <Tooltip formatter={(value) => formatCurrency(Number(value), isRTL)} />
                           <Legend />
-                          <Bar dataKey="totalSalaries" stackId="a" fill="#10b981" name="الرواتب" />
-                          <Bar dataKey="totalAllowances" stackId="a" fill="#3b82f6" name="البدلات" />
-                          <Bar dataKey="socialInsurance" stackId="a" fill="#f59e0b" name="التأمينات" />
+                          <Bar dataKey="totalSalaries" stackId="a" fill="#10b981" name={isRTL ? "الرواتب" : "Salaries"} />
+                          <Bar dataKey="totalAllowances" stackId="a" fill="#3b82f6" name={isRTL ? "البدلات" : "Allowances"} />
+                          <Bar dataKey="socialInsurance" stackId="a" fill="#f59e0b" name={isRTL ? "التأمينات" : "Insurance"} />
                         </BarChart>
                       </ResponsiveContainer>
                       <div className="mt-4 overflow-x-auto">
                         <Table className="table-fixed w-full">
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right w-[120px]">الفرع</TableHead>
-                              <TableHead className="text-center w-[80px]">الموظفين</TableHead>
-                              <TableHead className="text-center w-[100px]">الرواتب</TableHead>
-                              <TableHead className="text-center w-[90px]">البدلات</TableHead>
-                              <TableHead className="text-center w-[90px]">التأمينات</TableHead>
-                              <TableHead className="text-center w-[110px]">إجمالي التكلفة</TableHead>
-                              <TableHead className="text-center w-[100px]">تكلفة/موظف</TableHead>
+                              <TableHead className="text-right w-[120px]">{isRTL ? "الفرع" : "Branch"}</TableHead>
+                              <TableHead className="text-center w-[80px]">{isRTL ? "الموظفين" : "Employees"}</TableHead>
+                              <TableHead className="text-center w-[100px]">{isRTL ? "الرواتب" : "Salaries"}</TableHead>
+                              <TableHead className="text-center w-[90px]">{isRTL ? "البدلات" : "Allowances"}</TableHead>
+                              <TableHead className="text-center w-[90px]">{isRTL ? "التأمينات" : "Insurance"}</TableHead>
+                              <TableHead className="text-center w-[110px]">{isRTL ? "إجمالي التكلفة" : "Total Cost"}</TableHead>
+                              <TableHead className="text-center w-[100px]">{isRTL ? "تكلفة/موظف" : "Cost/Employee"}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -6267,13 +6266,13 @@ export default function EmployeeReportsDashboardPage() {
                               <TableRow key={i}>
                                 <TableCell className="font-medium text-right">{branch.branchName}</TableCell>
                                 <TableCell className="text-center">{formatNumber(branch.employeeCount)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(branch.totalSalaries)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(branch.totalAllowances)}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(branch.socialInsurance)}</TableCell>
-                                <TableCell className="text-center font-bold text-green-600">{formatCurrency(branch.totalCost)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.totalSalaries, isRTL)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.totalAllowances, isRTL)}</TableCell>
+                                <TableCell className="text-center">{formatCurrency(branch.socialInsurance, isRTL)}</TableCell>
+                                <TableCell className="text-center font-bold text-green-600">{formatCurrency(branch.totalCost, isRTL)}</TableCell>
                                 <TableCell className="text-center">
                                   <Badge className="bg-purple-100 text-purple-800">
-                                    {formatCurrency(branch.costPerEmployee)}
+                                    {formatCurrency(branch.costPerEmployee, isRTL)}
                                   </Badge>
                                 </TableCell>
                               </TableRow>
@@ -6289,9 +6288,9 @@ export default function EmployeeReportsDashboardPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-amber-500" />
-                        ترتيب الفروع حسب تكلفة الموظف
+                        {isRTL ? "ترتيب الفروع حسب تكلفة الموظف" : "Branch Ranking by Employee Cost"}
                       </CardTitle>
-                      <CardDescription>الفروع مرتبة من الأقل تكلفة إلى الأعلى (الأقل = الأكثر كفاءة)</CardDescription>
+                      <CardDescription>{isRTL ? "الفروع مرتبة من الأقل تكلفة إلى الأعلى (الأقل = الأكثر كفاءة)" : "Branches ranked from lowest to highest cost (lowest = most efficient)"}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
@@ -6308,7 +6307,7 @@ export default function EmployeeReportsDashboardPage() {
                               <div className="flex-1">
                                 <div className="flex justify-between mb-1">
                                   <span className="font-medium">{branch.branchName}</span>
-                                  <span className="text-sm text-gray-600">{formatCurrency(branch.costPerEmployee)} / موظف</span>
+                                  <span className="text-sm text-gray-600">{formatCurrency(branch.costPerEmployee, isRTL)} / {isRTL ? "موظف" : "employee"}</span>
                                 </div>
                                 <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                                   <div 
@@ -6325,7 +6324,7 @@ export default function EmployeeReportsDashboardPage() {
                   </Card>
                 </>
               ) : (
-                <div className="text-center py-10 text-gray-500">لا توجد بيانات</div>
+                <div className="text-center py-10 text-gray-500">{isRTL ? "لا توجد بيانات" : "No data available"}</div>
               )}
             </TabsContent>
           </Tabs>
