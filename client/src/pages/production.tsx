@@ -206,7 +206,7 @@ export default function ProductionPage() {
                         <SelectValue placeholder="اختر المنتج" />
                       </SelectTrigger>
                       <SelectContent>
-                        {products?.filter(p => p.isActive === 'true').map(product => (
+                        {products?.filter(p => p.isActive === 'true' || p.isActive === 't' || p.isActive === true).map(product => (
                           <SelectItem key={product.id} value={product.id.toString()}>{product.name}</SelectItem>
                         ))}
                       </SelectContent>
