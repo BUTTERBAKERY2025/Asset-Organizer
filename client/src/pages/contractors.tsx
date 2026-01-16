@@ -244,7 +244,8 @@ export default function ContractorsPage() {
                 <p className="text-muted-foreground">لا يوجد مقاولون</p>
               </div>
             ) : (
-              <Table>
+              <div className="overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>الاسم</TableHead>
@@ -306,6 +307,7 @@ export default function ContractorsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

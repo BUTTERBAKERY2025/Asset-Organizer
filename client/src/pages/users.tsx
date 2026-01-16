@@ -870,8 +870,8 @@ export default function UsersPage() {
                     </p>
                   </div>
                   
-                  <div className="rounded-md border">
-                    <Table>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table className="min-w-[700px]">
                       <TableHeader>
                         <TableRow className="bg-muted/50">
                           <TableHead className="text-right font-semibold">المستخدم</TableHead>
