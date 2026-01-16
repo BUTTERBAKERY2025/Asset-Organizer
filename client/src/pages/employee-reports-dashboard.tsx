@@ -742,21 +742,21 @@ export default function EmployeeReportsDashboardPage() {
   const exportUnlinkedRecordsToExcel = () => {
     if (unlinkedRecords.length === 0) return;
     const data = unlinkedRecords.map((rec, index) => ({
-      "م": index + 1,
-      "التاريخ": rec.attendanceDate,
-      "اسم الموظف (غير مرتبط)": rec.employeeName,
-      "معرف الموظف": rec.employeeId || "-",
-      "الفرع": getBranchName(rec.branchId),
-      "الحالة": rec.status === "present" ? "حاضر" : rec.status === "absent" ? "غائب" : rec.status === "late" ? "متأخر" : rec.status,
-      "وقت الحضور": rec.actualCheckIn || "-",
-      "وقت الانصراف": rec.actualCheckOut || "-",
-      "ساعات العمل": rec.workingHours || 0,
-      "ملاحظات": rec.notes || "-",
+      [isRTL ? "م" : "#"]: index + 1,
+      [isRTL ? "التاريخ" : "Date"]: rec.attendanceDate,
+      [isRTL ? "اسم الموظف (غير مرتبط)" : "Employee Name (Unlinked)"]: rec.employeeName,
+      [isRTL ? "معرف الموظف" : "Employee ID"]: rec.employeeId || "-",
+      [isRTL ? "الفرع" : "Branch"]: getBranchName(rec.branchId),
+      [isRTL ? "الحالة" : "Status"]: rec.status === "present" ? (isRTL ? "حاضر" : "Present") : rec.status === "absent" ? (isRTL ? "غائب" : "Absent") : rec.status === "late" ? (isRTL ? "متأخر" : "Late") : rec.status,
+      [isRTL ? "وقت الحضور" : "Check In"]: rec.actualCheckIn || "-",
+      [isRTL ? "وقت الانصراف" : "Check Out"]: rec.actualCheckOut || "-",
+      [isRTL ? "ساعات العمل" : "Working Hours"]: rec.workingHours || 0,
+      [isRTL ? "ملاحظات" : "Notes"]: rec.notes || "-",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "سجلات غير مرتبطة");
-    XLSX.writeFile(wb, `سجلات_حضور_غير_مرتبطة_${selectedMonth}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, isRTL ? "سجلات غير مرتبطة" : "Unlinked Records");
+    XLSX.writeFile(wb, `${isRTL ? "سجلات_حضور_غير_مرتبطة" : "unlinked_attendance_records"}_${selectedMonth}.xlsx`);
   };
 
   const exportAttendanceToExcel = () => {
@@ -764,20 +764,20 @@ export default function EmployeeReportsDashboardPage() {
       const attendance = attendanceByEmployee.get(emp.id) || { present: 0, absent: 0, late: 0, total: 0 };
       const rate = attendance.total > 0 ? Math.round((attendance.present / attendance.total) * 100) : 0;
       return {
-        "م": index + 1,
-        "الموظف": emp.employeeName,
-        "الفرع": getBranchName(emp.branchId),
-        "الوظيفة": emp.jobTitle,
-        "أيام الحضور": attendance.present,
-        "أيام الغياب": attendance.absent,
-        "أيام التأخير": attendance.late,
-        "نسبة الحضور": `${rate}%`,
+        [isRTL ? "م" : "#"]: index + 1,
+        [isRTL ? "الموظف" : "Employee"]: emp.employeeName,
+        [isRTL ? "الفرع" : "Branch"]: getBranchName(emp.branchId),
+        [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
+        [isRTL ? "أيام الحضور" : "Present Days"]: attendance.present,
+        [isRTL ? "أيام الغياب" : "Absent Days"]: attendance.absent,
+        [isRTL ? "أيام التأخير" : "Late Days"]: attendance.late,
+        [isRTL ? "نسبة الحضور" : "Attendance Rate"]: `${rate}%`,
       };
     });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "تقرير الحضور");
-    XLSX.writeFile(wb, `تقرير_الحضور_${selectedMonth}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, isRTL ? "تقرير الحضور" : "Attendance Report");
+    XLSX.writeFile(wb, `${isRTL ? "تقرير_الحضور" : "attendance_report"}_${selectedMonth}.xlsx`);
   };
 
   const exportSalaryClosingToExcel = () => {
@@ -785,64 +785,64 @@ export default function EmployeeReportsDashboardPage() {
     const wb = XLSX.utils.book_new();
     
     const summaryData = [
-      { "البيان": "الفرع", "القيمة": getBranchName(salaryClosingBranch) },
-      { "البيان": "الشهر", "القيمة": salaryClosingMonth },
-      { "البيان": "عدد الموظفين", "القيمة": salaryClosingData.length },
-      { "البيان": "إجمالي الرواتب", "القيمة": salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0) },
-      { "البيان": "إجمالي التأمينات الاجتماعية", "القيمة": salaryClosingData.reduce((sum, e) => sum + e.socialInsurance, 0) },
-      { "البيان": "صافي الرواتب المستحقة", "القيمة": salaryClosingData.reduce((sum, e) => sum + e.netSalary, 0) },
-      { "البيان": "", "القيمة": "" },
-      { "البيان": "سجلات حضور غير مرتبطة", "القيمة": salaryClosingUnlinkedCount },
-      { "البيان": "سجلات حضور (غير مرتبطة)", "القيمة": salaryClosingUnlinkedSummary.presentRecords },
-      { "البيان": "إجمالي ساعات غير مرتبطة", "القيمة": Math.round(salaryClosingUnlinkedSummary.totalHours * 10) / 10 },
-      { "البيان": "ملاحظة", "القيمة": salaryClosingUnlinkedCount > 0 ? "توجد سجلات حضور غير مرتبطة بموظفين - راجع ورقة السجلات غير المرتبطة للتفاصيل والمراجعة" : "جميع السجلات مرتبطة بموظفين" },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "الفرع" : "Branch", [isRTL ? "القيمة" : "Value"]: getBranchName(salaryClosingBranch) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "الشهر" : "Month", [isRTL ? "القيمة" : "Value"]: salaryClosingMonth },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "عدد الموظفين" : "Employee Count", [isRTL ? "القيمة" : "Value"]: salaryClosingData.length },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي الرواتب" : "Total Salaries", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي التأمينات الاجتماعية" : "Total Social Insurance", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.socialInsurance, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "صافي الرواتب المستحقة" : "Net Salaries Due", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.netSalary, 0) },
+      { [isRTL ? "البيان" : "Item"]: "", [isRTL ? "القيمة" : "Value"]: "" },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "سجلات حضور غير مرتبطة" : "Unlinked Attendance Records", [isRTL ? "القيمة" : "Value"]: salaryClosingUnlinkedCount },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "سجلات حضور (غير مرتبطة)" : "Present Records (Unlinked)", [isRTL ? "القيمة" : "Value"]: salaryClosingUnlinkedSummary.presentRecords },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي ساعات غير مرتبطة" : "Total Unlinked Hours", [isRTL ? "القيمة" : "Value"]: Math.round(salaryClosingUnlinkedSummary.totalHours * 10) / 10 },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "ملاحظة" : "Note", [isRTL ? "القيمة" : "Value"]: salaryClosingUnlinkedCount > 0 ? (isRTL ? "توجد سجلات حضور غير مرتبطة بموظفين - راجع ورقة السجلات غير المرتبطة للتفاصيل والمراجعة" : "Unlinked attendance records exist - see Unlinked Records sheet for details") : (isRTL ? "جميع السجلات مرتبطة بموظفين" : "All records are linked to employees") },
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, wsSummary, "ملخص");
+    XLSX.utils.book_append_sheet(wb, wsSummary, isRTL ? "ملخص" : "Summary");
     
     const data = salaryClosingData.map((emp, index) => ({
-      "م": index + 1,
-      "رقم الموظف": emp.employeeNumber,
-      "الاسم": emp.employeeName,
-      "الوظيفة": emp.jobTitle,
-      "الجنسية": emp.nationality,
-      "أيام الحضور": emp.presentDays,
-      "أيام الغياب": emp.absentDays,
-      "أيام التأخير": emp.lateDays,
-      "إجمالي الساعات": emp.totalHours,
-      "الراتب الأساسي": emp.baseSalary,
-      "البدلات": emp.allowances,
-      "إجمالي الراتب": emp.grossSalary,
-      "التأمينات الاجتماعية": emp.socialInsurance,
-      "صافي الراتب": emp.netSalary,
+      [isRTL ? "م" : "#"]: index + 1,
+      [isRTL ? "رقم الموظف" : "Employee #"]: emp.employeeNumber,
+      [isRTL ? "الاسم" : "Name"]: emp.employeeName,
+      [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
+      [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
+      [isRTL ? "أيام الحضور" : "Present Days"]: emp.presentDays,
+      [isRTL ? "أيام الغياب" : "Absent Days"]: emp.absentDays,
+      [isRTL ? "أيام التأخير" : "Late Days"]: emp.lateDays,
+      [isRTL ? "إجمالي الساعات" : "Total Hours"]: emp.totalHours,
+      [isRTL ? "الراتب الأساسي" : "Base Salary"]: emp.baseSalary,
+      [isRTL ? "البدلات" : "Allowances"]: emp.allowances,
+      [isRTL ? "إجمالي الراتب" : "Gross Salary"]: emp.grossSalary,
+      [isRTL ? "التأمينات الاجتماعية" : "Social Insurance"]: emp.socialInsurance,
+      [isRTL ? "صافي الراتب" : "Net Salary"]: emp.netSalary,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, "تفاصيل الرواتب");
+    XLSX.utils.book_append_sheet(wb, ws, isRTL ? "تفاصيل الرواتب" : "Salary Details");
     
     if (salaryClosingUnlinkedRecords.length > 0) {
       const unlinkedData = salaryClosingUnlinkedRecords.map((rec, index) => ({
-        "م": index + 1,
-        "التاريخ": rec.attendanceDate,
-        "اسم الموظف (غير مرتبط)": rec.employeeName,
-        "معرف الموظف": rec.employeeId || "-",
-        "الحالة": rec.status === "present" ? "حاضر" : rec.status === "absent" ? "غائب" : rec.status === "late" ? "متأخر" : rec.status,
-        "وقت الحضور": rec.actualCheckIn || "-",
-        "وقت الانصراف": rec.actualCheckOut || "-",
-        "ساعات العمل": rec.workingHours || 0,
-        "ملاحظات": rec.notes || "-",
+        [isRTL ? "م" : "#"]: index + 1,
+        [isRTL ? "التاريخ" : "Date"]: rec.attendanceDate,
+        [isRTL ? "اسم الموظف (غير مرتبط)" : "Employee Name (Unlinked)"]: rec.employeeName,
+        [isRTL ? "معرف الموظف" : "Employee ID"]: rec.employeeId || "-",
+        [isRTL ? "الحالة" : "Status"]: rec.status === "present" ? (isRTL ? "حاضر" : "Present") : rec.status === "absent" ? (isRTL ? "غائب" : "Absent") : rec.status === "late" ? (isRTL ? "متأخر" : "Late") : rec.status,
+        [isRTL ? "وقت الحضور" : "Check In"]: rec.actualCheckIn || "-",
+        [isRTL ? "وقت الانصراف" : "Check Out"]: rec.actualCheckOut || "-",
+        [isRTL ? "ساعات العمل" : "Working Hours"]: rec.workingHours || 0,
+        [isRTL ? "ملاحظات" : "Notes"]: rec.notes || "-",
       }));
       const wsUnlinked = XLSX.utils.json_to_sheet(unlinkedData);
-      XLSX.utils.book_append_sheet(wb, wsUnlinked, "سجلات غير مرتبطة");
+      XLSX.utils.book_append_sheet(wb, wsUnlinked, isRTL ? "سجلات غير مرتبطة" : "Unlinked Records");
     }
     
-    XLSX.writeFile(wb, `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.xlsx`);
+    XLSX.writeFile(wb, `${isRTL ? "إغلاق_الرواتب" : "salary_closing"}_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.xlsx`);
   };
 
   const exportSalaryClosingToPDF = async () => {
     console.log("PDF export button clicked, data length:", salaryClosingData.length);
     if (salaryClosingData.length === 0) {
       console.log("No data to export");
-      alert("لا توجد بيانات للتصدير");
+      alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
       return;
     }
     
@@ -873,14 +873,14 @@ export default function EmployeeReportsDashboardPage() {
       });
 
       if (!response.ok) {
-        throw new Error("فشل في إنشاء ملف PDF");
+        throw new Error(isRTL ? "فشل في إنشاء ملف PDF" : "Failed to generate PDF");
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `إغلاق_الرواتب_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`;
+      a.download = `${isRTL ? "إغلاق_الرواتب" : "salary_closing"}_${getBranchName(salaryClosingBranch)}_${salaryClosingMonth}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -889,7 +889,7 @@ export default function EmployeeReportsDashboardPage() {
       console.log("PDF download completed");
     } catch (error) {
       console.error("Error in exportSalaryClosingToPDF:", error);
-      alert("خطأ في تصدير PDF: " + (error as Error).message);
+      alert((isRTL ? "خطأ في تصدير PDF: " : "PDF export error: ") + (error as Error).message);
     }
   };
 
@@ -898,26 +898,26 @@ export default function EmployeeReportsDashboardPage() {
   const exportBranchComparisonToExcel = () => {
     if (branchComparisonData.length === 0) return;
     const data = branchComparisonData.map((branch, index) => ({
-      "م": index + 1,
-      "الفرع": branch.branchName,
-      "عدد الموظفين": branch.employeeCount,
-      "السعوديين": branch.saudiCount,
-      "نسبة السعودة %": branch.saudiPercentage,
-      "إجمالي الرواتب": branch.totalSalary,
-      "متوسط الراتب": branch.avgSalary,
-      "التأمينات": branch.totalInsurance,
-      "البدلات": branch.totalAllowances,
-      "نسبة الحضور %": branch.attendanceRate,
-      "نسبة الغياب %": branch.absentRate,
-      "أيام الحضور": branch.presentCount,
-      "أيام الغياب": branch.absentCount,
-      "أيام التأخير": branch.lateCount,
-      "إجمالي الساعات": branch.totalHours,
+      [isRTL ? "م" : "#"]: index + 1,
+      [isRTL ? "الفرع" : "Branch"]: branch.branchName,
+      [isRTL ? "عدد الموظفين" : "Employees"]: branch.employeeCount,
+      [isRTL ? "السعوديين" : "Saudis"]: branch.saudiCount,
+      [isRTL ? "نسبة السعودة %" : "Saudization %"]: branch.saudiPercentage,
+      [isRTL ? "إجمالي الرواتب" : "Total Salary"]: branch.totalSalary,
+      [isRTL ? "متوسط الراتب" : "Avg Salary"]: branch.avgSalary,
+      [isRTL ? "التأمينات" : "Insurance"]: branch.totalInsurance,
+      [isRTL ? "البدلات" : "Allowances"]: branch.totalAllowances,
+      [isRTL ? "نسبة الحضور %" : "Attendance %"]: branch.attendanceRate,
+      [isRTL ? "نسبة الغياب %" : "Absence %"]: branch.absentRate,
+      [isRTL ? "أيام الحضور" : "Present Days"]: branch.presentCount,
+      [isRTL ? "أيام الغياب" : "Absent Days"]: branch.absentCount,
+      [isRTL ? "أيام التأخير" : "Late Days"]: branch.lateCount,
+      [isRTL ? "إجمالي الساعات" : "Total Hours"]: branch.totalHours,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "مقارنة الفروع");
-    XLSX.writeFile(wb, `مقارنة_الفروع_${selectedMonth}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, isRTL ? "مقارنة الفروع" : "Branch Comparison");
+    XLSX.writeFile(wb, `${isRTL ? "مقارنة_الفروع" : "branch_comparison"}_${selectedMonth}.xlsx`);
   };
 
   const exportBranchComparisonToPDF = async () => {
@@ -944,7 +944,7 @@ export default function EmployeeReportsDashboardPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `مقارنة_الفروع_${selectedMonth}.pdf`;
+      a.download = `${isRTL ? "مقارنة_الفروع" : "branch_comparison"}_${selectedMonth}.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -958,22 +958,22 @@ export default function EmployeeReportsDashboardPage() {
     jobComparisonData.forEach((job, jobIndex) => {
       job.branches.forEach((branch, branchIndex) => {
         data.push({
-          "م": branchIndex === 0 ? jobIndex + 1 : "",
-          "المسمى الوظيفي": branchIndex === 0 ? job.jobTitle : "",
-          "الفرع": branch.branchName,
-          "العدد": branch.count,
-          "متوسط الراتب": branch.avgSalary,
-          "أدنى راتب": branch.minSalary,
-          "أعلى راتب": branch.maxSalary,
-          "نسبة الحضور %": branch.attendanceRate,
-          "الفرق عن المتوسط": branch.avgSalary - job.avgSalary,
+          [isRTL ? "م" : "#"]: branchIndex === 0 ? jobIndex + 1 : "",
+          [isRTL ? "المسمى الوظيفي" : "Job Title"]: branchIndex === 0 ? job.jobTitle : "",
+          [isRTL ? "الفرع" : "Branch"]: branch.branchName,
+          [isRTL ? "العدد" : "Count"]: branch.count,
+          [isRTL ? "متوسط الراتب" : "Avg Salary"]: branch.avgSalary,
+          [isRTL ? "أدنى راتب" : "Min Salary"]: branch.minSalary,
+          [isRTL ? "أعلى راتب" : "Max Salary"]: branch.maxSalary,
+          [isRTL ? "نسبة الحضور %" : "Attendance %"]: branch.attendanceRate,
+          [isRTL ? "الفرق عن المتوسط" : "Diff from Avg"]: branch.avgSalary - job.avgSalary,
         });
       });
     });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "مقارنة الوظائف");
-    XLSX.writeFile(wb, `مقارنة_الوظائف_${selectedMonth}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, isRTL ? "مقارنة الوظائف" : "Job Comparison");
+    XLSX.writeFile(wb, `${isRTL ? "مقارنة_الوظائف" : "job_comparison"}_${selectedMonth}.xlsx`);
   };
 
   const exportJobComparisonToPDF = async () => {
@@ -1001,7 +1001,7 @@ export default function EmployeeReportsDashboardPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `مقارنة_الوظائف_${selectedMonth}.pdf`;
+      a.download = `${isRTL ? "مقارنة_الوظائف" : "job_comparison"}_${selectedMonth}.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -1016,23 +1016,23 @@ export default function EmployeeReportsDashboardPage() {
       const storedIns = emp.socialInsuranceDeduction || 0;
       const insurance = emp.nationality === "سعودي" ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975)) : 0;
       return {
-        "م": index + 1,
-        "الموظف": emp.employeeName,
-        "رقم الموظف": emp.employeeNumber,
-        "الفرع": getBranchName(emp.branchId),
-        "الوظيفة": emp.jobTitle,
-        "الجنسية": emp.nationality,
-        "الراتب الأساسي": emp.salary || 0,
-        "البدلات": allowances,
-        "إجمالي الراتب": emp.totalSalary || emp.salary || 0,
-        "التأمينات": insurance,
-        "صافي الراتب": (emp.totalSalary || emp.salary || 0) - insurance,
+        [isRTL ? "م" : "#"]: index + 1,
+        [isRTL ? "الموظف" : "Employee"]: emp.employeeName,
+        [isRTL ? "رقم الموظف" : "Employee #"]: emp.employeeNumber,
+        [isRTL ? "الفرع" : "Branch"]: getBranchName(emp.branchId),
+        [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
+        [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
+        [isRTL ? "الراتب الأساسي" : "Base Salary"]: emp.salary || 0,
+        [isRTL ? "البدلات" : "Allowances"]: allowances,
+        [isRTL ? "إجمالي الراتب" : "Total Salary"]: emp.totalSalary || emp.salary || 0,
+        [isRTL ? "التأمينات" : "Insurance"]: insurance,
+        [isRTL ? "صافي الراتب" : "Net Salary"]: (emp.totalSalary || emp.salary || 0) - insurance,
       };
     });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "جدول الرواتب");
-    XLSX.writeFile(wb, `جدول_الرواتب_التفصيلي_${selectedMonth}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, isRTL ? "جدول الرواتب" : "Salary Table");
+    XLSX.writeFile(wb, `${isRTL ? "جدول_الرواتب_التفصيلي" : "detailed_salary_table"}_${selectedMonth}.xlsx`);
   };
 
   const exportSalariesTableToPDF = async () => {
@@ -1063,7 +1063,7 @@ export default function EmployeeReportsDashboardPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `جدول_الرواتب_${selectedMonth}.pdf`;
+      a.download = `${isRTL ? "جدول_الرواتب" : "salary_table"}_${selectedMonth}.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -1080,82 +1080,82 @@ export default function EmployeeReportsDashboardPage() {
       const storedIns = emp.socialInsuranceDeduction || 0;
       const insurance = emp.nationality === "سعودي" ? (storedIns > 0 ? storedIns : Math.round((emp.salary || 0) * 0.0975)) : 0;
       return {
-        "م": index + 1,
-        "الموظف": emp.employeeName,
-        "الفرع": getBranchName(emp.branchId),
-        "الوظيفة": emp.jobTitle,
-        "الجنسية": emp.nationality,
-        "الراتب الأساسي": emp.salary || 0,
-        "البدلات": allowances,
-        "التأمينات": insurance,
+        [isRTL ? "م" : "#"]: index + 1,
+        [isRTL ? "الموظف" : "Employee"]: emp.employeeName,
+        [isRTL ? "الفرع" : "Branch"]: getBranchName(emp.branchId),
+        [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
+        [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
+        [isRTL ? "الراتب الأساسي" : "Base Salary"]: emp.salary || 0,
+        [isRTL ? "البدلات" : "Allowances"]: allowances,
+        [isRTL ? "التأمينات" : "Insurance"]: insurance,
       };
     });
     const wsEmp = XLSX.utils.json_to_sheet(empData);
-    XLSX.utils.book_append_sheet(wb, wsEmp, "بيانات الموظفين");
+    XLSX.utils.book_append_sheet(wb, wsEmp, isRTL ? "بيانات الموظفين" : "Employee Data");
     
     const branchDistData = branchComparisonData.map((b: { branchName: string; employeeCount: number }) => ({
-      "الفرع": b.branchName,
-      "عدد الموظفين": b.employeeCount,
+      [isRTL ? "الفرع" : "Branch"]: b.branchName,
+      [isRTL ? "عدد الموظفين" : "Employee Count"]: b.employeeCount,
     }));
     const wsBranch = XLSX.utils.json_to_sheet(branchDistData);
-    XLSX.utils.book_append_sheet(wb, wsBranch, "توزيع الفروع");
+    XLSX.utils.book_append_sheet(wb, wsBranch, isRTL ? "توزيع الفروع" : "Branch Distribution");
     
     const jobData = jobTitleChartData.map(j => ({
-      "الوظيفة": j.name,
-      "العدد": j.value,
+      [isRTL ? "الوظيفة" : "Job Title"]: j.name,
+      [isRTL ? "العدد" : "Count"]: j.value,
     }));
     const wsJob = XLSX.utils.json_to_sheet(jobData);
-    XLSX.utils.book_append_sheet(wb, wsJob, "توزيع الوظائف");
+    XLSX.utils.book_append_sheet(wb, wsJob, isRTL ? "توزيع الوظائف" : "Job Distribution");
     
-    XLSX.writeFile(wb, `تحليلات_الموظفين_${selectedMonth}.xlsx`);
+    XLSX.writeFile(wb, `${isRTL ? "تحليلات_الموظفين" : "employee_analytics"}_${selectedMonth}.xlsx`);
   };
 
   const exportKPIsToExcel = () => {
     const wb = XLSX.utils.book_new();
     
     const kpiData = [
-      { "المؤشر": "إجمالي الموظفين", "القيمة": overviewStats.totalEmployees },
-      { "المؤشر": "الموظفين النشطين", "القيمة": filteredEmployees.filter(e => e.status === "active").length },
-      { "المؤشر": "نسبة الحضور", "القيمة": `${overviewStats.attendanceRate}%` },
-      { "المؤشر": "أيام الحضور", "القيمة": overviewStats.presentCount },
-      { "المؤشر": "أيام الغياب", "القيمة": overviewStats.absentCount },
-      { "المؤشر": "إجمالي الرواتب", "القيمة": overviewStats.totalSalaries },
-      { "المؤشر": "متوسط الراتب", "القيمة": overviewStats.totalEmployees > 0 ? Math.round(overviewStats.totalSalaries / overviewStats.totalEmployees) : 0 },
-      { "المؤشر": "عدد السعوديين", "القيمة": overviewStats.saudiEmployees },
-      { "المؤشر": "نسبة السعودة", "القيمة": `${overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%` },
-      { "المؤشر": "إجمالي التأمينات", "القيمة": overviewStats.totalInsurance },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "إجمالي الموظفين" : "Total Employees", [isRTL ? "القيمة" : "Value"]: overviewStats.totalEmployees },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "الموظفين النشطين" : "Active Employees", [isRTL ? "القيمة" : "Value"]: filteredEmployees.filter(e => e.status === "active").length },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "نسبة الحضور" : "Attendance Rate", [isRTL ? "القيمة" : "Value"]: `${overviewStats.attendanceRate}%` },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "أيام الحضور" : "Present Days", [isRTL ? "القيمة" : "Value"]: overviewStats.presentCount },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "أيام الغياب" : "Absent Days", [isRTL ? "القيمة" : "Value"]: overviewStats.absentCount },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "إجمالي الرواتب" : "Total Salaries", [isRTL ? "القيمة" : "Value"]: overviewStats.totalSalaries },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "متوسط الراتب" : "Avg Salary", [isRTL ? "القيمة" : "Value"]: overviewStats.totalEmployees > 0 ? Math.round(overviewStats.totalSalaries / overviewStats.totalEmployees) : 0 },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "عدد السعوديين" : "Saudi Count", [isRTL ? "القيمة" : "Value"]: overviewStats.saudiEmployees },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "نسبة السعودة" : "Saudization Rate", [isRTL ? "القيمة" : "Value"]: `${overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%` },
+      { [isRTL ? "المؤشر" : "Indicator"]: isRTL ? "إجمالي التأمينات" : "Total Insurance", [isRTL ? "القيمة" : "Value"]: overviewStats.totalInsurance },
     ];
     const wsKPI = XLSX.utils.json_to_sheet(kpiData);
-    XLSX.utils.book_append_sheet(wb, wsKPI, "المؤشرات الرئيسية");
+    XLSX.utils.book_append_sheet(wb, wsKPI, isRTL ? "المؤشرات الرئيسية" : "Key Indicators");
     
     const topData = topEmployeesBySalary.map((emp, index) => ({
-      "م": index + 1,
-      "الموظف": emp.employeeName,
-      "الفرع": getBranchName(emp.branchId),
-      "الوظيفة": emp.jobTitle,
-      "الراتب": emp.totalSalary || emp.salary,
+      [isRTL ? "م" : "#"]: index + 1,
+      [isRTL ? "الموظف" : "Employee"]: emp.employeeName,
+      [isRTL ? "الفرع" : "Branch"]: getBranchName(emp.branchId),
+      [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
+      [isRTL ? "الراتب" : "Salary"]: emp.totalSalary || emp.salary,
     }));
     const wsTop = XLSX.utils.json_to_sheet(topData);
-    XLSX.utils.book_append_sheet(wb, wsTop, "أعلى الرواتب");
+    XLSX.utils.book_append_sheet(wb, wsTop, isRTL ? "أعلى الرواتب" : "Top Salaries");
     
     const allowData = allowancesBreakdown.map(a => ({
-      "البدل": a.name,
-      "القيمة": a.value,
+      [isRTL ? "البدل" : "Allowance"]: a.name,
+      [isRTL ? "القيمة" : "Value"]: a.value,
     }));
     const wsAllow = XLSX.utils.json_to_sheet(allowData);
-    XLSX.utils.book_append_sheet(wb, wsAllow, "البدلات");
+    XLSX.utils.book_append_sheet(wb, wsAllow, isRTL ? "البدلات" : "Allowances");
     
     const branchSummary = branchComparisonData.map((b, index) => ({
-      "م": index + 1,
-      "الفرع": b.branchName,
-      "الموظفين": b.employeeCount,
-      "الرواتب": b.totalSalary,
-      "نسبة الحضور": `${b.attendanceRate}%`,
+      [isRTL ? "م" : "#"]: index + 1,
+      [isRTL ? "الفرع" : "Branch"]: b.branchName,
+      [isRTL ? "الموظفين" : "Employees"]: b.employeeCount,
+      [isRTL ? "الرواتب" : "Salaries"]: b.totalSalary,
+      [isRTL ? "نسبة الحضور" : "Attendance %"]: `${b.attendanceRate}%`,
     }));
     const wsBranch = XLSX.utils.json_to_sheet(branchSummary);
-    XLSX.utils.book_append_sheet(wb, wsBranch, "ملخص الفروع");
+    XLSX.utils.book_append_sheet(wb, wsBranch, isRTL ? "ملخص الفروع" : "Branch Summary");
     
-    XLSX.writeFile(wb, `مؤشرات_الأداء_${selectedMonth}.xlsx`);
+    XLSX.writeFile(wb, `${isRTL ? "مؤشرات_الأداء" : "kpi_report"}_${selectedMonth}.xlsx`);
   };
 
   const exportKPIsToPDF = async () => {
@@ -1184,7 +1184,7 @@ export default function EmployeeReportsDashboardPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `مؤشرات_الأداء_${selectedMonth}.pdf`;
+      a.download = `${isRTL ? "مؤشرات_الأداء" : "kpi_report"}_${selectedMonth}.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
