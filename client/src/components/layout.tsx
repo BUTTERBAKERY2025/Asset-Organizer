@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
+import { useTranslation } from "react-i18next";
+import { changeLanguage } from "@/lib/i18n";
 import { 
   LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, 
   CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, 
@@ -9,7 +11,7 @@ import {
   FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, 
   ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, 
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
-  Receipt, PieChart, Lock, Layers, PieChartIcon, Share2
+  Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -25,10 +27,10 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import type { SystemModule } from "@shared/schema";
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: "مدير",
-  employee: "موظف",
-  viewer: "مشاهد",
+const ROLE_KEYS: Record<string, string> = {
+  admin: "roles.admin",
+  employee: "roles.employee",
+  viewer: "roles.viewer",
 };
 
 interface NavItem {
@@ -51,6 +53,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user, isLoading, isAuthenticated, isAdmin, logout, isLoggingOut, activeBranch, allowedBranches, switchBranch, isSwitchingBranch } = useAuth();
   const { canView } = usePermissions();
+  const { t, i18n } = useTranslation("platform-home");
+  const currentLang = i18n.language;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     hr: true,
     production: false,
@@ -99,136 +103,136 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const allStandaloneItems: NavItem[] = [
-    { href: "/", label: "الصفحة الرئيسية", icon: Home, module: "dashboard" },
+    { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
   ];
 
   const allNavGroups: { key: string; group: NavGroup }[] = [
     {
       key: "hr",
       group: {
-        label: "الموارد البشرية",
+        label: t("sidebar.hr"),
         icon: UsersRound,
         items: [
-          { href: "/branch-employees", label: "موظفو الفروع", icon: Users, module: "branch_employees", isHeader: true },
-          { href: "/organizational-structure", label: "الهيكل التنظيمي", icon: Building, module: "organizational_structure", indent: true },
-          { href: "/attendance-dashboard", label: "الحضور والانصراف", icon: UserCheck, module: "shifts", indent: true },
-          { href: "/shift-management", label: "إدارة الورديات", icon: Calendar, module: "shifts", indent: true },
-          { href: "/attendance-check", label: "تسجيل الحضور", icon: Clock, module: "shifts", indent: true },
-          { href: "/timesheet", label: "تقارير التايم شيت", icon: FileText, module: "shifts", indent: true },
-          { href: "/employee-reports", label: "تقارير الموظفين", icon: FileBarChart, module: "employee_reports", indent: true },
+          { href: "/branch-employees", label: t("sidebar.branchEmployees"), icon: Users, module: "branch_employees", isHeader: true },
+          { href: "/organizational-structure", label: t("sidebar.orgStructure"), icon: Building, module: "organizational_structure", indent: true },
+          { href: "/attendance-dashboard", label: t("sidebar.attendanceDashboard"), icon: UserCheck, module: "shifts", indent: true },
+          { href: "/shift-management", label: t("sidebar.shiftManagement"), icon: Calendar, module: "shifts", indent: true },
+          { href: "/attendance-check", label: t("sidebar.attendanceCheck"), icon: Clock, module: "shifts", indent: true },
+          { href: "/timesheet", label: t("sidebar.timesheet"), icon: FileText, module: "shifts", indent: true },
+          { href: "/employee-reports", label: t("sidebar.employeeReports"), icon: FileBarChart, module: "employee_reports", indent: true },
         ],
       },
     },
     {
       key: "production",
       group: {
-        label: "الإنتاج",
+        label: t("sidebar.production"),
         icon: ClipboardList,
         items: [
-          { href: "/production-dashboard", label: "لوحة الإنتاج", icon: LayoutDashboard, module: "production", isHeader: true },
-          { href: "/advanced-production-orders", label: "أوامر الإنتاج", icon: ClipboardCheck, module: "production", indent: true },
-          { href: "/daily-production", label: "الإنتاج الفعلي اليومي", icon: ClipboardEdit, module: "daily_production", indent: true },
-                    { href: "/sales-data-uploads", label: "رفع بيانات المبيعات", icon: Upload, module: "production", indent: true },
-          { href: "/production-reports", label: "تقارير الإنتاج", icon: FileBarChart, module: "production", indent: true },
-          { href: "/production-comparisons", label: "مقارنة الإنتاج بالمبيعات", icon: Layers, module: "production", indent: true },
-          { href: "/production-comparison-reports", label: "تقارير تحليل الهدر", icon: PieChartIcon, module: "production", indent: true },
+          { href: "/production-dashboard", label: t("sidebar.productionDashboard"), icon: LayoutDashboard, module: "production", isHeader: true },
+          { href: "/advanced-production-orders", label: t("sidebar.productionOrders"), icon: ClipboardCheck, module: "production", indent: true },
+          { href: "/daily-production", label: t("sidebar.dailyProduction"), icon: ClipboardEdit, module: "daily_production", indent: true },
+          { href: "/sales-data-uploads", label: t("sidebar.salesDataUploads"), icon: Upload, module: "production", indent: true },
+          { href: "/production-reports", label: t("sidebar.productionReports"), icon: FileBarChart, module: "production", indent: true },
+          { href: "/production-comparisons", label: t("sidebar.productionComparisons"), icon: Layers, module: "production", indent: true },
+          { href: "/production-comparison-reports", label: t("sidebar.wasteAnalysis"), icon: PieChartIcon, module: "production", indent: true },
         ],
       },
     },
     {
       key: "operations",
       group: {
-        label: "التشغيل",
+        label: t("sidebar.operations"),
         icon: Factory,
         items: [
-          { href: "/operations", label: "لوحة التشغيل", icon: LayoutDashboard, module: "operations", isHeader: true },
-          { href: "/products", label: "المنتجات", icon: Package, module: "products", indent: true },
-          { href: "/quality-control", label: "مراقبة الجودة", icon: CheckCircle, module: "quality_control", indent: true },
-          { href: "/display-bar-waste", label: "بار العرض والهالك", icon: Boxes, module: "waste_tracking", indent: true },
-          { href: "/operations-employees", label: "موظفي التشغيل", icon: Users, module: "operations", indent: true },
-          { href: "/operations-reports", label: "تقارير التشغيل", icon: FileBarChart, module: "operations", indent: true },
+          { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true },
+          { href: "/products", label: t("sidebar.products"), icon: Package, module: "products", indent: true },
+          { href: "/quality-control", label: t("sidebar.qualityControl"), icon: CheckCircle, module: "quality_control", indent: true },
+          { href: "/display-bar-waste", label: t("sidebar.displayBarWaste"), icon: Boxes, module: "waste_tracking", indent: true },
+          { href: "/operations-employees", label: t("sidebar.operationsEmployees"), icon: Users, module: "operations", indent: true },
+          { href: "/operations-reports", label: t("sidebar.operationsReports"), icon: FileBarChart, module: "operations", indent: true },
         ],
       },
     },
     {
       key: "sales",
       group: {
-        label: "المبيعات والكاشير",
+        label: t("sidebar.sales"),
         icon: Receipt,
         items: [
-          { href: "/cashier-journals", label: "يومية الكاشير", icon: Wallet, module: "cashier_journal", isHeader: true },
-          { href: "/branch-daily-closures", label: "الإغلاقات اليومية", icon: Lock, module: "cashier_journal", indent: true },
-          { href: "/sales-analytics", label: "تحليلات المبيعات", icon: PieChart, module: "sales_analytics", indent: true },
-          { href: "/targets-planning", label: "تخطيط الأهداف", icon: Target, module: "targets_planning", indent: true },
-          { href: "/targets-dashboard", label: "لوحة الأهداف", icon: TrendingUp, module: "targets", indent: true },
-          { href: "/cashier-shift-performance", label: "أداء الشفتات والكاشير", icon: BarChart3, module: "cashier_performance", indent: true },
-          { href: "/incentives-management", label: "إدارة الحوافز", icon: Gift, module: "incentives", indent: true },
-          { href: "/pnl-dashboard", label: "الأرباح والخسائر", icon: TrendingUp, module: "pnl_dashboard", indent: true },
+          { href: "/cashier-journals", label: t("sidebar.cashierJournal"), icon: Wallet, module: "cashier_journal", isHeader: true },
+          { href: "/branch-daily-closures", label: t("sidebar.dailyClosures"), icon: Lock, module: "cashier_journal", indent: true },
+          { href: "/sales-analytics", label: t("sidebar.salesAnalytics"), icon: PieChart, module: "sales_analytics", indent: true },
+          { href: "/targets-planning", label: t("sidebar.targetsPlanning"), icon: Target, module: "targets_planning", indent: true },
+          { href: "/targets-dashboard", label: t("sidebar.targetsDashboard"), icon: TrendingUp, module: "targets", indent: true },
+          { href: "/cashier-shift-performance", label: t("sidebar.cashierPerformance"), icon: BarChart3, module: "cashier_performance", indent: true },
+          { href: "/incentives-management", label: t("sidebar.incentivesManagement"), icon: Gift, module: "incentives", indent: true },
+          { href: "/pnl-dashboard", label: t("sidebar.pnlDashboard"), icon: TrendingUp, module: "pnl_dashboard", indent: true },
         ],
       },
     },
     {
       key: "assets",
       group: {
-        label: "الأصول والجرد",
+        label: t("sidebar.assets"),
         icon: Package,
         items: [
-          { href: "/dashboard", label: "لوحة الأصول", icon: LayoutDashboard, module: "inventory", isHeader: true },
-          { href: "/inventory", label: "جرد الأصول", icon: Boxes, module: "inventory", indent: true },
-          { href: "/manage", label: "إدارة الأصول", icon: ClipboardEdit, requiresAuth: true, module: "inventory", indent: true },
-          { href: "/asset-transfers", label: "تحويلات الأصول", icon: ArrowLeftRight, module: "asset_transfers", indent: true },
-          { href: "/branches", label: "إدارة الفروع", icon: Building2, requiresAuth: true, module: "branches", indent: true },
-          { href: "/inspections", label: "الفحص الدوري", icon: CalendarCheck, module: "inspections", indent: true },
-          { href: "/maintenance", label: "تقرير الصيانة", icon: AlertTriangle, module: "maintenance", indent: true },
-          { href: "/reports", label: "تقارير الأصول", icon: FileText, module: "reports", indent: true },
+          { href: "/dashboard", label: t("sidebar.assetsDashboard"), icon: LayoutDashboard, module: "inventory", isHeader: true },
+          { href: "/inventory", label: t("sidebar.inventory"), icon: Boxes, module: "inventory", indent: true },
+          { href: "/manage", label: t("sidebar.assetManagement"), icon: ClipboardEdit, requiresAuth: true, module: "inventory", indent: true },
+          { href: "/asset-transfers", label: t("sidebar.assetTransfers"), icon: ArrowLeftRight, module: "asset_transfers", indent: true },
+          { href: "/branches", label: t("sidebar.branchManagement"), icon: Building2, requiresAuth: true, module: "branches", indent: true },
+          { href: "/inspections", label: t("sidebar.inspections"), icon: CalendarCheck, module: "inspections", indent: true },
+          { href: "/maintenance", label: t("sidebar.maintenance"), icon: AlertTriangle, module: "maintenance", indent: true },
+          { href: "/reports", label: t("sidebar.assetReports"), icon: FileText, module: "reports", indent: true },
         ],
       },
     },
     {
       key: "construction",
       group: {
-        label: "المشاريع والإنشاءات",
+        label: t("sidebar.construction"),
         icon: Hammer,
         items: [
-          { href: "/construction-projects", label: "المشاريع", icon: Briefcase, module: "construction_projects", isHeader: true },
-          { href: "/contractors", label: "المقاولون", icon: HardHat, module: "contractors", indent: true },
-          { href: "/contracts", label: "العقود", icon: FileSignature, module: "contracts", indent: true },
-          { href: "/payment-requests", label: "طلبات الدفع", icon: Wallet, module: "payment_requests", indent: true },
-          { href: "/budget-planning", label: "تخطيط الميزانية", icon: Calculator, module: "budget_planning", indent: true },
-          { href: "/construction-reports", label: "تقارير المشاريع", icon: FileBarChart, module: "reports", indent: true },
+          { href: "/construction-projects", label: t("sidebar.projects"), icon: Briefcase, module: "construction_projects", isHeader: true },
+          { href: "/contractors", label: t("sidebar.contractors"), icon: HardHat, module: "contractors", indent: true },
+          { href: "/contracts", label: t("sidebar.contracts"), icon: FileSignature, module: "contracts", indent: true },
+          { href: "/payment-requests", label: t("sidebar.paymentRequests"), icon: Wallet, module: "payment_requests", indent: true },
+          { href: "/budget-planning", label: t("sidebar.budgetPlanning"), icon: Calculator, module: "budget_planning", indent: true },
+          { href: "/construction-reports", label: t("sidebar.constructionReports"), icon: FileBarChart, module: "reports", indent: true },
         ],
       },
     },
     {
       key: "marketing",
       group: {
-        label: "التسويق",
+        label: t("sidebar.marketing"),
         icon: Megaphone,
         items: [
-          { href: "/marketing", label: "لوحة التسويق", icon: LayoutDashboard, module: "marketing", isHeader: true },
-          { href: "/marketing-campaigns", label: "الحملات التسويقية", icon: Target, module: "marketing_campaigns", indent: true },
-          { href: "/marketing-social", label: "السوشيال ميديا", icon: Share2, module: "marketing", indent: true },
-          { href: "/marketing-influencers", label: "المؤثرين والبلوجرز", icon: UserCheck, module: "marketing_influencers", indent: true },
-          { href: "/marketing-calendar", label: "تقويم التسويق", icon: Calendar, module: "marketing", indent: true },
-          { href: "/marketing-tasks", label: "مهام التسويق", icon: ClipboardCheck, module: "marketing_tasks", indent: true },
-          { href: "/marketing-reports", label: "تقارير الأداء", icon: BarChart3, module: "marketing", indent: true },
-          { href: "/marketing-team", label: "فريق التسويق", icon: Users, module: "marketing", indent: true },
+          { href: "/marketing", label: t("sidebar.marketingDashboard"), icon: LayoutDashboard, module: "marketing", isHeader: true },
+          { href: "/marketing-campaigns", label: t("sidebar.marketingCampaigns"), icon: Target, module: "marketing_campaigns", indent: true },
+          { href: "/marketing-social", label: t("sidebar.socialMedia"), icon: Share2, module: "marketing", indent: true },
+          { href: "/marketing-influencers", label: t("sidebar.influencers"), icon: UserCheck, module: "marketing_influencers", indent: true },
+          { href: "/marketing-calendar", label: t("sidebar.marketingCalendar"), icon: Calendar, module: "marketing", indent: true },
+          { href: "/marketing-tasks", label: t("sidebar.marketingTasks"), icon: ClipboardCheck, module: "marketing_tasks", indent: true },
+          { href: "/marketing-reports", label: t("sidebar.performanceReports"), icon: BarChart3, module: "marketing", indent: true },
+          { href: "/marketing-team", label: t("sidebar.marketingTeam"), icon: Users, module: "marketing", indent: true },
         ],
       },
     },
     {
       key: "settings",
       group: {
-        label: "الإعدادات والنظام",
+        label: t("sidebar.settings"),
         icon: Settings,
         items: [
-          { href: "/settings", label: "لوحة الإعدادات", icon: Settings, module: "settings", isHeader: true },
-          { href: "/security-management", label: "إدارة الأمان", icon: Shield, module: "rbac_management", indent: true },
-          { href: "/users", label: "إدارة المستخدمين", icon: Users, module: "users", indent: true },
-          { href: "/rbac-management", label: "الأدوار والصلاحيات", icon: Shield, module: "rbac_management", indent: true },
-          { href: "/integrations", label: "التكاملات", icon: Link2, module: "integrations", indent: true },
-          { href: "/audit-logs", label: "سجل التدقيق", icon: FileSearch, module: "audit_logs", indent: true },
-          { href: "/backups", label: "النسخ الاحتياطية", icon: HardDrive, module: "backups", indent: true },
+          { href: "/settings", label: t("sidebar.settingsDashboard"), icon: Settings, module: "settings", isHeader: true },
+          { href: "/security-management", label: t("sidebar.securityManagement"), icon: Shield, module: "rbac_management", indent: true },
+          { href: "/users", label: t("sidebar.userManagement"), icon: Users, module: "users", indent: true },
+          { href: "/rbac-management", label: t("sidebar.rolesPermissions"), icon: Shield, module: "rbac_management", indent: true },
+          { href: "/integrations", label: t("sidebar.integrations"), icon: Link2, module: "integrations", indent: true },
+          { href: "/audit-logs", label: t("sidebar.auditLogs"), icon: FileSearch, module: "audit_logs", indent: true },
+          { href: "/backups", label: t("sidebar.backups"), icon: HardDrive, module: "backups", indent: true },
         ],
       },
     },
@@ -288,7 +292,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-2">
             {isAuthenticated && <NotificationsDropdown />}
-            <p className="text-[10px] text-muted-foreground text-center leading-tight">منصة بتر بيكري الشاملة</p>
+            <p className="text-[10px] text-muted-foreground text-center leading-tight">{t("platformName")}</p>
           </div>
           {isAuthenticated && (
             <div className="mt-2 w-full">
@@ -348,7 +352,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium truncate">{user.firstName || user.phone}</p>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ROLE_LABELS[user.role] || user.role}</Badge>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t(ROLE_KEYS[user.role]) || user.role}</Badge>
                 </div>
               </div>
               <button
@@ -362,7 +366,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 ) : (
                   <LogOut className="w-4 h-4" />
                 )}
-                <span>تسجيل الخروج</span>
+                <span>{t("logout")}</span>
               </button>
             </div>
           ) : (
@@ -372,10 +376,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 data-testid="button-login"
               >
                 <LogIn className="w-4 h-4" />
-                <span>تسجيل الدخول</span>
+                <span>{t("login")}</span>
               </div>
             </Link>
           )}
+          <button
+            onClick={() => changeLanguage(currentLang === "ar" ? "en" : "ar")}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors rounded-md hover:bg-secondary mt-2"
+            data-testid="button-language-toggle"
+          >
+            <Languages className="w-4 h-4" />
+            <span>{t("switchLanguage")}</span>
+          </button>
         </div>
       </aside>
 
@@ -390,7 +402,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
                 <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16" />
-                <p className="text-[10px] text-muted-foreground text-center mt-2">منصة بتر بيكري الشاملة</p>
+                <p className="text-[10px] text-muted-foreground text-center mt-2">{t("platformName")}</p>
               </div>
               
               <nav className="p-3 space-y-1">
@@ -460,7 +472,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{user.firstName || user.phone}</p>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{ROLE_LABELS[user.role] || user.role}</Badge>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t(ROLE_KEYS[user.role]) || user.role}</Badge>
                       </div>
                     </div>
                     <button
@@ -473,17 +485,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       ) : (
                         <LogOut className="w-4 h-4" />
                       )}
-                      <span>تسجيل الخروج</span>
+                      <span>{t("logout")}</span>
                     </button>
                   </div>
                 ) : (
                   <Link href="/login">
                     <div className="flex items-center gap-2 px-3 py-2 text-sm text-primary hover:text-primary/80 cursor-pointer transition-colors rounded-md hover:bg-primary/10">
                       <LogIn className="w-4 h-4" />
-                      <span>تسجيل الدخول</span>
+                      <span>{t("login")}</span>
                     </div>
                   </Link>
                 )}
+                <button
+                  onClick={() => changeLanguage(currentLang === "ar" ? "en" : "ar")}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground cursor-pointer transition-colors rounded-md hover:bg-secondary mt-2"
+                  data-testid="button-language-toggle-mobile"
+                >
+                  <Languages className="w-4 h-4" />
+                  <span>{t("switchLanguage")}</span>
+                </button>
               </div>
             </SheetContent>
           </Sheet>
