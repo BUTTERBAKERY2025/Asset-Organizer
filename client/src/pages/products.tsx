@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, Package, Filter, X, Download, FileSpreadsheet } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, Filter, X, Download, FileSpreadsheet, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
@@ -229,12 +230,19 @@ export default function ProductsPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
-              <Package className="w-5 h-5 text-primary" />
-              إدارة المنتجات
-            </h1>
-            <p className="text-sm text-muted-foreground">قائمة المنتجات والأسعار - {products.length} منتج</p>
+          <div className="flex items-center gap-3">
+            <Link href="/operations">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                إدارة المنتجات
+              </h1>
+              <p className="text-sm text-muted-foreground">قائمة المنتجات والأسعار - {products.length} منتج</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <ExportButtons

@@ -140,7 +140,7 @@ export default function AttendanceDashboardPage() {
               variant="ghost"
               size="icon"
               className="h-11 w-11 sm:h-8 sm:w-8"
-              onClick={() => navigate("/operations")}
+              onClick={() => navigate("/branch-employees")}
               data-testid="btn-back"
             >
               <ChevronLeft className="w-5 h-5" />

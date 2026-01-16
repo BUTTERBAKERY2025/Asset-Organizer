@@ -12,7 +12,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
-import { Plus, Search, ClipboardCheck, CheckCircle, XCircle, AlertTriangle, Thermometer, Calendar, User } from "lucide-react";
+import { Plus, Search, ClipboardCheck, CheckCircle, XCircle, AlertTriangle, Thermometer, Calendar, User, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { QualityCheck, Branch } from "@shared/schema";
 
@@ -117,9 +118,16 @@ export default function QualityControlPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">مراقبة الجودة</h1>
-            <p className="text-sm text-muted-foreground">فحوصات الجودة والمعايير</p>
+          <div className="flex items-center gap-3">
+            <Link href="/operations">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">مراقبة الجودة</h1>
+              <p className="text-sm text-muted-foreground">فحوصات الجودة والمعايير</p>
+            </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>

@@ -31,7 +31,8 @@ import {
   Trash2,
   Building2,
   CreditCard,
-  Receipt
+  Receipt,
+  ArrowRight
 } from "lucide-react";
 import {
   AlertDialog,
@@ -215,9 +216,16 @@ export default function BranchDailyClosuresPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">الإغلاقات اليومية للفروع</h1>
-            <p className="text-gray-500 mt-1">إدارة ومراجعة الإغلاقات اليومية المجمعة</p>
+          <div className="flex items-center gap-3">
+            <Link href="/cashier-journals">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">الإغلاقات اليومية للفروع</h1>
+              <p className="text-gray-500 mt-1">إدارة ومراجعة الإغلاقات اليومية المجمعة</p>
+            </div>
           </div>
           <Link href="/branch-daily-closing">
             <Button className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="button-new-closure">

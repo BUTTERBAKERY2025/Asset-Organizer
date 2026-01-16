@@ -19,8 +19,9 @@ import {
   BarChart3, Eye, Heart, Share2, Video, Image, Upload, X,
   TrendingUp, Users, Clock, CheckCircle, XCircle, AlertCircle,
   Megaphone, FileText, Hash, Target, UserCheck, Briefcase,
-  Sparkles, Layout as LayoutIcon, Copy, Trash2, Edit2, Play
+  Sparkles, Layout as LayoutIcon, Copy, Trash2, Edit2, Play, ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
@@ -507,9 +508,14 @@ export default function MarketingSocialPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4">
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Link href="/marketing">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
             <div className="bg-gradient-to-r from-purple-500 to-rose-500 p-2 rounded-lg">
               <Share2 className="h-6 w-6 text-white" />
             </div>

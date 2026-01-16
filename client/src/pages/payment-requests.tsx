@@ -42,7 +42,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, Pencil, Trash2, Loader2, DollarSign, CheckCircle, XCircle, 
   Clock, AlertTriangle, Wallet, CreditCard, ArrowUpCircle, Share2, MessageCircle, FileDown, Download,
-  Search, Eye, Calendar, Building2, Filter, X
+  Search, Eye, Calendar, Building2, Filter, X, ArrowRight
 } from "lucide-react";
 import { Link } from "wouter";
 import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory } from "@shared/schema";
@@ -494,9 +494,16 @@ export default function PaymentRequestsPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-xl sm:text-3xl font-bold text-gray-900">طلبات الحوالات والمصروفات</h1>
-            <p className="text-gray-500 mt-1 text-sm sm:text-base">إدارة طلبات الدفع والحوالات للمشاريع</p>
+          <div className="flex items-center gap-3">
+            <Link href="/construction-projects">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">طلبات الحوالات والمصروفات</h1>
+              <p className="text-gray-500 mt-1 text-sm sm:text-base">إدارة طلبات الدفع والحوالات للمشاريع</p>
+            </div>
           </div>
           <Button
             onClick={() => {

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
@@ -477,12 +477,19 @@ export default function TargetsDashboard() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">
-              <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8" />
-              لوحة الأداء والأهداف
-            </h1>
-            <p className="text-sm sm:text-base text-amber-700 mt-1">متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع</p>
+          <div className="flex items-center gap-3">
+            <Link href="/cashier-journals">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">
+                <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8" />
+                لوحة الأداء والأهداف
+              </h1>
+              <p className="text-sm sm:text-base text-amber-700 mt-1">متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع</p>
+            </div>
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4 flex-wrap">

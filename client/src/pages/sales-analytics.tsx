@@ -37,8 +37,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 import * as XLSX from "xlsx";
 import {
   BarChart,
@@ -346,12 +348,19 @@ export default function SalesAnalytics() {
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-                <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
-                تحليلات المبيعات
-              </h1>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
+            <div className="flex items-center gap-3">
+              <Link href="/cashier-journals">
+                <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
+                  <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
+                  تحليلات المبيعات
+                </h1>
+                <p className="text-sm sm:text-base text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">

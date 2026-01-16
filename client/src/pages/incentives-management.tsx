@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
-import { Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus, FileSpreadsheet, FileText } from "lucide-react";
+import { Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus, FileSpreadsheet, FileText, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
 import type { Branch, IncentiveTier, IncentiveAward } from "@shared/schema";
@@ -306,12 +306,19 @@ export default function IncentivesManagement() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-3">
-              <Gift className="h-6 w-6 sm:h-8 sm:w-8" />
-              إدارة الحوافز والمكافآت
-            </h1>
-            <p className="text-amber-700 mt-1 text-sm sm:text-base">تعريف مستويات الحوافز وإدارة المكافآت</p>
+          <div className="flex items-center gap-3">
+            <Link href="/cashier-journals">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-3">
+                <Gift className="h-6 w-6 sm:h-8 sm:w-8" />
+                إدارة الحوافز والمكافآت
+              </h1>
+              <p className="text-amber-700 mt-1 text-sm sm:text-base">تعريف مستويات الحوافز وإدارة المكافآت</p>
+            </div>
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4 flex-wrap">

@@ -36,7 +36,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Loader2, Database, Clock, CheckCircle, XCircle, HardDrive } from "lucide-react";
+import { Plus, Trash2, Loader2, Database, Clock, CheckCircle, XCircle, HardDrive, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -155,13 +156,20 @@ export default function BackupsPage() {
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="النسخ الاحتياطية" currentIcon={HardDrive} />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
-              النسخ الاحتياطية
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              إدارة النسخ الاحتياطية لقاعدة البيانات
-            </p>
+          <div className="flex items-center gap-3">
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+                النسخ الاحتياطية
+              </h1>
+              <p className="text-sm sm:text-base text-muted-foreground mt-1">
+                إدارة النسخ الاحتياطية لقاعدة البيانات
+              </p>
+            </div>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>

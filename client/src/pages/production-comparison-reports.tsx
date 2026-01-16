@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, TrendingUp, TrendingDown, Building2, Package, AlertTriangle, BarChart3, PieChart, Download, RefreshCw } from "lucide-react";
+import { Calendar, TrendingUp, TrendingDown, Building2, Package, AlertTriangle, BarChart3, PieChart, Download, RefreshCw, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart as RechartsPie, Pie, Cell } from "recharts";
 import { ExportButtons } from "@/components/export-buttons";
 import { ExportColumn } from "@/lib/export-utils";
@@ -194,9 +195,16 @@ export default function ProductionComparisonReports() {
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-amber-900" data-testid="text-page-title">تقارير مقارنة الإنتاج</h1>
-            <p className="text-amber-700 mt-1">تحليل شامل للهدر والكفاءة الإنتاجية</p>
+          <div className="flex items-center gap-3">
+            <Link href="/production-dashboard">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold text-amber-900" data-testid="text-page-title">تقارير مقارنة الإنتاج</h1>
+              <p className="text-amber-700 mt-1">تحليل شامل للهدر والكفاءة الإنتاجية</p>
+            </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">

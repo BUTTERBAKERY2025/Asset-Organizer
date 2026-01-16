@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Loader2, Shield, Users, Building2, Key, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, Check, X } from "lucide-react";
+import { Loader2, Shield, Users, Building2, Key, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, Check, X, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { useState, useEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -560,9 +561,16 @@ export default function RBACManagementPage() {
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="الأدوار والصلاحيات" currentIcon={Shield} />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">نظام التحكم بالوصول المبني على الأدوار (RBAC)</p>
+          <div className="flex items-center gap-3">
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">نظام التحكم بالوصول المبني على الأدوار (RBAC)</p>
+            </div>
           </div>
         </div>
 

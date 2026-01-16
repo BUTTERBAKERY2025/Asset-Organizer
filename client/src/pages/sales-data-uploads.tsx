@@ -15,7 +15,7 @@ import { useBranches } from "@/hooks/useBranches";
 import { Upload, FileSpreadsheet, Calendar, Building2, Eye, Loader2, AlertCircle, CheckCircle, Clock, TrendingUp, Package, DollarSign, Target, Sparkles, Send, ArrowLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -306,13 +306,20 @@ export default function SalesDataUploadsPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">
-              رفع بيانات المبيعات
-            </h1>
-            <p className="text-muted-foreground">
-              رفع ملفات Excel لتحليل بيانات المبيعات وتخطيط الإنتاج
-            </p>
+          <div className="flex items-center gap-3">
+            <Link href="/production-dashboard">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">
+                رفع بيانات المبيعات
+              </h1>
+              <p className="text-muted-foreground">
+                رفع ملفات Excel لتحليل بيانات المبيعات وتخطيط الإنتاج
+              </p>
+            </div>
           </div>
         </div>
 

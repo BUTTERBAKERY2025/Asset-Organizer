@@ -19,8 +19,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { 
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
   FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User,
-  Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw
+  Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw, ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 import { ProductSelector } from "@/components/product-selector";
@@ -655,12 +656,19 @@ export default function DisplayBarWastePage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
-              <Package className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-              بار العرض والهالك
-            </h1>
-            <p className="text-sm text-muted-foreground">إدارة استلام الإنتاج ومتابعة الهالك اليومي</p>
+          <div className="flex items-center gap-3">
+            <Link href="/operations">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
+                <Package className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+                بار العرض والهالك
+              </h1>
+              <p className="text-sm text-muted-foreground">إدارة استلام الإنتاج ومتابعة الهالك اليومي</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>

@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useBranches } from "@/hooks/useBranches";
-import { Loader2, Users, Plus, Pencil, Trash2, Building2, Briefcase, Phone, Mail, UserCheck, UserX, RefreshCw, Shield } from "lucide-react";
+import { Loader2, Users, Plus, Pencil, Trash2, Building2, Briefcase, Phone, Mail, UserCheck, UserX, RefreshCw, Shield, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import type { User } from "@shared/schema";
 import React, { useState, useEffect } from "react";
 import { TablePagination } from "@/components/ui/pagination";
@@ -291,11 +292,18 @@ export default function OperationsEmployeesPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
-              موظفي التشغيل
-            </h1>
-            <p className="text-muted-foreground mt-1">إدارة موظفي الفروع وتعيين المهام والصلاحيات</p>
+          <div className="flex items-center gap-3">
+            <Link href="/operations">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+                موظفي التشغيل
+              </h1>
+              <p className="text-muted-foreground mt-1">إدارة موظفي الفروع وتعيين المهام والصلاحيات</p>
+            </div>
           </div>
           {canCreate && (
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

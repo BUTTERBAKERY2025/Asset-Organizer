@@ -19,7 +19,7 @@ import {
   CheckCircle, XCircle, Clock, AlertTriangle, Download, Wallet, CreditCard, Truck,
   Building2, Activity, Target, Package, FileText, Eye, Image, FileDown, Filter,
   Calendar, RefreshCw, Printer, ExternalLink, Receipt, ClipboardList, PieChart as PieChartIcon,
-  Gift, Trophy, User, ChevronDown
+  Gift, Trophy, User, ChevronDown, ArrowRight
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -1485,12 +1485,19 @@ export default function OperationsReportsDashboardPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2" data-testid="page-title">
-              <BarChart3 className="w-7 h-7 text-amber-600" />
-              لوحة تقارير التشغيل الشاملة
-            </h1>
-            <p className="text-muted-foreground">تقارير تفصيلية لجميع عمليات التشغيل والإنتاج والمبيعات ويوميات الكاشير</p>
+          <div className="flex items-center gap-3">
+            <Link href="/operations">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2" data-testid="page-title">
+                <BarChart3 className="w-7 h-7 text-amber-600" />
+                لوحة تقارير التشغيل الشاملة
+              </h1>
+              <p className="text-muted-foreground">تقارير تفصيلية لجميع عمليات التشغيل والإنتاج والمبيعات ويوميات الكاشير</p>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Link href="/targets-dashboard">

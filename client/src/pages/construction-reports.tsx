@@ -14,7 +14,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp, FileDown } from "lucide-react";
+import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp, FileDown, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 import { ExportButtons } from "@/components/export-buttons";
 import { TablePagination } from "@/components/ui/pagination";
 import { useReactToPrint } from "react-to-print";
@@ -562,9 +563,16 @@ export default function ConstructionReportsPage() {
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-page-title">تقارير المشاريع الإنشائية</h1>
-            <p className="text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
+          <div className="flex items-center gap-3">
+            <Link href="/construction-projects">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-page-title">تقارير المشاريع الإنشائية</h1>
+              <p className="text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <ExportButtons
