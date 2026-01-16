@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { format, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
@@ -28,6 +28,12 @@ import {
   Factory,
   ClipboardCheck,
   Sparkles,
+  Filter,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  X,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -158,12 +164,30 @@ const DATE_PRESETS = [
   { label: "هذا الشهر", getValue: () => ({ start: startOfMonth(new Date()), end: endOfMonth(new Date()) }) },
 ];
 
+type SortField = 'productName' | 'quantity' | 'productionDate' | 'status' | 'chefName' | 'productCategory';
+type SortOrder = 'asc' | 'desc';
+
 export default function ProductionReportsPage() {
   const { selectedBranch, setSelectedBranch, selectedDate, setSelectedDate } = useProductionContext();
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [activeTab, setActiveTab] = useState("data");
   const [isExporting, setIsExporting] = useState<string | null>(null);
+  
+  // Filters state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterChef, setFilterChef] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>('productionDate');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
@@ -201,6 +225,106 @@ export default function ProductionReportsPage() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
   };
+  
+  // Extract unique values for filters
+  const filterOptions = useMemo(() => {
+    const entries = reportData?.rawProductionEntries || [];
+    const categories = [...new Set(entries.map(e => e.productCategory).filter(Boolean))] as string[];
+    const chefs = [...new Set(entries.map(e => e.chefName).filter(Boolean))] as string[];
+    return { categories, chefs };
+  }, [reportData?.rawProductionEntries]);
+  
+  // Reset page when filters, data, or page size changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, filterCategory, filterChef, sortField, sortOrder, reportData?.rawProductionEntries, pageSize]);
+  
+  // Filter, sort and paginate data
+  const processedData = useMemo(() => {
+    let entries = reportData?.rawProductionEntries || [];
+    
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      entries = entries.filter(e => 
+        e.productName.toLowerCase().includes(term) ||
+        (e.chefName && e.chefName.toLowerCase().includes(term)) ||
+        (e.notes && e.notes.toLowerCase().includes(term))
+      );
+    }
+    
+    // Apply status filter
+    if (filterStatus !== "all") {
+      entries = entries.filter(e => e.status === filterStatus);
+    }
+    
+    // Apply category filter
+    if (filterCategory !== "all") {
+      entries = entries.filter(e => e.productCategory === filterCategory);
+    }
+    
+    // Apply chef filter
+    if (filterChef !== "all") {
+      entries = entries.filter(e => e.chefName === filterChef);
+    }
+    
+    // Sort entries
+    entries = [...entries].sort((a, b) => {
+      let aVal: any = a[sortField];
+      let bVal: any = b[sortField];
+      
+      if (sortField === 'quantity') {
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+      } else {
+        aVal = String(aVal || '').toLowerCase();
+        bVal = String(bVal || '').toLowerCase();
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    const totalCount = entries.length;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const startIndex = (currentPage - 1) * pageSize;
+    const paginatedEntries = entries.slice(startIndex, startIndex + pageSize);
+    
+    // Calculate filtered stats
+    const filteredTotal = entries.reduce((sum, e) => sum + e.quantity, 0);
+    const finishedCount = entries.filter(e => e.status === 'finished').length;
+    const inProgressCount = entries.filter(e => e.status === 'in_progress').length;
+    
+    return {
+      entries: paginatedEntries,
+      allFilteredEntries: entries,
+      totalCount,
+      totalPages,
+      currentPage,
+      filteredTotal,
+      finishedCount,
+      inProgressCount
+    };
+  }, [reportData?.rawProductionEntries, searchTerm, filterStatus, filterCategory, filterChef, sortField, sortOrder, currentPage, pageSize]);
+  
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
+  
+  const clearFilters = () => {
+    setSearchTerm("");
+    setFilterStatus("all");
+    setFilterCategory("all");
+    setFilterChef("all");
+  };
+  
+  const hasActiveFilters = searchTerm || filterStatus !== "all" || filterCategory !== "all" || filterChef !== "all";
 
   const exportToExcel = useCallback(async (reportType: string) => {
     if (!reportData) return;
@@ -266,10 +390,11 @@ export default function ProductionReportsPage() {
       }
 
       if (reportType === "all" || reportType === "data") {
-        if (reportData.rawProductionEntries && reportData.rawProductionEntries.length > 0) {
+        const entriesToExport = processedData.allFilteredEntries;
+        if (entriesToExport && entriesToExport.length > 0) {
           const rawData = [
             ["#", "المنتج", "التصنيف", "الكمية", "الفرع", "الوجهة", "الحالة", "الشيف", "مسجل بواسطة", "تاريخ الإنتاج", "وقت الإنتاج", "أكمل بواسطة", "وقت الإكمال", "مرحل من", "ملاحظات"],
-            ...reportData.rawProductionEntries.map((entry, idx) => [
+            ...entriesToExport.map((entry, idx) => [
               idx + 1,
               entry.productName,
               entry.productCategory || '-',
@@ -298,7 +423,7 @@ export default function ProductionReportsPage() {
     } finally {
       setIsExporting(null);
     }
-  }, [reportData, branches, selectedBranch, startDate, endDate]);
+  }, [reportData, branches, selectedBranch, startDate, endDate, processedData]);
 
   const exportToCSV = useCallback(async (reportType: string) => {
     if (!reportData) return;
@@ -317,9 +442,9 @@ export default function ProductionReportsPage() {
         reportData.productPerformance.forEach(p => {
           csvContent += `${p.productName},${p.quantity},${p.percentage.toFixed(1)}%,${p.trend >= 0 ? '+' : ''}${p.trend.toFixed(1)}%\n`;
         });
-      } else if (reportType === "data" && reportData.rawProductionEntries) {
+      } else if (reportType === "data" && processedData.allFilteredEntries.length > 0) {
         csvContent = "#,المنتج,التصنيف,الكمية,الفرع,الوجهة,الحالة,الشيف,مسجل بواسطة,تاريخ الإنتاج,وقت الإنتاج,أكمل بواسطة,وقت الإكمال,مرحل من,ملاحظات\n";
-        reportData.rawProductionEntries.forEach((entry, idx) => {
+        processedData.allFilteredEntries.forEach((entry, idx) => {
           const statusText = entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-';
           csvContent += `${idx + 1},${entry.productName},${entry.productCategory || '-'},${entry.quantity},${entry.branchName},${entry.destination},${statusText},${entry.chefName || '-'},${entry.recorderName || '-'},${entry.productionDate || '-'},"${entry.producedAt ? format(new Date(entry.producedAt), 'HH:mm') : '-'}",${entry.finishedByName || '-'},"${entry.finishedAt ? format(new Date(entry.finishedAt), 'yyyy/MM/dd HH:mm') : '-'}",${entry.sourceBatchId ? '#' + entry.sourceBatchId : '-'},${entry.notes || ''}\n`;
         });
@@ -335,7 +460,7 @@ export default function ProductionReportsPage() {
     } finally {
       setIsExporting(null);
     }
-  }, [reportData, startDate]);
+  }, [reportData, startDate, processedData]);
 
   const exportToPDF = useCallback(async () => {
     setIsExporting("pdf");
@@ -614,23 +739,82 @@ export default function ProductionReportsPage() {
           ) : (
             <>
               <TabsContent value="data" className="space-y-4">
+                {/* Quick Stats Bar */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Package className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">إجمالي السجلات</p>
+                        <p className="text-xl font-bold text-blue-700">{processedData.totalCount}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <BarChart3 className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">إجمالي الكمية</p>
+                        <p className="text-xl font-bold text-green-700">{processedData.filteredTotal}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="h-10 w-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                        <CheckCircle className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">مكتمل</p>
+                        <p className="text-xl font-bold text-emerald-700">{processedData.finishedCount}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center">
+                        <Clock className="h-5 w-5 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">قيد التحضير</p>
+                        <p className="text-xl font-bold text-amber-700">{processedData.inProgressCount}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
                 <Card className="border-amber-200">
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <FileSpreadsheet className="h-5 w-5 text-amber-600" />
-                        <CardTitle className="text-lg">بيانات الإنتاج الحقيقية</CardTitle>
-                      </div>
-                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">بيانات الإنتاج</CardTitle>
                         <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
-                          {reportData?.rawProductionEntries?.length || 0} سجل
+                          {processedData.totalCount} / {reportData?.rawProductionEntries?.length || 0}
                         </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          variant={showFilters ? "default" : "outline"}
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => setShowFilters(!showFilters)}
+                          data-testid="btn-toggle-filters"
+                        >
+                          <Filter className="h-3 w-3 ml-1" />
+                          فلاتر
+                          {hasActiveFilters && <span className="mr-1 h-2 w-2 bg-red-500 rounded-full" />}
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           className="h-8 text-xs bg-green-50 hover:bg-green-100 border-green-300"
                           onClick={() => exportToExcel("data")}
-                          disabled={isExporting !== null || !reportData?.rawProductionEntries?.length}
+                          disabled={isExporting !== null || !processedData.allFilteredEntries.length}
                           data-testid="btn-export-data-excel"
                         >
                           {isExporting === "excel" ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <FileSpreadsheet className="h-3 w-3 ml-1" />}
@@ -641,7 +825,7 @@ export default function ProductionReportsPage() {
                           size="sm"
                           className="h-8 text-xs bg-blue-50 hover:bg-blue-100 border-blue-300"
                           onClick={() => exportToCSV("data")}
-                          disabled={isExporting !== null || !reportData?.rawProductionEntries?.length}
+                          disabled={isExporting !== null || !processedData.allFilteredEntries.length}
                           data-testid="btn-export-data-csv"
                         >
                           {isExporting === "csv" ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <Download className="h-3 w-3 ml-1" />}
@@ -649,80 +833,235 @@ export default function ProductionReportsPage() {
                         </Button>
                       </div>
                     </div>
-                    <CardDescription>
-                      جميع دفعات الإنتاج المسجلة في الفترة المحددة - يمكنك تصدير البيانات إلى Excel أو CSV
-                    </CardDescription>
+                    
+                    {/* Filters Panel */}
+                    {showFilters && (
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg border space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">خيارات الفلترة والبحث</span>
+                          {hasActiveFilters && (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600" onClick={clearFilters} data-testid="btn-clear-filters">
+                              <X className="h-3 w-3 ml-1" />
+                              مسح الكل
+                            </Button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="relative">
+                            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                              placeholder="بحث بالمنتج أو الشيف..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="pr-9 h-9 text-sm"
+                              data-testid="input-search"
+                            />
+                          </div>
+                          <Select value={filterStatus} onValueChange={setFilterStatus}>
+                            <SelectTrigger className="h-9 text-sm" data-testid="select-filter-status">
+                              <SelectValue placeholder="الحالة" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الحالات</SelectItem>
+                              <SelectItem value="finished">مكتمل</SelectItem>
+                              <SelectItem value="in_progress">قيد التحضير</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select value={filterCategory} onValueChange={setFilterCategory}>
+                            <SelectTrigger className="h-9 text-sm" data-testid="select-filter-category">
+                              <SelectValue placeholder="التصنيف" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع التصنيفات</SelectItem>
+                              {filterOptions.categories.map(cat => (
+                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select value={filterChef} onValueChange={setFilterChef}>
+                            <SelectTrigger className="h-9 text-sm" data-testid="select-filter-chef">
+                              <SelectValue placeholder="الشيف" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الشيفات</SelectItem>
+                              {filterOptions.chefs.map(chef => (
+                                <SelectItem key={chef} value={chef}>{chef}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent>
-                    {reportData?.rawProductionEntries && reportData.rawProductionEntries.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm border-collapse" data-testid="table-production-data">
-                          <thead>
-                            <tr className="bg-amber-50 border-b border-amber-200">
-                              <th className="p-2 text-right font-medium text-amber-800">#</th>
-                              <th className="p-2 text-right font-medium text-amber-800">المنتج</th>
-                              <th className="p-2 text-right font-medium text-amber-800">التصنيف</th>
-                              <th className="p-2 text-right font-medium text-amber-800">الكمية</th>
-                              <th className="p-2 text-right font-medium text-amber-800">الفرع</th>
-                              <th className="p-2 text-right font-medium text-amber-800">الوجهة</th>
-                              <th className="p-2 text-right font-medium text-amber-800">الحالة</th>
-                              <th className="p-2 text-right font-medium text-amber-800">الشيف</th>
-                              <th className="p-2 text-right font-medium text-amber-800">مسجل بواسطة</th>
-                              <th className="p-2 text-right font-medium text-amber-800">تاريخ الإنتاج</th>
-                              <th className="p-2 text-right font-medium text-amber-800">وقت الإنتاج</th>
-                              <th className="p-2 text-right font-medium text-amber-800">أكمل بواسطة</th>
-                              <th className="p-2 text-right font-medium text-amber-800">وقت الإكمال</th>
-                              <th className="p-2 text-right font-medium text-amber-800">مرحل من</th>
-                              <th className="p-2 text-right font-medium text-amber-800">ملاحظات</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {reportData.rawProductionEntries.map((entry, idx) => (
-                              <tr key={entry.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} data-testid={`row-production-${entry.id}`}>
-                                <td className="p-2 border-b text-gray-600">{idx + 1}</td>
-                                <td className="p-2 border-b font-medium">{entry.productName}</td>
-                                <td className="p-2 border-b text-gray-600 text-xs">{entry.productCategory || '-'}</td>
-                                <td className="p-2 border-b text-green-700 font-bold">{entry.quantity}</td>
-                                <td className="p-2 border-b">{entry.branchName}</td>
-                                <td className="p-2 border-b">{entry.destination}</td>
-                                <td className="p-2 border-b">
-                                  <Badge variant={entry.status === 'finished' ? 'default' : 'secondary'} className={entry.status === 'finished' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
-                                    {entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-'}
-                                  </Badge>
-                                </td>
-                                <td className="p-2 border-b text-blue-700 text-xs">{entry.chefName || '-'}</td>
-                                <td className="p-2 border-b text-gray-600 text-xs">{entry.recorderName || '-'}</td>
-                                <td className="p-2 border-b text-indigo-700 text-xs font-medium">
-                                  {entry.productionDate || '-'}
-                                </td>
-                                <td className="p-2 border-b text-gray-600 text-xs">
-                                  {entry.producedAt ? format(new Date(entry.producedAt), "HH:mm", { locale: ar }) : '-'}
-                                </td>
-                                <td className="p-2 border-b text-purple-700 text-xs">{entry.finishedByName || '-'}</td>
-                                <td className="p-2 border-b text-gray-600 text-xs">
-                                  {entry.finishedAt ? format(new Date(entry.finishedAt), "yyyy/MM/dd HH:mm", { locale: ar }) : '-'}
-                                </td>
-                                <td className="p-2 border-b text-orange-600 text-xs">
-                                  {entry.sourceBatchId ? `#${entry.sourceBatchId}` : '-'}
-                                </td>
-                                <td className="p-2 border-b text-gray-500 text-xs max-w-[150px] truncate">{entry.notes || '-'}</td>
+                    {processedData.entries.length > 0 ? (
+                      <>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm border-collapse" data-testid="table-production-data">
+                            <thead>
+                              <tr className="bg-amber-50 border-b border-amber-200">
+                                <th className="p-2 text-right font-medium text-amber-800">#</th>
+                                <th 
+                                  className="p-2 text-right font-medium text-amber-800 cursor-pointer hover:bg-amber-100 select-none"
+                                  onClick={() => handleSort('productName')}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    المنتج
+                                    <ArrowUpDown className={`h-3 w-3 ${sortField === 'productName' ? 'text-amber-600' : 'text-gray-400'}`} />
+                                  </span>
+                                </th>
+                                <th 
+                                  className="p-2 text-right font-medium text-amber-800 cursor-pointer hover:bg-amber-100 select-none"
+                                  onClick={() => handleSort('productCategory')}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    التصنيف
+                                    <ArrowUpDown className={`h-3 w-3 ${sortField === 'productCategory' ? 'text-amber-600' : 'text-gray-400'}`} />
+                                  </span>
+                                </th>
+                                <th 
+                                  className="p-2 text-right font-medium text-amber-800 cursor-pointer hover:bg-amber-100 select-none"
+                                  onClick={() => handleSort('quantity')}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    الكمية
+                                    <ArrowUpDown className={`h-3 w-3 ${sortField === 'quantity' ? 'text-amber-600' : 'text-gray-400'}`} />
+                                  </span>
+                                </th>
+                                <th className="p-2 text-right font-medium text-amber-800">الفرع</th>
+                                <th className="p-2 text-right font-medium text-amber-800">الوجهة</th>
+                                <th 
+                                  className="p-2 text-right font-medium text-amber-800 cursor-pointer hover:bg-amber-100 select-none"
+                                  onClick={() => handleSort('status')}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    الحالة
+                                    <ArrowUpDown className={`h-3 w-3 ${sortField === 'status' ? 'text-amber-600' : 'text-gray-400'}`} />
+                                  </span>
+                                </th>
+                                <th 
+                                  className="p-2 text-right font-medium text-amber-800 cursor-pointer hover:bg-amber-100 select-none"
+                                  onClick={() => handleSort('chefName')}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    الشيف
+                                    <ArrowUpDown className={`h-3 w-3 ${sortField === 'chefName' ? 'text-amber-600' : 'text-gray-400'}`} />
+                                  </span>
+                                </th>
+                                <th className="p-2 text-right font-medium text-amber-800">مسجل بواسطة</th>
+                                <th 
+                                  className="p-2 text-right font-medium text-amber-800 cursor-pointer hover:bg-amber-100 select-none"
+                                  onClick={() => handleSort('productionDate')}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    تاريخ الإنتاج
+                                    <ArrowUpDown className={`h-3 w-3 ${sortField === 'productionDate' ? 'text-amber-600' : 'text-gray-400'}`} />
+                                  </span>
+                                </th>
+                                <th className="p-2 text-right font-medium text-amber-800">وقت الإنتاج</th>
+                                <th className="p-2 text-right font-medium text-amber-800">أكمل بواسطة</th>
+                                <th className="p-2 text-right font-medium text-amber-800">وقت الإكمال</th>
+                                <th className="p-2 text-right font-medium text-amber-800">مرحل من</th>
+                                <th className="p-2 text-right font-medium text-amber-800">ملاحظات</th>
                               </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="bg-amber-100 font-bold">
-                              <td colSpan={3} className="p-2 text-amber-800">المجموع</td>
-                              <td className="p-2 text-green-700">{reportData.rawProductionEntries.reduce((sum, e) => sum + e.quantity, 0)}</td>
-                              <td colSpan={11}></td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody>
+                              {processedData.entries.map((entry, idx) => (
+                                <tr key={entry.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} data-testid={`row-production-${entry.id}`}>
+                                  <td className="p-2 border-b text-gray-600">{(currentPage - 1) * pageSize + idx + 1}</td>
+                                  <td className="p-2 border-b font-medium">{entry.productName}</td>
+                                  <td className="p-2 border-b text-gray-600 text-xs">{entry.productCategory || '-'}</td>
+                                  <td className="p-2 border-b text-green-700 font-bold">{entry.quantity}</td>
+                                  <td className="p-2 border-b">{entry.branchName}</td>
+                                  <td className="p-2 border-b">{entry.destination}</td>
+                                  <td className="p-2 border-b">
+                                    <Badge variant={entry.status === 'finished' ? 'default' : 'secondary'} className={entry.status === 'finished' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
+                                      {entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-'}
+                                    </Badge>
+                                  </td>
+                                  <td className="p-2 border-b text-blue-700 text-xs">{entry.chefName || '-'}</td>
+                                  <td className="p-2 border-b text-gray-600 text-xs">{entry.recorderName || '-'}</td>
+                                  <td className="p-2 border-b text-indigo-700 text-xs font-medium">
+                                    {entry.productionDate || '-'}
+                                  </td>
+                                  <td className="p-2 border-b text-gray-600 text-xs">
+                                    {entry.producedAt ? format(new Date(entry.producedAt), "HH:mm", { locale: ar }) : '-'}
+                                  </td>
+                                  <td className="p-2 border-b text-purple-700 text-xs">{entry.finishedByName || '-'}</td>
+                                  <td className="p-2 border-b text-gray-600 text-xs">
+                                    {entry.finishedAt ? format(new Date(entry.finishedAt), "yyyy/MM/dd HH:mm", { locale: ar }) : '-'}
+                                  </td>
+                                  <td className="p-2 border-b text-orange-600 text-xs">
+                                    {entry.sourceBatchId ? `#${entry.sourceBatchId}` : '-'}
+                                  </td>
+                                  <td className="p-2 border-b text-gray-500 text-xs max-w-[150px] truncate">{entry.notes || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-amber-100 font-bold">
+                                <td colSpan={3} className="p-2 text-amber-800">المجموع (الصفحة الحالية)</td>
+                                <td className="p-2 text-green-700">{processedData.entries.reduce((sum, e) => sum + e.quantity, 0)}</td>
+                                <td colSpan={11}></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                        
+                        {/* Pagination */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <span>عرض</span>
+                            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                              <SelectTrigger className="h-8 w-20" data-testid="select-page-size">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="25">25</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <span>من {processedData.totalCount} سجل</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                              disabled={currentPage === 1}
+                              data-testid="btn-prev-page"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm px-3">
+                              صفحة {currentPage} من {processedData.totalPages || 1}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => setCurrentPage(p => Math.min(processedData.totalPages, p + 1))}
+                              disabled={currentPage >= processedData.totalPages}
+                              data-testid="btn-next-page"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </>
                     ) : (
                       <div className="text-center py-8 text-gray-500">
                         <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                        <p>لا توجد بيانات إنتاج في الفترة المحددة</p>
-                        <p className="text-xs mt-2">جرّب تغيير الفترة الزمنية أو الفرع</p>
+                        <p>{hasActiveFilters ? 'لا توجد نتائج تطابق معايير البحث' : 'لا توجد بيانات إنتاج في الفترة المحددة'}</p>
+                        <p className="text-xs mt-2">{hasActiveFilters ? 'جرّب تغيير الفلاتر أو مسحها' : 'جرّب تغيير الفترة الزمنية أو الفرع'}</p>
+                        {hasActiveFilters && (
+                          <Button variant="outline" size="sm" className="mt-3" onClick={clearFilters} data-testid="btn-clear-filters-empty">
+                            مسح الفلاتر
+                          </Button>
+                        )}
                       </div>
                     )}
                   </CardContent>
