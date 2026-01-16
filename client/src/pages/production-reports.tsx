@@ -267,7 +267,7 @@ export default function ProductionReportsPage() {
       if (reportType === "all" || reportType === "data") {
         if (reportData.rawProductionEntries && reportData.rawProductionEntries.length > 0) {
           const rawData = [
-            ["#", "المنتج", "الفئة", "الكمية", "الفرع", "الوردية", "الوجهة", "الحالة", "الشيف المنتج", "تاريخ الإنشاء", "تاريخ الاكتمال", "من أكمل الدفعة", "المسجل", "ملاحظات"],
+            ["#", "المنتج", "الفئة", "الكمية", "الفرع", "الوردية", "الوجهة", "الحالة", "الشيف المنتج", "تاريخ الإنشاء", "تاريخ الاكتمال", "من أكمل الدفعة", "المسجل", "مرحل من", "ملاحظات"],
             ...reportData.rawProductionEntries.map((entry, idx) => [
               idx + 1,
               entry.productName,
@@ -282,6 +282,7 @@ export default function ProductionReportsPage() {
               entry.finishedAt ? format(new Date(entry.finishedAt), "yyyy/MM/dd HH:mm") : '-',
               entry.finishedByName || '-',
               entry.recorderName || '-',
+              entry.sourceBatchId ? `#${entry.sourceBatchId}` : '-',
               entry.notes || ''
             ]),
           ];
@@ -316,9 +317,10 @@ export default function ProductionReportsPage() {
           csvContent += `${p.productName},${p.quantity},${p.percentage.toFixed(1)}%,${p.trend >= 0 ? '+' : ''}${p.trend.toFixed(1)}%\n`;
         });
       } else if (reportType === "data" && reportData.rawProductionEntries) {
-        csvContent = "الرقم,المنتج,الكمية,الفرع,الوردية,الوجهة,التاريخ,ملاحظات\n";
+        csvContent = "الرقم,المنتج,التصنيف,الكمية,الفرع,الوجهة,الحالة,الشيف,المسجل,تاريخ الإنتاج,من أكمل,تاريخ الاكتمال,مرحل من,ملاحظات\n";
         reportData.rawProductionEntries.forEach((entry, idx) => {
-          csvContent += `${idx + 1},${entry.productName},${entry.quantity},${entry.branchName},${entry.shiftName},${entry.destination},"${entry.producedAt ? format(new Date(entry.producedAt), 'yyyy/MM/dd HH:mm') : ''}",${entry.notes || ''}\n`;
+          const statusText = entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-';
+          csvContent += `${idx + 1},${entry.productName},${entry.productCategory || '-'},${entry.quantity},${entry.branchName},${entry.destination},${statusText},${entry.chefName || '-'},${entry.recorderName || '-'},"${entry.producedAt ? format(new Date(entry.producedAt), 'yyyy/MM/dd HH:mm') : ''}",${entry.finishedByName || '-'},"${entry.finishedAt ? format(new Date(entry.finishedAt), 'yyyy/MM/dd HH:mm') : '-'}",${entry.sourceBatchId ? '#' + entry.sourceBatchId : '-'},${entry.notes || ''}\n`;
         });
       }
       
@@ -658,11 +660,17 @@ export default function ProductionReportsPage() {
                             <tr className="bg-amber-50 border-b border-amber-200">
                               <th className="p-2 text-right font-medium text-amber-800">#</th>
                               <th className="p-2 text-right font-medium text-amber-800">المنتج</th>
+                              <th className="p-2 text-right font-medium text-amber-800">التصنيف</th>
                               <th className="p-2 text-right font-medium text-amber-800">الكمية</th>
                               <th className="p-2 text-right font-medium text-amber-800">الفرع</th>
-                              <th className="p-2 text-right font-medium text-amber-800">الوردية</th>
                               <th className="p-2 text-right font-medium text-amber-800">الوجهة</th>
-                              <th className="p-2 text-right font-medium text-amber-800">التاريخ والوقت</th>
+                              <th className="p-2 text-right font-medium text-amber-800">الحالة</th>
+                              <th className="p-2 text-right font-medium text-amber-800">الشيف</th>
+                              <th className="p-2 text-right font-medium text-amber-800">مسجل بواسطة</th>
+                              <th className="p-2 text-right font-medium text-amber-800">وقت الإنتاج</th>
+                              <th className="p-2 text-right font-medium text-amber-800">أكمل بواسطة</th>
+                              <th className="p-2 text-right font-medium text-amber-800">وقت الإكمال</th>
+                              <th className="p-2 text-right font-medium text-amber-800">مرحل من</th>
                               <th className="p-2 text-right font-medium text-amber-800">ملاحظات</th>
                             </tr>
                           </thead>
@@ -671,12 +679,26 @@ export default function ProductionReportsPage() {
                               <tr key={entry.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} data-testid={`row-production-${entry.id}`}>
                                 <td className="p-2 border-b text-gray-600">{idx + 1}</td>
                                 <td className="p-2 border-b font-medium">{entry.productName}</td>
+                                <td className="p-2 border-b text-gray-600 text-xs">{entry.productCategory || '-'}</td>
                                 <td className="p-2 border-b text-green-700 font-bold">{entry.quantity}</td>
                                 <td className="p-2 border-b">{entry.branchName}</td>
-                                <td className="p-2 border-b">{entry.shiftName}</td>
                                 <td className="p-2 border-b">{entry.destination}</td>
+                                <td className="p-2 border-b">
+                                  <Badge variant={entry.status === 'finished' ? 'default' : 'secondary'} className={entry.status === 'finished' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
+                                    {entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-'}
+                                  </Badge>
+                                </td>
+                                <td className="p-2 border-b text-blue-700 text-xs">{entry.chefName || '-'}</td>
+                                <td className="p-2 border-b text-gray-600 text-xs">{entry.recorderName || '-'}</td>
                                 <td className="p-2 border-b text-gray-600 text-xs">
                                   {entry.producedAt ? format(new Date(entry.producedAt), "yyyy/MM/dd HH:mm", { locale: ar }) : '-'}
+                                </td>
+                                <td className="p-2 border-b text-purple-700 text-xs">{entry.finishedByName || '-'}</td>
+                                <td className="p-2 border-b text-gray-600 text-xs">
+                                  {entry.finishedAt ? format(new Date(entry.finishedAt), "yyyy/MM/dd HH:mm", { locale: ar }) : '-'}
+                                </td>
+                                <td className="p-2 border-b text-orange-600 text-xs">
+                                  {entry.sourceBatchId ? `#${entry.sourceBatchId}` : '-'}
                                 </td>
                                 <td className="p-2 border-b text-gray-500 text-xs max-w-[150px] truncate">{entry.notes || '-'}</td>
                               </tr>
@@ -684,9 +706,9 @@ export default function ProductionReportsPage() {
                           </tbody>
                           <tfoot>
                             <tr className="bg-amber-100 font-bold">
-                              <td colSpan={2} className="p-2 text-amber-800">المجموع</td>
+                              <td colSpan={3} className="p-2 text-amber-800">المجموع</td>
                               <td className="p-2 text-green-700">{reportData.rawProductionEntries.reduce((sum, e) => sum + e.quantity, 0)}</td>
-                              <td colSpan={5}></td>
+                              <td colSpan={10}></td>
                             </tr>
                           </tfoot>
                         </table>
