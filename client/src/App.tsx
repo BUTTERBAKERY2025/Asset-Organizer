@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -11,79 +11,83 @@ import { ProductionProvider } from "@/contexts/ProductionContext";
 import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
-import NotFound from "@/pages/not-found";
-import PlatformHomePage from "@/pages/platform-home";
-import DashboardPage from "@/pages/dashboard";
-import InventoryPage from "@/pages/inventory";
-import ManagePage from "@/pages/manage";
-import BranchesPage from "@/pages/branches";
-import MaintenancePage from "@/pages/maintenance";
-import InspectionsPage from "@/pages/inspections";
-import UsersPage from "@/pages/users";
-import LoginPage from "@/pages/login";
-import ConstructionProjectsPage from "@/pages/construction-projects";
-import ConstructionProjectDetailPage from "@/pages/construction-project-detail";
-import ContractorsPage from "@/pages/contractors";
-import ReportsPage from "@/pages/reports";
-import ConstructionDashboardPage from "@/pages/construction-dashboard";
-import ConstructionReportsPage from "@/pages/construction-reports";
-import ContractsPage from "@/pages/contracts";
-import PaymentRequestsPage from "@/pages/payment-requests";
-import BudgetPlanningPage from "@/pages/budget-planning";
-import AssetTransfersPage from "@/pages/asset-transfers";
-import AuditLogsPage from "@/pages/audit-logs";
-import BackupsPage from "@/pages/backups";
-import IntegrationsPage from "@/pages/integrations";
-import OperationsDashboardPage from "@/pages/operations-dashboard";
-import OperationsReportsDashboardPage from "@/pages/operations-reports-dashboard";
-import ProductsPage from "@/pages/products";
-import ProductionPage from "@/pages/production";
-import QualityControlPage from "@/pages/quality-control";
-import CashierJournalsPage from "@/pages/cashier-journals";
-import CashierJournalFormPage from "@/pages/cashier-journal-form";
-import BranchDailyClosingPage from "@/pages/branch-daily-closing";
-import BranchDailyClosuresPage from "@/pages/branch-daily-closures";
-import OperationsEmployeesPage from "@/pages/operations-employees";
-import TargetsPlanningPage from "@/pages/targets-planning";
-import TargetsDashboardPage from "@/pages/targets-dashboard";
-import IncentivesManagementPage from "@/pages/incentives-management";
-import SalesAnalyticsPage from "@/pages/sales-analytics";
-import DisplayBarWastePage from "@/pages/display-bar-waste";
-import AdvancedProductionOrdersPage from "@/pages/advanced-production-orders";
-import AdvancedProductionOrderFormPage from "@/pages/advanced-production-order-form";
-import AdvancedProductionOrderDetailsPage from "@/pages/advanced-production-order-details";
-import SalesDataUploadsPage from "@/pages/sales-data-uploads";
-import ProductionDashboardPage from "@/pages/production-dashboard";
-import DailyProductionPage from "@/pages/daily-production";
-import ProductionReportsPage from "@/pages/production-reports";
-import RBACManagementPage from "@/pages/rbac-management";
-import CashierShiftPerformancePage from "@/pages/cashier-shift-performance";
-import MarketingCampaignsPage from "@/pages/marketing-campaigns";
-import MarketingInfluencersPage from "@/pages/marketing-influencers";
-import MarketingDashboardPage from "@/pages/marketing-dashboard";
-import MarketingCalendarPage from "@/pages/marketing-calendar";
-import MarketingTasksPage from "@/pages/marketing-tasks";
-import MarketingReportsPage from "@/pages/marketing-reports";
-import MarketingTeamPage from "@/pages/marketing-team";
-import MarketingGoalsPage from "@/pages/marketing-goals";
-import MarketingAssetsPage from "@/pages/marketing-assets";
-import MarketingAlertsPage from "@/pages/marketing-alerts";
-import MarketingExpensesPage from "@/pages/marketing-expenses";
-import MarketingSocialPage from "@/pages/marketing-social";
-import SettingsDashboardPage from "@/pages/settings-dashboard";
-import ShiftManagementPage from "@/pages/shift-management";
-import AttendanceCheckPage from "@/pages/attendance-check";
-import TimesheetPage from "@/pages/timesheet";
-import AttendanceDashboardPage from "@/pages/attendance-dashboard";
-import BranchEmployeesPage from "@/pages/branch-employees";
-import OrganizationalStructurePage from "@/pages/organizational-structure";
-import EmployeeReportsDashboardPage from "@/pages/employee-reports-dashboard";
-import PnLDashboardPage from "@/pages/pnl-dashboard";
-import SecurityManagementPage from "@/pages/security-management";
-import ProductionComparisonsPage from "@/pages/production-comparisons";
-import ProductionComparisonReportsPage from "@/pages/production-comparison-reports";
-import ProductCategoryManagementPage from "@/pages/product-category-management";
 import type { SystemModule } from "@shared/schema";
+
+// Essential pages loaded eagerly (small, frequently used)
+import NotFound from "@/pages/not-found";
+import LoginPage from "@/pages/login";
+
+// All other pages loaded lazily for better performance
+const PlatformHomePage = lazy(() => import("@/pages/platform-home"));
+const DashboardPage = lazy(() => import("@/pages/dashboard"));
+const InventoryPage = lazy(() => import("@/pages/inventory"));
+const ManagePage = lazy(() => import("@/pages/manage"));
+const BranchesPage = lazy(() => import("@/pages/branches"));
+const MaintenancePage = lazy(() => import("@/pages/maintenance"));
+const InspectionsPage = lazy(() => import("@/pages/inspections"));
+const UsersPage = lazy(() => import("@/pages/users"));
+const ConstructionProjectsPage = lazy(() => import("@/pages/construction-projects"));
+const ConstructionProjectDetailPage = lazy(() => import("@/pages/construction-project-detail"));
+const ContractorsPage = lazy(() => import("@/pages/contractors"));
+const ReportsPage = lazy(() => import("@/pages/reports"));
+const ConstructionDashboardPage = lazy(() => import("@/pages/construction-dashboard"));
+const ConstructionReportsPage = lazy(() => import("@/pages/construction-reports"));
+const ContractsPage = lazy(() => import("@/pages/contracts"));
+const PaymentRequestsPage = lazy(() => import("@/pages/payment-requests"));
+const BudgetPlanningPage = lazy(() => import("@/pages/budget-planning"));
+const AssetTransfersPage = lazy(() => import("@/pages/asset-transfers"));
+const AuditLogsPage = lazy(() => import("@/pages/audit-logs"));
+const BackupsPage = lazy(() => import("@/pages/backups"));
+const IntegrationsPage = lazy(() => import("@/pages/integrations"));
+const OperationsDashboardPage = lazy(() => import("@/pages/operations-dashboard"));
+const OperationsReportsDashboardPage = lazy(() => import("@/pages/operations-reports-dashboard"));
+const ProductsPage = lazy(() => import("@/pages/products"));
+const ProductionPage = lazy(() => import("@/pages/production"));
+const QualityControlPage = lazy(() => import("@/pages/quality-control"));
+const CashierJournalsPage = lazy(() => import("@/pages/cashier-journals"));
+const CashierJournalFormPage = lazy(() => import("@/pages/cashier-journal-form"));
+const BranchDailyClosingPage = lazy(() => import("@/pages/branch-daily-closing"));
+const BranchDailyClosuresPage = lazy(() => import("@/pages/branch-daily-closures"));
+const OperationsEmployeesPage = lazy(() => import("@/pages/operations-employees"));
+const TargetsPlanningPage = lazy(() => import("@/pages/targets-planning"));
+const TargetsDashboardPage = lazy(() => import("@/pages/targets-dashboard"));
+const IncentivesManagementPage = lazy(() => import("@/pages/incentives-management"));
+const SalesAnalyticsPage = lazy(() => import("@/pages/sales-analytics"));
+const DisplayBarWastePage = lazy(() => import("@/pages/display-bar-waste"));
+const AdvancedProductionOrdersPage = lazy(() => import("@/pages/advanced-production-orders"));
+const AdvancedProductionOrderFormPage = lazy(() => import("@/pages/advanced-production-order-form"));
+const AdvancedProductionOrderDetailsPage = lazy(() => import("@/pages/advanced-production-order-details"));
+const SalesDataUploadsPage = lazy(() => import("@/pages/sales-data-uploads"));
+const ProductionDashboardPage = lazy(() => import("@/pages/production-dashboard"));
+const DailyProductionPage = lazy(() => import("@/pages/daily-production"));
+const ProductionReportsPage = lazy(() => import("@/pages/production-reports"));
+const RBACManagementPage = lazy(() => import("@/pages/rbac-management"));
+const CashierShiftPerformancePage = lazy(() => import("@/pages/cashier-shift-performance"));
+const MarketingCampaignsPage = lazy(() => import("@/pages/marketing-campaigns"));
+const MarketingInfluencersPage = lazy(() => import("@/pages/marketing-influencers"));
+const MarketingDashboardPage = lazy(() => import("@/pages/marketing-dashboard"));
+const MarketingCalendarPage = lazy(() => import("@/pages/marketing-calendar"));
+const MarketingTasksPage = lazy(() => import("@/pages/marketing-tasks"));
+const MarketingReportsPage = lazy(() => import("@/pages/marketing-reports"));
+const MarketingTeamPage = lazy(() => import("@/pages/marketing-team"));
+const MarketingGoalsPage = lazy(() => import("@/pages/marketing-goals"));
+const MarketingAssetsPage = lazy(() => import("@/pages/marketing-assets"));
+const MarketingAlertsPage = lazy(() => import("@/pages/marketing-alerts"));
+const MarketingExpensesPage = lazy(() => import("@/pages/marketing-expenses"));
+const MarketingSocialPage = lazy(() => import("@/pages/marketing-social"));
+const SettingsDashboardPage = lazy(() => import("@/pages/settings-dashboard"));
+const ShiftManagementPage = lazy(() => import("@/pages/shift-management"));
+const AttendanceCheckPage = lazy(() => import("@/pages/attendance-check"));
+const TimesheetPage = lazy(() => import("@/pages/timesheet"));
+const AttendanceDashboardPage = lazy(() => import("@/pages/attendance-dashboard"));
+const BranchEmployeesPage = lazy(() => import("@/pages/branch-employees"));
+const OrganizationalStructurePage = lazy(() => import("@/pages/organizational-structure"));
+const EmployeeReportsDashboardPage = lazy(() => import("@/pages/employee-reports-dashboard"));
+const PnLDashboardPage = lazy(() => import("@/pages/pnl-dashboard"));
+const SecurityManagementPage = lazy(() => import("@/pages/security-management"));
+const ProductionComparisonsPage = lazy(() => import("@/pages/production-comparisons"));
+const ProductionComparisonReportsPage = lazy(() => import("@/pages/production-comparison-reports"));
+const ProductCategoryManagementPage = lazy(() => import("@/pages/product-category-management"));
 
 function AppLoadingFallback() {
   return (
@@ -94,10 +98,21 @@ function AppLoadingFallback() {
   );
 }
 
+function PageLoadingFallback() {
+  return (
+    <div className="min-h-[400px] flex flex-col items-center justify-center" dir="rtl">
+      <Loader2 className="w-8 h-8 text-[#e67e22] animate-spin" />
+      <p className="mt-3 text-[#1a3a2f] text-sm">جاري التحميل...</p>
+    </div>
+  );
+}
+
 function ModulePage({ component: Component, module }: { component: React.ComponentType; module: SystemModule }) {
   return (
     <ModuleProtectedRoute module={module}>
-      <Component />
+      <Suspense fallback={<PageLoadingFallback />}>
+        <Component />
+      </Suspense>
     </ModuleProtectedRoute>
   );
 }
@@ -106,13 +121,17 @@ function AdminPage({ component: Component, module }: { component: React.Componen
   if (module) {
     return (
       <ModuleProtectedRoute module={module} requiredRole="admin">
-        <Component />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <Component />
+        </Suspense>
       </ModuleProtectedRoute>
     );
   }
   return (
     <ProtectedRoute requiredRole="admin">
-      <Component />
+      <Suspense fallback={<PageLoadingFallback />}>
+        <Component />
+      </Suspense>
     </ProtectedRoute>
   );
 }
@@ -120,7 +139,7 @@ function AdminPage({ component: Component, module }: { component: React.Componen
 function Router() {
   return (
     <Switch>
-      <Route path="/">{() => <ProtectedRoute><PlatformHomePage /></ProtectedRoute>}</Route>
+      <Route path="/">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><PlatformHomePage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/login">
         {() => (
           <PublicOnlyRoute>
