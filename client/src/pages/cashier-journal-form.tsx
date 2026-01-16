@@ -2349,104 +2349,6 @@ export default function CashierJournalFormPage() {
               </Alert>
             )}
 
-            {/* Quick Add Payment Methods Panel */}
-            {!isReadOnly && (
-              <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
-                <CardHeader className="py-2 px-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    إضافة طريقة دفع
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 p-3 pt-0">
-                  {/* Bank Cards */}
-                  <div className="space-y-2">
-                    <div className="text-xs text-blue-600 font-medium flex items-center gap-1">
-                      <CreditCard className="w-3 h-3" />
-                      بطاقات الدفع
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { value: "mada", label: "مدى", color: "bg-blue-600 hover:bg-blue-700" },
-                        { value: "visa", label: "فيزا", color: "bg-indigo-600 hover:bg-indigo-700" },
-                        { value: "mastercard", label: "ماستركارد", color: "bg-orange-600 hover:bg-orange-700" },
-                      ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
-                        <Button
-                          key={method.value}
-                          type="button"
-                          size="sm"
-                          className={`h-7 px-2 text-white text-xs ${method.color}`}
-                          onClick={() => {
-                            setPaymentBreakdowns([...paymentBreakdowns, { 
-                              paymentMethod: method.value, 
-                              amount: 0, 
-                              transactionCount: 0,
-                              posAmount: 0,
-                              terminalAmount: 0,
-                              terminalTransactionCount: 0
-                            }]);
-                          }}
-                          data-testid={`quick-add-side-${method.value}`}
-                        >
-                          <CreditCard className="w-3 h-3 ml-1" />
-                          {method.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Delivery Apps */}
-                  <div className="space-y-2">
-                    <div className="text-xs text-purple-600 font-medium flex items-center gap-1">
-                      <Truck className="w-3 h-3" />
-                      تطبيقات التوصيل
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { value: "hunger_station", label: "هنجرستيشن", color: "bg-orange-500 hover:bg-orange-600" },
-                        { value: "keeta", label: "كيتا", color: "bg-green-500 hover:bg-green-600" },
-                        { value: "jahez", label: "جاهز", color: "bg-blue-500 hover:bg-blue-600" },
-                        { value: "marsool", label: "مرسول", color: "bg-purple-500 hover:bg-purple-600" },
-                        { value: "toyou", label: "ToYou", color: "bg-pink-500 hover:bg-pink-600" },
-                        { value: "the_chefs", label: "ذا شيفز", color: "bg-amber-600 hover:bg-amber-700" },
-                      ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
-                        <Button
-                          key={method.value}
-                          type="button"
-                          size="sm"
-                          className={`h-7 px-2 text-white text-xs ${method.color}`}
-                          onClick={() => {
-                            setPaymentBreakdowns([...paymentBreakdowns, { 
-                              paymentMethod: method.value, 
-                              amount: 0, 
-                              transactionCount: 0 
-                            }]);
-                          }}
-                          data-testid={`quick-add-side-${method.value}`}
-                        >
-                          <Truck className="w-3 h-3 ml-1" />
-                          {method.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Other payment method */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full h-7 text-xs border-dashed"
-                    onClick={addPaymentBreakdown}
-                    data-testid="quick-add-side-other"
-                  >
-                    <Plus className="w-3 h-3 ml-1" />
-                    طريقة دفع أخرى
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
             <div className="space-y-2">
               {!isReadOnly && (
                 <>
@@ -2493,6 +2395,172 @@ export default function CashierJournalFormPage() {
           </div>
         </div>
 
+        {/* Sticky Bottom Action Bar - iPad Optimized */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-2 md:p-3">
+          <div className="max-w-7xl mx-auto flex flex-col gap-2">
+            {/* Quick Add Payment Buttons - Always visible */}
+            {!isReadOnly && (
+              <div className="flex flex-col gap-1">
+                {/* Bank Cards Row */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="text-xs text-blue-600 font-medium ml-1">💳 بطاقات:</span>
+                  {[
+                    { value: "mada", label: "مدى", color: "bg-blue-600 hover:bg-blue-700" },
+                    { value: "visa", label: "فيزا", color: "bg-indigo-600 hover:bg-indigo-700" },
+                    { value: "mastercard", label: "ماستركارد", color: "bg-orange-600 hover:bg-orange-700" },
+                  ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
+                    <Button
+                      key={method.value}
+                      type="button"
+                      size="sm"
+                      className={`h-8 px-2 text-white text-xs ${method.color}`}
+                      onClick={() => {
+                        setPaymentBreakdowns([...paymentBreakdowns, { 
+                          paymentMethod: method.value, 
+                          amount: 0, 
+                          transactionCount: 0,
+                          posAmount: 0,
+                          terminalAmount: 0,
+                          terminalTransactionCount: 0
+                        }]);
+                      }}
+                      data-testid={`quick-add-sticky-${method.value}`}
+                    >
+                      <CreditCard className="w-3 h-3 ml-1" />
+                      {method.label}
+                    </Button>
+                  ))}
+                </div>
+                
+                {/* Delivery Apps Row */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="text-xs text-purple-600 font-medium ml-1">🚚 توصيل:</span>
+                  {[
+                    { value: "hunger_station", label: "هنجرستيشن", color: "bg-orange-500 hover:bg-orange-600" },
+                    { value: "keeta", label: "كيتا", color: "bg-green-500 hover:bg-green-600" },
+                    { value: "jahez", label: "جاهز", color: "bg-blue-500 hover:bg-blue-600" },
+                    { value: "marsool", label: "مرسول", color: "bg-purple-500 hover:bg-purple-600" },
+                    { value: "toyou", label: "ToYou", color: "bg-pink-500 hover:bg-pink-600" },
+                    { value: "the_chefs", label: "ذا شيفز", color: "bg-amber-600 hover:bg-amber-700" },
+                  ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
+                    <Button
+                      key={method.value}
+                      type="button"
+                      size="sm"
+                      className={`h-8 px-2 text-white text-xs ${method.color}`}
+                      onClick={() => {
+                        setPaymentBreakdowns([...paymentBreakdowns, { 
+                          paymentMethod: method.value, 
+                          amount: 0, 
+                          transactionCount: 0 
+                        }]);
+                      }}
+                      data-testid={`quick-add-sticky-${method.value}`}
+                    >
+                      <Truck className="w-3 h-3 ml-1" />
+                      {method.label}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 text-xs border-dashed"
+                    onClick={addPaymentBreakdown}
+                    data-testid="quick-add-sticky-other"
+                  >
+                    <Plus className="w-3 h-3 ml-1" />
+                    أخرى
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {/* Summary Stats and Action Buttons Row */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-2">
+            {/* Summary Stats */}
+            <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4 text-sm">
+              <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg">
+                <Receipt className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-600">المبيعات:</span>
+                <span className="font-bold text-lg">{formData.totalSales.toLocaleString('en')} ر.س</span>
+              </div>
+              {returnData.hasReturn && returnData.returnAmount > 0 && (
+                <div className="flex items-center gap-2 bg-red-100 px-3 py-2 rounded-lg">
+                  <RotateCcw className="w-4 h-4 text-red-500" />
+                  <span className="text-red-600">مرتجع:</span>
+                  <span className="font-bold text-red-700">-{returnData.returnAmount.toLocaleString('en')}</span>
+                </div>
+              )}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+                (() => {
+                  const variance = getVarianceSummary();
+                  if (variance.varianceType === 'balanced') return 'bg-green-100';
+                  if (variance.varianceType === 'warning') return 'bg-amber-100';
+                  return 'bg-red-100';
+                })()
+              }`}>
+                <Calculator className="w-4 h-4" />
+                <span>الفارق:</span>
+                <span className={`font-bold text-lg ${
+                  (() => {
+                    const variance = getVarianceSummary();
+                    if (variance.varianceType === 'balanced') return 'text-green-700';
+                    if (variance.varianceType === 'warning') return 'text-amber-700';
+                    return 'text-red-700';
+                  })()
+                }`}>
+                  {getVarianceSummary().netVariance >= 0 ? '+' : ''}{getVarianceSummary().netVariance.toLocaleString('en', {minimumFractionDigits: 2})}
+                </span>
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              {!isReadOnly && (
+                <>
+                  <Button
+                    size="lg"
+                    className="gap-2 h-12 px-6 text-base min-w-[140px]"
+                    onClick={handleSave}
+                    disabled={createMutation.isPending || updateMutation.isPending || !canSave}
+                    data-testid="button-save-sticky"
+                  >
+                    <Save className="w-5 h-5" />
+                    {isEdit ? "حفظ" : "حفظ مسودة"}
+                  </Button>
+                  {isEdit && existingJournal?.status === "draft" && (
+                    <Button
+                      size="lg"
+                      className="gap-2 bg-green-600 hover:bg-green-700 h-12 px-6 text-base min-w-[140px]"
+                      onClick={handleSaveAndPost}
+                      disabled={postMutation.isPending || updateMutation.isPending || !canPost}
+                      data-testid="button-post-sticky"
+                    >
+                      <Send className="w-5 h-5" />
+                      ترحيل
+                    </Button>
+                  )}
+                </>
+              )}
+              {isReadOnly && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="gap-2 h-12 px-6"
+                  onClick={() => setLocation("/cashier-journals")}
+                >
+                  <ArrowRight className="w-5 h-5" />
+                  العودة للقائمة
+                </Button>
+              )}
+            </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Spacer for sticky bar */}
+        <div className="h-36 md:h-28" />
       </div>
 
       {/* Variance Confirmation Dialog - for posting with mismatch */}
