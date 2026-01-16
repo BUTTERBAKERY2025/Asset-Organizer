@@ -13,14 +13,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, subDays, addDays } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch, Product } from "@shared/schema";
-import { useProductionContext } from "@/contexts/ProductionContext";
 import { 
   Factory, Plus, Clock, Package, Trash2, RefreshCw, Calendar,
   Refrigerator, ShoppingCart, Snowflake, ChefHat, ArrowLeft,
@@ -67,24 +65,7 @@ interface DailyProductionBatch {
   recorderName: string | null;
   notes: string | null;
   createdAt: string;
-  status: string | null;
-  chefId: string | null;
-  chefName: string | null;
-  sourceBatchId: number | null;
-  finishedAt: string | null;
 }
-
-interface ChefUser {
-  id: string;
-  username: string;
-  firstName: string | null;
-  lastName: string | null;
-}
-
-const PRODUCTION_STATUSES = [
-  { value: "finished", label: "مكتمل", color: "bg-green-100 text-green-800", icon: Check },
-  { value: "in_progress", label: "قيد التحضير", color: "bg-amber-100 text-amber-800", icon: Timer },
-];
 
 interface DailyStats {
   totalBatches: number;
@@ -120,41 +101,24 @@ const HOUR_LABELS: Record<string, string> = {
 const QUICK_QUANTITIES = [1, 2, 3, 5, 10, 12, 15, 20, 24, 30];
 
 export default function DailyProductionPage() {
-  // Use shared context for branch, date, and shift
-  const { 
-    selectedBranch: branchId, 
-    setSelectedBranch: setBranchId, 
-    selectedDate, 
-    setSelectedDate,
-    selectedShift,
-    setSelectedShift 
-  } = useProductionContext();
-  
+  const [branchId, setBranchId] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [productName, setProductName] = useState<string>("");
   const [productCategory, setProductCategory] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
   const [destination, setDestination] = useState<string>("display_bar");
+  const [selectedShift, setSelectedShift] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
-  const [status, setStatus] = useState<string>("finished");
-  const [selectedChefId, setSelectedChefId] = useState<string>("");
-  const [selectedChefName, setSelectedChefName] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<string>("entry");
   const [productSearch, setProductSearch] = useState<string>("");
-  const [batchSearch, setBatchSearch] = useState<string>("");
-  const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [filterDestination, setFilterDestination] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [quickMode, setQuickMode] = useState<boolean>(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
   const [editingBatch, setEditingBatch] = useState<DailyProductionBatch | null>(null);
   const [editQuantity, setEditQuantity] = useState<string>("");
   const [editDestination, setEditDestination] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
-  const [showCarryOverPanel, setShowCarryOverPanel] = useState<boolean>(false);
   const printRef = useRef<HTMLDivElement>(null);
-  const quantityInputRef = useRef<HTMLInputElement>(null);
-  const productInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -165,20 +129,27 @@ export default function DailyProductionPage() {
   const canModifyRecords = isAdmin || canEdit("production");
   const canDeleteRecords = isAdmin || canDelete("production");
 
-  const { branches, canSelectBranch, userBranchId } = useBranches();
+  const { data: branches } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+  });
 
   const { data: products } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
 
-  // Initialize branch from context, user's branch, or fallback to first branch for admins
   useEffect(() => {
-    if (userBranchId) {
-      setBranchId(userBranchId);
-    } else if (canSelectBranch && branches && branches.length > 0 && (!branchId || branchId === "all")) {
+    if (branches && branches.length > 0 && !branchId) {
       setBranchId(branches[0].id);
     }
-  }, [branches, branchId, setBranchId, userBranchId, canSelectBranch]);
+  }, [branches, branchId]);
+
+  // Auto-detect current shift
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 14) setSelectedShift("morning");
+    else if (hour >= 14 && hour < 22) setSelectedShift("evening");
+    else setSelectedShift("night");
+  }, []);
 
   const { data: batches, isLoading: batchesLoading, refetch: refetchBatches } = useQuery<DailyProductionBatch[]>({
     queryKey: ["/api/daily-production/batches", branchId, selectedDate],
@@ -191,32 +162,23 @@ export default function DailyProductionPage() {
       return res.json();
     },
     enabled: !!branchId,
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchInterval: autoRefresh ? 60000 : false,
   });
 
   const { data: stats } = useQuery<DailyStats>({
     queryKey: ["/api/daily-production/stats", branchId, selectedDate],
     queryFn: async () => {
-      if (!branchId || !selectedDate) return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
       const params = new URLSearchParams({ branchId, date: selectedDate });
       const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
     enabled: !!branchId && !!selectedDate,
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchInterval: autoRefresh ? 60000 : false,
   });
 
   // Previous day stats for comparison
-  const previousDate = (() => {
-    try {
-      return format(subDays(new Date(selectedDate || new Date()), 1), "yyyy-MM-dd");
-    } catch {
-      return format(subDays(new Date(), 1), "yyyy-MM-dd");
-    }
-  })();
+  const previousDate = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
   const { data: prevStats } = useQuery<DailyStats>({
     queryKey: ["/api/daily-production/stats", branchId, previousDate],
     queryFn: async () => {
@@ -236,15 +198,11 @@ export default function DailyProductionPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
       if (!quickMode) {
         setProductName("");
         setProductCategory("");
         setQuantity("");
         setNotes("");
-        setStatus("finished");
-        setSelectedChefId("");
-        setSelectedChefName("");
       } else {
         setQuantity("");
       }
@@ -270,116 +228,6 @@ export default function DailyProductionPage() {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
-
-  // Fetch chefs (users who can be assigned to production) - uses production-accessible endpoint
-  const { data: chefs } = useQuery<ChefUser[]>({
-    queryKey: ["/api/daily-production/chefs"],
-    queryFn: async () => {
-      const res = await fetch("/api/daily-production/chefs", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch chefs");
-      return res.json();
-    },
-  });
-
-  // Fetch unfinished batches for carry-over
-  const { data: unfinishedBatches, refetch: refetchUnfinished } = useQuery<DailyProductionBatch[]>({
-    queryKey: ["/api/daily-production/unfinished", branchId],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (branchId) params.set("branchId", branchId);
-      const res = await fetch(`/api/daily-production/unfinished?${params}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch unfinished batches");
-      return res.json();
-    },
-    enabled: !!branchId,
-  });
-
-  // Mutation to mark batch as finished
-  const finishMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await apiRequest("POST", `/api/daily-production/batches/${id}/finish`, {});
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
-      toast({ title: "تم إكمال الدفعة بنجاح" });
-    },
-    onError: (error: any) => {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Mutation to carry over batch to next day
-  const carryOverMutation = useMutation({
-    mutationFn: async ({ id, newDate, additionalQuantity }: { id: number; newDate: string; additionalQuantity?: number }) => {
-      const res = await apiRequest("POST", `/api/daily-production/batches/${id}/carry-over`, { newDate, additionalQuantity });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
-      toast({ title: "تم ترحيل الدفعة بنجاح إلى اليوم التالي" });
-    },
-    onError: (error: any) => {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if user is typing in an input/textarea
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        // Allow Enter to submit form when in quantity field
-        if (e.key === "Enter" && quantityInputRef.current === e.target) {
-          return; // Let form handle submission
-        }
-        return;
-      }
-      
-      // Alt+N: Focus on product name input (new entry)
-      if (e.altKey && e.key === "n") {
-        e.preventDefault();
-        productInputRef.current?.focus();
-        setActiveTab("entry");
-      }
-      
-      // Alt+Q: Focus on quantity input
-      if (e.altKey && e.key === "q") {
-        e.preventDefault();
-        quantityInputRef.current?.focus();
-      }
-      
-      // Alt+R: Refresh data
-      if (e.altKey && e.key === "r") {
-        e.preventDefault();
-        refetchBatches();
-        toast({ title: "تم تحديث البيانات" });
-      }
-      
-      // Alt+1-4: Quick destination select
-      if (e.altKey && ["1", "2", "3", "4"].includes(e.key)) {
-        e.preventDefault();
-        const destIndex = parseInt(e.key) - 1;
-        if (DESTINATIONS[destIndex]) {
-          setDestination(DESTINATIONS[destIndex].value);
-          toast({ title: `الوجهة: ${DESTINATIONS[destIndex].label}` });
-        }
-      }
-      
-      // Escape: Clear entry form only (not batch filters)
-      if (e.key === "Escape") {
-        setProductName("");
-        setQuantity("");
-        setNotes("");
-        setProductSearch("");
-      }
-    };
-    
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [refetchBatches, toast]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -409,30 +257,19 @@ export default function DailyProductionPage() {
     }
     
     const product = products?.find(p => p.name === productName);
-    const category = productCategory || product?.category || null;
-    
-    // For sweets category (حلويات), use the selected status; otherwise default to finished
-    const batchStatus = category === "حلويات" ? status : "finished";
-    
     createMutation.mutate({
       branchId,
       productId: product?.id || null,
       productName,
-      productCategory: category,
+      productCategory: productCategory || product?.category || null,
       quantity: numericQuantity,
       unit: product?.unit || "قطعة",
       destination,
       notes: notes || null,
-      status: batchStatus,
-      chefId: selectedChefId || null,
-      chefName: selectedChefName || null,
     });
   };
 
   const handleQuickEntry = (product: Product, qty: number) => {
-    // For sweets category, use the selected status; otherwise finished
-    const batchStatus = product.category === "حلويات" ? status : "finished";
-    
     createMutation.mutate({
       branchId,
       productId: product.id,
@@ -442,21 +279,7 @@ export default function DailyProductionPage() {
       unit: product.unit || "قطعة",
       destination,
       notes: null,
-      status: batchStatus,
-      chefId: selectedChefId || null,
-      chefName: selectedChefName || null,
     });
-  };
-  
-  // Handle chef selection
-  const handleChefSelect = (chefId: string) => {
-    setSelectedChefId(chefId);
-    const chef = chefs?.find(c => c.id === chefId);
-    if (chef) {
-      setSelectedChefName(`${chef.firstName || ''} ${chef.lastName || ''}`.trim() || chef.username);
-    } else {
-      setSelectedChefName("");
-    }
   };
 
   const handleEditSave = () => {
@@ -505,14 +328,12 @@ export default function DailyProductionPage() {
 
   const getBranchName = (id: string) => branches?.find(b => b.id === id)?.name || id;
 
+  const paginatedBatches = getPageItems(batches || [], currentPage);
+
   const batchesByHour = (batches || []).reduce((acc, batch) => {
-    try {
-      const hour = batch.producedAt ? format(new Date(batch.producedAt), "HH") : "00";
-      if (!acc[hour]) acc[hour] = [];
-      acc[hour].push(batch);
-    } catch {
-      // Skip invalid dates
-    }
+    const hour = format(new Date(batch.producedAt), "HH");
+    if (!acc[hour]) acc[hour] = [];
+    acc[hour].push(batch);
     return acc;
   }, {} as Record<string, DailyProductionBatch[]>);
 
@@ -549,51 +370,6 @@ export default function DailyProductionPage() {
       (p.category ?? "").toLowerCase().includes(search)
     );
   }, [products, productSearch]);
-
-  // Filter batches by search, category, destination, and status
-  const filteredBatches = useMemo(() => {
-    if (!batches) return [];
-    let result = [...batches];
-    
-    // Filter by search term
-    if (batchSearch) {
-      const search = batchSearch.toLowerCase();
-      result = result.filter(b =>
-        b.productName.toLowerCase().includes(search) ||
-        (b.productCategory ?? "").toLowerCase().includes(search) ||
-        (b.notes ?? "").toLowerCase().includes(search) ||
-        (b.recorderName ?? "").toLowerCase().includes(search) ||
-        (b.chefName ?? "").toLowerCase().includes(search)
-      );
-    }
-    
-    // Filter by category
-    if (filterCategory !== "all") {
-      result = result.filter(b => b.productCategory === filterCategory);
-    }
-    
-    // Filter by destination
-    if (filterDestination !== "all") {
-      result = result.filter(b => b.destination === filterDestination);
-    }
-    
-    // Filter by status
-    if (filterStatus !== "all") {
-      result = result.filter(b => (b.status || "finished") === filterStatus);
-    }
-    
-    return result;
-  }, [batches, batchSearch, filterCategory, filterDestination, filterStatus]);
-
-  const paginatedBatches = getPageItems(filteredBatches, currentPage);
-
-  // Reset to page 1 when filtered results change
-  useEffect(() => {
-    const totalPages = Math.ceil(filteredBatches.length / itemsPerPage);
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(1);
-    }
-  }, [filteredBatches.length, currentPage, itemsPerPage]);
 
   // Popular products (most used today)
   const popularProducts = useMemo(() => {
@@ -769,21 +545,21 @@ export default function DailyProductionPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="space-y-6" dir="rtl">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
-              <Factory className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
+              <Factory className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="text-page-title">الإنتاج الفعلي اليومي</h1>
-              <p className="text-sm text-muted-foreground">تسجيل ومتابعة دفعات الإنتاج على مدار اليوم</p>
+              <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">الإنتاج الفعلي اليومي</h1>
+              <p className="text-muted-foreground">تسجيل ومتابعة دفعات الإنتاج على مدار اليوم</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -801,11 +577,11 @@ export default function DailyProductionPage() {
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-2 min-w-[200px]">
             <Label>الفرع *</Label>
-            <Select value={branchId || undefined} onValueChange={setBranchId} disabled={!canSelectBranch}>
-              <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
+            <Select value={branchId} onValueChange={setBranchId}>
+              <SelectTrigger data-testid="select-branch">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-y-auto">
+              <SelectContent>
                 {branches?.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                 ))}
@@ -818,17 +594,17 @@ export default function DailyProductionPage() {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-[160px] h-11 sm:h-10"
+              className="w-[160px]"
               data-testid="input-date"
             />
           </div>
           <div className="space-y-2">
             <Label>الوردية</Label>
-            <Select value={selectedShift || undefined} onValueChange={setSelectedShift}>
-              <SelectTrigger className="w-[140px] h-11 sm:h-10">
+            <Select value={selectedShift} onValueChange={setSelectedShift}>
+              <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="الوردية" />
               </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-y-auto">
+              <SelectContent>
                 {SHIFTS.map((shift) => {
                   const Icon = shift.icon;
                   return (
@@ -856,16 +632,16 @@ export default function DailyProductionPage() {
               <Badge variant="secondary" className="text-xs">كل دقيقة</Badge>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetchBatches()} data-testid="btn-refresh" className="h-11 sm:h-9">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetchBatches()} data-testid="btn-refresh">
               <RefreshCw className="h-4 w-4 ml-2" />
               تحديث
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToExcel} disabled={!batches?.length} data-testid="btn-export" className="h-11 sm:h-9">
+            <Button variant="outline" size="sm" onClick={exportToExcel} disabled={!batches?.length} data-testid="btn-export">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-print" className="h-11 sm:h-9">
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-print">
               <Printer className="h-4 w-4 ml-2" />
               طباعة
             </Button>
@@ -874,14 +650,14 @@ export default function DailyProductionPage() {
 
         {/* Stats Cards with Comparison */}
         {branchId && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="border-r-4 border-r-amber-500">
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الدفعات</p>
+                    <p className="text-sm text-muted-foreground">إجمالي الدفعات</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-xl sm:text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
+                      <p className="text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
                       {prevStats && (
                         <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
                           {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -890,17 +666,17 @@ export default function DailyProductionPage() {
                       )}
                     </div>
                   </div>
-                  <Package className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500 opacity-50" />
+                  <Package className="h-8 w-8 text-amber-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-green-500">
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الكميات</p>
+                    <p className="text-sm text-muted-foreground">إجمالي الكميات</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-xl sm:text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
+                      <p className="text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
                       {prevStats && (
                         <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
                           {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -909,31 +685,31 @@ export default function DailyProductionPage() {
                       )}
                     </div>
                   </div>
-                  <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 opacity-50" />
+                  <TrendingUp className="h-8 w-8 text-green-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-blue-500">
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">بار العرض</p>
-                    <p className="text-xl sm:text-2xl font-bold text-blue-700">{stats?.byDestination?.display_bar || 0}</p>
+                    <p className="text-sm text-muted-foreground">بار العرض</p>
+                    <p className="text-2xl font-bold text-blue-700">{stats?.byDestination?.display_bar || 0}</p>
                   </div>
-                  <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 opacity-50" />
+                  <ShoppingCart className="h-8 w-8 text-blue-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-cyan-500">
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">التخزين</p>
-                    <p className="text-xl sm:text-2xl font-bold text-cyan-700">
+                    <p className="text-sm text-muted-foreground">التخزين</p>
+                    <p className="text-2xl font-bold text-cyan-700">
                       {(stats?.byDestination?.freezer || 0) + (stats?.byDestination?.refrigerator || 0)}
                     </p>
                   </div>
-                  <Snowflake className="h-6 w-6 sm:h-8 sm:w-8 text-cyan-500 opacity-50" />
+                  <Snowflake className="h-8 w-8 text-cyan-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
@@ -987,7 +763,7 @@ export default function DailyProductionPage() {
                   <CardDescription>سجل الإنتاج فور خروجه من المطبخ</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <Label>المنتج *</Label>
                       <div className="relative">
@@ -996,15 +772,15 @@ export default function DailyProductionPage() {
                           placeholder="ابحث عن منتج..."
                           value={productSearch}
                           onChange={(e) => setProductSearch(e.target.value)}
-                          className="pr-10 h-11 sm:h-10"
+                          className="pr-10"
                         />
                       </div>
-                      <Select value={productName || undefined} onValueChange={(val) => {
+                      <Select value={productName} onValueChange={(val) => {
                         setProductName(val);
                         const prod = products?.find(p => p.name === val);
                         if (prod?.category) setProductCategory(prod.category);
                       }}>
-                        <SelectTrigger data-testid="select-product" className="h-11 sm:h-10">
+                        <SelectTrigger data-testid="select-product">
                           <SelectValue placeholder="اختر المنتج" />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px] overflow-y-auto">
@@ -1020,17 +796,16 @@ export default function DailyProductionPage() {
                         value={productName}
                         onChange={(e) => setProductName(e.target.value)}
                         data-testid="input-product-name"
-                        className="h-11 sm:h-10"
                       />
                     </div>
 
                     <div className="space-y-2">
                       <Label>الفئة</Label>
-                      <Select value={productCategory || undefined} onValueChange={setProductCategory}>
-                        <SelectTrigger data-testid="select-category" className="h-11 sm:h-10">
+                      <Select value={productCategory} onValueChange={setProductCategory}>
+                        <SelectTrigger data-testid="select-category">
                           <SelectValue placeholder="اختر الفئة" />
                         </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
+                        <SelectContent>
                           {BAKERY_CATEGORIES.map((cat) => (
                             <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                           ))}
@@ -1041,17 +816,12 @@ export default function DailyProductionPage() {
                     <div className="space-y-2">
                       <Label>الكمية *</Label>
                       <Input
-                        type="text"
-                        inputMode="numeric"
+                        type="number"
+                        min="1"
                         value={quantity}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[^0-9]/g, '');
-                          setQuantity(val);
-                        }}
+                        onChange={(e) => setQuantity(e.target.value)}
                         placeholder="أدخل الكمية"
-                        ref={quantityInputRef}
                         data-testid="input-quantity"
-                        className="h-11 sm:h-10"
                       />
                       <div className="flex flex-wrap gap-1">
                         {QUICK_QUANTITIES.map((q) => (
@@ -1060,7 +830,7 @@ export default function DailyProductionPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-10 min-h-[40px] sm:h-7 sm:min-h-0 px-3 sm:px-2 text-sm sm:text-xs"
+                            className="h-7 px-2 text-xs"
                             onClick={() => setQuantity(q.toString())}
                           >
                             {q}
@@ -1091,67 +861,6 @@ export default function DailyProductionPage() {
                       </div>
                     </div>
 
-                    {/* Chef Selection */}
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <ChefHat className="h-4 w-4" />
-                        الشيف المنتج
-                      </Label>
-                      <Select value={selectedChefId || undefined} onValueChange={handleChefSelect}>
-                        <SelectTrigger data-testid="select-chef" className="h-11 sm:h-10">
-                          <SelectValue placeholder="اختر الشيف (اختياري)" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          <SelectItem value="">بدون تحديد</SelectItem>
-                          {chefs?.map((chef) => (
-                            <SelectItem key={chef.id} value={chef.id}>
-                              {chef.firstName ? `${chef.firstName} ${chef.lastName || ''}`.trim() : chef.username}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Status Selection - Only for Sweets (حلويات) - show based on resolved category */}
-                    {(productCategory === "حلويات" || products?.find(p => p.name === productName)?.category === "حلويات") && (
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          <Timer className="h-4 w-4" />
-                          حالة الإنتاج
-                        </Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {PRODUCTION_STATUSES.map((s) => {
-                            const Icon = s.icon;
-                            return (
-                              <Button
-                                key={s.value}
-                                type="button"
-                                variant={status === s.value ? "default" : "outline"}
-                                className={`h-auto py-2 flex items-center justify-center gap-2 ${
-                                  status === s.value 
-                                    ? s.value === "finished" 
-                                      ? "bg-green-600 hover:bg-green-700" 
-                                      : "bg-amber-600 hover:bg-amber-700"
-                                    : ""
-                                }`}
-                                onClick={() => setStatus(s.value)}
-                                data-testid={`btn-status-${s.value}`}
-                              >
-                                <Icon className="h-4 w-4" />
-                                <span className="text-sm">{s.label}</span>
-                              </Button>
-                            );
-                          })}
-                        </div>
-                        {status === "in_progress" && (
-                          <p className="text-xs text-amber-600 flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            سيظهر في قائمة الترحيل للمتابعة
-                          </p>
-                        )}
-                      </div>
-                    )}
-
                     {!quickMode && (
                       <div className="space-y-2">
                         <Label>ملاحظات</Label>
@@ -1167,7 +876,7 @@ export default function DailyProductionPage() {
 
                     <Button
                       type="submit"
-                      className="w-full h-11 sm:h-10 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
+                      className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
                       disabled={createMutation.isPending || !branchId}
                       data-testid="btn-submit"
                     >
@@ -1195,71 +904,6 @@ export default function DailyProductionPage() {
                       </div>
                     </div>
                   )}
-
-                  {/* Carry-Over Panel - Unfinished Batches */}
-                  {unfinishedBatches && unfinishedBatches.length > 0 && (
-                    <div className="mt-4 pt-4 border-t">
-                      <div className="flex items-center justify-between mb-3">
-                        <Label className="text-sm font-medium flex items-center gap-2 text-amber-700">
-                          <AlertTriangle className="h-4 w-4" />
-                          دفعات قيد التحضير ({unfinishedBatches.length})
-                        </Label>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowCarryOverPanel(!showCarryOverPanel)}
-                          className="text-xs"
-                        >
-                          {showCarryOverPanel ? "إخفاء" : "عرض"}
-                        </Button>
-                      </div>
-                      {showCarryOverPanel && (
-                        <div className="space-y-2">
-                          {(unfinishedBatches || []).slice(0, 5).map((batch) => (
-                            <div
-                              key={batch.id}
-                              className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-200"
-                            >
-                              <div className="flex-1">
-                                <p className="text-sm font-medium">{batch.productName}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {batch.quantity} {batch.unit || "قطعة"} • {batch.chefName || "بدون شيف"}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-green-600 hover:text-green-700"
-                                  onClick={() => finishMutation.mutate(batch.id)}
-                                  title="إكمال"
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-blue-600 hover:text-blue-700"
-                                  onClick={() => carryOverMutation.mutate({
-                                    id: batch.id,
-                                    newDate: format(addDays(batch.producedAt ? new Date(batch.producedAt) : new Date(), 1), "yyyy-MM-dd"),
-                                  })}
-                                  title="ترحيل لليوم التالي"
-                                >
-                                  <RefreshCw className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                          {(unfinishedBatches?.length || 0) > 5 && (
-                            <p className="text-xs text-muted-foreground text-center">
-                              +{(unfinishedBatches?.length || 0) - 5} دفعة أخرى
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </CardContent>
               </Card>
 
@@ -1275,74 +919,6 @@ export default function DailyProductionPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {/* Filter Bar */}
-                  {batches && batches.length > 0 && (
-                    <div className="flex flex-wrap gap-3 mb-4 p-3 bg-muted/30 rounded-lg">
-                      <div className="flex-1 min-w-[180px]">
-                        <Input
-                          placeholder="بحث في الدفعات..."
-                          value={batchSearch}
-                          onChange={(e) => { setBatchSearch(e.target.value); setCurrentPage(1); }}
-                          className="h-11 sm:h-10"
-                          data-testid="input-batch-search"
-                        />
-                      </div>
-                      <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-[140px] h-11 sm:h-10" data-testid="select-filter-category">
-                          <SelectValue placeholder="الفئة" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          <SelectItem value="all">كل الفئات</SelectItem>
-                          {BAKERY_CATEGORIES.map(cat => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={filterDestination} onValueChange={(v) => { setFilterDestination(v); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-[140px] h-11 sm:h-10" data-testid="select-filter-destination">
-                          <SelectValue placeholder="الوجهة" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          <SelectItem value="all">كل الوجهات</SelectItem>
-                          {DESTINATIONS.map(d => (
-                            <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-[140px] h-11 sm:h-10" data-testid="select-filter-status">
-                          <SelectValue placeholder="الحالة" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          <SelectItem value="all">كل الحالات</SelectItem>
-                          <SelectItem value="finished">مكتمل</SelectItem>
-                          <SelectItem value="in_progress">قيد التحضير</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {(batchSearch || filterCategory !== "all" || filterDestination !== "all" || filterStatus !== "all") && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-11 sm:h-9"
-                          onClick={() => {
-                            setBatchSearch("");
-                            setFilterCategory("all");
-                            setFilterDestination("all");
-                            setFilterStatus("all");
-                            setCurrentPage(1);
-                          }}
-                          data-testid="btn-clear-filters"
-                        >
-                          <X className="h-4 w-4 ml-1" />
-                          مسح
-                        </Button>
-                      )}
-                      <Badge variant="secondary" className="h-11 sm:h-9 px-3 flex items-center">
-                        {filteredBatches.length} نتيجة
-                      </Badge>
-                    </div>
-                  )}
-                  
                   {!branchId ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Factory className="w-12 h-12 mx-auto mb-4 opacity-20" />
@@ -1358,12 +934,6 @@ export default function DailyProductionPage() {
                       <p>لا توجد دفعات مسجلة لهذا اليوم</p>
                       <p className="text-sm">ابدأ بتسجيل الإنتاج من النموذج</p>
                     </div>
-                  ) : filteredBatches.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Search className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                      <p>لا توجد نتائج مطابقة للفلترة</p>
-                      <p className="text-sm">حاول تغيير معايير البحث</p>
-                    </div>
                   ) : (
                     <>
                       <div className="overflow-x-auto">
@@ -1375,8 +945,6 @@ export default function DailyProductionPage() {
                               <TableHead className="text-right">الفئة</TableHead>
                               <TableHead className="text-center">الكمية</TableHead>
                               <TableHead className="text-right">الوجهة</TableHead>
-                              <TableHead className="text-right">الحالة</TableHead>
-                              <TableHead className="text-right">الشيف</TableHead>
                               <TableHead className="text-right">المسجل</TableHead>
                               <TableHead className="text-left">إجراء</TableHead>
                             </TableRow>
@@ -1407,29 +975,6 @@ export default function DailyProductionPage() {
                                     </Badge>
                                   </TableCell>
                                   <TableCell>
-                                    {batch.status === "in_progress" ? (
-                                      <Badge className="bg-amber-100 text-amber-800 gap-1">
-                                        <Timer className="h-3 w-3" />
-                                        قيد التحضير
-                                      </Badge>
-                                    ) : (
-                                      <Badge className="bg-green-100 text-green-800 gap-1">
-                                        <Check className="h-3 w-3" />
-                                        مكتمل
-                                      </Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {batch.chefName ? (
-                                      <Badge variant="secondary" className="gap-1 text-xs">
-                                        <ChefHat className="h-3 w-3" />
-                                        {batch.chefName}
-                                      </Badge>
-                                    ) : (
-                                      <span className="text-muted-foreground text-xs">-</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
                                     <Badge variant="secondary" className="gap-1 text-xs">
                                       <User className="h-3 w-3" />
                                       {batch.recorderName || "-"}
@@ -1437,18 +982,6 @@ export default function DailyProductionPage() {
                                   </TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-1">
-                                      {/* Finish button for in_progress batches */}
-                                      {batch.status === "in_progress" && canModifyRecords && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7 text-green-600 hover:text-green-700"
-                                          onClick={() => finishMutation.mutate(batch.id)}
-                                          title="إكمال الدفعة"
-                                        >
-                                          <Check className="h-4 w-4" />
-                                        </Button>
-                                      )}
                                       {canModifyRecords && (
                                         <Button
                                           variant="ghost"
@@ -1502,10 +1035,10 @@ export default function DailyProductionPage() {
                           </TableBody>
                         </Table>
                       </div>
-                      {(batches?.length || 0) > itemsPerPage && (
+                      {batches.length > itemsPerPage && (
                         <TablePagination
                           currentPage={currentPage}
-                          totalItems={batches?.length || 0}
+                          totalItems={batches.length}
                           itemsPerPage={itemsPerPage}
                           onPageChange={setCurrentPage}
                         />
@@ -1842,7 +1375,7 @@ export default function DailyProductionPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {(batches || []).map((batch, index) => {
+                          {batches.map((batch, index) => {
                             const destInfo = getDestinationInfo(batch.destination);
                             const DestIcon = destInfo.icon;
                             return (
@@ -1964,13 +1497,10 @@ export default function DailyProductionPage() {
             <div className="space-y-2">
               <Label>الكمية</Label>
               <Input
-                type="text"
-                inputMode="numeric"
+                type="number"
+                min="1"
                 value={editQuantity}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^0-9]/g, '');
-                  setEditQuantity(val);
-                }}
+                onChange={(e) => setEditQuantity(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -1979,7 +1509,7 @@ export default function DailyProductionPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="max-h-60 overflow-y-auto">
+                <SelectContent>
                   {DESTINATIONS.map((dest) => (
                     <SelectItem key={dest.value} value={dest.value}>{dest.label}</SelectItem>
                   ))}
