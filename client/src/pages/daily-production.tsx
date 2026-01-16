@@ -71,6 +71,8 @@ interface DailyProductionBatch {
   chefName: string | null;
   sourceBatchId: number | null;
   finishedAt: string | null;
+  finishedById: string | null;
+  finishedByName: string | null;
 }
 
 interface ChefUser {
@@ -325,12 +327,15 @@ export default function DailyProductionPage() {
     },
   });
 
-  // Finish a batch (mark as completed)
+  // Finish a batch (mark as completed) - includes who finished it
   const finishBatchMutation = useMutation({
     mutationFn: async (batchId: number) => {
+      const finisherName = user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.username || "";
       const res = await apiRequest("PATCH", `/api/daily-production/batches/${batchId}`, {
         status: "finished",
         finishedAt: new Date().toISOString(),
+        finishedById: user?.id || null,
+        finishedByName: finisherName || null,
       });
       return res.json();
     },

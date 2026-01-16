@@ -125,12 +125,24 @@ interface ReportData {
   rawProductionEntries?: Array<{
     id: number;
     productName: string;
+    productCategory: string | null;
     quantity: number;
     branchName: string;
     shiftName: string;
     destination: string;
     producedAt: string;
     notes: string;
+    // Status and chef tracking
+    status: string | null;
+    chefId: string | null;
+    chefName: string | null;
+    recorderName: string | null;
+    // Completion tracking
+    finishedAt: string | null;
+    finishedById: string | null;
+    finishedByName: string | null;
+    // Carry-over tracking
+    sourceBatchId: number | null;
   }>;
 }
 
@@ -255,15 +267,21 @@ export default function ProductionReportsPage() {
       if (reportType === "all" || reportType === "data") {
         if (reportData.rawProductionEntries && reportData.rawProductionEntries.length > 0) {
           const rawData = [
-            ["#", "المنتج", "الكمية", "الفرع", "الوردية", "الوجهة", "التاريخ والوقت", "ملاحظات"],
+            ["#", "المنتج", "الفئة", "الكمية", "الفرع", "الوردية", "الوجهة", "الحالة", "الشيف المنتج", "تاريخ الإنشاء", "تاريخ الاكتمال", "من أكمل الدفعة", "المسجل", "ملاحظات"],
             ...reportData.rawProductionEntries.map((entry, idx) => [
               idx + 1,
               entry.productName,
+              entry.productCategory || '-',
               entry.quantity,
               entry.branchName,
               entry.shiftName,
               entry.destination,
+              entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-',
+              entry.chefName || '-',
               entry.producedAt ? format(new Date(entry.producedAt), "yyyy/MM/dd HH:mm") : '',
+              entry.finishedAt ? format(new Date(entry.finishedAt), "yyyy/MM/dd HH:mm") : '-',
+              entry.finishedByName || '-',
+              entry.recorderName || '-',
               entry.notes || ''
             ]),
           ];

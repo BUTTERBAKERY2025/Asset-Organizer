@@ -9948,7 +9948,7 @@ export async function registerRoutes(
           value: data.value,
         }));
       
-      // Build raw production entries list for table display
+      // Build raw production entries list for table display (with full history)
       const rawProductionEntries = await Promise.all(
         entriesInRange.slice(0, 500).map(async (entry) => {
           let branchName = 'غير محدد';
@@ -9964,12 +9964,24 @@ export async function registerRoutes(
           return {
             id: entry.id,
             productName: entry.productName || 'غير محدد',
+            productCategory: entry.productCategory || null,
             quantity: entry.quantity || 0,
             branchName,
             shiftName,
             destination: entry.destination || 'غير محدد',
             producedAt: entry.producedAt ? new Date(entry.producedAt).toISOString() : '',
             notes: entry.notes || '',
+            // Status and chef tracking
+            status: entry.status || 'finished',
+            chefId: entry.chefId || null,
+            chefName: entry.chefName || null,
+            recorderName: entry.recorderName || null,
+            // Completion tracking
+            finishedAt: entry.finishedAt ? new Date(entry.finishedAt).toISOString() : null,
+            finishedById: (entry as any).finishedById || null,
+            finishedByName: (entry as any).finishedByName || null,
+            // Carry-over tracking
+            sourceBatchId: entry.sourceBatchId || null,
           };
         })
       );

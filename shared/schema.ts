@@ -2725,6 +2725,8 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   chefName: text("chef_name"), // اسم الشيف المنتج
   sourceBatchId: integer("source_batch_id"), // ربط بالدفعة السابقة للترحيل
   finishedAt: timestamp("finished_at"), // تاريخ اكتمال الإنتاج
+  finishedById: varchar("finished_by_id").references(() => users.id), // من قام بإكمال الدفعة
+  finishedByName: text("finished_by_name"), // اسم من قام بالإكمال
 });
 
 export const insertDailyProductionBatchSchema = createInsertSchema(
