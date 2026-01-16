@@ -2501,8 +2501,8 @@ export default function EmployeeReportsDashboardPage() {
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">التقارير الشاملة</h1>
-              <p className="text-gray-500">تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{isRTL ? "التقارير الشاملة" : "Comprehensive Reports"}</h1>
+              <p className="text-gray-500">{isRTL ? "تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب" : "Comprehensive analytics reports for branch employees, attendance, and salaries"}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2512,8 +2512,8 @@ export default function EmployeeReportsDashboardPage() {
               onClick={() => setShowSalaryClosingDialog(true)}
               data-testid="button-salary-closing"
             >
-              <Wallet className="w-4 h-4 ml-2" />
-              إغلاق الرواتب الشهرية
+              <Wallet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+              {isRTL ? "إغلاق الرواتب الشهرية" : "Monthly Salary Closing"}
             </Button>
           </div>
         </div>
@@ -2522,13 +2522,13 @@ export default function EmployeeReportsDashboardPage() {
           <CardContent className="py-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
-                <Label>الفرع</Label>
+                <Label>{isRTL ? "الفرع" : "Branch"}</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
-                    <SelectValue placeholder="جميع الفروع" />
+                    <SelectValue placeholder={isRTL ? "جميع الفروع" : "All Branches"} />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
-                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                    {canSelectBranch && <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>}
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                     ))}
@@ -2536,7 +2536,7 @@ export default function EmployeeReportsDashboardPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>الشهر</Label>
+                <Label>{isRTL ? "الشهر" : "Month"}</Label>
                 <Input 
                   className="h-11 sm:h-10"
                   type="month" 
@@ -2546,13 +2546,13 @@ export default function EmployeeReportsDashboardPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>الوظيفة</Label>
+                <Label>{isRTL ? "الوظيفة" : "Job Title"}</Label>
                 <Select value={selectedJobTitle} onValueChange={setSelectedJobTitle}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-job">
-                    <SelectValue placeholder="جميع الوظائف" />
+                    <SelectValue placeholder={isRTL ? "جميع الوظائف" : "All Job Titles"} />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
-                    <SelectItem value="all">جميع الوظائف</SelectItem>
+                    <SelectItem value="all">{isRTL ? "جميع الوظائف" : "All Job Titles"}</SelectItem>
                     {jobTitles.map((job) => (
                       <SelectItem key={job} value={job}>{job}</SelectItem>
                     ))}
@@ -2560,13 +2560,13 @@ export default function EmployeeReportsDashboardPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>الموظف</Label>
+                <Label>{isRTL ? "الموظف" : "Employee"}</Label>
                 <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-employee">
-                    <SelectValue placeholder="جميع الموظفين" />
+                    <SelectValue placeholder={isRTL ? "جميع الموظفين" : "All Employees"} />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
-                    <SelectItem value="all">جميع الموظفين</SelectItem>
+                    <SelectItem value="all">{isRTL ? "جميع الموظفين" : "All Employees"}</SelectItem>
                     {employees?.map((emp) => (
                       <SelectItem key={emp.id} value={emp.id.toString()}>{emp.employeeName}</SelectItem>
                     ))}
@@ -2579,8 +2579,8 @@ export default function EmployeeReportsDashboardPage() {
                   setSelectedJobTitle("all");
                   setSelectedEmployee("all");
                 }} data-testid="button-reset-filters">
-                  <RefreshCw className="w-4 h-4 ml-2" />
-                  إعادة تعيين
+                  <RefreshCw className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                  {isRTL ? "إعادة تعيين" : "Reset"}
                 </Button>
               </div>
             </div>
@@ -2596,7 +2596,7 @@ export default function EmployeeReportsDashboardPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{formatNumber(overviewStats.totalEmployees)}</p>
-                  <p className="text-xs text-gray-500">إجمالي الموظفين</p>
+                  <p className="text-xs text-gray-500">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
                 </div>
               </div>
             </CardContent>
@@ -2609,7 +2609,7 @@ export default function EmployeeReportsDashboardPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{overviewStats.attendanceRate}%</p>
-                  <p className="text-xs text-gray-500">نسبة الحضور</p>
+                  <p className="text-xs text-gray-500">{isRTL ? "نسبة الحضور" : "Attendance Rate"}</p>
                 </div>
               </div>
             </CardContent>
@@ -2622,7 +2622,7 @@ export default function EmployeeReportsDashboardPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{formatNumber(overviewStats.absentCount)}</p>
-                  <p className="text-xs text-gray-500">أيام الغياب</p>
+                  <p className="text-xs text-gray-500">{isRTL ? "أيام الغياب" : "Absent Days"}</p>
                 </div>
               </div>
             </CardContent>
@@ -2634,8 +2634,8 @@ export default function EmployeeReportsDashboardPage() {
                   <DollarSign className="w-5 h-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatCurrency(overviewStats.totalSalaries)}</p>
-                  <p className="text-xs text-gray-500">إجمالي الرواتب</p>
+                  <p className="text-2xl font-bold">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
+                  <p className="text-xs text-gray-500">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
                 </div>
               </div>
             </CardContent>
@@ -2648,7 +2648,7 @@ export default function EmployeeReportsDashboardPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{formatNumber(overviewStats.saudiEmployees)}</p>
-                  <p className="text-xs text-gray-500">الموظفين السعوديين</p>
+                  <p className="text-xs text-gray-500">{isRTL ? "الموظفين السعوديين" : "Saudi Employees"}</p>
                 </div>
               </div>
             </CardContent>
@@ -2660,8 +2660,8 @@ export default function EmployeeReportsDashboardPage() {
                   <Wallet className="w-5 h-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatCurrency(overviewStats.totalInsurance)}</p>
-                  <p className="text-xs text-gray-500">التأمينات الاجتماعية</p>
+                  <p className="text-2xl font-bold">{formatCurrency(overviewStats.totalInsurance, isRTL)}</p>
+                  <p className="text-xs text-gray-500">{isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}</p>
                 </div>
               </div>
             </CardContent>
@@ -2678,10 +2678,10 @@ export default function EmployeeReportsDashboardPage() {
                   </div>
                   <div>
                     <p className="font-medium text-orange-800">
-                      {formatNumber(unlinkedRecordsCount)} سجل حضور غير مرتبط
+                      {isRTL ? `${formatNumber(unlinkedRecordsCount)} سجل حضور غير مرتبط` : `${formatNumber(unlinkedRecordsCount)} Unlinked Attendance Records`}
                     </p>
                     <p className="text-sm text-orange-600">
-                      سجلات لا يمكن ربطها بموظفين محددين - قم بتصديرها للمراجعة
+                      {isRTL ? "سجلات لا يمكن ربطها بموظفين محددين - قم بتصديرها للمراجعة" : "Records that cannot be linked to specific employees - export for review"}
                     </p>
                   </div>
                 </div>
@@ -2692,8 +2692,8 @@ export default function EmployeeReportsDashboardPage() {
                   className="border-orange-300 text-orange-700 hover:bg-orange-100"
                   data-testid="button-export-unlinked"
                 >
-                  <Download className="w-4 h-4 ml-2" />
-                  تصدير للمراجعة
+                  <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                  {isRTL ? "تصدير للمراجعة" : "Export for Review"}
                 </Button>
               </div>
             </CardContent>
@@ -2766,10 +2766,10 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-blue-600 font-medium">إجمالي الموظفين</p>
+                        <p className="text-sm text-blue-600 font-medium">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
                         <p className="text-3xl font-bold text-blue-800">{formatNumber(overviewStats.totalEmployees)}</p>
                         <p className="text-xs text-blue-500 mt-1">
-                          نشط: {formatNumber(overviewStats.activeEmployees)}
+                          {isRTL ? "نشط:" : "Active:"} {formatNumber(overviewStats.activeEmployees)}
                         </p>
                       </div>
                       <div className="p-3 bg-blue-200 rounded-full">
@@ -2783,10 +2783,10 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-green-600 font-medium">إجمالي الرواتب</p>
-                        <p className="text-2xl font-bold text-green-800">{formatCurrency(overviewStats.totalSalaries)}</p>
+                        <p className="text-sm text-green-600 font-medium">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
+                        <p className="text-2xl font-bold text-green-800">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
                         <p className="text-xs text-green-500 mt-1">
-                          تأمينات: {formatCurrency(overviewStats.totalInsurance)}
+                          {isRTL ? "تأمينات:" : "Insurance:"} {formatCurrency(overviewStats.totalInsurance, isRTL)}
                         </p>
                       </div>
                       <div className="p-3 bg-green-200 rounded-full">
@@ -2800,12 +2800,12 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-amber-600 font-medium">نسبة السعودة</p>
+                        <p className="text-sm text-amber-600 font-medium">{isRTL ? "نسبة السعودة" : "Saudization Rate"}</p>
                         <p className="text-3xl font-bold text-amber-800">
                           {overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%
                         </p>
                         <p className="text-xs text-amber-500 mt-1">
-                          {formatNumber(overviewStats.saudiEmployees)} سعودي من {formatNumber(overviewStats.totalEmployees)}
+                          {isRTL ? `${formatNumber(overviewStats.saudiEmployees)} سعودي من ${formatNumber(overviewStats.totalEmployees)}` : `${formatNumber(overviewStats.saudiEmployees)} Saudi of ${formatNumber(overviewStats.totalEmployees)}`}
                         </p>
                       </div>
                       <div className="p-3 bg-amber-200 rounded-full">
@@ -2819,13 +2819,13 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-purple-600 font-medium">معدل الحضور</p>
+                        <p className="text-sm text-purple-600 font-medium">{isRTL ? "معدل الحضور" : "Attendance Rate"}</p>
                         <p className="text-3xl font-bold text-purple-800">{overviewStats.attendanceRate}%</p>
                         <div className="flex items-center gap-2 mt-1">
                           {previousMonthStats && (
                             <span className={`text-xs flex items-center gap-1 ${getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? "text-green-600" : "text-red-600"}`}>
                               {getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
-                              {Math.abs(getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).change)}% من الشهر السابق
+                              {Math.abs(getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).change)}% {isRTL ? "من الشهر السابق" : "from last month"}
                             </span>
                           )}
                         </div>
@@ -2845,9 +2845,9 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
                     <CardTitle className="flex items-center gap-2 text-amber-800">
                       <PieChartIcon className="w-5 h-5" />
-                      توزيع الموظفين حسب الجنسية
+                      {isRTL ? "توزيع الموظفين حسب الجنسية" : "Employee Distribution by Nationality"}
                     </CardTitle>
-                    <CardDescription>أعلى 5 جنسيات + أخرى</CardDescription>
+                    <CardDescription>{isRTL ? "أعلى 5 جنسيات + أخرى" : "Top 5 nationalities + others"}</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-6">
@@ -2909,9 +2909,9 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
                     <CardTitle className="flex items-center gap-2 text-green-800">
                       <BarChart3 className="w-5 h-5" />
-                      توزيع الموظفين حسب الوظيفة
+                      {isRTL ? "توزيع الموظفين حسب الوظيفة" : "Employee Distribution by Job Title"}
                     </CardTitle>
-                    <CardDescription>أعلى 8 وظائف (إجمالي {jobTitleFullData.length} وظيفة)</CardDescription>
+                    <CardDescription>{isRTL ? `أعلى 8 وظائف (إجمالي ${jobTitleFullData.length} وظيفة)` : `Top 8 job titles (Total ${jobTitleFullData.length} titles)`}</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="space-y-3">
@@ -2952,7 +2952,7 @@ export default function EmployeeReportsDashboardPage() {
                     </div>
                     {jobTitleFullData.length > 8 && (
                       <p className="text-xs text-gray-400 text-center mt-4">
-                        و {jobTitleFullData.length - 8} وظائف أخرى...
+                        {isRTL ? `و ${jobTitleFullData.length - 8} وظائف أخرى...` : `And ${jobTitleFullData.length - 8} more job titles...`}
                       </p>
                     )}
                   </CardContent>
@@ -2964,9 +2964,9 @@ export default function EmployeeReportsDashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="w-5 h-5" />
-                    إجمالي الرواتب حسب الفرع
+                    {isRTL ? "إجمالي الرواتب حسب الفرع" : "Total Salaries by Branch"}
                   </CardTitle>
-                  <CardDescription>مرتب من الأعلى للأقل</CardDescription>
+                  <CardDescription>{isRTL ? "مرتب من الأعلى للأقل" : "Sorted from highest to lowest"}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -2974,11 +2974,11 @@ export default function EmployeeReportsDashboardPage() {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tickFormatter={(value) => formatNumber(value)} />
-                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                      <Tooltip formatter={(value) => formatCurrency(Number(value), isRTL)} />
                       <Bar 
                         dataKey="salary" 
                         fill="#10b981" 
-                        name="إجمالي الرواتب"
+                        name={isRTL ? "إجمالي الرواتب" : "Total Salaries"}
                         label={{ position: 'top', fill: '#666', fontSize: 10, formatter: (value: number) => formatNumber(value) }}
                         radius={[4, 4, 0, 0]}
                       />
@@ -2993,7 +2993,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-green-600">حضور</p>
+                        <p className="text-sm text-green-600">{isRTL ? "حضور" : "Present"}</p>
                         <p className="text-2xl font-bold text-green-800">{formatNumber(overviewStats.presentCount)}</p>
                       </div>
                       <CheckCircle className="w-8 h-8 text-green-500" />
@@ -3004,7 +3004,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-red-600">غياب</p>
+                        <p className="text-sm text-red-600">{isRTL ? "غياب" : "Absent"}</p>
                         <p className="text-2xl font-bold text-red-800">{formatNumber(overviewStats.absentCount)}</p>
                       </div>
                       <XCircle className="w-8 h-8 text-red-500" />
@@ -3015,7 +3015,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-yellow-600">تأخير</p>
+                        <p className="text-sm text-yellow-600">{isRTL ? "تأخير" : "Late"}</p>
                         <p className="text-2xl font-bold text-yellow-800">{formatNumber(overviewStats.lateCount)}</p>
                       </div>
                       <AlertCircle className="w-8 h-8 text-yellow-500" />
