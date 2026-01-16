@@ -11,10 +11,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { ar, enUS } from "date-fns/locale";
 import type { Branch, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
 
 interface ScheduledEmployee {
@@ -27,12 +28,6 @@ interface ScheduledEmployee {
   scheduleDate: string;
   attendance?: AttendanceRecord;
 }
-
-const SHIFT_TYPES = [
-  { value: "morning", label: "الوردية الصباحية", icon: Sunrise, color: "text-amber-500" },
-  { value: "evening", label: "الوردية المسائية", icon: Sun, color: "text-orange-500" },
-  { value: "night", label: "الوردية الليلية", icon: Moon, color: "text-indigo-500" },
-];
 
 export default function AttendanceCheckPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -48,6 +43,15 @@ export default function AttendanceCheckPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const { t, i18n } = useTranslation("hr");
+  const isRTL = i18n.language === "ar";
+  const dateLocale = isRTL ? ar : enUS;
+
+  const SHIFT_TYPES = [
+    { value: "morning", label: t("attendanceCheck.morningShift"), icon: Sunrise, color: "text-amber-500" },
+    { value: "evening", label: t("attendanceCheck.eveningShift"), icon: Sun, color: "text-orange-500" },
+    { value: "night", label: t("attendanceCheck.nightShift"), icon: Moon, color: "text-indigo-500" },
+  ];
 
   const today = format(new Date(), "yyyy-MM-dd");
 
@@ -96,11 +100,11 @@ export default function AttendanceCheckPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-employees-for-attendance"] });
-      toast({ title: "تم تسجيل الحضور بنجاح", description: `الوقت: ${format(new Date(), "hh:mm a", { locale: ar })}` });
+      toast({ title: t("attendanceCheck.checkInSuccess"), description: `${t("attendanceCheck.time")}: ${format(new Date(), "hh:mm a", { locale: dateLocale })}` });
       closeSignatureDialog();
     },
     onError: (error: any) => {
-      toast({ title: "خطأ", description: error.message || "فشل في تسجيل الحضور", variant: "destructive" });
+      toast({ title: t("attendanceCheck.error"), description: error.message || t("attendanceCheck.checkInError"), variant: "destructive" });
     },
   });
 
@@ -110,11 +114,11 @@ export default function AttendanceCheckPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-employees-for-attendance"] });
-      toast({ title: "تم تسجيل الانصراف بنجاح", description: `الوقت: ${format(new Date(), "hh:mm a", { locale: ar })}` });
+      toast({ title: t("attendanceCheck.checkOutSuccess"), description: `${t("attendanceCheck.time")}: ${format(new Date(), "hh:mm a", { locale: dateLocale })}` });
       closeSignatureDialog();
     },
     onError: (error: any) => {
-      toast({ title: "خطأ", description: error.message || "فشل في تسجيل الانصراف", variant: "destructive" });
+      toast({ title: t("attendanceCheck.error"), description: error.message || t("attendanceCheck.checkOutError"), variant: "destructive" });
     },
   });
 
@@ -183,7 +187,7 @@ export default function AttendanceCheckPage() {
 
   const handleSubmitSignature = () => {
     if (!hasSignature || !selectedEmployee) {
-      toast({ title: "يرجى التوقيع أولاً", variant: "destructive" });
+      toast({ title: t("attendanceCheck.pleaseSign"), variant: "destructive" });
       return;
     }
 
@@ -207,17 +211,17 @@ export default function AttendanceCheckPage() {
   };
 
   const getEmployeeStatus = (emp: ScheduledEmployee) => {
-    if (!emp.attendance) return { label: "لم يحضر", color: "bg-gray-100 text-gray-700", canCheckIn: true, canCheckOut: false };
-    if (emp.attendance.actualCheckIn && !emp.attendance.actualCheckOut) return { label: "حاضر", color: "bg-green-100 text-green-700", canCheckIn: false, canCheckOut: true };
-    if (emp.attendance.actualCheckOut) return { label: "انصرف", color: "bg-blue-100 text-blue-700", canCheckIn: false, canCheckOut: false };
-    return { label: "في انتظار", color: "bg-amber-100 text-amber-700", canCheckIn: true, canCheckOut: false };
+    if (!emp.attendance) return { label: t("attendanceCheck.notPresent"), color: "bg-gray-100 text-gray-700", canCheckIn: true, canCheckOut: false };
+    if (emp.attendance.actualCheckIn && !emp.attendance.actualCheckOut) return { label: t("attendanceCheck.present"), color: "bg-green-100 text-green-700", canCheckIn: false, canCheckOut: true };
+    if (emp.attendance.actualCheckOut) return { label: t("attendanceCheck.left"), color: "bg-blue-100 text-blue-700", canCheckIn: false, canCheckOut: false };
+    return { label: t("attendanceCheck.waiting"), color: "bg-amber-100 text-amber-700", canCheckIn: true, canCheckOut: false };
   };
 
   const selectedShiftInfo = SHIFT_TYPES.find(s => s.value === selectedShift);
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -229,16 +233,16 @@ export default function AttendanceCheckPage() {
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold" data-testid="page-title">تسجيل الحضور والانصراف</h1>
-              <p className="text-muted-foreground">تسجيل حضور وانصراف موظفي الوردية</p>
+              <h1 className="text-3xl font-bold" data-testid="page-title">{t("attendanceCheck.pageTitle")}</h1>
+              <p className="text-muted-foreground">{t("attendanceCheck.pageDescription")}</p>
             </div>
           </div>
-          <div className="text-left">
+          <div className={isRTL ? "text-left" : "text-right"}>
             <div className="text-3xl font-mono font-bold text-primary" data-testid="current-time">
-              {format(currentTime, "hh:mm:ss", { locale: ar })}
+              {format(currentTime, "hh:mm:ss", { locale: dateLocale })}
             </div>
             <div className="text-sm text-muted-foreground">
-              {format(currentTime, "EEEE, dd MMMM yyyy", { locale: ar })}
+              {format(currentTime, "EEEE, dd MMMM yyyy", { locale: dateLocale })}
             </div>
           </div>
         </div>
@@ -247,10 +251,10 @@ export default function AttendanceCheckPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="w-5 h-5" />
-              اختيار الفرع والوردية
+              {t("attendanceCheck.selectBranchShift")}
             </CardTitle>
             <CardDescription>
-              حدد الفرع والوردية لعرض الموظفين المجدولين لهذا اليوم
+              {t("attendanceCheck.selectBranchShiftDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -258,11 +262,11 @@ export default function AttendanceCheckPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <Building2 className="w-4 h-4" />
-                  الفرع
+                  {t("attendanceCheck.branch")}
                 </label>
                 <Select value={selectedBranch} onValueChange={(v) => { setSelectedBranch(v); setSelectedShift(""); }} disabled={!canSelectBranch}>
                   <SelectTrigger data-testid="select-branch">
-                    <SelectValue placeholder="اختر الفرع" />
+                    <SelectValue placeholder={t("attendanceCheck.selectBranch")} />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
                     {branches?.map(branch => (
@@ -275,11 +279,11 @@ export default function AttendanceCheckPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <Clock className="w-4 h-4" />
-                  الوردية
+                  {t("attendanceCheck.shift")}
                 </label>
                 <Select value={selectedShift} onValueChange={setSelectedShift} disabled={!selectedBranch}>
                   <SelectTrigger data-testid="select-shift">
-                    <SelectValue placeholder="اختر الوردية" />
+                    <SelectValue placeholder={t("attendanceCheck.selectShift")} />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
                     {SHIFT_TYPES.map(shift => (
@@ -297,10 +301,10 @@ export default function AttendanceCheckPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
-                  التاريخ
+                  {t("common.date")}
                 </label>
                 <div className="p-3 bg-muted rounded-lg text-sm font-medium">
-                  {format(new Date(), "EEEE, dd MMMM yyyy", { locale: ar })}
+                  {format(new Date(), "EEEE, dd MMMM yyyy", { locale: dateLocale })}
                 </div>
               </div>
             </div>
@@ -312,13 +316,13 @@ export default function AttendanceCheckPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
-                موظفو {selectedShiftInfo?.label || "الوردية"}
+                {t("attendanceCheck.shiftEmployees")} {selectedShiftInfo?.label || t("attendanceCheck.shift")}
                 {scheduledEmployees && scheduledEmployees.length > 0 && (
-                  <Badge variant="secondary">{scheduledEmployees.length} موظف</Badge>
+                  <Badge variant="secondary">{scheduledEmployees.length} {t("stats.employee")}</Badge>
                 )}
               </CardTitle>
               <CardDescription>
-                الموظفون المجدولون للعمل في هذه الوردية اليوم
+                {t("attendanceCheck.scheduledEmployees")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -329,21 +333,21 @@ export default function AttendanceCheckPage() {
               ) : !scheduledEmployees || scheduledEmployees.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>لا يوجد موظفون مجدولون لهذه الوردية اليوم</p>
-                  <p className="text-sm mt-2">تأكد من إنشاء جداول الدوام في صفحة إدارة الورديات</p>
+                  <p>{t("attendanceCheck.noScheduledEmployees")}</p>
+                  <p className="text-sm mt-2">{t("attendanceCheck.checkShiftManagement")}</p>
                 </div>
               ) : (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-right">الموظف</TableHead>
-                        <TableHead className="text-center">وقت البدء</TableHead>
-                        <TableHead className="text-center">وقت الانتهاء</TableHead>
-                        <TableHead className="text-center">الحضور</TableHead>
-                        <TableHead className="text-center">الانصراف</TableHead>
-                        <TableHead className="text-center">الحالة</TableHead>
-                        <TableHead className="text-center">الإجراءات</TableHead>
+                        <TableHead className={isRTL ? "text-right" : "text-left"}>{t("attendanceCheck.employee")}</TableHead>
+                        <TableHead className="text-center">{t("attendanceCheck.startTime")}</TableHead>
+                        <TableHead className="text-center">{t("attendanceCheck.endTime")}</TableHead>
+                        <TableHead className="text-center">{t("attendanceCheck.checkIn")}</TableHead>
+                        <TableHead className="text-center">{t("attendanceCheck.checkOut")}</TableHead>
+                        <TableHead className="text-center">{t("attendanceCheck.status")}</TableHead>
+                        <TableHead className="text-center">{t("attendanceCheck.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -384,7 +388,7 @@ export default function AttendanceCheckPage() {
                                     data-testid={`btn-checkin-${emp.employeeId}`}
                                   >
                                     <LogIn className="w-4 h-4" />
-                                    حضور
+                                    {t("attendanceCheck.checkInBtn")}
                                   </Button>
                                 )}
                                 {status.canCheckOut && (
@@ -395,13 +399,13 @@ export default function AttendanceCheckPage() {
                                     data-testid={`btn-checkout-${emp.employeeId}`}
                                   >
                                     <LogOut className="w-4 h-4" />
-                                    انصراف
+                                    {t("attendanceCheck.checkOutBtn")}
                                   </Button>
                                 )}
                                 {!status.canCheckIn && !status.canCheckOut && (
                                   <span className="text-sm text-muted-foreground flex items-center gap-1">
                                     <Check className="w-4 h-4 text-green-600" />
-                                    مكتمل
+                                    {t("attendanceCheck.completed")}
                                   </span>
                                 )}
                               </div>
@@ -424,34 +428,34 @@ export default function AttendanceCheckPage() {
                 {signatureMode === "check_in" ? (
                   <>
                     <LogIn className="w-5 h-5 text-green-600" />
-                    تسجيل حضور - {selectedEmployee?.employeeName}
+                    {t("attendanceCheck.checkInTitle")} - {selectedEmployee?.employeeName}
                   </>
                 ) : (
                   <>
                     <LogOut className="w-5 h-5 text-red-600" />
-                    تسجيل انصراف - {selectedEmployee?.employeeName}
+                    {t("attendanceCheck.checkOutTitle")} - {selectedEmployee?.employeeName}
                   </>
                 )}
               </DialogTitle>
               <DialogDescription>
-                يرجى توقيع الموظف للتأكيد
+                {t("attendanceCheck.signatureRequired")}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
               <div className="text-center p-4 bg-muted rounded-lg">
                 <div className="text-3xl font-mono font-bold text-primary">
-                  {format(currentTime, "hh:mm:ss", { locale: ar })}
+                  {format(currentTime, "hh:mm:ss", { locale: dateLocale })}
                 </div>
                 <div className="text-sm text-muted-foreground mt-1">
-                  {format(currentTime, "a", { locale: ar })}
+                  {format(currentTime, "a", { locale: dateLocale })}
                 </div>
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <Pencil className="w-4 h-4" />
-                  توقيع الموظف
+                  {t("attendanceCheck.employeeSignature")}
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
                   <canvas
@@ -471,7 +475,7 @@ export default function AttendanceCheckPage() {
                 </div>
                 <Button variant="outline" size="sm" onClick={clearCanvas} className="gap-2" data-testid="btn-clear-signature">
                   <RotateCcw className="w-4 h-4" />
-                  مسح التوقيع
+                  {t("attendanceCheck.clearSignature")}
                 </Button>
               </div>
 
@@ -481,7 +485,7 @@ export default function AttendanceCheckPage() {
                   onClick={closeSignatureDialog}
                   className="flex-1"
                 >
-                  إلغاء
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   onClick={handleSubmitSignature}
@@ -491,8 +495,8 @@ export default function AttendanceCheckPage() {
                 >
                   {signatureMode === "check_in" ? <LogIn className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
                   {(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) 
-                    ? "جاري التسجيل..." 
-                    : signatureMode === "check_in" ? "تأكيد الحضور" : "تأكيد الانصراف"}
+                    ? t("attendanceCheck.processing") 
+                    : signatureMode === "check_in" ? t("attendanceCheck.confirmCheckIn") : t("attendanceCheck.confirmCheckOut")}
                 </Button>
               </div>
             </div>

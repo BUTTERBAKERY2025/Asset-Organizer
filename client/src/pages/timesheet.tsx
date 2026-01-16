@@ -11,8 +11,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { ar } from "date-fns/locale";
+import { ar, enUS } from "date-fns/locale";
 import { Calendar, FileText, Pen, Printer, Download, Loader2, CheckCircle, Clock, AlertCircle, User, Check, XCircle, ArrowRight } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
@@ -85,32 +86,35 @@ interface TimesheetEntry {
   checkOutSignature?: string;
 }
 
-const DAY_LABELS: Record<string, string> = {
-  sat: "السبت",
-  sun: "الأحد",
-  mon: "الاثنين",
-  tue: "الثلاثاء",
-  wed: "الأربعاء",
-  thu: "الخميس",
-  fri: "الجمعة",
-};
-
-const STATUS_LABELS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  pending: { label: "معلق", color: "bg-gray-100 text-gray-700", icon: <Clock className="w-3 h-3" /> },
-  present: { label: "حاضر", color: "bg-green-100 text-green-700", icon: <CheckCircle className="w-3 h-3" /> },
-  absent: { label: "غائب", color: "bg-red-100 text-red-700", icon: <XCircle className="w-3 h-3" /> },
-  late: { label: "متأخر", color: "bg-amber-100 text-amber-700", icon: <AlertCircle className="w-3 h-3" /> },
-  day_off: { label: "إجازة", color: "bg-blue-100 text-blue-700", icon: <Calendar className="w-3 h-3" /> },
-};
-
-const TIMESHEET_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending: { label: "قيد الإنشاء", color: "bg-gray-100 text-gray-700" },
-  pending_employee_signature: { label: "بانتظار توقيع الموظف", color: "bg-amber-100 text-amber-700" },
-  pending_manager_signature: { label: "بانتظار توقيع المدير", color: "bg-blue-100 text-blue-700" },
-  finalized: { label: "مكتمل", color: "bg-green-100 text-green-700" },
-};
-
 export default function TimesheetPage() {
+  const { t, i18n } = useTranslation("hr");
+  const isRTL = i18n.language === "ar";
+  const dateLocale = isRTL ? ar : enUS;
+
+  const DAY_LABELS: Record<string, string> = {
+    sat: t("timesheet.days.sat"),
+    sun: t("timesheet.days.sun"),
+    mon: t("timesheet.days.mon"),
+    tue: t("timesheet.days.tue"),
+    wed: t("timesheet.days.wed"),
+    thu: t("timesheet.days.thu"),
+    fri: t("timesheet.days.fri"),
+  };
+
+  const STATUS_LABELS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+    pending: { label: t("timesheet.statusLabels.pending"), color: "bg-gray-100 text-gray-700", icon: <Clock className="w-3 h-3" /> },
+    present: { label: t("timesheet.statusLabels.present"), color: "bg-green-100 text-green-700", icon: <CheckCircle className="w-3 h-3" /> },
+    absent: { label: t("timesheet.statusLabels.absent"), color: "bg-red-100 text-red-700", icon: <XCircle className="w-3 h-3" /> },
+    late: { label: t("timesheet.statusLabels.late"), color: "bg-amber-100 text-amber-700", icon: <AlertCircle className="w-3 h-3" /> },
+    day_off: { label: t("timesheet.statusLabels.dayOff"), color: "bg-blue-100 text-blue-700", icon: <Calendar className="w-3 h-3" /> },
+  };
+
+  const TIMESHEET_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+    pending: { label: t("timesheet.reportStatusLabels.pending"), color: "bg-gray-100 text-gray-700" },
+    pending_employee_signature: { label: t("timesheet.reportStatusLabels.pendingEmployee"), color: "bg-amber-100 text-amber-700" },
+    pending_manager_signature: { label: t("timesheet.reportStatusLabels.pendingManager"), color: "bg-blue-100 text-blue-700" },
+    finalized: { label: t("timesheet.reportStatusLabels.finalized"), color: "bg-green-100 text-green-700" },
+  };
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { branches, userBranchId, canSelectBranch } = useBranches();
@@ -198,18 +202,18 @@ export default function TimesheetPage() {
       });
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "فشل في إنشاء التقرير");
+        throw new Error(error.error || t("timesheet.reportError"));
       }
       return res.json();
     },
     onSuccess: (data) => {
-      toast({ title: "تم إنشاء التقرير بنجاح", description: `تم إنشاء ${data.entriesCount} سجل يومي` });
+      toast({ title: t("timesheet.reportSuccess"), description: t("timesheet.reportSuccessDesc", { count: data.entriesCount }) });
       queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports"] });
       setSelectedReport(data.report);
       setActiveTab("view");
     },
     onError: (error: Error) => {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -222,30 +226,30 @@ export default function TimesheetPage() {
       });
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "فشل في التوقيع");
+        throw new Error(error.error || t("timesheet.signError"));
       }
       return res.json();
     },
     onSuccess: (data) => {
-      toast({ title: "تم التوقيع بنجاح" });
+      toast({ title: t("timesheet.signSuccess") });
       setSelectedReport(data);
       setShowSignatureDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports"] });
     },
     onError: (error: Error) => {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     },
   });
 
   const handleGenerateReport = () => {
     if (!selectedEmployee) {
-      toast({ title: "تنبيه", description: "يرجى اختيار موظف", variant: "destructive" });
+      toast({ title: t("common.alert"), description: t("timesheet.selectEmployeeAlert"), variant: "destructive" });
       return;
     }
     
     const employee = allUsers.find(u => u.id === selectedEmployee);
     if (!employee?.branchId && selectedBranch === "all") {
-      toast({ title: "تنبيه", description: "يرجى اختيار فرع", variant: "destructive" });
+      toast({ title: t("common.alert"), description: t("timesheet.selectBranchAlert"), variant: "destructive" });
       return;
     }
 
@@ -257,7 +261,7 @@ export default function TimesheetPage() {
     const branchId = selectedBranch !== "all" ? selectedBranch : employee?.branchId || "";
     
     if (!branchId) {
-      toast({ title: "تنبيه", description: "يرجى اختيار فرع", variant: "destructive" });
+      toast({ title: t("common.alert"), description: t("timesheet.selectBranchAlert"), variant: "destructive" });
       return;
     }
 
@@ -276,7 +280,7 @@ export default function TimesheetPage() {
 
   const handleSubmitSignature = () => {
     if (!signatureRef.current || signatureRef.current.isEmpty()) {
-      toast({ title: "تنبيه", description: "يرجى التوقيع أولاً", variant: "destructive" });
+      toast({ title: t("common.alert"), description: t("timesheet.pleaseSign"), variant: "destructive" });
       return;
     }
     
@@ -284,8 +288,8 @@ export default function TimesheetPage() {
     
     const signature = signatureRef.current.toDataURL();
     const acknowledgment = signatureType === "employee" 
-      ? "أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه"
-      : "أصادق على صحة بيانات حضور وانصراف الموظف";
+      ? t("timesheet.employeeAcknowledgment")
+      : t("timesheet.managerAcknowledgment");
     
     signMutation.mutate({
       id: selectedReport.id,
@@ -308,34 +312,34 @@ export default function TimesheetPage() {
     }
     // Check regular users
     const employee = allUsers.find(u => u.id === employeeId);
-    if (!employee) return "غير معروف";
-    return `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username || "غير معروف";
-  }, [allUsers, branchEmployees]);
+    if (!employee) return t("timesheet.unknownEmployee");
+    return `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username || t("timesheet.unknownEmployee");
+  }, [allUsers, branchEmployees, t]);
 
   const exportToExcel = () => {
     if (!selectedReport || reportEntries.length === 0) {
-      toast({ title: "تنبيه", description: "لا توجد بيانات للتصدير", variant: "destructive" });
+      toast({ title: t("common.alert"), description: t("timesheet.noDataToExport"), variant: "destructive" });
       return;
     }
 
     const data = reportEntries.map(entry => ({
-      "التاريخ": entry.date,
-      "اليوم": DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek,
-      "الحالة": STATUS_LABELS[entry.status]?.label || entry.status,
-      "وقت البداية المقرر": entry.scheduledStartTime ?? "--",
-      "وقت النهاية المقرر": entry.scheduledEndTime ?? "--",
-      "وقت الحضور الفعلي": entry.actualStartTime ?? "--",
-      "وقت الانصراف الفعلي": entry.actualEndTime ?? "--",
-      "ساعات العمل المقررة": entry.scheduledHours ?? "--",
-      "ساعات العمل الفعلية": entry.actualHours ?? "--",
-      "دقائق التأخير": entry.lateMinutes ?? "--",
-      "دقائق العمل الإضافي": entry.overtimeMinutes ?? "--",
-      "التوقيع": entry.checkInSignature ? "موقع" : "--",
+      [t("timesheet.date")]: entry.date,
+      [t("timesheet.day")]: DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek,
+      [t("timesheet.status")]: STATUS_LABELS[entry.status]?.label || entry.status,
+      [t("timesheet.scheduledStart")]: entry.scheduledStartTime ?? "--",
+      [t("timesheet.scheduledEnd")]: entry.scheduledEndTime ?? "--",
+      [t("timesheet.actualStart")]: entry.actualStartTime ?? "--",
+      [t("timesheet.actualEnd")]: entry.actualEndTime ?? "--",
+      [t("timesheet.scheduledDays")]: entry.scheduledHours ?? "--",
+      [t("timesheet.workHours")]: entry.actualHours ?? "--",
+      [t("timesheet.lateMinutes")]: entry.lateMinutes ?? "--",
+      [t("timesheet.overtimeMinutes")]: entry.overtimeMinutes ?? "--",
+      [t("timesheet.signature")]: entry.checkInSignature ? t("timesheet.signed") : "--",
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "تقرير التايم شيت");
+    XLSX.utils.book_append_sheet(wb, ws, t("timesheet.pageTitle"));
     const employeeName = getEmployeeName(selectedReport.employeeId);
     XLSX.writeFile(wb, `timesheet_${employeeName}_${selectedReport.startDate}_${selectedReport.endDate}.xlsx`);
   };
@@ -485,7 +489,7 @@ export default function TimesheetPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -498,8 +502,8 @@ export default function TimesheetPage() {
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">تقارير التايم شيت</h1>
-              <p className="text-muted-foreground">إنشاء وإدارة تقارير الدوام مع التوقيعات الإلكترونية</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">{t("timesheet.pageTitle")}</h1>
+              <p className="text-muted-foreground">{t("timesheet.pageDescription")}</p>
             </div>
           </div>
         </div>
@@ -508,15 +512,15 @@ export default function TimesheetPage() {
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="generate" className="gap-2" data-testid="tab-generate">
               <FileText className="w-4 h-4" />
-              إنشاء تقرير
+              {t("timesheet.generateReport")}
             </TabsTrigger>
             <TabsTrigger value="view" className="gap-2" data-testid="tab-view" disabled={!selectedReport}>
               <Calendar className="w-4 h-4" />
-              عرض التقرير
+              {t("timesheet.viewReport")}
             </TabsTrigger>
             <TabsTrigger value="history" className="gap-2" data-testid="tab-history">
               <Clock className="w-4 h-4" />
-              السجلات السابقة
+              {t("timesheet.previousRecords")}
             </TabsTrigger>
           </TabsList>
 
@@ -525,22 +529,22 @@ export default function TimesheetPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5" />
-                  إنشاء تقرير تايم شيت جديد
+                  {t("timesheet.createNewReport")}
                 </CardTitle>
                 <CardDescription>
-                  اختر الموظف والفترة الزمنية لإنشاء تقرير دوام شامل
+                  {t("timesheet.createReportDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label>الفرع</Label>
+                    <Label>{t("timesheet.branch")}</Label>
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                       <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
-                        <SelectValue placeholder="اختر الفرع" />
+                        <SelectValue placeholder={t("timesheet.selectBranch")} />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
-                        {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                        {canSelectBranch && <SelectItem value="all">{t("timesheet.allBranches")}</SelectItem>}
                         {branches.map((branch) => (
                           <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                         ))}
@@ -549,10 +553,10 @@ export default function TimesheetPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>الموظف</Label>
+                    <Label>{t("timesheet.employee")}</Label>
                     <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                       <SelectTrigger className="h-11 sm:h-10" data-testid="select-employee">
-                        <SelectValue placeholder="اختر الموظف" />
+                        <SelectValue placeholder={t("timesheet.selectEmployee")} />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
                         {filteredEmployees.map((employee) => (
@@ -565,20 +569,20 @@ export default function TimesheetPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>الشهر</Label>
+                    <Label>{t("timesheet.month")}</Label>
                     <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                       <SelectTrigger className="h-11 sm:h-10" data-testid="select-month">
-                        <SelectValue placeholder="اختر الشهر" />
+                        <SelectValue placeholder={t("timesheet.selectMonth")} />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value={format(new Date(), "yyyy-MM")}>
-                          {format(new Date(), "MMMM yyyy", { locale: ar })}
+                          {format(new Date(), "MMMM yyyy", { locale: dateLocale })}
                         </SelectItem>
                         <SelectItem value={format(subMonths(new Date(), 1), "yyyy-MM")}>
-                          {format(subMonths(new Date(), 1), "MMMM yyyy", { locale: ar })}
+                          {format(subMonths(new Date(), 1), "MMMM yyyy", { locale: dateLocale })}
                         </SelectItem>
                         <SelectItem value={format(subMonths(new Date(), 2), "yyyy-MM")}>
-                          {format(subMonths(new Date(), 2), "MMMM yyyy", { locale: ar })}
+                          {format(subMonths(new Date(), 2), "MMMM yyyy", { locale: dateLocale })}
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -594,12 +598,12 @@ export default function TimesheetPage() {
                   {isGenerating ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      جاري الإنشاء...
+                      {t("timesheet.generating")}
                     </>
                   ) : (
                     <>
                       <FileText className="w-4 h-4" />
-                      إنشاء التقرير
+                      {t("timesheet.generateBtn")}
                     </>
                   )}
                 </Button>
@@ -619,7 +623,7 @@ export default function TimesheetPage() {
                           {getEmployeeName(selectedReport.employeeId)}
                         </CardTitle>
                         <CardDescription>
-                          {selectedReport.startDate} إلى {selectedReport.endDate}
+                          {selectedReport.startDate} {t("common.to")} {selectedReport.endDate}
                         </CardDescription>
                       </div>
                       <div className="flex items-center gap-2">
@@ -633,41 +637,41 @@ export default function TimesheetPage() {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                       <div className="p-4 bg-muted rounded-lg text-center">
                         <div className="text-2xl font-bold">{selectedReport.totalScheduledDays}</div>
-                        <div className="text-sm text-muted-foreground">أيام العمل</div>
+                        <div className="text-sm text-muted-foreground">{t("timesheet.scheduledDays")}</div>
                       </div>
                       <div className="p-4 bg-green-50 rounded-lg text-center">
                         <div className="text-2xl font-bold text-green-700">{selectedReport.totalPresentDays}</div>
-                        <div className="text-sm text-green-600">أيام الحضور</div>
+                        <div className="text-sm text-green-600">{t("timesheet.presentDays")}</div>
                       </div>
                       <div className="p-4 bg-red-50 rounded-lg text-center">
                         <div className="text-2xl font-bold text-red-700">{selectedReport.totalAbsentDays}</div>
-                        <div className="text-sm text-red-600">أيام الغياب</div>
+                        <div className="text-sm text-red-600">{t("timesheet.absentDays")}</div>
                       </div>
                       <div className="p-4 bg-blue-50 rounded-lg text-center">
                         <div className="text-2xl font-bold text-blue-700">{selectedReport.totalActualHours?.toFixed(1) || 0}</div>
-                        <div className="text-sm text-blue-600">ساعات العمل</div>
+                        <div className="text-sm text-blue-600">{t("timesheet.totalWorkHours")}</div>
                       </div>
                     </div>
 
                     <div className="flex gap-2 mb-6">
                       <Button variant="outline" onClick={exportToExcel} className="gap-2 h-11 sm:h-9" data-testid="btn-export-excel">
                         <Download className="w-4 h-4" />
-                        تصدير Excel
+                        {t("timesheet.exportToExcel")}
                       </Button>
                       <Button variant="outline" onClick={printReport} className="gap-2 h-11 sm:h-9" data-testid="btn-print">
                         <Printer className="w-4 h-4" />
-                        طباعة
+                        {t("timesheet.printReport")}
                       </Button>
                       {(selectedReport.status === "pending" || selectedReport.status === "pending_employee_signature") && (
                         <Button onClick={() => handleOpenSignature("employee", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-employee">
                           <Pen className="w-4 h-4" />
-                          توقيع الموظف
+                          {t("timesheet.signEmployee")}
                         </Button>
                       )}
                       {selectedReport.status === "pending_manager_signature" && (
                         <Button onClick={() => handleOpenSignature("manager", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-manager">
                           <Pen className="w-4 h-4" />
-                          توقيع المدير
+                          {t("timesheet.signManager")}
                         </Button>
                       )}
                     </div>
@@ -676,16 +680,16 @@ export default function TimesheetPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-right">التاريخ</TableHead>
-                            <TableHead className="text-center">اليوم</TableHead>
-                            <TableHead className="text-center">الحالة</TableHead>
-                            <TableHead className="text-center">بداية الدوام</TableHead>
-                            <TableHead className="text-center">نهاية الدوام</TableHead>
-                            <TableHead className="text-center">وقت الحضور</TableHead>
-                            <TableHead className="text-center">وقت الانصراف</TableHead>
-                            <TableHead className="text-center">ساعات العمل</TableHead>
-                            <TableHead className="text-center">تأخير (دقائق)</TableHead>
-                            <TableHead className="text-center">توقيع الحضور</TableHead>
+                            <TableHead className={isRTL ? "text-right" : "text-left"}>{t("timesheet.date")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.day")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.status")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.scheduledStart")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.scheduledEnd")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.actualStart")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.actualEnd")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.workHours")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.lateMinutes")}</TableHead>
+                            <TableHead className="text-center">{t("timesheet.signature")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -717,7 +721,7 @@ export default function TimesheetPage() {
                               </TableCell>
                               <TableCell className="text-center">
                                 {entry.checkInSignature ? (
-                                  <img src={entry.checkInSignature} alt="توقيع" className="h-8 max-w-16 mx-auto object-contain" />
+                                  <img src={entry.checkInSignature} alt={t("timesheet.signature")} className="h-8 max-w-16 mx-auto object-contain" />
                                 ) : "--"}
                               </TableCell>
                             </TableRow>
@@ -730,27 +734,27 @@ export default function TimesheetPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-lg">توقيع الموظف</CardTitle>
+                          <CardTitle className="text-lg">{t("timesheet.employeeSignature")}</CardTitle>
                         </CardHeader>
                         <CardContent>
                           {selectedReport.employeeSignature ? (
                             <div className="space-y-2">
                               <img 
                                 src={selectedReport.employeeSignature} 
-                                alt="توقيع الموظف" 
+                                alt={t("timesheet.employeeSignature")} 
                                 className="max-h-20 border rounded p-2"
                               />
                               <p className="text-sm text-muted-foreground">{selectedReport.employeeAcknowledgment}</p>
                               {selectedReport.employeeSignedAt && (
                                 <p className="text-xs text-muted-foreground">
-                                  تاريخ التوقيع: {new Date(selectedReport.employeeSignedAt).toLocaleDateString('ar-SA')}
+                                  {t("timesheet.signedAt")}: {new Date(selectedReport.employeeSignedAt).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
                                 </p>
                               )}
                             </div>
                           ) : (
                             <div className="text-center py-4 text-muted-foreground">
                               <Pen className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                              <p>لم يتم التوقيع بعد</p>
+                              <p>{t("timesheet.notSigned")}</p>
                             </div>
                           )}
                         </CardContent>
@@ -758,27 +762,27 @@ export default function TimesheetPage() {
 
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-lg">توقيع المدير المباشر</CardTitle>
+                          <CardTitle className="text-lg">{t("timesheet.managerSignature")}</CardTitle>
                         </CardHeader>
                         <CardContent>
                           {selectedReport.managerSignature ? (
                             <div className="space-y-2">
                               <img 
                                 src={selectedReport.managerSignature} 
-                                alt="توقيع المدير" 
+                                alt={t("timesheet.managerSignature")} 
                                 className="max-h-20 border rounded p-2"
                               />
                               <p className="text-sm text-muted-foreground">{selectedReport.managerAcknowledgment}</p>
                               {selectedReport.managerSignedAt && (
                                 <p className="text-xs text-muted-foreground">
-                                  تاريخ التوقيع: {new Date(selectedReport.managerSignedAt).toLocaleDateString('ar-SA')}
+                                  {t("timesheet.signedAt")}: {new Date(selectedReport.managerSignedAt).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
                                 </p>
                               )}
                             </div>
                           ) : (
                             <div className="text-center py-4 text-muted-foreground">
                               <Pen className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                              <p>لم يتم التوقيع بعد</p>
+                              <p>{t("timesheet.notSigned")}</p>
                             </div>
                           )}
                         </CardContent>
@@ -793,17 +797,17 @@ export default function TimesheetPage() {
           <TabsContent value="history" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>السجلات السابقة</CardTitle>
-                <CardDescription>جميع تقارير التايم شيت المحفوظة</CardDescription>
+                <CardTitle>{t("timesheet.previousRecords")}</CardTitle>
+                <CardDescription>{t("timesheet.previousRecordsDesc")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="mb-4">
                   <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                     <SelectTrigger className="w-[200px]" data-testid="select-history-branch" disabled={!canSelectBranch}>
-                      <SelectValue placeholder="فلترة حسب الفرع" />
+                      <SelectValue placeholder={t("timesheet.selectBranch")} />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
-                      {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                      {canSelectBranch && <SelectItem value="all">{t("timesheet.allBranches")}</SelectItem>}
                       {branches.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                       ))}
@@ -815,12 +819,12 @@ export default function TimesheetPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-right">الموظف</TableHead>
-                        <TableHead className="text-center">الفترة</TableHead>
-                        <TableHead className="text-center">الحالة</TableHead>
-                        <TableHead className="text-center">أيام الحضور</TableHead>
-                        <TableHead className="text-center">تاريخ الإنشاء</TableHead>
-                        <TableHead className="text-center">الإجراءات</TableHead>
+                        <TableHead className={isRTL ? "text-right" : "text-left"}>{t("timesheet.employee")}</TableHead>
+                        <TableHead className="text-center">{t("timesheet.period")}</TableHead>
+                        <TableHead className="text-center">{t("timesheet.status")}</TableHead>
+                        <TableHead className="text-center">{t("timesheet.presentDays")}</TableHead>
+                        <TableHead className="text-center">{t("common.date")}</TableHead>
+                        <TableHead className="text-center">{t("common.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -833,7 +837,7 @@ export default function TimesheetPage() {
                       ) : reports.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                            لا توجد تقارير سابقة
+                            {t("timesheet.noReportsFound")}
                           </TableCell>
                         </TableRow>
                       ) : reports.map(report => (
@@ -851,7 +855,7 @@ export default function TimesheetPage() {
                             {report.totalPresentDays} / {report.totalScheduledDays}
                           </TableCell>
                           <TableCell className="text-center text-sm">
-                            {new Date(report.createdAt).toLocaleDateString('ar-SA')}
+                            {new Date(report.createdAt).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
                           </TableCell>
                           <TableCell className="text-center">
                             <Button 
@@ -863,7 +867,7 @@ export default function TimesheetPage() {
                               }}
                               data-testid={`btn-view-report-${report.id}`}
                             >
-                              عرض
+                              {t("timesheet.viewReport")}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -881,12 +885,12 @@ export default function TimesheetPage() {
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
-                {signatureType === "employee" ? "توقيع الموظف" : "توقيع المدير المباشر"}
+                {signatureType === "employee" ? t("timesheet.employeeSignature") : t("timesheet.managerSignature")}
               </DialogTitle>
               <DialogDescription>
                 {signatureType === "employee" 
-                  ? "أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه"
-                  : "أصادق على صحة بيانات حضور وانصراف الموظف"}
+                  ? t("timesheet.employeeAcknowledgment")
+                  : t("timesheet.managerAcknowledgment")}
               </DialogDescription>
             </DialogHeader>
             
@@ -905,7 +909,7 @@ export default function TimesheetPage() {
 
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={handleClearSignature} data-testid="btn-clear-signature">
-                مسح
+                {t("timesheet.clearSignature")}
               </Button>
               <Button 
                 onClick={handleSubmitSignature} 
@@ -917,7 +921,7 @@ export default function TimesheetPage() {
                 ) : (
                   <Check className="w-4 h-4" />
                 )}
-                تأكيد التوقيع
+                {t("timesheet.submitSignature")}
               </Button>
             </DialogFooter>
           </DialogContent>
