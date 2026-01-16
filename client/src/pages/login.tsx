@@ -178,11 +178,11 @@ export default function LoginPage() {
 
             <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xl border border-[#1a3a2f]/10">
               <div className="text-center mb-5 sm:mb-6 md:mb-8">
-                <div className="hidden lg:block mb-4">
+                <div className="hidden lg:block mb-6">
                   <img 
                     src={logo} 
                     alt="Butter Bakery" 
-                    className="h-12 xl:h-16 w-auto mx-auto drop-shadow-md" 
+                    className="h-20 xl:h-24 w-auto mx-auto drop-shadow-md" 
                   />
                 </div>
                 <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1a3a2f] mb-2">Login</h3>
