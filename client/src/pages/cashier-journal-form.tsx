@@ -1353,11 +1353,11 @@ export default function CashierJournalFormPage() {
                   const iconColor = isBank ? 'text-blue-700' : isCash ? 'text-amber-700' : 'text-gray-600';
 
                   return (
-                    <div key={index} className={`p-3 border rounded-lg ${rowStyle}`} data-testid={`payment-row-${index}`}>
+                    <div key={index} className={`p-2 border rounded ${rowStyle}`} data-testid={`payment-row-${index}`}>
                       {/* Compact Header Row */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className={`p-1.5 rounded ${iconBg}`}>
-                          <Icon className={`w-4 h-4 ${iconColor}`} />
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <div className={`p-1 rounded ${iconBg}`}>
+                          <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
                         </div>
                         <Select
                           value={breakdown.paymentMethod}
@@ -1375,12 +1375,12 @@ export default function CashierJournalFormPage() {
                           }}
                           disabled={isReadOnly}
                         >
-                          <SelectTrigger className="w-36 h-9 text-sm font-medium">
+                          <SelectTrigger className="w-28 h-7 text-xs font-medium">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
                             {PAYMENT_METHODS.map((m) => (
-                              <SelectItem key={m.value} value={m.value} className="py-2">
+                              <SelectItem key={m.value} value={m.value} className="py-1.5 text-sm">
                                 {m.label}
                               </SelectItem>
                             ))}
@@ -1388,19 +1388,19 @@ export default function CashierJournalFormPage() {
                         </Select>
                         <div className="flex-1" />
                         {paymentBreakdowns.length > 1 && !isReadOnly && (
-                          <Button variant="ghost" size="sm" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-100 p-0" onClick={() => removePaymentBreakdown(index)}>
-                            <Trash2 className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100 p-0" onClick={() => removePaymentBreakdown(index)}>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
                       </div>
                       
                       {/* Compact Input Grid - Bank Methods: POS vs Terminal side by side */}
                       {isBank ? (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {/* POS & Terminal Amounts - Side by Side */}
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <Label className="text-xs text-blue-700 font-medium">POS (الكاشير)</Label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div className="space-y-0.5">
+                              <Label className="text-[10px] text-blue-700 font-medium">POS (الكاشير)</Label>
                               <Input
                                 type="number"
                                 inputMode="decimal"
@@ -1412,22 +1412,22 @@ export default function CashierJournalFormPage() {
                                 }}
                                 onWheel={preventWheelChange}
                                 disabled={isReadOnly}
-                                className="h-10 text-base font-bold text-center"
+                                className="h-8 text-sm font-bold text-center"
                                 data-testid={`input-payment-amount-${index}`}
                               />
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-0.5">
                               <div className="flex items-center justify-between">
-                                <Label className="text-xs text-blue-700 font-medium">Terminal (الجهاز)</Label>
+                                <Label className="text-[10px] text-blue-700 font-medium">Terminal</Label>
                                 {!isReadOnly && (
                                   <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-5 px-1 text-xs text-blue-600 hover:text-blue-800 p-0"
+                                    className="h-4 px-1 text-[10px] text-blue-600 hover:text-blue-800 p-0"
                                     onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
                                   >
-                                    <Copy className="w-3 h-3 ml-1" />
+                                    <Copy className="w-2.5 h-2.5 ml-0.5" />
                                     نسخ
                                   </Button>
                                 )}
@@ -1440,22 +1440,22 @@ export default function CashierJournalFormPage() {
                                 onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseNumericValue(e.target.value))}
                                 onWheel={preventWheelChange}
                                 disabled={isReadOnly}
-                                className="h-10 text-base font-bold text-center bg-white"
+                                className="h-8 text-sm font-bold text-center bg-white"
                                 data-testid={`input-terminal-amount-${index}`}
                               />
                             </div>
                           </div>
                           {/* Discrepancy & Transaction Counts - Compact Row */}
-                          <div className="flex items-center gap-2 text-xs">
-                            <div className={`flex-1 px-2 py-1.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <div className={`flex-1 px-1.5 py-1 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
                               <span>الفرق:</span>
                               <span className="font-bold">
-                                {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} ر.س {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
+                                {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded">
-                              <div className="flex items-center gap-1">
-                                <span className="text-gray-500 text-[10px]">POS:</span>
+                            <div className="flex items-center gap-1.5 bg-gray-100 px-1.5 py-0.5 rounded">
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-gray-500">POS:</span>
                                 <Input
                                   type="number"
                                   inputMode="numeric"
@@ -1464,12 +1464,12 @@ export default function CashierJournalFormPage() {
                                   onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
                                   onWheel={preventWheelChange}
                                   disabled={isReadOnly}
-                                  className="h-6 w-10 text-xs font-bold text-center p-0.5"
+                                  className="h-5 w-8 text-[10px] font-bold text-center p-0"
                                   data-testid={`input-payment-count-${index}`}
                                 />
                               </div>
-                              <div className="flex items-center gap-1">
-                                <span className="text-gray-500 text-[10px]">جهاز:</span>
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-gray-500">جهاز:</span>
                                 <Input
                                   type="number"
                                   inputMode="numeric"
@@ -1478,7 +1478,7 @@ export default function CashierJournalFormPage() {
                                   onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseNumericValue(e.target.value, false))}
                                   onWheel={preventWheelChange}
                                   disabled={isReadOnly}
-                                  className="h-6 w-10 text-xs font-bold text-center p-0.5"
+                                  className="h-5 w-8 text-[10px] font-bold text-center p-0"
                                   data-testid={`input-terminal-count-${index}`}
                                 />
                               </div>
@@ -1493,11 +1493,11 @@ export default function CashierJournalFormPage() {
                           const cashDisc = actualCash - expectedCash;
                           const cashDiscType = cashDisc > 0.5 ? 'surplus' : cashDisc < -0.5 ? 'shortage' : 'balanced';
                           return (
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               {/* Cash POS & Actual Drawer - Side by Side */}
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1">
-                                  <Label className="text-xs text-amber-700 font-medium">النقد المسجل (POS)</Label>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <div className="space-y-0.5">
+                                  <Label className="text-[10px] text-amber-700 font-medium">النقد المسجل (POS)</Label>
                                   <Input
                                     type="number"
                                     inputMode="decimal"
@@ -1506,12 +1506,12 @@ export default function CashierJournalFormPage() {
                                     onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
                                     onWheel={preventWheelChange}
                                     disabled={isReadOnly}
-                                    className="h-10 text-base font-bold text-center"
+                                    className="h-8 text-sm font-bold text-center"
                                     data-testid={`input-payment-amount-${index}`}
                                   />
                                 </div>
-                                <div className="space-y-1">
-                                  <Label className="text-xs text-amber-700 font-medium">الفعلي في الصندوق</Label>
+                                <div className="space-y-0.5">
+                                  <Label className="text-[10px] text-amber-700 font-medium">الفعلي في الصندوق</Label>
                                   <Input
                                     type="number"
                                     inputMode="decimal"
@@ -1520,21 +1520,21 @@ export default function CashierJournalFormPage() {
                                     onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseNumericValue(e.target.value) })}
                                     onWheel={preventWheelChange}
                                     disabled={isReadOnly}
-                                    className="h-10 text-base font-bold text-center bg-white"
+                                    className="h-8 text-sm font-bold text-center bg-white"
                                     data-testid="input-actual-cash-inline"
                                   />
                                 </div>
                               </div>
                               {/* Cash Discrepancy & Transaction Count - Compact Row */}
-                              <div className="flex items-center gap-2 text-xs">
-                                <div className={`flex-1 px-2 py-1.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : cashDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <div className={`flex-1 px-1.5 py-1 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : cashDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
                                   <span>الفرق:</span>
                                   <span className="font-bold">
-                                    {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} ر.س {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
+                                    {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                                  <span className="text-gray-500 text-[10px]">عمليات:</span>
+                                <div className="flex items-center gap-0.5 bg-gray-100 px-1.5 py-0.5 rounded">
+                                  <span className="text-gray-500">عمليات:</span>
                                   <Input
                                     type="number"
                                     inputMode="numeric"
@@ -1543,13 +1543,13 @@ export default function CashierJournalFormPage() {
                                     onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
                                     onWheel={preventWheelChange}
                                     disabled={isReadOnly}
-                                    className="h-6 w-10 text-xs font-bold text-center p-0.5"
+                                    className="h-5 w-8 text-[10px] font-bold text-center p-0"
                                     data-testid={`input-payment-count-${index}`}
                                   />
                                 </div>
                               </div>
                               {/* Expected Cash Formula Context */}
-                              <div className="text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded flex flex-wrap items-center gap-1">
+                              <div className="text-[9px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex flex-wrap items-center gap-0.5">
                                 <span>المتوقع:</span>
                                 {formData.openingBalance > 0 && (
                                   <>
@@ -1572,9 +1572,9 @@ export default function CashierJournalFormPage() {
                         })()
                       ) : (
                         /* Other Non-Bank: Simple Amount + Transaction Count */
-                        <div className="flex items-end gap-3">
-                          <div className="flex-1 space-y-1">
-                            <Label className="text-xs font-medium">المبلغ</Label>
+                        <div className="flex items-end gap-1.5">
+                          <div className="flex-1 space-y-0.5">
+                            <Label className="text-[10px] font-medium">المبلغ</Label>
                             <Input
                               type="number"
                               inputMode="decimal"
@@ -1583,12 +1583,12 @@ export default function CashierJournalFormPage() {
                               onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
                               onWheel={preventWheelChange}
                               disabled={isReadOnly}
-                              className="h-10 text-base font-bold text-center"
+                              className="h-8 text-sm font-bold text-center"
                               data-testid={`input-payment-amount-${index}`}
                             />
                           </div>
-                          <div className="w-20 space-y-1">
-                            <Label className="text-xs font-medium text-gray-500">عمليات</Label>
+                          <div className="w-16 space-y-0.5">
+                            <Label className="text-[10px] font-medium text-gray-500">عمليات</Label>
                             <Input
                               type="number"
                               inputMode="numeric"
@@ -1597,7 +1597,7 @@ export default function CashierJournalFormPage() {
                               onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
                               onWheel={preventWheelChange}
                               disabled={isReadOnly}
-                              className="h-10 text-sm font-medium text-center"
+                              className="h-8 text-xs font-medium text-center"
                               data-testid={`input-payment-count-${index}`}
                             />
                           </div>
@@ -1631,29 +1631,29 @@ export default function CashierJournalFormPage() {
                   return (
                     <>
                       <Separator />
-                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <CreditCard className="w-5 h-5 text-blue-600" />
-                          <span className="font-bold text-blue-700">ملخص مطابقة البنك</span>
+                      <div className="p-2 bg-blue-50 rounded border border-blue-200">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <CreditCard className="w-4 h-4 text-blue-600" />
+                          <span className="font-bold text-blue-700 text-sm">ملخص مطابقة البنك</span>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                          <div className="p-2 bg-white rounded">
-                            <div className="text-muted-foreground text-xs">إجمالي POS</div>
-                            <div className="font-bold">{bankSummary.totalPosAmount.toFixed(2)} ر.س</div>
+                        <div className="grid grid-cols-4 gap-1 text-[10px]">
+                          <div className="p-1.5 bg-white rounded">
+                            <div className="text-muted-foreground">POS</div>
+                            <div className="font-bold text-xs">{bankSummary.totalPosAmount.toFixed(2)}</div>
                           </div>
-                          <div className="p-2 bg-white rounded">
-                            <div className="text-muted-foreground text-xs">إجمالي التيرمنال</div>
-                            <div className="font-bold">{bankSummary.totalTerminalAmount.toFixed(2)} ر.س</div>
+                          <div className="p-1.5 bg-white rounded">
+                            <div className="text-muted-foreground">تيرمنال</div>
+                            <div className="font-bold text-xs">{bankSummary.totalTerminalAmount.toFixed(2)}</div>
                           </div>
-                          <div className={`p-2 rounded ${bankSummary.type === 'surplus' ? 'bg-emerald-200 border border-emerald-400' : bankSummary.type === 'shortage' ? 'bg-red-200 border border-red-400' : 'bg-gray-100'}`}>
-                            <div className="text-muted-foreground text-xs">الفرق الإجمالي</div>
-                            <div className={`font-bold ${bankSummary.type === 'surplus' ? 'text-emerald-800' : bankSummary.type === 'shortage' ? 'text-red-800' : ''}`}>
-                              {bankSummary.discrepancy.toFixed(2)} ر.س
+                          <div className={`p-1.5 rounded ${bankSummary.type === 'surplus' ? 'bg-emerald-200' : bankSummary.type === 'shortage' ? 'bg-red-200' : 'bg-gray-100'}`}>
+                            <div className="text-muted-foreground">الفرق</div>
+                            <div className={`font-bold text-xs ${bankSummary.type === 'surplus' ? 'text-emerald-800' : bankSummary.type === 'shortage' ? 'text-red-800' : ''}`}>
+                              {bankSummary.discrepancy.toFixed(2)}
                             </div>
                           </div>
-                          <div className={`p-2 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-emerald-200 text-emerald-800 border border-emerald-400' : bankSummary.type === 'shortage' ? 'bg-red-200 text-red-800 border border-red-400' : 'bg-gray-100'}`}>
-                            <span className="font-bold text-sm">
-                              {bankSummary.type === 'surplus' ? '⬆️ زيادة في البنك' : bankSummary.type === 'shortage' ? '⬇️ عجز في البنك' : '✓ متطابق'}
+                          <div className={`p-1.5 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-emerald-200 text-emerald-800' : bankSummary.type === 'shortage' ? 'bg-red-200 text-red-800' : 'bg-gray-100'}`}>
+                            <span className="font-bold text-[10px]">
+                              {bankSummary.type === 'surplus' ? '⬆️ زيادة' : bankSummary.type === 'shortage' ? '⬇️ عجز' : '✓'}
                             </span>
                           </div>
                         </div>
