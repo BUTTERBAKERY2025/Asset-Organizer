@@ -51,7 +51,9 @@ export function useAuth() {
     },
     onSuccess: (userData) => {
       queryClient.setQueryData(["/api/auth/me"], userData);
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     },
   });
 
@@ -65,7 +67,7 @@ export function useAuth() {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/auth/me"], null);
-      queryClient.invalidateQueries();
+      queryClient.clear();
     },
   });
 
@@ -85,7 +87,9 @@ export function useAuth() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     },
   });
 

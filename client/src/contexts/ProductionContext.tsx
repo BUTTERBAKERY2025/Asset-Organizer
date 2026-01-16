@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 
 interface CommandCenterData {
   production: {
@@ -72,6 +73,7 @@ const ProductionContext = createContext<ProductionContextType | undefined>(
 );
 
 export function ProductionProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useAuth();
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(
     format(new Date(), "yyyy-MM-dd"),
@@ -106,6 +108,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       }
       return res.json();
     },
+    enabled: isAuthenticated && !!selectedDate,
     refetchInterval: autoRefresh ? 300000 : false,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
