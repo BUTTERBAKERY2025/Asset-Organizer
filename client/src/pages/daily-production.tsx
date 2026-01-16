@@ -139,6 +139,9 @@ export default function DailyProductionPage() {
   const [editQuantity, setEditQuantity] = useState<string>("");
   const [editDestination, setEditDestination] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
+  const [showInProgressDialog, setShowInProgressDialog] = useState<boolean>(false);
+  const [matchingInProgressBatch, setMatchingInProgressBatch] = useState<DailyProductionBatch | null>(null);
+  const [pendingSubmitAction, setPendingSubmitAction] = useState<(() => void) | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
@@ -246,6 +249,23 @@ export default function DailyProductionPage() {
     if (chef) {
       setSelectedChefName(chef.firstName ? `${chef.firstName} ${chef.lastName || ""}`.trim() : chef.username);
     }
+  };
+
+  // Find matching in-progress batch for a product
+  const findMatchingInProgressBatch = (name: string, productId?: number | null): DailyProductionBatch | null => {
+    if (!unfinishedBatches || unfinishedBatches.length === 0) return null;
+    
+    // First try to match by productId if available
+    if (productId) {
+      const matchById = unfinishedBatches.find(b => b.productId === productId && b.status === "in_progress");
+      if (matchById) return matchById;
+    }
+    
+    // Fall back to matching by product name (normalized)
+    const normalizedName = name.trim().toLowerCase();
+    return unfinishedBatches.find(b => 
+      b.productName.trim().toLowerCase() === normalizedName && b.status === "in_progress"
+    ) || null;
   };
 
   const createMutation = useMutation({
@@ -365,19 +385,9 @@ export default function DailyProductionPage() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!branchId || !productName || !quantity || !destination) {
-      toast({ title: "بيانات ناقصة", description: "يرجى ملء جميع الحقول المطلوبة", variant: "destructive" });
-      return;
-    }
-    
+  // Helper to execute the actual batch creation
+  const executeCreateBatch = () => {
     const numericQuantity = parseInt(quantity, 10);
-    if (isNaN(numericQuantity) || numericQuantity <= 0) {
-      toast({ title: "خطأ", description: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر", variant: "destructive" });
-      return;
-    }
-    
     const product = products?.find(p => p.name === productName);
     const resolvedCategory = productCategory || product?.category || null;
     createMutation.mutate({
@@ -395,7 +405,76 @@ export default function DailyProductionPage() {
     });
   };
 
-  const handleQuickEntry = (product: Product, qty: number) => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!branchId || !productName || !quantity || !destination) {
+      toast({ title: "بيانات ناقصة", description: "يرجى ملء جميع الحقول المطلوبة", variant: "destructive" });
+      return;
+    }
+    
+    const numericQuantity = parseInt(quantity, 10);
+    if (isNaN(numericQuantity) || numericQuantity <= 0) {
+      toast({ title: "خطأ", description: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر", variant: "destructive" });
+      return;
+    }
+    
+    const product = products?.find(p => p.name === productName);
+    const resolvedCategory = productCategory || product?.category || null;
+    
+    // Check for matching in-progress batch (only for sweets category)
+    if (isSweetsCategory(resolvedCategory)) {
+      const matchingBatch = findMatchingInProgressBatch(productName, product?.id);
+      if (matchingBatch) {
+        // Show dialog to ask user what to do
+        setMatchingInProgressBatch(matchingBatch);
+        setPendingSubmitAction(() => executeCreateBatch);
+        setShowInProgressDialog(true);
+        return;
+      }
+    }
+    
+    // No matching in-progress batch, proceed normally
+    executeCreateBatch();
+  };
+
+  // Handle dialog: mark existing as finished, then create new batch
+  const handleFinishExistingAndCreate = async () => {
+    if (!matchingInProgressBatch) return;
+    
+    try {
+      await finishBatchMutation.mutateAsync(matchingInProgressBatch.id);
+      // After finishing, execute the pending create action
+      if (pendingSubmitAction) {
+        pendingSubmitAction();
+      }
+    } catch (error) {
+      console.error("Error finishing batch:", error);
+    } finally {
+      setShowInProgressDialog(false);
+      setMatchingInProgressBatch(null);
+      setPendingSubmitAction(null);
+    }
+  };
+
+  // Handle dialog: continue with new batch without finishing existing
+  const handleContinueNewBatch = () => {
+    if (pendingSubmitAction) {
+      pendingSubmitAction();
+    }
+    setShowInProgressDialog(false);
+    setMatchingInProgressBatch(null);
+    setPendingSubmitAction(null);
+  };
+
+  // Handle dialog: cancel
+  const handleCancelInProgressDialog = () => {
+    setShowInProgressDialog(false);
+    setMatchingInProgressBatch(null);
+    setPendingSubmitAction(null);
+  };
+
+  // Helper to execute quick entry batch creation
+  const executeQuickEntry = (product: Product, qty: number) => {
     createMutation.mutate({
       branchId,
       productId: product.id,
@@ -409,6 +488,23 @@ export default function DailyProductionPage() {
       chefId: selectedChefId || null,
       chefName: selectedChefName || null,
     });
+  };
+
+  const handleQuickEntry = (product: Product, qty: number) => {
+    // Check for matching in-progress batch (only for sweets category)
+    if (isSweetsCategory(product.category)) {
+      const matchingBatch = findMatchingInProgressBatch(product.name, product.id);
+      if (matchingBatch) {
+        // Show dialog to ask user what to do
+        setMatchingInProgressBatch(matchingBatch);
+        setPendingSubmitAction(() => () => executeQuickEntry(product, qty));
+        setShowInProgressDialog(true);
+        return;
+      }
+    }
+    
+    // No matching in-progress batch, proceed normally
+    executeQuickEntry(product, qty);
   };
 
   const handleEditSave = () => {
@@ -1810,6 +1906,72 @@ export default function DailyProductionPage() {
             <Button onClick={handleEditSave} disabled={updateMutation.isPending}>
               <Check className="h-4 w-4 ml-2" />
               {updateMutation.isPending ? "جاري الحفظ..." : "حفظ التعديلات"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* In-Progress Product Dialog */}
+      <Dialog open={showInProgressDialog} onOpenChange={setShowInProgressDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" />
+              يوجد صنف قيد التحضير
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              هذا الصنف لديه دفعة سابقة قيد التحضير. ماذا تريد أن تفعل؟
+            </DialogDescription>
+          </DialogHeader>
+          
+          {matchingInProgressBatch && (
+            <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
+              <p className="font-medium text-amber-800">{matchingInProgressBatch.productName}</p>
+              <div className="flex justify-between text-sm text-amber-700">
+                <span>الكمية: {matchingInProgressBatch.quantity} {matchingInProgressBatch.unit || "قطعة"}</span>
+                <span>التاريخ: {format(new Date(matchingInProgressBatch.producedAt), "yyyy-MM-dd")}</span>
+              </div>
+              {matchingInProgressBatch.chefName && (
+                <p className="text-sm text-amber-600 flex items-center gap-1">
+                  <ChefHat className="h-3 w-3" />
+                  {matchingInProgressBatch.chefName}
+                </p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            {canModifyRecords ? (
+              <Button
+                onClick={handleFinishExistingAndCreate}
+                className="w-full bg-green-600 hover:bg-green-700"
+                disabled={finishBatchMutation.isPending}
+              >
+                <CheckCircle className="h-4 w-4 ml-2" />
+                {finishBatchMutation.isPending ? "جاري التحديث..." : "تحويل السابق لمكتمل وتسجيل الجديد"}
+              </Button>
+            ) : (
+              <div className="p-2 bg-gray-100 rounded text-center text-sm text-muted-foreground">
+                <Shield className="h-4 w-4 inline ml-1" />
+                لا تملك صلاحية تعديل الدفعة السابقة
+              </div>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleContinueNewBatch}
+              className="w-full"
+              disabled={createMutation.isPending}
+            >
+              <Plus className="h-4 w-4 ml-2" />
+              تسجيل دفعة جديدة منفصلة
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleCancelInProgressDialog}
+              className="w-full text-muted-foreground"
+            >
+              <X className="h-4 w-4 ml-2" />
+              إلغاء
             </Button>
           </DialogFooter>
         </DialogContent>
