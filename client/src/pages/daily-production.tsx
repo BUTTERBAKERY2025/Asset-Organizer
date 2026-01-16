@@ -198,6 +198,7 @@ export default function DailyProductionPage() {
   const { data: stats } = useQuery<DailyStats>({
     queryKey: ["/api/daily-production/stats", branchId, selectedDate],
     queryFn: async () => {
+      if (!branchId || !selectedDate) return { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} };
       const params = new URLSearchParams({ branchId, date: selectedDate });
       const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
@@ -209,7 +210,13 @@ export default function DailyProductionPage() {
   });
 
   // Previous day stats for comparison
-  const previousDate = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
+  const previousDate = (() => {
+    try {
+      return format(subDays(new Date(selectedDate || new Date()), 1), "yyyy-MM-dd");
+    } catch {
+      return format(subDays(new Date(), 1), "yyyy-MM-dd");
+    }
+  })();
   const { data: prevStats } = useQuery<DailyStats>({
     queryKey: ["/api/daily-production/stats", branchId, previousDate],
     queryFn: async () => {
@@ -499,9 +506,13 @@ export default function DailyProductionPage() {
   const getBranchName = (id: string) => branches?.find(b => b.id === id)?.name || id;
 
   const batchesByHour = (batches || []).reduce((acc, batch) => {
-    const hour = format(new Date(batch.producedAt), "HH");
-    if (!acc[hour]) acc[hour] = [];
-    acc[hour].push(batch);
+    try {
+      const hour = batch.producedAt ? format(new Date(batch.producedAt), "HH") : "00";
+      if (!acc[hour]) acc[hour] = [];
+      acc[hour].push(batch);
+    } catch {
+      // Skip invalid dates
+    }
     return acc;
   }, {} as Record<string, DailyProductionBatch[]>);
 
