@@ -348,14 +348,14 @@ export default function EmployeeReportsDashboardPage() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
     
-    // Show top 5 and group rest as "أخرى"
+    // Show top 5 and group rest as "Others"
     if (sorted.length > 5) {
       const top5 = sorted.slice(0, 5);
       const othersSum = sorted.slice(5).reduce((sum, item) => sum + item.value, 0);
-      return [...top5, { name: "أخرى", value: othersSum }];
+      return [...top5, { name: isRTL ? "أخرى" : "Others", value: othersSum }];
     }
     return sorted;
-  }, [filteredEmployees]);
+  }, [filteredEmployees, isRTL]);
 
   const jobTitleChartData = useMemo(() => {
     const map = new Map<string, number>();
@@ -643,12 +643,12 @@ export default function EmployeeReportsDashboardPage() {
     }), { housing: 0, transport: 0, food: 0, other: 0 });
     
     return [
-      { name: "بدل السكن", value: totals.housing, color: "#3b82f6" },
-      { name: "بدل النقل", value: totals.transport, color: "#10b981" },
-      { name: "بدل الطعام", value: totals.food, color: "#f59e0b" },
-      { name: "بدلات أخرى", value: totals.other, color: "#8b5cf6" },
+      { name: isRTL ? "بدل السكن" : "Housing", value: totals.housing, color: "#3b82f6" },
+      { name: isRTL ? "بدل النقل" : "Transport", value: totals.transport, color: "#10b981" },
+      { name: isRTL ? "بدل الطعام" : "Food", value: totals.food, color: "#f59e0b" },
+      { name: isRTL ? "بدلات أخرى" : "Other", value: totals.other, color: "#8b5cf6" },
     ].filter(item => item.value > 0);
-  }, [filteredEmployees]);
+  }, [filteredEmployees, isRTL]);
 
   const { salaryClosingData, salaryClosingUnlinkedCount, salaryClosingUnlinkedRecords, salaryClosingUnlinkedSummary } = useMemo(() => {
     if (!salaryClosingBranch || salaryClosingBranch === "all") return { salaryClosingData: [], salaryClosingUnlinkedCount: 0, salaryClosingUnlinkedRecords: [] as AttendanceRecord[], salaryClosingUnlinkedSummary: { totalRecords: 0, presentRecords: 0, totalHours: 0 } };
@@ -4929,29 +4929,29 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <DollarSign className="w-5 h-5 text-green-500" />
-                      أداء الكاشير والمبيعات
+                      {isRTL ? "أداء الكاشير والمبيعات" : "Cashier & Sales Performance"}
                     </CardTitle>
-                    <CardDescription>ربط موظفي الكاشير بإجمالي المبيعات</CardDescription>
+                    <CardDescription>{isRTL ? "ربط موظفي الكاشير بإجمالي المبيعات" : "Cashier employees linked to total sales"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {cashierPerformanceAnalysis.cashierPerformance.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">لا توجد بيانات مبيعات</div>
+                      <div className="text-center py-8 text-gray-500">{isRTL ? "لا توجد بيانات مبيعات" : "No sales data available"}</div>
                     ) : (
                       <>
                         <div className="p-3 bg-green-50 rounded-lg mb-4 text-center">
-                          <p className="text-2xl font-bold text-green-700">{formatCurrency(cashierPerformanceAnalysis.totalSales)}</p>
-                          <p className="text-xs text-green-600">إجمالي المبيعات للشهر</p>
+                          <p className="text-2xl font-bold text-green-700">{formatCurrency(cashierPerformanceAnalysis.totalSales, isRTL)}</p>
+                          <p className="text-xs text-green-600">{isRTL ? "إجمالي المبيعات للشهر" : "Total Monthly Sales"}</p>
                         </div>
                         <div className="space-y-2 max-h-32 overflow-y-auto">
                           {cashierPerformanceAnalysis.cashierPerformance.map((cashier, i) => (
                             <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                               <div>
                                 <p className="font-medium text-sm">{cashier.name}</p>
-                                <p className="text-xs text-gray-500">{cashier.daysWorked} يوم عمل</p>
+                                <p className="text-xs text-gray-500">{isRTL ? `${cashier.daysWorked} يوم عمل` : `${cashier.daysWorked} work days`}</p>
                               </div>
-                              <div className="text-left">
-                                <p className="font-bold text-green-700">{formatCurrency(cashier.totalSales)}</p>
-                                <p className="text-xs text-gray-500">متوسط: {formatCurrency(cashier.avgDaily)}</p>
+                              <div className={isRTL ? "text-left" : "text-right"}>
+                                <p className="font-bold text-green-700">{formatCurrency(cashier.totalSales, isRTL)}</p>
+                                <p className="text-xs text-gray-500">{isRTL ? `متوسط: ${formatCurrency(cashier.avgDaily, isRTL)}` : `Avg: ${formatCurrency(cashier.avgDaily, isRTL)}`}</p>
                               </div>
                             </div>
                           ))}
@@ -4979,8 +4979,8 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-blue-700">{formatNumber(overviewStats.totalEmployees)}</p>
-                      <p className="text-sm text-blue-600">إجمالي الموظفين</p>
-                      <p className="text-xs text-blue-500 mt-1">نشط: {filteredEmployees.filter(e => e.status === "active").length}</p>
+                      <p className="text-sm text-blue-600">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
+                      <p className="text-xs text-blue-500 mt-1">{isRTL ? `نشط: ${filteredEmployees.filter(e => e.status === "active").length}` : `Active: ${filteredEmployees.filter(e => e.status === "active").length}`}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -4988,17 +4988,17 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-green-700">{overviewStats.attendanceRate}%</p>
-                      <p className="text-sm text-green-600">نسبة الحضور</p>
-                      <p className="text-xs text-green-500 mt-1">{formatNumber(overviewStats.presentCount)} يوم حضور</p>
+                      <p className="text-sm text-green-600">{isRTL ? "نسبة الحضور" : "Attendance Rate"}</p>
+                      <p className="text-xs text-green-500 mt-1">{isRTL ? `${formatNumber(overviewStats.presentCount)} يوم حضور` : `${formatNumber(overviewStats.presentCount)} present days`}</p>
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200" data-testid="kpi-total-salaries">
                   <CardContent className="pt-4">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-amber-700">{formatCurrency(overviewStats.totalSalaries)}</p>
-                      <p className="text-sm text-amber-600">إجمالي الرواتب</p>
-                      <p className="text-xs text-amber-500 mt-1">متوسط: {formatCurrency(overviewStats.totalEmployees > 0 ? Math.round(overviewStats.totalSalaries / overviewStats.totalEmployees) : 0)}</p>
+                      <p className="text-3xl font-bold text-amber-700">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
+                      <p className="text-sm text-amber-600">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
+                      <p className="text-xs text-amber-500 mt-1">{isRTL ? `متوسط: ${formatCurrency(overviewStats.totalEmployees > 0 ? Math.round(overviewStats.totalSalaries / overviewStats.totalEmployees) : 0, isRTL)}` : `Avg: ${formatCurrency(overviewStats.totalEmployees > 0 ? Math.round(overviewStats.totalSalaries / overviewStats.totalEmployees) : 0, isRTL)}`}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -5006,8 +5006,8 @@ export default function EmployeeReportsDashboardPage() {
                   <CardContent className="pt-4">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-teal-700">{overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%</p>
-                      <p className="text-sm text-teal-600">نسبة السعودة</p>
-                      <p className="text-xs text-teal-500 mt-1">{formatNumber(overviewStats.saudiEmployees)} موظف سعودي</p>
+                      <p className="text-sm text-teal-600">{isRTL ? "نسبة السعودة" : "Saudization Rate"}</p>
+                      <p className="text-xs text-teal-500 mt-1">{isRTL ? `${formatNumber(overviewStats.saudiEmployees)} موظف سعودي` : `${formatNumber(overviewStats.saudiEmployees)} Saudi employees`}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -5018,18 +5018,18 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <DollarSign className="w-5 h-5" />
-                      أعلى 10 موظفين راتباً
+                      {isRTL ? "أعلى 10 موظفين راتباً" : "Top 10 Highest Paid Employees"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Table data-testid="table-top-employees">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="text-right">م</TableHead>
-                          <TableHead className="text-right">الموظف</TableHead>
-                          <TableHead className="text-right">الفرع</TableHead>
-                          <TableHead className="text-right">الوظيفة</TableHead>
-                          <TableHead className="text-center">الراتب</TableHead>
+                          <TableHead className={isRTL ? "text-right" : "text-left"}>#</TableHead>
+                          <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الموظف" : "Employee"}</TableHead>
+                          <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                          <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الوظيفة" : "Job Title"}</TableHead>
+                          <TableHead className="text-center">{isRTL ? "الراتب" : "Salary"}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -5039,7 +5039,7 @@ export default function EmployeeReportsDashboardPage() {
                             <TableCell className="font-medium">{emp.employeeName}</TableCell>
                             <TableCell>{getBranchName(emp.branchId)}</TableCell>
                             <TableCell>{emp.jobTitle}</TableCell>
-                            <TableCell className="text-center font-bold">{formatCurrency(emp.totalSalary || emp.salary)}</TableCell>
+                            <TableCell className="text-center font-bold">{formatCurrency(emp.totalSalary || emp.salary, isRTL)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -5051,7 +5051,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Wallet className="w-5 h-5" />
-                      تحليل البدلات
+                      {isRTL ? "تحليل البدلات" : "Allowances Breakdown"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -5732,66 +5732,66 @@ export default function EmployeeReportsDashboardPage() {
                   if (!comprehensiveComparisons) return;
                   const wb = XLSX.utils.book_new();
                   const branchSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.branchSalaryStats.map(b => ({
-                    "الفرع": b.branchName,
-                    "عدد الموظفين": b.employeeCount,
-                    "إجمالي الرواتب": b.totalSalary,
-                    "متوسط الراتب": b.avgSalary,
-                    "أعلى راتب": b.maxSalary,
-                    "أقل راتب": b.minSalary,
-                    "الأعلى راتباً": b.highestPaid,
-                    "الأقل راتباً": b.lowestPaid,
+                    [isRTL ? "الفرع" : "Branch"]: b.branchName,
+                    [isRTL ? "عدد الموظفين" : "Employee Count"]: b.employeeCount,
+                    [isRTL ? "إجمالي الرواتب" : "Total Salary"]: b.totalSalary,
+                    [isRTL ? "متوسط الراتب" : "Avg Salary"]: b.avgSalary,
+                    [isRTL ? "أعلى راتب" : "Max Salary"]: b.maxSalary,
+                    [isRTL ? "أقل راتب" : "Min Salary"]: b.minSalary,
+                    [isRTL ? "الأعلى راتباً" : "Highest Paid"]: b.highestPaid,
+                    [isRTL ? "الأقل راتباً" : "Lowest Paid"]: b.lowestPaid,
                   })));
-                  XLSX.utils.book_append_sheet(wb, branchSheet, "مقارنة الفروع");
+                  XLSX.utils.book_append_sheet(wb, branchSheet, isRTL ? "مقارنة الفروع" : "Branch Comparison");
                   const natSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.nationalityStats.map(n => ({
-                    "الجنسية": n.nationality,
-                    "العدد": n.count,
-                    "النسبة": `${n.percentage}%`,
-                    "متوسط الراتب": n.avgSalary,
-                    "إجمالي الرواتب": n.totalSalary,
+                    [isRTL ? "الجنسية" : "Nationality"]: n.nationality,
+                    [isRTL ? "العدد" : "Count"]: n.count,
+                    [isRTL ? "النسبة" : "Percentage"]: `${n.percentage}%`,
+                    [isRTL ? "متوسط الراتب" : "Avg Salary"]: n.avgSalary,
+                    [isRTL ? "إجمالي الرواتب" : "Total Salary"]: n.totalSalary,
                   })));
-                  XLSX.utils.book_append_sheet(wb, natSheet, "مقارنة الجنسيات");
+                  XLSX.utils.book_append_sheet(wb, natSheet, isRTL ? "مقارنة الجنسيات" : "Nationality Comparison");
                   const jobSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.jobAcrossBranches.map(j => ({
-                    "الوظيفة": j.jobTitle,
-                    "العدد": j.totalCount,
-                    "متوسط الراتب": j.overallAvgSalary,
-                    "أعلى فرع": j.highestPayingBranch,
-                    "أقل فرع": j.lowestPayingBranch,
-                    "فجوة الراتب": j.salaryGap,
+                    [isRTL ? "الوظيفة" : "Job Title"]: j.jobTitle,
+                    [isRTL ? "العدد" : "Count"]: j.totalCount,
+                    [isRTL ? "متوسط الراتب" : "Avg Salary"]: j.overallAvgSalary,
+                    [isRTL ? "أعلى فرع" : "Highest Branch"]: j.highestPayingBranch,
+                    [isRTL ? "أقل فرع" : "Lowest Branch"]: j.lowestPayingBranch,
+                    [isRTL ? "فجوة الراتب" : "Salary Gap"]: j.salaryGap,
                   })));
-                  XLSX.utils.book_append_sheet(wb, jobSheet, "مقارنة الوظائف");
+                  XLSX.utils.book_append_sheet(wb, jobSheet, isRTL ? "مقارنة الوظائف" : "Job Comparison");
                   const tenureSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.tenureRanges.map(t => ({
-                    "مدة الخدمة": t.range,
-                    "عدد الموظفين": t.count,
+                    [isRTL ? "مدة الخدمة" : "Tenure"]: t.range,
+                    [isRTL ? "عدد الموظفين" : "Employee Count"]: t.count,
                   })));
-                  XLSX.utils.book_append_sheet(wb, tenureSheet, "مدة الخدمة");
+                  XLSX.utils.book_append_sheet(wb, tenureSheet, isRTL ? "مدة الخدمة" : "Tenure");
                   const salaryGapSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.salaryGapByJob.map(g => ({
-                    "الوظيفة": g.jobTitle,
-                    "أعلى جنسية": g.highestPaidNat,
-                    "أقل جنسية": g.lowestPaidNat,
-                    "فجوة الراتب": g.maxGap,
+                    [isRTL ? "الوظيفة" : "Job Title"]: g.jobTitle,
+                    [isRTL ? "أعلى جنسية" : "Highest Paid Nat."]: g.highestPaidNat,
+                    [isRTL ? "أقل جنسية" : "Lowest Paid Nat."]: g.lowestPaidNat,
+                    [isRTL ? "فجوة الراتب" : "Salary Gap"]: g.maxGap,
                   })));
-                  XLSX.utils.book_append_sheet(wb, salaryGapSheet, "فجوة الرواتب");
+                  XLSX.utils.book_append_sheet(wb, salaryGapSheet, isRTL ? "فجوة الرواتب" : "Salary Gap");
                   const allowancesSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.allowancesAnalysis.map(a => ({
-                    "الفرع": a.branchName,
-                    "الموظفين": a.employeeCount,
-                    "بدل السكن": a.housingAllowance,
-                    "بدل النقل": a.transportAllowance,
-                    "بدل الطعام": a.foodAllowance,
-                    "بدلات أخرى": a.otherAllowances,
-                    "إجمالي البدلات": a.totalAllowances,
-                    "متوسط/موظف": a.avgAllowancePerEmployee,
+                    [isRTL ? "الفرع" : "Branch"]: a.branchName,
+                    [isRTL ? "الموظفين" : "Employees"]: a.employeeCount,
+                    [isRTL ? "بدل السكن" : "Housing"]: a.housingAllowance,
+                    [isRTL ? "بدل النقل" : "Transport"]: a.transportAllowance,
+                    [isRTL ? "بدل الطعام" : "Food"]: a.foodAllowance,
+                    [isRTL ? "بدلات أخرى" : "Other"]: a.otherAllowances,
+                    [isRTL ? "إجمالي البدلات" : "Total Allowances"]: a.totalAllowances,
+                    [isRTL ? "متوسط/موظف" : "Avg/Employee"]: a.avgAllowancePerEmployee,
                   })));
-                  XLSX.utils.book_append_sheet(wb, allowancesSheet, "تحليل البدلات");
+                  XLSX.utils.book_append_sheet(wb, allowancesSheet, isRTL ? "تحليل البدلات" : "Allowances Analysis");
                   const costSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.monthlyCostAnalysis.map(c => ({
-                    "الفرع": c.branchName,
-                    "الموظفين": c.employeeCount,
-                    "الرواتب": c.totalSalaries,
-                    "البدلات": c.totalAllowances,
-                    "التأمينات": c.socialInsurance,
-                    "إجمالي التكلفة": c.totalCost,
-                    "تكلفة/موظف": c.costPerEmployee,
+                    [isRTL ? "الفرع" : "Branch"]: c.branchName,
+                    [isRTL ? "الموظفين" : "Employees"]: c.employeeCount,
+                    [isRTL ? "الرواتب" : "Salaries"]: c.totalSalaries,
+                    [isRTL ? "البدلات" : "Allowances"]: c.totalAllowances,
+                    [isRTL ? "التأمينات" : "Insurance"]: c.socialInsurance,
+                    [isRTL ? "إجمالي التكلفة" : "Total Cost"]: c.totalCost,
+                    [isRTL ? "تكلفة/موظف" : "Cost/Employee"]: c.costPerEmployee,
                   })));
-                  XLSX.utils.book_append_sheet(wb, costSheet, "التكلفة الشهرية");
+                  XLSX.utils.book_append_sheet(wb, costSheet, isRTL ? "التكلفة الشهرية" : "Monthly Cost");
                   XLSX.writeFile(wb, `comparisons_report_${selectedMonth}.xlsx`);
                 }} data-testid="button-export-comparisons-excel">
                   <FileSpreadsheet className="w-4 h-4 ml-1" />
@@ -6437,17 +6437,17 @@ export default function EmployeeReportsDashboardPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-right">م</TableHead>
-                            <TableHead className="text-right">رقم الموظف</TableHead>
-                            <TableHead className="text-right">الاسم</TableHead>
-                            <TableHead className="text-right">الوظيفة</TableHead>
-                            <TableHead className="text-center">الحضور</TableHead>
-                            <TableHead className="text-center">الغياب</TableHead>
-                            <TableHead className="text-center">الساعات</TableHead>
-                            <TableHead className="text-center">الراتب</TableHead>
-                            <TableHead className="text-center">البدلات</TableHead>
-                            <TableHead className="text-center">التأمينات</TableHead>
-                            <TableHead className="text-center">الصافي</TableHead>
+                            <TableHead className={isRTL ? "text-right" : "text-left"}>#</TableHead>
+                            <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "رقم الموظف" : "Employee #"}</TableHead>
+                            <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
+                            <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الوظيفة" : "Job Title"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الحضور" : "Present"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الغياب" : "Absent"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الساعات" : "Hours"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الراتب" : "Salary"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "البدلات" : "Allowances"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "التأمينات" : "Insurance"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -6464,12 +6464,12 @@ export default function EmployeeReportsDashboardPage() {
                                 <Badge className="bg-red-100 text-red-800">{emp.absentDays}</Badge>
                               </TableCell>
                               <TableCell className="text-center">{emp.totalHours}</TableCell>
-                              <TableCell className="text-center">{formatCurrency(emp.baseSalary)}</TableCell>
-                              <TableCell className="text-center">{formatCurrency(emp.allowances)}</TableCell>
+                              <TableCell className="text-center">{formatCurrency(emp.baseSalary, isRTL)}</TableCell>
+                              <TableCell className="text-center">{formatCurrency(emp.allowances, isRTL)}</TableCell>
                               <TableCell className="text-center text-red-600">
-                                {emp.socialInsurance > 0 ? `- ${formatCurrency(emp.socialInsurance)}` : "-"}
+                                {emp.socialInsurance > 0 ? `- ${formatCurrency(emp.socialInsurance, isRTL)}` : "-"}
                               </TableCell>
-                              <TableCell className="text-center font-bold">{formatCurrency(emp.netSalary)}</TableCell>
+                              <TableCell className="text-center font-bold">{formatCurrency(emp.netSalary, isRTL)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -6482,7 +6482,7 @@ export default function EmployeeReportsDashboardPage() {
               {salaryClosingBranch && salaryClosingData.length === 0 && (
                 <div className="text-center py-10 text-gray-500">
                   <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>لا يوجد موظفين نشطين في هذا الفرع</p>
+                  <p>{isRTL ? "لا يوجد موظفين نشطين في هذا الفرع" : "No active employees in this branch"}</p>
                 </div>
               )}
             </div>
