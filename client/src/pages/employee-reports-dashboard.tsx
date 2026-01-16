@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,9 +77,9 @@ import type { BranchEmployee, AttendanceRecord, TimesheetReport } from "@shared/
 
 const COLORS = ["#f59e0b", "#10b981", "#3b82f6", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
 
-function formatCurrency(value: number | null | undefined): string {
-  if (value == null) return "0 ريال";
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value) + " ريال";
+function formatCurrency(value: number | null | undefined, isRTL: boolean = true): string {
+  if (value == null) return isRTL ? "0 ريال" : "0 SAR";
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value) + (isRTL ? " ريال" : " SAR");
 }
 
 function formatNumber(value: number | null | undefined): string {
@@ -97,6 +98,8 @@ function formatTime(timeStr: string | null | undefined): string {
 }
 
 export default function EmployeeReportsDashboardPage() {
+  const { i18n } = useTranslation();
+  const isRTL = i18n.language === "ar";
   const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
   
@@ -2706,52 +2709,52 @@ export default function EmployeeReportsDashboardPage() {
             <div className="overflow-x-auto pb-2">
               <TabsList className="flex w-max min-w-full gap-1 text-xs">
               <TabsTrigger value="overview" data-testid="tab-overview">
-                <BarChart3 className="w-4 h-4 ml-1" />
-                نظرة عامة
+                <BarChart3 className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "نظرة عامة" : "Overview"}
               </TabsTrigger>
               <TabsTrigger value="data-quality" data-testid="tab-data-quality">
-                <AlertCircle className="w-4 h-4 ml-1" />
-                جودة البيانات
+                <AlertCircle className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "جودة البيانات" : "Data Quality"}
               </TabsTrigger>
               <TabsTrigger value="compliance" data-testid="tab-compliance">
-                <CheckCircle className="w-4 h-4 ml-1" />
-                الامتثال
+                <CheckCircle className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "الامتثال" : "Compliance"}
               </TabsTrigger>
               <TabsTrigger value="turnover" data-testid="tab-turnover">
-                <RefreshCw className="w-4 h-4 ml-1" />
-                الدوران
+                <RefreshCw className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "الدوران" : "Turnover"}
               </TabsTrigger>
               <TabsTrigger value="branch-comparison" data-testid="tab-branch-comparison">
-                <Building2 className="w-4 h-4 ml-1" />
-                الفروع
+                <Building2 className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "الفروع" : "Branches"}
               </TabsTrigger>
               <TabsTrigger value="job-comparison" data-testid="tab-job-comparison">
-                <Users className="w-4 h-4 ml-1" />
-                الوظائف
+                <Users className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "الوظائف" : "Job Titles"}
               </TabsTrigger>
               <TabsTrigger value="attendance" data-testid="tab-attendance">
-                <Calendar className="w-4 h-4 ml-1" />
-                الحضور
+                <Calendar className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "الحضور" : "Attendance"}
               </TabsTrigger>
               <TabsTrigger value="salaries" data-testid="tab-salaries">
-                <DollarSign className="w-4 h-4 ml-1" />
-                الرواتب
+                <DollarSign className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "الرواتب" : "Salaries"}
               </TabsTrigger>
               <TabsTrigger value="analytics" data-testid="tab-analytics">
-                <TrendingUp className="w-4 h-4 ml-1" />
-                التحليلات
+                <TrendingUp className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "التحليلات" : "Analytics"}
               </TabsTrigger>
               <TabsTrigger value="kpis" data-testid="tab-kpis">
-                <PieChartIcon className="w-4 h-4 ml-1" />
-                المؤشرات
+                <PieChartIcon className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "المؤشرات" : "KPIs"}
               </TabsTrigger>
               <TabsTrigger value="health-certificates" data-testid="tab-health-certificates">
-                <CheckCircle className="w-4 h-4 ml-1" />
-                الشهادات الصحية
+                <CheckCircle className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "الشهادات الصحية" : "Health Certs"}
               </TabsTrigger>
               <TabsTrigger value="comparisons" data-testid="tab-comparisons">
-                <BarChart3 className="w-4 h-4 ml-1" />
-                المقارنات
+                <BarChart3 className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                {isRTL ? "المقارنات" : "Comparisons"}
               </TabsTrigger>
               </TabsList>
             </div>
