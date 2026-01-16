@@ -54,7 +54,9 @@ import {
   DollarSign,
   FileSignature,
   AlertCircle,
+  ArrowRight,
 } from "lucide-react";
+import { Link } from "wouter";
 import type { InfluencerContract, MarketingInfluencer, Branch } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -410,6 +412,14 @@ export default function InfluencerContractsPage() {
   return (
     <Layout>
       <div className="p-4 max-w-6xl mx-auto space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <Link href="/marketing">
+            <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back">
+              <ArrowRight className="h-4 w-4" />
+              لوحة التسويق
+            </Button>
+          </Link>
+        </div>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-[#1a3a2f]">عقود المؤثرين</h1>
