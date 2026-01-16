@@ -1334,7 +1334,8 @@ export default function CashierJournalFormPage() {
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2 p-3 pt-2">
+              <CardContent className="p-3 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {paymentBreakdowns.map((breakdown, index) => {
                   const method = PAYMENT_METHODS.find((m) => m.value === breakdown.paymentMethod);
                   const Icon = method?.icon || Wallet;
@@ -1355,9 +1356,9 @@ export default function CashierJournalFormPage() {
                   return (
                     <div key={index} className={`p-2 border rounded ${rowStyle}`} data-testid={`payment-row-${index}`}>
                       {/* Compact Header Row */}
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <div className={`p-1 rounded ${iconBg}`}>
-                          <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
+                      <div className="flex items-center gap-1 mb-1">
+                        <div className={`p-0.5 rounded ${iconBg}`}>
+                          <Icon className={`w-3 h-3 ${iconColor}`} />
                         </div>
                         <Select
                           value={breakdown.paymentMethod}
@@ -1375,12 +1376,12 @@ export default function CashierJournalFormPage() {
                           }}
                           disabled={isReadOnly}
                         >
-                          <SelectTrigger className="w-28 h-7 text-xs font-medium">
+                          <SelectTrigger className="w-24 h-6 text-[10px] font-medium">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
                             {PAYMENT_METHODS.map((m) => (
-                              <SelectItem key={m.value} value={m.value} className="py-1.5 text-sm">
+                              <SelectItem key={m.value} value={m.value} className="py-1 text-xs">
                                 {m.label}
                               </SelectItem>
                             ))}
@@ -1606,8 +1607,9 @@ export default function CashierJournalFormPage() {
                     </div>
                   );
                 })}
-                <Separator />
-                <div className="flex justify-between items-center text-lg font-medium">
+                </div>
+                <Separator className="my-2" />
+                <div className="flex justify-between items-center text-sm font-medium">
                   <span>مجموع التفصيل</span>
                   <span data-testid="text-breakdown-total">{getBreakdownTotal().toFixed(2)} ر.س</span>
                 </div>
