@@ -690,7 +690,7 @@ export interface IStorage {
   }>;
 
   // Daily Production Batches
-  getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string }): Promise<DailyProductionBatch[]>;
+  getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string }): Promise<DailyProductionBatch[]>;
   getDailyProductionBatch(id: number): Promise<DailyProductionBatch | undefined>;
   createDailyProductionBatch(batch: InsertDailyProductionBatch): Promise<DailyProductionBatch>;
   updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined>;
@@ -702,6 +702,9 @@ export interface IStorage {
     byCategory: Record<string, number>;
     byHour: Record<string, number>;
   }>;
+  getUnfinishedBatches(branchId?: string): Promise<DailyProductionBatch[]>;
+  finishBatch(id: number): Promise<DailyProductionBatch | undefined>;
+  carryOverBatch(sourceBatchId: number, newDate: Date, additionalQuantity?: number): Promise<DailyProductionBatch | undefined>;
 
   // Cashier Shift Targets - أهداف الكاشير للشفت
   getAllCashierShiftTargets(filters?: { branchId?: string; date?: string; shiftType?: string }): Promise<CashierShiftTarget[]>;
@@ -4826,7 +4829,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Daily Production Batches
-  async getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string }): Promise<DailyProductionBatch[]> {
+  async getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string }): Promise<DailyProductionBatch[]> {
     let query = db.select().from(dailyProductionBatches);
     
     const conditions = [];
@@ -4844,11 +4847,66 @@ export class DatabaseStorage implements IStorage {
     if (filters?.destination) {
       conditions.push(eq(dailyProductionBatches.destination, filters.destination));
     }
+    if (filters?.status) {
+      conditions.push(eq(dailyProductionBatches.status, filters.status));
+    }
+    if (filters?.chefId) {
+      conditions.push(eq(dailyProductionBatches.chefId, filters.chefId));
+    }
+    if (filters?.category) {
+      conditions.push(eq(dailyProductionBatches.productCategory, filters.category));
+    }
     
     if (conditions.length > 0) {
       return await db.select().from(dailyProductionBatches).where(and(...conditions)).orderBy(desc(dailyProductionBatches.producedAt));
     }
     return await db.select().from(dailyProductionBatches).orderBy(desc(dailyProductionBatches.producedAt));
+  }
+
+  // Get unfinished batches that can be carried over to next day
+  async getUnfinishedBatches(branchId?: string): Promise<DailyProductionBatch[]> {
+    const conditions = [eq(dailyProductionBatches.status, 'in_progress')];
+    if (branchId) {
+      conditions.push(eq(dailyProductionBatches.branchId, branchId));
+    }
+    return await db.select().from(dailyProductionBatches)
+      .where(and(...conditions))
+      .orderBy(desc(dailyProductionBatches.producedAt));
+  }
+
+  // Mark batch as finished
+  async finishBatch(id: number): Promise<DailyProductionBatch | undefined> {
+    const [updated] = await db.update(dailyProductionBatches)
+      .set({ status: 'finished', finishedAt: new Date() })
+      .where(eq(dailyProductionBatches.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Carry over batch to next day
+  async carryOverBatch(sourceBatchId: number, newDate: Date, additionalQuantity?: number): Promise<DailyProductionBatch | undefined> {
+    const sourceBatch = await this.getDailyProductionBatch(sourceBatchId);
+    if (!sourceBatch) return undefined;
+    
+    const [newBatch] = await db.insert(dailyProductionBatches).values({
+      branchId: sourceBatch.branchId,
+      productId: sourceBatch.productId,
+      productName: sourceBatch.productName,
+      productCategory: sourceBatch.productCategory,
+      quantity: additionalQuantity || sourceBatch.quantity,
+      unit: sourceBatch.unit,
+      destination: sourceBatch.destination,
+      shiftId: sourceBatch.shiftId,
+      producedAt: newDate,
+      recordedBy: sourceBatch.recordedBy,
+      recorderName: sourceBatch.recorderName,
+      notes: `ترحيل من دفعة #${sourceBatchId}`,
+      status: 'in_progress',
+      chefId: sourceBatch.chefId,
+      chefName: sourceBatch.chefName,
+      sourceBatchId: sourceBatchId,
+    }).returning();
+    return newBatch;
   }
 
   async getDailyProductionBatch(id: number): Promise<DailyProductionBatch | undefined> {
