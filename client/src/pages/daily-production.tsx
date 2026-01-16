@@ -183,24 +183,30 @@ export default function DailyProductionPage() {
       const params = new URLSearchParams();
       if (branchId) params.set("branchId", branchId);
       if (selectedDate) params.set("date", selectedDate);
-      const res = await fetch(`/api/daily-production/batches?${params}`, { credentials: "include" });
+      params.set("_t", Date.now().toString()); // Cache buster
+      const res = await fetch(`/api/daily-production/batches?${params}`, { 
+        credentials: "include",
+        cache: "no-store"
+      });
       if (!res.ok) throw new Error("Failed to fetch batches");
       return res.json();
     },
     enabled: !!branchId,
     refetchInterval: autoRefresh ? 60000 : false,
+    staleTime: 0, // Always consider stale to enable refetch
   });
 
   const { data: stats } = useQuery<DailyStats>({
     queryKey: ["/api/daily-production/stats", branchId, selectedDate],
     queryFn: async () => {
-      const params = new URLSearchParams({ branchId, date: selectedDate });
-      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include" });
+      const params = new URLSearchParams({ branchId, date: selectedDate, _t: Date.now().toString() });
+      const res = await fetch(`/api/daily-production/stats?${params}`, { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
     enabled: !!branchId && !!selectedDate,
     refetchInterval: autoRefresh ? 60000 : false,
+    staleTime: 0,
   });
 
   // Previous day stats for comparison
@@ -232,11 +238,13 @@ export default function DailyProductionPage() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (branchId) params.set("branchId", branchId);
-      const res = await fetch(`/api/daily-production/unfinished?${params}`, { credentials: "include" });
+      params.set("_t", Date.now().toString());
+      const res = await fetch(`/api/daily-production/unfinished?${params}`, { credentials: "include", cache: "no-store" });
       if (!res.ok) return [];
       return res.json();
     },
     enabled: !!branchId,
+    staleTime: 0,
   });
 
   // Helper to check if product category is sweets (حلويات)
