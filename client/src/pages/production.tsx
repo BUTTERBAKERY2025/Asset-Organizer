@@ -203,9 +203,7 @@ export default function ProductionPage() {
                     <Label>المنتج *</Label>
                     <Select value={formData.productId} onValueChange={v => setFormData({ ...formData, productId: v })}>
                       <SelectTrigger data-testid="select-product" className="h-11 sm:h-10">
-                        <SelectValue placeholder="اختر المنتج">
-                          {formData.productId && products?.find(p => p.id.toString() === formData.productId)?.name}
-                        </SelectValue>
+                        <SelectValue placeholder="اختر المنتج" />
                       </SelectTrigger>
                       <SelectContent>
                         {products?.filter(p => p.isActive === 'true').map(product => (
@@ -213,6 +211,11 @@ export default function ProductionPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {formData.productId && (
+                      <p className="text-xs text-green-600 mt-1 font-medium">
+                        تم اختيار: {products?.find(p => p.id.toString() === formData.productId)?.name}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
