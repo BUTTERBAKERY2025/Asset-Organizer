@@ -66,6 +66,7 @@ const RBACManagementPage = lazy(() => import("@/pages/rbac-management"));
 const CashierShiftPerformancePage = lazy(() => import("@/pages/cashier-shift-performance"));
 const MarketingCampaignsPage = lazy(() => import("@/pages/marketing-campaigns"));
 const MarketingInfluencersPage = lazy(() => import("@/pages/marketing-influencers"));
+const InfluencerContractsPage = lazy(() => import("@/pages/influencer-contracts"));
 const MarketingDashboardPage = lazy(() => import("@/pages/marketing-dashboard"));
 const MarketingCalendarPage = lazy(() => import("@/pages/marketing-calendar"));
 const MarketingTasksPage = lazy(() => import("@/pages/marketing-tasks"));
@@ -218,6 +219,7 @@ function Router() {
       <Route path="/marketing-campaigns">{() => <ModulePage component={MarketingCampaignsPage} module="marketing_campaigns" />}</Route>
       <Route path="/marketing-social">{() => <ModulePage component={MarketingSocialPage} module="marketing" />}</Route>
       <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
+      <Route path="/influencer-contracts">{() => <ModulePage component={InfluencerContractsPage} module="marketing_influencers" />}</Route>
       <Route path="/marketing-calendar">{() => <ModulePage component={MarketingCalendarPage} module="marketing" />}</Route>
       <Route path="/marketing-tasks">{() => <ModulePage component={MarketingTasksPage} module="marketing_tasks" />}</Route>
       <Route path="/marketing-reports">{() => <ModulePage component={MarketingReportsPage} module="marketing" />}</Route>
