@@ -1,166 +1,457 @@
 import { Layout } from "@/components/layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
 import { 
-  Package, Hammer, Settings, Users, Building2, 
-  LayoutDashboard, Factory, CheckCircle, Megaphone, UserCheck, Calendar, 
-  Target, UsersRound, ClipboardList, Receipt, TrendingUp, Brain,
-  FileBarChart, PieChart, Shield, BarChart3, Briefcase
+  Package, Hammer, Settings, Users, ArrowLeftRight, Building2, 
+  FileSignature, Wallet, Calculator, Boxes, AlertTriangle, CalendarCheck, 
+  ClipboardEdit, HardHat, FileSearch, HardDrive, Link2, LayoutDashboard, 
+  ChevronLeft, Factory, Clock, CheckCircle, Megaphone, UserCheck, Calendar, 
+  Target, UsersRound, ClipboardList, Receipt, TrendingUp, Brain, Upload,
+  FileBarChart, Gift, PieChart, Shield, Building, Briefcase, BarChart3,
+  Zap, Sun, Moon, CloudSun, Loader2, RefreshCw
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
-interface ModuleIconProps {
+interface ModuleCardProps {
   title: string;
+  description: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
-  gradient: string;
+  color: string;
+  badge?: string;
+  items?: { label: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
 }
 
-function ModuleIcon({ title, icon: Icon, href, gradient }: ModuleIconProps) {
+interface QuickStatProps {
+  title: string;
+  value: string | number;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  trend?: { value: number; isPositive: boolean };
+  href?: string;
+}
+
+function QuickStat({ title, value, icon: Icon, color, trend, href }: QuickStatProps) {
+  const content = (
+    <Card className={`${href ? 'hover:shadow-md cursor-pointer transition-all hover:border-primary/30' : ''}`}>
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="space-y-0.5 min-w-0">
+            <p className="text-[10px] text-muted-foreground truncate">{title}</p>
+            <p className="text-lg font-bold truncate">{value}</p>
+            {trend && (
+              <div className={`flex items-center gap-1 text-[10px] ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                <TrendingUp className={`w-2.5 h-2.5 ${!trend.isPositive && 'rotate-180'}`} />
+                <span>{trend.value}%</span>
+              </div>
+            )}
+          </div>
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
+            <Icon className="w-4 h-4 text-white" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
+}
+
+function ModuleCard({ title, description, icon: Icon, href, color, badge, items }: ModuleCardProps) {
+  const [, navigate] = useLocation();
+  
+  return (
+    <Card 
+      className="group hover:shadow-md transition-all duration-300 cursor-pointer border hover:border-primary/30 overflow-hidden h-full"
+      onClick={() => navigate(href)}
+      data-testid={`module-card-${href.replace('/', '')}`}
+    >
+      <CardHeader className="p-2.5 pb-1.5">
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-md flex items-center justify-center ${color} transition-transform group-hover:scale-110 shrink-0`}>
+            <Icon className="w-3.5 h-3.5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-xs font-semibold truncate">{title}</CardTitle>
+          </div>
+          {badge && (
+            <Badge variant="secondary" className="text-[9px] shrink-0">{badge}</Badge>
+          )}
+        </div>
+        <CardDescription className="text-[11px] leading-snug line-clamp-2 mt-1">{description}</CardDescription>
+      </CardHeader>
+      {items && items.length > 0 && (
+        <CardContent className="p-2.5 pt-0">
+          <div className="flex flex-wrap gap-1">
+            {items.slice(0, 3).map((item, index) => (
+              <Link key={index} href={item.href} onClick={(e) => e.stopPropagation()}>
+                <Badge 
+                  variant="outline" 
+                  className="flex items-center gap-0.5 hover:bg-secondary cursor-pointer transition-colors text-[9px] px-1 py-0"
+                >
+                  <item.icon className="w-2 h-2" />
+                  {item.label}
+                </Badge>
+              </Link>
+            ))}
+            {items.length > 3 && (
+              <Badge variant="outline" className="text-[9px] text-muted-foreground px-1 py-0">
+                +{items.length - 3}
+              </Badge>
+            )}
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+function QuickActionButton({ 
+  icon: Icon, 
+  label, 
+  href, 
+  color 
+}: { 
+  icon: React.ComponentType<{ className?: string }>; 
+  label: string; 
+  href: string; 
+  color: string;
+}) {
   return (
     <Link href={href}>
-      <div className="flex flex-col items-center gap-3 group cursor-pointer" data-testid={`module-icon-${href.replace('/', '')}`}>
-        <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl ${gradient} flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}>
-          <Icon className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+      <Button variant="outline" className="h-auto py-2 px-3 flex flex-col items-center gap-1.5 hover:border-primary/50 transition-all min-h-[40px]">
+        <div className={`w-7 h-7 rounded-md flex items-center justify-center ${color}`}>
+          <Icon className="w-3.5 h-3.5 text-white" />
         </div>
-        <span className="text-sm sm:text-base font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
-          {title}
-        </span>
-      </div>
+        <span className="text-[10px] font-medium">{label}</span>
+      </Button>
     </Link>
   );
 }
 
 export default function PlatformHomePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, activeBranch } = useAuth();
   const { canView } = usePermissions();
+  const [, navigate] = useLocation();
 
-  const modules: { title: string; icon: React.ComponentType<{ className?: string }>; href: string; gradient: string; module?: SystemModule }[] = [
-    // Operations
-    { title: "Production", icon: ClipboardList, href: "/production-dashboard", gradient: "bg-gradient-to-br from-blue-400 to-blue-600", module: "production" },
-    { title: "Operations", icon: Factory, href: "/operations", gradient: "bg-gradient-to-br from-indigo-400 to-indigo-600", module: "operations" },
-    { title: "Quality Control", icon: CheckCircle, href: "/quality-control", gradient: "bg-gradient-to-br from-green-400 to-green-600", module: "operations" },
-    { title: "Daily Production", icon: Calendar, href: "/daily-production", gradient: "bg-gradient-to-br from-cyan-400 to-cyan-600", module: "production" },
-    { title: "Products", icon: Package, href: "/products", gradient: "bg-gradient-to-br from-teal-400 to-teal-600", module: "operations" },
-    { title: "Targets", icon: Target, href: "/targets-dashboard", gradient: "bg-gradient-to-br from-violet-400 to-violet-600", module: "cashier_journal" },
-    
-    // Analytics
-    { title: "Sales Analytics", icon: PieChart, href: "/sales-analytics", gradient: "bg-gradient-to-br from-rose-400 to-rose-600", module: "cashier_journal" },
-    { title: "P&L Dashboard", icon: TrendingUp, href: "/pnl-dashboard", gradient: "bg-gradient-to-br from-emerald-400 to-emerald-600", module: "cashier_journal" },
-    { title: "Reports", icon: FileBarChart, href: "/reports", gradient: "bg-gradient-to-br from-amber-400 to-amber-600", module: "reports" },
-    { title: "Production Reports", icon: BarChart3, href: "/production-reports", gradient: "bg-gradient-to-br from-orange-400 to-orange-600", module: "production" },
-    { title: "Cashier Journal", icon: Receipt, href: "/cashier-journals", gradient: "bg-gradient-to-br from-lime-400 to-lime-600", module: "cashier_journal" },
-    { title: "Command Center", icon: Brain, href: "/production-dashboard", gradient: "bg-gradient-to-br from-purple-400 to-purple-600", module: "production" },
-    
-    // Admin
-    { title: "Employees", icon: UsersRound, href: "/branch-employees", gradient: "bg-gradient-to-br from-sky-400 to-sky-600", module: "branch_employees" },
-    { title: "Attendance", icon: UserCheck, href: "/attendance-dashboard", gradient: "bg-gradient-to-br from-fuchsia-400 to-fuchsia-600", module: "shifts" },
-    { title: "Branches", icon: Building2, href: "/branches", gradient: "bg-gradient-to-br from-yellow-400 to-yellow-600", module: "branches" },
-    { title: "Users", icon: Users, href: "/users", gradient: "bg-gradient-to-br from-pink-400 to-pink-600", module: "users" },
-    { title: "Security", icon: Shield, href: "/security-management", gradient: "bg-gradient-to-br from-red-400 to-red-600", module: "settings" },
-    { title: "Settings", icon: Settings, href: "/settings", gradient: "bg-gradient-to-br from-slate-400 to-slate-600", module: "settings" },
-    
-    // CEO Command
-    { title: "Marketing", icon: Megaphone, href: "/marketing", gradient: "bg-gradient-to-br from-pink-400 to-rose-600", module: "marketing" },
-    { title: "Projects", icon: Hammer, href: "/construction-projects", gradient: "bg-gradient-to-br from-orange-400 to-red-600", module: "construction_projects" },
-    { title: "Contractors", icon: Briefcase, href: "/contractors", gradient: "bg-gradient-to-br from-stone-400 to-stone-600", module: "construction_projects" },
-    { title: "Assets", icon: Package, href: "/inventory", gradient: "bg-gradient-to-br from-amber-400 to-yellow-600", module: "inventory" },
-    { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard", gradient: "bg-gradient-to-br from-blue-500 to-indigo-600", module: "dashboard" },
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ["/api/dashboard/stats", activeBranch?.id],
+    queryFn: async () => {
+      const branchParam = activeBranch?.id ? `?branchId=${activeBranch.id}` : '';
+      const res = await fetch(`/api/dashboard/stats${branchParam}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: branchesCount } = useQuery({
+    queryKey: ["/api/branches/count"],
+    queryFn: async () => {
+      const res = await fetch("/api/branches");
+      if (!res.ok) return 0;
+      const branches = await res.json();
+      return branches.length;
+    },
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: employeesCount } = useQuery({
+    queryKey: ["/api/branch-employees/count"],
+    queryFn: async () => {
+      const res = await fetch("/api/branch-employees");
+      if (!res.ok) return 0;
+      const employees = await res.json();
+      return employees.length;
+    },
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const modules: (ModuleCardProps & { module?: SystemModule })[] = [
+    {
+      title: "الموارد البشرية",
+      description: "إدارة الموظفين والهيكل التنظيمي والحضور والورديات",
+      icon: UsersRound,
+      href: "/attendance-dashboard",
+      color: "bg-teal-500",
+      module: "branch_employees",
+      items: [
+        { label: "موظفو الفروع", href: "/branch-employees", icon: Users },
+        { label: "الهيكل التنظيمي", href: "/organizational-structure", icon: Building },
+        { label: "الحضور", href: "/attendance-dashboard", icon: UserCheck },
+        { label: "الورديات", href: "/shift-management", icon: Calendar },
+        { label: "التايم شيت", href: "/timesheet", icon: Clock },
+      ],
+    },
+    {
+      title: "الإنتاج",
+      description: "إدارة أوامر الإنتاج والتخطيط الذكي والتقارير",
+      icon: ClipboardList,
+      href: "/production-dashboard",
+      color: "bg-blue-500",
+      module: "production",
+      items: [
+        { label: "لوحة الإنتاج", href: "/production-dashboard", icon: LayoutDashboard },
+        { label: "أوامر الإنتاج", href: "/advanced-production-orders", icon: ClipboardEdit },
+        { label: "الإنتاج اليومي", href: "/daily-production", icon: CheckCircle },
+                { label: "تقارير الإنتاج", href: "/production-reports", icon: FileBarChart },
+      ],
+    },
+    {
+      title: "التشغيل",
+      description: "إدارة العمليات اليومية والمنتجات ومراقبة الجودة",
+      icon: Factory,
+      href: "/operations",
+      color: "bg-indigo-500",
+      module: "operations",
+      items: [
+        { label: "لوحة التشغيل", href: "/operations", icon: LayoutDashboard },
+        { label: "المنتجات", href: "/products", icon: Package },
+        { label: "مراقبة الجودة", href: "/quality-control", icon: CheckCircle },
+        { label: "بار العرض", href: "/display-bar-waste", icon: Boxes },
+      ],
+    },
+    {
+      title: "المبيعات والكاشير",
+      description: "يومية الكاشير والأهداف والحوافز وتحليلات المبيعات",
+      icon: Receipt,
+      href: "/cashier-journals",
+      color: "bg-emerald-500",
+      module: "cashier_journal",
+      items: [
+        { label: "يومية الكاشير", href: "/cashier-journals", icon: Wallet },
+        { label: "تحليلات المبيعات", href: "/sales-analytics", icon: PieChart },
+        { label: "الأهداف", href: "/targets-dashboard", icon: Target },
+        { label: "الحوافز", href: "/incentives-management", icon: Gift },
+        { label: "P&L", href: "/pnl-dashboard", icon: TrendingUp },
+      ],
+    },
+    {
+      title: "الأصول والجرد",
+      description: "إدارة ومتابعة جميع أصول الشركة والمعدات والمخزون",
+      icon: Package,
+      href: "/inventory",
+      color: "bg-amber-500",
+      module: "inventory",
+      items: [
+        { label: "جرد الأصول", href: "/inventory", icon: Boxes },
+        { label: "إدارة الأصول", href: "/manage", icon: ClipboardEdit },
+        { label: "التحويلات", href: "/asset-transfers", icon: ArrowLeftRight },
+        { label: "الفروع", href: "/branches", icon: Building2 },
+        { label: "الصيانة", href: "/maintenance", icon: AlertTriangle },
+      ],
+    },
+    {
+      title: "المشاريع والإنشاءات",
+      description: "تتبع مشاريع البناء والتجديد والمقاولين والميزانيات",
+      icon: Hammer,
+      href: "/construction-projects",
+      color: "bg-orange-500",
+      module: "construction_projects",
+      items: [
+        { label: "المشاريع", href: "/construction-projects", icon: Briefcase },
+        { label: "المقاولون", href: "/contractors", icon: HardHat },
+        { label: "العقود", href: "/contracts", icon: FileSignature },
+        { label: "طلبات الدفع", href: "/payment-requests", icon: Wallet },
+        { label: "الميزانية", href: "/budget-planning", icon: Calculator },
+      ],
+    },
+    {
+      title: "التسويق",
+      description: "إدارة الحملات التسويقية والمؤثرين وتحليل الأداء",
+      icon: Megaphone,
+      href: "/marketing",
+      color: "bg-pink-500",
+      module: "marketing",
+      items: [
+        { label: "لوحة التسويق", href: "/marketing", icon: LayoutDashboard },
+        { label: "الحملات", href: "/marketing-campaigns", icon: Target },
+        { label: "المؤثرين", href: "/marketing-influencers", icon: UserCheck },
+        { label: "فريق التسويق", href: "/marketing-team", icon: Users },
+      ],
+    },
+    {
+      title: "الإعدادات والنظام",
+      description: "إدارة الأمان والمستخدمين والصلاحيات والنسخ الاحتياطية",
+      icon: Settings,
+      href: "/settings",
+      color: "bg-slate-500",
+      module: "settings",
+      items: [
+        { label: "لوحة الإعدادات", href: "/settings", icon: Settings },
+        { label: "الأمان", href: "/security-management", icon: Shield },
+        { label: "المستخدمين", href: "/users", icon: Users },
+        { label: "الصلاحيات", href: "/rbac-management", icon: Shield },
+        { label: "النسخ الاحتياطي", href: "/backups", icon: HardDrive },
+      ],
+    },
   ];
+
+  const allQuickActions: { icon: React.ComponentType<{ className?: string }>; label: string; href: string; color: string; module: SystemModule }[] = [
+    { icon: Users, label: "إضافة موظف", href: "/branch-employees", color: "bg-teal-500", module: "branch_employees" },
+    { icon: ClipboardEdit, label: "أمر إنتاج", href: "/advanced-production-orders", color: "bg-blue-500", module: "production" },
+    { icon: Wallet, label: "يومية كاشير", href: "/cashier-journals", color: "bg-emerald-500", module: "cashier_journal" },
+    { icon: UserCheck, label: "تسجيل حضور", href: "/attendance-check", color: "bg-purple-500", module: "shifts" },
+    { icon: Boxes, label: "جرد الأصول", href: "/inventory", color: "bg-amber-500", module: "inventory" },
+    { icon: FileBarChart, label: "التقارير", href: "/reports", color: "bg-indigo-500", module: "reports" },
+  ];
+
+  // Filter quick actions by permissions
+  const quickActions = allQuickActions.filter(action => canView(action.module));
 
   const accessibleModules = modules.filter(module => {
     if (!module.module) return true;
     return canView(module.module);
   });
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return { text: "صباح الخير", icon: Sun, color: "text-amber-500" };
+    if (hour >= 12 && hour < 17) return { text: "مساء الخير", icon: CloudSun, color: "text-orange-500" };
+    return { text: "مساء الخير", icon: Moon, color: "text-indigo-500" };
+  };
+
+  const greeting = getGreeting();
+  const GreetingIcon = greeting.icon;
+
+  const formatDate = () => {
+    const options: Intl.DateTimeFormatOptions = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return new Date().toLocaleDateString('ar-SA', options);
+  };
+
+  const formatTime = () => {
+    return new Date().toLocaleTimeString('ar-SA', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        {/* Hero Section */}
-        <div className="text-center py-12 sm:py-16 px-4">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-800 mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
-            All your business on{" "}
-            <span className="relative inline-block">
-              <span className="relative z-10 text-amber-600">one platform</span>
-              <span className="absolute bottom-1 left-0 w-full h-3 bg-amber-200/60 -z-0 rounded"></span>
-            </span>
-          </h1>
-          <p className="text-xl sm:text-2xl text-slate-600 font-light italic" style={{ fontFamily: "'Playfair Display', serif" }}>
-            Simple, efficient, yet powerful!
-          </p>
-          
-          {isAuthenticated && user && (
-            <div className="mt-6 inline-flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
-                {user.firstName?.charAt(0) || user.username?.charAt(0) || "U"}
-              </div>
-              <span className="text-slate-700 font-medium">
-                Welcome, {user.firstName || user.username}
-              </span>
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-4 sm:p-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <GreetingIcon className={`w-6 h-6 sm:w-8 sm:h-8 ${greeting.color}`} />
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
+                {greeting.text}{user?.firstName ? `, ${user.firstName}` : ""}
+              </h1>
             </div>
-          )}
-        </div>
-
-        {/* Category Labels */}
-        <div className="max-w-6xl mx-auto px-4 pb-16">
-          {/* Operations Section */}
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-              <h2 className="text-lg font-semibold text-slate-700 uppercase tracking-wide">Operations</h2>
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6 sm:gap-8">
-              {accessibleModules.slice(0, 6).map((module, index) => (
-                <ModuleIcon key={index} {...module} />
-              ))}
-            </div>
+            <p className="text-muted-foreground">
+              مرحباً بك في منصة بتر بيكري الشاملة
+            </p>
+            {activeBranch && (
+              <Badge variant="outline" className="text-xs">
+                <Building2 className="w-3 h-3 ml-1" />
+                {activeBranch.name}
+              </Badge>
+            )}
           </div>
-
-          {/* Analytics Section */}
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-6 bg-emerald-500 rounded-full"></div>
-              <h2 className="text-lg font-semibold text-slate-700 uppercase tracking-wide">Analytics</h2>
+          <div className="flex flex-col items-end gap-1 text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="w-4 h-4" />
+              <span>{formatDate()}</span>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6 sm:gap-8">
-              {accessibleModules.slice(6, 12).map((module, index) => (
-                <ModuleIcon key={index} {...module} />
-              ))}
-            </div>
-          </div>
-
-          {/* Admin Section */}
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
-              <h2 className="text-lg font-semibold text-slate-700 uppercase tracking-wide">Admin</h2>
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6 sm:gap-8">
-              {accessibleModules.slice(12, 18).map((module, index) => (
-                <ModuleIcon key={index} {...module} />
-              ))}
-            </div>
-          </div>
-
-          {/* CEO Command Section */}
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-6 bg-amber-500 rounded-full"></div>
-              <h2 className="text-lg font-semibold text-slate-700 uppercase tracking-wide">CEO Command</h2>
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6 sm:gap-8">
-              {accessibleModules.slice(18).map((module, index) => (
-                <ModuleIcon key={index} {...module} />
-              ))}
+            <div className="flex items-center gap-2 text-sm">
+              <Clock className="w-4 h-4" />
+              <span>{formatTime()}</span>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="text-center py-8 text-slate-400 text-sm">
-          <p>Butter Bakery Management Platform</p>
+        {isAuthenticated && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {canView("branches") && (
+              <QuickStat
+                title="الفروع"
+                value={branchesCount || 0}
+                icon={Building2}
+                color="bg-amber-500"
+                href="/branches"
+              />
+            )}
+            {canView("branch_employees") && (
+              <QuickStat
+                title="الموظفين"
+                value={employeesCount || 0}
+                icon={Users}
+                color="bg-teal-500"
+                href="/branch-employees"
+              />
+            )}
+            {canView("production") && (
+              <QuickStat
+                title="أوامر الإنتاج اليوم"
+                value={stats?.productionOrders || 0}
+                icon={ClipboardList}
+                color="bg-blue-500"
+                href="/advanced-production-orders"
+              />
+            )}
+            {canView("cashier_journal") && (
+              <QuickStat
+                title="مبيعات اليوم"
+                value={stats?.todaySales ? `${stats.todaySales.toLocaleString()} ر.س` : "0 ر.س"}
+                icon={Receipt}
+                color="bg-emerald-500"
+                href="/cashier-journals"
+              />
+            )}
+          </div>
+        )}
+
+        <div>
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <LayoutDashboard className="w-5 h-5 text-primary" />
+            أقسام النظام
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {accessibleModules.map((module, index) => (
+              <ModuleCard key={index} {...module} />
+            ))}
+          </div>
         </div>
+
+        {!isAuthenticated && (
+          <div className="text-center py-8">
+            <Card className="max-w-md mx-auto">
+              <CardHeader>
+                <CardTitle className="text-lg">تسجيل الدخول مطلوب</CardTitle>
+                <CardDescription>
+                  للوصول إلى جميع ميزات المنصة، يرجى تسجيل الدخول أولاً
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/login">
+                  <Button className="w-full h-11 sm:h-9" data-testid="button-login-home">
+                    <ChevronLeft className="w-4 h-4 ml-2" />
+                    تسجيل الدخول
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </Layout>
   );
