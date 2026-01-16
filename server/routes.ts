@@ -12596,12 +12596,12 @@ export async function registerRoutes(
 
       const formatDate = (dateStr: string | null) => {
         if (!dateStr) return "-";
-        return new Date(dateStr).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" });
+        return new Date(dateStr).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
       };
 
       const formatCurrency = (amount: number | null) => {
         if (!amount) return "-";
-        return new Intl.NumberFormat("ar-SA").format(amount) + " ريال سعودي";
+        return new Intl.NumberFormat("en-US").format(amount) + " ريال سعودي";
       };
 
       const htmlContent = `
@@ -12775,7 +12775,7 @@ export async function registerRoutes(
 
             <div class="footer">
               <p>هذا العقد صادر من نظام منصة بتر بيكري الشاملة</p>
-              <p>تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}</p>
+              <p>تاريخ الإصدار: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
             </div>
           </div>
         </body>

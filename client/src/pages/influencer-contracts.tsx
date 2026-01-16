@@ -391,12 +391,12 @@ export default function InfluencerContractsPage() {
 
   const formatCurrency = (amount: number | null) => {
     if (!amount) return "-";
-    return new Intl.NumberFormat("ar-SA").format(amount) + " ر.س";
+    return new Intl.NumberFormat("en-US").format(amount) + " ر.س";
   };
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString("ar-SA");
+    return new Date(dateStr).toLocaleDateString("en-US");
   };
 
   const stats = {
