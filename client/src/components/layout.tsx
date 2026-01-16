@@ -53,7 +53,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user, isLoading, isAuthenticated, isAdmin, logout, isLoggingOut, activeBranch, allowedBranches, switchBranch, isSwitchingBranch } = useAuth();
   const { canView } = usePermissions();
-  const { t, i18n } = useTranslation("platform-home");
+  const { t, i18n } = useTranslation("platformHome");
   const currentLang = i18n.language;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     hr: true,
