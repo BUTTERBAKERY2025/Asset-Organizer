@@ -2396,7 +2396,7 @@ export default function CashierJournalFormPage() {
         </div>
 
         {/* Sticky Bottom Action Bar - iPad Optimized */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-2 md:p-3">
+        <div className="fixed bottom-0 left-0 right-0 md:right-64 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-2 md:p-3">
           <div className="max-w-7xl mx-auto flex flex-col gap-2">
             {/* Quick Add Payment Buttons - Always visible */}
             {!isReadOnly && (
