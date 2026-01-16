@@ -19,7 +19,8 @@ import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
-import { ar } from "date-fns/locale";
+import { ar, enUS } from "date-fns/locale";
+import { useTranslation } from "react-i18next";
 import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord, BranchEmployee } from "@shared/schema";
 import * as XLSX from "xlsx";
 
@@ -34,6 +35,10 @@ interface ScheduleCell {
 }
 
 export default function ShiftManagementPage() {
+  const { t, i18n } = useTranslation("hr");
+  const isRTL = i18n.language === "ar";
+  const dateLocale = isRTL ? ar : enUS;
+  const DAYS = isRTL ? DAYS_AR : DAYS_EN;
   const [activeTab, setActiveTab] = useState("schedule");
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
@@ -1016,7 +1021,7 @@ export default function ShiftManagementPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -1029,18 +1034,18 @@ export default function ShiftManagementPage() {
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary" data-testid="page-title">جدولة الدوام</h1>
-              <p className="text-muted-foreground mt-1">إنشاء وإدارة جداول دوام الموظفين للفروع</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary" data-testid="page-title">{t("shiftManagement.pageTitle")}</h1>
+              <p className="text-muted-foreground mt-1">{t("shiftManagement.pageDescription")}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
               <SelectTrigger className="w-48 h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
                 <Building2 className="w-4 h-4 ml-2" />
-                <SelectValue placeholder="اختر الفرع" />
+                <SelectValue placeholder={t("shiftManagement.selectBranch")} />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
-                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                {canSelectBranch && <SelectItem value="all">{t("shiftManagement.allBranches")}</SelectItem>}
                 {branches?.map(branch => (
                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                 ))}
@@ -1053,24 +1058,24 @@ export default function ShiftManagementPage() {
           <Card>
             <CardContent className="py-12 text-center">
               <Building2 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">اختر الفرع</h3>
-              <p className="text-muted-foreground">يرجى اختيار فرع محدد لعرض وإدارة جدول الدوام</p>
+              <h3 className="text-lg font-semibold mb-2">{t("shiftManagement.selectBranchFirst")}</h3>
+              <p className="text-muted-foreground">{t("shiftManagement.selectBranchMessage")}</p>
             </CardContent>
           </Card>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid grid-cols-4 w-[600px]">
               <TabsTrigger value="schedule" className="gap-2" data-testid="tab-schedule">
-                <CalendarDays className="w-4 h-4" />جدول الدوام
+                <CalendarDays className="w-4 h-4" />{t("shiftManagement.schedule")}
               </TabsTrigger>
               <TabsTrigger value="attendance" className="gap-2" data-testid="tab-attendance">
-                <UserCheck className="w-4 h-4" />سجل الحضور
+                <UserCheck className="w-4 h-4" />{t("shiftManagement.attendanceRecord")}
               </TabsTrigger>
               <TabsTrigger value="reports" className="gap-2" data-testid="tab-reports">
-                <FileText className="w-4 h-4" />التقارير
+                <FileText className="w-4 h-4" />{t("shiftManagement.reports")}
               </TabsTrigger>
               <TabsTrigger value="settings" className="gap-2" data-testid="tab-settings">
-                <Clock className="w-4 h-4" />إعدادات الورديات
+                <Clock className="w-4 h-4" />{t("shiftManagement.shiftSettings")}
               </TabsTrigger>
             </TabsList>
 
@@ -1081,10 +1086,10 @@ export default function ShiftManagementPage() {
                     <div>
                       <CardTitle className="flex items-center gap-2">
                         <CalendarDays className="w-5 h-5" />
-                        جدول الدوام الأسبوعي - {getBranchName(selectedBranch)}
+                        {t("shiftManagement.weeklySchedule")} - {getBranchName(selectedBranch)}
                       </CardTitle>
                       <CardDescription className="mt-1">
-                        {format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}
+                        {format(currentWeekStart, "dd MMMM yyyy", { locale: dateLocale })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: dateLocale })}
                       </CardDescription>
                     </div>
                     <div className="flex gap-2 items-center">
@@ -1092,7 +1097,7 @@ export default function ShiftManagementPage() {
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                       <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 6 }))} className="h-11 sm:h-9" data-testid="btn-current-week">
-                        هذا الأسبوع
+                        {t("shiftManagement.thisWeek")}
                       </Button>
                       <Button variant="outline" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-next-week">
                         <ChevronLeft className="w-4 h-4" />
@@ -1101,31 +1106,31 @@ export default function ShiftManagementPage() {
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" className="gap-2 h-11 sm:h-9" disabled={isExporting || isExportingPdf} data-testid="btn-export-schedule">
                             {(isExporting || isExportingPdf) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                            تصدير
+                            {t("shiftManagement.export")}
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem onClick={exportScheduleToExcel} className="gap-2 cursor-pointer" data-testid="btn-export-schedule-excel">
                             <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                            تصدير Excel
+                            {t("shiftManagement.exportExcel")}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={exportScheduleToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-schedule-pdf">
                             <File className="w-4 h-4 text-red-600" />
-                            تصدير PDF
+                            {t("shiftManagement.exportPdf")}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={printSchedule} className="gap-2 cursor-pointer" data-testid="btn-print-schedule">
                             <Printer className="w-4 h-4 text-blue-600" />
-                            طباعة
+                            {t("shiftManagement.print")}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={downloadImportTemplate} className="gap-2 cursor-pointer" data-testid="btn-download-template">
                             <Download className="w-4 h-4 text-amber-600" />
-                            تحميل نموذج الاستيراد
+                            {t("shiftManagement.downloadTemplate")}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2 cursor-pointer" data-testid="btn-import-excel">
                             <Upload className="w-4 h-4 text-purple-600" />
-                            استيراد من Excel
+                            {t("shiftManagement.importFromExcel")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1144,7 +1149,7 @@ export default function ShiftManagementPage() {
                     <Select value={selectedShiftProfile} onValueChange={setSelectedShiftProfile}>
                       <SelectTrigger className="w-48 h-11 sm:h-10" data-testid="select-shift-profile">
                         <Clock className="w-4 h-4 ml-2" />
-                        <SelectValue placeholder="اختر الوردية" />
+                        <SelectValue placeholder={t("shiftManagement.selectShift")} />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
                         {activeShiftProfiles.length > 0 ? (
@@ -1155,25 +1160,25 @@ export default function ShiftManagementPage() {
                           ))
                         ) : (
                           <>
-                            <SelectItem value="morning">الوردية الصباحية (06:00 - 14:00)</SelectItem>
-                            <SelectItem value="evening">الوردية المسائية (14:00 - 22:00)</SelectItem>
-                            <SelectItem value="night">الوردية الليلية (22:00 - 06:00)</SelectItem>
+                            <SelectItem value="morning">{t("shiftManagement.morningShift")} (06:00 - 14:00)</SelectItem>
+                            <SelectItem value="evening">{t("shiftManagement.eveningShift")} (14:00 - 22:00)</SelectItem>
+                            <SelectItem value="night">{t("shiftManagement.nightShift")} (22:00 - 06:00)</SelectItem>
                           </>
                         )}
                       </SelectContent>
                     </Select>
                     <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2 h-11 sm:h-9" data-testid="btn-apply-default">
                       <Users className="w-4 h-4" />
-                      تطبيق على الجميع
+                      {t("shiftManagement.applyAll")}
                     </Button>
                     <Button variant="outline" onClick={copyToNextWeek} className="gap-2 h-11 sm:h-9" data-testid="btn-copy-next-week">
                       <Copy className="w-4 h-4" />
-                      نسخ للأسبوع القادم
+                      {t("shiftManagement.copyToNextWeek")}
                     </Button>
                     {hasUnsavedChanges && (
                       <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2 h-11 sm:h-9" data-testid="btn-save-schedule">
                         <Save className="w-4 h-4" />
-                        {saveSchedulesMutation.isPending ? "جاري الحفظ..." : "حفظ الجدول"}
+                        {saveSchedulesMutation.isPending ? t("common.loading") : t("shiftManagement.save")}
                       </Button>
                     )}
                   </div>
@@ -1181,19 +1186,19 @@ export default function ShiftManagementPage() {
                   {filteredEmployees.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                      <p>لا يوجد موظفين في هذا الفرع</p>
+                      <p>{t("shiftManagement.noEmployeesInBranch")}</p>
                     </div>
                   ) : (
                     <div className="rounded-md border overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
-                            <TableHead className="text-right sticky right-0 bg-muted/50 z-10 min-w-[280px] font-bold">
-                              الموظف / الوردية
+                            <TableHead className={`${isRTL ? 'text-right sticky right-0' : 'text-left sticky left-0'} bg-muted/50 z-10 min-w-[280px] font-bold`}>
+                              {t("shiftManagement.employee")}
                             </TableHead>
                             {weekDates.map((date, index) => (
                               <TableHead key={index} className={`text-center min-w-[140px] ${isToday(date) ? "bg-primary/10" : ""}`}>
-                                <div className="font-bold">{DAYS_AR[index]}</div>
+                                <div className="font-bold">{DAYS[index]}</div>
                                 <div className={`text-sm ${isToday(date) ? "text-primary font-bold" : "text-muted-foreground"}`}>
                                   {format(date, "dd/MM")}
                                 </div>
@@ -1207,26 +1212,26 @@ export default function ShiftManagementPage() {
                             const linkedUserId = employee.linkedUserId || empIdStr;
                             return (
                             <TableRow key={employee.id} data-testid={`row-employee-${employee.id}`}>
-                              <TableCell className="font-medium sticky right-0 bg-background z-10 border-l min-w-[280px]">
+                              <TableCell className={`font-medium ${isRTL ? 'sticky right-0 border-l' : 'sticky left-0 border-r'} bg-background z-10 min-w-[280px]`}>
                                 <div className="flex items-center justify-between">
                                   <div className="font-semibold">{employee.employeeName}</div>
                                   <div className="flex gap-1">
                                     {!hasOffDays(empIdStr) && Object.keys(scheduleData[empIdStr] || {}).length > 0 && (
-                                      <Badge variant="destructive" className="text-[10px] px-1 py-0">بدون إجازة</Badge>
+                                      <Badge variant="destructive" className="text-[10px] px-1 py-0">{isRTL ? 'بدون إجازة' : 'No Off'}</Badge>
                                     )}
                                     {calculateEmployeeWorkHours(empIdStr) > 0 && (
-                                      <Badge variant="secondary" className="text-[10px] px-1 py-0">{calculateEmployeeWorkHours(empIdStr)}س</Badge>
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0">{calculateEmployeeWorkHours(empIdStr)}{isRTL ? 'س' : 'h'}</Badge>
                                     )}
                                   </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground mb-2">{employee.jobTitle || "موظف"}</div>
+                                <div className="text-xs text-muted-foreground mb-2">{employee.jobTitle || t("shiftManagement.employee")}</div>
                                 <div className="flex gap-1 items-center">
                                   <Select 
                                     value={getEmployeeShiftSelection(empIdStr)} 
                                     onValueChange={(val) => setEmployeeShiftSelection(empIdStr, val)}
                                   >
                                     <SelectTrigger className="h-7 text-xs w-28" data-testid={`select-shift-${employee.id}`}>
-                                      <SelectValue placeholder="الوردية" />
+                                      <SelectValue placeholder={t("shiftManagement.selectShift")} />
                                     </SelectTrigger>
                                     <SelectContent className="max-h-60 overflow-y-auto">
                                       {activeShiftProfiles.length > 0 ? (
@@ -1237,9 +1242,9 @@ export default function ShiftManagementPage() {
                                         ))
                                       ) : (
                                         <>
-                                          <SelectItem value="morning" className="text-xs">صباحية</SelectItem>
-                                          <SelectItem value="evening" className="text-xs">مسائية</SelectItem>
-                                          <SelectItem value="night" className="text-xs">ليلية</SelectItem>
+                                          <SelectItem value="morning" className="text-xs">{isRTL ? 'صباحية' : 'Morning'}</SelectItem>
+                                          <SelectItem value="evening" className="text-xs">{isRTL ? 'مسائية' : 'Evening'}</SelectItem>
+                                          <SelectItem value="night" className="text-xs">{isRTL ? 'ليلية' : 'Night'}</SelectItem>
                                         </>
                                       )}
                                     </SelectContent>
@@ -1251,7 +1256,7 @@ export default function ShiftManagementPage() {
                                     onClick={() => applyShiftToEmployee(empIdStr)}
                                     data-testid={`btn-apply-shift-${employee.id}`}
                                   >
-                                    تطبيق
+                                    {t("shiftManagement.applyShift")}
                                   </Button>
                                 </div>
                               </TableCell>
@@ -1269,12 +1274,12 @@ export default function ShiftManagementPage() {
                                           onCheckedChange={(checked) => handleScheduleChange(empIdStr, dateStr, "isOff", checked as boolean)}
                                           data-testid={`checkbox-off-${employee.id}-${dateStr}`}
                                         />
-                                        <span className="text-xs">إجازة</span>
+                                        <span className="text-xs">{t("shiftManagement.off")}</span>
                                       </div>
                                       {!cellData.isOff && (
                                         <div className="space-y-1">
                                           <div className="flex items-center gap-1">
-                                            <span className="text-xs text-muted-foreground w-8">من</span>
+                                            <span className="text-xs text-muted-foreground w-8">{t("common.from")}</span>
                                             <Input
                                               type="time"
                                               value={cellData.startTime}
@@ -1284,7 +1289,7 @@ export default function ShiftManagementPage() {
                                             />
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            <span className="text-xs text-muted-foreground w-8">إلى</span>
+                                            <span className="text-xs text-muted-foreground w-8">{t("common.to")}</span>
                                             <Input
                                               type="time"
                                               value={cellData.endTime}
@@ -1297,7 +1302,7 @@ export default function ShiftManagementPage() {
                                       )}
                                       {cellData.isOff && (
                                         <div className="text-center">
-                                          <Badge variant="secondary" className="text-xs">إجازة</Badge>
+                                          <Badge variant="secondary" className="text-xs">{t("shiftManagement.off")}</Badge>
                                         </div>
                                       )}
                                       {attendance && (

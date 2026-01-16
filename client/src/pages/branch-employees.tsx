@@ -29,6 +29,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useReactToPrint } from "react-to-print";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import * as XLSX from "xlsx";
 import {
   Users,
@@ -798,6 +799,8 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
 }
 
 export default function BranchEmployeesPage() {
+  const { t, i18n } = useTranslation("hr");
+  const isRTL = i18n.language === "ar";
   const [location, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -1623,29 +1626,29 @@ export default function BranchEmployeesPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
-              <ChevronLeft className="w-5 h-5" />
+              {isRTL ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">موظفي الفروع</h1>
-              <p className="text-gray-500 text-sm sm:text-base">إدارة بيانات الموظفين والرواتب والمستندات</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t("branchEmployees.pageTitle")}</h1>
+              <p className="text-gray-500 text-sm sm:text-base">{t("branchEmployees.pageDescription")}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" className="h-11 sm:h-9" onClick={exportToExcel} data-testid="button-export-excel">
-              <FileSpreadsheet className="w-4 h-4 ml-2" />
+              <FileSpreadsheet className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
               Excel
             </Button>
             <Button variant="outline" className="h-11 sm:h-9" onClick={exportToPDF} data-testid="button-export-pdf">
-              <Download className="w-4 h-4 ml-2" />
+              <Download className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
               PDF
             </Button>
             <Button variant="outline" className="h-11 sm:h-9" onClick={() => handlePrint()} data-testid="button-print">
-              <Printer className="w-4 h-4 ml-2" />
-              طباعة
+              <Printer className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+              {t("branchEmployees.print")}
             </Button>
             <input
               type="file"
@@ -1656,12 +1659,12 @@ export default function BranchEmployeesPage() {
               data-testid="input-import-file"
             />
             <Button variant="outline" className="h-11 sm:h-9" onClick={() => fileInputRef.current?.click()} data-testid="button-import">
-              <Upload className="w-4 h-4 ml-2" />
-              استيراد
+              <Upload className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+              {isRTL ? "استيراد" : "Import"}
             </Button>
             <Button className="bg-teal-600 hover:bg-teal-700 text-white h-11 sm:h-9" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
-              <Network className="w-4 h-4 ml-2" />
-              الهيكل الوظيفي
+              <Network className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+              {t("branchEmployees.orgStructure")}
             </Button>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
@@ -1672,8 +1675,8 @@ export default function BranchEmployeesPage() {
             }}>
               <DialogTrigger asChild>
                 <Button className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9" data-testid="button-add-employee">
-                  <Plus className="w-4 h-4 ml-2" />
-                  إضافة موظف
+                  <Plus className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                  {t("branchEmployees.addEmployee")}
                 </Button>
               </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" dir="rtl">
@@ -2016,15 +2019,15 @@ export default function BranchEmployeesPage() {
           <TabsList className="grid grid-cols-3 w-full max-w-[450px]">
             <TabsTrigger value="employees" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              الموظفين
+              {t("branchEmployees.tabs.employees")}
             </TabsTrigger>
             <TabsTrigger value="transfers" className="flex items-center gap-2" data-testid="tab-transfers">
               <Network className="w-4 h-4" />
-              نقل الموظفين
+              {t("branchEmployees.tabs.transfers")}
             </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="w-4 h-4" />
-              الإعدادات
+              {t("branchEmployees.tabs.settings")}
             </TabsTrigger>
           </TabsList>
 
@@ -2037,7 +2040,7 @@ export default function BranchEmployeesPage() {
                   <Users className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">إجمالي الموظفين</p>
+                  <p className="text-sm text-gray-500">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
                   <p className="text-2xl font-bold" data-testid="text-total-employees">{formatNumber(stats?.totalEmployees || 0)}</p>
                 </div>
               </div>
@@ -2050,7 +2053,7 @@ export default function BranchEmployeesPage() {
                   <DollarSign className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">إجمالي الرواتب</p>
+                  <p className="text-sm text-gray-500">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
                   <p className="text-2xl font-bold" data-testid="text-total-salaries">{formatCurrency(stats?.totalSalaries)}</p>
                 </div>
               </div>
@@ -2063,7 +2066,7 @@ export default function BranchEmployeesPage() {
                   <Globe className="w-6 h-6 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">عدد الجنسيات</p>
+                  <p className="text-sm text-gray-500">{isRTL ? "عدد الجنسيات" : "Nationalities"}</p>
                   <p className="text-2xl font-bold" data-testid="text-nationalities-count">{formatNumber(stats?.byNationality?.length || 0)}</p>
                 </div>
               </div>
@@ -2076,7 +2079,7 @@ export default function BranchEmployeesPage() {
                   <Briefcase className="w-6 h-6 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">عدد الوظائف</p>
+                  <p className="text-sm text-gray-500">{isRTL ? "عدد الوظائف" : "Job Titles"}</p>
                   <p className="text-2xl font-bold" data-testid="text-jobs-count">{formatNumber(stats?.byJobTitle?.length || 0)}</p>
                 </div>
               </div>
@@ -2089,10 +2092,10 @@ export default function BranchEmployeesPage() {
             <Building className="w-4 h-4 text-gray-500 hidden sm:block" />
             <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
               <SelectTrigger className="w-40 sm:w-48 h-11 sm:h-10" data-testid="filter-branch">
-                <SelectValue placeholder="جميع الفروع" />
+                <SelectValue placeholder={t("branchEmployees.allBranches")} />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
-                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                {canSelectBranch && <SelectItem value="all">{t("branchEmployees.allBranches")}</SelectItem>}
                 {branches?.map((b: { id: string; name: string }) => (
                   <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                 ))}
@@ -2103,10 +2106,10 @@ export default function BranchEmployeesPage() {
             <Globe className="w-4 h-4 text-gray-500 hidden sm:block" />
             <Select value={selectedNationality} onValueChange={setSelectedNationality}>
               <SelectTrigger className="w-36 sm:w-40 h-11 sm:h-10" data-testid="filter-nationality">
-                <SelectValue placeholder="جميع الجنسيات" />
+                <SelectValue placeholder={isRTL ? "جميع الجنسيات" : "All Nationalities"} />
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
-                <SelectItem value="all">جميع الجنسيات</SelectItem>
+                <SelectItem value="all">{isRTL ? "جميع الجنسيات" : "All Nationalities"}</SelectItem>
                 {settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
                   <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
                 ))}

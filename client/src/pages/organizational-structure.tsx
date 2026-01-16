@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,6 +118,7 @@ function CollapsibleTreeNode({
   onEdit,
   onDelete,
   onAddChild,
+  t,
 }: {
   node: TreeNode;
   level: number;
@@ -126,6 +128,7 @@ function CollapsibleTreeNode({
   onEdit: (role: OrgJobRole) => void;
   onDelete: (role: OrgJobRole) => void;
   onAddChild: (parentId: number) => void;
+  t: (key: string, options?: any) => string;
 }) {
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
@@ -174,7 +177,7 @@ function CollapsibleTreeNode({
 
         {hasChildren && (
           <Badge className="bg-white/20 text-current border-0 text-xs">
-            {node.children.length} تابع
+            {node.children.length} {t("orgStructure.subordinate")}
           </Badge>
         )}
 
@@ -188,16 +191,16 @@ function CollapsibleTreeNode({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem onClick={() => onView(node)} className="text-xs gap-2">
-              <Eye className="h-3 w-3" /> عرض التفاصيل
+              <Eye className="h-3 w-3" /> {t("orgStructure.viewDetails")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onEdit(node)} className="text-xs gap-2">
-              <Edit className="h-3 w-3" /> تعديل
+              <Edit className="h-3 w-3" /> {t("orgStructure.edit")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onAddChild(node.id)} className="text-xs gap-2">
-              <Plus className="h-3 w-3" /> إضافة وظيفة تابعة
+              <Plus className="h-3 w-3" /> {t("orgStructure.addChildRole")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDelete(node)} className="text-xs gap-2 text-red-600">
-              <Trash2 className="h-3 w-3" /> حذف
+              <Trash2 className="h-3 w-3" /> {t("orgStructure.delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -224,6 +227,7 @@ function CollapsibleTreeNode({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onAddChild={onAddChild}
+                t={t}
               />
             </div>
           ))}
@@ -239,12 +243,14 @@ function CollapsibleOrgChart({
   onEdit,
   onDelete,
   onAddChild,
+  t,
 }: {
   tree: TreeNode[];
   onView: (role: OrgJobRole) => void;
   onEdit: (role: OrgJobRole) => void;
   onDelete: (role: OrgJobRole) => void;
   onAddChild: (parentId: number) => void;
+  t: (key: string, options?: any) => string;
 }) {
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(() => {
     const initial = new Set<number>();
@@ -291,11 +297,11 @@ function CollapsibleOrgChart({
       <div className="flex justify-end gap-2 mb-4">
         <Button variant="outline" size="sm" onClick={expandAll} className="text-xs gap-1 h-11 sm:h-9">
           <Maximize2 className="h-3 w-3" />
-          توسيع الكل
+          {t("orgStructure.expandAll")}
         </Button>
         <Button variant="outline" size="sm" onClick={collapseAll} className="text-xs gap-1 h-11 sm:h-9">
           <ZoomOut className="h-3 w-3" />
-          طي الكل
+          {t("orgStructure.collapseAll")}
         </Button>
       </div>
       <div className="space-y-1">
@@ -310,6 +316,7 @@ function CollapsibleOrgChart({
             onEdit={onEdit}
             onDelete={onDelete}
             onAddChild={onAddChild}
+            t={t}
           />
         ))}
       </div>
@@ -321,10 +328,12 @@ function RoleDetailsDialog({
   role,
   open,
   onClose,
+  t,
 }: {
   role: OrgJobRole | null;
   open: boolean;
   onClose: () => void;
+  t: (key: string, options?: any) => string;
 }) {
   if (!role) return null;
 
@@ -345,7 +354,7 @@ function RoleDetailsDialog({
               <DialogTitle className="text-xl mb-1">{role.titleAr}</DialogTitle>
               <p className="text-sm text-gray-500" dir="ltr">{role.titleEn}</p>
               <Badge variant="outline" className="mt-2 text-xs">
-                المستوى {role.level}
+                {t("orgStructure.level")} {role.level}
               </Badge>
             </div>
           </div>
@@ -353,8 +362,8 @@ function RoleDetailsDialog({
 
         <Tabs defaultValue="arabic" className="mt-4">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="arabic">العربية</TabsTrigger>
-            <TabsTrigger value="english">English</TabsTrigger>
+            <TabsTrigger value="arabic">{t("orgStructure.arabic")}</TabsTrigger>
+            <TabsTrigger value="english">{t("orgStructure.english")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="arabic" className="space-y-4 mt-4">
@@ -366,7 +375,7 @@ function RoleDetailsDialog({
               <div>
                 <h4 className="font-bold text-green-700 mb-3 flex items-center gap-2 text-sm">
                   <ClipboardList className="h-4 w-4" />
-                  المهام والمسؤوليات
+                  {t("orgStructure.responsibilities")}
                 </h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {responsibilitiesAr.map((item, idx) => (
@@ -385,7 +394,7 @@ function RoleDetailsDialog({
               <div>
                 <h4 className="font-bold text-green-700 mb-2 flex items-center gap-2 text-sm">
                   <Star className="h-4 w-4" />
-                  المؤهلات
+                  {t("orgStructure.qualifications")}
                 </h4>
                 <div className="flex flex-wrap gap-1">
                   {qualificationsAr.map((item, idx) => (
@@ -407,7 +416,7 @@ function RoleDetailsDialog({
               <div>
                 <h4 className="font-bold text-green-700 mb-3 flex items-center gap-2 text-sm">
                   <ClipboardList className="h-4 w-4" />
-                  Responsibilities
+                  {t("orgStructure.responsibilities")}
                 </h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {responsibilitiesEn.map((item, idx) => (
@@ -426,7 +435,7 @@ function RoleDetailsDialog({
               <div>
                 <h4 className="font-bold text-green-700 mb-2 flex items-center gap-2 text-sm">
                   <Star className="h-4 w-4" />
-                  Qualifications
+                  {t("orgStructure.qualifications")}
                 </h4>
                 <div className="flex flex-wrap gap-1" dir="ltr">
                   {qualificationsEn.map((item, idx) => (
@@ -444,11 +453,11 @@ function RoleDetailsDialog({
           <Link href={`/branch-employees?jobTitle=${encodeURIComponent(role.titleAr)}`}>
             <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9">
               <Users className="h-4 w-4" />
-              عرض الموظفين
+              {t("orgStructure.viewEmployees")}
             </Button>
           </Link>
           <Button onClick={onClose} size="sm" className="bg-green-600 hover:bg-green-700 h-11 sm:h-9">
-            إغلاق
+            {t("orgStructure.close")}
           </Button>
         </div>
       </DialogContent>
@@ -464,6 +473,7 @@ function RoleFormDialog({
   onClose,
   onSave,
   isLoading,
+  t,
 }: {
   role: OrgJobRole | null;
   roles: OrgJobRole[];
@@ -472,6 +482,7 @@ function RoleFormDialog({
   onClose: () => void;
   onSave: (data: any) => void;
   isLoading: boolean;
+  t: (key: string, options?: any) => string;
 }) {
   const getInitialFormData = useCallback(() => {
     const initialParentId = role?.parentId?.toString() || parentId?.toString() || "";
@@ -522,13 +533,13 @@ function RoleFormDialog({
   };
 
   const colorOptions = [
-    { value: "bg-green-400", label: "أخضر", gradient: "from-green-400 to-green-600" },
-    { value: "bg-teal-400", label: "فيروزي", gradient: "from-teal-400 to-teal-600" },
-    { value: "bg-cyan-400", label: "سماوي", gradient: "from-cyan-400 to-cyan-600" },
-    { value: "bg-blue-400", label: "أزرق", gradient: "from-blue-400 to-blue-600" },
-    { value: "bg-indigo-400", label: "نيلي", gradient: "from-indigo-400 to-indigo-600" },
-    { value: "bg-purple-400", label: "بنفسجي", gradient: "from-purple-400 to-purple-600" },
-    { value: "bg-amber-500", label: "ذهبي", gradient: "from-amber-400 to-amber-600" },
+    { value: "bg-green-400", label: t("orgStructure.colors.green"), gradient: "from-green-400 to-green-600" },
+    { value: "bg-teal-400", label: t("orgStructure.colors.teal"), gradient: "from-teal-400 to-teal-600" },
+    { value: "bg-cyan-400", label: t("orgStructure.colors.cyan"), gradient: "from-cyan-400 to-cyan-600" },
+    { value: "bg-blue-400", label: t("orgStructure.colors.blue"), gradient: "from-blue-400 to-blue-600" },
+    { value: "bg-indigo-400", label: t("orgStructure.colors.indigo"), gradient: "from-indigo-400 to-indigo-600" },
+    { value: "bg-purple-400", label: t("orgStructure.colors.purple"), gradient: "from-purple-400 to-purple-600" },
+    { value: "bg-amber-500", label: t("orgStructure.colors.gold"), gradient: "from-amber-400 to-amber-600" },
   ];
 
   return (
@@ -536,37 +547,35 @@ function RoleFormDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {role ? "تعديل الوظيفة" : parentId ? "إضافة وظيفة تابعة" : "إضافة وظيفة جديدة"}
+            {role ? t("orgStructure.editRole") : parentId ? t("orgStructure.addChildRoleTitle") : t("orgStructure.addNewRole")}
           </DialogTitle>
-          <DialogDescription>أدخل بيانات الوظيفة</DialogDescription>
+          <DialogDescription>{t("orgStructure.enterRoleData")}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
-              <TabsTrigger value="responsibilities">المهام</TabsTrigger>
-              <TabsTrigger value="qualifications">المؤهلات</TabsTrigger>
+              <TabsTrigger value="basic">{t("orgStructure.basicData")}</TabsTrigger>
+              <TabsTrigger value="responsibilities">{t("orgStructure.tasks")}</TabsTrigger>
+              <TabsTrigger value="qualifications">{t("orgStructure.qualifications")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>المسمى الوظيفي (عربي) *</Label>
+                  <Label>{t("orgStructure.jobTitleAr")} *</Label>
                   <Input
                     value={formData.titleAr}
                     onChange={(e) => setFormData({ ...formData, titleAr: e.target.value })}
-                    placeholder="مدير الفرع"
                     required
                     className="h-11 sm:h-10"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Job Title (English) *</Label>
+                  <Label>{t("orgStructure.jobTitleEn")} *</Label>
                   <Input
                     value={formData.titleEn}
                     onChange={(e) => setFormData({ ...formData, titleEn: e.target.value })}
-                    placeholder="Branch Manager"
                     required
                     dir="ltr"
                     className="h-11 sm:h-10"
@@ -576,20 +585,18 @@ function RoleFormDialog({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>الوصف (عربي)</Label>
+                  <Label>{t("orgStructure.descriptionAr")}</Label>
                   <Textarea
                     value={formData.summaryAr}
                     onChange={(e) => setFormData({ ...formData, summaryAr: e.target.value })}
-                    placeholder="وصف الوظيفة"
                     rows={2}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Description (English)</Label>
+                  <Label>{t("orgStructure.descriptionEn")}</Label>
                   <Textarea
                     value={formData.summaryEn}
                     onChange={(e) => setFormData({ ...formData, summaryEn: e.target.value })}
-                    placeholder="Job description"
                     rows={2}
                     dir="ltr"
                   />
@@ -598,16 +605,16 @@ function RoleFormDialog({
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>الوظيفة الأعلى</Label>
+                  <Label>{t("orgStructure.parentRole")}</Label>
                   <Select
                     value={formData.parentId || "__none__"}
                     onValueChange={(v) => setFormData({ ...formData, parentId: v === "__none__" ? "" : v })}
                   >
                     <SelectTrigger className="h-11 sm:h-10">
-                      <SelectValue placeholder="بدون" />
+                      <SelectValue placeholder={t("orgStructure.none")} />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto">
-                      <SelectItem value="__none__">بدون</SelectItem>
+                      <SelectItem value="__none__">{t("orgStructure.none")}</SelectItem>
                       {roles.filter(r => r.id !== role?.id).map((r) => (
                         <SelectItem key={r.id} value={r.id.toString()}>{r.titleAr}</SelectItem>
                       ))}
@@ -615,7 +622,7 @@ function RoleFormDialog({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>المستوى</Label>
+                  <Label>{t("orgStructure.level")}</Label>
                   <Input
                     type="number"
                     value={formData.level}
@@ -626,7 +633,7 @@ function RoleFormDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>اللون</Label>
+                  <Label>{t("orgStructure.color")}</Label>
                   <Select
                     value={formData.color}
                     onValueChange={(v) => setFormData({ ...formData, color: v })}
@@ -652,7 +659,7 @@ function RoleFormDialog({
             <TabsContent value="responsibilities" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>المهام (عربي) - سطر لكل مهمة</Label>
+                  <Label>{t("orgStructure.responsibilitiesAr")}</Label>
                   <Textarea
                     value={formData.responsibilitiesAr}
                     onChange={(e) => setFormData({ ...formData, responsibilitiesAr: e.target.value })}
@@ -660,7 +667,7 @@ function RoleFormDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Responsibilities (English)</Label>
+                  <Label>{t("orgStructure.responsibilitiesEn")}</Label>
                   <Textarea
                     value={formData.responsibilitiesEn}
                     onChange={(e) => setFormData({ ...formData, responsibilitiesEn: e.target.value })}
@@ -674,7 +681,7 @@ function RoleFormDialog({
             <TabsContent value="qualifications" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>المؤهلات (عربي)</Label>
+                  <Label>{t("orgStructure.qualificationsAr")}</Label>
                   <Textarea
                     value={formData.qualificationsAr}
                     onChange={(e) => setFormData({ ...formData, qualificationsAr: e.target.value })}
@@ -682,7 +689,7 @@ function RoleFormDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Qualifications (English)</Label>
+                  <Label>{t("orgStructure.qualificationsEn")}</Label>
                   <Textarea
                     value={formData.qualificationsEn}
                     onChange={(e) => setFormData({ ...formData, qualificationsEn: e.target.value })}
@@ -696,11 +703,11 @@ function RoleFormDialog({
 
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button type="button" variant="outline" onClick={onClose} className="h-11 sm:h-9">
-              إلغاء
+              {t("orgStructure.cancel")}
             </Button>
             <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700 min-w-[100px] h-11 sm:h-9">
               {isLoading && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
-              {role ? "حفظ" : "إضافة"}
+              {role ? t("orgStructure.save") : t("orgStructure.add")}
             </Button>
           </div>
         </form>
@@ -710,6 +717,8 @@ function RoleFormDialog({
 }
 
 export default function OrganizationalStructurePage() {
+  const { t, i18n } = useTranslation("hr");
+  const isRTL = i18n.language === "ar";
   const queryClient = useQueryClient();
   const printRef = useRef<HTMLDivElement>(null);
   const [selectedRole, setSelectedRole] = useState<OrgJobRole | null>(null);
@@ -820,51 +829,51 @@ export default function OrganizationalStructurePage() {
   return (
     <Layout>
       <TooltipProvider>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir="rtl">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir={isRTL ? "rtl" : "ltr"}>
           <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
           <div className="flex items-center justify-between mb-6 print:hidden">
             <div className="flex items-center gap-4">
               <Link href="/branch-employees">
                 <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9">
                   <ArrowLeft className="h-4 w-4" />
-                  العودة
+                  {t("orgStructure.back")}
                 </Button>
               </Link>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
                   <Network className="h-6 w-6 text-green-600" />
-                  الهيكل الوظيفي
+                  {t("orgStructure.pageTitle")}
                 </h1>
-                <p className="text-sm text-gray-500">إدارة التشغيل - Butter Bakery</p>
+                <p className="text-sm text-gray-500">{t("orgStructure.pageDescription")}</p>
               </div>
             </div>
             
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2 h-11 sm:h-9">
                 <Printer className="h-4 w-4" />
-                طباعة
+                {t("orgStructure.print")}
               </Button>
               <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2 h-11 sm:h-9">
                 <FileSpreadsheet className="h-4 w-4" />
-                تصدير
+                {t("orgStructure.export")}
               </Button>
               <Button type="button" size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 h-11 sm:h-9" data-testid="button-add-role">
                 <Plus className="h-4 w-4" />
-                إضافة وظيفة
+                {t("orgStructure.addRole")}
               </Button>
             </div>
           </div>
 
           <div ref={printRef} className="print:p-4">
             <div className="hidden print:block text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-800">الهيكل الوظيفي</h1>
-              <p className="text-gray-600">إدارة التشغيل - Butter Bakery</p>
+              <h1 className="text-3xl font-bold text-gray-800">{t("orgStructure.pageTitle")}</h1>
+              <p className="text-gray-600">{t("orgStructure.pageDescription")}</p>
             </div>
 
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24">
                 <Loader2 className="h-12 w-12 animate-spin text-green-600 mb-4" />
-                <p className="text-gray-500">جاري التحميل...</p>
+                <p className="text-gray-500">{t("orgStructure.loading")}</p>
               </div>
             ) : tree.length === 0 ? (
               <Card className="text-center py-16 bg-white/80 border-dashed border-2 border-gray-200">
@@ -872,11 +881,11 @@ export default function OrganizationalStructurePage() {
                   <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
                     <Network className="h-10 w-10 text-green-600" />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">لا توجد وظائف</h3>
-                  <p className="text-gray-500 mb-6">ابدأ بإضافة الوظيفة الأولى</p>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">{t("orgStructure.noRoles")}</h3>
+                  <p className="text-gray-500 mb-6">{t("orgStructure.startAddingRoles")}</p>
                   <Button onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 h-11 sm:h-9">
                     <Plus className="h-4 w-4" />
-                    إضافة أول وظيفة
+                    {t("orgStructure.addFirstRole")}
                   </Button>
                 </CardContent>
               </Card>
@@ -892,7 +901,7 @@ export default function OrganizationalStructurePage() {
                         </div>
                         <div>
                           <p className="text-xl font-bold">{roles.length}</p>
-                          <p className="text-xs opacity-90">إجمالي الوظائف</p>
+                          <p className="text-xs opacity-90">{t("orgStructure.totalRoles")}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -906,7 +915,7 @@ export default function OrganizationalStructurePage() {
                         </div>
                         <div>
                           <p className="text-xl font-bold">{Math.max(...roles.map((r: OrgJobRole) => r.level || 1))}</p>
-                          <p className="text-xs opacity-90">عدد المستويات</p>
+                          <p className="text-xs opacity-90">{t("orgStructure.levelsCount")}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -920,7 +929,7 @@ export default function OrganizationalStructurePage() {
                         </div>
                         <div>
                           <p className="text-xl font-bold">{tree.length}</p>
-                          <p className="text-xs opacity-90">مناصب إدارية عليا</p>
+                          <p className="text-xs opacity-90">{t("orgStructure.seniorPositions")}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -934,7 +943,7 @@ export default function OrganizationalStructurePage() {
                         </div>
                         <div>
                           <p className="text-sm font-bold">Butter Bakery</p>
-                          <p className="text-xs opacity-90">إدارة التشغيل</p>
+                          <p className="text-xs opacity-90">{t("orgStructure.operations")}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -947,10 +956,10 @@ export default function OrganizationalStructurePage() {
                     <CardTitle className="flex items-center justify-between">
                       <span className="flex items-center gap-2 text-base">
                         <Crown className="h-5 w-5" />
-                        التسلسل الهرمي الوظيفي
+                        {t("orgStructure.hierarchyTitle")}
                       </span>
                       <Badge className="bg-white/20 text-white border-white/30 text-xs print:bg-gray-200 print:text-gray-700">
-                        {roles.length} وظيفة
+                        {t("orgStructure.roleCount", { count: roles.length })}
                       </Badge>
                     </CardTitle>
                   </CardHeader>
@@ -961,6 +970,7 @@ export default function OrganizationalStructurePage() {
                       onEdit={handleEdit}
                       onDelete={setDeleteConfirm}
                       onAddChild={handleAddChild}
+                      t={t}
                     />
                   </CardContent>
                 </Card>
@@ -972,6 +982,7 @@ export default function OrganizationalStructurePage() {
             role={selectedRole}
             open={!!selectedRole}
             onClose={() => setSelectedRole(null)}
+            t={t}
           />
 
           <RoleFormDialog
@@ -982,6 +993,7 @@ export default function OrganizationalStructurePage() {
             onClose={() => { setIsFormOpen(false); setEditingRole(null); setAddChildParentId(null); }}
             onSave={handleSave}
             isLoading={createMutation.isPending || updateMutation.isPending}
+            t={t}
           />
 
           <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
@@ -989,15 +1001,15 @@ export default function OrganizationalStructurePage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-red-600">
                   <Trash2 className="h-5 w-5" />
-                  تأكيد الحذف
+                  {t("orgStructure.confirmDelete")}
                 </DialogTitle>
                 <DialogDescription className="pt-4">
-                  هل أنت متأكد من حذف وظيفة <strong>"{deleteConfirm?.titleAr}"</strong>؟
+                  {t("orgStructure.deleteConfirmMessage")} <strong>"{deleteConfirm?.titleAr}"</strong>?
                 </DialogDescription>
               </DialogHeader>
               <div className="flex justify-end gap-3 mt-6">
                 <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-                  إلغاء
+                  {t("orgStructure.cancel")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -1005,7 +1017,7 @@ export default function OrganizationalStructurePage() {
                   disabled={deleteMutation.isPending}
                 >
                   {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
-                  حذف
+                  {t("orgStructure.delete")}
                 </Button>
               </div>
             </DialogContent>
