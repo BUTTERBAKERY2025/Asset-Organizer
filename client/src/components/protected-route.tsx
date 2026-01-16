@@ -1,6 +1,7 @@
 import { useLocation, Redirect } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuthReady } from "@/contexts/AuthContext";
 import { Loader2, ShieldX, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,34 +65,22 @@ function AccessDeniedPage({ message }: { message?: string }) {
   );
 }
 
-function LoadingAuth() {
+function InlineSkeleton() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background" data-testid="loading-auth">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-        <p className="text-muted-foreground">جاري التحقق من المصادقة...</p>
-      </div>
-    </div>
-  );
-}
-
-function LoadingPermissions() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background" data-testid="loading-permissions">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-        <p className="text-muted-foreground">جاري التحقق من الصلاحيات...</p>
-      </div>
+    <div className="min-h-[200px] flex items-center justify-center" data-testid="inline-skeleton">
+      <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
     </div>
   );
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { isReady } = useAuthReady();
+  const { user, isAuthenticated } = useAuth();
   const [location] = useLocation();
 
-  if (isLoading) {
-    return <LoadingAuth />;
+  // Show lightweight skeleton during any transient loading
+  if (!isReady) {
+    return <InlineSkeleton />;
   }
 
   if (!isAuthenticated) {
@@ -118,21 +107,19 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 }
 
 export function ModuleProtectedRoute({ children, module, requiredRole }: ModuleProtectedRouteProps) {
-  const { user, isLoading: authLoading, isAuthenticated, isAdmin } = useAuth();
-  const { canView, isLoading: permissionsLoading } = usePermissions();
+  const { isReady } = useAuthReady();
+  const { user, isAuthenticated, isAdmin } = useAuth();
+  const { canView } = usePermissions();
   const [location] = useLocation();
 
-  if (authLoading) {
-    return <LoadingAuth />;
+  // Show lightweight skeleton during any transient loading
+  if (!isReady) {
+    return <InlineSkeleton />;
   }
 
   if (!isAuthenticated) {
     const returnUrl = encodeURIComponent(location);
     return <Redirect to={`/login?returnUrl=${returnUrl}`} />;
-  }
-
-  if (permissionsLoading) {
-    return <LoadingPermissions />;
   }
 
   if (requiredRole) {
@@ -158,10 +145,12 @@ export function ModuleProtectedRoute({ children, module, requiredRole }: ModuleP
 }
 
 export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isReady } = useAuthReady();
+  const { isAuthenticated } = useAuth();
 
-  if (isLoading) {
-    return <LoadingAuth />;
+  // Show lightweight skeleton during any transient loading
+  if (!isReady) {
+    return <InlineSkeleton />;
   }
 
   if (isAuthenticated) {

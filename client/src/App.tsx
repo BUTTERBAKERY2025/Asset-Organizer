@@ -9,6 +9,7 @@ import { OfflineIndicator } from "@/components/offline-indicator";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
 import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
+import { AuthGate } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
@@ -244,17 +245,17 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ProductionProvider>
-          <TooltipProvider>
-            <Suspense fallback={<AppLoadingFallback />}>
+        <AuthGate>
+          <ProductionProvider>
+            <TooltipProvider>
               <Toaster />
               <InactivityLogout />
               <Router />
               <PWAInstallPrompt />
               <OfflineIndicator />
-            </Suspense>
-          </TooltipProvider>
-        </ProductionProvider>
+            </TooltipProvider>
+          </ProductionProvider>
+        </AuthGate>
       </QueryClientProvider>
     </ErrorBoundary>
   );
