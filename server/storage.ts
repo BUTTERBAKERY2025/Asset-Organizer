@@ -4837,12 +4837,8 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(dailyProductionBatches.branchId, filters.branchId));
     }
     if (filters?.date) {
-      const startOfDay = new Date(filters.date);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(filters.date);
-      endOfDay.setHours(23, 59, 59, 999);
-      conditions.push(gte(dailyProductionBatches.producedAt, startOfDay));
-      conditions.push(lte(dailyProductionBatches.producedAt, endOfDay));
+      // Filter by productionDate (user's local date) for reliable timezone-independent filtering
+      conditions.push(eq(dailyProductionBatches.productionDate, filters.date));
     }
     if (filters?.destination) {
       conditions.push(eq(dailyProductionBatches.destination, filters.destination));
@@ -4939,16 +4935,11 @@ export class DatabaseStorage implements IStorage {
     byCategory: Record<string, number>;
     byHour: Record<string, number>;
   }> {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
+    // Use productionDate for reliable timezone-independent filtering
     const batches = await db.select().from(dailyProductionBatches)
       .where(and(
         eq(dailyProductionBatches.branchId, branchId),
-        gte(dailyProductionBatches.producedAt, startOfDay),
-        lte(dailyProductionBatches.producedAt, endOfDay)
+        eq(dailyProductionBatches.productionDate, date)
       ));
 
     const byDestination: Record<string, number> = {};

@@ -2715,6 +2715,7 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   shiftId: integer("shift_id").references(() => shifts.id),
   productionOrderId: integer("production_order_id"),
   producedAt: timestamp("produced_at").defaultNow().notNull(),
+  productionDate: text("production_date"), // تاريخ الإنتاج بتوقيت المستخدم YYYY-MM-DD
   recordedBy: varchar("recorded_by").references(() => users.id),
   recorderName: text("recorder_name"),
   notes: text("notes"),

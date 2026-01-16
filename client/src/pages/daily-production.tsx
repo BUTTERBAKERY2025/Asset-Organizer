@@ -375,6 +375,7 @@ export default function DailyProductionPage() {
         unit: sourceBatch.unit,
         destination: sourceBatch.destination,
         notes: `ترحيل من ${format(new Date(sourceBatch.producedAt), "yyyy-MM-dd")}`,
+        productionDate: selectedDate, // Carry over to current selected date
         status: "in_progress",
         chefId: sourceBatch.chefId,
         chefName: sourceBatch.chefName,
@@ -415,6 +416,7 @@ export default function DailyProductionPage() {
       unit: product?.unit || "قطعة",
       destination,
       notes: notes || null,
+      productionDate: selectedDate, // User's local date for timezone-independent filtering
       status: isSweetsCategory(resolvedCategory) ? status : "finished",
       chefId: selectedChefId || null,
       chefName: selectedChefName || null,
@@ -500,6 +502,7 @@ export default function DailyProductionPage() {
       unit: product.unit || "قطعة",
       destination,
       notes: null,
+      productionDate: selectedDate, // User's local date for timezone-independent filtering
       status: isSweetsCategory(product.category) ? status : "finished",
       chefId: selectedChefId || null,
       chefName: selectedChefName || null,

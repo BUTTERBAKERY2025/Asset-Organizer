@@ -9481,7 +9481,7 @@ export async function registerRoutes(
   app.post("/api/daily-production/batches", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const user = (req as any).user;
-      const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt, status, chefId, chefName, sourceBatchId } = req.body;
+      const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt, productionDate, status, chefId, chefName, sourceBatchId } = req.body;
       
       // Validate required fields
       if (!branchId || typeof branchId !== 'string') {
@@ -9521,6 +9521,7 @@ export async function registerRoutes(
         recordedBy: user?.id || null,
         recorderName: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || null,
         producedAt: producedAt ? new Date(producedAt) : new Date(),
+        productionDate: productionDate || null, // User's local date YYYY-MM-DD
         status: status || 'finished',
         chefId: chefId || null,
         chefName: chefName || null,
