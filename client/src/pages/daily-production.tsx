@@ -1231,7 +1231,7 @@ export default function DailyProductionPage() {
                                   className="h-7 text-blue-600 hover:text-blue-700"
                                   onClick={() => carryOverMutation.mutate({
                                     id: batch.id,
-                                    newDate: format(addDays(new Date(batch.producedAt), 1), "yyyy-MM-dd"),
+                                    newDate: format(addDays(batch.producedAt ? new Date(batch.producedAt) : new Date(), 1), "yyyy-MM-dd"),
                                   })}
                                   title="ترحيل لليوم التالي"
                                 >
