@@ -2051,17 +2051,17 @@ export default function CashierJournalFormPage() {
                 />
                 
                 {!isReadOnly && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1">
                     {ATTACHMENT_TYPES.map((type) => (
                       <Button
                         key={type}
                         variant="outline"
-                        className="h-12 flex flex-col items-center justify-center gap-1 text-xs"
+                        className="h-7 flex items-center justify-center gap-1 text-[10px] px-1"
                         onClick={() => handleFileSelect(type)}
                         data-testid={`button-upload-${type}`}
                       >
-                        <Camera className="w-4 h-4" />
-                        <span>{ATTACHMENT_TYPE_LABELS[type]}</span>
+                        <Camera className="w-3 h-3" />
+                        <span className="truncate">{ATTACHMENT_TYPE_LABELS[type]}</span>
                       </Button>
                     ))}
                   </div>
