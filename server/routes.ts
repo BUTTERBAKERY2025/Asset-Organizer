@@ -9386,6 +9386,7 @@ export async function registerRoutes(
       res.set('Expires', '0');
       
       const { branchId, date, destination, status, chefId, category } = req.query;
+      console.log("Fetching batches with filters:", { branchId, date, destination, status, chefId, category });
       const batches = await storage.getAllDailyProductionBatches({
         branchId: branchId as string,
         date: date as string,
@@ -9394,6 +9395,7 @@ export async function registerRoutes(
         chefId: chefId as string,
         category: category as string,
       });
+      console.log("Found batches:", batches.length);
       res.json(batches);
     } catch (error) {
       console.error("Error fetching daily production batches:", error);
