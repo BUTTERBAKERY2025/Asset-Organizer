@@ -1,0 +1,97 @@
+{
+  "greeting": {
+    "morning": "صباح الخير",
+    "afternoon": "مساء الخير",
+    "evening": "مساء الخير"
+  },
+  "welcome": "مرحباً بك في منصة بتر بيكري الشاملة",
+  "modules": {
+    "hr": {
+      "title": "الموارد البشرية",
+      "description": "إدارة الموظفين والهيكل التنظيمي والحضور والورديات"
+    },
+    "production": {
+      "title": "الإنتاج",
+      "description": "إدارة أوامر الإنتاج والتخطيط الذكي والتقارير"
+    },
+    "operations": {
+      "title": "التشغيل",
+      "description": "إدارة العمليات اليومية والمنتجات ومراقبة الجودة"
+    },
+    "sales": {
+      "title": "المبيعات والكاشير",
+      "description": "يومية الكاشير والأهداف والحوافز وتحليلات المبيعات"
+    },
+    "assets": {
+      "title": "الأصول والجرد",
+      "description": "إدارة ومتابعة جميع أصول الشركة والمعدات والمخزون"
+    },
+    "projects": {
+      "title": "المشاريع والإنشاءات",
+      "description": "تتبع مشاريع البناء والتجديد والمقاولين والميزانيات"
+    },
+    "marketing": {
+      "title": "التسويق",
+      "description": "إدارة الحملات التسويقية والمؤثرين وتحليل الأداء"
+    },
+    "settings": {
+      "title": "الإعدادات والنظام",
+      "description": "إدارة الأمان والمستخدمين والصلاحيات والنسخ الاحتياطية"
+    }
+  },
+  "subItems": {
+    "branchEmployees": "موظفو الفروع",
+    "orgStructure": "الهيكل التنظيمي",
+    "attendance": "الحضور",
+    "shifts": "الورديات",
+    "timesheet": "التايم شيت",
+    "productionDashboard": "لوحة الإنتاج",
+    "productionOrders": "أوامر الإنتاج",
+    "dailyProduction": "الإنتاج اليومي",
+    "productionReports": "تقارير الإنتاج",
+    "operationsDashboard": "لوحة التشغيل",
+    "products": "المنتجات",
+    "qualityControl": "مراقبة الجودة",
+    "displayBar": "بار العرض",
+    "cashierJournal": "يومية الكاشير",
+    "salesAnalytics": "تحليلات المبيعات",
+    "targets": "الأهداف",
+    "incentives": "الحوافز",
+    "pnl": "P&L",
+    "inventory": "جرد الأصول",
+    "assetManagement": "إدارة الأصول",
+    "transfers": "التحويلات",
+    "branches": "الفروع",
+    "maintenance": "الصيانة",
+    "constructionProjects": "المشاريع",
+    "contractors": "المقاولون",
+    "contracts": "العقود",
+    "paymentRequests": "طلبات الدفع",
+    "budgetPlanning": "الميزانية",
+    "marketingDashboard": "لوحة التسويق",
+    "campaigns": "الحملات",
+    "influencers": "المؤثرين",
+    "marketingTeam": "فريق التسويق",
+    "settingsDashboard": "لوحة الإعدادات",
+    "security": "الأمان",
+    "users": "المستخدمين",
+    "permissions": "الصلاحيات",
+    "backups": "النسخ الاحتياطي"
+  },
+  "quickActions": {
+    "addEmployee": "إضافة موظف",
+    "productionOrder": "أمر إنتاج",
+    "cashierJournal": "يومية كاشير",
+    "recordAttendance": "تسجيل حضور",
+    "inventoryCheck": "جرد الأصول",
+    "reports": "التقارير"
+  },
+  "stats": {
+    "branches": "الفروع",
+    "employees": "الموظفين",
+    "todayOrders": "أوامر الإنتاج اليوم",
+    "pendingMaintenance": "صيانة معلقة"
+  },
+  "language": "اللغة",
+  "switchLanguage": "English"
+}

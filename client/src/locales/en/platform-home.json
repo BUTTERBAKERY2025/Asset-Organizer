@@ -1,0 +1,97 @@
+{
+  "greeting": {
+    "morning": "Good Morning",
+    "afternoon": "Good Afternoon",
+    "evening": "Good Evening"
+  },
+  "welcome": "Welcome to Butter Bakery Management Platform",
+  "modules": {
+    "hr": {
+      "title": "Human Resources",
+      "description": "Manage employees, organizational structure, attendance and shifts"
+    },
+    "production": {
+      "title": "Production",
+      "description": "Manage production orders, smart planning and reports"
+    },
+    "operations": {
+      "title": "Operations",
+      "description": "Manage daily operations, products and quality control"
+    },
+    "sales": {
+      "title": "Sales & Cashier",
+      "description": "Cashier journal, targets, incentives and sales analytics"
+    },
+    "assets": {
+      "title": "Assets & Inventory",
+      "description": "Manage and track all company assets, equipment and inventory"
+    },
+    "projects": {
+      "title": "Projects & Construction",
+      "description": "Track construction projects, contractors and budgets"
+    },
+    "marketing": {
+      "title": "Marketing",
+      "description": "Manage marketing campaigns, influencers and performance analysis"
+    },
+    "settings": {
+      "title": "Settings & System",
+      "description": "Manage security, users, permissions and backups"
+    }
+  },
+  "subItems": {
+    "branchEmployees": "Branch Employees",
+    "orgStructure": "Org Structure",
+    "attendance": "Attendance",
+    "shifts": "Shifts",
+    "timesheet": "Timesheet",
+    "productionDashboard": "Production Dashboard",
+    "productionOrders": "Production Orders",
+    "dailyProduction": "Daily Production",
+    "productionReports": "Production Reports",
+    "operationsDashboard": "Operations Dashboard",
+    "products": "Products",
+    "qualityControl": "Quality Control",
+    "displayBar": "Display Bar",
+    "cashierJournal": "Cashier Journal",
+    "salesAnalytics": "Sales Analytics",
+    "targets": "Targets",
+    "incentives": "Incentives",
+    "pnl": "P&L",
+    "inventory": "Asset Inventory",
+    "assetManagement": "Asset Management",
+    "transfers": "Transfers",
+    "branches": "Branches",
+    "maintenance": "Maintenance",
+    "constructionProjects": "Projects",
+    "contractors": "Contractors",
+    "contracts": "Contracts",
+    "paymentRequests": "Payment Requests",
+    "budgetPlanning": "Budget Planning",
+    "marketingDashboard": "Marketing Dashboard",
+    "campaigns": "Campaigns",
+    "influencers": "Influencers",
+    "marketingTeam": "Marketing Team",
+    "settingsDashboard": "Settings Dashboard",
+    "security": "Security",
+    "users": "Users",
+    "permissions": "Permissions",
+    "backups": "Backups"
+  },
+  "quickActions": {
+    "addEmployee": "Add Employee",
+    "productionOrder": "Production Order",
+    "cashierJournal": "Cashier Journal",
+    "recordAttendance": "Record Attendance",
+    "inventoryCheck": "Inventory Check",
+    "reports": "Reports"
+  },
+  "stats": {
+    "branches": "Branches",
+    "employees": "Employees",
+    "todayOrders": "Today's Production Orders",
+    "pendingMaintenance": "Pending Maintenance"
+  },
+  "language": "Language",
+  "switchLanguage": "العربية"
+}
