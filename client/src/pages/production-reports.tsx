@@ -131,6 +131,7 @@ interface ReportData {
     shiftName: string;
     destination: string;
     producedAt: string;
+    productionDate: string | null; // Local date YYYY-MM-DD
     notes: string;
     // Status and chef tracking
     status: string | null;
@@ -267,21 +268,21 @@ export default function ProductionReportsPage() {
       if (reportType === "all" || reportType === "data") {
         if (reportData.rawProductionEntries && reportData.rawProductionEntries.length > 0) {
           const rawData = [
-            ["#", "المنتج", "الفئة", "الكمية", "الفرع", "الوردية", "الوجهة", "الحالة", "الشيف المنتج", "تاريخ الإنشاء", "تاريخ الاكتمال", "من أكمل الدفعة", "المسجل", "مرحل من", "ملاحظات"],
+            ["#", "المنتج", "التصنيف", "الكمية", "الفرع", "الوجهة", "الحالة", "الشيف", "مسجل بواسطة", "تاريخ الإنتاج", "وقت الإنتاج", "أكمل بواسطة", "وقت الإكمال", "مرحل من", "ملاحظات"],
             ...reportData.rawProductionEntries.map((entry, idx) => [
               idx + 1,
               entry.productName,
               entry.productCategory || '-',
               entry.quantity,
               entry.branchName,
-              entry.shiftName,
               entry.destination,
               entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-',
               entry.chefName || '-',
-              entry.producedAt ? format(new Date(entry.producedAt), "yyyy/MM/dd HH:mm") : '',
-              entry.finishedAt ? format(new Date(entry.finishedAt), "yyyy/MM/dd HH:mm") : '-',
-              entry.finishedByName || '-',
               entry.recorderName || '-',
+              entry.productionDate || '-',
+              entry.producedAt ? format(new Date(entry.producedAt), "HH:mm") : '-',
+              entry.finishedByName || '-',
+              entry.finishedAt ? format(new Date(entry.finishedAt), "yyyy/MM/dd HH:mm") : '-',
               entry.sourceBatchId ? `#${entry.sourceBatchId}` : '-',
               entry.notes || ''
             ]),
@@ -317,10 +318,10 @@ export default function ProductionReportsPage() {
           csvContent += `${p.productName},${p.quantity},${p.percentage.toFixed(1)}%,${p.trend >= 0 ? '+' : ''}${p.trend.toFixed(1)}%\n`;
         });
       } else if (reportType === "data" && reportData.rawProductionEntries) {
-        csvContent = "الرقم,المنتج,التصنيف,الكمية,الفرع,الوجهة,الحالة,الشيف,المسجل,تاريخ الإنتاج,من أكمل,تاريخ الاكتمال,مرحل من,ملاحظات\n";
+        csvContent = "#,المنتج,التصنيف,الكمية,الفرع,الوجهة,الحالة,الشيف,مسجل بواسطة,تاريخ الإنتاج,وقت الإنتاج,أكمل بواسطة,وقت الإكمال,مرحل من,ملاحظات\n";
         reportData.rawProductionEntries.forEach((entry, idx) => {
           const statusText = entry.status === 'finished' ? 'مكتمل' : entry.status === 'in_progress' ? 'قيد التحضير' : '-';
-          csvContent += `${idx + 1},${entry.productName},${entry.productCategory || '-'},${entry.quantity},${entry.branchName},${entry.destination},${statusText},${entry.chefName || '-'},${entry.recorderName || '-'},"${entry.producedAt ? format(new Date(entry.producedAt), 'yyyy/MM/dd HH:mm') : ''}",${entry.finishedByName || '-'},"${entry.finishedAt ? format(new Date(entry.finishedAt), 'yyyy/MM/dd HH:mm') : '-'}",${entry.sourceBatchId ? '#' + entry.sourceBatchId : '-'},${entry.notes || ''}\n`;
+          csvContent += `${idx + 1},${entry.productName},${entry.productCategory || '-'},${entry.quantity},${entry.branchName},${entry.destination},${statusText},${entry.chefName || '-'},${entry.recorderName || '-'},${entry.productionDate || '-'},"${entry.producedAt ? format(new Date(entry.producedAt), 'HH:mm') : '-'}",${entry.finishedByName || '-'},"${entry.finishedAt ? format(new Date(entry.finishedAt), 'yyyy/MM/dd HH:mm') : '-'}",${entry.sourceBatchId ? '#' + entry.sourceBatchId : '-'},${entry.notes || ''}\n`;
         });
       }
       
@@ -667,6 +668,7 @@ export default function ProductionReportsPage() {
                               <th className="p-2 text-right font-medium text-amber-800">الحالة</th>
                               <th className="p-2 text-right font-medium text-amber-800">الشيف</th>
                               <th className="p-2 text-right font-medium text-amber-800">مسجل بواسطة</th>
+                              <th className="p-2 text-right font-medium text-amber-800">تاريخ الإنتاج</th>
                               <th className="p-2 text-right font-medium text-amber-800">وقت الإنتاج</th>
                               <th className="p-2 text-right font-medium text-amber-800">أكمل بواسطة</th>
                               <th className="p-2 text-right font-medium text-amber-800">وقت الإكمال</th>
@@ -690,8 +692,11 @@ export default function ProductionReportsPage() {
                                 </td>
                                 <td className="p-2 border-b text-blue-700 text-xs">{entry.chefName || '-'}</td>
                                 <td className="p-2 border-b text-gray-600 text-xs">{entry.recorderName || '-'}</td>
+                                <td className="p-2 border-b text-indigo-700 text-xs font-medium">
+                                  {entry.productionDate || '-'}
+                                </td>
                                 <td className="p-2 border-b text-gray-600 text-xs">
-                                  {entry.producedAt ? format(new Date(entry.producedAt), "yyyy/MM/dd HH:mm", { locale: ar }) : '-'}
+                                  {entry.producedAt ? format(new Date(entry.producedAt), "HH:mm", { locale: ar }) : '-'}
                                 </td>
                                 <td className="p-2 border-b text-purple-700 text-xs">{entry.finishedByName || '-'}</td>
                                 <td className="p-2 border-b text-gray-600 text-xs">
@@ -708,7 +713,7 @@ export default function ProductionReportsPage() {
                             <tr className="bg-amber-100 font-bold">
                               <td colSpan={3} className="p-2 text-amber-800">المجموع</td>
                               <td className="p-2 text-green-700">{reportData.rawProductionEntries.reduce((sum, e) => sum + e.quantity, 0)}</td>
-                              <td colSpan={10}></td>
+                              <td colSpan={11}></td>
                             </tr>
                           </tfoot>
                         </table>

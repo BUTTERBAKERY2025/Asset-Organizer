@@ -9818,11 +9818,13 @@ export async function registerRoutes(
       const passRate = qualityChecks.length > 0 ? (passed / qualityChecks.length) * 100 : 100;
       
       // Build real product performance from production batches
+      // Use productionDate for timezone-independent filtering
       const allProductionBatches = await storage.getAllDailyProductionBatches(
         branchId === 'all' ? {} : { branchId }
       );
       const entriesInRange = allProductionBatches.filter(e => {
-        const entryDate = e.producedAt ? new Date(e.producedAt).toISOString().split('T')[0] : '';
+        // Use productionDate if available, otherwise fall back to producedAt
+        const entryDate = e.productionDate || (e.producedAt ? new Date(e.producedAt).toISOString().split('T')[0] : '');
         return entryDate >= startDate && entryDate <= endDate;
       });
       
@@ -9842,7 +9844,7 @@ export async function registerRoutes(
         destinationCounts[dest] = (destinationCounts[dest] || 0) + (entry.quantity || 0);
         
         // Count by category
-        const cat = entry.category || 'غير محدد';
+        const cat = entry.productCategory || 'غير محدد';
         categoryCounts[cat] = (categoryCounts[cat] || 0) + (entry.quantity || 0);
         
         // Count by hour
@@ -9986,6 +9988,7 @@ export async function registerRoutes(
             shiftName,
             destination: entry.destination || 'غير محدد',
             producedAt: entry.producedAt ? new Date(entry.producedAt).toISOString() : '',
+            productionDate: entry.productionDate || null, // Local date for timezone-independent display
             notes: entry.notes || '',
             // Status and chef tracking
             status: entry.status || 'finished',
@@ -9994,8 +9997,8 @@ export async function registerRoutes(
             recorderName: entry.recorderName || null,
             // Completion tracking
             finishedAt: entry.finishedAt ? new Date(entry.finishedAt).toISOString() : null,
-            finishedById: (entry as any).finishedById || null,
-            finishedByName: (entry as any).finishedByName || null,
+            finishedById: entry.finishedById || null,
+            finishedByName: entry.finishedByName || null,
             // Carry-over tracking
             sourceBatchId: entry.sourceBatchId || null,
           };
