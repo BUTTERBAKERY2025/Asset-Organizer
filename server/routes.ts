@@ -12646,7 +12646,6 @@ export async function registerRoutes(
               <img src="${logoBase64}" alt="Butter Bakery" class="logo" />
               <div class="company-info">
                 <div class="company-name">Butter Bakery</div>
-                <div>مخبز باتر</div>
               </div>
             </div>
 
@@ -12770,7 +12769,7 @@ export async function registerRoutes(
               <div class="signature-box">
                 <div class="signature-line"></div>
                 <div class="signature-label">توقيع الشركة</div>
-                <div>مخبز باتر</div>
+                <div>Butter Bakery</div>
               </div>
             </div>
 
