@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, RotateCcw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -9,14 +9,16 @@ interface Props {
 interface State {
   hasError: boolean;
   error?: Error;
+  retryCount: number;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
-    hasError: false
+    hasError: false,
+    retryCount: 0
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
@@ -28,8 +30,18 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
+  private handleRetry = () => {
+    this.setState(prev => ({ 
+      hasError: false, 
+      error: undefined,
+      retryCount: prev.retryCount + 1 
+    }));
+  };
+
   public render() {
     if (this.state.hasError) {
+      const canRetry = this.state.retryCount < 3;
+      
       return (
         <div 
           className="min-h-screen flex flex-col items-center justify-center bg-[#F5F0E6] p-4"
@@ -44,15 +56,27 @@ export class ErrorBoundary extends Component<Props, State> {
               حدث خطأ غير متوقع
             </h1>
             <p className="text-[#1a3a2f]/70 text-sm mb-6">
-              نعتذر عن هذا الخطأ. يرجى تحديث الصفحة للمتابعة.
+              نعتذر عن هذا الخطأ. يرجى المحاولة مرة أخرى.
             </p>
-            <Button 
-              onClick={this.handleReload}
-              className="bg-[#e67e22] hover:bg-[#d35400] text-white"
-            >
-              <RefreshCw className="w-4 h-4 ml-2" />
-              تحديث الصفحة
-            </Button>
+            <div className="flex gap-3 justify-center">
+              {canRetry && (
+                <Button 
+                  onClick={this.handleRetry}
+                  variant="outline"
+                  className="border-[#e67e22] text-[#e67e22] hover:bg-[#e67e22]/10"
+                >
+                  <RotateCcw className="w-4 h-4 ml-2" />
+                  إعادة المحاولة
+                </Button>
+              )}
+              <Button 
+                onClick={this.handleReload}
+                className="bg-[#e67e22] hover:bg-[#d35400] text-white"
+              >
+                <RefreshCw className="w-4 h-4 ml-2" />
+                تحديث الصفحة
+              </Button>
+            </div>
           </div>
         </div>
       );

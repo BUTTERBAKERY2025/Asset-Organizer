@@ -8,7 +8,6 @@ import React, {
 } from "react";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
 
 interface CommandCenterData {
   production: {
@@ -73,7 +72,6 @@ const ProductionContext = createContext<ProductionContextType | undefined>(
 );
 
 export function ProductionProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(
     format(new Date(), "yyyy-MM-dd"),
@@ -93,9 +91,12 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     data: commandCenterData,
     isLoading,
     refetch,
-  } = useQuery<CommandCenterData>({
+  } = useQuery<CommandCenterData | null>({
     queryKey: ["/api/command-center", selectedBranch, selectedDate],
     queryFn: async () => {
+      if (!selectedBranch || !selectedDate) {
+        return null;
+      }
       const params = new URLSearchParams({
         branchId: selectedBranch,
         date: selectedDate,
@@ -104,14 +105,18 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         credentials: "include",
       });
       if (!res.ok) {
-        throw new Error("Failed to fetch command center data");
+        if (res.status === 401) {
+          return null;
+        }
+        return null;
       }
       return res.json();
     },
-    enabled: isAuthenticated && !!selectedDate && !!selectedBranch,
+    enabled: !!selectedDate && !!selectedBranch,
     refetchInterval: autoRefresh ? 300000 : false,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
+    retry: false,
   });
 
   const handleRefetch = useCallback(() => {
