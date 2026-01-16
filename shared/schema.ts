@@ -2719,6 +2719,12 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   recorderName: text("recorder_name"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Production status and chef tracking - حالة الإنتاج ومتابعة الشيف
+  status: text("status").default("finished"), // finished = مكتمل, in_progress = قيد التحضير
+  chefId: varchar("chef_id").references(() => users.id),
+  chefName: text("chef_name"), // اسم الشيف المنتج
+  sourceBatchId: integer("source_batch_id"), // ربط بالدفعة السابقة للترحيل
+  finishedAt: timestamp("finished_at"), // تاريخ اكتمال الإنتاج
 });
 
 export const insertDailyProductionBatchSchema = createInsertSchema(
@@ -2726,6 +2732,7 @@ export const insertDailyProductionBatchSchema = createInsertSchema(
 ).omit({
   id: true,
   createdAt: true,
+  finishedAt: true,
 });
 
 export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;
