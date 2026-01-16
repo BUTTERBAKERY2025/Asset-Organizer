@@ -276,9 +276,9 @@ export default function DailyProductionPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches", branchId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished", branchId] });
       if (!quickMode) {
         setProductName("");
         setProductCategory("");
@@ -303,8 +303,9 @@ export default function DailyProductionPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches", branchId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished", branchId] });
       setEditingBatch(null);
       toast({ title: "تم تحديث الدفعة بنجاح" });
     },
@@ -318,8 +319,9 @@ export default function DailyProductionPage() {
       await apiRequest("DELETE", `/api/daily-production/batches/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches", branchId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished", branchId] });
       toast({ title: "تم حذف الدفعة" });
     },
     onError: (error: any) => {
@@ -340,9 +342,9 @@ export default function DailyProductionPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        (query.queryKey[0] as string)?.startsWith("/api/daily-production/") 
+      });
       toast({ title: "تم اكتمال الدفعة", description: "تم تحديث حالة الدفعة إلى مكتمل" });
     },
     onError: (error: any) => {
@@ -380,9 +382,9 @@ export default function DailyProductionPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        (query.queryKey[0] as string)?.startsWith("/api/daily-production/") 
+      });
       toast({ title: "تم الترحيل", description: "تم ترحيل الدفعة لليوم الحالي" });
     },
     onError: (error: any) => {
