@@ -4586,25 +4586,25 @@ export default function EmployeeReportsDashboardPage() {
                   <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <p className="text-gray-500">إجمالي الموظفين (المعروضين)</p>
+                        <p className="text-gray-500">{isRTL ? "إجمالي الموظفين (المعروضين)" : "Total Employees (Displayed)"}</p>
                         <p className="font-bold text-lg">{salaryFilteredEmployees.length}</p>
                       </div>
                       <div>
-                        <p className="text-gray-500">إجمالي الرواتب الأساسية</p>
+                        <p className="text-gray-500">{isRTL ? "إجمالي الرواتب الأساسية" : "Total Base Salaries"}</p>
                         <p className="font-bold text-lg text-blue-700">
-                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.salary || 0), 0))}
+                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.salary || 0), 0), isRTL)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-500">إجمالي البدلات</p>
+                        <p className="text-gray-500">{isRTL ? "إجمالي البدلات" : "Total Allowances"}</p>
                         <p className="font-bold text-lg text-amber-700">
-                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.housingAllowance || 0) + (e.transportAllowance || 0) + (e.foodAllowance || 0) + (e.otherAllowances || 0), 0))}
+                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.housingAllowance || 0) + (e.transportAllowance || 0) + (e.foodAllowance || 0) + (e.otherAllowances || 0), 0), isRTL)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-500">صافي الرواتب المستحقة</p>
+                        <p className="text-gray-500">{isRTL ? "صافي الرواتب المستحقة" : "Net Salaries Due"}</p>
                         <p className="font-bold text-lg text-green-700">
-                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.totalSalary || 0), 0))}
+                          {formatCurrency(salaryFilteredEmployees.reduce((sum, e) => sum + (e.totalSalary || 0), 0), isRTL)}
                         </p>
                       </div>
                     </div>
@@ -4616,23 +4616,23 @@ export default function EmployeeReportsDashboardPage() {
             <TabsContent value="analytics" className="space-y-4">
               <div className="flex justify-end mb-4">
                 <Button variant="outline" size="sm" onClick={exportAnalyticsToExcel} data-testid="button-export-analytics-excel">
-                  <FileSpreadsheet className="w-4 h-4 ml-1" />
-                  تصدير التحليلات Excel
+                  <FileSpreadsheet className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                  {isRTL ? "تصدير التحليلات Excel" : "Export Analytics Excel"}
                 </Button>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>مقارنة الحضور والغياب</CardTitle>
+                    <CardTitle>{isRTL ? "مقارنة الحضور والغياب" : "Attendance vs Absence Comparison"}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie
                           data={[
-                            { name: "حضور", value: overviewStats.presentCount },
-                            { name: "غياب", value: overviewStats.absentCount },
-                            { name: "تأخير", value: overviewStats.lateCount },
+                            { name: isRTL ? "حضور" : "Present", value: overviewStats.presentCount },
+                            { name: isRTL ? "غياب" : "Absent", value: overviewStats.absentCount },
+                            { name: isRTL ? "تأخير" : "Late", value: overviewStats.lateCount },
                           ]}
                           cx="50%"
                           cy="50%"
@@ -4655,15 +4655,15 @@ export default function EmployeeReportsDashboardPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>إحصائيات الموظفين حسب الحالة</CardTitle>
+                    <CardTitle>{isRTL ? "إحصائيات الموظفين حسب الحالة" : "Employee Statistics by Status"}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {[
-                        { label: "نشط", value: filteredEmployees.filter(e => e.status === "active").length, color: "bg-green-500" },
-                        { label: "غير نشط", value: filteredEmployees.filter(e => e.status === "inactive").length, color: "bg-gray-500" },
-                        { label: "في إجازة", value: filteredEmployees.filter(e => e.status === "on_leave").length, color: "bg-yellow-500" },
-                        { label: "منتهي", value: filteredEmployees.filter(e => e.status === "terminated").length, color: "bg-red-500" },
+                        { label: isRTL ? "نشط" : "Active", value: filteredEmployees.filter(e => e.status === "active").length, color: "bg-green-500" },
+                        { label: isRTL ? "غير نشط" : "Inactive", value: filteredEmployees.filter(e => e.status === "inactive").length, color: "bg-gray-500" },
+                        { label: isRTL ? "في إجازة" : "On Leave", value: filteredEmployees.filter(e => e.status === "on_leave").length, color: "bg-yellow-500" },
+                        { label: isRTL ? "منتهي" : "Terminated", value: filteredEmployees.filter(e => e.status === "terminated").length, color: "bg-red-500" },
                       ].map((item) => (
                         <div key={item.label} className="flex items-center gap-4">
                           <div className={`w-3 h-3 rounded-full ${item.color}`} />
@@ -4687,7 +4687,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Users className="w-5 h-5" />
-                      توزيع الجنسيات
+                      {isRTL ? "توزيع الجنسيات" : "Nationality Distribution"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -4697,7 +4697,7 @@ export default function EmployeeReportsDashboardPage() {
                         <XAxis type="number" />
                         <YAxis dataKey="name" type="category" width={80} />
                         <Tooltip />
-                        <Bar dataKey="value" fill="#f59e0b" name="عدد الموظفين" />
+                        <Bar dataKey="value" fill="#f59e0b" name={isRTL ? "عدد الموظفين" : "Employee Count"} />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -4707,13 +4707,13 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Clock className="w-5 h-5 text-red-500" />
-                      أكثر الموظفين تأخراً
+                      {isRTL ? "أكثر الموظفين تأخراً" : "Most Late Employees"}
                     </CardTitle>
-                    <CardDescription>أعلى 10 موظفين في عدد أيام التأخير</CardDescription>
+                    <CardDescription>{isRTL ? "أعلى 10 موظفين في عدد أيام التأخير" : "Top 10 employees with late days"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {lateAnalysis.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">لا توجد سجلات تأخير</div>
+                      <div className="text-center py-8 text-gray-500">{isRTL ? "لا توجد سجلات تأخير" : "No late records"}</div>
                     ) : (
                       <div className="space-y-2">
                         {lateAnalysis.map((emp, index) => (
@@ -4725,7 +4725,7 @@ export default function EmployeeReportsDashboardPage() {
                               <p className="font-medium text-sm">{emp.name}</p>
                               <p className="text-xs text-gray-500">{emp.branch}</p>
                             </div>
-                            <Badge className="bg-red-100 text-red-800">{emp.lateDays} يوم</Badge>
+                            <Badge className="bg-red-100 text-red-800">{emp.lateDays} {isRTL ? "يوم" : "days"}</Badge>
                           </div>
                         ))}
                       </div>
@@ -4737,7 +4737,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Clock className="w-5 h-5 text-blue-500" />
-                      تحليل ساعات العمل حسب الفرع
+                      {isRTL ? "تحليل ساعات العمل حسب الفرع" : "Work Hours Analysis by Branch"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -4748,8 +4748,8 @@ export default function EmployeeReportsDashboardPage() {
                         <YAxis />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="totalHours" fill="#3b82f6" name="إجمالي الساعات" />
-                        <Bar dataKey="overtime" fill="#10b981" name="ساعات إضافية" />
+                        <Bar dataKey="totalHours" fill="#3b82f6" name={isRTL ? "إجمالي الساعات" : "Total Hours"} />
+                        <Bar dataKey="overtime" fill="#10b981" name={isRTL ? "ساعات إضافية" : "Overtime"} />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -4759,9 +4759,9 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <TrendingUp className="w-5 h-5 text-amber-500" />
-                      ترتيب الفروع حسب الأداء
+                      {isRTL ? "ترتيب الفروع حسب الأداء" : "Branch Performance Ranking"}
                     </CardTitle>
-                    <CardDescription>التقييم الشامل بناءً على السعودة والحضور والإنتاجية</CardDescription>
+                    <CardDescription>{isRTL ? "التقييم الشامل بناءً على السعودة والحضور والإنتاجية" : "Comprehensive evaluation based on Saudization, attendance, and productivity"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
@@ -4780,19 +4780,19 @@ export default function EmployeeReportsDashboardPage() {
                           </div>
                           <div className="grid grid-cols-4 gap-2 text-xs">
                             <div className="text-center">
-                              <p className="text-gray-500">السعودة</p>
+                              <p className="text-gray-500">{isRTL ? "السعودة" : "Saudization"}</p>
                               <p className="font-bold">{branch.saudiScore}/25</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-gray-500">الحضور</p>
+                              <p className="text-gray-500">{isRTL ? "الحضور" : "Attendance"}</p>
                               <p className="font-bold">{branch.attendanceScore}/25</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-gray-500">الإنتاجية</p>
+                              <p className="text-gray-500">{isRTL ? "الإنتاجية" : "Productivity"}</p>
                               <p className="font-bold">{branch.productivityScore}/25</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-gray-500">الكفاءة</p>
+                              <p className="text-gray-500">{isRTL ? "الكفاءة" : "Efficiency"}</p>
                               <p className="font-bold">{branch.efficiencyScore}/25</p>
                             </div>
                           </div>
@@ -4816,7 +4816,7 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-indigo-500" />
-                      توزيع الموظفين حسب مدة الخدمة
+                      {isRTL ? "توزيع الموظفين حسب مدة الخدمة" : "Employee Distribution by Tenure"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -4847,15 +4847,15 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <AlertCircle className="w-5 h-5 text-red-500" />
-                      مؤشرات الإنذار المبكر
+                      {isRTL ? "مؤشرات الإنذار المبكر" : "Early Warning Indicators"}
                     </CardTitle>
-                    <CardDescription>موظفين يحتاجون متابعة بسبب نمط الحضور</CardDescription>
+                    <CardDescription>{isRTL ? "موظفين يحتاجون متابعة بسبب نمط الحضور" : "Employees requiring follow-up due to attendance patterns"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {earlyWarningIndicators.length === 0 ? (
                       <div className="text-center py-8 text-green-600">
                         <CheckCircle className="w-12 h-12 mx-auto mb-2" />
-                        لا توجد تنبيهات حالياً
+                        {isRTL ? "لا توجد تنبيهات حالياً" : "No alerts currently"}
                       </div>
                     ) : (
                       <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -4866,7 +4866,7 @@ export default function EmployeeReportsDashboardPage() {
                               <p className="text-xs text-gray-500">{warning.type}: {warning.description}</p>
                             </div>
                             <Badge className={`${warning.severity === "high" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
-                              {warning.severity === "high" ? "عالي" : "متوسط"}
+                              {warning.severity === "high" ? (isRTL ? "عالي" : "High") : (isRTL ? "متوسط" : "Medium")}
                             </Badge>
                           </div>
                         ))}
@@ -4880,31 +4880,31 @@ export default function EmployeeReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Clock className="w-5 h-5 text-blue-500" />
-                      مقارنة الجدولة بالحضور الفعلي
+                      {isRTL ? "مقارنة الجدولة بالحضور الفعلي" : "Schedule vs Actual Attendance"}
                     </CardTitle>
-                    <CardDescription>تحليل الفروقات بين الورديات المجدولة والحضور</CardDescription>
+                    <CardDescription>{isRTL ? "تحليل الفروقات بين الورديات المجدولة والحضور" : "Variance analysis between scheduled shifts and attendance"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {scheduleVarianceAnalysis.summary.total === 0 ? (
-                      <div className="text-center py-8 text-gray-500">لا توجد بيانات جدولة</div>
+                      <div className="text-center py-8 text-gray-500">{isRTL ? "لا توجد بيانات جدولة" : "No schedule data"}</div>
                     ) : (
                       <>
                         <div className="grid grid-cols-4 gap-2 mb-4 text-center">
                           <div className="p-2 bg-green-50 rounded">
                             <p className="text-xl font-bold text-green-700">{scheduleVarianceAnalysis.summary.onTime}</p>
-                            <p className="text-xs text-green-600">في الموعد</p>
+                            <p className="text-xs text-green-600">{isRTL ? "في الموعد" : "On Time"}</p>
                           </div>
                           <div className="p-2 bg-yellow-50 rounded">
                             <p className="text-xl font-bold text-yellow-700">{scheduleVarianceAnalysis.summary.late}</p>
-                            <p className="text-xs text-yellow-600">متأخر</p>
+                            <p className="text-xs text-yellow-600">{isRTL ? "متأخر" : "Late"}</p>
                           </div>
                           <div className="p-2 bg-red-50 rounded">
                             <p className="text-xl font-bold text-red-700">{scheduleVarianceAnalysis.summary.absent}</p>
-                            <p className="text-xs text-red-600">غائب</p>
+                            <p className="text-xs text-red-600">{isRTL ? "غائب" : "Absent"}</p>
                           </div>
                           <div className="p-2 bg-blue-50 rounded">
                             <p className="text-xl font-bold text-blue-700">{scheduleVarianceAnalysis.summary.total}</p>
-                            <p className="text-xs text-blue-600">إجمالي</p>
+                            <p className="text-xs text-blue-600">{isRTL ? "إجمالي" : "Total"}</p>
                           </div>
                         </div>
                         {scheduleVarianceAnalysis.variances.length > 0 && (
