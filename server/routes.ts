@@ -9362,7 +9362,7 @@ export async function registerRoutes(
   // Get chefs for production assignment (accessible to production users)
   app.get("/api/daily-production/chefs", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
-      const users = await storage.getUsers();
+      const users = await storage.getAllUsers();
       // Return minimal user info for chef selection
       const chefs = users.map(u => ({
         id: u.id,
