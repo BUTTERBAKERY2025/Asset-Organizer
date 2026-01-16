@@ -9359,6 +9359,24 @@ export async function registerRoutes(
 
   // ==================== Daily Production Batches ====================
   
+  // Get chefs for production assignment (accessible to production users)
+  app.get("/api/daily-production/chefs", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const users = await storage.getUsers();
+      // Return minimal user info for chef selection
+      const chefs = users.map(u => ({
+        id: u.id,
+        username: u.username,
+        firstName: u.firstName,
+        lastName: u.lastName,
+      }));
+      res.json(chefs);
+    } catch (error) {
+      console.error("Error fetching chefs:", error);
+      res.status(500).json({ error: "فشل في جلب الشيفات" });
+    }
+  });
+  
   // Get all batches with optional filters
   app.get("/api/daily-production/batches", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {

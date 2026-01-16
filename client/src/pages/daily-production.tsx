@@ -16,7 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, subDays } from "date-fns";
+import { format, subDays, addDays } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch, Product } from "@shared/schema";
@@ -67,7 +67,24 @@ interface DailyProductionBatch {
   recorderName: string | null;
   notes: string | null;
   createdAt: string;
+  status: string | null;
+  chefId: string | null;
+  chefName: string | null;
+  sourceBatchId: number | null;
+  finishedAt: string | null;
 }
+
+interface ChefUser {
+  id: string;
+  username: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+const PRODUCTION_STATUSES = [
+  { value: "finished", label: "مكتمل", color: "bg-green-100 text-green-800", icon: Check },
+  { value: "in_progress", label: "قيد التحضير", color: "bg-amber-100 text-amber-800", icon: Timer },
+];
 
 interface DailyStats {
   totalBatches: number;
@@ -118,18 +135,23 @@ export default function DailyProductionPage() {
   const [quantity, setQuantity] = useState<string>("");
   const [destination, setDestination] = useState<string>("display_bar");
   const [notes, setNotes] = useState<string>("");
+  const [status, setStatus] = useState<string>("finished");
+  const [selectedChefId, setSelectedChefId] = useState<string>("");
+  const [selectedChefName, setSelectedChefName] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<string>("entry");
   const [productSearch, setProductSearch] = useState<string>("");
   const [batchSearch, setBatchSearch] = useState<string>("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterDestination, setFilterDestination] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [quickMode, setQuickMode] = useState<boolean>(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
   const [editingBatch, setEditingBatch] = useState<DailyProductionBatch | null>(null);
   const [editQuantity, setEditQuantity] = useState<string>("");
   const [editDestination, setEditDestination] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
+  const [showCarryOverPanel, setShowCarryOverPanel] = useState<boolean>(false);
   const printRef = useRef<HTMLDivElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
   const productInputRef = useRef<HTMLInputElement>(null);
@@ -207,11 +229,15 @@ export default function DailyProductionPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
       if (!quickMode) {
         setProductName("");
         setProductCategory("");
         setQuantity("");
         setNotes("");
+        setStatus("finished");
+        setSelectedChefId("");
+        setSelectedChefName("");
       } else {
         setQuantity("");
       }
@@ -232,6 +258,61 @@ export default function DailyProductionPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats"] });
       setEditingBatch(null);
       toast({ title: "تم تحديث الدفعة بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Fetch chefs (users who can be assigned to production) - uses production-accessible endpoint
+  const { data: chefs } = useQuery<ChefUser[]>({
+    queryKey: ["/api/daily-production/chefs"],
+    queryFn: async () => {
+      const res = await fetch("/api/daily-production/chefs", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch chefs");
+      return res.json();
+    },
+  });
+
+  // Fetch unfinished batches for carry-over
+  const { data: unfinishedBatches, refetch: refetchUnfinished } = useQuery<DailyProductionBatch[]>({
+    queryKey: ["/api/daily-production/unfinished", branchId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (branchId) params.set("branchId", branchId);
+      const res = await fetch(`/api/daily-production/unfinished?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch unfinished batches");
+      return res.json();
+    },
+    enabled: !!branchId,
+  });
+
+  // Mutation to mark batch as finished
+  const finishMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/daily-production/batches/${id}/finish`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
+      toast({ title: "تم إكمال الدفعة بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Mutation to carry over batch to next day
+  const carryOverMutation = useMutation({
+    mutationFn: async ({ id, newDate, additionalQuantity }: { id: number; newDate: string; additionalQuantity?: number }) => {
+      const res = await apiRequest("POST", `/api/daily-production/batches/${id}/carry-over`, { newDate, additionalQuantity });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/batches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-production/unfinished"] });
+      toast({ title: "تم ترحيل الدفعة بنجاح إلى اليوم التالي" });
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
@@ -321,19 +402,30 @@ export default function DailyProductionPage() {
     }
     
     const product = products?.find(p => p.name === productName);
+    const category = productCategory || product?.category || null;
+    
+    // For sweets category (حلويات), use the selected status; otherwise default to finished
+    const batchStatus = category === "حلويات" ? status : "finished";
+    
     createMutation.mutate({
       branchId,
       productId: product?.id || null,
       productName,
-      productCategory: productCategory || product?.category || null,
+      productCategory: category,
       quantity: numericQuantity,
       unit: product?.unit || "قطعة",
       destination,
       notes: notes || null,
+      status: batchStatus,
+      chefId: selectedChefId || null,
+      chefName: selectedChefName || null,
     });
   };
 
   const handleQuickEntry = (product: Product, qty: number) => {
+    // For sweets category, use the selected status; otherwise finished
+    const batchStatus = product.category === "حلويات" ? status : "finished";
+    
     createMutation.mutate({
       branchId,
       productId: product.id,
@@ -343,7 +435,21 @@ export default function DailyProductionPage() {
       unit: product.unit || "قطعة",
       destination,
       notes: null,
+      status: batchStatus,
+      chefId: selectedChefId || null,
+      chefName: selectedChefName || null,
     });
+  };
+  
+  // Handle chef selection
+  const handleChefSelect = (chefId: string) => {
+    setSelectedChefId(chefId);
+    const chef = chefs?.find(c => c.id === chefId);
+    if (chef) {
+      setSelectedChefName(`${chef.firstName || ''} ${chef.lastName || ''}`.trim() || chef.username);
+    } else {
+      setSelectedChefName("");
+    }
   };
 
   const handleEditSave = () => {
@@ -433,7 +539,7 @@ export default function DailyProductionPage() {
     );
   }, [products, productSearch]);
 
-  // Filter batches by search, category, and destination
+  // Filter batches by search, category, destination, and status
   const filteredBatches = useMemo(() => {
     if (!batches) return [];
     let result = [...batches];
@@ -445,7 +551,8 @@ export default function DailyProductionPage() {
         b.productName.toLowerCase().includes(search) ||
         (b.productCategory ?? "").toLowerCase().includes(search) ||
         (b.notes ?? "").toLowerCase().includes(search) ||
-        (b.recorderName ?? "").toLowerCase().includes(search)
+        (b.recorderName ?? "").toLowerCase().includes(search) ||
+        (b.chefName ?? "").toLowerCase().includes(search)
       );
     }
     
@@ -459,8 +566,13 @@ export default function DailyProductionPage() {
       result = result.filter(b => b.destination === filterDestination);
     }
     
+    // Filter by status
+    if (filterStatus !== "all") {
+      result = result.filter(b => (b.status || "finished") === filterStatus);
+    }
+    
     return result;
-  }, [batches, batchSearch, filterCategory, filterDestination]);
+  }, [batches, batchSearch, filterCategory, filterDestination, filterStatus]);
 
   const paginatedBatches = getPageItems(filteredBatches, currentPage);
 
@@ -968,6 +1080,67 @@ export default function DailyProductionPage() {
                       </div>
                     </div>
 
+                    {/* Chef Selection */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <ChefHat className="h-4 w-4" />
+                        الشيف المنتج
+                      </Label>
+                      <Select value={selectedChefId} onValueChange={handleChefSelect}>
+                        <SelectTrigger data-testid="select-chef" className="h-11 sm:h-10">
+                          <SelectValue placeholder="اختر الشيف (اختياري)" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60 overflow-y-auto">
+                          <SelectItem value="">بدون تحديد</SelectItem>
+                          {chefs?.map((chef) => (
+                            <SelectItem key={chef.id} value={chef.id}>
+                              {chef.firstName ? `${chef.firstName} ${chef.lastName || ''}`.trim() : chef.username}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Status Selection - Only for Sweets (حلويات) - show based on resolved category */}
+                    {(productCategory === "حلويات" || products?.find(p => p.name === productName)?.category === "حلويات") && (
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          <Timer className="h-4 w-4" />
+                          حالة الإنتاج
+                        </Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {PRODUCTION_STATUSES.map((s) => {
+                            const Icon = s.icon;
+                            return (
+                              <Button
+                                key={s.value}
+                                type="button"
+                                variant={status === s.value ? "default" : "outline"}
+                                className={`h-auto py-2 flex items-center justify-center gap-2 ${
+                                  status === s.value 
+                                    ? s.value === "finished" 
+                                      ? "bg-green-600 hover:bg-green-700" 
+                                      : "bg-amber-600 hover:bg-amber-700"
+                                    : ""
+                                }`}
+                                onClick={() => setStatus(s.value)}
+                                data-testid={`btn-status-${s.value}`}
+                              >
+                                <Icon className="h-4 w-4" />
+                                <span className="text-sm">{s.label}</span>
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        {status === "in_progress" && (
+                          <p className="text-xs text-amber-600 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            سيظهر في قائمة الترحيل للمتابعة
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {!quickMode && (
                       <div className="space-y-2">
                         <Label>ملاحظات</Label>
@@ -1009,6 +1182,71 @@ export default function DailyProductionPage() {
                           </Button>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Carry-Over Panel - Unfinished Batches */}
+                  {unfinishedBatches && unfinishedBatches.length > 0 && (
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="flex items-center justify-between mb-3">
+                        <Label className="text-sm font-medium flex items-center gap-2 text-amber-700">
+                          <AlertTriangle className="h-4 w-4" />
+                          دفعات قيد التحضير ({unfinishedBatches.length})
+                        </Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowCarryOverPanel(!showCarryOverPanel)}
+                          className="text-xs"
+                        >
+                          {showCarryOverPanel ? "إخفاء" : "عرض"}
+                        </Button>
+                      </div>
+                      {showCarryOverPanel && (
+                        <div className="space-y-2">
+                          {unfinishedBatches.slice(0, 5).map((batch) => (
+                            <div
+                              key={batch.id}
+                              className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-200"
+                            >
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{batch.productName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {batch.quantity} {batch.unit || "قطعة"} • {batch.chefName || "بدون شيف"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-green-600 hover:text-green-700"
+                                  onClick={() => finishMutation.mutate(batch.id)}
+                                  title="إكمال"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-blue-600 hover:text-blue-700"
+                                  onClick={() => carryOverMutation.mutate({
+                                    id: batch.id,
+                                    newDate: format(addDays(new Date(batch.producedAt), 1), "yyyy-MM-dd"),
+                                  })}
+                                  title="ترحيل لليوم التالي"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          {unfinishedBatches.length > 5 && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              +{unfinishedBatches.length - 5} دفعة أخرى
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -1060,7 +1298,17 @@ export default function DailyProductionPage() {
                           ))}
                         </SelectContent>
                       </Select>
-                      {(batchSearch || filterCategory !== "all" || filterDestination !== "all") && (
+                      <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setCurrentPage(1); }}>
+                        <SelectTrigger className="w-[140px] h-11 sm:h-10" data-testid="select-filter-status">
+                          <SelectValue placeholder="الحالة" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60 overflow-y-auto">
+                          <SelectItem value="all">كل الحالات</SelectItem>
+                          <SelectItem value="finished">مكتمل</SelectItem>
+                          <SelectItem value="in_progress">قيد التحضير</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {(batchSearch || filterCategory !== "all" || filterDestination !== "all" || filterStatus !== "all") && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1069,6 +1317,7 @@ export default function DailyProductionPage() {
                             setBatchSearch("");
                             setFilterCategory("all");
                             setFilterDestination("all");
+                            setFilterStatus("all");
                             setCurrentPage(1);
                           }}
                           data-testid="btn-clear-filters"
@@ -1115,6 +1364,8 @@ export default function DailyProductionPage() {
                               <TableHead className="text-right">الفئة</TableHead>
                               <TableHead className="text-center">الكمية</TableHead>
                               <TableHead className="text-right">الوجهة</TableHead>
+                              <TableHead className="text-right">الحالة</TableHead>
+                              <TableHead className="text-right">الشيف</TableHead>
                               <TableHead className="text-right">المسجل</TableHead>
                               <TableHead className="text-left">إجراء</TableHead>
                             </TableRow>
@@ -1145,6 +1396,29 @@ export default function DailyProductionPage() {
                                     </Badge>
                                   </TableCell>
                                   <TableCell>
+                                    {batch.status === "in_progress" ? (
+                                      <Badge className="bg-amber-100 text-amber-800 gap-1">
+                                        <Timer className="h-3 w-3" />
+                                        قيد التحضير
+                                      </Badge>
+                                    ) : (
+                                      <Badge className="bg-green-100 text-green-800 gap-1">
+                                        <Check className="h-3 w-3" />
+                                        مكتمل
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {batch.chefName ? (
+                                      <Badge variant="secondary" className="gap-1 text-xs">
+                                        <ChefHat className="h-3 w-3" />
+                                        {batch.chefName}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-muted-foreground text-xs">-</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
                                     <Badge variant="secondary" className="gap-1 text-xs">
                                       <User className="h-3 w-3" />
                                       {batch.recorderName || "-"}
@@ -1152,6 +1426,18 @@ export default function DailyProductionPage() {
                                   </TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-1">
+                                      {/* Finish button for in_progress batches */}
+                                      {batch.status === "in_progress" && canModifyRecords && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 text-green-600 hover:text-green-700"
+                                          onClick={() => finishMutation.mutate(batch.id)}
+                                          title="إكمال الدفعة"
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                       {canModifyRecords && (
                                         <Button
                                           variant="ghost"
