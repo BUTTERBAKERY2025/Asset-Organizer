@@ -3,6 +3,8 @@ import { initReactI18next } from 'react-i18next';
 
 import arPlatformHome from '@/locales/ar/platform-home.json';
 import enPlatformHome from '@/locales/en/platform-home.json';
+import arHr from '@/locales/ar/hr.json';
+import enHr from '@/locales/en/hr.json';
 
 const savedLanguage = localStorage.getItem('language') || 'ar';
 
@@ -12,14 +14,16 @@ i18n
     resources: {
       ar: {
         platformHome: arPlatformHome,
+        hr: arHr,
       },
       en: {
         platformHome: enPlatformHome,
+        hr: enHr,
       },
     },
     lng: savedLanguage,
     fallbackLng: 'ar',
-    ns: ['platformHome'],
+    ns: ['platformHome', 'hr'],
     defaultNS: 'platformHome',
     interpolation: {
       escapeValue: false,

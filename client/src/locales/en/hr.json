@@ -1,0 +1,75 @@
+{
+  "pageTitle": "Comprehensive Branch Employee Management",
+  "pageDescription": "Complete management of branch employees, shifts, attendance and timesheet reports",
+  "quickActions": "Quick Actions",
+  "managementReports": "Management & Reports",
+  "quickGuide": "Quick Guide:",
+  "quickGuideSteps": "Setup Shifts → Record Attendance → Generate Timesheet Reports",
+  "mostUsed": "Most Used",
+  "stats": {
+    "totalEmployees": "Total Employees",
+    "presentToday": "Present Today",
+    "lateToday": "Late Today",
+    "absentToday": "Absent Today",
+    "employee": "employee",
+    "report": "report",
+    "attendanceRate": "Attendance Rate"
+  },
+  "actions": {
+    "attendanceCheck": {
+      "title": "Attendance Check-in",
+      "description": "Record employee check-in/out with electronic signature"
+    },
+    "shiftManagement": {
+      "title": "Shift Management",
+      "description": "Create and manage shift templates and work schedules"
+    },
+    "timesheet": {
+      "title": "Timesheet Reports",
+      "description": "Generate monthly attendance reports with signatures"
+    },
+    "branchEmployees": {
+      "title": "Branch Employees",
+      "description": "Manage employee data, salaries and documents"
+    }
+  },
+  "management": {
+    "orgStructure": {
+      "title": "Organizational Structure",
+      "description": "Departments, divisions and positions"
+    },
+    "reports": {
+      "title": "Comprehensive Reports",
+      "description": "Analytical reports and payroll closure"
+    }
+  },
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "print": "Print",
+    "loading": "Loading...",
+    "noData": "No data available",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "active": "Active",
+    "inactive": "Inactive",
+    "all": "All",
+    "today": "Today",
+    "date": "Date",
+    "time": "Time",
+    "from": "From",
+    "to": "To",
+    "status": "Status",
+    "actions": "Actions",
+    "details": "Details",
+    "notes": "Notes"
+  }
+}
