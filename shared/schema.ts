@@ -5282,3 +5282,112 @@ export const CONTENT_CATEGORIES = {
   behind_scenes: { label: "كواليس", icon: "camera" },
   user_content: { label: "محتوى المستخدمين", icon: "users" },
 } as const;
+
+// Influencer Contracts - عقود المؤثرين والبلوجر
+export const influencerContracts = pgTable("influencer_contracts", {
+  id: serial("id").primaryKey(),
+  contractNumber: text("contract_number").notNull(), // رقم العقد
+  influencerId: integer("influencer_id").references(() => marketingInfluencers.id, { onDelete: "set null" }),
+  
+  // معلومات المؤثر (نسخة لحفظها في العقد حتى لو تغيرت بيانات المؤثر)
+  influencerName: text("influencer_name").notNull(),
+  influencerPhone: text("influencer_phone"),
+  influencerEmail: text("influencer_email"),
+  nationalId: text("national_id"), // رقم الهوية
+  
+  // معلومات الحساب البنكي
+  bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
+  bankAccountHolder: text("bank_account_holder"),
+  iban: text("iban"),
+  
+  // تفاصيل الحملة/التغطية
+  campaignName: text("campaign_name").notNull(), // اسم الحملة أو التغطية
+  campaignDescription: text("campaign_description"), // وصف التغطية
+  branchId: varchar("branch_id").references(() => branches.id), // الفرع المستهدف
+  branchName: text("branch_name"), // اسم الفرع (نسخة)
+  coverageLocation: text("coverage_location"), // مكان التغطية
+  coverageDate: text("coverage_date"), // تاريخ التغطية YYYY-MM-DD
+  coverageTime: text("coverage_time"), // وقت التغطية
+  
+  // الشروط المالية
+  contractAmount: real("contract_amount").notNull(), // مبلغ العقد
+  currency: text("currency").default("SAR"), // العملة
+  paymentTerms: text("payment_terms"), // شروط الدفع
+  
+  // الالتزامات
+  deliverables: text("deliverables").array(), // المخرجات المتوقعة (قصة، منشور، ريلز، إلخ)
+  contentRequirements: text("content_requirements"), // متطلبات المحتوى
+  exclusivityClause: boolean("exclusivity_clause").default(false), // شرط الحصرية
+  
+  // التواريخ
+  contractStartDate: text("contract_start_date").notNull(), // تاريخ بداية العقد
+  contractEndDate: text("contract_end_date"), // تاريخ نهاية العقد
+  
+  // التوقيعات
+  influencerSignature: text("influencer_signature"), // توقيع المؤثر (base64 أو URL)
+  influencerSignedAt: timestamp("influencer_signed_at"),
+  companySignature: text("company_signature"), // توقيع الشركة
+  companySignedAt: timestamp("company_signed_at"),
+  companySignedBy: varchar("company_signed_by").references(() => users.id),
+  
+  // حالة العقد
+  status: text("status").default("draft").notNull(), // draft, pending_signature, signed, completed, cancelled
+  
+  // اعتماد الإدارة المالية
+  financeApproved: boolean("finance_approved").default(false),
+  financeApprovedBy: varchar("finance_approved_by").references(() => users.id),
+  financeApprovedAt: timestamp("finance_approved_at"),
+  financeNotes: text("finance_notes"),
+  
+  // حالة الدفع
+  paymentStatus: text("payment_status").default("pending"), // pending, approved, paid
+  paymentDate: text("payment_date"),
+  paymentReference: text("payment_reference"), // رقم مرجع التحويل
+  
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_influencer_contracts_influencer").on(table.influencerId),
+  index("idx_influencer_contracts_status").on(table.status),
+  index("idx_influencer_contracts_branch").on(table.branchId),
+  index("idx_influencer_contracts_payment").on(table.paymentStatus),
+]);
+
+export const insertInfluencerContractSchema = createInsertSchema(influencerContracts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InfluencerContract = typeof influencerContracts.$inferSelect;
+export type InsertInfluencerContract = z.infer<typeof insertInfluencerContractSchema>;
+
+// Contract Status Constants
+export const CONTRACT_STATUS = {
+  draft: { label: "مسودة", labelEn: "Draft", color: "gray" },
+  pending_signature: { label: "بانتظار التوقيع", labelEn: "Pending Signature", color: "yellow" },
+  signed: { label: "موقع", labelEn: "Signed", color: "green" },
+  completed: { label: "مكتمل", labelEn: "Completed", color: "blue" },
+  cancelled: { label: "ملغي", labelEn: "Cancelled", color: "red" },
+} as const;
+
+export const PAYMENT_STATUS = {
+  pending: { label: "بانتظار الاعتماد", labelEn: "Pending", color: "gray" },
+  approved: { label: "معتمد للصرف", labelEn: "Approved", color: "yellow" },
+  paid: { label: "تم الدفع", labelEn: "Paid", color: "green" },
+} as const;
+
+export const DELIVERABLE_TYPES = [
+  { value: "instagram_story", label: "ستوري انستقرام" },
+  { value: "instagram_post", label: "منشور انستقرام" },
+  { value: "instagram_reel", label: "ريلز انستقرام" },
+  { value: "tiktok_video", label: "فيديو تيك توك" },
+  { value: "snapchat_story", label: "ستوري سناب شات" },
+  { value: "youtube_video", label: "فيديو يوتيوب" },
+  { value: "twitter_post", label: "تغريدة" },
+  { value: "live_coverage", label: "تغطية مباشرة" },
+  { value: "blog_post", label: "مقالة مدونة" },
+] as const;
