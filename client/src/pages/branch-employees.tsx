@@ -1113,11 +1113,11 @@ export default function BranchEmployeesPage() {
   };
 
   const SETTING_CATEGORIES = [
-    { value: "nationality", labelAr: "الجنسيات", icon: Flag },
-    { value: "job_title", labelAr: "الوظائف", icon: Briefcase },
-    { value: "department", labelAr: "الأقسام", icon: Layers },
-    { value: "contract_type", labelAr: "أنواع العقود", icon: FileCheck },
-    { value: "bank", labelAr: "البنوك", icon: CreditCard },
+    { value: "nationality", labelAr: "الجنسيات", labelEn: "Nationalities", icon: Flag },
+    { value: "job_title", labelAr: "الوظائف", labelEn: "Job Titles", icon: Briefcase },
+    { value: "department", labelAr: "الأقسام", labelEn: "Departments", icon: Layers },
+    { value: "contract_type", labelAr: "أنواع العقود", labelEn: "Contract Types", icon: FileCheck },
+    { value: "bank", labelAr: "البنوك", labelEn: "Banks", icon: CreditCard },
   ];
 
   const form = useForm<EmployeeFormData>({
@@ -2465,15 +2465,15 @@ export default function BranchEmployeesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Settings className="w-5 h-5" />
-                  إعدادات بيانات الموظفين
+                  {isRTL ? "إعدادات بيانات الموظفين" : "Employee Data Settings"}
                 </CardTitle>
-                <CardDescription>إدارة القوائم المنسدلة وخيارات البيانات التي تظهر في نماذج الموظفين</CardDescription>
+                <CardDescription>{isRTL ? "إدارة القوائم المنسدلة وخيارات البيانات التي تظهر في نماذج الموظفين" : "Manage dropdown lists and data options displayed in employee forms"}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   {/* Categories sidebar */}
                   <div className="space-y-2">
-                    <h4 className="font-medium text-sm text-gray-500 mb-3">الفئات</h4>
+                    <h4 className="font-medium text-sm text-gray-500 mb-3">{isRTL ? "الفئات" : "Categories"}</h4>
                     {SETTING_CATEGORIES.map((cat) => {
                       const Icon = cat.icon;
                       return (
@@ -2485,8 +2485,8 @@ export default function BranchEmployeesPage() {
                           data-testid={`btn-category-${cat.value}`}
                         >
                           <Icon className="w-4 h-4" />
-                          {cat.labelAr}
-                          <Badge variant="outline" className="mr-auto">{settingsByCategory[cat.value]?.length || 0}</Badge>
+                          {isRTL ? cat.labelAr : cat.labelEn}
+                          <Badge variant="outline" className={isRTL ? "mr-auto" : "ml-auto"}>{settingsByCategory[cat.value]?.length || 0}</Badge>
                         </Button>
                       );
                     })}
@@ -2496,11 +2496,11 @@ export default function BranchEmployeesPage() {
                   <div className="md:col-span-3 space-y-4">
                     <div className="flex justify-between items-center">
                       <h4 className="font-medium">
-                        {SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelAr || settingsCategory}
+                        {isRTL ? SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelAr : SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelEn || settingsCategory}
                       </h4>
                       <Button size="sm" className="bg-amber-600 hover:bg-amber-700" onClick={handleAddSetting} data-testid="btn-add-setting">
-                        <Plus className="w-4 h-4 ml-2" />
-                        إضافة جديد
+                        <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                        {isRTL ? "إضافة جديد" : "Add New"}
                       </Button>
                     </div>
 
@@ -2513,12 +2513,12 @@ export default function BranchEmployeesPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-right">#</TableHead>
-                              <TableHead className="text-right">القيمة</TableHead>
-                              <TableHead className="text-right">الاسم بالعربي</TableHead>
-                              <TableHead className="text-right">الاسم بالإنجليزي</TableHead>
-                              <TableHead className="text-right">الحالة</TableHead>
-                              <TableHead className="text-center w-32">إجراءات</TableHead>
+                              <TableHead className={isRTL ? "text-right" : "text-left"}>#</TableHead>
+                              <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "القيمة" : "Value"}</TableHead>
+                              <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم بالعربي" : "Arabic Name"}</TableHead>
+                              <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم بالإنجليزي" : "English Name"}</TableHead>
+                              <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الحالة" : "Status"}</TableHead>
+                              <TableHead className="text-center w-32">{isRTL ? "إجراءات" : "Actions"}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -2530,7 +2530,7 @@ export default function BranchEmployeesPage() {
                                 <TableCell>{setting.labelEn || "-"}</TableCell>
                                 <TableCell>
                                   <Badge className={setting.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
-                                    {setting.isActive ? "نشط" : "غير نشط"}
+                                    {setting.isActive ? (isRTL ? "نشط" : "Active") : (isRTL ? "غير نشط" : "Inactive")}
                                   </Badge>
                                 </TableCell>
                                 <TableCell>
@@ -2542,7 +2542,7 @@ export default function BranchEmployeesPage() {
                                       variant="ghost" 
                                       size="icon" 
                                       onClick={() => {
-                                        if (confirm(`هل أنت متأكد من حذف "${setting.labelAr}"؟`)) {
+                                        if (confirm(isRTL ? `هل أنت متأكد من حذف "${setting.labelAr}"؟` : `Are you sure you want to delete "${setting.labelEn || setting.labelAr}"?`)) {
                                           deleteSettingMutation.mutate(setting.id);
                                         }
                                       }}
@@ -2557,7 +2557,7 @@ export default function BranchEmployeesPage() {
                             {(!settingsByCategory[settingsCategory] || settingsByCategory[settingsCategory].length === 0) && (
                               <TableRow>
                                 <TableCell colSpan={6} className="text-center text-gray-500 py-8">
-                                  لا توجد بيانات في هذه الفئة
+                                  {isRTL ? "لا توجد بيانات في هذه الفئة" : "No data in this category"}
                                 </TableCell>
                               </TableRow>
                             )}
@@ -2580,53 +2580,57 @@ export default function BranchEmployeesPage() {
                 setNewSettingLabelEn("");
               }
             }}>
-              <DialogContent className="max-w-md" dir="rtl">
+              <DialogContent className="max-w-md" dir={isRTL ? "rtl" : "ltr"}>
                 <DialogHeader>
-                  <DialogTitle>{editingSetting ? "تعديل الإعداد" : "إضافة إعداد جديد"}</DialogTitle>
+                  <DialogTitle>{editingSetting ? (isRTL ? "تعديل الإعداد" : "Edit Setting") : (isRTL ? "إضافة إعداد جديد" : "Add New Setting")}</DialogTitle>
                   <DialogDescription>
-                    {editingSetting ? "تعديل القيمة الموجودة" : `إضافة قيمة جديدة إلى ${SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelAr}`}
+                    {editingSetting 
+                      ? (isRTL ? "تعديل القيمة الموجودة" : "Edit existing value") 
+                      : (isRTL 
+                          ? `إضافة قيمة جديدة إلى ${SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelAr}` 
+                          : `Add new value to ${SETTING_CATEGORIES.find(c => c.value === settingsCategory)?.labelEn}`)}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>القيمة *</Label>
+                    <Label>{isRTL ? "القيمة *" : "Value *"}</Label>
                     <Input 
                       value={newSettingValue}
                       onChange={(e) => setNewSettingValue(e.target.value)}
-                      placeholder="مثال: سعودي"
+                      placeholder={isRTL ? "مثال: سعودي" : "Example: Saudi"}
                       data-testid="input-setting-value"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>الاسم بالعربي *</Label>
+                    <Label>{isRTL ? "الاسم بالعربي *" : "Arabic Name *"}</Label>
                     <Input 
                       value={newSettingLabelAr}
                       onChange={(e) => setNewSettingLabelAr(e.target.value)}
-                      placeholder="مثال: سعودي"
+                      placeholder={isRTL ? "مثال: سعودي" : "Example: سعودي"}
                       data-testid="input-setting-label-ar"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>الاسم بالإنجليزي (اختياري)</Label>
+                    <Label>{isRTL ? "الاسم بالإنجليزي (اختياري)" : "English Name (optional)"}</Label>
                     <Input 
                       value={newSettingLabelEn}
                       onChange={(e) => setNewSettingLabelEn(e.target.value)}
-                      placeholder="مثال: Saudi"
+                      placeholder={isRTL ? "مثال: Saudi" : "Example: Saudi"}
                       dir="ltr"
                       data-testid="input-setting-label-en"
                     />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setIsSettingDialogOpen(false)}>إلغاء</Button>
+                  <Button variant="outline" onClick={() => setIsSettingDialogOpen(false)}>{isRTL ? "إلغاء" : "Cancel"}</Button>
                   <Button 
                     className="bg-amber-600 hover:bg-amber-700"
                     onClick={handleSaveSetting}
                     disabled={!newSettingValue || !newSettingLabelAr || createSettingMutation.isPending || updateSettingMutation.isPending}
                     data-testid="btn-save-setting"
                   >
-                    {(createSettingMutation.isPending || updateSettingMutation.isPending) && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
-                    {editingSetting ? "تحديث" : "إضافة"}
+                    {(createSettingMutation.isPending || updateSettingMutation.isPending) && <Loader2 className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} animate-spin`} />}
+                    {editingSetting ? (isRTL ? "تحديث" : "Update") : (isRTL ? "إضافة" : "Add")}
                   </Button>
                 </div>
               </DialogContent>
