@@ -378,11 +378,14 @@ import {
   purchasingRequestItems,
   type PurchasingRequestItem,
   type InsertPurchasingRequestItem,
+  warehouseNotifications,
+  type WarehouseNotification,
+  type InsertWarehouseNotification,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db } from "./db";
-import { eq, and, gte, lte, desc, or, inArray, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, or, inArray, sql, isNull } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export interface IStorage {
@@ -8752,6 +8755,118 @@ export class DatabaseStorage implements IStorage {
       
       return purchaseRequest;
     });
+  }
+
+  // ==================== Warehouse Notifications ====================
+  
+  async getWarehouseNotifications(filters?: { 
+    branchId?: string; 
+    userId?: string; 
+    isRead?: boolean;
+    limit?: number;
+  }): Promise<WarehouseNotification[]> {
+    let query = db.select().from(warehouseNotifications);
+    const conditions = [];
+    
+    if (filters?.branchId) {
+      conditions.push(
+        or(
+          eq(warehouseNotifications.branchId, filters.branchId),
+          eq(warehouseNotifications.targetBranchId, filters.branchId)
+        )
+      );
+    }
+    if (filters?.userId) {
+      conditions.push(
+        or(
+          eq(warehouseNotifications.userId, filters.userId),
+          isNull(warehouseNotifications.userId)
+        )
+      );
+    }
+    if (filters?.isRead !== undefined) {
+      conditions.push(eq(warehouseNotifications.isRead, filters.isRead));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+    
+    const result = await query.orderBy(desc(warehouseNotifications.createdAt)).limit(filters?.limit || 50);
+    return result;
+  }
+
+  async getUnreadNotificationCount(branchId?: string, userId?: string): Promise<number> {
+    const conditions = [eq(warehouseNotifications.isRead, false)];
+    
+    if (branchId) {
+      conditions.push(
+        or(
+          eq(warehouseNotifications.branchId, branchId),
+          eq(warehouseNotifications.targetBranchId, branchId)
+        ) as any
+      );
+    }
+    if (userId) {
+      conditions.push(
+        or(
+          eq(warehouseNotifications.userId, userId),
+          isNull(warehouseNotifications.userId)
+        ) as any
+      );
+    }
+    
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(warehouseNotifications)
+      .where(and(...conditions));
+    
+    return Number(result[0]?.count || 0);
+  }
+
+  async createWarehouseNotification(data: InsertWarehouseNotification): Promise<WarehouseNotification> {
+    const [notification] = await db.insert(warehouseNotifications).values(data).returning();
+    return notification;
+  }
+
+  async markNotificationAsRead(id: number, userId?: string): Promise<WarehouseNotification | undefined> {
+    const [updated] = await db.update(warehouseNotifications)
+      .set({ 
+        isRead: true, 
+        readAt: new Date(),
+        readBy: userId
+      })
+      .where(eq(warehouseNotifications.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markAllNotificationsAsRead(branchId?: string, userId?: string): Promise<void> {
+    const conditions = [eq(warehouseNotifications.isRead, false)];
+    
+    if (branchId) {
+      conditions.push(
+        or(
+          eq(warehouseNotifications.branchId, branchId),
+          eq(warehouseNotifications.targetBranchId, branchId)
+        ) as any
+      );
+    }
+    if (userId) {
+      conditions.push(
+        or(
+          eq(warehouseNotifications.userId, userId),
+          isNull(warehouseNotifications.userId)
+        ) as any
+      );
+    }
+    
+    await db.update(warehouseNotifications)
+      .set({ isRead: true, readAt: new Date(), readBy: userId })
+      .where(and(...conditions));
+  }
+
+  async deleteWarehouseNotification(id: number): Promise<void> {
+    await db.delete(warehouseNotifications).where(eq(warehouseNotifications.id, id));
   }
 }
 

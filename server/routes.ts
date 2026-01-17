@@ -17140,6 +17140,86 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Warehouse Notifications ====================
+  
+  app.get("/api/warehouse/notifications", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const filters: { branchId?: string; userId?: string; isRead?: boolean; limit?: number } = {};
+      
+      if (req.query.branchId) filters.branchId = req.query.branchId as string;
+      else if (user?.branchId) filters.branchId = user.branchId;
+      
+      filters.userId = user?.id;
+      if (req.query.isRead !== undefined) filters.isRead = req.query.isRead === 'true';
+      if (req.query.limit) filters.limit = parseInt(req.query.limit as string);
+      
+      const notifications = await storage.getWarehouseNotifications(filters);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "فشل في جلب الإشعارات" });
+    }
+  });
+
+  app.get("/api/warehouse/notifications/unread-count", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const branchId = req.query.branchId as string || user?.branchId;
+      const count = await storage.getUnreadNotificationCount(branchId, user?.id);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ error: "فشل في جلب عدد الإشعارات" });
+    }
+  });
+
+  app.post("/api/warehouse/notifications", isAuthenticated, async (req, res) => {
+    try {
+      const notification = await storage.createWarehouseNotification(req.body);
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error("Error creating notification:", error);
+      res.status(500).json({ error: "فشل في إنشاء الإشعار" });
+    }
+  });
+
+  app.put("/api/warehouse/notifications/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const notification = await storage.markNotificationAsRead(parseInt(req.params.id), user?.id);
+      if (!notification) {
+        return res.status(404).json({ error: "الإشعار غير موجود" });
+      }
+      res.json(notification);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "فشل في تحديث الإشعار" });
+    }
+  });
+
+  app.put("/api/warehouse/notifications/mark-all-read", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const branchId = req.query.branchId as string || user?.branchId;
+      await storage.markAllNotificationsAsRead(branchId, user?.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ error: "فشل في تحديث الإشعارات" });
+    }
+  });
+
+  app.delete("/api/warehouse/notifications/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteWarehouseNotification(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      res.status(500).json({ error: "فشل في حذف الإشعار" });
+    }
+  });
+
   // Purchasing Requests
   app.get("/api/purchasing/requests", isAuthenticated, async (req, res) => {
     try {
