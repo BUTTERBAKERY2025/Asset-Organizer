@@ -6,6 +6,61 @@ import vfs from "@digicole/pdfmake-rtl/build/vfs_fonts";
 const pdfMake = pdfMakeRtl as any;
 // vfs_fonts exports vfs directly as default export
 pdfMake.vfs = (vfs as any).default || vfs;
+
+// Flag to track if Amiri font is loaded
+let amiriFontLoaded = false;
+
+async function loadAmiriFont(): Promise<void> {
+  if (amiriFontLoaded) return;
+  try {
+    const [regularRes, boldRes] = await Promise.all([
+      fetch('/assets/Amiri-Regular.ttf'),
+      fetch('/assets/Amiri-Bold.ttf')
+    ]);
+    if (regularRes.ok && boldRes.ok) {
+      const [regularBlob, boldBlob] = await Promise.all([regularRes.blob(), boldRes.blob()]);
+      const [regularBase64, boldBase64] = await Promise.all([
+        blobToBase64(regularBlob),
+        blobToBase64(boldBlob)
+      ]);
+      pdfMake.vfs['Amiri-Regular.ttf'] = regularBase64.split(',')[1];
+      pdfMake.vfs['Amiri-Bold.ttf'] = boldBase64.split(',')[1];
+      pdfMake.fonts = {
+        Amiri: {
+          normal: 'Amiri-Regular.ttf',
+          bold: 'Amiri-Bold.ttf',
+          italics: 'Amiri-Regular.ttf',
+          bolditalics: 'Amiri-Bold.ttf',
+        },
+        Nillima: {
+          normal: 'Nillima.ttf',
+          bold: 'Nillima.ttf',
+          italics: 'Nillima.ttf',
+          bolditalics: 'Nillima.ttf',
+        },
+        Roboto: {
+          normal: 'Nillima.ttf',
+          bold: 'Nillima.ttf',
+          italics: 'Nillima.ttf',
+          bolditalics: 'Nillima.ttf',
+        }
+      };
+      amiriFontLoaded = true;
+    }
+  } catch (e) {
+    console.warn('Failed to load Amiri font, using default');
+  }
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 pdfMake.fonts = {
   Nillima: {
     normal: 'Nillima.ttf',
@@ -88,6 +143,7 @@ export async function generateTransferPdf(
   items: TransferItemWithAvailable[]
 ): Promise<void> {
   
+  await loadAmiriFont();
   const logoBase64 = await getLogoBase64();
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
   const destName = transfer.destinationBranchName || 'غير محدد';
@@ -289,8 +345,8 @@ export async function generateTransferPdf(
       tableHeader: { bold: true, fontSize: 8, fillColor: '#f0f0f0' }
     },
     defaultStyle: {
-      font: 'Nillima',
-      fontSize: 9,
+      font: amiriFontLoaded ? 'Amiri' : 'Nillima',
+      fontSize: 10,
       alignment: 'right'
     }
   };
@@ -299,6 +355,7 @@ export async function generateTransferPdf(
 }
 
 export async function generateQuickTransferPdf(transfer: MaterialTransferWithNames): Promise<void> {
+  await loadAmiriFont();
   const logoBase64 = await getLogoBase64();
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
   const destName = transfer.destinationBranchName || 'غير محدد';
@@ -462,8 +519,8 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
       }
     ],
     defaultStyle: {
-      font: 'Nillima',
-      fontSize: 9,
+      font: amiriFontLoaded ? 'Amiri' : 'Nillima',
+      fontSize: 10,
       alignment: 'right'
     }
   };
