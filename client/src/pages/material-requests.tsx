@@ -59,6 +59,15 @@ type Branch = {
   nameAr: string;
 };
 
+type WarehouseItem = {
+  id: number;
+  name: string;
+  nameEn: string;
+  sku: string;
+  category: string;
+  unit: string;
+};
+
 const MATERIAL_CATEGORIES = [
   { value: "raw_materials", labelAr: "مواد خام", labelEn: "Raw Materials" },
   { value: "consumables", labelAr: "مستهلكات", labelEn: "Consumables" },
@@ -140,6 +149,15 @@ export default function MaterialRequestsPage() {
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
+  });
+
+  const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
+    queryKey: ["/api/warehouse/items"],
+    queryFn: async () => {
+      const response = await fetch("/api/warehouse/items?isActive=true");
+      if (!response.ok) throw new Error("Failed to fetch items");
+      return response.json();
+    },
   });
 
   const { data: requests = [], isLoading } = useQuery<MaterialRequest[]>({
@@ -247,7 +265,7 @@ export default function MaterialRequestsPage() {
   const addItem = () => {
     setNewRequest(prev => ({
       ...prev,
-      items: [...prev.items, { itemName: "", category: prev.requestType, requestedQuantity: 1, unit: "كجم", notes: "" }],
+      items: [...prev.items, { itemId: 0, itemName: "", category: prev.requestType, requestedQuantity: 1, unit: "كجم", notes: "" }],
     }));
   };
 
@@ -454,12 +472,30 @@ export default function MaterialRequestsPage() {
                       <div className="grid grid-cols-12 gap-2 items-end">
                         <div className="col-span-4">
                           <Label className="text-xs">{isRTL ? "اسم المادة" : "Item Name"}</Label>
-                          <Input 
-                            value={item.itemName}
-                            onChange={(e) => updateItem(index, "itemName", e.target.value)}
-                            placeholder={isRTL ? "اسم المادة" : "Item name"}
-                            data-testid={`input-item-name-${index}`}
-                          />
+                          <Select 
+                            value={item.itemId ? String(item.itemId) : ""} 
+                            onValueChange={(value) => {
+                              const selectedItem = warehouseItems.find(i => i.id === parseInt(value));
+                              if (selectedItem) {
+                                updateItem(index, "itemId", selectedItem.id);
+                                updateItem(index, "itemName", selectedItem.name);
+                                updateItem(index, "unit", selectedItem.unit);
+                              }
+                            }}
+                          >
+                            <SelectTrigger data-testid={`select-item-${index}`}>
+                              <SelectValue placeholder={isRTL ? "اختر المادة" : "Select item"} />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                              {warehouseItems
+                                .filter(i => !newRequest.requestType || i.category === newRequest.requestType)
+                                .map((wItem) => (
+                                  <SelectItem key={wItem.id} value={String(wItem.id)}>
+                                    {wItem.name} {wItem.sku ? `(${wItem.sku})` : ""}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="col-span-2">
                           <Label className="text-xs">{isRTL ? "الكمية" : "Quantity"}</Label>
