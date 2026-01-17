@@ -12,6 +12,12 @@ pdfMake.fonts = {
     bold: 'Nillima.ttf',
     italics: 'Nillima.ttf',
     bolditalics: 'Nillima.ttf',
+  },
+  Roboto: {
+    normal: 'Nillima.ttf',
+    bold: 'Nillima.ttf',
+    italics: 'Nillima.ttf',
+    bolditalics: 'Nillima.ttf',
   }
 };
 
