@@ -149,7 +149,7 @@ export default function TransferRequestsPage() {
     `,
   });
 
-  // Generate PDF document definition with professional header
+  // Generate PDF document definition - Compact formal style
   const generatePdfDocDefinition = () => {
     if (!selectedTransfer) return null;
     
@@ -158,6 +158,7 @@ export default function TransferRequestsPage() {
     const srcName = selectedTransfer.sourceBranchName || 'المستودع الرئيسي';
     const requestDate = selectedTransfer.createdAt ? new Date(selectedTransfer.createdAt).toLocaleString('ar-SA') : '-';
     const printDate = new Date().toLocaleString('ar-SA');
+    const transferDate = selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString('ar-SA') : '-';
     
     const tableBody = [
       [
@@ -165,256 +166,146 @@ export default function TransferRequestsPage() {
         { text: 'الوحدة', style: 'tableHeader', alignment: 'center' },
         { text: 'الكمية', style: 'tableHeader', alignment: 'center' },
         { text: 'التصنيف', style: 'tableHeader', alignment: 'center' },
-        { text: 'الصنف', style: 'tableHeader', alignment: 'center' },
-        { text: '#', style: 'tableHeader', alignment: 'center' },
+        { text: 'اسم الصنف', style: 'tableHeader', alignment: 'center' },
+        { text: 'م', style: 'tableHeader', alignment: 'center' },
       ],
       ...transferItems.map((item, index) => [
-        { text: item.notes || '-', alignment: 'center' },
-        { text: item.unit, alignment: 'center' },
-        { text: item.quantity.toString(), alignment: 'center', bold: true, fontSize: 12 },
-        { text: item.category || '-', alignment: 'center' },
-        { text: item.itemName, alignment: 'center', bold: true },
-        { text: (index + 1).toString(), alignment: 'center' },
+        { text: item.notes || '-', fontSize: 8, alignment: 'center' },
+        { text: item.unit, fontSize: 9, alignment: 'center' },
+        { text: item.quantity.toString(), fontSize: 9, bold: true, alignment: 'center' },
+        { text: item.category || '-', fontSize: 8, alignment: 'center' },
+        { text: item.itemName, fontSize: 9, alignment: 'center' },
+        { text: (index + 1).toString(), fontSize: 9, alignment: 'center' },
       ])
     ];
 
     return {
       pageSize: 'A4',
       pageOrientation: 'portrait',
-      pageMargins: [30, 30, 30, 50],
+      pageMargins: [20, 15, 20, 30],
       
       footer: (currentPage: number, pageCount: number) => ({
         columns: [
-          { text: `صفحة ${currentPage} من ${pageCount}`, alignment: 'center', fontSize: 9, color: '#888888' },
+          { text: `صفحة ${currentPage} من ${pageCount}`, alignment: 'center', fontSize: 8, color: '#666' },
         ],
-        margin: [30, 10, 30, 0]
+        margin: [20, 5, 20, 0]
       }),
       
       content: [
-        // Professional Header with Company Info
+        // Compact Header Row
+        {
+          columns: [
+            { text: 'مخابز باتر | BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
+            { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
+          ],
+          margin: [0, 0, 0, 3]
+        },
+        
+        // Thin divider
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 1, lineColor: '#D4A853' }], margin: [0, 0, 0, 6] },
+        
+        // Compact Info Row - Transfer details
         {
           table: {
-            widths: ['*', 'auto'],
+            widths: ['auto', '*', 'auto', '*', 'auto', '*'],
             body: [
               [
-                {
-                  stack: [
-                    { text: '🧈', fontSize: 28, alignment: 'right' },
-                    { text: 'مخابز باتر', fontSize: 22, bold: true, alignment: 'right', color: '#D4A853' },
-                    { text: 'BUTTER BAKERY', fontSize: 10, alignment: 'right', color: '#888888' },
-                  ],
-                  border: [false, false, false, false]
-                },
-                {
-                  stack: [
-                    { text: 'أمر تحويل مواد', fontSize: 18, bold: true, alignment: 'left', color: '#333333' },
-                    { text: 'Material Transfer Order', fontSize: 9, alignment: 'left', color: '#888888' },
-                  ],
-                  border: [false, false, false, false]
-                }
+                { text: 'رقم التحويل:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: selectedTransfer.transferNumber, fontSize: 9, bold: true, border: [false, false, false, false] },
+                { text: 'الحالة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: statusLabel, fontSize: 9, bold: true, color: '#16a34a', border: [false, false, false, false] },
+                { text: 'التاريخ:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: transferDate, fontSize: 9, bold: true, border: [false, false, false, false] },
               ]
             ]
           },
           layout: 'noBorders',
-          margin: [0, 0, 0, 10]
+          margin: [0, 0, 0, 4]
         },
         
-        // Divider line
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 2, lineColor: '#D4A853' }], margin: [0, 0, 0, 15] },
-        
-        // Transfer Number & Status Card
+        // Transfer Flow - Compact inline
         {
           table: {
-            widths: ['*', '*', '*'],
+            widths: ['auto', '*', 'auto', 'auto', 'auto', '*'],
             body: [
               [
-                { 
-                  stack: [
-                    { text: 'رقم التحويل', fontSize: 9, color: '#666666', alignment: 'center' },
-                    { text: selectedTransfer.transferNumber, fontSize: 14, bold: true, alignment: 'center', color: '#333333' }
-                  ],
-                  fillColor: '#f8f9fa',
-                  border: [true, true, true, true],
-                  margin: [5, 8, 5, 8]
-                },
-                { 
-                  stack: [
-                    { text: 'الحالة', fontSize: 9, color: '#666666', alignment: 'center' },
-                    { text: statusLabel, fontSize: 12, bold: true, alignment: 'center', color: '#16a34a' }
-                  ],
-                  fillColor: '#f0fdf4',
-                  border: [true, true, true, true],
-                  margin: [5, 8, 5, 8]
-                },
-                { 
-                  stack: [
-                    { text: 'تاريخ التحويل', fontSize: 9, color: '#666666', alignment: 'center' },
-                    { text: selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString('ar-SA') : '-', fontSize: 12, bold: true, alignment: 'center', color: '#333333' }
-                  ],
-                  fillColor: '#f8f9fa',
-                  border: [true, true, true, true],
-                  margin: [5, 8, 5, 8]
-                }
+                { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
+                { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
+                { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
+                { text: '', border: [false, false, false, false] },
               ]
             ]
           },
-          layout: {
-            hLineWidth: () => 1,
-            vLineWidth: () => 1,
-            hLineColor: () => '#e5e7eb',
-            vLineColor: () => '#e5e7eb',
-          },
-          margin: [0, 0, 0, 15]
+          layout: 'noBorders',
+          margin: [0, 0, 0, 4]
         },
         
-        // Request Time & Print Time
+        // Time info - Compact
         {
           columns: [
-            { text: `وقت الطباعة: ${printDate}`, fontSize: 9, color: '#666666', alignment: 'right' },
-            { text: `وقت الطلب: ${requestDate}`, fontSize: 9, color: '#666666', alignment: 'left' },
+            { text: `وقت الطلب: ${requestDate}`, fontSize: 7, color: '#888', alignment: 'right' },
+            { text: `وقت الطباعة: ${printDate}`, fontSize: 7, color: '#888', alignment: 'left' },
           ],
-          margin: [0, 0, 0, 15]
+          margin: [0, 0, 0, 6]
         },
         
-        // Transfer Flow Section
-        {
-          table: {
-            widths: ['*', 'auto', '*'],
-            body: [
-              [
-                { 
-                  stack: [
-                    { text: '📦', fontSize: 20, alignment: 'center' },
-                    { text: srcName, fontSize: 14, bold: true, alignment: 'center', color: '#16a34a' },
-                    { text: 'المصدر', fontSize: 9, color: '#666666', alignment: 'center' }
-                  ],
-                  fillColor: '#f0fdf4',
-                  border: [true, true, true, true],
-                  margin: [10, 10, 10, 10]
-                },
-                { 
-                  stack: [
-                    { text: '➡️', fontSize: 24, alignment: 'center', margin: [0, 15, 0, 0] }
-                  ],
-                  border: [false, false, false, false]
-                },
-                { 
-                  stack: [
-                    { text: '🏪', fontSize: 20, alignment: 'center' },
-                    { text: destName, fontSize: 14, bold: true, alignment: 'center', color: '#2563eb' },
-                    { text: 'الوجهة', fontSize: 9, color: '#666666', alignment: 'center' }
-                  ],
-                  fillColor: '#eff6ff',
-                  border: [true, true, true, true],
-                  margin: [10, 10, 10, 10]
-                }
-              ]
-            ]
-          },
-          layout: {
-            hLineWidth: (i: number, node: any) => (node.table.body[0][0].border ? 1 : 0),
-            vLineWidth: (i: number, node: any) => (node.table.body[0][0].border ? 1 : 0),
-            hLineColor: () => '#e5e7eb',
-            vLineColor: () => '#e5e7eb',
-          },
-          margin: [0, 0, 0, 20]
-        },
-        
-        // Items Section Header
-        { 
-          text: '📋 الأصناف المحولة', 
-          style: 'sectionHeader', 
-          alignment: 'right', 
-          margin: [0, 5, 0, 10],
-          fontSize: 14,
-          bold: true,
-          color: '#333333'
-        },
-        
-        // Items Table
-        {
-          table: {
-            headerRows: 1,
-            widths: ['*', 50, 50, 80, '*', 30],
-            body: tableBody
-          },
-          layout: {
-            hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length) ? 1.5 : 0.5,
-            vLineWidth: () => 0.5,
-            hLineColor: (i: number) => i === 1 ? '#D4A853' : '#e5e7eb',
-            vLineColor: () => '#e5e7eb',
-            fillColor: (rowIndex: number) => rowIndex === 0 ? '#D4A853' : (rowIndex % 2 === 0 ? '#fafafa' : null)
-          },
-          margin: [0, 0, 0, 20]
-        },
-        
-        // Driver & Vehicle Info
+        // Driver & Vehicle - Compact inline (if exists)
         ...(selectedTransfer.driverName || selectedTransfer.vehicleNumber ? [
           {
             table: {
-              widths: ['*', '*'],
+              widths: ['auto', '*', 'auto', '*'],
               body: [
                 [
-                  { 
-                    stack: [
-                      { text: '🚚 السائق', fontSize: 10, color: '#666666', alignment: 'center' },
-                      { text: selectedTransfer.driverName || '-', fontSize: 12, bold: true, alignment: 'center' }
-                    ],
-                    fillColor: '#fef3c7',
-                    border: [true, true, true, true],
-                    margin: [10, 8, 10, 8]
-                  },
-                  { 
-                    stack: [
-                      { text: '🚗 رقم المركبة', fontSize: 10, color: '#666666', alignment: 'center' },
-                      { text: selectedTransfer.vehicleNumber || '-', fontSize: 12, bold: true, alignment: 'center' }
-                    ],
-                    fillColor: '#fef3c7',
-                    border: [true, true, true, true],
-                    margin: [10, 8, 10, 8]
-                  }
+                  { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                  { text: selectedTransfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
+                  { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                  { text: selectedTransfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
                 ]
               ]
             },
-            layout: {
-              hLineWidth: () => 1,
-              vLineWidth: () => 1,
-              hLineColor: () => '#fcd34d',
-              vLineColor: () => '#fcd34d',
-            },
-            margin: [0, 0, 0, 15]
+            layout: 'noBorders',
+            margin: [0, 0, 0, 6]
           }
         ] : []),
         
-        // Notes Section
+        // Items Table Header
+        { text: 'الأصناف المحولة:', fontSize: 10, bold: true, margin: [0, 2, 0, 4] },
+        
+        // Compact Items Table
+        {
+          table: {
+            headerRows: 1,
+            widths: [80, 35, 35, 60, '*', 20],
+            body: tableBody
+          },
+          layout: {
+            hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.5 : 0.25,
+            vLineWidth: () => 0.25,
+            hLineColor: () => '#ccc',
+            vLineColor: () => '#ccc',
+            paddingTop: () => 2,
+            paddingBottom: () => 2,
+            paddingLeft: () => 3,
+            paddingRight: () => 3,
+            fillColor: (rowIndex: number) => rowIndex === 0 ? '#f0f0f0' : null
+          },
+          margin: [0, 0, 0, 6]
+        },
+        
+        // Notes - Compact (if exists)
         ...(selectedTransfer.notes ? [
           {
-            table: {
-              widths: ['*'],
-              body: [
-                [{ 
-                  stack: [
-                    { text: '📝 ملاحظات', fontSize: 10, bold: true, color: '#666666', margin: [0, 0, 0, 5] },
-                    { text: selectedTransfer.notes, fontSize: 11, alignment: 'right' }
-                  ],
-                  fillColor: '#f8f9fa',
-                  border: [true, true, true, true],
-                  margin: [10, 8, 10, 8]
-                }]
-              ]
-            },
-            layout: {
-              hLineWidth: () => 1,
-              vLineWidth: () => 1,
-              hLineColor: () => '#e5e7eb',
-              vLineColor: () => '#e5e7eb',
-            },
-            margin: [0, 0, 0, 20]
+            columns: [
+              { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
+              { text: selectedTransfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
+            ],
+            margin: [0, 0, 0, 8]
           }
         ] : []),
         
-        // Signatures Section
-        { text: '', margin: [0, 20, 0, 0] },
+        // Compact Signatures Row
         {
           table: {
             widths: ['*', '*', '*'],
@@ -422,54 +313,49 @@ export default function TransferRequestsPage() {
               [
                 { 
                   stack: [
-                    { text: 'توقيع المستلم', fontSize: 10, bold: true, alignment: 'center', color: '#666666' },
-                    { text: '', margin: [0, 30, 0, 0] },
-                    { canvas: [{ type: 'line', x1: 20, y1: 0, x2: 140, y2: 0, lineWidth: 1, lineColor: '#333333' }] },
-                    { text: 'التاريخ: ___/___/______', fontSize: 9, alignment: 'center', color: '#888888', margin: [0, 10, 0, 0] }
+                    { text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' },
+                    { text: '', margin: [0, 15, 0, 0] },
+                    { text: '_______________', fontSize: 10, alignment: 'center' },
                   ],
                   border: [true, true, true, true],
-                  margin: [5, 10, 5, 10]
+                  margin: [2, 3, 2, 3]
                 },
                 { 
                   stack: [
-                    { text: 'توقيع المُرسل', fontSize: 10, bold: true, alignment: 'center', color: '#666666' },
-                    { text: '', margin: [0, 30, 0, 0] },
-                    { canvas: [{ type: 'line', x1: 20, y1: 0, x2: 140, y2: 0, lineWidth: 1, lineColor: '#333333' }] },
-                    { text: 'التاريخ: ___/___/______', fontSize: 9, alignment: 'center', color: '#888888', margin: [0, 10, 0, 0] }
+                    { text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' },
+                    { text: '', margin: [0, 15, 0, 0] },
+                    { text: '_______________', fontSize: 10, alignment: 'center' },
                   ],
                   border: [true, true, true, true],
-                  margin: [5, 10, 5, 10]
+                  margin: [2, 3, 2, 3]
                 },
                 { 
                   stack: [
-                    { text: 'توقيع المدير', fontSize: 10, bold: true, alignment: 'center', color: '#666666' },
-                    { text: '', margin: [0, 30, 0, 0] },
-                    { canvas: [{ type: 'line', x1: 20, y1: 0, x2: 140, y2: 0, lineWidth: 1, lineColor: '#333333' }] },
-                    { text: 'التاريخ: ___/___/______', fontSize: 9, alignment: 'center', color: '#888888', margin: [0, 10, 0, 0] }
+                    { text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' },
+                    { text: '', margin: [0, 15, 0, 0] },
+                    { text: '_______________', fontSize: 10, alignment: 'center' },
                   ],
                   border: [true, true, true, true],
-                  margin: [5, 10, 5, 10]
+                  margin: [2, 3, 2, 3]
                 }
               ]
             ]
           },
           layout: {
-            hLineWidth: () => 1,
-            vLineWidth: () => 1,
-            hLineColor: () => '#e5e7eb',
-            vLineColor: () => '#e5e7eb',
-          }
+            hLineWidth: () => 0.5,
+            vLineWidth: () => 0.5,
+            hLineColor: () => '#ccc',
+            vLineColor: () => '#ccc',
+          },
+          margin: [0, 6, 0, 0]
         }
       ],
       styles: {
-        header: { fontSize: 18, bold: true },
-        subheader: { fontSize: 14, color: 'gray' },
-        sectionHeader: { fontSize: 12, bold: true },
-        tableHeader: { bold: true, fillColor: '#D4A853', color: '#ffffff', fontSize: 10 }
+        tableHeader: { bold: true, fontSize: 8, fillColor: '#f0f0f0' }
       },
       defaultStyle: {
         font: 'Nillima',
-        fontSize: 11,
+        fontSize: 9,
         alignment: 'right'
       }
     };
@@ -817,232 +703,127 @@ _مُرسل من نظام باتر_`;
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
   };
 
-  // Quick PDF download from table row (simplified version without items)
+  // Quick PDF download from table row (simplified version without items) - Compact formal style
   const handleQuickPdf = (transfer: MaterialTransfer) => {
     const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
     const destName = transfer.destinationBranchName || 'غير محدد';
     const srcName = transfer.sourceBranchName || 'المستودع الرئيسي';
     const requestDate = transfer.createdAt ? new Date(transfer.createdAt).toLocaleString('ar-SA') : '-';
     const printDate = new Date().toLocaleString('ar-SA');
+    const transferDate = transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-';
     
     const docDefinition = {
       pageSize: 'A4',
       pageOrientation: 'portrait',
-      pageMargins: [30, 30, 30, 50],
+      pageMargins: [20, 15, 20, 30],
       
       footer: {
         columns: [
-          { text: 'صفحة 1 من 1', alignment: 'center', fontSize: 9, color: '#888888' },
+          { text: 'صفحة 1 من 1', alignment: 'center', fontSize: 8, color: '#666' },
         ],
-        margin: [30, 10, 30, 0]
+        margin: [20, 5, 20, 0]
       },
       
       content: [
-        // Professional Header
+        // Compact Header Row
+        {
+          columns: [
+            { text: 'مخابز باتر | BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
+            { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
+          ],
+          margin: [0, 0, 0, 3]
+        },
+        
+        // Thin divider
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 1, lineColor: '#D4A853' }], margin: [0, 0, 0, 6] },
+        
+        // Compact Info Row
         {
           table: {
-            widths: ['*', 'auto'],
+            widths: ['auto', '*', 'auto', '*', 'auto', '*'],
             body: [
               [
-                {
-                  stack: [
-                    { text: '🧈', fontSize: 28, alignment: 'right' },
-                    { text: 'مخابز باتر', fontSize: 22, bold: true, alignment: 'right', color: '#D4A853' },
-                    { text: 'BUTTER BAKERY', fontSize: 10, alignment: 'right', color: '#888888' },
-                  ],
-                  border: [false, false, false, false]
-                },
-                {
-                  stack: [
-                    { text: 'أمر تحويل مواد', fontSize: 18, bold: true, alignment: 'left', color: '#333333' },
-                    { text: 'Material Transfer Order', fontSize: 9, alignment: 'left', color: '#888888' },
-                  ],
-                  border: [false, false, false, false]
-                }
+                { text: 'رقم التحويل:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: transfer.transferNumber, fontSize: 9, bold: true, border: [false, false, false, false] },
+                { text: 'الحالة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: statusLabel, fontSize: 9, bold: true, color: '#16a34a', border: [false, false, false, false] },
+                { text: 'التاريخ:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: transferDate, fontSize: 9, bold: true, border: [false, false, false, false] },
               ]
             ]
           },
           layout: 'noBorders',
-          margin: [0, 0, 0, 10]
+          margin: [0, 0, 0, 4]
         },
         
-        // Divider line
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 2, lineColor: '#D4A853' }], margin: [0, 0, 0, 15] },
-        
-        // Transfer Number & Status Card
+        // Transfer Flow - Compact inline
         {
           table: {
-            widths: ['*', '*', '*'],
+            widths: ['auto', '*', 'auto', 'auto', '*', 'auto'],
             body: [
               [
-                { 
-                  stack: [
-                    { text: 'رقم التحويل', fontSize: 9, color: '#666666', alignment: 'center' },
-                    { text: transfer.transferNumber, fontSize: 14, bold: true, alignment: 'center', color: '#333333' }
-                  ],
-                  fillColor: '#f8f9fa',
-                  border: [true, true, true, true],
-                  margin: [5, 8, 5, 8]
-                },
-                { 
-                  stack: [
-                    { text: 'الحالة', fontSize: 9, color: '#666666', alignment: 'center' },
-                    { text: statusLabel, fontSize: 12, bold: true, alignment: 'center', color: '#16a34a' }
-                  ],
-                  fillColor: '#f0fdf4',
-                  border: [true, true, true, true],
-                  margin: [5, 8, 5, 8]
-                },
-                { 
-                  stack: [
-                    { text: 'تاريخ التحويل', fontSize: 9, color: '#666666', alignment: 'center' },
-                    { text: transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-', fontSize: 12, bold: true, alignment: 'center', color: '#333333' }
-                  ],
-                  fillColor: '#f8f9fa',
-                  border: [true, true, true, true],
-                  margin: [5, 8, 5, 8]
-                }
+                { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
+                { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
+                { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
+                { text: '', border: [false, false, false, false] },
               ]
             ]
           },
-          layout: {
-            hLineWidth: () => 1,
-            vLineWidth: () => 1,
-            hLineColor: () => '#e5e7eb',
-            vLineColor: () => '#e5e7eb',
-          },
-          margin: [0, 0, 0, 15]
+          layout: 'noBorders',
+          margin: [0, 0, 0, 4]
         },
         
-        // Request Time & Print Time
+        // Time info - Compact
         {
           columns: [
-            { text: `وقت الطباعة: ${printDate}`, fontSize: 9, color: '#666666', alignment: 'right' },
-            { text: `وقت الطلب: ${requestDate}`, fontSize: 9, color: '#666666', alignment: 'left' },
+            { text: `وقت الطلب: ${requestDate}`, fontSize: 7, color: '#888', alignment: 'right' },
+            { text: `وقت الطباعة: ${printDate}`, fontSize: 7, color: '#888', alignment: 'left' },
           ],
-          margin: [0, 0, 0, 15]
+          margin: [0, 0, 0, 6]
         },
         
-        // Transfer Flow Section
-        {
-          table: {
-            widths: ['*', 'auto', '*'],
-            body: [
-              [
-                { 
-                  stack: [
-                    { text: '📦', fontSize: 20, alignment: 'center' },
-                    { text: srcName, fontSize: 14, bold: true, alignment: 'center', color: '#16a34a' },
-                    { text: 'المصدر', fontSize: 9, color: '#666666', alignment: 'center' }
-                  ],
-                  fillColor: '#f0fdf4',
-                  border: [true, true, true, true],
-                  margin: [10, 10, 10, 10]
-                },
-                { 
-                  stack: [
-                    { text: '➡️', fontSize: 24, alignment: 'center', margin: [0, 15, 0, 0] }
-                  ],
-                  border: [false, false, false, false]
-                },
-                { 
-                  stack: [
-                    { text: '🏪', fontSize: 20, alignment: 'center' },
-                    { text: destName, fontSize: 14, bold: true, alignment: 'center', color: '#2563eb' },
-                    { text: 'الوجهة', fontSize: 9, color: '#666666', alignment: 'center' }
-                  ],
-                  fillColor: '#eff6ff',
-                  border: [true, true, true, true],
-                  margin: [10, 10, 10, 10]
-                }
-              ]
-            ]
-          },
-          layout: {
-            hLineWidth: (i: number, node: any) => (node.table.body[0][0].border ? 1 : 0),
-            vLineWidth: (i: number, node: any) => (node.table.body[0][0].border ? 1 : 0),
-            hLineColor: () => '#e5e7eb',
-            vLineColor: () => '#e5e7eb',
-          },
-          margin: [0, 0, 0, 20]
-        },
-        
-        // Note about items
-        {
-          text: '⚠️ للحصول على قائمة الأصناف الكاملة، يرجى استخدام زر الطباعة من صفحة التفاصيل',
-          fontSize: 10,
-          color: '#f59e0b',
-          alignment: 'center',
-          margin: [0, 0, 0, 20]
-        },
-        
-        // Driver & Vehicle Info
+        // Driver & Vehicle - Compact inline (if exists)
         ...(transfer.driverName || transfer.vehicleNumber ? [
           {
             table: {
-              widths: ['*', '*'],
+              widths: ['auto', '*', 'auto', '*'],
               body: [
                 [
-                  { 
-                    stack: [
-                      { text: '🚚 السائق', fontSize: 10, color: '#666666', alignment: 'center' },
-                      { text: transfer.driverName || '-', fontSize: 12, bold: true, alignment: 'center' }
-                    ],
-                    fillColor: '#fef3c7',
-                    border: [true, true, true, true],
-                    margin: [10, 8, 10, 8]
-                  },
-                  { 
-                    stack: [
-                      { text: '🚗 رقم المركبة', fontSize: 10, color: '#666666', alignment: 'center' },
-                      { text: transfer.vehicleNumber || '-', fontSize: 12, bold: true, alignment: 'center' }
-                    ],
-                    fillColor: '#fef3c7',
-                    border: [true, true, true, true],
-                    margin: [10, 8, 10, 8]
-                  }
+                  { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                  { text: transfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
+                  { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+                  { text: transfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
                 ]
               ]
             },
-            layout: {
-              hLineWidth: () => 1,
-              vLineWidth: () => 1,
-              hLineColor: () => '#fcd34d',
-              vLineColor: () => '#fcd34d',
-            },
-            margin: [0, 0, 0, 15]
+            layout: 'noBorders',
+            margin: [0, 0, 0, 6]
           }
         ] : []),
         
-        // Notes Section
+        // Note about items
+        {
+          text: 'ملاحظة: للحصول على قائمة الأصناف، استخدم زر عرض ثم PDF',
+          fontSize: 8,
+          color: '#888',
+          alignment: 'center',
+          margin: [0, 10, 0, 10]
+        },
+        
+        // Notes - Compact (if exists)
         ...(transfer.notes ? [
           {
-            table: {
-              widths: ['*'],
-              body: [
-                [{ 
-                  stack: [
-                    { text: '📝 ملاحظات', fontSize: 10, bold: true, color: '#666666', margin: [0, 0, 0, 5] },
-                    { text: transfer.notes, fontSize: 11, alignment: 'right' }
-                  ],
-                  fillColor: '#f8f9fa',
-                  border: [true, true, true, true],
-                  margin: [10, 8, 10, 8]
-                }]
-              ]
-            },
-            layout: {
-              hLineWidth: () => 1,
-              vLineWidth: () => 1,
-              hLineColor: () => '#e5e7eb',
-              vLineColor: () => '#e5e7eb',
-            },
-            margin: [0, 0, 0, 20]
+            columns: [
+              { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
+              { text: transfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
+            ],
+            margin: [0, 0, 0, 8]
           }
         ] : []),
         
-        // Signatures Section
-        { text: '', margin: [0, 20, 0, 0] },
+        // Compact Signatures Row
         {
           table: {
             widths: ['*', '*', '*'],
@@ -1050,53 +831,46 @@ _مُرسل من نظام باتر_`;
               [
                 { 
                   stack: [
-                    { text: 'توقيع المستلم', fontSize: 10, bold: true, alignment: 'center', color: '#666666' },
-                    { text: '', margin: [0, 30, 0, 0] },
-                    { canvas: [{ type: 'line', x1: 20, y1: 0, x2: 140, y2: 0, lineWidth: 1, lineColor: '#333333' }] },
-                    { text: 'التاريخ: ___/___/______', fontSize: 9, alignment: 'center', color: '#888888', margin: [0, 10, 0, 0] }
+                    { text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' },
+                    { text: '', margin: [0, 15, 0, 0] },
+                    { text: '_______________', fontSize: 10, alignment: 'center' },
                   ],
                   border: [true, true, true, true],
-                  margin: [5, 10, 5, 10]
+                  margin: [2, 3, 2, 3]
                 },
                 { 
                   stack: [
-                    { text: 'توقيع المُرسل', fontSize: 10, bold: true, alignment: 'center', color: '#666666' },
-                    { text: '', margin: [0, 30, 0, 0] },
-                    { canvas: [{ type: 'line', x1: 20, y1: 0, x2: 140, y2: 0, lineWidth: 1, lineColor: '#333333' }] },
-                    { text: 'التاريخ: ___/___/______', fontSize: 9, alignment: 'center', color: '#888888', margin: [0, 10, 0, 0] }
+                    { text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' },
+                    { text: '', margin: [0, 15, 0, 0] },
+                    { text: '_______________', fontSize: 10, alignment: 'center' },
                   ],
                   border: [true, true, true, true],
-                  margin: [5, 10, 5, 10]
+                  margin: [2, 3, 2, 3]
                 },
                 { 
                   stack: [
-                    { text: 'توقيع المدير', fontSize: 10, bold: true, alignment: 'center', color: '#666666' },
-                    { text: '', margin: [0, 30, 0, 0] },
-                    { canvas: [{ type: 'line', x1: 20, y1: 0, x2: 140, y2: 0, lineWidth: 1, lineColor: '#333333' }] },
-                    { text: 'التاريخ: ___/___/______', fontSize: 9, alignment: 'center', color: '#888888', margin: [0, 10, 0, 0] }
+                    { text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' },
+                    { text: '', margin: [0, 15, 0, 0] },
+                    { text: '_______________', fontSize: 10, alignment: 'center' },
                   ],
                   border: [true, true, true, true],
-                  margin: [5, 10, 5, 10]
+                  margin: [2, 3, 2, 3]
                 }
               ]
             ]
           },
           layout: {
-            hLineWidth: () => 1,
-            vLineWidth: () => 1,
-            hLineColor: () => '#e5e7eb',
-            vLineColor: () => '#e5e7eb',
-          }
+            hLineWidth: () => 0.5,
+            vLineWidth: () => 0.5,
+            hLineColor: () => '#ccc',
+            vLineColor: () => '#ccc',
+          },
+          margin: [0, 6, 0, 0]
         }
       ],
-      styles: {
-        header: { fontSize: 18, bold: true },
-        subheader: { fontSize: 14, color: 'gray' },
-        sectionHeader: { fontSize: 12, bold: true },
-      },
       defaultStyle: {
         font: 'Nillima',
-        fontSize: 11,
+        fontSize: 9,
         alignment: 'right'
       }
     };
