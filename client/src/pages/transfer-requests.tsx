@@ -105,9 +105,6 @@ export default function TransferRequestsPage() {
     sourceBranchName: "",
     destinationBranchId: "",
     destinationBranchName: "",
-    transferDate: new Date().toISOString().split('T')[0],
-    driverName: "",
-    vehicleNumber: "",
     notes: "",
     items: [] as { itemId: number; itemName: string; category: string; quantity: number; unit: string; notes: string }[],
   });
@@ -168,6 +165,10 @@ export default function TransferRequestsPage() {
     status: "",
     notes: "",
     receiverSignature: null as string | null,
+    // Dispatch fields (for in_transit status)
+    driverName: "",
+    vehicleNumber: "",
+    transferDate: new Date().toISOString().split('T')[0],
   });
 
   const { data: transfers = [], isLoading } = useQuery<MaterialTransfer[]>({
@@ -212,11 +213,22 @@ export default function TransferRequestsPage() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, notes, receiverSignature }: { id: number; status: string; notes?: string; receiverSignature?: string | null }) => {
+    mutationFn: async ({ id, status, notes, receiverSignature, driverName, vehicleNumber, transferDate }: { 
+      id: number; 
+      status: string; 
+      notes?: string; 
+      receiverSignature?: string | null;
+      driverName?: string;
+      vehicleNumber?: string;
+      transferDate?: string;
+    }) => {
       const response = await apiRequest("PUT", `/api/warehouse/material-transfers/${id}/status`, {
         status,
         notes,
         receiverSignature,
+        driverName,
+        vehicleNumber,
+        transferDate,
       });
       return response.json();
     },
@@ -244,9 +256,6 @@ export default function TransferRequestsPage() {
       sourceBranchName: sourceName,
       destinationBranchId: "",
       destinationBranchName: "",
-      transferDate: new Date().toISOString().split('T')[0],
-      driverName: "",
-      vehicleNumber: "",
       notes: "",
       items: [],
     });
@@ -260,7 +269,14 @@ export default function TransferRequestsPage() {
 
   const handleUpdateStatus = (transfer: MaterialTransfer) => {
     setSelectedTransfer(transfer);
-    setStatusUpdate({ status: "", notes: "", receiverSignature: null });
+    setStatusUpdate({ 
+      status: "", 
+      notes: "", 
+      receiverSignature: null,
+      driverName: "",
+      vehicleNumber: "",
+      transferDate: new Date().toISOString().split('T')[0],
+    });
     setIsUpdateStatusOpen(true);
   };
 
@@ -378,14 +394,14 @@ export default function TransferRequestsPage() {
               <DialogTrigger asChild>
                 <Button data-testid="btn-create-transfer">
                   <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-                  {isRTL ? "تحويل جديد" : "New Transfer"}
+                  {isRTL ? "طلب جديد" : "New Request"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{isRTL ? "إنشاء طلب تحويل جديد" : "Create New Transfer Request"}</DialogTitle>
+                <DialogTitle>{isRTL ? "إنشاء طلب تحويل مواد" : "Create Material Transfer Request"}</DialogTitle>
                 <DialogDescription>
-                  {isRTL ? "طلب تحويل مواد من فرعك" : "Request material transfer from your branch"}
+                  {isRTL ? "اختر الأصناف والكميات المطلوبة - سيتم إرسال الطلب للمراجعة والموافقة" : "Select items and quantities needed - request will be sent for review and approval"}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -510,35 +526,6 @@ export default function TransferRequestsPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "تاريخ التحويل" : "Transfer Date"}</Label>
-                    <Input 
-                      type="date" 
-                      value={newTransfer.transferDate}
-                      onChange={(e) => setNewTransfer(prev => ({ ...prev, transferDate: e.target.value }))}
-                      data-testid="input-transfer-date"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "رقم المركبة" : "Vehicle Number"}</Label>
-                    <Input 
-                      value={newTransfer.vehicleNumber}
-                      onChange={(e) => setNewTransfer(prev => ({ ...prev, vehicleNumber: e.target.value }))}
-                      placeholder="ABC-1234"
-                      data-testid="input-vehicle"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>{isRTL ? "اسم السائق" : "Driver Name"}</Label>
-                  <Input 
-                    value={newTransfer.driverName}
-                    onChange={(e) => setNewTransfer(prev => ({ ...prev, driverName: e.target.value }))}
-                    placeholder={isRTL ? "اسم السائق" : "Driver name"}
-                    data-testid="input-driver"
-                  />
-                </div>
                 {/* Items Section */}
                 <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
                   <div className="flex items-center justify-between">
@@ -866,6 +853,44 @@ export default function TransferRequestsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Dispatch fields for in_transit status */}
+              {statusUpdate.status === "in_transit" && (
+                <div className="space-y-3 border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/20">
+                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    {isRTL ? "بيانات الإرسال" : "Dispatch Information"}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">{isRTL ? "تاريخ الإرسال" : "Dispatch Date"}</Label>
+                      <Input 
+                        type="date" 
+                        value={statusUpdate.transferDate}
+                        onChange={(e) => setStatusUpdate(prev => ({ ...prev, transferDate: e.target.value }))}
+                        data-testid="input-dispatch-date"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">{isRTL ? "رقم المركبة" : "Vehicle Number"}</Label>
+                      <Input 
+                        value={statusUpdate.vehicleNumber}
+                        onChange={(e) => setStatusUpdate(prev => ({ ...prev, vehicleNumber: e.target.value }))}
+                        placeholder="ABC-1234"
+                        data-testid="input-dispatch-vehicle"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{isRTL ? "اسم السائق" : "Driver Name"}</Label>
+                    <Input 
+                      value={statusUpdate.driverName}
+                      onChange={(e) => setStatusUpdate(prev => ({ ...prev, driverName: e.target.value }))}
+                      placeholder={isRTL ? "اسم السائق" : "Driver name"}
+                      data-testid="input-dispatch-driver"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
                 <Textarea 
@@ -900,10 +925,21 @@ export default function TransferRequestsPage() {
                       status: statusUpdate.status,
                       notes: statusUpdate.notes,
                       receiverSignature: statusUpdate.receiverSignature,
+                      // Include dispatch fields for in_transit
+                      ...(statusUpdate.status === "in_transit" && {
+                        driverName: statusUpdate.driverName,
+                        vehicleNumber: statusUpdate.vehicleNumber,
+                        transferDate: statusUpdate.transferDate,
+                      }),
                     });
                   }
                 }}
-                disabled={!statusUpdate.status || updateStatusMutation.isPending || (statusUpdate.status === "delivered" && !statusUpdate.receiverSignature)}
+                disabled={
+                  !statusUpdate.status || 
+                  updateStatusMutation.isPending || 
+                  (statusUpdate.status === "delivered" && !statusUpdate.receiverSignature) ||
+                  (statusUpdate.status === "in_transit" && (!statusUpdate.driverName || !statusUpdate.vehicleNumber))
+                }
                 data-testid="btn-confirm-status"
               >
                 {updateStatusMutation.isPending ? (isRTL ? "جاري التحديث..." : "Updating...") : (isRTL ? "تأكيد" : "Confirm")}

@@ -17152,7 +17152,7 @@ export async function registerRoutes(
       const user = req.user as any;
       const { status, receiverSignature, ...additionalData } = req.body;
       
-      if (!['in_transit', 'delivered', 'cancelled'].includes(status)) {
+      if (!['pending', 'approved', 'rejected', 'in_transit', 'delivered', 'cancelled'].includes(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
       }
       
