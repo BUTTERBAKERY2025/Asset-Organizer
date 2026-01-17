@@ -5539,3 +5539,279 @@ export const insertProductionInventoryLogSchema = createInsertSchema(productionI
 
 export type ProductionInventoryLog = typeof productionInventoryLogs.$inferSelect;
 export type InsertProductionInventoryLog = z.infer<typeof insertProductionInventoryLogSchema>;
+
+// ==================== نظام المخازن والتحويلات ====================
+
+// Material Categories - فئات المواد
+export const MATERIAL_CATEGORIES = {
+  raw: { label: "مواد خام", labelEn: "Raw Materials", color: "blue" },
+  consumable: { label: "مواد استهلاكية", labelEn: "Consumables", color: "green" },
+  packaging: { label: "مواد تغليف", labelEn: "Packaging", color: "amber" },
+  primary: { label: "مواد أولية", labelEn: "Primary Materials", color: "purple" },
+} as const;
+
+// Request Types - أنواع الطلبات
+export const REQUEST_TYPES = {
+  daily: { label: "يومي", labelEn: "Daily", color: "blue" },
+  weekly: { label: "أسبوعي", labelEn: "Weekly", color: "green" },
+  urgent: { label: "طارئ", labelEn: "Urgent", color: "red" },
+} as const;
+
+// Request Reasons - أسباب الطلب
+export const REQUEST_REASONS = {
+  depleted: { label: "نفاد المخزون", labelEn: "Stock Depleted", color: "red" },
+  production_expansion: { label: "توسع الإنتاج", labelEn: "Production Expansion", color: "blue" },
+  seasonal: { label: "موسم", labelEn: "Seasonal", color: "amber" },
+  urgent: { label: "طارئ", labelEn: "Urgent", color: "red" },
+  buffer_stock: { label: "مخزون احتياطي", labelEn: "Buffer Stock", color: "green" },
+} as const;
+
+// Material Request Status - حالات طلب المواد
+export const MATERIAL_REQUEST_STATUS = {
+  draft: { label: "مسودة", labelEn: "Draft", color: "gray" },
+  pending: { label: "قيد المراجعة", labelEn: "Pending Review", color: "yellow" },
+  approved: { label: "معتمد", labelEn: "Approved", color: "green" },
+  partially_fulfilled: { label: "منفذ جزئياً", labelEn: "Partially Fulfilled", color: "blue" },
+  fulfilled: { label: "منفذ بالكامل", labelEn: "Fulfilled", color: "emerald" },
+  rejected: { label: "مرفوض", labelEn: "Rejected", color: "red" },
+  forwarded_to_purchasing: { label: "محول للمشتريات", labelEn: "Forwarded to Purchasing", color: "purple" },
+  cancelled: { label: "ملغي", labelEn: "Cancelled", color: "gray" },
+} as const;
+
+// Warehouse Items - أصناف المستودع
+export const warehouseItems = pgTable("warehouse_items", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  category: text("category").notNull(), // raw, consumable, packaging, primary
+  unit: text("unit").notNull().default("كجم"), // كجم، لتر، قطعة، علبة، كرتون
+  sku: text("sku"), // رمز الصنف
+  barcode: text("barcode"),
+  minStockLevel: integer("min_stock_level").default(0), // الحد الأدنى للتنبيه
+  maxStockLevel: integer("max_stock_level"), // الحد الأقصى
+  reorderPoint: integer("reorder_point"), // نقطة إعادة الطلب
+  currentStock: integer("current_stock").default(0), // المخزون الحالي في المستودع الرئيسي
+  unitPrice: text("unit_price"), // سعر الوحدة
+  supplierId: integer("supplier_id"), // المورد الرئيسي
+  isActive: boolean("is_active").default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_warehouse_items_category").on(table.category),
+  index("idx_warehouse_items_sku").on(table.sku),
+  index("idx_warehouse_items_active").on(table.isActive),
+]);
+
+export const insertWarehouseItemSchema = createInsertSchema(warehouseItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type WarehouseItem = typeof warehouseItems.$inferSelect;
+export type InsertWarehouseItem = z.infer<typeof insertWarehouseItemSchema>;
+
+// Branch Stock - مخزون الفروع
+export const branchStock = pgTable("branch_stock", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => warehouseItems.id),
+  currentQuantity: integer("current_quantity").default(0),
+  dailyConsumption: integer("daily_consumption").default(0), // معدل الاستهلاك اليومي
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+}, (table) => [
+  index("idx_branch_stock_branch").on(table.branchId),
+  index("idx_branch_stock_item").on(table.itemId),
+  uniqueIndex("branch_stock_unique").on(table.branchId, table.itemId),
+]);
+
+export const insertBranchStockSchema = createInsertSchema(branchStock).omit({
+  id: true,
+  lastUpdated: true,
+});
+
+export type BranchStock = typeof branchStock.$inferSelect;
+export type InsertBranchStock = z.infer<typeof insertBranchStockSchema>;
+
+// Material Requests - طلبات المواد
+export const materialRequests = pgTable("material_requests", {
+  id: serial("id").primaryKey(),
+  requestNumber: text("request_number").notNull(), // رقم الطلب التلقائي
+  requestType: text("request_type").notNull().default("daily"), // daily, weekly, urgent
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  requestDate: text("request_date").notNull(), // تاريخ الطلب YYYY-MM-DD
+  expectedDeliveryDate: text("expected_delivery_date"), // تاريخ التسليم المتوقع
+  status: text("status").notNull().default("draft"), // draft, pending, approved, rejected, fulfilled, forwarded_to_purchasing
+  totalItems: integer("total_items").default(0),
+  notes: text("notes"),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  requestedByName: text("requested_by_name"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedByName: text("reviewed_by_name"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_material_requests_branch").on(table.branchId),
+  index("idx_material_requests_status").on(table.status),
+  index("idx_material_requests_date").on(table.requestDate),
+  index("idx_material_requests_type").on(table.requestType),
+  uniqueIndex("material_requests_number_unique").on(table.requestNumber),
+]);
+
+export const insertMaterialRequestSchema = createInsertSchema(materialRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MaterialRequest = typeof materialRequests.$inferSelect;
+export type InsertMaterialRequest = z.infer<typeof insertMaterialRequestSchema>;
+
+// Material Request Items - بنود طلب المواد
+export const materialRequestItems = pgTable("material_request_items", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id")
+    .notNull()
+    .references(() => materialRequests.id, { onDelete: "cascade" }),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => warehouseItems.id),
+  itemName: text("item_name").notNull(),
+  category: text("category").notNull(), // raw, consumable, packaging, primary
+  unit: text("unit").notNull(),
+  currentQuantity: integer("current_quantity").default(0), // الكمية المتوفرة حالياً
+  requestedQuantity: integer("requested_quantity").notNull(), // الكمية المطلوبة
+  approvedQuantity: integer("approved_quantity"), // الكمية المعتمدة
+  fulfilledQuantity: integer("fulfilled_quantity").default(0), // الكمية المنفذة
+  dailyConsumption: integer("daily_consumption").default(0), // معدل الاستهلاك اليومي
+  coverageDays: integer("coverage_days"), // مدة التغطية بالأيام
+  reason: text("reason"), // depleted, production_expansion, seasonal, urgent
+  notes: text("notes"),
+  status: text("status").default("pending"), // pending, approved, rejected, fulfilled
+}, (table) => [
+  index("idx_material_request_items_request").on(table.requestId),
+  index("idx_material_request_items_item").on(table.itemId),
+  index("idx_material_request_items_category").on(table.category),
+]);
+
+export const insertMaterialRequestItemSchema = createInsertSchema(materialRequestItems).omit({
+  id: true,
+});
+
+export type MaterialRequestItem = typeof materialRequestItems.$inferSelect;
+export type InsertMaterialRequestItem = z.infer<typeof insertMaterialRequestItemSchema>;
+
+// Material Transfers - تحويلات المواد
+export const materialTransfers = pgTable("material_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: text("transfer_number").notNull(), // رقم التحويل التلقائي
+  requestId: integer("request_id")
+    .references(() => materialRequests.id),
+  sourceType: text("source_type").notNull().default("warehouse"), // warehouse, branch
+  sourceBranchId: varchar("source_branch_id")
+    .references(() => branches.id),
+  destinationBranchId: varchar("destination_branch_id")
+    .notNull()
+    .references(() => branches.id),
+  transferDate: text("transfer_date").notNull(), // تاريخ التحويل
+  deliveryDate: text("delivery_date"), // تاريخ التسليم الفعلي
+  status: text("status").notNull().default("pending"), // pending, in_transit, delivered, cancelled
+  driverName: text("driver_name"),
+  vehicleNumber: text("vehicle_number"),
+  departureTime: timestamp("departure_time"),
+  arrivalTime: timestamp("arrival_time"),
+  receivedBy: varchar("received_by").references(() => users.id),
+  receivedByName: text("received_by_name"),
+  receiverSignature: text("receiver_signature"), // توقيع المستلم الإلكتروني
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_material_transfers_source").on(table.sourceBranchId),
+  index("idx_material_transfers_dest").on(table.destinationBranchId),
+  index("idx_material_transfers_status").on(table.status),
+  index("idx_material_transfers_date").on(table.transferDate),
+  index("idx_material_transfers_request").on(table.requestId),
+  uniqueIndex("material_transfers_number_unique").on(table.transferNumber),
+]);
+
+export const insertMaterialTransferSchema = createInsertSchema(materialTransfers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MaterialTransfer = typeof materialTransfers.$inferSelect;
+export type InsertMaterialTransfer = z.infer<typeof insertMaterialTransferSchema>;
+
+// Material Transfer Items - بنود التحويل
+export const materialTransferItems = pgTable("material_transfer_items", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id")
+    .notNull()
+    .references(() => materialTransfers.id, { onDelete: "cascade" }),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => warehouseItems.id),
+  itemName: text("item_name").notNull(),
+  category: text("category").notNull(),
+  unit: text("unit").notNull(),
+  quantity: integer("quantity").notNull(), // الكمية المحولة
+  receivedQuantity: integer("received_quantity"), // الكمية المستلمة (قد تختلف)
+  notes: text("notes"),
+}, (table) => [
+  index("idx_material_transfer_items_transfer").on(table.transferId),
+  index("idx_material_transfer_items_item").on(table.itemId),
+]);
+
+export const insertMaterialTransferItemSchema = createInsertSchema(materialTransferItems).omit({
+  id: true,
+});
+
+export type MaterialTransferItem = typeof materialTransferItems.$inferSelect;
+export type InsertMaterialTransferItem = z.infer<typeof insertMaterialTransferItemSchema>;
+
+// Warehouse Movement Log - سجل حركة المستودع
+export const warehouseMovementLogs = pgTable("warehouse_movement_logs", {
+  id: serial("id").primaryKey(),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => warehouseItems.id),
+  branchId: varchar("branch_id")
+    .references(() => branches.id),
+  movementType: text("movement_type").notNull(), // in, out, adjustment, transfer_in, transfer_out
+  quantity: integer("quantity").notNull(),
+  balanceBefore: integer("balance_before").default(0),
+  balanceAfter: integer("balance_after").default(0),
+  referenceType: text("reference_type"), // request, transfer, purchase, adjustment
+  referenceId: integer("reference_id"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_warehouse_logs_item").on(table.itemId),
+  index("idx_warehouse_logs_branch").on(table.branchId),
+  index("idx_warehouse_logs_type").on(table.movementType),
+  index("idx_warehouse_logs_date").on(table.createdAt),
+]);
+
+export const insertWarehouseMovementLogSchema = createInsertSchema(warehouseMovementLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WarehouseMovementLog = typeof warehouseMovementLogs.$inferSelect;
+export type InsertWarehouseMovementLog = z.infer<typeof insertWarehouseMovementLogSchema>;
