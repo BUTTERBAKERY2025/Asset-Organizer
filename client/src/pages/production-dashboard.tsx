@@ -146,6 +146,14 @@ const QUICK_ACTIONS = [
     href: "/products",
     color: "bg-gradient-to-br from-teal-500 to-green-600",
     badge: null
+  },
+  {
+    title: "مخزون الإنتاج النهائي",
+    description: "متابعة المخزون النهائي",
+    icon: Layers,
+    href: "/finished-goods-inventory",
+    color: "bg-gradient-to-br from-purple-500 to-fuchsia-600",
+    badge: "جديد"
   }
 ];
 
@@ -338,12 +346,6 @@ export default function ProductionDashboardPage() {
                   <Button variant="outline" size="sm" onClick={handleRefresh} className="h-9 px-3" data-testid="btn-refresh">
                     <RefreshCw className={`h-4 w-4 ${dailyLoading ? 'animate-spin' : ''}`} />
                   </Button>
-                  <Link href="/finished-goods-inventory">
-                    <Button variant="outline" size="sm" className="h-9 gap-2" data-testid="btn-finished-goods">
-                      <Package className="h-4 w-4" />
-                      مخزون الإنتاج النهائي
-                    </Button>
-                  </Link>
                   <Link href="/advanced-production-orders/new">
                     <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-9 shadow-md shadow-amber-200" data-testid="btn-new-order">
                       <Plus className="h-4 w-4 ml-1" />
