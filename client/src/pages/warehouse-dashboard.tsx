@@ -3,14 +3,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import { 
-  Warehouse, PackageCheck, Send, Boxes, LayoutDashboard,
-  ArrowRight, Clock, CheckCircle, AlertCircle
+  Warehouse, PackageCheck, Send, Boxes,
+  ArrowRight, Clock, CheckCircle, AlertTriangle, Truck
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+type DashboardStats = {
+  pendingRequests: number;
+  approvedRequests: number;
+  inTransitTransfers: number;
+  lowStockItems: number;
+};
 
 export default function WarehouseDashboardPage() {
   const { t, i18n } = useTranslation("platform-home");
   const isRTL = i18n.language === "ar";
+
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
+    queryKey: ["/api/warehouse/dashboard-stats"],
+    refetchInterval: 60000,
+  });
 
   const quickLinks = [
     {
@@ -36,24 +50,34 @@ export default function WarehouseDashboardPage() {
     },
   ];
 
-  const stats = [
+  const statCards = [
     {
       title: isRTL ? "طلبات قيد الانتظار" : "Pending Requests",
-      value: "0",
+      value: stats?.pendingRequests ?? 0,
       icon: Clock,
       color: "text-yellow-500",
+      bgColor: "bg-yellow-100 dark:bg-yellow-900/20",
     },
     {
-      title: isRTL ? "طلبات مكتملة" : "Completed Requests",
-      value: "0",
+      title: isRTL ? "طلبات موافق عليها" : "Approved Requests",
+      value: stats?.approvedRequests ?? 0,
       icon: CheckCircle,
       color: "text-green-500",
+      bgColor: "bg-green-100 dark:bg-green-900/20",
     },
     {
-      title: isRTL ? "طلبات مرفوضة" : "Rejected Requests",
-      value: "0",
-      icon: AlertCircle,
+      title: isRTL ? "تحويلات في الطريق" : "In Transit",
+      value: stats?.inTransitTransfers ?? 0,
+      icon: Truck,
+      color: "text-blue-500",
+      bgColor: "bg-blue-100 dark:bg-blue-900/20",
+    },
+    {
+      title: isRTL ? "مواد منخفضة المخزون" : "Low Stock Items",
+      value: stats?.lowStockItems ?? 0,
+      icon: AlertTriangle,
       color: "text-red-500",
+      bgColor: "bg-red-100 dark:bg-red-900/20",
     },
   ];
 
@@ -74,16 +98,22 @@ export default function WarehouseDashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {stats.map((stat, index) => (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {statCards.map((stat, index) => (
             <Card key={index} data-testid={`stat-card-${index}`}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-bold">{stat.value}</p>
+                    <p className="text-xs text-muted-foreground">{stat.title}</p>
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-12 mt-1" />
+                    ) : (
+                      <p className="text-2xl font-bold">{stat.value}</p>
+                    )}
                   </div>
-                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
+                  <div className={`w-10 h-10 rounded-full ${stat.bgColor} flex items-center justify-center`}>
+                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -122,24 +152,37 @@ export default function WarehouseDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <LayoutDashboard className="w-5 h-5" />
-              {isRTL ? "قريباً" : "Coming Soon"}
+              <Warehouse className="w-5 h-5" />
+              {isRTL ? "نظرة عامة" : "Overview"}
             </CardTitle>
             <CardDescription>
               {isRTL 
-                ? "سيتم إضافة المزيد من الميزات لنظام المخازن والتحويلات قريباً"
-                : "More features will be added to the warehouse management system soon"
+                ? "نظام إدارة المستودعات والتحويلات يتضمن الميزات التالية"
+                : "The warehouse management system includes the following features"
               }
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-              <li>{isRTL ? "طلبات المواد الخام" : "Raw material requests"}</li>
-              <li>{isRTL ? "طلبات المستلزمات" : "Consumable requests"}</li>
-              <li>{isRTL ? "طلبات مواد التغليف" : "Packaging material requests"}</li>
-              <li>{isRTL ? "سير عمل الموافقات" : "Approval workflow"}</li>
-              <li>{isRTL ? "تقارير المخزون" : "Inventory reports"}</li>
-            </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="space-y-2">
+                <h4 className="font-medium">{isRTL ? "طلبات المواد" : "Material Requests"}</h4>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>{isRTL ? "طلبات المواد الخام" : "Raw material requests"}</li>
+                  <li>{isRTL ? "طلبات المستلزمات" : "Consumable requests"}</li>
+                  <li>{isRTL ? "طلبات مواد التغليف" : "Packaging material requests"}</li>
+                  <li>{isRTL ? "سير عمل الموافقات" : "Approval workflow"}</li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-medium">{isRTL ? "التحويلات" : "Transfers"}</h4>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>{isRTL ? "تتبع التحويلات بين الفروع" : "Track transfers between branches"}</li>
+                  <li>{isRTL ? "بيانات السائق والمركبة" : "Driver and vehicle info"}</li>
+                  <li>{isRTL ? "تتبع حالة التسليم" : "Delivery status tracking"}</li>
+                  <li>{isRTL ? "التوقيع الإلكتروني للاستلام" : "Electronic signature receipt"}</li>
+                </ul>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

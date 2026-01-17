@@ -92,6 +92,9 @@ const ProductionComparisonReportsPage = lazy(() => import("@/pages/production-co
 const ProductCategoryManagementPage = lazy(() => import("@/pages/product-category-management"));
 const FinishedGoodsInventoryPage = lazy(() => import("@/pages/finished-goods-inventory"));
 const WarehouseDashboardPage = lazy(() => import("@/pages/warehouse-dashboard"));
+const MaterialRequestsPage = lazy(() => import("@/pages/material-requests"));
+const TransferRequestsPage = lazy(() => import("@/pages/transfer-requests"));
+const WarehouseInventoryPage = lazy(() => import("@/pages/warehouse-inventory"));
 
 function AppLoadingFallback() {
   return (
@@ -243,9 +246,9 @@ function Router() {
       
       {/* Warehouse - المخازن والتحويلات */}
       <Route path="/warehouse-dashboard">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
-      <Route path="/material-requests">{() => <ModulePage component={WarehouseDashboardPage} module="material_requests" />}</Route>
-      <Route path="/transfer-requests">{() => <ModulePage component={WarehouseDashboardPage} module="transfer_requests" />}</Route>
-      <Route path="/warehouse-inventory">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse_inventory" />}</Route>
+      <Route path="/material-requests">{() => <ModulePage component={MaterialRequestsPage} module="material_requests" />}</Route>
+      <Route path="/transfer-requests">{() => <ModulePage component={TransferRequestsPage} module="transfer_requests" />}</Route>
+      <Route path="/warehouse-inventory">{() => <ModulePage component={WarehouseInventoryPage} module="warehouse_inventory" />}</Route>
       
       <Route component={NotFound} />
     </Switch>
