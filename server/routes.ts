@@ -9528,19 +9528,10 @@ export async function registerRoutes(
         sourceBatchId: sourceBatchId ? Number(sourceBatchId) : null,
       };
       
-      const batch = await storage.createDailyProductionBatch(batchData);
+      const userName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';
+      const result = await storage.createDailyProductionBatchWithTransfer(batchData, user?.id, userName);
       
-      // Auto-transfer to finished goods if batch is created with "finished" status
-      if (batch && batchData.status === "finished") {
-        try {
-          await storage.addProductionToFinishedGoods(batch.id, user?.id, user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '');
-        } catch (transferError) {
-          console.error("Failed to auto-transfer to finished goods:", transferError);
-          // Don't fail the request, just log the error
-        }
-      }
-      
-      res.status(201).json(batch);
+      res.status(201).json({ ...result.batch, transferred: result.transferred });
     } catch (error) {
       console.error("Error creating batch:", error);
       res.status(500).json({ error: "فشل في إنشاء دفعة الإنتاج" });
@@ -9585,30 +9576,15 @@ export async function registerRoutes(
         }
       }
       
-      // Get current batch to check if status is changing to finished
-      const existingBatch = await storage.getDailyProductionBatch(id);
-      if (!existingBatch) {
+      const user = (req as any).user;
+      const userName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';
+      const result = await storage.updateDailyProductionBatchWithTransfer(id, updateData, user?.id, userName);
+      
+      if (!result.batch) {
         return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
       }
       
-      const updated = await storage.updateDailyProductionBatch(id, updateData);
-      if (!updated) {
-        return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
-      }
-      
-      // Auto-transfer to finished goods when status changes to "finished"
-      if (updateData.status === "finished" && existingBatch.status !== "finished") {
-        try {
-          const user = (req as any).user;
-          const userName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';
-          await storage.addProductionToFinishedGoods(id, user?.id, userName);
-        } catch (transferError) {
-          console.error("Failed to auto-transfer to finished goods:", transferError);
-          // Don't fail the request, just log the error
-        }
-      }
-      
-      res.json(updated);
+      res.json({ ...result.batch, transferred: result.transferred });
     } catch (error) {
       console.error("Error updating batch:", error);
       res.status(500).json({ error: "فشل في تحديث دفعة الإنتاج" });

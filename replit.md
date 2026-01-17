@@ -43,6 +43,8 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Branch Employee Integration**: Features for linking employees to user accounts, tracking attendance, schedules, and timesheets.
 - **Influencer Contracts Management**: Contract generation with PDF export, auto-generated contract numbers (BTR-INF-YYYY-####), deliverables tracking, exclusivity clauses, dual signatures, and financial approval workflow.
 - **Finished Goods Inventory (مخزون الإنتاج النهائي)**: Automatic transfer of completed production batches to finished goods inventory with full audit trail. Supports transfers to branches or sales display bar (بار العرض). Features atomic transactions for data integrity, balance tracking, and movement logs. Tables: `finished_goods_inventory`, `finished_goods_transfers`, `production_inventory_logs`.
+  - **Design Decision**: Products are identified by normalized name (lowercase, trimmed) rather than strict SKU. This allows aggregation of production by product name and supports manual entries without product IDs. The unique constraint is (branch_id, product_name_normalized, production_date).
+  - **Atomic Operations**: Batch creation/update with finished goods transfer happens in a single database transaction, ensuring consistency.
 
 ### Performance Optimization
 - **Tiered Caching Strategy**: Three-tier cache system based on data volatility:

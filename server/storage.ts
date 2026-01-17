@@ -702,7 +702,9 @@ export interface IStorage {
   getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string }): Promise<DailyProductionBatch[]>;
   getDailyProductionBatch(id: number): Promise<DailyProductionBatch | undefined>;
   createDailyProductionBatch(batch: InsertDailyProductionBatch): Promise<DailyProductionBatch>;
+  createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch; transferred: boolean }>;
   updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined>;
+  updateDailyProductionBatchWithTransfer(id: number, batch: Partial<InsertDailyProductionBatch>, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch | undefined; transferred: boolean }>;
   deleteDailyProductionBatch(id: number): Promise<boolean>;
   getDailyProductionStats(branchId: string, date: string): Promise<{
     totalBatches: number;
@@ -4946,12 +4948,118 @@ export class DatabaseStorage implements IStorage {
     return newBatch;
   }
 
+  async createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch; transferred: boolean }> {
+    return await db.transaction(async (tx) => {
+      const [newBatch] = await tx.insert(dailyProductionBatches).values(batch).returning();
+      
+      let transferred = false;
+      if (newBatch && batch.status === "finished") {
+        const productionDate = newBatch.productionDate || new Date().toISOString().split('T')[0];
+        const productNameNormalized = (newBatch.productName || '').trim().toLowerCase();
+        
+        const upsertResult = await tx.execute(sql`
+          INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
+          VALUES (${newBatch.branchId}, ${newBatch.productId}, ${newBatch.productName}, ${productNameNormalized}, ${newBatch.productCategory}, ${newBatch.quantity}, ${newBatch.unit || 'قطعة'}, ${productionDate}, ${newBatch.id}, NOW(), NOW())
+          ON CONFLICT (branch_id, product_name_normalized, production_date)
+          DO UPDATE SET 
+            quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
+            last_batch_id = EXCLUDED.last_batch_id,
+            product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
+            updated_at = NOW()
+          RETURNING id, quantity
+        `) as { rows: any[] };
+        
+        const row = upsertResult.rows[0];
+        const balanceAfter = row.quantity;
+        const balanceBefore = balanceAfter - newBatch.quantity;
+        
+        await tx.insert(productionInventoryLogs).values({
+          branchId: newBatch.branchId,
+          productId: newBatch.productId,
+          productName: newBatch.productName,
+          movementType: 'production_in',
+          quantity: newBatch.quantity,
+          balanceBefore,
+          balanceAfter,
+          referenceType: 'batch',
+          referenceId: newBatch.id,
+          notes: `ترحيل من دفعة الإنتاج #${newBatch.id}`,
+          createdBy: userId,
+          createdByName: userName,
+        });
+        
+        transferred = true;
+      }
+      
+      return { batch: newBatch, transferred };
+    });
+  }
+
   async updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined> {
     const [updated] = await db.update(dailyProductionBatches)
       .set(batch)
       .where(eq(dailyProductionBatches.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async updateDailyProductionBatchWithTransfer(id: number, batch: Partial<InsertDailyProductionBatch>, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch | undefined; transferred: boolean }> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(dailyProductionBatches).where(eq(dailyProductionBatches.id, id));
+      if (!existing) {
+        return { batch: undefined, transferred: false };
+      }
+      
+      const [updated] = await tx.update(dailyProductionBatches)
+        .set(batch)
+        .where(eq(dailyProductionBatches.id, id))
+        .returning();
+      
+      if (!updated) {
+        return { batch: undefined, transferred: false };
+      }
+      
+      let transferred = false;
+      if (batch.status === "finished" && existing.status !== "finished") {
+        const productionDate = updated.productionDate || new Date().toISOString().split('T')[0];
+        const productNameNormalized = (updated.productName || '').trim().toLowerCase();
+        
+        const upsertResult = await tx.execute(sql`
+          INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
+          VALUES (${updated.branchId}, ${updated.productId}, ${updated.productName}, ${productNameNormalized}, ${updated.productCategory}, ${updated.quantity}, ${updated.unit || 'قطعة'}, ${productionDate}, ${updated.id}, NOW(), NOW())
+          ON CONFLICT (branch_id, product_name_normalized, production_date)
+          DO UPDATE SET 
+            quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
+            last_batch_id = EXCLUDED.last_batch_id,
+            product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
+            updated_at = NOW()
+          RETURNING id, quantity
+        `) as { rows: any[] };
+        
+        const row = upsertResult.rows[0];
+        const balanceAfter = row.quantity;
+        const balanceBefore = balanceAfter - updated.quantity;
+        
+        await tx.insert(productionInventoryLogs).values({
+          branchId: updated.branchId,
+          productId: updated.productId,
+          productName: updated.productName,
+          movementType: 'production_in',
+          quantity: updated.quantity,
+          balanceBefore,
+          balanceAfter,
+          referenceType: 'batch',
+          referenceId: updated.id,
+          notes: `ترحيل من دفعة الإنتاج #${updated.id}`,
+          createdBy: userId,
+          createdByName: userName,
+        });
+        
+        transferred = true;
+      }
+      
+      return { batch: updated, transferred };
+    });
   }
 
   async deleteDailyProductionBatch(id: number): Promise<boolean> {
