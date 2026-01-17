@@ -220,7 +220,7 @@ export async function generateTransferPdf(
       tableHeader: { bold: true, fontSize: 8, fillColor: '#f0f0f0' }
     },
     defaultStyle: {
-      font: 'Nillima',
+      font: 'Roboto',
       fontSize: 9,
       alignment: 'right'
     }
@@ -385,7 +385,7 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
       }
     ],
     defaultStyle: {
-      font: 'Nillima',
+      font: 'Roboto',
       fontSize: 9,
       alignment: 'right'
     }
