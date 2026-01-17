@@ -194,6 +194,7 @@ export default function TransferRequestsPage() {
         ...data,
         destinationBranchName: destBranch?.nameAr || destBranch?.name || "",
         status: "pending",
+        transferDate: new Date().toISOString().split('T')[0], // Set request date
       });
       return response.json();
     },
