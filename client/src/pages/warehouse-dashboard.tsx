@@ -74,8 +74,8 @@ export default function WarehouseDashboardPage() {
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ["/api/warehouse/notifications", selectedBranch],
     queryFn: async () => {
-      const params = selectedBranch !== "all" ? `?branchId=${selectedBranch}` : "";
-      const res = await fetch(`/api/warehouse/notifications${params}&limit=20`);
+      const params = selectedBranch !== "all" ? `?branchId=${selectedBranch}&limit=20` : "?limit=20";
+      const res = await fetch(`/api/warehouse/notifications${params}`);
       return res.json();
     },
     refetchInterval: 30000,
@@ -213,6 +213,8 @@ export default function WarehouseDashboardPage() {
         return <Truck className="w-4 h-4 text-orange-500" />;
       case "transfer_delivered":
         return <Package className="w-4 h-4 text-green-500" />;
+      case "transfer_cancelled":
+        return <X className="w-4 h-4 text-red-500" />;
       case "low_stock":
         return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
       default:

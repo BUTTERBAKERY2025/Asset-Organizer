@@ -16918,6 +16918,22 @@ export async function registerRoutes(
         requestedByName: user?.fullName || user?.username
       }, items || []);
       
+      // Create notification for main warehouse
+      try {
+        await storage.createWarehouseNotification({
+          type: "request_created",
+          title: `طلب مواد جديد: ${requestNumber}`,
+          titleEn: `New Material Request: ${requestNumber}`,
+          body: `تم استلام طلب مواد جديد من الفرع`,
+          bodyEn: `New material request received from branch`,
+          branchId: "main_warehouse",
+          targetBranchId: requestData.branchId,
+          entityType: "material_request",
+          entityId: request.id,
+          priority: "normal",
+        });
+      } catch (e) { console.error("Failed to create notification:", e); }
+      
       res.status(201).json(request);
     } catch (error) {
       console.error("Error creating material request:", error);
@@ -16958,6 +16974,36 @@ export async function registerRoutes(
       if (!request) {
         return res.status(404).json({ error: "الطلب غير موجود" });
       }
+      
+      // Create notification for the requesting branch
+      try {
+        const notifType = status === "approved" ? "request_approved" : 
+                         status === "rejected" ? "request_rejected" : "request_created";
+        const titleAr = status === "approved" ? `تمت الموافقة على طلب: ${request.requestNumber}` :
+                       status === "rejected" ? `تم رفض طلب: ${request.requestNumber}` :
+                       `تم تحويل الطلب للمشتريات: ${request.requestNumber}`;
+        const titleEn = status === "approved" ? `Request Approved: ${request.requestNumber}` :
+                       status === "rejected" ? `Request Rejected: ${request.requestNumber}` :
+                       `Request Forwarded to Purchasing: ${request.requestNumber}`;
+        const bodyAr = status === "approved" ? "تمت الموافقة على طلبك وسيتم تنفيذه قريباً" :
+                      status === "rejected" ? `تم رفض طلبك. السبب: ${reviewNotes || "غير محدد"}` :
+                      "تم تحويل طلبك لقسم المشتريات";
+        const bodyEn = status === "approved" ? "Your request has been approved and will be fulfilled soon" :
+                      status === "rejected" ? `Your request was rejected. Reason: ${reviewNotes || "Not specified"}` :
+                      "Your request has been forwarded to purchasing";
+        
+        await storage.createWarehouseNotification({
+          type: notifType,
+          title: titleAr,
+          titleEn: titleEn,
+          body: bodyAr,
+          bodyEn: bodyEn,
+          branchId: request.branchId,
+          entityType: "material_request",
+          entityId: request.id,
+          priority: status === "rejected" ? "high" : "normal",
+        });
+      } catch (e) { console.error("Failed to create notification:", e); }
       
       res.json(request);
     } catch (error) {
@@ -17116,6 +17162,37 @@ export async function registerRoutes(
       if (!transfer) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      
+      // Create notification for the destination branch
+      try {
+        const notifType = status === "in_transit" ? "transfer_started" : 
+                         status === "delivered" ? "transfer_delivered" : "transfer_cancelled";
+        const titleAr = status === "in_transit" ? `شحنة في الطريق: ${transfer.transferNumber}` :
+                       status === "delivered" ? `تم استلام شحنة: ${transfer.transferNumber}` :
+                       `تم إلغاء التحويل: ${transfer.transferNumber}`;
+        const titleEn = status === "in_transit" ? `Shipment In Transit: ${transfer.transferNumber}` :
+                       status === "delivered" ? `Shipment Delivered: ${transfer.transferNumber}` :
+                       `Transfer Cancelled: ${transfer.transferNumber}`;
+        const bodyAr = status === "in_transit" ? "الشحنة في الطريق إليكم" :
+                      status === "delivered" ? "تم استلام الشحنة بنجاح" :
+                      "تم إلغاء التحويل";
+        const bodyEn = status === "in_transit" ? "Shipment is on its way to you" :
+                      status === "delivered" ? "Shipment was successfully delivered" :
+                      "Transfer was cancelled";
+        
+        await storage.createWarehouseNotification({
+          type: notifType,
+          title: titleAr,
+          titleEn: titleEn,
+          body: bodyAr,
+          bodyEn: bodyEn,
+          branchId: transfer.destinationBranchId,
+          targetBranchId: transfer.sourceBranchId,
+          entityType: "transfer",
+          entityId: transfer.id,
+          priority: status === "in_transit" ? "high" : "normal",
+        });
+      } catch (e) { console.error("Failed to create notification:", e); }
       
       res.json(transfer);
     } catch (error) {
