@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet
 } from "lucide-react";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
@@ -25,6 +25,7 @@ import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
+import * as XLSX from "xlsx";
 
 pdfMake.vfs = pdfFonts.vfs;
 
@@ -298,6 +299,54 @@ ${selectedTransfer.vehicleNumber ? `المركبة: ${selectedTransfer.vehicleNu
 ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  // Export to Excel
+  const handleExportExcel = () => {
+    if (!filteredTransfers || filteredTransfers.length === 0) {
+      toast({
+        title: isRTL ? "لا توجد بيانات" : "No Data",
+        description: isRTL ? "لا توجد طلبات تحويل للتصدير" : "No transfer requests to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const excelData = filteredTransfers.map((transfer) => ({
+      "رقم التحويل": transfer.transferNumber,
+      "من": transfer.sourceBranchName || "المستودع الرئيسي",
+      "إلى": transfer.destinationBranchName || "-",
+      "الحالة": STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status,
+      "السائق": transfer.driverName || "-",
+      "المركبة": transfer.vehicleNumber || "-",
+      "تاريخ التحويل": transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : "-",
+      "ملاحظات": transfer.notes || "-",
+      "أنشأه": transfer.createdByName || "-",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "طلبات التحويل");
+    
+    const colWidths = [
+      { wch: 18 }, // رقم التحويل
+      { wch: 20 }, // من
+      { wch: 20 }, // إلى
+      { wch: 15 }, // الحالة
+      { wch: 15 }, // السائق
+      { wch: 12 }, // المركبة
+      { wch: 15 }, // تاريخ التحويل
+      { wch: 25 }, // ملاحظات
+      { wch: 15 }, // أنشأه
+    ];
+    worksheet['!cols'] = colWidths;
+
+    XLSX.writeFile(workbook, `طلبات-التحويل-${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    toast({
+      title: isRTL ? "تم التصدير" : "Exported",
+      description: isRTL ? "تم تصدير البيانات إلى ملف Excel" : "Data exported to Excel file",
+    });
   };
 
   // Fetch transfer items when viewing details
@@ -887,6 +936,15 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               ))}
             </SelectContent>
           </Select>
+          <Button 
+            variant="outline" 
+            onClick={handleExportExcel}
+            className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+            data-testid="btn-export-excel"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            {isRTL ? "تصدير Excel" : "Export Excel"}
+          </Button>
         </div>
 
         <Card>
