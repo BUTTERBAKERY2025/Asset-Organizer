@@ -70,13 +70,13 @@ export default function FinishedGoodsInventoryPage() {
   }, [branches, branchId]);
 
   const { data: inventory, isLoading, refetch } = useQuery<FinishedGoodsInventory[]>({
-    queryKey: ["/api/finished-goods/inventory", branchId, selectedDate, categoryFilter],
+    queryKey: ["/api/finished-goods-inventory", branchId, selectedDate, categoryFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (branchId) params.set("branchId", branchId);
       if (selectedDate) params.set("productionDate", selectedDate);
       if (categoryFilter) params.set("category", categoryFilter);
-      const res = await fetch(`/api/finished-goods/inventory?${params}`, { credentials: "include" });
+      const res = await fetch(`/api/finished-goods-inventory?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch inventory");
       return res.json();
     },
@@ -84,11 +84,11 @@ export default function FinishedGoodsInventoryPage() {
   });
 
   const { data: transfers } = useQuery<FinishedGoodsTransfer[]>({
-    queryKey: ["/api/finished-goods/transfers", branchId],
+    queryKey: ["/api/finished-goods-transfers", branchId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (branchId) params.set("sourceBranchId", branchId);
-      const res = await fetch(`/api/finished-goods/transfers?${params}`, { credentials: "include" });
+      const res = await fetch(`/api/finished-goods-transfers?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch transfers");
       return res.json();
     },
@@ -96,11 +96,11 @@ export default function FinishedGoodsInventoryPage() {
   });
 
   const { data: logs } = useQuery({
-    queryKey: ["/api/finished-goods/logs", branchId],
+    queryKey: ["/api/production-inventory-logs", branchId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (branchId) params.set("branchId", branchId);
-      const res = await fetch(`/api/finished-goods/logs?${params}`, { credentials: "include" });
+      const res = await fetch(`/api/production-inventory-logs?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch logs");
       return res.json();
     },
@@ -115,7 +115,7 @@ export default function FinishedGoodsInventoryPage() {
       destinationBranchId?: string;
       notes?: string;
     }) => {
-      const res = await apiRequest("POST", `/api/finished-goods/inventory/${data.inventoryId}/transfer`, {
+      const res = await apiRequest("POST", `/api/finished-goods-inventory/${data.inventoryId}/transfer`, {
         quantity: data.quantity,
         destinationType: data.destinationType,
         destinationBranchId: data.destinationBranchId,
@@ -125,8 +125,8 @@ export default function FinishedGoodsInventoryPage() {
     },
     onSuccess: () => {
       refetch();
-      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods/transfers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods/logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/production-inventory-logs"] });
       setShowTransferDialog(false);
       setSelectedItem(null);
       setTransferQuantity("");

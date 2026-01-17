@@ -287,7 +287,7 @@ export default function DailyProductionPage() {
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
-      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-inventory"] });
       if (!quickMode) {
         setProductName("");
         setProductCategory("");
@@ -355,7 +355,7 @@ export default function DailyProductionPage() {
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
-      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-inventory"] });
       toast({ title: "تم اكتمال الدفعة", description: "تم تحديث حالة الدفعة وترحيلها للمخزون النهائي" });
     },
     onError: (error: any) => {
