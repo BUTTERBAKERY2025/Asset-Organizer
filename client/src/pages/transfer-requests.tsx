@@ -13,11 +13,12 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 
 type MaterialTransfer = {
   id: number;
@@ -95,6 +96,7 @@ export default function TransferRequestsPage() {
   const [statusUpdate, setStatusUpdate] = useState({
     status: "",
     notes: "",
+    receiverSignature: null as string | null,
   });
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -138,10 +140,11 @@ export default function TransferRequestsPage() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, notes }: { id: number; status: string; notes?: string }) => {
+    mutationFn: async ({ id, status, notes, receiverSignature }: { id: number; status: string; notes?: string; receiverSignature?: string | null }) => {
       const response = await apiRequest("PUT", `/api/warehouse/material-transfers/${id}/status`, {
         status,
         notes,
+        receiverSignature,
       });
       return response.json();
     },
@@ -181,7 +184,7 @@ export default function TransferRequestsPage() {
 
   const handleUpdateStatus = (transfer: MaterialTransfer) => {
     setSelectedTransfer(transfer);
-    setStatusUpdate({ status: "", notes: "" });
+    setStatusUpdate({ status: "", notes: "", receiverSignature: null });
     setIsUpdateStatusOpen(true);
   };
 
@@ -493,6 +496,13 @@ export default function TransferRequestsPage() {
                     <p className="text-sm">{selectedTransfer.notes}</p>
                   </div>
                 )}
+                
+                {selectedTransfer.receiverSignature && (
+                  <SignatureDisplay 
+                    signature={selectedTransfer.receiverSignature} 
+                    label={isRTL ? "توقيع المستلم" : "Receiver Signature"} 
+                  />
+                )}
               </div>
             )}
           </DialogContent>
@@ -534,6 +544,18 @@ export default function TransferRequestsPage() {
                   data-testid="input-status-notes"
                 />
               </div>
+              {statusUpdate.status === "delivered" && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <PenTool className="w-4 h-4" />
+                    {isRTL ? "توقيع المستلم" : "Receiver Signature"}
+                  </Label>
+                  <SignaturePad
+                    onSignatureChange={(sig) => setStatusUpdate(prev => ({ ...prev, receiverSignature: sig }))}
+                    label={isRTL ? "وقّع هنا لتأكيد الاستلام" : "Sign here to confirm receipt"}
+                  />
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsUpdateStatusOpen(false)}>
@@ -546,10 +568,11 @@ export default function TransferRequestsPage() {
                       id: selectedTransfer.id,
                       status: statusUpdate.status,
                       notes: statusUpdate.notes,
+                      receiverSignature: statusUpdate.receiverSignature,
                     });
                   }
                 }}
-                disabled={!statusUpdate.status || updateStatusMutation.isPending}
+                disabled={!statusUpdate.status || updateStatusMutation.isPending || (statusUpdate.status === "delivered" && !statusUpdate.receiverSignature)}
                 data-testid="btn-confirm-status"
               >
                 {updateStatusMutation.isPending ? (isRTL ? "جاري التحديث..." : "Updating...") : (isRTL ? "تأكيد" : "Confirm")}

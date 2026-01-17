@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  Warehouse, PackageCheck, Send, Boxes,
+  Warehouse, PackageCheck, Send, Boxes, History,
   ArrowRight, Clock, CheckCircle, AlertTriangle, Truck
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,6 +47,13 @@ export default function WarehouseDashboardPage() {
       icon: Boxes,
       href: "/warehouse-inventory",
       color: "bg-amber-500",
+    },
+    {
+      title: isRTL ? "سجل الحركات" : "Movement Logs",
+      description: isRTL ? "تتبع جميع حركات المخزون الواردة والصادرة" : "Track all inventory movements",
+      icon: History,
+      href: "/warehouse-movement-logs",
+      color: "bg-indigo-500",
     },
   ];
 

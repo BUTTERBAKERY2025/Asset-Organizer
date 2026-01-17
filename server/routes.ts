@@ -17021,7 +17021,7 @@ export async function registerRoutes(
   app.put("/api/warehouse/material-transfers/:id/status", isAuthenticated, async (req, res) => {
     try {
       const user = req.user as any;
-      const { status, ...additionalData } = req.body;
+      const { status, receiverSignature, ...additionalData } = req.body;
       
       if (!['in_transit', 'delivered', 'cancelled'].includes(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
@@ -17035,6 +17035,9 @@ export async function registerRoutes(
         updateData.arrivalTime = new Date();
         updateData.receivedBy = user?.id;
         updateData.receivedByName = user?.fullName || user?.username;
+        if (receiverSignature) {
+          updateData.receiverSignature = receiverSignature;
+        }
       }
       
       const transfer = await storage.updateMaterialTransferStatus(
