@@ -167,6 +167,436 @@ const DATE_PRESETS = [
 type SortField = 'productName' | 'quantity' | 'productionDate' | 'status' | 'chefName' | 'productCategory';
 type SortOrder = 'asc' | 'desc';
 
+interface InventoryItem {
+  id: number;
+  branchId: string;
+  branchName?: string;
+  productId: number | null;
+  productName: string;
+  productNameNormalized: string;
+  productCategory: string | null;
+  currentBalance: number;
+  unit: string | null;
+  productionDate: string;
+  lastUpdated: string;
+  sourceBatchId: number | null;
+}
+
+interface TransferItem {
+  id: number;
+  inventoryId: number;
+  productName: string;
+  productCategory: string | null;
+  quantity: number;
+  unit: string | null;
+  sourceBranchId: string;
+  sourceBranchName?: string;
+  destinationType: string;
+  destinationBranchId: string | null;
+  destinationBranchName?: string;
+  notes: string | null;
+  transferredAt: string;
+  transferredById: string | null;
+  transferredByName: string | null;
+  status: string;
+}
+
+function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string; startDate: string; endDate: string }) {
+  const { data: inventory, isLoading } = useQuery<InventoryItem[]>({
+    queryKey: ["/api/finished-goods-inventory", branchId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (branchId && branchId !== "all") params.append("branchId", branchId);
+      const res = await fetch(`/api/finished-goods-inventory?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("فشل في جلب بيانات المخزون");
+      return res.json();
+    },
+  });
+
+  const totalBalance = useMemo(() => 
+    inventory?.reduce((sum, item) => sum + (item.currentBalance || 0), 0) || 0
+  , [inventory]);
+
+  const byCategory = useMemo(() => {
+    const categories: Record<string, number> = {};
+    inventory?.forEach(item => {
+      const cat = item.productCategory || "غير مصنف";
+      categories[cat] = (categories[cat] || 0) + (item.currentBalance || 0);
+    });
+    return Object.entries(categories).map(([name, value]) => ({ name, value }));
+  }, [inventory]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[1, 2, 3].map(i => (
+          <Card key={i}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Package className="h-4 w-4 text-purple-600" />
+              <span className="text-xs text-gray-500">إجمالي المخزون</span>
+            </div>
+            <p className="text-2xl font-bold text-purple-700" data-testid="text-total-inventory">{totalBalance}</p>
+            <p className="text-xs text-gray-400">وحدة</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-4 w-4 text-blue-600" />
+              <span className="text-xs text-gray-500">عدد الأصناف</span>
+            </div>
+            <p className="text-2xl font-bold text-blue-700" data-testid="text-items-count">{inventory?.length || 0}</p>
+            <p className="text-xs text-gray-400">صنف</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="h-4 w-4 text-green-600" />
+              <span className="text-xs text-gray-500">التصنيفات</span>
+            </div>
+            <p className="text-2xl font-bold text-green-700">{byCategory.length}</p>
+            <p className="text-xs text-gray-400">تصنيف</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="h-4 w-4 text-amber-600" />
+              <span className="text-xs text-gray-500">متوسط الرصيد</span>
+            </div>
+            <p className="text-2xl font-bold text-amber-700">
+              {inventory && inventory.length > 0 ? Math.round(totalBalance / inventory.length) : 0}
+            </p>
+            <p className="text-xs text-gray-400">وحدة/صنف</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm">توزيع المخزون حسب التصنيف</CardTitle>
+          </CardHeader>
+          <CardContent className="h-64">
+            {byCategory.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPie>
+                  <Pie
+                    data={byCategory}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {byCategory.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </RechartsPie>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-8">لا توجد بيانات</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm">أعلى الأصناف رصيداً</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2" data-testid="top-inventory-list">
+              {inventory?.slice()
+                .sort((a, b) => b.currentBalance - a.currentBalance)
+                .slice(0, 8)
+                .map((item, i) => (
+                  <div key={item.id} className="flex justify-between items-center p-2 rounded-lg bg-gray-50" data-testid={`row-inventory-${i}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-xs font-medium text-purple-700">
+                        {i + 1}
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium">{item.productName}</span>
+                        {item.productCategory && (
+                          <span className="text-xs text-gray-400 mr-2">({item.productCategory})</span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge className="text-xs bg-purple-600">{item.currentBalance} {item.unit || "وحدة"}</Badge>
+                  </div>
+                ))}
+              {(!inventory || inventory.length === 0) && (
+                <p className="text-sm text-gray-400 text-center py-4">لا توجد بيانات</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-sm">تفاصيل المخزون</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-right p-2">المنتج</th>
+                  <th className="text-right p-2">التصنيف</th>
+                  <th className="text-right p-2">الفرع</th>
+                  <th className="text-right p-2">الرصيد</th>
+                  <th className="text-right p-2">تاريخ الإنتاج</th>
+                  <th className="text-right p-2">آخر تحديث</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventory?.map((item) => (
+                  <tr key={item.id} className="border-b hover:bg-gray-50">
+                    <td className="p-2 font-medium">{item.productName}</td>
+                    <td className="p-2 text-gray-500">{item.productCategory || "-"}</td>
+                    <td className="p-2 text-gray-500">{item.branchName || "-"}</td>
+                    <td className="p-2">
+                      <Badge variant={item.currentBalance > 0 ? "default" : "destructive"}>
+                        {item.currentBalance} {item.unit || "وحدة"}
+                      </Badge>
+                    </td>
+                    <td className="p-2 text-gray-500">{item.productionDate}</td>
+                    <td className="p-2 text-gray-500">{format(new Date(item.lastUpdated), "yyyy/MM/dd HH:mm")}</td>
+                  </tr>
+                ))}
+                {(!inventory || inventory.length === 0) && (
+                  <tr><td colSpan={6} className="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string; startDate: string; endDate: string }) {
+  const { data: transfers, isLoading } = useQuery<TransferItem[]>({
+    queryKey: ["/api/finished-goods-transfers", branchId, startDate, endDate],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (branchId && branchId !== "all") params.append("sourceBranchId", branchId);
+      const res = await fetch(`/api/finished-goods-transfers?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("فشل في جلب بيانات التحويلات");
+      return res.json();
+    },
+  });
+
+  const totalTransferred = useMemo(() => 
+    transfers?.reduce((sum, t) => sum + (t.quantity || 0), 0) || 0
+  , [transfers]);
+
+  const byDestination = useMemo(() => {
+    const destinations: Record<string, number> = {};
+    transfers?.forEach(t => {
+      const dest = t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
+        ? "بار العرض" 
+        : t.destinationBranchName || "فرع آخر";
+      destinations[dest] = (destinations[dest] || 0) + t.quantity;
+    });
+    return Object.entries(destinations).map(([name, value]) => ({ name, value }));
+  }, [transfers]);
+
+  const displayBarTotal = useMemo(() => 
+    transfers?.filter(t => t.destinationType === "display_bar" || t.destinationType === "بار_العرض")
+      .reduce((sum, t) => sum + t.quantity, 0) || 0
+  , [transfers]);
+
+  const branchTotal = useMemo(() => 
+    transfers?.filter(t => t.destinationType === "branch")
+      .reduce((sum, t) => sum + t.quantity, 0) || 0
+  , [transfers]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[1, 2, 3].map(i => (
+          <Card key={i}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <ArrowRight className="h-4 w-4 text-blue-600" />
+              <span className="text-xs text-gray-500">إجمالي التحويلات</span>
+            </div>
+            <p className="text-2xl font-bold text-blue-700" data-testid="text-total-transfers">{totalTransferred}</p>
+            <p className="text-xs text-gray-400">وحدة</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-white border-orange-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Factory className="h-4 w-4 text-orange-600" />
+              <span className="text-xs text-gray-500">بار العرض</span>
+            </div>
+            <p className="text-2xl font-bold text-orange-700" data-testid="text-display-bar">{displayBarTotal}</p>
+            <p className="text-xs text-gray-400">وحدة</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Building2 className="h-4 w-4 text-green-600" />
+              <span className="text-xs text-gray-500">للفروع</span>
+            </div>
+            <p className="text-2xl font-bold text-green-700" data-testid="text-branch-transfers">{branchTotal}</p>
+            <p className="text-xs text-gray-400">وحدة</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardCheck className="h-4 w-4 text-purple-600" />
+              <span className="text-xs text-gray-500">عدد العمليات</span>
+            </div>
+            <p className="text-2xl font-bold text-purple-700">{transfers?.length || 0}</p>
+            <p className="text-xs text-gray-400">عملية</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm">توزيع التحويلات حسب الوجهة</CardTitle>
+          </CardHeader>
+          <CardContent className="h-64">
+            {byDestination.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byDestination}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#8b5cf6" name="الكمية" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-8">لا توجد بيانات</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm">آخر التحويلات</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2" data-testid="recent-transfers-list">
+              {transfers?.slice(0, 8).map((t, i) => (
+                <div key={t.id} className="flex justify-between items-center p-2 rounded-lg bg-gray-50" data-testid={`row-transfer-${i}`}>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                      t.destinationType === "display_bar" || t.destinationType === "بار_العرض"
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}>
+                      {t.destinationType === "display_bar" || t.destinationType === "بار_العرض" ? "ب" : "ف"}
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">{t.productName}</span>
+                      <span className="text-xs text-gray-400 mr-2">
+                        → {t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
+                          ? "بار العرض" 
+                          : t.destinationBranchName || "فرع"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="text-xs bg-blue-600">{t.quantity} {t.unit || "وحدة"}</Badge>
+                    <span className="text-xs text-gray-400">
+                      {format(new Date(t.transferredAt), "MM/dd HH:mm")}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {(!transfers || transfers.length === 0) && (
+                <p className="text-sm text-gray-400 text-center py-4">لا توجد تحويلات</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-sm">سجل التحويلات</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-right p-2">المنتج</th>
+                  <th className="text-right p-2">الكمية</th>
+                  <th className="text-right p-2">من</th>
+                  <th className="text-right p-2">إلى</th>
+                  <th className="text-right p-2">بواسطة</th>
+                  <th className="text-right p-2">التاريخ</th>
+                  <th className="text-right p-2">ملاحظات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transfers?.map((t) => (
+                  <tr key={t.id} className="border-b hover:bg-gray-50">
+                    <td className="p-2 font-medium">{t.productName}</td>
+                    <td className="p-2">
+                      <Badge variant="outline">{t.quantity} {t.unit || "وحدة"}</Badge>
+                    </td>
+                    <td className="p-2 text-gray-500">{t.sourceBranchName || "-"}</td>
+                    <td className="p-2">
+                      <Badge className={t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
+                        ? "bg-orange-500" : "bg-blue-500"}>
+                        {t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
+                          ? "بار العرض" 
+                          : t.destinationBranchName || "فرع"}
+                      </Badge>
+                    </td>
+                    <td className="p-2 text-gray-500">{t.transferredByName || "-"}</td>
+                    <td className="p-2 text-gray-500">{format(new Date(t.transferredAt), "yyyy/MM/dd HH:mm")}</td>
+                    <td className="p-2 text-gray-500">{t.notes || "-"}</td>
+                  </tr>
+                ))}
+                {(!transfers || transfers.length === 0) && (
+                  <tr><td colSpan={7} className="p-4 text-center text-gray-400">لا توجد تحويلات</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function ProductionReportsPage() {
   const { selectedBranch, setSelectedBranch, selectedDate, setSelectedDate } = useProductionContext();
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -668,7 +1098,7 @@ export default function ProductionReportsPage() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid grid-cols-5 md:grid-cols-9 gap-1 h-auto p-1">
+          <TabsList className="grid grid-cols-5 md:grid-cols-11 gap-1 h-auto p-1">
             <TabsTrigger value="data" className="text-xs py-1.5 bg-amber-100" data-testid="tab-data">
               <FileSpreadsheet className="h-3 w-3 ml-1" />
               البيانات
@@ -677,12 +1107,20 @@ export default function ProductionReportsPage() {
               <BarChart3 className="h-3 w-3 ml-1" />
               الملخص
             </TabsTrigger>
+            <TabsTrigger value="inventory" className="text-xs py-1.5" data-testid="tab-inventory">
+              <Package className="h-3 w-3 ml-1" />
+              المخزون النهائي
+            </TabsTrigger>
+            <TabsTrigger value="transfers" className="text-xs py-1.5" data-testid="tab-transfers">
+              <ArrowRight className="h-3 w-3 ml-1" />
+              التحويلات
+            </TabsTrigger>
             <TabsTrigger value="targets" className="text-xs py-1.5" data-testid="tab-targets">
               <Target className="h-3 w-3 ml-1" />
               الأهداف
             </TabsTrigger>
             <TabsTrigger value="products" className="text-xs py-1.5" data-testid="tab-products">
-              <Package className="h-3 w-3 ml-1" />
+              <Sparkles className="h-3 w-3 ml-1" />
               المنتجات
             </TabsTrigger>
             <TabsTrigger value="waste" className="text-xs py-1.5" data-testid="tab-waste">
@@ -1309,6 +1747,16 @@ export default function ProductionReportsPage() {
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              {/* Finished Goods Inventory Tab */}
+              <TabsContent value="inventory" className="space-y-4">
+                <InventoryReportTab branchId={selectedBranch} startDate={startDate} endDate={endDate} />
+              </TabsContent>
+
+              {/* Transfers Tab */}
+              <TabsContent value="transfers" className="space-y-4">
+                <TransfersReportTab branchId={selectedBranch} startDate={startDate} endDate={endDate} />
               </TabsContent>
 
               <TabsContent value="targets" className="space-y-4">
