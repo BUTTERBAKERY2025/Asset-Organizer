@@ -248,6 +248,7 @@ function Router() {
       <Route path="/backups">{() => <AdminPage component={BackupsPage} module="backups" />}</Route>
       
       {/* Warehouse - المخازن والتحويلات */}
+      <Route path="/warehouse">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
       <Route path="/warehouse-dashboard">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
       <Route path="/transfer-requests">{() => <ModulePage component={TransferRequestsPage} module="transfer_requests" />}</Route>
       <Route path="/warehouse-inventory">{() => <ModulePage component={WarehouseInventoryPage} module="warehouse_inventory" />}</Route>
