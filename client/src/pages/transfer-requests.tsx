@@ -401,7 +401,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     destinationBranchId: "",
     destinationBranchName: "",
     notes: "",
-    items: [] as { itemId: number; itemName: string; category: string; quantity: number; unit: string; notes: string }[],
+    items: [] as { itemId: number; itemName: string; category: string; quantity: number; availableQuantity: number | null; unit: string; notes: string }[],
   });
 
   // Fetch warehouse items for selection
@@ -418,7 +418,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
   const addTransferItem = () => {
     setNewTransfer(prev => ({
       ...prev,
-      items: [...prev.items, { itemId: 0, itemName: "", category: "", quantity: 1, unit: "كجم", notes: "" }],
+      items: [...prev.items, { itemId: 0, itemName: "", category: "", quantity: 1, availableQuantity: null, unit: "كجم", notes: "" }],
     }));
   };
 
@@ -836,67 +836,95 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   </div>
                   
                   {newTransfer.items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-2 items-end border-b pb-2" data-testid={`item-row-${index}`}>
-                      <div className="col-span-5">
-                        <Label className="text-xs">{isRTL ? "الصنف" : "Item"}</Label>
-                        <Select 
-                          value={item.itemId ? item.itemId.toString() : ""}
-                          onValueChange={(value) => {
-                            const selectedItem = warehouseItems.find(i => i.id === parseInt(value));
-                            if (selectedItem) {
-                              updateTransferItem(index, "itemId", selectedItem.id);
-                              updateTransferItem(index, "itemName", selectedItem.name);
-                              updateTransferItem(index, "category", selectedItem.category);
-                              updateTransferItem(index, "unit", selectedItem.unit);
-                            }
-                          }}
-                        >
-                          <SelectTrigger data-testid={`select-item-${index}`}>
-                            <SelectValue placeholder={isRTL ? "اختر الصنف" : "Select item"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouseItems.map((wItem) => (
-                              <SelectItem key={wItem.id} value={wItem.id.toString()}>
-                                {wItem.name} ({wItem.category})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    <div key={index} className="space-y-2 border-b pb-3" data-testid={`item-row-${index}`}>
+                      <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-6">
+                          <Label className="text-xs">{isRTL ? "الصنف" : "Item"}</Label>
+                          <Select 
+                            value={item.itemId ? item.itemId.toString() : ""}
+                            onValueChange={(value) => {
+                              const selectedItem = warehouseItems.find(i => i.id === parseInt(value));
+                              if (selectedItem) {
+                                updateTransferItem(index, "itemId", selectedItem.id);
+                                updateTransferItem(index, "itemName", selectedItem.name);
+                                updateTransferItem(index, "category", selectedItem.category);
+                                updateTransferItem(index, "unit", selectedItem.unit);
+                              }
+                            }}
+                          >
+                            <SelectTrigger data-testid={`select-item-${index}`}>
+                              <SelectValue placeholder={isRTL ? "اختر الصنف" : "Select item"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouseItems.map((wItem) => (
+                                <SelectItem key={wItem.id} value={wItem.id.toString()}>
+                                  {wItem.name} ({wItem.category})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">{isRTL ? "الوحدة" : "Unit"}</Label>
+                          <Input value={item.unit} disabled className="bg-muted" />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs">{isRTL ? "ملاحظات" : "Notes"}</Label>
+                          <Input 
+                            value={item.notes}
+                            onChange={(e) => updateTransferItem(index, "notes", e.target.value)}
+                            placeholder="..."
+                            data-testid={`input-item-notes-${index}`}
+                          />
+                        </div>
+                        <div className="col-span-1">
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-red-500 hover:text-red-700"
+                            onClick={() => removeTransferItem(index)}
+                            data-testid={`btn-remove-item-${index}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs">{isRTL ? "الكمية" : "Qty"}</Label>
-                        <Input 
-                          type="number" 
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => updateTransferItem(index, "quantity", parseInt(e.target.value) || 1)}
-                          data-testid={`input-qty-${index}`}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs">{isRTL ? "الوحدة" : "Unit"}</Label>
-                        <Input value={item.unit} disabled className="bg-muted" />
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs">{isRTL ? "ملاحظات" : "Notes"}</Label>
-                        <Input 
-                          value={item.notes}
-                          onChange={(e) => updateTransferItem(index, "notes", e.target.value)}
-                          placeholder="..."
-                          data-testid={`input-item-notes-${index}`}
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
-                          className="text-red-500 hover:text-red-700"
-                          onClick={() => removeTransferItem(index)}
-                          data-testid={`btn-remove-item-${index}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-3">
+                          <Label className="text-xs text-blue-600 font-medium">
+                            {isRTL ? "الكمية المتوفرة بالفرع *" : "Available in Branch *"}
+                          </Label>
+                          <Input 
+                            type="number" 
+                            min="0"
+                            value={item.availableQuantity ?? ""}
+                            onChange={(e) => updateTransferItem(index, "availableQuantity", e.target.value === "" ? null : parseInt(e.target.value))}
+                            placeholder={isRTL ? "أدخل الكمية المتوفرة" : "Enter available qty"}
+                            className="border-blue-300 focus:border-blue-500"
+                            data-testid={`input-available-qty-${index}`}
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-orange-600 font-medium">
+                            {isRTL ? "الكمية المطلوبة *" : "Requested Qty *"}
+                          </Label>
+                          <Input 
+                            type="number" 
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateTransferItem(index, "quantity", parseInt(e.target.value) || 1)}
+                            className="border-orange-300 focus:border-orange-500"
+                            data-testid={`input-qty-${index}`}
+                          />
+                        </div>
+                        {item.availableQuantity !== null && item.quantity > item.availableQuantity && (
+                          <div className="col-span-6">
+                            <p className="text-xs text-red-500 flex items-center gap-1">
+                              ⚠️ {isRTL ? "الكمية المطلوبة أكبر من المتوفرة!" : "Requested qty exceeds available!"}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -928,9 +956,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "يجب إضافة صنف واحد على الأقل" : "Please add at least one item", variant: "destructive" });
                       return;
                     }
+                    const missingAvailableQty = newTransfer.items.some(item => item.availableQuantity === null);
+                    if (missingAvailableQty) {
+                      toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "يجب إدخال الكمية المتوفرة بالفرع لجميع الأصناف" : "Please enter available quantity for all items", variant: "destructive" });
+                      return;
+                    }
                     createMutation.mutate(newTransfer);
                   }} 
-                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || createMutation.isPending}
+                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => item.availableQuantity === null) || createMutation.isPending}
                   data-testid="btn-submit-transfer"
                 >
                   {createMutation.isPending ? (isRTL ? "جاري الإرسال..." : "Submitting...") : (isRTL ? "إرسال الطلب" : "Submit Request")}
