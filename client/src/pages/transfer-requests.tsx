@@ -25,7 +25,7 @@ import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
 
 pdfMake.vfs = pdfFonts.vfs;
 
@@ -301,7 +301,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  // Export to Excel
+  // Export to Excel with Arabic RTL support
   const handleExportExcel = () => {
     if (!filteredTransfers || filteredTransfers.length === 0) {
       toast({
@@ -312,35 +312,65 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
       return;
     }
 
-    const excelData = filteredTransfers.map((transfer) => ({
-      "رقم التحويل": transfer.transferNumber,
-      "من": transfer.sourceBranchName || "المستودع الرئيسي",
-      "إلى": transfer.destinationBranchName || "-",
-      "الحالة": STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status,
-      "السائق": transfer.driverName || "-",
-      "المركبة": transfer.vehicleNumber || "-",
-      "تاريخ التحويل": transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : "-",
-      "ملاحظات": transfer.notes || "-",
-      "أنشأه": transfer.createdByName || "-",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "طلبات التحويل");
+    const headers = ["رقم التحويل", "من", "إلى", "الحالة", "السائق", "المركبة", "تاريخ التحويل", "ملاحظات", "أنشأه"];
     
+    const rows = filteredTransfers.map((transfer) => [
+      transfer.transferNumber,
+      transfer.sourceBranchName || "المستودع الرئيسي",
+      transfer.destinationBranchName || "-",
+      STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status,
+      transfer.driverName || "-",
+      transfer.vehicleNumber || "-",
+      transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : "-",
+      transfer.notes || "-",
+      transfer.createdByName || "-",
+    ]);
+
+    const data = [headers, ...rows];
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    
+    const headerStyle = {
+      font: { name: "Cairo", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "D4A853" } },
+      alignment: { horizontal: "right", vertical: "center", wrapText: true, readingOrder: 2 },
+      border: {
+        top: { style: "thin", color: { rgb: "000000" } },
+        bottom: { style: "thin", color: { rgb: "000000" } },
+        left: { style: "thin", color: { rgb: "000000" } },
+        right: { style: "thin", color: { rgb: "000000" } },
+      }
+    };
+    
+    const cellStyle = {
+      font: { name: "Cairo", sz: 11 },
+      alignment: { horizontal: "right", vertical: "center", wrapText: true, readingOrder: 2 },
+      border: {
+        top: { style: "thin", color: { rgb: "CCCCCC" } },
+        bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+        left: { style: "thin", color: { rgb: "CCCCCC" } },
+        right: { style: "thin", color: { rgb: "CCCCCC" } },
+      }
+    };
+
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
+    for (let row = range.s.r; row <= range.e.r; row++) {
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!worksheet[cellAddress]) continue;
+        worksheet[cellAddress].s = row === 0 ? headerStyle : cellStyle;
+      }
+    }
+
     const colWidths = [
-      { wch: 18 }, // رقم التحويل
-      { wch: 20 }, // من
-      { wch: 20 }, // إلى
-      { wch: 15 }, // الحالة
-      { wch: 15 }, // السائق
-      { wch: 12 }, // المركبة
-      { wch: 15 }, // تاريخ التحويل
-      { wch: 25 }, // ملاحظات
-      { wch: 15 }, // أنشأه
+      { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, 
+      { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 15 }
     ];
     worksheet['!cols'] = colWidths;
+    
+    worksheet['!views'] = [{ rightToLeft: true }];
 
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "طلبات التحويل");
     XLSX.writeFile(workbook, `طلبات-التحويل-${new Date().toISOString().split('T')[0]}.xlsx`);
     
     toast({
