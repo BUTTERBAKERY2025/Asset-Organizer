@@ -710,14 +710,20 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                {/* Request Info Banner - Shows flow: Warehouse → Branch */}
+                {/* Request Info Banner - Shows flow dynamically based on selection */}
                 <div className="p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
                   <div className="flex items-center justify-center gap-4 text-sm">
                     <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
-                      <Warehouse className="w-5 h-5 text-green-600" />
+                      {newTransfer.sourceBranchId === "main_warehouse" ? (
+                        <Warehouse className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <Building2 className="w-5 h-5 text-green-600" />
+                      )}
                       <div>
                         <p className="text-xs text-muted-foreground">{isRTL ? "المصدر" : "Source"}</p>
-                        <p className="font-bold text-green-700">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</p>
+                        <p className="font-bold text-green-700">
+                          {newTransfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 text-muted-foreground">
@@ -728,7 +734,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       <Building2 className="w-5 h-5 text-blue-600" />
                       <div>
                         <p className="text-xs text-muted-foreground">{isRTL ? "الوجهة" : "Destination"}</p>
-                        <p className="font-bold text-blue-700">{newTransfer.destinationBranchName || (isRTL ? "فرعك" : "Your Branch")}</p>
+                        <p className="font-bold text-blue-700">
+                          {newTransfer.destinationBranchName || (isRTL ? "اختر الفرع" : "Select Branch")}
+                        </p>
                       </div>
                     </div>
                   </div>
