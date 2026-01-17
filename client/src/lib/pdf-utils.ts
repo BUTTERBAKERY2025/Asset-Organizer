@@ -135,12 +135,12 @@ export async function generateTransferPdf(
           logoBase64 ? { image: logoBase64, width: 50, alignment: 'right' } : { text: '', width: 50 },
           { 
             stack: [
-              { text: 'مخابز باتر', fontSize: 18, bold: true, color: '#D4A853', alignment: 'center' },
-              { text: 'BUTTER BAKERY', fontSize: 10, color: '#666', alignment: 'center' },
+              { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#D4A853', alignment: 'center' },
             ],
-            width: '*'
+            width: '*',
+            margin: [0, 12, 0, 0]
           },
-          { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 8, 0, 0] },
+          { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 12, 0, 0] },
         ],
         margin: [0, 0, 0, 8]
       },
@@ -325,12 +325,12 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
           logoBase64 ? { image: logoBase64, width: 50, alignment: 'right' } : { text: '', width: 50 },
           { 
             stack: [
-              { text: 'مخابز باتر', fontSize: 18, bold: true, color: '#D4A853', alignment: 'center' },
-              { text: 'BUTTER BAKERY', fontSize: 10, color: '#666', alignment: 'center' },
+              { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#D4A853', alignment: 'center' },
             ],
-            width: '*'
+            width: '*',
+            margin: [0, 12, 0, 0]
           },
-          { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 8, 0, 0] },
+          { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 12, 0, 0] },
         ],
         margin: [0, 0, 0, 8]
       },
