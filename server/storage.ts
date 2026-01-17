@@ -8420,6 +8420,49 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  // Transactional review with item updates - ensures atomicity
+  async reviewMaterialRequestWithItems(
+    id: number, 
+    status: string, 
+    reviewerId: string | undefined, 
+    reviewerName: string | undefined, 
+    reviewNotes: string | undefined,
+    itemUpdates: Array<{ id: number; approvedQuantity: number }>
+  ): Promise<MaterialRequest | undefined> {
+    try {
+      return await db.transaction(async (tx) => {
+        // Update request status
+        const [updated] = await tx.update(materialRequests)
+          .set({ 
+            status, 
+            reviewedBy: reviewerId,
+            reviewedByName: reviewerName,
+            reviewedAt: new Date(),
+            reviewNotes,
+            updatedAt: new Date() 
+          })
+          .where(eq(materialRequests.id, id))
+          .returning();
+        
+        if (!updated) {
+          return undefined;
+        }
+        
+        // Update all items within same transaction
+        for (const item of itemUpdates) {
+          await tx.update(materialRequestItems)
+            .set({ approvedQuantity: item.approvedQuantity })
+            .where(eq(materialRequestItems.id, item.id));
+        }
+        
+        return updated;
+      });
+    } catch (error) {
+      console.error("Transaction failed:", error);
+      return undefined;
+    }
+  }
+
   async getMaterialRequestItems(requestId: number): Promise<MaterialRequestItem[]> {
     return await db.select().from(materialRequestItems).where(eq(materialRequestItems.requestId, requestId));
   }

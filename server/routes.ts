@@ -16957,18 +16957,43 @@ export async function registerRoutes(
   app.post("/api/warehouse/material-requests/:id/review", isAuthenticated, async (req, res) => {
     try {
       const user = req.user as any;
-      const { status, reviewNotes } = req.body;
+      const requestId = parseInt(req.params.id);
+      const { status, reviewNotes, items } = req.body;
       
       if (!['approved', 'rejected', 'forwarded_to_purchasing'].includes(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
       }
       
-      const request = await storage.updateMaterialRequestStatus(
-        parseInt(req.params.id),
+      // Validate items before making any changes if approving
+      let validatedItems: Array<{ id: number; approvedQuantity: number }> = [];
+      if (status === 'approved' && items && Array.isArray(items) && items.length > 0) {
+        const requestWithItems = await storage.getMaterialRequestWithItems(requestId);
+        if (!requestWithItems) {
+          return res.status(404).json({ error: "الطلب غير موجود" });
+        }
+        
+        const validItemIds = new Set(requestWithItems.items.map(i => i.id));
+        
+        // Validate all items belong to this request
+        for (const item of items) {
+          if (!item.id || !validItemIds.has(item.id)) {
+            return res.status(400).json({ error: "بند غير صالح في الطلب" });
+          }
+          if (typeof item.approvedQuantity !== 'number' || item.approvedQuantity < 0) {
+            return res.status(400).json({ error: "كمية معتمدة غير صالحة" });
+          }
+          validatedItems.push({ id: item.id, approvedQuantity: item.approvedQuantity });
+        }
+      }
+      
+      // Use transactional update for atomicity
+      const request = await storage.reviewMaterialRequestWithItems(
+        requestId,
         status,
         user?.id,
         user?.fullName || user?.username,
-        reviewNotes
+        reviewNotes,
+        validatedItems
       );
       
       if (!request) {

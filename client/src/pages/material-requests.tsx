@@ -203,10 +203,11 @@ export default function MaterialRequestsPage() {
   });
 
   const reviewMutation = useMutation({
-    mutationFn: async ({ id, status, reviewNotes }: { id: number; status: string; reviewNotes: string }) => {
+    mutationFn: async ({ id, status, reviewNotes, items }: { id: number; status: string; reviewNotes: string; items?: Array<{ id: number; approvedQuantity: number }> }) => {
       const response = await apiRequest("POST", `/api/warehouse/material-requests/${id}/review`, {
         status,
         reviewNotes,
+        items,
       });
       return response.json();
     },
@@ -929,6 +930,10 @@ export default function MaterialRequestsPage() {
                       id: selectedRequest.id,
                       status: reviewData.status,
                       reviewNotes: reviewData.reviewNotes,
+                      items: reviewItems.map(item => ({
+                        id: item.id,
+                        approvedQuantity: item.approvedQuantity || 0,
+                      })),
                     });
                   }
                 }}
