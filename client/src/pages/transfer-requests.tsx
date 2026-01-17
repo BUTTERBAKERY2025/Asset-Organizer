@@ -671,10 +671,12 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                {isRTL ? "طلبات التحويل" : "Transfer Requests"}
+                {isRTL ? "طلبات التحويل والطلب" : "Transfer & Order Requests"}
               </h1>
               <p className="text-muted-foreground text-sm">
-                {isRTL ? "تتبع تحويلات المواد بين الفروع والمستودع" : "Track material transfers between branches and warehouse"}
+                {isRTL 
+                  ? "إدارة طلبات الأصناف من المستودع الرئيسي وتتبع حالة التحويلات" 
+                  : "Manage item requests from main warehouse and track transfer status"}
               </p>
             </div>
           </div>
@@ -695,132 +697,92 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{isRTL ? "إنشاء طلب تحويل مواد" : "Create Material Transfer Request"}</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-green-600" />
+                  {isRTL ? "طلب أصناف من المستودع الرئيسي" : "Request Items from Main Warehouse"}
+                </DialogTitle>
                 <DialogDescription>
-                  {isRTL ? "اختر الأصناف والكميات المطلوبة - سيتم إرسال الطلب للمراجعة والموافقة" : "Select items and quantities needed - request will be sent for review and approval"}
+                  {isRTL 
+                    ? "حدد الأصناف والكميات المطلوبة من المستودع - سيتم إرسال الطلب للموافقة ثم الإرسال"
+                    : "Specify items and quantities needed from warehouse - request will be sent for approval then dispatch"}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                {/* Transfer Type Selection */}
-                <div className="space-y-2">
-                  <Label>{isRTL ? "نوع التحويل" : "Transfer Type"}</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant={transferType === "to_warehouse" ? "default" : "outline"}
-                      className="flex items-center gap-2"
-                      onClick={() => {
-                        setTransferType("to_warehouse");
-                        setNewTransfer(prev => ({ 
-                          ...prev, 
-                          destinationBranchId: "main_warehouse",
-                          destinationBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse"
-                        }));
-                      }}
-                      data-testid="btn-type-warehouse"
-                    >
-                      <Warehouse className="w-4 h-4" />
-                      {isRTL ? "إلى المستودع" : "To Warehouse"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={transferType === "between_branches" ? "default" : "outline"}
-                      className="flex items-center gap-2"
-                      onClick={() => {
-                        setTransferType("between_branches");
-                        setNewTransfer(prev => ({ ...prev, destinationBranchId: "", destinationBranchName: "" }));
-                      }}
-                      data-testid="btn-type-branch"
-                    >
-                      <Building2 className="w-4 h-4" />
-                      {isRTL ? "إلى فرع آخر" : "To Branch"}
-                    </Button>
+                {/* Request Info Banner */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      <span className="font-medium">{isRTL ? "الفرع الطالب:" : "Requesting Branch:"}</span>
+                      <span className="text-blue-700">{newTransfer.sourceBranchName || (isRTL ? "فرعك" : "Your Branch")}</span>
+                    </div>
+                    <Send className="w-4 h-4 text-blue-400" />
+                    <div className="flex items-center gap-2">
+                      <Warehouse className="w-4 h-4 text-green-600" />
+                      <span className="font-medium">{isRTL ? "المستودع:" : "Warehouse:"}</span>
+                      <span className="text-green-700">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Source Branch (Read-only for non-admins) */}
-                <div className="space-y-2">
-                  <Label>{isRTL ? "من (المصدر)" : "From (Source)"}</Label>
-                  {canSelectBranch ? (
-                    <Select 
-                      value={newTransfer.sourceBranchId} 
-                      onValueChange={(value) => {
-                        const branch = branches.find(b => b.id === value);
-                        setNewTransfer(prev => ({ 
-                          ...prev, 
-                          sourceBranchId: value,
-                          sourceBranchName: branch ? (isRTL ? branch.nameAr || branch.name : branch.name) : ""
-                        }));
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-source">
-                        <SelectValue placeholder={isRTL ? "اختر المصدر" : "Select source"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="main_warehouse">
-                          {isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
-                        </SelectItem>
-                        {branches.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>
-                            {isRTL ? branch.nameAr || branch.name : branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input 
-                      value={newTransfer.sourceBranchName || (isRTL ? "فرعك" : "Your Branch")}
-                      disabled
-                      className="bg-muted"
-                    />
-                  )}
-                </div>
-
-                {/* Destination Selection */}
-                <div className="space-y-2">
-                  <Label>{isRTL ? "إلى (الوجهة)" : "To (Destination)"}</Label>
-                  {transferType === "to_warehouse" && !canSelectBranch ? (
-                    <Input 
-                      value={isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
-                      disabled
-                      className="bg-muted"
-                    />
-                  ) : (
-                    <Select 
-                      value={newTransfer.destinationBranchId} 
-                      onValueChange={(value) => {
-                        const branch = value === "main_warehouse" 
-                          ? null 
-                          : branches.find(b => b.id === value);
-                        setNewTransfer(prev => ({ 
-                          ...prev, 
-                          destinationBranchId: value,
-                          destinationBranchName: branch 
-                            ? (isRTL ? branch.nameAr || branch.name : branch.name)
-                            : (isRTL ? "المستودع الرئيسي" : "Main Warehouse")
-                        }));
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-destination">
-                        <SelectValue placeholder={isRTL ? "اختر الوجهة" : "Select destination"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {canSelectBranch && (
+                {/* Admin can select source/destination */}
+                {canSelectBranch && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "الفرع الطالب (المستلم)" : "Requesting Branch (Receiver)"}</Label>
+                      <Select 
+                        value={newTransfer.destinationBranchId} 
+                        onValueChange={(value) => {
+                          const branch = branches.find(b => b.id === value);
+                          setNewTransfer(prev => ({ 
+                            ...prev, 
+                            destinationBranchId: value,
+                            destinationBranchName: branch ? (isRTL ? branch.name : branch.name) : ""
+                          }));
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-destination">
+                          <SelectValue placeholder={isRTL ? "اختر الفرع" : "Select branch"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branches.map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id}>
+                              {branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "المصدر (المرسل)" : "Source (Sender)"}</Label>
+                      <Select 
+                        value={newTransfer.sourceBranchId} 
+                        onValueChange={(value) => {
+                          const branch = branches.find(b => b.id === value);
+                          setNewTransfer(prev => ({ 
+                            ...prev, 
+                            sourceBranchId: value,
+                            sourceBranchName: branch ? branch.name : (isRTL ? "المستودع الرئيسي" : "Main Warehouse")
+                          }));
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-source">
+                          <SelectValue placeholder={isRTL ? "اختر المصدر" : "Select source"} />
+                        </SelectTrigger>
+                        <SelectContent>
                           <SelectItem value="main_warehouse">
                             {isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
                           </SelectItem>
-                        )}
-                        {branches
-                          .filter(b => b.id !== newTransfer.sourceBranchId) // Exclude source branch
-                          .map((branch) => (
+                          {branches.map((branch) => (
                             <SelectItem key={branch.id} value={branch.id}>
-                              {isRTL ? branch.nameAr || branch.name : branch.name}
+                              {branch.name}
                             </SelectItem>
                           ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
 
                 {/* Items Section */}
                 <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
