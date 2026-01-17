@@ -21,6 +21,51 @@ pdfMake.fonts = {
   }
 };
 
+// Cache for logo base64
+let cachedLogoBase64: string | null = null;
+
+async function getLogoBase64(): Promise<string | null> {
+  if (cachedLogoBase64) return cachedLogoBase64;
+  try {
+    const response = await fetch('/assets/logo.png');
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        cachedLogoBase64 = reader.result as string;
+        resolve(cachedLogoBase64);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function formatDate(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return '-';
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(date.getTime())) return '-';
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatDateTime(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return '-';
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(date.getTime())) return '-';
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
 export type MaterialTransferWithNames = MaterialTransfer & {
   sourceBranchName?: string | null;
   destinationBranchName?: string | null;
@@ -43,12 +88,13 @@ export async function generateTransferPdf(
   items: TransferItemWithAvailable[]
 ): Promise<void> {
   
+  const logoBase64 = await getLogoBase64();
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
   const destName = transfer.destinationBranchName || 'غير محدد';
   const srcName = transfer.sourceBranchName || 'المستودع الرئيسي';
-  const requestDate = transfer.createdAt ? new Date(transfer.createdAt).toLocaleString('ar-SA') : '-';
-  const printDate = new Date().toLocaleString('ar-SA');
-  const transferDate = transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-';
+  const requestDate = formatDateTime(transfer.createdAt);
+  const printDate = formatDateTime(new Date());
+  const transferDate = formatDate(transfer.transferDate);
   
   const tableBody = [
     [
@@ -86,30 +132,37 @@ export async function generateTransferPdf(
     content: [
       {
         columns: [
-          { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
-          { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
+          logoBase64 ? { image: logoBase64, width: 50, alignment: 'right' } : { text: '', width: 50 },
+          { 
+            stack: [
+              { text: 'مخابز باتر', fontSize: 18, bold: true, color: '#D4A853', alignment: 'center' },
+              { text: 'BUTTER BAKERY', fontSize: 10, color: '#666', alignment: 'center' },
+            ],
+            width: '*'
+          },
+          { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 8, 0, 0] },
         ],
-        margin: [0, 0, 0, 3]
+        margin: [0, 0, 0, 8]
       },
       
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 1, lineColor: '#D4A853' }], margin: [0, 0, 0, 6] },
+      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 2, lineColor: '#D4A853' }], margin: [0, 0, 0, 10] },
       
       {
         table: {
           widths: ['auto', '*', 'auto', '*', 'auto', '*'],
           body: [
             [
-              { text: 'رقم التحويل:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: transfer.transferNumber, fontSize: 9, bold: true, border: [false, false, false, false] },
-              { text: 'الحالة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: statusLabel, fontSize: 9, bold: true, color: '#16a34a', border: [false, false, false, false] },
-              { text: 'التاريخ:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: transferDate, fontSize: 9, bold: true, border: [false, false, false, false] },
+              { text: 'رقم التحويل:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+              { text: transfer.transferNumber, fontSize: 10, bold: true, border: [false, false, false, false] },
+              { text: 'الحالة:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+              { text: statusLabel, fontSize: 10, bold: true, color: '#16a34a', border: [false, false, false, false] },
+              { text: 'التاريخ:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+              { text: transferDate, fontSize: 10, bold: true, border: [false, false, false, false] },
             ]
           ]
         },
         layout: 'noBorders',
-        margin: [0, 0, 0, 4]
+        margin: [0, 0, 0, 6]
       },
       
       {
@@ -246,12 +299,13 @@ export async function generateTransferPdf(
 }
 
 export async function generateQuickTransferPdf(transfer: MaterialTransferWithNames): Promise<void> {
+  const logoBase64 = await getLogoBase64();
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
   const destName = transfer.destinationBranchName || 'غير محدد';
   const srcName = transfer.sourceBranchName || 'المستودع الرئيسي';
-  const requestDate = transfer.createdAt ? new Date(transfer.createdAt).toLocaleString('ar-SA') : '-';
-  const printDate = new Date().toLocaleString('ar-SA');
-  const transferDate = transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-';
+  const requestDate = formatDateTime(transfer.createdAt);
+  const printDate = formatDateTime(new Date());
+  const transferDate = formatDate(transfer.transferDate);
   
   const docDefinition = {
     pageSize: 'A4',
@@ -268,30 +322,37 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
     content: [
       {
         columns: [
-          { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
-          { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
+          logoBase64 ? { image: logoBase64, width: 50, alignment: 'right' } : { text: '', width: 50 },
+          { 
+            stack: [
+              { text: 'مخابز باتر', fontSize: 18, bold: true, color: '#D4A853', alignment: 'center' },
+              { text: 'BUTTER BAKERY', fontSize: 10, color: '#666', alignment: 'center' },
+            ],
+            width: '*'
+          },
+          { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 8, 0, 0] },
         ],
-        margin: [0, 0, 0, 3]
+        margin: [0, 0, 0, 8]
       },
       
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 1, lineColor: '#D4A853' }], margin: [0, 0, 0, 6] },
+      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 2, lineColor: '#D4A853' }], margin: [0, 0, 0, 10] },
       
       {
         table: {
           widths: ['auto', '*', 'auto', '*', 'auto', '*'],
           body: [
             [
-              { text: 'رقم التحويل:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: transfer.transferNumber, fontSize: 9, bold: true, border: [false, false, false, false] },
-              { text: 'الحالة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: statusLabel, fontSize: 9, bold: true, color: '#16a34a', border: [false, false, false, false] },
-              { text: 'التاريخ:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: transferDate, fontSize: 9, bold: true, border: [false, false, false, false] },
+              { text: 'رقم التحويل:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+              { text: transfer.transferNumber, fontSize: 10, bold: true, border: [false, false, false, false] },
+              { text: 'الحالة:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+              { text: statusLabel, fontSize: 10, bold: true, color: '#16a34a', border: [false, false, false, false] },
+              { text: 'التاريخ:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+              { text: transferDate, fontSize: 10, bold: true, border: [false, false, false, false] },
             ]
           ]
         },
         layout: 'noBorders',
-        margin: [0, 0, 0, 4]
+        margin: [0, 0, 0, 6]
       },
       
       {
