@@ -502,7 +502,6 @@ export default function MaterialRequestsPage() {
                               </div>
                               <div className="max-h-[250px] overflow-y-auto">
                                 {warehouseItems
-                                  .filter(i => !newRequest.requestType || i.category === newRequest.requestType)
                                   .filter(i => {
                                     if (!itemSearchQuery) return true;
                                     const query = itemSearchQuery.toLowerCase();
