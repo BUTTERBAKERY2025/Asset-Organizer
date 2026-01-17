@@ -156,6 +156,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/production-dashboard", label: t("sidebar.productionDashboard"), icon: LayoutDashboard, module: "production", isHeader: true },
           { href: "/advanced-production-orders", label: t("sidebar.productionOrders"), icon: ClipboardCheck, module: "production", indent: true },
           { href: "/daily-production", label: t("sidebar.dailyProduction"), icon: ClipboardEdit, module: "daily_production", indent: true },
+          { href: "/finished-goods-inventory", label: t("sidebar.finishedGoodsInventory"), icon: Boxes, module: "production", indent: true },
           { href: "/sales-data-uploads", label: t("sidebar.salesDataUploads"), icon: Upload, module: "production", indent: true },
           { href: "/production-reports", label: t("sidebar.productionReports"), icon: FileBarChart, module: "production", indent: true },
           { href: "/production-comparisons", label: t("sidebar.productionComparisons"), icon: Layers, module: "production", indent: true },
