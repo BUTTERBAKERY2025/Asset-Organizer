@@ -346,44 +346,42 @@ export default function TransferRequestsPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                {/* Transfer Type Selection - only for branches */}
-                {userBranchId && userBranchId !== "main_warehouse" && (
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "نوع التحويل" : "Transfer Type"}</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant={transferType === "to_warehouse" ? "default" : "outline"}
-                        className="flex items-center gap-2"
-                        onClick={() => {
-                          setTransferType("to_warehouse");
-                          setNewTransfer(prev => ({ 
-                            ...prev, 
-                            destinationBranchId: "main_warehouse",
-                            destinationBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse"
-                          }));
-                        }}
-                        data-testid="btn-type-warehouse"
-                      >
-                        <Warehouse className="w-4 h-4" />
-                        {isRTL ? "إلى المستودع" : "To Warehouse"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={transferType === "between_branches" ? "default" : "outline"}
-                        className="flex items-center gap-2"
-                        onClick={() => {
-                          setTransferType("between_branches");
-                          setNewTransfer(prev => ({ ...prev, destinationBranchId: "", destinationBranchName: "" }));
-                        }}
-                        data-testid="btn-type-branch"
-                      >
-                        <Building2 className="w-4 h-4" />
-                        {isRTL ? "إلى فرع آخر" : "To Branch"}
-                      </Button>
-                    </div>
+                {/* Transfer Type Selection */}
+                <div className="space-y-2">
+                  <Label>{isRTL ? "نوع التحويل" : "Transfer Type"}</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={transferType === "to_warehouse" ? "default" : "outline"}
+                      className="flex items-center gap-2"
+                      onClick={() => {
+                        setTransferType("to_warehouse");
+                        setNewTransfer(prev => ({ 
+                          ...prev, 
+                          destinationBranchId: "main_warehouse",
+                          destinationBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse"
+                        }));
+                      }}
+                      data-testid="btn-type-warehouse"
+                    >
+                      <Warehouse className="w-4 h-4" />
+                      {isRTL ? "إلى المستودع" : "To Warehouse"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={transferType === "between_branches" ? "default" : "outline"}
+                      className="flex items-center gap-2"
+                      onClick={() => {
+                        setTransferType("between_branches");
+                        setNewTransfer(prev => ({ ...prev, destinationBranchId: "", destinationBranchName: "" }));
+                      }}
+                      data-testid="btn-type-branch"
+                    >
+                      <Building2 className="w-4 h-4" />
+                      {isRTL ? "إلى فرع آخر" : "To Branch"}
+                    </Button>
                   </div>
-                )}
+                </div>
 
                 {/* Source Branch (Read-only for non-admins) */}
                 <div className="space-y-2">
