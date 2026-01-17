@@ -86,7 +86,7 @@ export async function generateTransferPdf(
     content: [
       {
         columns: [
-          { text: 'مخابز باتر | BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
+          { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
           { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
         ],
         margin: [0, 0, 0, 3]
@@ -268,7 +268,7 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
     content: [
       {
         columns: [
-          { text: 'مخابز باتر | BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
+          { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
           { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
         ],
         margin: [0, 0, 0, 3]
