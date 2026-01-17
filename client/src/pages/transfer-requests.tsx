@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,14 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 import { ExportButtons } from "@/components/export-buttons";
+import { useBranches } from "@/hooks/useBranches";
 
 type MaterialTransfer = {
   id: number;
@@ -74,6 +75,7 @@ export default function TransferRequestsPage() {
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { branches, userBranchId, canSelectBranch } = useBranches();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -81,10 +83,15 @@ export default function TransferRequestsPage() {
   const [selectedTransfer, setSelectedTransfer] = useState<MaterialTransfer | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
+
+  // For non-admins, source branch is always their own branch
+  const userBranch = branches.find(b => b.id === userBranchId);
+  const isMainWarehouse = userBranchId === "main_warehouse";
 
   const [newTransfer, setNewTransfer] = useState({
-    sourceBranchId: "main_warehouse",
-    sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+    sourceBranchId: userBranchId || "",
+    sourceBranchName: "",
     destinationBranchId: "",
     destinationBranchName: "",
     transferDate: new Date().toISOString().split('T')[0],
@@ -94,21 +101,39 @@ export default function TransferRequestsPage() {
     items: [] as { itemName: string; quantity: number; unit: string }[],
   });
 
+  // Initialize source branch when user branch is available
+  useEffect(() => {
+    if (userBranchId && userBranch) {
+      setNewTransfer(prev => ({
+        ...prev,
+        sourceBranchId: userBranchId,
+        sourceBranchName: isRTL ? userBranch.nameAr || userBranch.name : userBranch.name,
+      }));
+    } else if (canSelectBranch) {
+      // Admin - default to main warehouse as source
+      setNewTransfer(prev => ({
+        ...prev,
+        sourceBranchId: "main_warehouse",
+        sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+      }));
+    }
+  }, [userBranchId, userBranch, canSelectBranch, isRTL]);
+
   const [statusUpdate, setStatusUpdate] = useState({
     status: "",
     notes: "",
     receiverSignature: null as string | null,
   });
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
-
   const { data: transfers = [], isLoading } = useQuery<MaterialTransfer[]>({
-    queryKey: ["/api/warehouse/material-transfers", filterStatus],
+    queryKey: ["/api/warehouse/material-transfers", filterStatus, userBranchId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterStatus !== "all") params.append("status", filterStatus);
+      // For branch users, filter by their branch (as source or destination)
+      if (userBranchId) {
+        params.append("branchId", userBranchId);
+      }
       const response = await fetch(`/api/warehouse/material-transfers?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch transfers");
       return response.json();
@@ -165,9 +190,12 @@ export default function TransferRequestsPage() {
   });
 
   const resetForm = () => {
+    const sourceName = userBranch 
+      ? (isRTL ? userBranch.nameAr || userBranch.name : userBranch.name)
+      : (isRTL ? "المستودع الرئيسي" : "Main Warehouse");
     setNewTransfer({
-      sourceBranchId: "main_warehouse",
-      sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+      sourceBranchId: userBranchId || "main_warehouse",
+      sourceBranchName: sourceName,
       destinationBranchId: "",
       destinationBranchName: "",
       transferDate: new Date().toISOString().split('T')[0],
@@ -176,6 +204,7 @@ export default function TransferRequestsPage() {
       notes: "",
       items: [],
     });
+    setTransferType("to_warehouse");
   };
 
   const handleViewDetails = (transfer: MaterialTransfer) => {
@@ -272,38 +301,135 @@ export default function TransferRequestsPage() {
               </DialogTrigger>
               <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>{isRTL ? "إنشاء أمر تحويل جديد" : "Create New Transfer"}</DialogTitle>
+                <DialogTitle>{isRTL ? "إنشاء طلب تحويل جديد" : "Create New Transfer Request"}</DialogTitle>
                 <DialogDescription>
-                  {isRTL ? "أدخل تفاصيل التحويل" : "Enter transfer details"}
+                  {isRTL ? "طلب تحويل مواد من فرعك" : "Request material transfer from your branch"}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {/* Transfer Type Selection - only for branches */}
+                {userBranchId && userBranchId !== "main_warehouse" && (
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "نوع التحويل" : "Transfer Type"}</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={transferType === "to_warehouse" ? "default" : "outline"}
+                        className="flex items-center gap-2"
+                        onClick={() => {
+                          setTransferType("to_warehouse");
+                          setNewTransfer(prev => ({ 
+                            ...prev, 
+                            destinationBranchId: "main_warehouse",
+                            destinationBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse"
+                          }));
+                        }}
+                        data-testid="btn-type-warehouse"
+                      >
+                        <Warehouse className="w-4 h-4" />
+                        {isRTL ? "إلى المستودع" : "To Warehouse"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={transferType === "between_branches" ? "default" : "outline"}
+                        className="flex items-center gap-2"
+                        onClick={() => {
+                          setTransferType("between_branches");
+                          setNewTransfer(prev => ({ ...prev, destinationBranchId: "", destinationBranchName: "" }));
+                        }}
+                        data-testid="btn-type-branch"
+                      >
+                        <Building2 className="w-4 h-4" />
+                        {isRTL ? "إلى فرع آخر" : "To Branch"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Source Branch (Read-only for non-admins) */}
                 <div className="space-y-2">
-                  <Label>{isRTL ? "من" : "From"}</Label>
-                  <Input 
-                    value={isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{isRTL ? "إلى (الفرع)" : "To (Branch)"}</Label>
-                  <Select 
-                    value={newTransfer.destinationBranchId} 
-                    onValueChange={(value) => setNewTransfer(prev => ({ ...prev, destinationBranchId: value }))}
-                  >
-                    <SelectTrigger data-testid="select-destination">
-                      <SelectValue placeholder={isRTL ? "اختر الفرع" : "Select branch"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>
-                          {isRTL ? branch.nameAr || branch.name : branch.name}
+                  <Label>{isRTL ? "من (المصدر)" : "From (Source)"}</Label>
+                  {canSelectBranch ? (
+                    <Select 
+                      value={newTransfer.sourceBranchId} 
+                      onValueChange={(value) => {
+                        const branch = branches.find(b => b.id === value);
+                        setNewTransfer(prev => ({ 
+                          ...prev, 
+                          sourceBranchId: value,
+                          sourceBranchName: branch ? (isRTL ? branch.nameAr || branch.name : branch.name) : ""
+                        }));
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-source">
+                        <SelectValue placeholder={isRTL ? "اختر المصدر" : "Select source"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="main_warehouse">
+                          {isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        {branches.map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id}>
+                            {isRTL ? branch.nameAr || branch.name : branch.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input 
+                      value={newTransfer.sourceBranchName || (isRTL ? "فرعك" : "Your Branch")}
+                      disabled
+                      className="bg-muted"
+                    />
+                  )}
                 </div>
+
+                {/* Destination Selection */}
+                <div className="space-y-2">
+                  <Label>{isRTL ? "إلى (الوجهة)" : "To (Destination)"}</Label>
+                  {transferType === "to_warehouse" && !canSelectBranch ? (
+                    <Input 
+                      value={isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
+                      disabled
+                      className="bg-muted"
+                    />
+                  ) : (
+                    <Select 
+                      value={newTransfer.destinationBranchId} 
+                      onValueChange={(value) => {
+                        const branch = value === "main_warehouse" 
+                          ? null 
+                          : branches.find(b => b.id === value);
+                        setNewTransfer(prev => ({ 
+                          ...prev, 
+                          destinationBranchId: value,
+                          destinationBranchName: branch 
+                            ? (isRTL ? branch.nameAr || branch.name : branch.name)
+                            : (isRTL ? "المستودع الرئيسي" : "Main Warehouse")
+                        }));
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-destination">
+                        <SelectValue placeholder={isRTL ? "اختر الوجهة" : "Select destination"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {canSelectBranch && (
+                          <SelectItem value="main_warehouse">
+                            {isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
+                          </SelectItem>
+                        )}
+                        {branches
+                          .filter(b => b.id !== newTransfer.sourceBranchId) // Exclude source branch
+                          .map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id}>
+                              {isRTL ? branch.nameAr || branch.name : branch.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{isRTL ? "تاريخ التحويل" : "Transfer Date"}</Label>
@@ -349,10 +475,10 @@ export default function TransferRequestsPage() {
                 </Button>
                 <Button 
                   onClick={() => createMutation.mutate(newTransfer)} 
-                  disabled={!newTransfer.destinationBranchId || createMutation.isPending}
+                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || createMutation.isPending}
                   data-testid="btn-submit-transfer"
                 >
-                  {createMutation.isPending ? (isRTL ? "جاري الإنشاء..." : "Creating...") : (isRTL ? "إنشاء التحويل" : "Create Transfer")}
+                  {createMutation.isPending ? (isRTL ? "جاري الإرسال..." : "Submitting...") : (isRTL ? "إرسال الطلب" : "Submit Request")}
                 </Button>
               </DialogFooter>
             </DialogContent>

@@ -17096,9 +17096,11 @@ export async function registerRoutes(
   // Material Transfers
   app.get("/api/warehouse/material-transfers", isAuthenticated, async (req, res) => {
     try {
-      const filters: { sourceBranchId?: string; destinationBranchId?: string; status?: string; startDate?: string; endDate?: string } = {};
+      const filters: { sourceBranchId?: string; destinationBranchId?: string; branchId?: string; status?: string; startDate?: string; endDate?: string } = {};
       if (req.query.sourceBranchId) filters.sourceBranchId = req.query.sourceBranchId as string;
       if (req.query.destinationBranchId) filters.destinationBranchId = req.query.destinationBranchId as string;
+      // branchId filter: match as either source OR destination (for branch-scoped access)
+      if (req.query.branchId) filters.branchId = req.query.branchId as string;
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.startDate) filters.startDate = req.query.startDate as string;
       if (req.query.endDate) filters.endDate = req.query.endDate as string;
