@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch, FinishedGoodsInventory, FinishedGoodsTransfer } from "@shared/schema";
 import { 
   Package, ArrowRight, Building, ShoppingCart, Refrigerator, Snowflake, ChefHat,
-  RefreshCw, Search, History, Filter, Calendar
+  RefreshCw, Search, History, Filter, Calendar, Download, FileSpreadsheet, Printer
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -29,6 +29,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import * as XLSX from "xlsx";
+import { useReactToPrint } from "react-to-print";
 
 const DESTINATION_TYPES = [
   { value: "branch", label: "فرع آخر", icon: Building },
@@ -54,6 +62,7 @@ export default function FinishedGoodsInventoryPage() {
   
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   
+  const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { itemsPerPage, getPageItems } = usePagination(15);
@@ -189,6 +198,54 @@ export default function FinishedGoodsInventoryPage() {
     return branches?.find(b => b.id === id)?.name || id;
   };
 
+  const handlePrint = useReactToPrint({ contentRef: printRef });
+
+  const exportToExcel = () => {
+    if (!filteredInventory.length) {
+      toast({ title: "لا توجد بيانات للتصدير", variant: "destructive" });
+      return;
+    }
+    const exportData = filteredInventory.map(item => ({
+      "المنتج": item.productName,
+      "الفئة": item.productCategory || "-",
+      "الكمية": item.quantity,
+      "الوحدة": item.unit,
+      "تاريخ الإنتاج": item.productionDate,
+      "الفرع": getBranchName(item.branchId),
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "مخزون الإنتاج النهائي");
+    const fileName = `finished-goods-inventory-${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast({ title: "تم تصدير البيانات بنجاح" });
+  };
+
+  const exportToCSV = () => {
+    if (!filteredInventory.length) {
+      toast({ title: "لا توجد بيانات للتصدير", variant: "destructive" });
+      return;
+    }
+    const headers = ["المنتج", "الفئة", "الكمية", "الوحدة", "تاريخ الإنتاج", "الفرع"];
+    const rows = filteredInventory.map(item => [
+      item.productName,
+      item.productCategory || "-",
+      item.quantity,
+      item.unit,
+      item.productionDate,
+      getBranchName(item.branchId),
+    ]);
+    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `finished-goods-inventory-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "تم تصدير البيانات بنجاح" });
+  };
+
   return (
     <Layout>
       <div className="container mx-auto py-6 space-y-6">
@@ -201,6 +258,28 @@ export default function FinishedGoodsInventoryPage() {
             <p className="text-muted-foreground">إدارة وتحويل المنتجات النهائية للفروع أو بار العرض</p>
           </div>
           <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" data-testid="btn-export">
+                  <Download className="h-4 w-4 ml-1" />
+                  تصدير
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportToExcel} data-testid="btn-export-excel">
+                  <FileSpreadsheet className="h-4 w-4 ml-2" />
+                  تصدير Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportToCSV} data-testid="btn-export-csv">
+                  <FileSpreadsheet className="h-4 w-4 ml-2" />
+                  تصدير CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handlePrint()} data-testid="btn-print">
+                  <Printer className="h-4 w-4 ml-2" />
+                  طباعة / PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" size="sm" onClick={() => setShowHistoryDialog(true)} data-testid="btn-history">
               <History className="h-4 w-4 ml-1" />
               سجل الحركات
@@ -274,15 +353,22 @@ export default function FinishedGoodsInventoryPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">المخزون المتاح</CardTitle>
-            <CardDescription>
-              {filteredInventory.length} منتج متاح للتحويل
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
+        <div ref={printRef} className="print:p-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="hidden print:block text-center mb-4">
+                <h1 className="text-xl font-bold">مخزون الإنتاج النهائي</h1>
+                <p className="text-sm text-muted-foreground">
+                  {branches?.find(b => b.id === branchId)?.name} - {format(new Date(), "yyyy-MM-dd")}
+                </p>
+              </div>
+              <CardTitle className="text-lg print:hidden">المخزون المتاح</CardTitle>
+              <CardDescription>
+                {filteredInventory.length} منتج متاح للتحويل
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
@@ -340,8 +426,9 @@ export default function FinishedGoodsInventoryPage() {
                 )}
               </>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
         <Card>
           <CardHeader className="pb-3">
