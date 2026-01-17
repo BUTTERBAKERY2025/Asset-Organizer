@@ -330,9 +330,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     
     const headerStyle = {
-      font: { name: "Cairo", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
+      font: { name: "Tahoma", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
       fill: { fgColor: { rgb: "D4A853" } },
-      alignment: { horizontal: "right", vertical: "center", wrapText: true, readingOrder: 2 },
+      alignment: { horizontal: "right", vertical: "center", wrapText: true },
       border: {
         top: { style: "thin", color: { rgb: "000000" } },
         bottom: { style: "thin", color: { rgb: "000000" } },
@@ -342,8 +342,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     };
     
     const cellStyle = {
-      font: { name: "Cairo", sz: 11 },
-      alignment: { horizontal: "right", vertical: "center", wrapText: true, readingOrder: 2 },
+      font: { name: "Tahoma", sz: 11 },
+      alignment: { horizontal: "right", vertical: "center", wrapText: true },
       border: {
         top: { style: "thin", color: { rgb: "CCCCCC" } },
         bottom: { style: "thin", color: { rgb: "CCCCCC" } },
