@@ -24,11 +24,27 @@ import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
+import pdfMake from "@digicole/pdfmake-rtl/build/pdfmake";
+import pdfFonts from "@digicole/pdfmake-rtl/build/vfs_fonts";
 import XLSX from "xlsx-js-style";
 
-pdfMake.vfs = pdfFonts.vfs;
+pdfMake.vfs = pdfFonts.pdfMake?.vfs || pdfFonts.vfs;
+
+// Configure Arabic font (Amiri is included in pdfmake-rtl)
+pdfMake.fonts = {
+  Roboto: {
+    normal: 'Roboto-Regular.ttf',
+    bold: 'Roboto-Medium.ttf',
+    italics: 'Roboto-Italic.ttf',
+    bolditalics: 'Roboto-MediumItalic.ttf'
+  },
+  Amiri: {
+    normal: 'Amiri-Regular.ttf',
+    bold: 'Amiri-Bold.ttf',
+    italics: 'Amiri-Regular.ttf',
+    bolditalics: 'Amiri-Bold.ttf'
+  }
+};
 
 type MaterialTransfer = {
   id: number;
@@ -254,8 +270,9 @@ export default function TransferRequestsPage() {
         tableHeader: { bold: true, fillColor: '#f3f4f6', fontSize: 10 }
       },
       defaultStyle: {
-        font: 'Roboto',
-        fontSize: 11
+        font: 'Amiri',
+        fontSize: 11,
+        alignment: 'right'
       }
     };
   };
@@ -600,6 +617,101 @@ _مُرسل من نظام باتر_`;
     
     const encodedMessage = encodeURIComponent(message);
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
+  // Quick PDF download from table row (simplified version without items)
+  const handleQuickPdf = (transfer: MaterialTransfer) => {
+    const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
+    const destName = transfer.destinationBranchName || 'غير محدد';
+    const srcName = transfer.sourceBranchName || 'المستودع الرئيسي';
+    
+    const docDefinition = {
+      pageSize: 'A4',
+      pageOrientation: 'portrait',
+      pageMargins: [40, 60, 40, 60],
+      content: [
+        { text: 'أمر تحويل مواد', style: 'header', alignment: 'center' },
+        { text: transfer.transferNumber, style: 'subheader', alignment: 'center', margin: [0, 0, 0, 20] },
+        
+        {
+          columns: [
+            { text: `الحالة: ${statusLabel}`, alignment: 'right', width: '*' },
+            { text: `التاريخ: ${transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-'}`, alignment: 'left', width: '*' },
+          ],
+          margin: [0, 0, 0, 15]
+        },
+        
+        {
+          table: {
+            widths: ['*', 'auto', '*'],
+            body: [
+              [
+                { text: destName, alignment: 'center', bold: true },
+                { text: '←', alignment: 'center', fontSize: 16 },
+                { text: srcName, alignment: 'center', bold: true },
+              ],
+              [
+                { text: 'إلى', alignment: 'center', color: 'gray', fontSize: 10 },
+                { text: '', alignment: 'center' },
+                { text: 'من', alignment: 'center', color: 'gray', fontSize: 10 },
+              ]
+            ]
+          },
+          layout: 'noBorders',
+          margin: [0, 0, 0, 20]
+        },
+        
+        ...(transfer.driverName || transfer.vehicleNumber ? [
+          {
+            columns: [
+              { text: `المركبة: ${transfer.vehicleNumber || '-'}`, alignment: 'right', width: '*' },
+              { text: `السائق: ${transfer.driverName || '-'}`, alignment: 'left', width: '*' },
+            ]
+          }
+        ] : []),
+        
+        ...(transfer.notes ? [
+          { text: 'ملاحظات:', style: 'sectionHeader', alignment: 'right', margin: [0, 15, 0, 5] },
+          { text: transfer.notes, alignment: 'right' }
+        ] : []),
+        
+        { text: '', margin: [0, 40, 0, 0] },
+        {
+          columns: [
+            { 
+              stack: [
+                { text: 'توقيع المستلم', alignment: 'center' },
+                { text: '________________', alignment: 'center', margin: [0, 30, 0, 0] }
+              ],
+              width: '*'
+            },
+            { 
+              stack: [
+                { text: 'توقيع المُرسل', alignment: 'center' },
+                { text: '________________', alignment: 'center', margin: [0, 30, 0, 0] }
+              ],
+              width: '*'
+            }
+          ]
+        }
+      ],
+      styles: {
+        header: { fontSize: 18, bold: true },
+        subheader: { fontSize: 14, color: 'gray' },
+        sectionHeader: { fontSize: 12, bold: true },
+      },
+      defaultStyle: {
+        font: 'Amiri',
+        fontSize: 11,
+        alignment: 'right'
+      }
+    };
+    
+    pdfMake.createPdf(docDefinition as any).download(`transfer-${transfer.transferNumber}.pdf`);
+    toast({
+      title: isRTL ? "تم تحميل الملف" : "File Downloaded",
+      description: isRTL ? "تم تحميل ملف PDF بنجاح" : "PDF downloaded successfully",
+    });
   };
 
   // Cancel/reject a transfer
@@ -1197,9 +1309,13 @@ _مُرسل من نظام باتر_`;
                                   <MessageCircle className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-green-600`} />
                                   {isRTL ? "مشاركة واتساب" : "Share WhatsApp"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { setSelectedTransfer(transfer); handlePrint(); }} data-testid={`btn-print-${transfer.id}`}>
+                                <DropdownMenuItem onClick={() => handleViewDetails(transfer)} data-testid={`btn-print-${transfer.id}`}>
                                   <Printer className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                                   {isRTL ? "طباعة" : "Print"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleQuickPdf(transfer)} data-testid={`btn-pdf-${transfer.id}`}>
+                                  <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-red-600`} />
+                                  {isRTL ? "تحميل PDF" : "Download PDF"}
                                 </DropdownMenuItem>
                                 {(transfer.status === 'pending' && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
                                   <>
