@@ -1,4 +1,9 @@
 import type { MaterialTransfer, MaterialTransferItem } from "@shared/schema";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+
+// Initialize pdfMake with fonts
+(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || (pdfFonts as any).default?.pdfMake?.vfs || {};
 
 export type MaterialTransferWithNames = MaterialTransfer & {
   sourceBranchName?: string | null;
@@ -17,47 +22,10 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', labelAr: 'ملغي', labelEn: 'Cancelled' },
 ];
 
-let pdfMakeInstance: any = null;
-let pdfFontsLoaded = false;
-
-async function getPdfMake() {
-  if (pdfMakeInstance && pdfFontsLoaded) return pdfMakeInstance;
-  
-  const [pdfMakeModule, pdfFontsModule] = await Promise.all([
-    import('@digicole/pdfmake-rtl/build/pdfmake'),
-    import('@digicole/pdfmake-rtl/build/vfs_fonts')
-  ]);
-  
-  pdfMakeInstance = pdfMakeModule.default || pdfMakeModule;
-  
-  // Handle different module export formats - try all possible paths
-  const fontsData = pdfFontsModule as any;
-  const vfs = fontsData?.pdfMake?.vfs 
-    || fontsData?.vfs 
-    || fontsData?.default?.pdfMake?.vfs 
-    || fontsData?.default?.vfs
-    || {};
-    
-  pdfMakeInstance.vfs = vfs;
-  
-  pdfMakeInstance.fonts = {
-    Nillima: {
-      normal: 'Nillima.ttf',
-      bold: 'Nillima.ttf',
-      italics: 'Nillima.ttf',
-      bolditalics: 'Nillima.ttf',
-    }
-  };
-  
-  pdfFontsLoaded = true;
-  return pdfMakeInstance;
-}
-
 export async function generateTransferPdf(
   transfer: MaterialTransferWithNames,
   items: TransferItemWithAvailable[]
 ): Promise<void> {
-  const pdfMake = await getPdfMake();
   
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
   const destName = transfer.destinationBranchName || 'غير محدد';
@@ -262,8 +230,6 @@ export async function generateTransferPdf(
 }
 
 export async function generateQuickTransferPdf(transfer: MaterialTransferWithNames): Promise<void> {
-  const pdfMake = await getPdfMake();
-  
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
   const destName = transfer.destinationBranchName || 'غير محدد';
   const srcName = transfer.sourceBranchName || 'المستودع الرئيسي';
