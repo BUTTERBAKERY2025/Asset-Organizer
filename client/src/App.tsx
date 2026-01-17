@@ -90,6 +90,7 @@ const SecurityManagementPage = lazy(() => import("@/pages/security-management"))
 const ProductionComparisonsPage = lazy(() => import("@/pages/production-comparisons"));
 const ProductionComparisonReportsPage = lazy(() => import("@/pages/production-comparison-reports"));
 const ProductCategoryManagementPage = lazy(() => import("@/pages/product-category-management"));
+const FinishedGoodsInventoryPage = lazy(() => import("@/pages/finished-goods-inventory"));
 
 function AppLoadingFallback() {
   return (
@@ -172,6 +173,7 @@ function Router() {
       <Route path="/production-comparison-reports">{() => <ModulePage component={ProductionComparisonReportsPage} module="production" />}</Route>
       <Route path="/product-category-management">{() => <ModulePage component={ProductCategoryManagementPage} module="production" />}</Route>
       <Route path="/production">{() => <ModulePage component={ProductionPage} module="production" />}</Route>
+      <Route path="/finished-goods-inventory">{() => <ModulePage component={FinishedGoodsInventoryPage} module="production" />}</Route>
       
       {/* Operations - التشغيل */}
       <Route path="/operations">{() => <ModulePage component={OperationsDashboardPage} module="operations" />}</Route>

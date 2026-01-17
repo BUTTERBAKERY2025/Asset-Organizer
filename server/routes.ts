@@ -9529,6 +9529,17 @@ export async function registerRoutes(
       };
       
       const batch = await storage.createDailyProductionBatch(batchData);
+      
+      // Auto-transfer to finished goods if batch is created with "finished" status
+      if (batch && batchData.status === "finished") {
+        try {
+          await storage.addProductionToFinishedGoods(batch.id, user?.id, user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '');
+        } catch (transferError) {
+          console.error("Failed to auto-transfer to finished goods:", transferError);
+          // Don't fail the request, just log the error
+        }
+      }
+      
       res.status(201).json(batch);
     } catch (error) {
       console.error("Error creating batch:", error);
@@ -9574,10 +9585,29 @@ export async function registerRoutes(
         }
       }
       
+      // Get current batch to check if status is changing to finished
+      const existingBatch = await storage.getDailyProductionBatch(id);
+      if (!existingBatch) {
+        return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+      }
+      
       const updated = await storage.updateDailyProductionBatch(id, updateData);
       if (!updated) {
         return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
       }
+      
+      // Auto-transfer to finished goods when status changes to "finished"
+      if (updateData.status === "finished" && existingBatch.status !== "finished") {
+        try {
+          const user = (req as any).user;
+          const userName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';
+          await storage.addProductionToFinishedGoods(id, user?.id, userName);
+        } catch (transferError) {
+          console.error("Failed to auto-transfer to finished goods:", transferError);
+          // Don't fail the request, just log the error
+        }
+      }
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating batch:", error);

@@ -284,10 +284,10 @@ export default function DailyProductionPage() {
       return res.json();
     },
     onSuccess: () => {
-      // Force refetch to ensure fresh data
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods/inventory"] });
       if (!quickMode) {
         setProductName("");
         setProductCategory("");
@@ -339,6 +339,7 @@ export default function DailyProductionPage() {
   });
 
   // Finish a batch (mark as completed) - includes who finished it
+  // Backend automatically transfers to finished goods inventory
   const finishBatchMutation = useMutation({
     mutationFn: async (batchId: number) => {
       const finisherName = user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.username || "";
@@ -354,7 +355,8 @@ export default function DailyProductionPage() {
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
-      toast({ title: "تم اكتمال الدفعة", description: "تم تحديث حالة الدفعة إلى مكتمل" });
+      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods/inventory"] });
+      toast({ title: "تم اكتمال الدفعة", description: "تم تحديث حالة الدفعة وترحيلها للمخزون النهائي" });
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });

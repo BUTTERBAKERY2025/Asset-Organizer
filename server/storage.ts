@@ -7890,17 +7890,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addToFinishedGoodsInventory(item: InsertFinishedGoodsInventory): Promise<FinishedGoodsInventory> {
-    // Build conditions for aggregation: prioritize productId if available, fallback to productName
-    const conditions = [
-      eq(finishedGoodsInventory.branchId, item.branchId),
-      eq(finishedGoodsInventory.productionDate, item.productionDate)
-    ];
+    // Ensure productNameNormalized is set for consistent matching
+    const itemWithNormalized = {
+      ...item,
+      productNameNormalized: item.productNameNormalized || item.productName.trim().toLowerCase()
+    };
     
-    if (item.productId) {
-      conditions.push(eq(finishedGoodsInventory.productId, item.productId));
-    } else {
-      conditions.push(eq(finishedGoodsInventory.productName, item.productName));
-    }
+    // Use normalized product name for matching
+    const conditions = [
+      eq(finishedGoodsInventory.branchId, itemWithNormalized.branchId),
+      eq(finishedGoodsInventory.productNameNormalized, itemWithNormalized.productNameNormalized),
+      eq(finishedGoodsInventory.productionDate, itemWithNormalized.productionDate)
+    ];
     
     const existing = await db.select().from(finishedGoodsInventory).where(and(...conditions));
     
@@ -7908,8 +7909,9 @@ export class DatabaseStorage implements IStorage {
       // Update existing entry
       const [updated] = await db.update(finishedGoodsInventory)
         .set({ 
-          quantity: sql`${finishedGoodsInventory.quantity} + ${item.quantity}`,
-          lastBatchId: item.lastBatchId,
+          quantity: sql`${finishedGoodsInventory.quantity} + ${itemWithNormalized.quantity}`,
+          lastBatchId: itemWithNormalized.lastBatchId,
+          productId: itemWithNormalized.productId || existing[0].productId,
           updatedAt: new Date()
         })
         .where(eq(finishedGoodsInventory.id, existing[0].id))
@@ -7918,7 +7920,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     // Create new entry
-    const [created] = await db.insert(finishedGoodsInventory).values(item).returning();
+    const [created] = await db.insert(finishedGoodsInventory).values(itemWithNormalized).returning();
     return created;
   }
 
@@ -7951,22 +7953,22 @@ export class DatabaseStorage implements IStorage {
       
       const productionDate = batch.productionDate || new Date().toISOString().split('T')[0];
       
-      // Normalize product name for consistent matching (trim whitespace)
-      const normalizedProductName = batch.productName?.trim() || batch.productName;
+      // Normalize product name for consistent matching - trim and lowercase
+      const productNameNormalized = (batch.productName || '').trim().toLowerCase();
       
-      // Use UPSERT with functional unique index for atomic inventory addition
-      // Index: finished_goods_unique_identity_idx on (branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date)
-      // This treats product_id as primary identifier when present, normalized product_name when NULL
+      // Use UPSERT with standard unique index for atomic inventory addition
+      // Index: finished_goods_unique_idx on (branch_id, product_name_normalized, production_date)
       // RETURNING provides the final quantity after the operation
       const upsertResult = await tx.execute(sql`
-        INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
-        VALUES (${batch.branchId}, ${batch.productId}, ${normalizedProductName}, ${batch.productCategory}, ${batch.quantity}, ${batch.unit || 'قطعة'}, ${productionDate}, ${batchId}, NOW(), NOW())
-        ON CONFLICT (branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date)
+        INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
+        VALUES (${batch.branchId}, ${batch.productId}, ${batch.productName}, ${productNameNormalized}, ${batch.productCategory}, ${batch.quantity}, ${batch.unit || 'قطعة'}, ${productionDate}, ${batchId}, NOW(), NOW())
+        ON CONFLICT (branch_id, product_name_normalized, production_date)
         DO UPDATE SET 
           quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
           last_batch_id = EXCLUDED.last_batch_id,
+          product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
           updated_at = NOW()
-        RETURNING id, branch_id, product_id, product_name, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at
+        RETURNING id, branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at
       `) as { rows: any[] };
       
       // Use RETURNING row directly - this is the final state after atomic upsert
@@ -7983,6 +7985,7 @@ export class DatabaseStorage implements IStorage {
         branchId: row.branch_id,
         productId: row.product_id,
         productName: row.product_name,
+        productNameNormalized: row.product_name_normalized,
         productCategory: row.product_category,
         quantity: row.quantity,
         unit: row.unit,

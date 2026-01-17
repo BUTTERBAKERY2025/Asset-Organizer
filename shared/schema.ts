@@ -5408,12 +5408,9 @@ export const DELIVERABLE_TYPES = [
 // Finished Goods Inventory - مخزون الإنتاج النهائي
 // يحتوي على الكميات المنتجة التي يمكن تحويلها للفروع أو بار العرض
 // 
-// IMPORTANT: This table requires a functional unique index for atomic UPSERT operations.
-// The index must be created manually via SQL (Drizzle doesn't support functional indexes):
-// CREATE UNIQUE INDEX finished_goods_unique_identity_idx ON finished_goods_inventory (
-//   branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date
-// );
-// This ensures unique inventory entries per branch/product/date and enables atomic aggregation.
+// Unique constraint: (branch_id, product_name_normalized, production_date)
+// product_name_normalized stores the lowercased, trimmed product name for consistent matching
+// This allows atomic UPSERT operations without functional indexes
 export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
   id: serial("id").primaryKey(),
   branchId: varchar("branch_id")
@@ -5421,6 +5418,7 @@ export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
     .references(() => branches.id),
   productId: integer("product_id").references(() => products.id),
   productName: text("product_name").notNull(),
+  productNameNormalized: text("product_name_normalized").notNull(), // normalized: lower(trim(product_name))
   productCategory: text("product_category"),
   quantity: integer("quantity").notNull().default(0), // الكمية المتاحة
   unit: text("unit").default("قطعة"),
@@ -5433,9 +5431,8 @@ export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
   index("idx_finished_goods_product").on(table.productId),
   index("idx_finished_goods_date").on(table.productionDate),
   index("idx_finished_goods_category").on(table.productCategory),
-  // Functional unique index for atomic UPSERT - uses raw SQL since Drizzle doesn't support COALESCE in indexes
-  // This is created via SQL: CREATE UNIQUE INDEX finished_goods_unique_identity_idx ON finished_goods_inventory (branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date)
-  uniqueIndex("finished_goods_unique_identity_idx").on(table.branchId, table.productId, table.productName, table.productionDate),
+  // Standard unique index for atomic UPSERT - uses normalized product name
+  uniqueIndex("finished_goods_unique_idx").on(table.branchId, table.productNameNormalized, table.productionDate),
 ]);
 
 export const insertFinishedGoodsInventorySchema = createInsertSchema(finishedGoodsInventory).omit({
