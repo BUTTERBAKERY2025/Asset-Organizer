@@ -438,16 +438,20 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     }));
   };
 
-  // Initialize source branch when user branch is available
+  // Initialize transfer form: source = warehouse, destination = user's branch
+  // This models the correct flow: branch requests items FROM warehouse
   useEffect(() => {
-    if (userBranchId && userBranch) {
+    if (userBranchId && userBranch && !canSelectBranch) {
+      // Non-admin: source = warehouse, destination = their branch
       setNewTransfer(prev => ({
         ...prev,
-        sourceBranchId: userBranchId,
-        sourceBranchName: userBranch.name,
+        sourceBranchId: "main_warehouse",
+        sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+        destinationBranchId: userBranchId,
+        destinationBranchName: userBranch.name,
       }));
     } else if (canSelectBranch) {
-      // Admin - default to main warehouse as source
+      // Admin - default source to warehouse, can select destination
       setNewTransfer(prev => ({
         ...prev,
         sourceBranchId: "main_warehouse",
@@ -544,12 +548,12 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
   });
 
   const resetForm = () => {
-    const sourceName = userBranch?.name || (isRTL ? "المستودع الرئيسي" : "Main Warehouse");
+    // Reset to correct flow: source = warehouse, destination = branch
     setNewTransfer({
-      sourceBranchId: userBranchId || "main_warehouse",
-      sourceBranchName: sourceName,
-      destinationBranchId: "",
-      destinationBranchName: "",
+      sourceBranchId: "main_warehouse",
+      sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+      destinationBranchId: canSelectBranch ? "" : (userBranchId || ""),
+      destinationBranchName: canSelectBranch ? "" : (userBranch?.name || ""),
       notes: "",
       items: [],
     });
@@ -610,7 +614,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     };
   });
 
-  // Status workflow based on user role and transfer direction
+  // Status workflow: Warehouse (source) approves → dispatches → Branch (destination) confirms delivery
   const getNextStatus = (transfer: MaterialTransfer): string[] => {
     // Admins can manage all transfers
     if (canSelectBranch) {
@@ -622,29 +626,29 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
       }
     }
     
-    // Non-admin users: check if they are source or destination
-    const isSource = transfer.sourceBranchId === userBranchId;
+    // Non-admin users: check if they are source (warehouse) or destination (branch)
+    const isWarehouse = transfer.sourceBranchId === "main_warehouse" && userBranchId === "main_warehouse";
     const isDestination = transfer.destinationBranchId === userBranchId;
     
     switch (transfer.status) {
       case "pending":
-        // Destination branch can approve/reject incoming requests
-        if (isDestination) {
+        // Warehouse approves/rejects requests from branches
+        if (isWarehouse) {
           return ["approved", "rejected"];
         }
-        // Source can cancel their own outgoing request
-        if (isSource) {
+        // Requesting branch can cancel their own request
+        if (isDestination) {
           return ["cancelled"];
         }
         return [];
       case "approved":
-        // Source branch starts the transit after approval
-        if (isSource) {
+        // Warehouse dispatches after approval
+        if (isWarehouse) {
           return ["in_transit", "cancelled"];
         }
         return [];
       case "in_transit":
-        // Destination confirms delivery
+        // Destination branch confirms delivery
         if (isDestination) {
           return ["delivered"];
         }
@@ -706,19 +710,26 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                {/* Request Info Banner */}
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-blue-600" />
-                      <span className="font-medium">{isRTL ? "الفرع الطالب:" : "Requesting Branch:"}</span>
-                      <span className="text-blue-700">{newTransfer.sourceBranchName || (isRTL ? "فرعك" : "Your Branch")}</span>
+                {/* Request Info Banner - Shows flow: Warehouse → Branch */}
+                <div className="p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-center gap-4 text-sm">
+                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
+                      <Warehouse className="w-5 h-5 text-green-600" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">{isRTL ? "المصدر" : "Source"}</p>
+                        <p className="font-bold text-green-700">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</p>
+                      </div>
                     </div>
-                    <Send className="w-4 h-4 text-blue-400" />
-                    <div className="flex items-center gap-2">
-                      <Warehouse className="w-4 h-4 text-green-600" />
-                      <span className="font-medium">{isRTL ? "المستودع:" : "Warehouse:"}</span>
-                      <span className="text-green-700">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</span>
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Send className="w-4 h-4" />
+                      <span className="text-xs">{isRTL ? "إرسال إلى" : "sends to"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
+                      <Building2 className="w-5 h-5 text-blue-600" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">{isRTL ? "الوجهة" : "Destination"}</p>
+                        <p className="font-bold text-blue-700">{newTransfer.destinationBranchName || (isRTL ? "فرعك" : "Your Branch")}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -953,6 +964,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 key={status}
                 onClick={() => setFilterStatus(filterStatus === status ? "all" : status)}
                 className={`p-3 rounded-lg border ${color} ${filterStatus === status ? "ring-2 ring-offset-1" : ""} transition-all hover:scale-[1.02] cursor-pointer`}
+                data-testid={`status-card-${status}`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-lg">{icon}</span>
@@ -1009,8 +1021,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead className="font-bold">{isRTL ? "رقم الطلب" : "Request #"}</TableHead>
-                  <TableHead className="font-bold">{isRTL ? "الفرع الطالب" : "Requesting Branch"}</TableHead>
-                  <TableHead className="font-bold">{isRTL ? "المصدر" : "Source"}</TableHead>
+                  <TableHead className="font-bold">{isRTL ? "المصدر (المستودع)" : "Source"}</TableHead>
+                  <TableHead className="font-bold">{isRTL ? "الوجهة (الفرع)" : "Destination"}</TableHead>
                   <TableHead className="font-bold">{isRTL ? "الحالة" : "Status"}</TableHead>
                   <TableHead className="font-bold">{isRTL ? "التاريخ" : "Date"}</TableHead>
                   <TableHead className="font-bold">{isRTL ? "معلومات الإرسال" : "Dispatch Info"}</TableHead>
@@ -1041,14 +1053,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4 text-muted-foreground" />
-                            <span className="font-medium">{transfer.destinationBranchName || "-"}</span>
+                            <Warehouse className="w-4 h-4 text-green-600" />
+                            <span>{transfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Warehouse className="w-4 h-4 text-green-600" />
-                            <span>{transfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}</span>
+                            <Building2 className="w-4 h-4 text-blue-600" />
+                            <span className="font-medium">{transfer.destinationBranchName || "-"}</span>
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(transfer.status, isRTL)}</TableCell>
