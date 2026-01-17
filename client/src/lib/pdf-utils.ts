@@ -28,8 +28,17 @@ async function getPdfMake() {
     import('@digicole/pdfmake-rtl/build/vfs_fonts')
   ]);
   
-  pdfMakeInstance = pdfMakeModule.default;
-  pdfMakeInstance.vfs = pdfFontsModule.default.pdfMake.vfs;
+  pdfMakeInstance = pdfMakeModule.default || pdfMakeModule;
+  
+  // Handle different module export formats - try all possible paths
+  const fontsData = pdfFontsModule as any;
+  const vfs = fontsData?.pdfMake?.vfs 
+    || fontsData?.vfs 
+    || fontsData?.default?.pdfMake?.vfs 
+    || fontsData?.default?.vfs
+    || {};
+    
+  pdfMakeInstance.vfs = vfs;
   
   pdfMakeInstance.fonts = {
     Nillima: {
