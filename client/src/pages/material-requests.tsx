@@ -489,12 +489,14 @@ export default function MaterialRequestsPage() {
                               <SelectValue placeholder={isRTL ? "اختر المادة" : "Select item"} />
                             </SelectTrigger>
                             <SelectContent className="max-h-[350px]">
-                              <div className="p-2 sticky top-0 bg-background border-b">
+                              <div className="p-2 sticky top-0 bg-background border-b" onPointerDown={(e) => e.stopPropagation()}>
                                 <Input
                                   placeholder={isRTL ? "بحث عن صنف..." : "Search item..."}
                                   value={itemSearchQuery}
                                   onChange={(e) => setItemSearchQuery(e.target.value)}
+                                  onKeyDown={(e) => e.stopPropagation()}
                                   className="h-8"
+                                  autoComplete="off"
                                   data-testid={`input-item-search-${index}`}
                                 />
                               </div>
