@@ -30,7 +30,7 @@ import XLSX from "xlsx-js-style";
 
 pdfMake.vfs = pdfFonts.pdfMake?.vfs || pdfFonts.vfs;
 
-// Configure Arabic font (Amiri is included in pdfmake-rtl)
+// Configure Arabic font (Nillima is included in pdfmake-rtl for RTL support)
 pdfMake.fonts = {
   Roboto: {
     normal: 'Roboto-Regular.ttf',
@@ -38,11 +38,11 @@ pdfMake.fonts = {
     italics: 'Roboto-Italic.ttf',
     bolditalics: 'Roboto-MediumItalic.ttf'
   },
-  Amiri: {
-    normal: 'Amiri-Regular.ttf',
-    bold: 'Amiri-Bold.ttf',
-    italics: 'Amiri-Regular.ttf',
-    bolditalics: 'Amiri-Bold.ttf'
+  Nillima: {
+    normal: 'Nillima.ttf',
+    bold: 'Nillima.ttf',
+    italics: 'Nillima.ttf',
+    bolditalics: 'Nillima.ttf'
   }
 };
 
@@ -270,7 +270,7 @@ export default function TransferRequestsPage() {
         tableHeader: { bold: true, fillColor: '#f3f4f6', fontSize: 10 }
       },
       defaultStyle: {
-        font: 'Amiri',
+        font: 'Nillima',
         fontSize: 11,
         alignment: 'right'
       }
@@ -701,7 +701,7 @@ _مُرسل من نظام باتر_`;
         sectionHeader: { fontSize: 12, bold: true },
       },
       defaultStyle: {
-        font: 'Amiri',
+        font: 'Nillima',
         fontSize: 11,
         alignment: 'right'
       }
