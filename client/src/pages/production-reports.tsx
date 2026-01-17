@@ -203,10 +203,12 @@ interface TransferItem {
 
 function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string; startDate: string; endDate: string }) {
   const { data: inventory, isLoading } = useQuery<InventoryItem[]>({
-    queryKey: ["/api/finished-goods-inventory", branchId],
+    queryKey: ["/api/finished-goods-inventory", branchId, startDate, endDate],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (branchId && branchId !== "all") params.append("branchId", branchId);
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
       const res = await fetch(`/api/finished-goods-inventory?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("فشل في جلب بيانات المخزون");
       return res.json();
@@ -397,6 +399,8 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
     queryFn: async () => {
       const params = new URLSearchParams();
       if (branchId && branchId !== "all") params.append("sourceBranchId", branchId);
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
       const res = await fetch(`/api/finished-goods-transfers?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("فشل في جلب بيانات التحويلات");
       return res.json();
