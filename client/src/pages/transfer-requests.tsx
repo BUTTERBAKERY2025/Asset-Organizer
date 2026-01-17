@@ -13,8 +13,9 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy
 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Link } from "wouter";
@@ -579,6 +580,49 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     setIsUpdateStatusOpen(true);
   };
 
+  // Quick WhatsApp share from table row
+  const handleQuickWhatsApp = (transfer: MaterialTransfer) => {
+    const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
+    const destName = transfer.destinationBranchName || 'غير محدد';
+    const srcName = transfer.sourceBranchName || 'المستودع الرئيسي';
+    
+    const message = `🧈 *باتر - طلب تحويل مواد*
+
+📋 *رقم الطلب:* ${transfer.transferNumber}
+📊 *الحالة:* ${statusLabel}
+📍 *من:* ${srcName}
+📍 *إلى:* ${destName}
+📅 *التاريخ:* ${transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-'}
+${transfer.driverName ? `🚚 *السائق:* ${transfer.driverName}` : ''}
+${transfer.vehicleNumber ? `🚗 *المركبة:* ${transfer.vehicleNumber}` : ''}
+
+_مُرسل من نظام باتر_`;
+    
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
+  // Cancel/reject a transfer
+  const handleCancelTransfer = async (transfer: MaterialTransfer) => {
+    if (!confirm(isRTL ? 'هل أنت متأكد من إلغاء هذا الطلب؟' : 'Are you sure you want to cancel this request?')) {
+      return;
+    }
+    try {
+      await apiRequest("PUT", `/api/warehouse/material-transfers/${transfer.id}/status`, {
+        status: 'cancelled',
+        notes: isRTL ? 'تم الإلغاء بواسطة المستخدم' : 'Cancelled by user',
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
+      toast({ title: isRTL ? "تم إلغاء الطلب" : "Request cancelled" });
+    } catch (error: any) {
+      toast({ 
+        title: isRTL ? "فشل في إلغاء الطلب" : "Failed to cancel",
+        description: error.message,
+        variant: "destructive" 
+      });
+    }
+  };
+
   const filteredTransfers = transfers.filter(transfer => {
     // Filter by branch (destination or source)
     if (filterBranch !== "all") {
@@ -1113,7 +1157,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-1 justify-center">
+                          <div className="flex gap-1 justify-center items-center">
                             <Button 
                               variant="outline" 
                               size="sm" 
@@ -1142,6 +1186,36 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                 {!nextStatuses.includes("approved") && !nextStatuses.includes("in_transit") && !nextStatuses.includes("delivered") && (isRTL ? "تحديث" : "Update")}
                               </Button>
                             )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" data-testid={`btn-more-${transfer.id}`}>
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align={isRTL ? "start" : "end"}>
+                                <DropdownMenuItem onClick={() => handleQuickWhatsApp(transfer)} data-testid={`btn-whatsapp-${transfer.id}`}>
+                                  <MessageCircle className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-green-600`} />
+                                  {isRTL ? "مشاركة واتساب" : "Share WhatsApp"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setSelectedTransfer(transfer); handlePrint(); }} data-testid={`btn-print-${transfer.id}`}>
+                                  <Printer className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                                  {isRTL ? "طباعة" : "Print"}
+                                </DropdownMenuItem>
+                                {(transfer.status === 'pending' && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      onClick={() => handleCancelTransfer(transfer)} 
+                                      className="text-red-600"
+                                      data-testid={`btn-cancel-${transfer.id}`}
+                                    >
+                                      <XCircle className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                                      {isRTL ? "إلغاء الطلب" : "Cancel Request"}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
