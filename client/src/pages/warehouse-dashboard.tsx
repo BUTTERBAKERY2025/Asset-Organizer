@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  Warehouse, PackageCheck, Send, Boxes, History,
+  Warehouse, PackageCheck, Send, Boxes, History, Store,
   ArrowRight, Clock, CheckCircle, AlertTriangle, Truck
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,6 +54,13 @@ export default function WarehouseDashboardPage() {
       icon: History,
       href: "/warehouse-movement-logs",
       color: "bg-indigo-500",
+    },
+    {
+      title: isRTL ? "مخزون الفروع" : "Branch Stock",
+      description: isRTL ? "متابعة مستويات المخزون في الفروع" : "Monitor stock levels in branches",
+      icon: Store,
+      href: "/branch-stock",
+      color: "bg-purple-500",
     },
   ];
 
