@@ -11,6 +11,9 @@ Preferred communication style: Simple, everyday language.
 - Deployment workflow: Manual deploy on Render (not auto-deploy)
 - Database updates require manual SQL execution in Supabase SQL Editor before code deployment
 
+**Required Migrations:**
+- `migrations/001_finished_goods_unique_index.sql` - Functional unique index for Finished Goods Inventory system (required for atomic UPSERT operations)
+
 ## System Architecture
 The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
 
@@ -39,6 +42,7 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Marketing Influencers Enhancement**: Management of influencer data including social media metrics and bank details.
 - **Branch Employee Integration**: Features for linking employees to user accounts, tracking attendance, schedules, and timesheets.
 - **Influencer Contracts Management**: Contract generation with PDF export, auto-generated contract numbers (BTR-INF-YYYY-####), deliverables tracking, exclusivity clauses, dual signatures, and financial approval workflow.
+- **Finished Goods Inventory (مخزون الإنتاج النهائي)**: Automatic transfer of completed production batches to finished goods inventory with full audit trail. Supports transfers to branches or sales display bar (بار العرض). Features atomic transactions for data integrity, balance tracking, and movement logs. Tables: `finished_goods_inventory`, `finished_goods_transfers`, `production_inventory_logs`.
 
 ### Performance Optimization
 - **Tiered Caching Strategy**: Three-tier cache system based on data volatility:

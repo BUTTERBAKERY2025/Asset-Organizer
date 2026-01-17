@@ -342,6 +342,15 @@ import {
   socialPostMetrics,
   type SocialPostMetric,
   type InsertSocialPostMetric,
+  finishedGoodsInventory,
+  type FinishedGoodsInventory,
+  type InsertFinishedGoodsInventory,
+  finishedGoodsTransfers,
+  type FinishedGoodsTransfer,
+  type InsertFinishedGoodsTransfer,
+  productionInventoryLogs,
+  type ProductionInventoryLog,
+  type InsertProductionInventoryLog,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -960,6 +969,28 @@ export interface IStorage {
   updateInfluencerContract(id: number, contract: Partial<InsertInfluencerContract>): Promise<InfluencerContract | undefined>;
   deleteInfluencerContract(id: number): Promise<boolean>;
   generateContractNumber(): Promise<string>;
+
+  // ==========================================
+  // Finished Goods Inventory - مخزون الإنتاج النهائي
+  // ==========================================
+  
+  // Finished Goods Inventory
+  getFinishedGoodsInventory(filters?: { branchId?: string; productId?: number; productionDate?: string; category?: string }): Promise<FinishedGoodsInventory[]>;
+  getFinishedGoodsInventoryItem(id: number): Promise<FinishedGoodsInventory | undefined>;
+  addToFinishedGoodsInventory(item: InsertFinishedGoodsInventory): Promise<FinishedGoodsInventory>;
+  updateFinishedGoodsInventory(id: number, item: Partial<InsertFinishedGoodsInventory>): Promise<FinishedGoodsInventory | undefined>;
+  decrementFinishedGoodsInventory(id: number, quantity: number): Promise<FinishedGoodsInventory | undefined>;
+  addProductionToFinishedGoods(batchId: number, userId?: string, userName?: string): Promise<FinishedGoodsInventory>;
+  
+  // Finished Goods Transfers
+  getFinishedGoodsTransfers(filters?: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string }): Promise<FinishedGoodsTransfer[]>;
+  getFinishedGoodsTransfer(id: number): Promise<FinishedGoodsTransfer | undefined>;
+  createFinishedGoodsTransfer(transfer: InsertFinishedGoodsTransfer): Promise<FinishedGoodsTransfer>;
+  transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer>;
+  
+  // Production Inventory Logs
+  getProductionInventoryLogs(filters?: { branchId?: string; productId?: number; movementType?: string }): Promise<ProductionInventoryLog[]>;
+  createProductionInventoryLog(log: InsertProductionInventoryLog): Promise<ProductionInventoryLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -7834,6 +7865,277 @@ export class DatabaseStorage implements IStorage {
     const [result] = await db.select({ count: sql<number>`count(*)` }).from(influencerContracts);
     const nextNum = (result?.count || 0) + 1;
     return `BTR-INF-${year}-${String(nextNum).padStart(4, '0')}`;
+  }
+
+  // ==========================================
+  // Finished Goods Inventory - مخزون الإنتاج النهائي
+  // ==========================================
+
+  async getFinishedGoodsInventory(filters?: { branchId?: string; productId?: number; productionDate?: string; category?: string }): Promise<FinishedGoodsInventory[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(finishedGoodsInventory.branchId, filters.branchId));
+    if (filters?.productId) conditions.push(eq(finishedGoodsInventory.productId, filters.productId));
+    if (filters?.productionDate) conditions.push(eq(finishedGoodsInventory.productionDate, filters.productionDate));
+    if (filters?.category) conditions.push(eq(finishedGoodsInventory.productCategory, filters.category));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(finishedGoodsInventory).where(and(...conditions)).orderBy(desc(finishedGoodsInventory.updatedAt));
+    }
+    return await db.select().from(finishedGoodsInventory).orderBy(desc(finishedGoodsInventory.updatedAt));
+  }
+
+  async getFinishedGoodsInventoryItem(id: number): Promise<FinishedGoodsInventory | undefined> {
+    const [item] = await db.select().from(finishedGoodsInventory).where(eq(finishedGoodsInventory.id, id));
+    return item || undefined;
+  }
+
+  async addToFinishedGoodsInventory(item: InsertFinishedGoodsInventory): Promise<FinishedGoodsInventory> {
+    // Build conditions for aggregation: prioritize productId if available, fallback to productName
+    const conditions = [
+      eq(finishedGoodsInventory.branchId, item.branchId),
+      eq(finishedGoodsInventory.productionDate, item.productionDate)
+    ];
+    
+    if (item.productId) {
+      conditions.push(eq(finishedGoodsInventory.productId, item.productId));
+    } else {
+      conditions.push(eq(finishedGoodsInventory.productName, item.productName));
+    }
+    
+    const existing = await db.select().from(finishedGoodsInventory).where(and(...conditions));
+    
+    if (existing.length > 0) {
+      // Update existing entry
+      const [updated] = await db.update(finishedGoodsInventory)
+        .set({ 
+          quantity: sql`${finishedGoodsInventory.quantity} + ${item.quantity}`,
+          lastBatchId: item.lastBatchId,
+          updatedAt: new Date()
+        })
+        .where(eq(finishedGoodsInventory.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    
+    // Create new entry
+    const [created] = await db.insert(finishedGoodsInventory).values(item).returning();
+    return created;
+  }
+
+  async updateFinishedGoodsInventory(id: number, item: Partial<InsertFinishedGoodsInventory>): Promise<FinishedGoodsInventory | undefined> {
+    const [updated] = await db.update(finishedGoodsInventory)
+      .set({ ...item, updatedAt: new Date() })
+      .where(eq(finishedGoodsInventory.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async decrementFinishedGoodsInventory(id: number, quantity: number): Promise<FinishedGoodsInventory | undefined> {
+    const [updated] = await db.update(finishedGoodsInventory)
+      .set({ 
+        quantity: sql`GREATEST(${finishedGoodsInventory.quantity} - ${quantity}, 0)`,
+        updatedAt: new Date()
+      })
+      .where(eq(finishedGoodsInventory.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async addProductionToFinishedGoods(batchId: number, userId?: string, userName?: string): Promise<FinishedGoodsInventory> {
+    return await db.transaction(async (tx) => {
+      // Get the production batch
+      const [batch] = await tx.select().from(dailyProductionBatches).where(eq(dailyProductionBatches.id, batchId));
+      if (!batch) {
+        throw new Error(`دفعة الإنتاج ${batchId} غير موجودة`);
+      }
+      
+      const productionDate = batch.productionDate || new Date().toISOString().split('T')[0];
+      
+      // Normalize product name for consistent matching (trim whitespace)
+      const normalizedProductName = batch.productName?.trim() || batch.productName;
+      
+      // Use UPSERT with functional unique index for atomic inventory addition
+      // Index: finished_goods_unique_identity_idx on (branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date)
+      // This treats product_id as primary identifier when present, normalized product_name when NULL
+      // RETURNING provides the final quantity after the operation
+      const upsertResult = await tx.execute(sql`
+        INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
+        VALUES (${batch.branchId}, ${batch.productId}, ${normalizedProductName}, ${batch.productCategory}, ${batch.quantity}, ${batch.unit || 'قطعة'}, ${productionDate}, ${batchId}, NOW(), NOW())
+        ON CONFLICT (branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date)
+        DO UPDATE SET 
+          quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
+          last_batch_id = EXCLUDED.last_batch_id,
+          updated_at = NOW()
+        RETURNING id, branch_id, product_id, product_name, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at
+      `) as { rows: any[] };
+      
+      // Use RETURNING row directly - this is the final state after atomic upsert
+      const row = upsertResult.rows[0];
+      const finalQuantity = row.quantity;
+      
+      // Balance calculation from RETURNING data (quantity after operation - added quantity = balance before)
+      const balanceAfter = finalQuantity;
+      const balanceBefore = finalQuantity - batch.quantity;
+      
+      // Map result to expected type
+      const inventoryItem: FinishedGoodsInventory = {
+        id: row.id,
+        branchId: row.branch_id,
+        productId: row.product_id,
+        productName: row.product_name,
+        productCategory: row.product_category,
+        quantity: row.quantity,
+        unit: row.unit,
+        productionDate: row.production_date,
+        lastBatchId: row.last_batch_id,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+      
+      // Log the movement within same transaction
+      await tx.insert(productionInventoryLogs).values({
+        branchId: batch.branchId,
+        productId: batch.productId,
+        productName: batch.productName,
+        movementType: 'production_in',
+        quantity: batch.quantity,
+        balanceBefore,
+        balanceAfter,
+        referenceType: 'batch',
+        referenceId: batchId,
+        notes: `ترحيل من دفعة الإنتاج #${batchId}`,
+        createdBy: userId,
+        createdByName: userName,
+      });
+      
+      return inventoryItem;
+    });
+  }
+
+  // Finished Goods Transfers
+  async getFinishedGoodsTransfers(filters?: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string }): Promise<FinishedGoodsTransfer[]> {
+    const conditions = [];
+    if (filters?.sourceBranchId) conditions.push(eq(finishedGoodsTransfers.sourceBranchId, filters.sourceBranchId));
+    if (filters?.destinationType) conditions.push(eq(finishedGoodsTransfers.destinationType, filters.destinationType));
+    if (filters?.destinationBranchId) conditions.push(eq(finishedGoodsTransfers.destinationBranchId, filters.destinationBranchId));
+    if (filters?.transferDate) conditions.push(eq(finishedGoodsTransfers.transferDate, filters.transferDate));
+    if (filters?.status) conditions.push(eq(finishedGoodsTransfers.status, filters.status));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(finishedGoodsTransfers).where(and(...conditions)).orderBy(desc(finishedGoodsTransfers.createdAt));
+    }
+    return await db.select().from(finishedGoodsTransfers).orderBy(desc(finishedGoodsTransfers.createdAt));
+  }
+
+  async getFinishedGoodsTransfer(id: number): Promise<FinishedGoodsTransfer | undefined> {
+    const [transfer] = await db.select().from(finishedGoodsTransfers).where(eq(finishedGoodsTransfers.id, id));
+    return transfer || undefined;
+  }
+
+  async createFinishedGoodsTransfer(transfer: InsertFinishedGoodsTransfer): Promise<FinishedGoodsTransfer> {
+    const [created] = await db.insert(finishedGoodsTransfers).values(transfer).returning();
+    return created;
+  }
+
+  async transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer> {
+    // Valid destination types
+    const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض'];
+    if (!validDestinationTypes.includes(destinationType)) {
+      throw new Error(`نوع الوجهة غير صالح. الأنواع المسموحة: فرع, بار العرض`);
+    }
+    
+    // Validate branch ID for branch transfers
+    if (destinationType === 'branch' && !destinationBranchId) {
+      throw new Error(`يجب تحديد الفرع المستهدف عند التحويل لفرع آخر`);
+    }
+    
+    return await db.transaction(async (tx) => {
+      // Use conditional update with quantity check to prevent overselling under concurrency
+      // This atomically checks quantity >= requested and decrements, returns updated row
+      const updateResult = await tx.update(finishedGoodsInventory)
+        .set({ 
+          quantity: sql`${finishedGoodsInventory.quantity} - ${quantity}`,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(finishedGoodsInventory.id, inventoryId),
+          sql`${finishedGoodsInventory.quantity} >= ${quantity}`
+        ))
+        .returning();
+      
+      if (updateResult.length === 0) {
+        // Either item doesn't exist or insufficient quantity - check which
+        const [existingItem] = await tx.select().from(finishedGoodsInventory)
+          .where(eq(finishedGoodsInventory.id, inventoryId));
+        
+        if (!existingItem) {
+          throw new Error(`عنصر المخزون ${inventoryId} غير موجود`);
+        }
+        throw new Error(`الكمية غير كافية. المتاح: ${existingItem.quantity}, المطلوب: ${quantity}`);
+      }
+      
+      const updatedInventory = updateResult[0];
+      const transferDate = new Date().toISOString().split('T')[0];
+      const balanceAfter = updatedInventory.quantity;
+      const balanceBefore = balanceAfter + quantity;
+      
+      // Create transfer record within transaction
+      const [transfer] = await tx.insert(finishedGoodsTransfers).values({
+        inventoryId,
+        sourceBranchId: updatedInventory.branchId,
+        destinationType,
+        destinationBranchId: destinationBranchId || null,
+        productId: updatedInventory.productId,
+        productName: updatedInventory.productName,
+        productCategory: updatedInventory.productCategory,
+        quantity,
+        unit: updatedInventory.unit,
+        transferDate,
+        notes,
+        status: 'completed',
+        createdBy: userId,
+        createdByName: userName,
+      }).returning();
+      
+      // Map destination type to Arabic for log
+      const destTypeArabic = destinationType === 'branch' ? 'فرع' : 'بار العرض';
+      
+      // Log the movement within same transaction
+      await tx.insert(productionInventoryLogs).values({
+        branchId: updatedInventory.branchId,
+        productId: updatedInventory.productId,
+        productName: updatedInventory.productName,
+        movementType: 'transfer_out',
+        quantity: -quantity,
+        balanceBefore,
+        balanceAfter,
+        referenceType: 'transfer',
+        referenceId: transfer.id,
+        notes: `تحويل إلى ${destTypeArabic}${destinationBranchId ? ` - ${destinationBranchId}` : ''}`,
+        createdBy: userId,
+        createdByName: userName,
+      });
+      
+      return transfer;
+    });
+  }
+
+  // Production Inventory Logs
+  async getProductionInventoryLogs(filters?: { branchId?: string; productId?: number; movementType?: string }): Promise<ProductionInventoryLog[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(productionInventoryLogs.branchId, filters.branchId));
+    if (filters?.productId) conditions.push(eq(productionInventoryLogs.productId, filters.productId));
+    if (filters?.movementType) conditions.push(eq(productionInventoryLogs.movementType, filters.movementType));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(productionInventoryLogs).where(and(...conditions)).orderBy(desc(productionInventoryLogs.createdAt));
+    }
+    return await db.select().from(productionInventoryLogs).orderBy(desc(productionInventoryLogs.createdAt));
+  }
+
+  async createProductionInventoryLog(log: InsertProductionInventoryLog): Promise<ProductionInventoryLog> {
+    const [created] = await db.insert(productionInventoryLogs).values(log).returning();
+    return created;
   }
 }
 

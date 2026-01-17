@@ -16622,5 +16622,142 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // Finished Goods Inventory - مخزون الإنتاج النهائي
+  // ==========================================
+
+  app.get("/api/finished-goods-inventory", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { branchId?: string; productId?: number; productionDate?: string; category?: string } = {};
+      if (req.query.branchId) filters.branchId = req.query.branchId as string;
+      if (req.query.productId) filters.productId = parseInt(req.query.productId as string);
+      if (req.query.productionDate) filters.productionDate = req.query.productionDate as string;
+      if (req.query.category) filters.category = req.query.category as string;
+      
+      const inventory = await storage.getFinishedGoodsInventory(filters);
+      res.json(inventory);
+    } catch (error) {
+      console.error("Error fetching finished goods inventory:", error);
+      res.status(500).json({ error: "فشل في جلب مخزون الإنتاج النهائي" });
+    }
+  });
+
+  app.get("/api/finished-goods-inventory/:id", isAuthenticated, async (req, res) => {
+    try {
+      const item = await storage.getFinishedGoodsInventoryItem(parseInt(req.params.id));
+      if (!item) {
+        return res.status(404).json({ error: "العنصر غير موجود" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Error fetching inventory item:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات العنصر" });
+    }
+  });
+
+  app.post("/api/finished-goods-inventory/from-batch/:batchId", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const batchId = parseInt(req.params.batchId);
+      
+      if (isNaN(batchId) || batchId <= 0) {
+        return res.status(400).json({ error: "معرف الدفعة غير صالح" });
+      }
+      
+      const inventoryItem = await storage.addProductionToFinishedGoods(
+        batchId,
+        user?.id,
+        user?.fullName || user?.username
+      );
+      
+      res.status(201).json(inventoryItem);
+    } catch (error: any) {
+      console.error("Error adding production to inventory:", error);
+      // Return 400 for not found or validation errors
+      const isClientError = error.message?.includes('غير موجودة');
+      const statusCode = isClientError ? 400 : 500;
+      res.status(statusCode).json({ error: error.message || "فشل في ترحيل الإنتاج للمخزون" });
+    }
+  });
+
+  app.post("/api/finished-goods-inventory/:id/transfer", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const inventoryId = parseInt(req.params.id);
+      const { quantity, destinationType, destinationBranchId, notes } = req.body;
+      
+      if (!quantity || quantity <= 0) {
+        return res.status(400).json({ error: "الكمية يجب أن تكون أكبر من صفر" });
+      }
+      
+      if (!destinationType) {
+        return res.status(400).json({ error: "يجب تحديد نوع الوجهة" });
+      }
+      
+      // Validate destination type at route level
+      const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض'];
+      if (!validDestinationTypes.includes(destinationType)) {
+        return res.status(400).json({ error: "نوع الوجهة غير صالح. الأنواع المسموحة: branch, display_bar, بار_العرض" });
+      }
+      
+      // Validate branch ID for branch transfers
+      if (destinationType === 'branch' && !destinationBranchId) {
+        return res.status(400).json({ error: "يجب تحديد الفرع المستهدف عند التحويل لفرع آخر" });
+      }
+      
+      const transfer = await storage.transferFinishedGoods(
+        inventoryId,
+        quantity,
+        destinationType,
+        destinationBranchId,
+        notes,
+        user?.id,
+        user?.fullName || user?.username
+      );
+      
+      res.status(201).json(transfer);
+    } catch (error: any) {
+      console.error("Error transferring finished goods:", error);
+      // Return 400 for validation/business logic errors from storage
+      const isClientError = error.message?.includes('غير كافية') || 
+                           error.message?.includes('غير موجود') ||
+                           error.message?.includes('غير صالح');
+      const statusCode = isClientError ? 400 : 500;
+      res.status(statusCode).json({ error: error.message || "فشل في تحويل المخزون" });
+    }
+  });
+
+  app.get("/api/finished-goods-transfers", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string } = {};
+      if (req.query.sourceBranchId) filters.sourceBranchId = req.query.sourceBranchId as string;
+      if (req.query.destinationType) filters.destinationType = req.query.destinationType as string;
+      if (req.query.destinationBranchId) filters.destinationBranchId = req.query.destinationBranchId as string;
+      if (req.query.transferDate) filters.transferDate = req.query.transferDate as string;
+      if (req.query.status) filters.status = req.query.status as string;
+      
+      const transfers = await storage.getFinishedGoodsTransfers(filters);
+      res.json(transfers);
+    } catch (error) {
+      console.error("Error fetching transfers:", error);
+      res.status(500).json({ error: "فشل في جلب سجل التحويلات" });
+    }
+  });
+
+  app.get("/api/production-inventory-logs", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { branchId?: string; productId?: number; movementType?: string } = {};
+      if (req.query.branchId) filters.branchId = req.query.branchId as string;
+      if (req.query.productId) filters.productId = parseInt(req.query.productId as string);
+      if (req.query.movementType) filters.movementType = req.query.movementType as string;
+      
+      const logs = await storage.getProductionInventoryLogs(filters);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching inventory logs:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الحركات" });
+    }
+  });
+
   return httpServer;
 }

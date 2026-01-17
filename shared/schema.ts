@@ -8,6 +8,7 @@ import {
   timestamp,
   serial,
   index,
+  uniqueIndex,
   jsonb,
   boolean,
   doublePrecision,
@@ -5401,3 +5402,127 @@ export const DELIVERABLE_TYPES = [
   { value: "live_coverage", label: "تغطية مباشرة" },
   { value: "blog_post", label: "مقالة مدونة" },
 ] as const;
+
+// ==================== مخزون الإنتاج النهائي ====================
+
+// Finished Goods Inventory - مخزون الإنتاج النهائي
+// يحتوي على الكميات المنتجة التي يمكن تحويلها للفروع أو بار العرض
+// 
+// IMPORTANT: This table requires a functional unique index for atomic UPSERT operations.
+// The index must be created manually via SQL (Drizzle doesn't support functional indexes):
+// CREATE UNIQUE INDEX finished_goods_unique_identity_idx ON finished_goods_inventory (
+//   branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date
+// );
+// This ensures unique inventory entries per branch/product/date and enables atomic aggregation.
+export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  quantity: integer("quantity").notNull().default(0), // الكمية المتاحة
+  unit: text("unit").default("قطعة"),
+  productionDate: text("production_date").notNull(), // تاريخ الإنتاج YYYY-MM-DD
+  lastBatchId: integer("last_batch_id").references(() => dailyProductionBatches.id), // آخر دفعة إنتاج
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_finished_goods_branch").on(table.branchId),
+  index("idx_finished_goods_product").on(table.productId),
+  index("idx_finished_goods_date").on(table.productionDate),
+  index("idx_finished_goods_category").on(table.productCategory),
+  // Functional unique index for atomic UPSERT - uses raw SQL since Drizzle doesn't support COALESCE in indexes
+  // This is created via SQL: CREATE UNIQUE INDEX finished_goods_unique_identity_idx ON finished_goods_inventory (branch_id, COALESCE(product_id::text, lower(trim(product_name))), production_date)
+  uniqueIndex("finished_goods_unique_identity_idx").on(table.branchId, table.productId, table.productName, table.productionDate),
+]);
+
+export const insertFinishedGoodsInventorySchema = createInsertSchema(finishedGoodsInventory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FinishedGoodsInventory = typeof finishedGoodsInventory.$inferSelect;
+export type InsertFinishedGoodsInventory = z.infer<typeof insertFinishedGoodsInventorySchema>;
+
+// Finished Goods Transfer Types - أنواع التحويلات
+export const TRANSFER_DESTINATION_TYPES = {
+  branch: { label: "فرع آخر", labelEn: "Another Branch" },
+  display_bar: { label: "بار العرض", labelEn: "Display Bar" },
+  kitchen_trolley: { label: "عربة المطبخ", labelEn: "Kitchen Trolley" },
+  freezer: { label: "الفريزر", labelEn: "Freezer" },
+  refrigerator: { label: "الثلاجة", labelEn: "Refrigerator" },
+} as const;
+
+// Finished Goods Transfers - تحويلات المخزون النهائي
+export const finishedGoodsTransfers = pgTable("finished_goods_transfers", {
+  id: serial("id").primaryKey(),
+  inventoryId: integer("inventory_id")
+    .notNull()
+    .references(() => finishedGoodsInventory.id),
+  sourceBranchId: varchar("source_branch_id")
+    .notNull()
+    .references(() => branches.id),
+  destinationType: text("destination_type").notNull(), // branch, display_bar, kitchen_trolley, freezer, refrigerator
+  destinationBranchId: varchar("destination_branch_id")
+    .references(() => branches.id), // فقط إذا كان التحويل لفرع آخر
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").default("قطعة"),
+  transferDate: text("transfer_date").notNull(), // تاريخ التحويل YYYY-MM-DD
+  notes: text("notes"),
+  status: text("status").default("completed").notNull(), // pending, completed, cancelled
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_fg_transfers_source").on(table.sourceBranchId),
+  index("idx_fg_transfers_dest").on(table.destinationBranchId),
+  index("idx_fg_transfers_type").on(table.destinationType),
+  index("idx_fg_transfers_date").on(table.transferDate),
+  index("idx_fg_transfers_status").on(table.status),
+]);
+
+export const insertFinishedGoodsTransferSchema = createInsertSchema(finishedGoodsTransfers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type FinishedGoodsTransfer = typeof finishedGoodsTransfers.$inferSelect;
+export type InsertFinishedGoodsTransfer = z.infer<typeof insertFinishedGoodsTransferSchema>;
+
+// Production Inventory Movement Log - سجل حركة مخزون الإنتاج
+export const productionInventoryLogs = pgTable("production_inventory_logs", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  movementType: text("movement_type").notNull(), // production_in, transfer_out, adjustment
+  quantity: integer("quantity").notNull(), // موجب للإضافة، سالب للخصم
+  balanceBefore: integer("balance_before").default(0),
+  balanceAfter: integer("balance_after").default(0),
+  referenceType: text("reference_type"), // batch, transfer, adjustment
+  referenceId: integer("reference_id"), // معرف المرجع
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_prod_inv_logs_branch").on(table.branchId),
+  index("idx_prod_inv_logs_product").on(table.productId),
+  index("idx_prod_inv_logs_type").on(table.movementType),
+]);
+
+export const insertProductionInventoryLogSchema = createInsertSchema(productionInventoryLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProductionInventoryLog = typeof productionInventoryLogs.$inferSelect;
+export type InsertProductionInventoryLog = z.infer<typeof insertProductionInventoryLogSchema>;
