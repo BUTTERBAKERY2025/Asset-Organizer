@@ -37,6 +37,9 @@ app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_as
 // Serve uploads directory for social media files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Serve public assets (logo, etc.) for PDF generation
+app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
