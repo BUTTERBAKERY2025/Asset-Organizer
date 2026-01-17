@@ -1,9 +1,18 @@
 import type { MaterialTransfer, MaterialTransferItem } from "@shared/schema";
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
+import pdfMakeRtl from "@digicole/pdfmake-rtl/build/pdfmake";
+import pdfFontsRtl from "@digicole/pdfmake-rtl/build/vfs_fonts";
 
-// Initialize pdfMake with fonts
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || (pdfFonts as any).default?.pdfMake?.vfs || {};
+// Initialize pdfMake-RTL with fonts (supports Arabic)
+const pdfMake = pdfMakeRtl as any;
+pdfMake.vfs = (pdfFontsRtl as any).pdfMake?.vfs || (pdfFontsRtl as any).vfs || {};
+pdfMake.fonts = {
+  Nillima: {
+    normal: 'Nillima.ttf',
+    bold: 'Nillima.ttf',
+    italics: 'Nillima.ttf',
+    bolditalics: 'Nillima.ttf',
+  }
+};
 
 export type MaterialTransferWithNames = MaterialTransfer & {
   sourceBranchName?: string | null;
@@ -220,7 +229,7 @@ export async function generateTransferPdf(
       tableHeader: { bold: true, fontSize: 8, fillColor: '#f0f0f0' }
     },
     defaultStyle: {
-      font: 'Roboto',
+      font: 'Nillima',
       fontSize: 9,
       alignment: 'right'
     }
@@ -385,7 +394,7 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
       }
     ],
     defaultStyle: {
-      font: 'Roboto',
+      font: 'Nillima',
       fontSize: 9,
       alignment: 'right'
     }
