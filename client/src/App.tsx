@@ -91,6 +91,7 @@ const ProductionComparisonsPage = lazy(() => import("@/pages/production-comparis
 const ProductionComparisonReportsPage = lazy(() => import("@/pages/production-comparison-reports"));
 const ProductCategoryManagementPage = lazy(() => import("@/pages/product-category-management"));
 const FinishedGoodsInventoryPage = lazy(() => import("@/pages/finished-goods-inventory"));
+const WarehouseDashboardPage = lazy(() => import("@/pages/warehouse-dashboard"));
 
 function AppLoadingFallback() {
   return (
@@ -239,6 +240,12 @@ function Router() {
       <Route path="/integrations">{() => <AdminPage component={IntegrationsPage} module="integrations" />}</Route>
       <Route path="/audit-logs">{() => <AdminPage component={AuditLogsPage} module="audit_logs" />}</Route>
       <Route path="/backups">{() => <AdminPage component={BackupsPage} module="backups" />}</Route>
+      
+      {/* Warehouse - المخازن والتحويلات */}
+      <Route path="/warehouse-dashboard">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
+      <Route path="/material-requests">{() => <ModulePage component={WarehouseDashboardPage} module="material_requests" />}</Route>
+      <Route path="/transfer-requests">{() => <ModulePage component={WarehouseDashboardPage} module="transfer_requests" />}</Route>
+      <Route path="/warehouse-inventory">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse_inventory" />}</Route>
       
       <Route component={NotFound} />
     </Switch>

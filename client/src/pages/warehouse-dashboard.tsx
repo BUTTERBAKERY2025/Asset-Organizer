@@ -1,0 +1,148 @@
+import { Layout } from "@/components/layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
+import { 
+  Warehouse, PackageCheck, Send, Boxes, LayoutDashboard,
+  ArrowRight, Clock, CheckCircle, AlertCircle
+} from "lucide-react";
+
+export default function WarehouseDashboardPage() {
+  const { t, i18n } = useTranslation("platform-home");
+  const isRTL = i18n.language === "ar";
+
+  const quickLinks = [
+    {
+      title: isRTL ? "طلبات المواد" : "Material Requests",
+      description: isRTL ? "إنشاء ومتابعة طلبات المواد الخام والمستلزمات" : "Create and track raw material requests",
+      icon: PackageCheck,
+      href: "/material-requests",
+      color: "bg-blue-500",
+    },
+    {
+      title: isRTL ? "طلبات التحويل" : "Transfer Requests",
+      description: isRTL ? "طلبات التحويل بين الفروع والمستودع الرئيسي" : "Transfer requests between branches and warehouse",
+      icon: Send,
+      href: "/transfer-requests",
+      color: "bg-green-500",
+    },
+    {
+      title: isRTL ? "مخزون المستودع" : "Warehouse Inventory",
+      description: isRTL ? "عرض ومتابعة مخزون المستودع الرئيسي" : "View and track main warehouse inventory",
+      icon: Boxes,
+      href: "/warehouse-inventory",
+      color: "bg-amber-500",
+    },
+  ];
+
+  const stats = [
+    {
+      title: isRTL ? "طلبات قيد الانتظار" : "Pending Requests",
+      value: "0",
+      icon: Clock,
+      color: "text-yellow-500",
+    },
+    {
+      title: isRTL ? "طلبات مكتملة" : "Completed Requests",
+      value: "0",
+      icon: CheckCircle,
+      color: "text-green-500",
+    },
+    {
+      title: isRTL ? "طلبات مرفوضة" : "Rejected Requests",
+      value: "0",
+      icon: AlertCircle,
+      color: "text-red-500",
+    },
+  ];
+
+  return (
+    <Layout>
+      <div className="p-4 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-cyan-500 flex items-center justify-center">
+            <Warehouse className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {isRTL ? "المخازن والتحويلات" : "Warehouse & Transfers"}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {isRTL ? "إدارة طلبات المواد والتحويلات بين الفروع والمستودع الرئيسي" : "Manage material requests and transfers between branches and main warehouse"}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {stats.map((stat, index) => (
+            <Card key={index} data-testid={`stat-card-${index}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">{stat.title}</p>
+                    <p className="text-2xl font-bold">{stat.value}</p>
+                  </div>
+                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {quickLinks.map((link, index) => (
+            <Link key={index} href={link.href}>
+              <Card 
+                className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/40 h-full"
+                data-testid={`quick-link-${link.href.replace('/', '')}`}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg ${link.color} flex items-center justify-center`}>
+                      <link.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <CardTitle className="text-lg">{link.title}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-sm">
+                    {link.description}
+                  </CardDescription>
+                  <div className="mt-4 flex items-center text-primary text-sm font-medium">
+                    {isRTL ? "الذهاب للصفحة" : "Go to page"}
+                    <ArrowRight className={`w-4 h-4 ${isRTL ? "mr-1 rotate-180" : "ml-1"}`} />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LayoutDashboard className="w-5 h-5" />
+              {isRTL ? "قريباً" : "Coming Soon"}
+            </CardTitle>
+            <CardDescription>
+              {isRTL 
+                ? "سيتم إضافة المزيد من الميزات لنظام المخازن والتحويلات قريباً"
+                : "More features will be added to the warehouse management system soon"
+              }
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+              <li>{isRTL ? "طلبات المواد الخام" : "Raw material requests"}</li>
+              <li>{isRTL ? "طلبات المستلزمات" : "Consumable requests"}</li>
+              <li>{isRTL ? "طلبات مواد التغليف" : "Packaging material requests"}</li>
+              <li>{isRTL ? "سير عمل الموافقات" : "Approval workflow"}</li>
+              <li>{isRTL ? "تقارير المخزون" : "Inventory reports"}</li>
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
+  );
+}
