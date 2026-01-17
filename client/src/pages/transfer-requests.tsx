@@ -9,11 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy, Check, ChevronsUpDown
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useReactToPrint } from "react-to-print";
@@ -112,6 +114,7 @@ export default function TransferRequestsPage() {
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
+  const [openItemIndex, setOpenItemIndex] = useState<number | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   // Print functionality with portrait orientation
@@ -855,64 +858,87 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   </div>
                   
                   {newTransfer.items.map((item, index) => (
-                    <div key={index} className="space-y-2 border-b pb-3" data-testid={`item-row-${index}`}>
-                      <div className="grid grid-cols-12 gap-2 items-end">
-                        <div className="col-span-6">
-                          <Label className="text-xs">{isRTL ? "الصنف" : "Item"}</Label>
-                          <Select 
-                            value={item.itemId ? item.itemId.toString() : ""}
-                            onValueChange={(value) => {
-                              const selectedItem = warehouseItems.find(i => i.id === parseInt(value));
-                              if (selectedItem) {
-                                updateTransferItem(index, "itemId", selectedItem.id);
-                                updateTransferItem(index, "itemName", selectedItem.name);
-                                updateTransferItem(index, "category", selectedItem.category);
-                                updateTransferItem(index, "unit", selectedItem.unit);
-                              }
-                            }}
-                          >
-                            <SelectTrigger data-testid={`select-item-${index}`}>
-                              <SelectValue placeholder={isRTL ? "اختر الصنف" : "Select item"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {warehouseItems.map((wItem) => (
-                                <SelectItem key={wItem.id} value={wItem.id.toString()}>
-                                  {wItem.name} ({wItem.category})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                    <div key={index} className="space-y-3 border rounded-lg p-3 bg-white shadow-sm" data-testid={`item-row-${index}`}>
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-amber-600" />
+                            <Label className="text-sm font-medium">{isRTL ? "الصنف" : "Item"}</Label>
+                          </div>
+                          <Popover open={openItemIndex === index} onOpenChange={(open) => setOpenItemIndex(open ? index : null)}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openItemIndex === index}
+                                className="w-full justify-between text-right h-10"
+                                data-testid={`select-item-${index}`}
+                              >
+                                {item.itemId ? (
+                                  <span className="flex items-center gap-2">
+                                    <span className="font-medium">{item.itemName}</span>
+                                    <Badge variant="secondary" className="text-xs">{item.category}</Badge>
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">{isRTL ? "ابحث واختر الصنف..." : "Search and select item..."}</span>
+                                )}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder={isRTL ? "ابحث عن صنف..." : "Search item..."} />
+                                <CommandList>
+                                  <CommandEmpty>{isRTL ? "لم يتم العثور على أصناف" : "No items found"}</CommandEmpty>
+                                  <CommandGroup heading={isRTL ? "الأصناف المتاحة" : "Available Items"}>
+                                    {warehouseItems.map((wItem) => (
+                                      <CommandItem
+                                        key={wItem.id}
+                                        value={`${wItem.name} ${wItem.category}`}
+                                        onSelect={() => {
+                                          updateTransferItem(index, "itemId", wItem.id);
+                                          updateTransferItem(index, "itemName", wItem.name);
+                                          updateTransferItem(index, "category", wItem.category);
+                                          updateTransferItem(index, "unit", wItem.unit);
+                                          setOpenItemIndex(null);
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <Check
+                                          className={`mr-2 h-4 w-4 ${item.itemId === wItem.id ? "opacity-100" : "opacity-0"}`}
+                                        />
+                                        <div className="flex flex-col flex-1">
+                                          <span className="font-medium">{wItem.name}</span>
+                                          <span className="text-xs text-muted-foreground">{wItem.category} • {wItem.unit}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-xs">{isRTL ? "الوحدة" : "Unit"}</Label>
-                          <Input value={item.unit} disabled className="bg-muted" />
-                        </div>
-                        <div className="col-span-3">
-                          <Label className="text-xs">{isRTL ? "ملاحظات" : "Notes"}</Label>
-                          <Input 
-                            value={item.notes}
-                            onChange={(e) => updateTransferItem(index, "notes", e.target.value)}
-                            placeholder="..."
-                            data-testid={`input-item-notes-${index}`}
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => removeTransferItem(index)}
-                            data-testid={`btn-remove-item-${index}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 mt-6"
+                          onClick={() => removeTransferItem(index)}
+                          data-testid={`btn-remove-item-${index}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <div className="grid grid-cols-12 gap-2 items-end">
-                        <div className="col-span-3">
+                      
+                      <div className="grid grid-cols-4 gap-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">{isRTL ? "الوحدة" : "Unit"}</Label>
+                          <Input value={item.unit || "-"} disabled className="bg-muted/50 text-center" />
+                        </div>
+                        <div>
                           <Label className="text-xs text-blue-600 font-medium">
-                            {isRTL ? "الكمية المتوفرة بالفرع *" : "Available in Branch *"}
+                            {isRTL ? "المتوفر بالفرع" : "Available"}
                           </Label>
                           <Input 
                             type="number" 
@@ -922,32 +948,40 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                               const val = e.target.value === "" ? 0 : parseInt(e.target.value);
                               updateTransferItem(index, "availableQuantity", val);
                             }}
-                            placeholder={isRTL ? "أدخل الكمية المتوفرة" : "Enter available qty"}
-                            className="border-blue-300 focus:border-blue-500"
+                            placeholder="0"
+                            className="border-blue-300 focus:border-blue-500 text-center"
                             data-testid={`input-available-qty-${index}`}
                           />
                         </div>
-                        <div className="col-span-3">
+                        <div>
                           <Label className="text-xs text-orange-600 font-medium">
-                            {isRTL ? "الكمية المطلوبة *" : "Requested Qty *"}
+                            {isRTL ? "الكمية المطلوبة" : "Qty"}
                           </Label>
                           <Input 
                             type="number" 
                             min="1"
                             value={item.quantity}
                             onChange={(e) => updateTransferItem(index, "quantity", parseInt(e.target.value) || 1)}
-                            className="border-orange-300 focus:border-orange-500"
+                            className="border-orange-300 focus:border-orange-500 text-center font-bold"
                             data-testid={`input-qty-${index}`}
                           />
                         </div>
-                        {item.availableQuantity !== null && item.quantity > item.availableQuantity && (
-                          <div className="col-span-6">
-                            <p className="text-xs text-red-500 flex items-center gap-1">
-                              ⚠️ {isRTL ? "الكمية المطلوبة أكبر من المتوفرة!" : "Requested qty exceeds available!"}
-                            </p>
-                          </div>
-                        )}
+                        <div>
+                          <Label className="text-xs text-muted-foreground">{isRTL ? "ملاحظات" : "Notes"}</Label>
+                          <Input 
+                            value={item.notes}
+                            onChange={(e) => updateTransferItem(index, "notes", e.target.value)}
+                            placeholder="..."
+                            data-testid={`input-item-notes-${index}`}
+                          />
+                        </div>
                       </div>
+                      
+                      {item.availableQuantity !== null && item.quantity > item.availableQuantity && (
+                        <p className="text-xs text-red-500 flex items-center gap-1 bg-red-50 p-2 rounded">
+                          ⚠️ {isRTL ? "الكمية المطلوبة أكبر من المتوفرة!" : "Requested qty exceeds available!"}
+                        </p>
+                      )}
                     </div>
                   ))}
                   
