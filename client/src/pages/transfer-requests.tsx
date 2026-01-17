@@ -130,11 +130,13 @@ export default function TransferRequestsPage() {
     `,
   });
 
-  // Generate PDF and share via WhatsApp
-  const handleWhatsAppShare = () => {
-    if (!selectedTransfer) return;
+  // Generate PDF document definition
+  const generatePdfDocDefinition = () => {
+    if (!selectedTransfer) return null;
     
     const statusLabel = STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status;
+    const destName = selectedTransfer.destinationBranchName || 'غير محدد';
+    const srcName = selectedTransfer.sourceBranchName || 'المستودع الرئيسي';
     
     const tableBody = [
       [
@@ -155,7 +157,7 @@ export default function TransferRequestsPage() {
       ])
     ];
 
-    const docDefinition: any = {
+    return {
       pageSize: 'A4',
       pageOrientation: 'portrait',
       pageMargins: [40, 60, 40, 60],
@@ -176,9 +178,9 @@ export default function TransferRequestsPage() {
             widths: ['*', 'auto', '*'],
             body: [
               [
-                { text: selectedTransfer.destinationBranchName, alignment: 'center', bold: true },
+                { text: destName, alignment: 'center', bold: true },
                 { text: '←', alignment: 'center', fontSize: 16 },
-                { text: selectedTransfer.sourceBranchName || 'المستودع الرئيسي', alignment: 'center', bold: true },
+                { text: srcName, alignment: 'center', bold: true },
               ],
               [
                 { text: 'إلى', alignment: 'center', color: 'gray', fontSize: 10 },
@@ -253,18 +255,49 @@ export default function TransferRequestsPage() {
         fontSize: 11
       }
     };
+  };
 
-    pdfMake.createPdf(docDefinition).download(`transfer-${selectedTransfer.transferNumber}.pdf`);
+  // Download PDF only
+  const handleDownloadPdf = () => {
+    const docDefinition = generatePdfDocDefinition();
+    if (!docDefinition || !selectedTransfer) return;
+    
+    pdfMake.createPdf(docDefinition as any).download(`transfer-${selectedTransfer.transferNumber}.pdf`);
     
     toast({
       title: isRTL ? "تم تحميل الملف" : "File Downloaded",
-      description: isRTL ? "تم تحميل ملف PDF. يرجى إرفاقه في واتساب" : "PDF downloaded. Please attach it in WhatsApp",
+      description: isRTL ? "تم تحميل ملف PDF بنجاح" : "PDF downloaded successfully",
     });
+  };
+
+  // Share via WhatsApp (text only)
+  const handleWhatsAppShare = () => {
+    if (!selectedTransfer) return;
     
-    setTimeout(() => {
-      const message = `📦 أمر تحويل مواد رقم: ${selectedTransfer.transferNumber}\nيرجى مراجعة الملف المرفق`;
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-    }, 1000);
+    const statusLabel = STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status;
+    const destName = selectedTransfer.destinationBranchName || 'غير محدد';
+    const srcName = selectedTransfer.sourceBranchName || 'المستودع الرئيسي';
+    
+    const itemsList = transferItems.map((item, i) => 
+      `${i + 1}. ${item.itemName} - ${item.quantity} ${item.unit}`
+    ).join('\n');
+    
+    const message = `📦 *أمر تحويل مواد*
+━━━━━━━━━━━━━━
+رقم التحويل: ${selectedTransfer.transferNumber}
+الحالة: ${statusLabel}
+━━━━━━━━━━━━━━
+من: ${srcName}
+إلى: ${destName}
+━━━━━━━━━━━━━━
+*الأصناف:*
+${itemsList || 'لا توجد أصناف'}
+━━━━━━━━━━━━━━
+${selectedTransfer.driverName ? `السائق: ${selectedTransfer.driverName}` : ''}
+${selectedTransfer.vehicleNumber ? `المركبة: ${selectedTransfer.vehicleNumber}` : ''}
+${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   // Fetch transfer items when viewing details
@@ -940,6 +973,16 @@ export default function TransferRequestsPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
+                    onClick={handleDownloadPdf}
+                    className="bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
+                    data-testid="btn-pdf"
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    PDF
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
                     onClick={handleWhatsAppShare}
                     className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
                     data-testid="btn-whatsapp"
@@ -989,7 +1032,7 @@ export default function TransferRequestsPage() {
                   <div className="flex-1 text-center">
                     <MapPin className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">{isRTL ? "إلى" : "To"}</p>
-                    <p className="font-bold">{selectedTransfer.destinationBranchName}</p>
+                    <p className="font-bold">{selectedTransfer.destinationBranchName || (isRTL ? "غير محدد" : "Not specified")}</p>
                   </div>
                 </div>
 
