@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -49,6 +49,15 @@ type Branch = {
   id: string;
   name: string;
   nameAr: string;
+};
+
+type WarehouseItem = {
+  id: number;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  isActive: boolean;
 };
 
 const STATUS_OPTIONS = [
@@ -100,8 +109,42 @@ export default function TransferRequestsPage() {
     driverName: "",
     vehicleNumber: "",
     notes: "",
-    items: [] as { itemName: string; quantity: number; unit: string }[],
+    items: [] as { itemId: number; itemName: string; category: string; quantity: number; unit: string; notes: string }[],
   });
+
+  // Fetch warehouse items for selection
+  const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
+    queryKey: ["/api/warehouse/items"],
+    queryFn: async () => {
+      const response = await fetch("/api/warehouse/items?isActive=true");
+      if (!response.ok) throw new Error("Failed to fetch items");
+      return response.json();
+    },
+  });
+
+  // Add item to transfer
+  const addTransferItem = () => {
+    setNewTransfer(prev => ({
+      ...prev,
+      items: [...prev.items, { itemId: 0, itemName: "", category: "", quantity: 1, unit: "كجم", notes: "" }],
+    }));
+  };
+
+  // Remove item from transfer
+  const removeTransferItem = (index: number) => {
+    setNewTransfer(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+  };
+
+  // Update item field
+  const updateTransferItem = (index: number, field: string, value: string | number) => {
+    setNewTransfer(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item),
+    }));
+  };
 
   // Initialize source branch when user branch is available
   useEffect(() => {
@@ -496,6 +539,92 @@ export default function TransferRequestsPage() {
                     data-testid="input-driver"
                   />
                 </div>
+                {/* Items Section */}
+                <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      {isRTL ? "الأصناف المطلوب تحويلها" : "Items to Transfer"}
+                    </Label>
+                    <Button type="button" variant="outline" size="sm" onClick={addTransferItem} data-testid="btn-add-item">
+                      <Plus className="w-4 h-4" />
+                      {isRTL ? "إضافة صنف" : "Add Item"}
+                    </Button>
+                  </div>
+                  
+                  {newTransfer.items.map((item, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-2 items-end border-b pb-2" data-testid={`item-row-${index}`}>
+                      <div className="col-span-5">
+                        <Label className="text-xs">{isRTL ? "الصنف" : "Item"}</Label>
+                        <Select 
+                          value={item.itemId ? item.itemId.toString() : ""}
+                          onValueChange={(value) => {
+                            const selectedItem = warehouseItems.find(i => i.id === parseInt(value));
+                            if (selectedItem) {
+                              updateTransferItem(index, "itemId", selectedItem.id);
+                              updateTransferItem(index, "itemName", selectedItem.name);
+                              updateTransferItem(index, "category", selectedItem.category);
+                              updateTransferItem(index, "unit", selectedItem.unit);
+                            }
+                          }}
+                        >
+                          <SelectTrigger data-testid={`select-item-${index}`}>
+                            <SelectValue placeholder={isRTL ? "اختر الصنف" : "Select item"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouseItems.map((wItem) => (
+                              <SelectItem key={wItem.id} value={wItem.id.toString()}>
+                                {wItem.name} ({wItem.category})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">{isRTL ? "الكمية" : "Qty"}</Label>
+                        <Input 
+                          type="number" 
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateTransferItem(index, "quantity", parseInt(e.target.value) || 1)}
+                          data-testid={`input-qty-${index}`}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">{isRTL ? "الوحدة" : "Unit"}</Label>
+                        <Input value={item.unit} disabled className="bg-muted" />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">{isRTL ? "ملاحظات" : "Notes"}</Label>
+                        <Input 
+                          value={item.notes}
+                          onChange={(e) => updateTransferItem(index, "notes", e.target.value)}
+                          placeholder="..."
+                          data-testid={`input-item-notes-${index}`}
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => removeTransferItem(index)}
+                          data-testid={`btn-remove-item-${index}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {newTransfer.items.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      {isRTL ? "لم تتم إضافة أي أصناف بعد - اضغط على 'إضافة صنف'" : "No items added yet - click 'Add Item'"}
+                    </p>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
                   <Textarea 
@@ -511,8 +640,14 @@ export default function TransferRequestsPage() {
                   {isRTL ? "إلغاء" : "Cancel"}
                 </Button>
                 <Button 
-                  onClick={() => createMutation.mutate(newTransfer)} 
-                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || createMutation.isPending}
+                  onClick={() => {
+                    if (newTransfer.items.length === 0) {
+                      toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "يجب إضافة صنف واحد على الأقل" : "Please add at least one item", variant: "destructive" });
+                      return;
+                    }
+                    createMutation.mutate(newTransfer);
+                  }} 
+                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || createMutation.isPending}
                   data-testid="btn-submit-transfer"
                 >
                   {createMutation.isPending ? (isRTL ? "جاري الإرسال..." : "Submitting...") : (isRTL ? "إرسال الطلب" : "Submit Request")}
