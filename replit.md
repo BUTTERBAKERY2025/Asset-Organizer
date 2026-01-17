@@ -45,6 +45,15 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Finished Goods Inventory (مخزون الإنتاج النهائي)**: Automatic transfer of completed production batches to finished goods inventory with full audit trail. Supports transfers to branches or sales display bar (بار العرض). Features atomic transactions for data integrity, balance tracking, and movement logs. Tables: `finished_goods_inventory`, `finished_goods_transfers`, `production_inventory_logs`.
   - **Design Decision**: Products are identified by normalized name (lowercase, trimmed) rather than strict SKU. This allows aggregation of production by product name and supports manual entries without product IDs. The unique constraint is (branch_id, product_name_normalized, production_date).
   - **Atomic Operations**: Batch creation/update with finished goods transfer happens in a single database transaction, ensuring consistency.
+- **Warehouse & Materials Management (المخازن والتحويلات)**: Comprehensive system for managing material requests and transfers between branches and main warehouse.
+  - **Material Categories**: Raw materials (مواد خام), Consumables (مستهلكات), Packaging (مواد تغليف), Primary Production (مواد إنتاج أولية).
+  - **Request Workflow**: draft → pending → approved/rejected/forwarded_to_purchasing → fulfilled.
+  - **Transfer Tracking**: pending → in_transit → delivered, with driver name, vehicle number, departure/arrival times.
+  - **Electronic Signatures**: Receipt confirmation with digital signatures.
+  - **Stock Level Monitoring**: Low stock alerts and reorder point tracking.
+  - **Tables**: `warehouse_items`, `branch_stock`, `material_requests`, `material_request_items`, `material_transfers`, `material_transfer_items`, `warehouse_movement_logs`.
+  - **Request Numbers**: Auto-generated format MR-YYYYMM-XXXX.
+  - **Transfer Numbers**: Auto-generated format MT-YYYYMM-XXXX.
 
 ### Performance Optimization
 - **Tiered Caching Strategy**: Three-tier cache system based on data volatility:
