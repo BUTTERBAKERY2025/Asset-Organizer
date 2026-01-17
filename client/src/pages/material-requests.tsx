@@ -148,6 +148,9 @@ export default function MaterialRequestsPage() {
     reviewNotes: "",
   });
 
+  const [reviewItems, setReviewItems] = useState<MaterialRequestItem[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
+
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
   });
@@ -296,10 +299,36 @@ export default function MaterialRequestsPage() {
     createMutation.mutate(newRequest);
   };
 
-  const handleReview = (request: MaterialRequest) => {
+  const handleReview = async (request: MaterialRequest) => {
     setSelectedRequest(request);
     setReviewData({ status: "", reviewNotes: "" });
+    setReviewItems([]);
+    setIsLoadingItems(true);
     setIsReviewOpen(true);
+    
+    // Fetch request items
+    try {
+      const response = await fetch(`/api/warehouse/material-requests/${request.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.items) {
+          setReviewItems(data.items.map((item: MaterialRequestItem) => ({
+            ...item,
+            approvedQuantity: item.approvedQuantity || item.requestedQuantity,
+          })));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch request items:", error);
+    } finally {
+      setIsLoadingItems(false);
+    }
+  };
+
+  const updateReviewItem = (index: number, field: string, value: any) => {
+    setReviewItems(prev => prev.map((item, i) => 
+      i === index ? { ...item, [field]: value } : item
+    ));
   };
 
   const handleViewDetails = (request: MaterialRequest) => {
@@ -764,7 +793,7 @@ export default function MaterialRequestsPage() {
         </Dialog>
 
         <Dialog open={isReviewOpen} onOpenChange={setIsReviewOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{isRTL ? "مراجعة الطلب" : "Review Request"}</DialogTitle>
               <DialogDescription>
@@ -772,27 +801,121 @@ export default function MaterialRequestsPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>{isRTL ? "القرار" : "Decision"}</Label>
-                <Select value={reviewData.status} onValueChange={(value) => setReviewData(prev => ({ ...prev, status: value }))}>
-                  <SelectTrigger data-testid="select-review-status">
-                    <SelectValue placeholder={isRTL ? "اختر القرار" : "Select decision"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="approved">{isRTL ? "موافقة" : "Approve"}</SelectItem>
-                    <SelectItem value="rejected">{isRTL ? "رفض" : "Reject"}</SelectItem>
-                    <SelectItem value="forwarded_to_purchasing">{isRTL ? "تحويل للمشتريات" : "Forward to Purchasing"}</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Request Info */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="text-xs text-muted-foreground">{isRTL ? "الفرع" : "Branch"}</p>
+                  <p className="font-medium">{selectedRequest?.branchName}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{isRTL ? "الأولوية" : "Priority"}</p>
+                  {selectedRequest && getPriorityBadge(selectedRequest.priority, isRTL)}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{isRTL ? "تاريخ الطلب" : "Date"}</p>
+                  <p className="font-medium">{selectedRequest?.requestDate ? new Date(selectedRequest.requestDate).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US') : '-'}</p>
+                </div>
               </div>
+
+              {/* Items Table */}
               <div className="space-y-2">
-                <Label>{isRTL ? "ملاحظات المراجعة" : "Review Notes"}</Label>
-                <Textarea 
-                  value={reviewData.reviewNotes}
-                  onChange={(e) => setReviewData(prev => ({ ...prev, reviewNotes: e.target.value }))}
-                  placeholder={isRTL ? "أدخل ملاحظاتك..." : "Enter your notes..."}
-                  data-testid="input-review-notes"
-                />
+                <Label className="text-base font-semibold">{isRTL ? "بنود الطلب" : "Request Items"}</Label>
+                {isLoadingItems ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {isRTL ? "جاري تحميل البنود..." : "Loading items..."}
+                  </div>
+                ) : reviewItems.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {isRTL ? "لا توجد بنود" : "No items found"}
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
+                          <TableHead className="w-24 text-center">{isRTL ? "الكمية المطلوبة" : "Requested"}</TableHead>
+                          <TableHead className="w-32 text-center">{isRTL ? "الكمية المعتمدة" : "Approved"}</TableHead>
+                          <TableHead className="w-20 text-center">{isRTL ? "الوحدة" : "Unit"}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reviewItems.map((item, index) => (
+                          <TableRow key={item.id || index}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{item.itemName}</p>
+                                {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center font-medium">
+                              {item.requestedQuantity}
+                            </TableCell>
+                            <TableCell>
+                              <Input 
+                                type="number"
+                                min={0}
+                                max={item.requestedQuantity}
+                                value={item.approvedQuantity}
+                                onChange={(e) => updateReviewItem(index, 'approvedQuantity', parseInt(e.target.value) || 0)}
+                                className="w-24 text-center mx-auto"
+                                data-testid={`input-approved-qty-${index}`}
+                              />
+                            </TableCell>
+                            <TableCell className="text-center text-muted-foreground">
+                              {item.unit}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {isRTL ? "* يمكنك تعديل الكميات المعتمدة إذا كانت بعض المواد غير متوفرة" : "* You can adjust approved quantities if some items are unavailable"}
+                </p>
+              </div>
+
+              {/* Decision */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{isRTL ? "القرار" : "Decision"}</Label>
+                  <Select value={reviewData.status} onValueChange={(value) => setReviewData(prev => ({ ...prev, status: value }))}>
+                    <SelectTrigger data-testid="select-review-status">
+                      <SelectValue placeholder={isRTL ? "اختر القرار" : "Select decision"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="approved">
+                        <span className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          {isRTL ? "موافقة" : "Approve"}
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="rejected">
+                        <span className="flex items-center gap-2">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          {isRTL ? "رفض" : "Reject"}
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="forwarded_to_purchasing">
+                        <span className="flex items-center gap-2">
+                          <Send className="w-4 h-4 text-purple-500" />
+                          {isRTL ? "تحويل للمشتريات" : "Forward to Purchasing"}
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{isRTL ? "ملاحظات المراجعة" : "Review Notes"}</Label>
+                  <Textarea 
+                    value={reviewData.reviewNotes}
+                    onChange={(e) => setReviewData(prev => ({ ...prev, reviewNotes: e.target.value }))}
+                    placeholder={isRTL ? "أدخل ملاحظاتك..." : "Enter your notes..."}
+                    className="h-20"
+                    data-testid="input-review-notes"
+                  />
+                </div>
               </div>
             </div>
             <DialogFooter>
@@ -810,9 +933,14 @@ export default function MaterialRequestsPage() {
                   }
                 }}
                 disabled={!reviewData.status || reviewMutation.isPending}
+                className={reviewData.status === "approved" ? "bg-green-600 hover:bg-green-700" : 
+                          reviewData.status === "rejected" ? "bg-red-600 hover:bg-red-700" : ""}
                 data-testid="btn-submit-review"
               >
-                {reviewMutation.isPending ? (isRTL ? "جاري التحديث..." : "Updating...") : (isRTL ? "تأكيد" : "Confirm")}
+                {reviewMutation.isPending ? (isRTL ? "جاري التحديث..." : "Updating...") : 
+                 reviewData.status === "approved" ? (isRTL ? "موافقة" : "Approve") :
+                 reviewData.status === "rejected" ? (isRTL ? "رفض" : "Reject") :
+                 (isRTL ? "تأكيد" : "Confirm")}
               </Button>
             </DialogFooter>
           </DialogContent>
