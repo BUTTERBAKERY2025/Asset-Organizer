@@ -427,6 +427,92 @@ _مُرسل من نظام باتر_`;
     }
   };
 
+  // Download single transfer as Excel
+  const handleDownloadTransferExcel = async () => {
+    if (!selectedTransfer || transferItems.length === 0) {
+      toast({
+        title: isRTL ? "لا توجد بيانات" : "No Data",
+        description: isRTL ? "لا توجد أصناف للتصدير" : "No items to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const XLSX = await import('xlsx-js-style');
+      
+      const headers = ["#", "الصنف", "التصنيف", "المتوفر", "الكمية", "الوحدة", "ملاحظات"];
+      
+      const rows = transferItems.map((item, index) => [
+        index + 1,
+        item.itemName,
+        item.category || "-",
+        item.availableQuantity ?? "-",
+        item.quantity,
+        item.unit,
+        item.notes || "-",
+      ]);
+
+      const data = [headers, ...rows];
+      const worksheet = XLSX.utils.aoa_to_sheet(data);
+      
+      const headerStyle = {
+        font: { name: "Tahoma", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: "D4A853" } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } },
+        }
+      };
+      
+      const cellStyle = {
+        font: { name: "Tahoma", sz: 11 },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "CCCCCC" } },
+          bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+          left: { style: "thin", color: { rgb: "CCCCCC" } },
+          right: { style: "thin", color: { rgb: "CCCCCC" } },
+        }
+      };
+
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
+      for (let row = range.s.r; row <= range.e.r; row++) {
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!worksheet[cellAddress]) continue;
+          worksheet[cellAddress].s = row === 0 ? headerStyle : cellStyle;
+        }
+      }
+
+      const colWidths = [
+        { wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 10 }, 
+        { wch: 10 }, { wch: 10 }, { wch: 20 }
+      ];
+      worksheet['!cols'] = colWidths;
+      
+      (worksheet as any)['!views'] = [{ rightToLeft: true }];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, selectedTransfer.transferNumber);
+      XLSX.writeFile(workbook, `${selectedTransfer.transferNumber}.xlsx`);
+      
+      toast({
+        title: isRTL ? "تم التصدير" : "Exported",
+        description: isRTL ? "تم تصدير البيانات إلى ملف Excel" : "Data exported to Excel file",
+      });
+    } catch (error: any) {
+      toast({
+        title: isRTL ? "فشل في التصدير" : "Export failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Share via WhatsApp (text only)
   const handleWhatsAppShare = () => {
     if (!selectedTransfer) return;
@@ -1154,6 +1240,16 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   >
                     <Download className="w-4 h-4 mr-1" />
                     PDF
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleDownloadTransferExcel}
+                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
+                    data-testid="btn-excel"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-1" />
+                    Excel
                   </Button>
                   <Button 
                     variant="outline" 
