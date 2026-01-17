@@ -18,7 +18,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from "recharts";
-import type { Branch, WarehouseItem, MaterialRequest, MaterialTransfer, BranchStock } from "@shared/schema";
+import type { Branch, WarehouseItem, MaterialTransfer, BranchStock } from "@shared/schema";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
@@ -37,10 +37,6 @@ export default function WarehouseReportsPage() {
     queryKey: ["/api/warehouse/items"],
   });
 
-  const { data: requests } = useQuery<MaterialRequest[]>({
-    queryKey: ["/api/warehouse/material-requests"],
-  });
-
   const { data: transfers } = useQuery<MaterialTransfer[]>({
     queryKey: ["/api/warehouse/material-transfers"],
   });
@@ -53,28 +49,12 @@ export default function WarehouseReportsPage() {
     queryKey: ["/api/warehouse/movement-logs"],
   });
 
-  const filteredRequests = requests?.filter(r => {
-    if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-    if (dateFrom && new Date(r.createdAt!) < new Date(dateFrom)) return false;
-    if (dateTo && new Date(r.createdAt!) > new Date(dateTo)) return false;
-    return true;
-  }) || [];
-
   const filteredTransfers = transfers?.filter(t => {
     if (selectedBranch !== "all" && t.destinationBranchId !== selectedBranch && t.sourceBranchId !== selectedBranch) return false;
     if (dateFrom && new Date(t.createdAt!) < new Date(dateFrom)) return false;
     if (dateTo && new Date(t.createdAt!) > new Date(dateTo)) return false;
     return true;
   }) || [];
-
-  const requestStats = {
-    total: filteredRequests.length,
-    pending: filteredRequests.filter(r => r.status === "pending").length,
-    approved: filteredRequests.filter(r => r.status === "approved").length,
-    fulfilled: filteredRequests.filter(r => r.status === "fulfilled").length,
-    rejected: filteredRequests.filter(r => r.status === "rejected").length,
-    forwarded: filteredRequests.filter(r => r.status === "forwarded_to_purchasing").length,
-  };
 
   const transferStats = {
     total: filteredTransfers.length,
@@ -87,14 +67,6 @@ export default function WarehouseReportsPage() {
     const item = warehouseItems?.find(i => i.id === s.itemId);
     return item && (s.currentQuantity || 0) <= (item.reorderPoint || 0);
   }) || [];
-
-  const requestStatusData = [
-    { name: isRTL ? "قيد الانتظار" : "Pending", value: requestStats.pending, color: "#FFBB28" },
-    { name: isRTL ? "موافق عليه" : "Approved", value: requestStats.approved, color: "#00C49F" },
-    { name: isRTL ? "مُنفذ" : "Fulfilled", value: requestStats.fulfilled, color: "#0088FE" },
-    { name: isRTL ? "مرفوض" : "Rejected", value: requestStats.rejected, color: "#FF8042" },
-    { name: isRTL ? "محول للمشتريات" : "To Purchasing", value: requestStats.forwarded, color: "#8884d8" },
-  ].filter(d => d.value > 0);
 
   const transferStatusData = [
     { name: isRTL ? "قيد الانتظار" : "Pending", value: transferStats.pending, color: "#FFBB28" },
@@ -131,23 +103,6 @@ export default function WarehouseReportsPage() {
       status: isLow ? (isRTL ? "منخفض" : "Low") : (isRTL ? "جيد" : "Good"),
     };
   }) || [];
-
-  const requestColumns = [
-    { header: isRTL ? "رقم الطلب" : "Request #", key: "requestNumber", width: 18 },
-    { header: isRTL ? "الفرع" : "Branch", key: "branchName", width: 20 },
-    { header: isRTL ? "الحالة" : "Status", key: "statusText", width: 15 },
-    { header: isRTL ? "التاريخ" : "Date", key: "dateText", width: 15 },
-  ];
-
-  const requestExportData = filteredRequests.map(r => {
-    const branch = branches?.find(b => b.id === r.branchId);
-    return {
-      requestNumber: r.requestNumber,
-      branchName: branch?.name || r.branchId,
-      statusText: r.status,
-      dateText: r.createdAt ? new Date(r.createdAt).toLocaleDateString("ar-SA") : "",
-    };
-  });
 
   const transferColumns = [
     { header: isRTL ? "رقم التحويل" : "Transfer #", key: "transferNumber", width: 18 },
@@ -236,20 +191,7 @@ export default function WarehouseReportsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card data-testid="stat-requests-total">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-                  <FileText className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{isRTL ? "إجمالي الطلبات" : "Total Requests"}</p>
-                  <p className="text-2xl font-bold">{requestStats.total}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card data-testid="stat-transfers-total">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -292,15 +234,12 @@ export default function WarehouseReportsPage() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview" data-testid="tab-overview">
               {isRTL ? "نظرة عامة" : "Overview"}
             </TabsTrigger>
             <TabsTrigger value="stock" data-testid="tab-stock">
               {isRTL ? "المخزون" : "Stock"}
-            </TabsTrigger>
-            <TabsTrigger value="requests" data-testid="tab-requests">
-              {isRTL ? "الطلبات" : "Requests"}
             </TabsTrigger>
             <TabsTrigger value="transfers" data-testid="tab-transfers">
               {isRTL ? "التحويلات" : "Transfers"}
@@ -309,41 +248,6 @@ export default function WarehouseReportsPage() {
 
           <TabsContent value="overview" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{isRTL ? "حالات الطلبات" : "Request Status"}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64">
-                    {requestStatusData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={requestStatusData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={40}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            label={({ name, value }) => `${name}: ${value}`}
-                          >
-                            {requestStatusData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-muted-foreground">
-                        {isRTL ? "لا توجد بيانات" : "No data"}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
               <Card>
                 <CardHeader>
                   <CardTitle>{isRTL ? "حالات التحويلات" : "Transfer Status"}</CardTitle>
@@ -486,62 +390,6 @@ export default function WarehouseReportsPage() {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
-
-          <TabsContent value="requests" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>{isRTL ? "تقرير الطلبات" : "Requests Report"}</CardTitle>
-                  <CardDescription>
-                    {isRTL ? `${requestExportData.length} طلب` : `${requestExportData.length} requests`}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ExportButtons
-                    data={requestExportData}
-                    columns={requestColumns}
-                    fileName={`requests-report-${new Date().toISOString().split('T')[0]}`}
-                    title={isRTL ? "تقرير الطلبات" : "Requests Report"}
-                    sheetName={isRTL ? "الطلبات" : "Requests"}
-                  />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="p-2 text-right font-semibold">{isRTL ? "رقم الطلب" : "Request #"}</th>
-                        <th className="p-2 text-right font-semibold">{isRTL ? "الفرع" : "Branch"}</th>
-                        <th className="p-2 text-right font-semibold">{isRTL ? "الحالة" : "Status"}</th>
-                        <th className="p-2 text-right font-semibold">{isRTL ? "التاريخ" : "Date"}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {requestExportData.slice(0, 20).map((row, idx) => (
-                        <tr key={idx} className="border-b hover:bg-muted/50">
-                          <td className="p-2 font-mono">{row.requestNumber}</td>
-                          <td className="p-2">{row.branchName}</td>
-                          <td className="p-2">
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              row.statusText === "approved" ? "bg-green-100 text-green-700" :
-                              row.statusText === "pending" ? "bg-yellow-100 text-yellow-700" :
-                              row.statusText === "fulfilled" ? "bg-blue-100 text-blue-700" :
-                              row.statusText === "rejected" ? "bg-red-100 text-red-700" :
-                              "bg-purple-100 text-purple-700"
-                            }`}>
-                              {row.statusText}
-                            </span>
-                          </td>
-                          <td className="p-2">{row.dateText}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="transfers" className="space-y-4">

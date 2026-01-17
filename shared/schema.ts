@@ -5639,84 +5639,11 @@ export const insertBranchStockSchema = createInsertSchema(branchStock).omit({
 export type BranchStock = typeof branchStock.$inferSelect;
 export type InsertBranchStock = z.infer<typeof insertBranchStockSchema>;
 
-// Material Requests - طلبات المواد
-export const materialRequests = pgTable("material_requests", {
-  id: serial("id").primaryKey(),
-  requestNumber: text("request_number").notNull(), // رقم الطلب التلقائي
-  requestType: text("request_type").notNull().default("daily"), // daily, weekly, urgent
-  branchId: varchar("branch_id")
-    .notNull()
-    .references(() => branches.id),
-  requestDate: text("request_date").notNull(), // تاريخ الطلب YYYY-MM-DD
-  expectedDeliveryDate: text("expected_delivery_date"), // تاريخ التسليم المتوقع
-  status: text("status").notNull().default("draft"), // draft, pending, approved, rejected, fulfilled, forwarded_to_purchasing
-  totalItems: integer("total_items").default(0),
-  notes: text("notes"),
-  requestedBy: varchar("requested_by").references(() => users.id),
-  requestedByName: text("requested_by_name"),
-  reviewedBy: varchar("reviewed_by").references(() => users.id),
-  reviewedByName: text("reviewed_by_name"),
-  reviewedAt: timestamp("reviewed_at"),
-  reviewNotes: text("review_notes"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => [
-  index("idx_material_requests_branch").on(table.branchId),
-  index("idx_material_requests_status").on(table.status),
-  index("idx_material_requests_date").on(table.requestDate),
-  index("idx_material_requests_type").on(table.requestType),
-  uniqueIndex("material_requests_number_unique").on(table.requestNumber),
-]);
-
-export const insertMaterialRequestSchema = createInsertSchema(materialRequests).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type MaterialRequest = typeof materialRequests.$inferSelect;
-export type InsertMaterialRequest = z.infer<typeof insertMaterialRequestSchema>;
-
-// Material Request Items - بنود طلب المواد
-export const materialRequestItems = pgTable("material_request_items", {
-  id: serial("id").primaryKey(),
-  requestId: integer("request_id")
-    .notNull()
-    .references(() => materialRequests.id, { onDelete: "cascade" }),
-  itemId: integer("item_id")
-    .notNull()
-    .references(() => warehouseItems.id),
-  itemName: text("item_name").notNull(),
-  category: text("category").notNull(), // raw, consumable, packaging, primary
-  unit: text("unit").notNull(),
-  currentQuantity: integer("current_quantity").default(0), // الكمية المتوفرة حالياً
-  requestedQuantity: integer("requested_quantity").notNull(), // الكمية المطلوبة
-  approvedQuantity: integer("approved_quantity"), // الكمية المعتمدة
-  fulfilledQuantity: integer("fulfilled_quantity").default(0), // الكمية المنفذة
-  dailyConsumption: integer("daily_consumption").default(0), // معدل الاستهلاك اليومي
-  coverageDays: integer("coverage_days"), // مدة التغطية بالأيام
-  reason: text("reason"), // depleted, production_expansion, seasonal, urgent
-  notes: text("notes"),
-  status: text("status").default("pending"), // pending, approved, rejected, fulfilled
-}, (table) => [
-  index("idx_material_request_items_request").on(table.requestId),
-  index("idx_material_request_items_item").on(table.itemId),
-  index("idx_material_request_items_category").on(table.category),
-]);
-
-export const insertMaterialRequestItemSchema = createInsertSchema(materialRequestItems).omit({
-  id: true,
-});
-
-export type MaterialRequestItem = typeof materialRequestItems.$inferSelect;
-export type InsertMaterialRequestItem = z.infer<typeof insertMaterialRequestItemSchema>;
-
 // Material Transfers - تحويلات المواد
 export const materialTransfers = pgTable("material_transfers", {
   id: serial("id").primaryKey(),
   transferNumber: text("transfer_number").notNull(), // رقم التحويل التلقائي
-  requestId: integer("request_id")
-    .references(() => materialRequests.id),
+  requestId: integer("request_id"), // للتوافقية مع البيانات القديمة
   sourceType: text("source_type").notNull().default("warehouse"), // warehouse, branch
   sourceBranchId: varchar("source_branch_id")
     .references(() => branches.id),
@@ -5821,8 +5748,7 @@ export type InsertWarehouseMovementLog = z.infer<typeof insertWarehouseMovementL
 export const purchasingRequests = pgTable("purchasing_requests", {
   id: serial("id").primaryKey(),
   requestNumber: text("request_number").notNull(),
-  sourceMaterialRequestId: integer("source_material_request_id")
-    .references(() => materialRequests.id),
+  sourceMaterialRequestId: integer("source_material_request_id"), // للتوافقية مع البيانات القديمة
   branchId: varchar("branch_id")
     .notNull()
     .references(() => branches.id),

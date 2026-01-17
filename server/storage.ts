@@ -357,12 +357,6 @@ import {
   branchStock,
   type BranchStock,
   type InsertBranchStock,
-  materialRequests,
-  type MaterialRequest,
-  type InsertMaterialRequest,
-  materialRequestItems,
-  type MaterialRequestItem,
-  type InsertMaterialRequestItem,
   materialTransfers,
   type MaterialTransfer,
   type InsertMaterialTransfer,
@@ -8352,149 +8346,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Material Requests
-  async getMaterialRequests(filters?: { branchId?: string; status?: string; requestType?: string; startDate?: string; endDate?: string }): Promise<MaterialRequest[]> {
-    const conditions = [];
-    if (filters?.branchId) conditions.push(eq(materialRequests.branchId, filters.branchId));
-    if (filters?.status) conditions.push(eq(materialRequests.status, filters.status));
-    if (filters?.requestType) conditions.push(eq(materialRequests.requestType, filters.requestType));
-    if (filters?.startDate) conditions.push(gte(materialRequests.requestDate, filters.startDate));
-    if (filters?.endDate) conditions.push(lte(materialRequests.requestDate, filters.endDate));
-    
-    if (conditions.length > 0) {
-      return await db.select().from(materialRequests).where(and(...conditions)).orderBy(desc(materialRequests.createdAt));
-    }
-    return await db.select().from(materialRequests).orderBy(desc(materialRequests.createdAt));
-  }
-
-  async getMaterialRequest(id: number): Promise<MaterialRequest | undefined> {
-    const [request] = await db.select().from(materialRequests).where(eq(materialRequests.id, id));
-    return request || undefined;
-  }
-
-  async getMaterialRequestWithItems(id: number): Promise<{ request: MaterialRequest; items: MaterialRequestItem[] } | undefined> {
-    const [request] = await db.select().from(materialRequests).where(eq(materialRequests.id, id));
-    if (!request) return undefined;
-    
-    const items = await db.select().from(materialRequestItems).where(eq(materialRequestItems.requestId, id));
-    return { request, items };
-  }
-
-  async createMaterialRequest(request: InsertMaterialRequest, items: InsertMaterialRequestItem[]): Promise<MaterialRequest> {
-    return await db.transaction(async (tx) => {
-      const [created] = await tx.insert(materialRequests).values({
-        ...request,
-        totalItems: items.length
-      }).returning();
-      
-      if (items.length > 0) {
-        await tx.insert(materialRequestItems).values(
-          items.map(item => ({ ...item, requestId: created.id }))
-        );
-      }
-      
-      return created;
-    });
-  }
-
-  async updateMaterialRequest(id: number, updates: Partial<InsertMaterialRequest>): Promise<MaterialRequest | undefined> {
-    const [updated] = await db.update(materialRequests)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(materialRequests.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async updateMaterialRequestStatus(id: number, status: string, reviewerId?: string, reviewerName?: string, reviewNotes?: string): Promise<MaterialRequest | undefined> {
-    const [updated] = await db.update(materialRequests)
-      .set({ 
-        status, 
-        reviewedBy: reviewerId,
-        reviewedByName: reviewerName,
-        reviewedAt: new Date(),
-        reviewNotes,
-        updatedAt: new Date() 
-      })
-      .where(eq(materialRequests.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  // Transactional review with item updates - ensures atomicity
-  async reviewMaterialRequestWithItems(
-    id: number, 
-    status: string, 
-    reviewerId: string | undefined, 
-    reviewerName: string | undefined, 
-    reviewNotes: string | undefined,
-    itemUpdates: Array<{ id: number; approvedQuantity: number }>
-  ): Promise<MaterialRequest | undefined> {
-    try {
-      return await db.transaction(async (tx) => {
-        // Update request status
-        const [updated] = await tx.update(materialRequests)
-          .set({ 
-            status, 
-            reviewedBy: reviewerId,
-            reviewedByName: reviewerName,
-            reviewedAt: new Date(),
-            reviewNotes,
-            updatedAt: new Date() 
-          })
-          .where(eq(materialRequests.id, id))
-          .returning();
-        
-        if (!updated) {
-          return undefined;
-        }
-        
-        // Update all items within same transaction
-        for (const item of itemUpdates) {
-          await tx.update(materialRequestItems)
-            .set({ approvedQuantity: item.approvedQuantity })
-            .where(eq(materialRequestItems.id, item.id));
-        }
-        
-        return updated;
-      });
-    } catch (error) {
-      console.error("Transaction failed:", error);
-      return undefined;
-    }
-  }
-
-  async getMaterialRequestItems(requestId: number): Promise<MaterialRequestItem[]> {
-    return await db.select().from(materialRequestItems).where(eq(materialRequestItems.requestId, requestId));
-  }
-
-  async updateMaterialRequestItem(id: number, updates: Partial<InsertMaterialRequestItem>): Promise<MaterialRequestItem | undefined> {
-    const [updated] = await db.update(materialRequestItems)
-      .set(updates)
-      .where(eq(materialRequestItems.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async generateMaterialRequestNumber(): Promise<string> {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const prefix = `MR-${year}${month}`;
-    
-    const existing = await db.select()
-      .from(materialRequests)
-      .where(sql`${materialRequests.requestNumber} LIKE ${prefix + '%'}`)
-      .orderBy(desc(materialRequests.requestNumber));
-    
-    let nextNum = 1;
-    if (existing.length > 0) {
-      const lastNum = existing[0].requestNumber.split('-').pop();
-      nextNum = parseInt(lastNum || '0') + 1;
-    }
-    
-    return `${prefix}-${String(nextNum).padStart(4, '0')}`;
-  }
-
   // Material Transfers
   async getMaterialTransfers(filters?: { sourceBranchId?: string; destinationBranchId?: string; branchId?: string; status?: string; startDate?: string; endDate?: string }): Promise<MaterialTransfer[]> {
     const conditions = [];
@@ -8667,17 +8518,17 @@ export class DatabaseStorage implements IStorage {
     lowStockItems: number;
   }> {
     const pendingResult = await db.select({ count: sql<number>`count(*)` })
-      .from(materialRequests)
+      .from(materialTransfers)
       .where(branchId 
-        ? and(eq(materialRequests.status, 'pending'), eq(materialRequests.branchId, branchId))
-        : eq(materialRequests.status, 'pending')
+        ? and(eq(materialTransfers.status, 'pending'), eq(materialTransfers.destinationBranchId, branchId))
+        : eq(materialTransfers.status, 'pending')
       );
     
     const approvedResult = await db.select({ count: sql<number>`count(*)` })
-      .from(materialRequests)
+      .from(materialTransfers)
       .where(branchId 
-        ? and(eq(materialRequests.status, 'approved'), eq(materialRequests.branchId, branchId))
-        : eq(materialRequests.status, 'approved')
+        ? and(eq(materialTransfers.status, 'approved'), eq(materialTransfers.destinationBranchId, branchId))
+        : eq(materialTransfers.status, 'approved')
       );
     
     const inTransitResult = await db.select({ count: sql<number>`count(*)` })
@@ -8771,47 +8622,6 @@ export class DatabaseStorage implements IStorage {
     }
     
     return `${prefix}-${String(nextNum).padStart(4, '0')}`;
-  }
-
-  async createPurchasingRequestFromMaterialRequest(materialRequestId: number, userId?: string, userName?: string): Promise<PurchasingRequest | undefined> {
-    return await db.transaction(async (tx) => {
-      const [matRequest] = await tx.select().from(materialRequests).where(eq(materialRequests.id, materialRequestId));
-      if (!matRequest) throw new Error("طلب المواد غير موجود");
-      
-      const matItems = await tx.select().from(materialRequestItems).where(eq(materialRequestItems.requestId, materialRequestId));
-      
-      const requestNumber = await this.generatePurchasingRequestNumber();
-      
-      const [purchaseRequest] = await tx.insert(purchasingRequests).values({
-        requestNumber,
-        sourceMaterialRequestId: materialRequestId,
-        branchId: matRequest.branchId,
-        status: 'pending',
-        priority: 'normal',
-        notes: `تم إنشاؤه من طلب المواد ${matRequest.requestNumber}`,
-        requestedBy: userId,
-        requestedByName: userName,
-      }).returning();
-      
-      if (matItems.length > 0) {
-        await tx.insert(purchasingRequestItems).values(
-          matItems.map(item => ({
-            purchasingRequestId: purchaseRequest.id,
-            itemId: item.itemId,
-            itemName: item.itemName,
-            category: item.category,
-            unit: item.unit,
-            requestedQuantity: item.approvedQuantity || item.requestedQuantity,
-          }))
-        );
-      }
-      
-      await tx.update(materialRequests)
-        .set({ status: 'forwarded_to_purchasing', updatedAt: new Date() })
-        .where(eq(materialRequests.id, materialRequestId));
-      
-      return purchaseRequest;
-    });
   }
 
   // ==================== Warehouse Notifications ====================
