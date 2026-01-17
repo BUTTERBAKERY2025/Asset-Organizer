@@ -245,14 +245,14 @@ export default function FinishedGoodsInventoryPage() {
               </div>
               <div>
                 <Label>الفئة</Label>
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <Select value={categoryFilter || "all"} onValueChange={(val) => setCategoryFilter(val === "all" ? "" : val)}>
                   <SelectTrigger data-testid="select-category">
                     <SelectValue placeholder="كل الفئات" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">كل الفئات</SelectItem>
+                    <SelectItem value="all">كل الفئات</SelectItem>
                     {categories.map(cat => (
-                      <SelectItem key={cat} value={cat || ""}>{cat}</SelectItem>
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
