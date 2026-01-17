@@ -431,6 +431,10 @@ export default function DailyProductionPage() {
       toast({ title: "بيانات ناقصة", description: "يرجى ملء جميع الحقول المطلوبة", variant: "destructive" });
       return;
     }
+    if (!selectedChefId) {
+      toast({ title: "بيانات ناقصة", description: "يرجى اختيار الشيف المنتج", variant: "destructive" });
+      return;
+    }
     
     const numericQuantity = parseInt(quantity, 10);
     if (isNaN(numericQuantity) || numericQuantity <= 0) {
@@ -1173,11 +1177,11 @@ export default function DailyProductionPage() {
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2">
                         <ChefHat className="h-4 w-4" />
-                        الشيف المنتج
+                        الشيف المنتج *
                       </Label>
                       <Select value={selectedChefId || undefined} onValueChange={handleChefSelect}>
                         <SelectTrigger data-testid="select-chef">
-                          <SelectValue placeholder="اختر الشيف (اختياري)" />
+                          <SelectValue placeholder="اختر الشيف" />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
                           {chefs?.map((chef) => (
