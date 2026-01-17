@@ -17170,8 +17170,27 @@ export async function registerRoutes(
 
   app.post("/api/purchasing/requests", isAuthenticated, async (req, res) => {
     try {
+      const purchasingRequestSchema = z.object({
+        branchId: z.string(),
+        priority: z.string().default("normal"),
+        vendorName: z.string().optional(),
+        notes: z.string().optional(),
+        items: z.array(z.object({
+          itemId: z.number(),
+          itemName: z.string(),
+          quantityRequested: z.union([z.string(), z.number()]),
+          unit: z.string().default("unit"),
+          estimatedUnitCost: z.union([z.string(), z.number()]).optional(),
+        })).optional(),
+      });
+
+      const parseResult = purchasingRequestSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
       const user = req.user as any;
-      const { items, ...requestData } = req.body;
+      const { items, ...requestData } = parseResult.data;
       
       const requestNumber = await storage.generatePurchasingRequestNumber();
       
@@ -17211,13 +17230,25 @@ export async function registerRoutes(
 
   app.put("/api/purchasing/requests/:id/status", isAuthenticated, async (req, res) => {
     try {
+      const statusUpdateSchema = z.object({
+        status: z.enum(["pending", "approved", "rejected", "ordered", "received", "cancelled"]),
+        vendorName: z.string().optional(),
+        expectedDeliveryDate: z.string().optional(),
+        notes: z.string().optional(),
+      });
+
+      const parseResult = statusUpdateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
       const user = req.user as any;
-      const { status, ...additionalData } = req.body;
+      const { status, ...additionalData } = parseResult.data;
       
       if (status === 'approved') {
-        additionalData.approvedBy = user?.id;
-        additionalData.approvedByName = user?.username;
-        additionalData.approvedAt = new Date();
+        (additionalData as any).approvedBy = user?.id;
+        (additionalData as any).approvedByName = user?.username;
+        (additionalData as any).approvedAt = new Date();
       }
       
       const request = await storage.updatePurchasingRequestStatus(
