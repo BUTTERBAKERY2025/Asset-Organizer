@@ -5881,3 +5881,37 @@ export const insertPurchasingRequestItemSchema = createInsertSchema(purchasingRe
 
 export type PurchasingRequestItem = typeof purchasingRequestItems.$inferSelect;
 export type InsertPurchasingRequestItem = z.infer<typeof insertPurchasingRequestItemSchema>;
+
+// Warehouse Notifications - إشعارات المخازن
+export const warehouseNotifications = pgTable("warehouse_notifications", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // request_created, request_approved, request_rejected, transfer_started, transfer_delivered, low_stock
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  body: text("body").notNull(),
+  bodyEn: text("body_en"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  targetBranchId: varchar("target_branch_id").references(() => branches.id), // for transfers
+  userId: varchar("user_id").references(() => users.id), // specific user target (null = all branch users)
+  entityType: text("entity_type"), // material_request, transfer, warehouse_item
+  entityId: integer("entity_id"),
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  readBy: varchar("read_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_warehouse_notif_branch").on(table.branchId),
+  index("idx_warehouse_notif_user").on(table.userId),
+  index("idx_warehouse_notif_read").on(table.isRead),
+  index("idx_warehouse_notif_date").on(table.createdAt),
+  index("idx_warehouse_notif_entity").on(table.entityType, table.entityId),
+]);
+
+export const insertWarehouseNotificationSchema = createInsertSchema(warehouseNotifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WarehouseNotification = typeof warehouseNotifications.$inferSelect;
+export type InsertWarehouseNotification = z.infer<typeof insertWarehouseNotificationSchema>;
