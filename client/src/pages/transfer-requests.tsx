@@ -23,6 +23,10 @@ import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+
+pdfMake.vfs = pdfFonts.vfs;
 
 type MaterialTransfer = {
   id: number;
@@ -126,31 +130,141 @@ export default function TransferRequestsPage() {
     `,
   });
 
-  // WhatsApp share function
+  // Generate PDF and share via WhatsApp
   const handleWhatsAppShare = () => {
     if (!selectedTransfer) return;
     
-    const itemsList = transferItems.map((item, i) => 
-      `${i + 1}. ${item.itemName} - ${item.quantity} ${item.unit}`
-    ).join('\n');
+    const statusLabel = STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status;
     
-    const message = `📦 *طلب تحويل مواد*
-━━━━━━━━━━━━━━
-رقم التحويل: ${selectedTransfer.transferNumber}
-الحالة: ${STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status}
-━━━━━━━━━━━━━━
-من: ${selectedTransfer.sourceBranchName || "المستودع الرئيسي"}
-إلى: ${selectedTransfer.destinationBranchName}
-━━━━━━━━━━━━━━
-*الأصناف:*
-${itemsList || "لا توجد أصناف"}
-━━━━━━━━━━━━━━
-${selectedTransfer.driverName ? `السائق: ${selectedTransfer.driverName}` : ''}
-${selectedTransfer.vehicleNumber ? `المركبة: ${selectedTransfer.vehicleNumber}` : ''}
-${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
+    const tableBody = [
+      [
+        { text: 'ملاحظات', style: 'tableHeader', alignment: 'right' },
+        { text: 'الوحدة', style: 'tableHeader', alignment: 'center' },
+        { text: 'الكمية', style: 'tableHeader', alignment: 'center' },
+        { text: 'التصنيف', style: 'tableHeader', alignment: 'right' },
+        { text: 'الصنف', style: 'tableHeader', alignment: 'right' },
+        { text: '#', style: 'tableHeader', alignment: 'center' },
+      ],
+      ...transferItems.map((item, index) => [
+        { text: item.notes || '-', alignment: 'right' },
+        { text: item.unit, alignment: 'center' },
+        { text: item.quantity.toString(), alignment: 'center', bold: true },
+        { text: item.category || '-', alignment: 'right' },
+        { text: item.itemName, alignment: 'right' },
+        { text: (index + 1).toString(), alignment: 'center' },
+      ])
+    ];
+
+    const docDefinition: any = {
+      pageSize: 'A4',
+      pageOrientation: 'portrait',
+      pageMargins: [40, 60, 40, 60],
+      content: [
+        { text: 'أمر تحويل مواد', style: 'header', alignment: 'center' },
+        { text: selectedTransfer.transferNumber, style: 'subheader', alignment: 'center', margin: [0, 0, 0, 20] },
+        
+        {
+          columns: [
+            { text: `الحالة: ${statusLabel}`, alignment: 'right', width: '*' },
+            { text: `التاريخ: ${selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString('ar-SA') : '-'}`, alignment: 'left', width: '*' },
+          ],
+          margin: [0, 0, 0, 15]
+        },
+        
+        {
+          table: {
+            widths: ['*', 'auto', '*'],
+            body: [
+              [
+                { text: selectedTransfer.destinationBranchName, alignment: 'center', bold: true },
+                { text: '←', alignment: 'center', fontSize: 16 },
+                { text: selectedTransfer.sourceBranchName || 'المستودع الرئيسي', alignment: 'center', bold: true },
+              ],
+              [
+                { text: 'إلى', alignment: 'center', color: 'gray', fontSize: 10 },
+                { text: '', alignment: 'center' },
+                { text: 'من', alignment: 'center', color: 'gray', fontSize: 10 },
+              ]
+            ]
+          },
+          layout: 'noBorders',
+          margin: [0, 0, 0, 20]
+        },
+        
+        { text: 'الأصناف المحولة', style: 'sectionHeader', alignment: 'right', margin: [0, 10, 0, 10] },
+        
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', 'auto', 'auto', 'auto', '*', 'auto'],
+            body: tableBody
+          },
+          layout: {
+            hLineWidth: () => 0.5,
+            vLineWidth: () => 0.5,
+            hLineColor: () => '#cccccc',
+            vLineColor: () => '#cccccc',
+          }
+        },
+        
+        ...(selectedTransfer.driverName || selectedTransfer.vehicleNumber ? [
+          { text: '', margin: [0, 20, 0, 0] },
+          {
+            columns: [
+              { text: `المركبة: ${selectedTransfer.vehicleNumber || '-'}`, alignment: 'right', width: '*' },
+              { text: `السائق: ${selectedTransfer.driverName || '-'}`, alignment: 'left', width: '*' },
+            ]
+          }
+        ] : []),
+        
+        ...(selectedTransfer.notes ? [
+          { text: 'ملاحظات:', style: 'sectionHeader', alignment: 'right', margin: [0, 15, 0, 5] },
+          { text: selectedTransfer.notes, alignment: 'right' }
+        ] : []),
+        
+        { text: '', margin: [0, 40, 0, 0] },
+        {
+          columns: [
+            { 
+              stack: [
+                { text: 'توقيع المستلم', alignment: 'center' },
+                { text: '________________', alignment: 'center', margin: [0, 30, 0, 0] }
+              ],
+              width: '*'
+            },
+            { 
+              stack: [
+                { text: 'توقيع المُرسل', alignment: 'center' },
+                { text: '________________', alignment: 'center', margin: [0, 30, 0, 0] }
+              ],
+              width: '*'
+            }
+          ]
+        }
+      ],
+      styles: {
+        header: { fontSize: 18, bold: true },
+        subheader: { fontSize: 14, color: 'gray' },
+        sectionHeader: { fontSize: 12, bold: true },
+        tableHeader: { bold: true, fillColor: '#f3f4f6', fontSize: 10 }
+      },
+      defaultStyle: {
+        font: 'Roboto',
+        fontSize: 11
+      }
+    };
+
+    pdfMake.createPdf(docDefinition).download(`transfer-${selectedTransfer.transferNumber}.pdf`);
     
-    const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    toast({
+      title: isRTL ? "تم تحميل الملف" : "File Downloaded",
+      description: isRTL ? "تم تحميل ملف PDF. يرجى إرفاقه في واتساب" : "PDF downloaded. Please attach it in WhatsApp",
+    });
+    
+    setTimeout(() => {
+      const message = `📦 أمر تحويل مواد رقم: ${selectedTransfer.transferNumber}\nيرجى مراجعة الملف المرفق`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    }, 1000);
   };
 
   // Fetch transfer items when viewing details
