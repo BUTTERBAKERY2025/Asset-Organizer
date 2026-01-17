@@ -825,6 +825,12 @@ export default function DailyProductionPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/finished-goods-inventory">
+              <Button variant="outline" size="sm" className="gap-2" data-testid="btn-finished-goods">
+                <Package className="h-4 w-4" />
+                مخزون الإنتاج النهائي
+              </Button>
+            </Link>
             {user && (
               <Badge variant="outline" className="gap-1 px-3 py-1.5">
                 <User className="h-3 w-3" />
