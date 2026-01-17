@@ -351,6 +351,27 @@ import {
   productionInventoryLogs,
   type ProductionInventoryLog,
   type InsertProductionInventoryLog,
+  warehouseItems,
+  type WarehouseItem,
+  type InsertWarehouseItem,
+  branchStock,
+  type BranchStock,
+  type InsertBranchStock,
+  materialRequests,
+  type MaterialRequest,
+  type InsertMaterialRequest,
+  materialRequestItems,
+  type MaterialRequestItem,
+  type InsertMaterialRequestItem,
+  materialTransfers,
+  type MaterialTransfer,
+  type InsertMaterialTransfer,
+  materialTransferItems,
+  type MaterialTransferItem,
+  type InsertMaterialTransferItem,
+  warehouseMovementLogs,
+  type WarehouseMovementLog,
+  type InsertWarehouseMovementLog,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -8247,6 +8268,314 @@ export class DatabaseStorage implements IStorage {
   async createProductionInventoryLog(log: InsertProductionInventoryLog): Promise<ProductionInventoryLog> {
     const [created] = await db.insert(productionInventoryLogs).values(log).returning();
     return created;
+  }
+
+  // ==================== Warehouse Management ====================
+
+  // Warehouse Items
+  async getWarehouseItems(filters?: { category?: string; isActive?: boolean }): Promise<WarehouseItem[]> {
+    const conditions = [];
+    if (filters?.category) conditions.push(eq(warehouseItems.category, filters.category));
+    if (filters?.isActive !== undefined) conditions.push(eq(warehouseItems.isActive, filters.isActive));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(warehouseItems).where(and(...conditions)).orderBy(warehouseItems.name);
+    }
+    return await db.select().from(warehouseItems).orderBy(warehouseItems.name);
+  }
+
+  async getWarehouseItem(id: number): Promise<WarehouseItem | undefined> {
+    const [item] = await db.select().from(warehouseItems).where(eq(warehouseItems.id, id));
+    return item || undefined;
+  }
+
+  async createWarehouseItem(item: InsertWarehouseItem): Promise<WarehouseItem> {
+    const [created] = await db.insert(warehouseItems).values(item).returning();
+    return created;
+  }
+
+  async updateWarehouseItem(id: number, updates: Partial<InsertWarehouseItem>): Promise<WarehouseItem | undefined> {
+    const [updated] = await db.update(warehouseItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(warehouseItems.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteWarehouseItem(id: number): Promise<boolean> {
+    const result = await db.delete(warehouseItems).where(eq(warehouseItems.id, id));
+    return true;
+  }
+
+  // Branch Stock
+  async getBranchStock(branchId: string): Promise<(BranchStock & { item: WarehouseItem })[]> {
+    const result = await db.select()
+      .from(branchStock)
+      .leftJoin(warehouseItems, eq(branchStock.itemId, warehouseItems.id))
+      .where(eq(branchStock.branchId, branchId));
+    
+    return result.map(r => ({
+      ...r.branch_stock,
+      item: r.warehouse_items!
+    }));
+  }
+
+  async updateBranchStock(branchId: string, itemId: number, quantity: number, dailyConsumption?: number, userId?: string): Promise<BranchStock> {
+    const existing = await db.select().from(branchStock)
+      .where(and(eq(branchStock.branchId, branchId), eq(branchStock.itemId, itemId)));
+    
+    if (existing.length > 0) {
+      const [updated] = await db.update(branchStock)
+        .set({ 
+          currentQuantity: quantity, 
+          dailyConsumption: dailyConsumption ?? existing[0].dailyConsumption,
+          lastUpdated: new Date(),
+          updatedBy: userId 
+        })
+        .where(and(eq(branchStock.branchId, branchId), eq(branchStock.itemId, itemId)))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(branchStock)
+        .values({ branchId, itemId, currentQuantity: quantity, dailyConsumption, updatedBy: userId })
+        .returning();
+      return created;
+    }
+  }
+
+  // Material Requests
+  async getMaterialRequests(filters?: { branchId?: string; status?: string; requestType?: string; startDate?: string; endDate?: string }): Promise<MaterialRequest[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(materialRequests.branchId, filters.branchId));
+    if (filters?.status) conditions.push(eq(materialRequests.status, filters.status));
+    if (filters?.requestType) conditions.push(eq(materialRequests.requestType, filters.requestType));
+    if (filters?.startDate) conditions.push(gte(materialRequests.requestDate, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(materialRequests.requestDate, filters.endDate));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(materialRequests).where(and(...conditions)).orderBy(desc(materialRequests.createdAt));
+    }
+    return await db.select().from(materialRequests).orderBy(desc(materialRequests.createdAt));
+  }
+
+  async getMaterialRequest(id: number): Promise<MaterialRequest | undefined> {
+    const [request] = await db.select().from(materialRequests).where(eq(materialRequests.id, id));
+    return request || undefined;
+  }
+
+  async getMaterialRequestWithItems(id: number): Promise<{ request: MaterialRequest; items: MaterialRequestItem[] } | undefined> {
+    const [request] = await db.select().from(materialRequests).where(eq(materialRequests.id, id));
+    if (!request) return undefined;
+    
+    const items = await db.select().from(materialRequestItems).where(eq(materialRequestItems.requestId, id));
+    return { request, items };
+  }
+
+  async createMaterialRequest(request: InsertMaterialRequest, items: InsertMaterialRequestItem[]): Promise<MaterialRequest> {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(materialRequests).values({
+        ...request,
+        totalItems: items.length
+      }).returning();
+      
+      if (items.length > 0) {
+        await tx.insert(materialRequestItems).values(
+          items.map(item => ({ ...item, requestId: created.id }))
+        );
+      }
+      
+      return created;
+    });
+  }
+
+  async updateMaterialRequest(id: number, updates: Partial<InsertMaterialRequest>): Promise<MaterialRequest | undefined> {
+    const [updated] = await db.update(materialRequests)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(materialRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async updateMaterialRequestStatus(id: number, status: string, reviewerId?: string, reviewerName?: string, reviewNotes?: string): Promise<MaterialRequest | undefined> {
+    const [updated] = await db.update(materialRequests)
+      .set({ 
+        status, 
+        reviewedBy: reviewerId,
+        reviewedByName: reviewerName,
+        reviewedAt: new Date(),
+        reviewNotes,
+        updatedAt: new Date() 
+      })
+      .where(eq(materialRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getMaterialRequestItems(requestId: number): Promise<MaterialRequestItem[]> {
+    return await db.select().from(materialRequestItems).where(eq(materialRequestItems.requestId, requestId));
+  }
+
+  async updateMaterialRequestItem(id: number, updates: Partial<InsertMaterialRequestItem>): Promise<MaterialRequestItem | undefined> {
+    const [updated] = await db.update(materialRequestItems)
+      .set(updates)
+      .where(eq(materialRequestItems.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async generateMaterialRequestNumber(): Promise<string> {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const prefix = `MR-${year}${month}`;
+    
+    const existing = await db.select()
+      .from(materialRequests)
+      .where(sql`${materialRequests.requestNumber} LIKE ${prefix + '%'}`)
+      .orderBy(desc(materialRequests.requestNumber));
+    
+    let nextNum = 1;
+    if (existing.length > 0) {
+      const lastNum = existing[0].requestNumber.split('-').pop();
+      nextNum = parseInt(lastNum || '0') + 1;
+    }
+    
+    return `${prefix}-${String(nextNum).padStart(4, '0')}`;
+  }
+
+  // Material Transfers
+  async getMaterialTransfers(filters?: { sourceBranchId?: string; destinationBranchId?: string; status?: string; startDate?: string; endDate?: string }): Promise<MaterialTransfer[]> {
+    const conditions = [];
+    if (filters?.sourceBranchId) conditions.push(eq(materialTransfers.sourceBranchId, filters.sourceBranchId));
+    if (filters?.destinationBranchId) conditions.push(eq(materialTransfers.destinationBranchId, filters.destinationBranchId));
+    if (filters?.status) conditions.push(eq(materialTransfers.status, filters.status));
+    if (filters?.startDate) conditions.push(gte(materialTransfers.transferDate, filters.startDate));
+    if (filters?.endDate) conditions.push(lte(materialTransfers.transferDate, filters.endDate));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(materialTransfers).where(and(...conditions)).orderBy(desc(materialTransfers.createdAt));
+    }
+    return await db.select().from(materialTransfers).orderBy(desc(materialTransfers.createdAt));
+  }
+
+  async getMaterialTransfer(id: number): Promise<MaterialTransfer | undefined> {
+    const [transfer] = await db.select().from(materialTransfers).where(eq(materialTransfers.id, id));
+    return transfer || undefined;
+  }
+
+  async getMaterialTransferWithItems(id: number): Promise<{ transfer: MaterialTransfer; items: MaterialTransferItem[] } | undefined> {
+    const [transfer] = await db.select().from(materialTransfers).where(eq(materialTransfers.id, id));
+    if (!transfer) return undefined;
+    
+    const items = await db.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, id));
+    return { transfer, items };
+  }
+
+  async createMaterialTransfer(transfer: InsertMaterialTransfer, items: InsertMaterialTransferItem[]): Promise<MaterialTransfer> {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(materialTransfers).values(transfer).returning();
+      
+      if (items.length > 0) {
+        await tx.insert(materialTransferItems).values(
+          items.map(item => ({ ...item, transferId: created.id }))
+        );
+      }
+      
+      return created;
+    });
+  }
+
+  async updateMaterialTransferStatus(id: number, status: string, additionalData?: Partial<InsertMaterialTransfer>): Promise<MaterialTransfer | undefined> {
+    const [updated] = await db.update(materialTransfers)
+      .set({ 
+        status,
+        ...additionalData,
+        updatedAt: new Date() 
+      })
+      .where(eq(materialTransfers.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async generateMaterialTransferNumber(): Promise<string> {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const prefix = `MT-${year}${month}`;
+    
+    const existing = await db.select()
+      .from(materialTransfers)
+      .where(sql`${materialTransfers.transferNumber} LIKE ${prefix + '%'}`)
+      .orderBy(desc(materialTransfers.transferNumber));
+    
+    let nextNum = 1;
+    if (existing.length > 0) {
+      const lastNum = existing[0].transferNumber.split('-').pop();
+      nextNum = parseInt(lastNum || '0') + 1;
+    }
+    
+    return `${prefix}-${String(nextNum).padStart(4, '0')}`;
+  }
+
+  // Warehouse Movement Logs
+  async getWarehouseMovementLogs(filters?: { itemId?: number; branchId?: string; movementType?: string }): Promise<WarehouseMovementLog[]> {
+    const conditions = [];
+    if (filters?.itemId) conditions.push(eq(warehouseMovementLogs.itemId, filters.itemId));
+    if (filters?.branchId) conditions.push(eq(warehouseMovementLogs.branchId, filters.branchId));
+    if (filters?.movementType) conditions.push(eq(warehouseMovementLogs.movementType, filters.movementType));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(warehouseMovementLogs).where(and(...conditions)).orderBy(desc(warehouseMovementLogs.createdAt));
+    }
+    return await db.select().from(warehouseMovementLogs).orderBy(desc(warehouseMovementLogs.createdAt));
+  }
+
+  async createWarehouseMovementLog(log: InsertWarehouseMovementLog): Promise<WarehouseMovementLog> {
+    const [created] = await db.insert(warehouseMovementLogs).values(log).returning();
+    return created;
+  }
+
+  // Warehouse Dashboard Stats
+  async getWarehouseDashboardStats(branchId?: string): Promise<{
+    pendingRequests: number;
+    approvedRequests: number;
+    inTransitTransfers: number;
+    lowStockItems: number;
+  }> {
+    const pendingResult = await db.select({ count: sql<number>`count(*)` })
+      .from(materialRequests)
+      .where(branchId 
+        ? and(eq(materialRequests.status, 'pending'), eq(materialRequests.branchId, branchId))
+        : eq(materialRequests.status, 'pending')
+      );
+    
+    const approvedResult = await db.select({ count: sql<number>`count(*)` })
+      .from(materialRequests)
+      .where(branchId 
+        ? and(eq(materialRequests.status, 'approved'), eq(materialRequests.branchId, branchId))
+        : eq(materialRequests.status, 'approved')
+      );
+    
+    const inTransitResult = await db.select({ count: sql<number>`count(*)` })
+      .from(materialTransfers)
+      .where(branchId 
+        ? and(eq(materialTransfers.status, 'in_transit'), eq(materialTransfers.destinationBranchId, branchId))
+        : eq(materialTransfers.status, 'in_transit')
+      );
+    
+    const lowStockResult = await db.select({ count: sql<number>`count(*)` })
+      .from(warehouseItems)
+      .where(and(
+        eq(warehouseItems.isActive, true),
+        sql`${warehouseItems.currentStock} <= ${warehouseItems.reorderPoint}`
+      ));
+    
+    return {
+      pendingRequests: Number(pendingResult[0]?.count || 0),
+      approvedRequests: Number(approvedResult[0]?.count || 0),
+      inTransitTransfers: Number(inTransitResult[0]?.count || 0),
+      lowStockItems: Number(lowStockResult[0]?.count || 0),
+    };
   }
 }
 
