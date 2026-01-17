@@ -45,6 +45,10 @@
     "settings": {
       "title": "Settings & System",
       "description": "Manage security, users, permissions and backups"
+    },
+    "warehouse": {
+      "title": "Warehouse & Transfers",
+      "description": "Manage material requests and transfers between branches and main warehouse"
     }
   },
   "sidebar": {
@@ -115,7 +119,12 @@
     "rolesPermissions": "Roles & Permissions",
     "integrations": "Integrations",
     "auditLogs": "Audit Logs",
-    "backups": "Backups"
+    "backups": "Backups",
+    "warehouse": "Warehouse & Transfers",
+    "warehouseDashboard": "Warehouse Dashboard",
+    "materialRequests": "Material Requests",
+    "transferRequests": "Transfer Requests",
+    "warehouseInventory": "Warehouse Inventory"
   },
   "roles": {
     "admin": "Admin",
@@ -159,7 +168,11 @@
     "security": "Security",
     "users": "Users",
     "permissions": "Permissions",
-    "backups": "Backups"
+    "backups": "Backups",
+    "warehouseDashboard": "Warehouse Dashboard",
+    "materialRequests": "Material Requests",
+    "transferRequests": "Transfer Requests",
+    "warehouseInventory": "Warehouse Inventory"
   },
   "quickActions": {
     "addEmployee": "Add Employee",

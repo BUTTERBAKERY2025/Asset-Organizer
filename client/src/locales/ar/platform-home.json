@@ -45,6 +45,10 @@
     "settings": {
       "title": "الإعدادات والنظام",
       "description": "إدارة الأمان والمستخدمين والصلاحيات والنسخ الاحتياطية"
+    },
+    "warehouse": {
+      "title": "المخازن والتحويلات",
+      "description": "إدارة طلبات المواد والتحويلات بين الفروع والمستودع الرئيسي"
     }
   },
   "sidebar": {
@@ -115,7 +119,12 @@
     "rolesPermissions": "الأدوار والصلاحيات",
     "integrations": "التكاملات",
     "auditLogs": "سجل التدقيق",
-    "backups": "النسخ الاحتياطية"
+    "backups": "النسخ الاحتياطية",
+    "warehouse": "المخازن والتحويلات",
+    "warehouseDashboard": "لوحة المخازن",
+    "materialRequests": "طلبات المواد",
+    "transferRequests": "طلبات التحويل",
+    "warehouseInventory": "مخزون المستودع"
   },
   "roles": {
     "admin": "مدير",
@@ -159,7 +168,11 @@
     "security": "الأمان",
     "users": "المستخدمين",
     "permissions": "الصلاحيات",
-    "backups": "النسخ الاحتياطي"
+    "backups": "النسخ الاحتياطي",
+    "warehouseDashboard": "لوحة المخازن",
+    "materialRequests": "طلبات المواد",
+    "transferRequests": "طلبات التحويل",
+    "warehouseInventory": "مخزون المستودع"
   },
   "quickActions": {
     "addEmployee": "إضافة موظف",

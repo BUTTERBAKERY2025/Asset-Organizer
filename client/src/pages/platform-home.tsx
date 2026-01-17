@@ -15,7 +15,8 @@ import {
   ChevronLeft, Factory, Clock, CheckCircle, Megaphone, UserCheck, Calendar, 
   Target, UsersRound, ClipboardList, Receipt, TrendingUp, Brain, Upload,
   FileBarChart, Gift, PieChart, Shield, Building, Briefcase, BarChart3,
-  Zap, Sun, Moon, CloudSun, Loader2, RefreshCw, Languages
+  Zap, Sun, Moon, CloudSun, Loader2, RefreshCw, Languages, Warehouse,
+  PackageCheck, Send, ClipboardCheck
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
@@ -307,6 +308,20 @@ export default function PlatformHomePage() {
         { label: t('subItems.users'), href: "/users", icon: Users },
         { label: t('subItems.permissions'), href: "/rbac-management", icon: Shield },
         { label: t('subItems.backups'), href: "/backups", icon: HardDrive },
+      ],
+    },
+    {
+      title: t('modules.warehouse.title'),
+      description: t('modules.warehouse.description'),
+      icon: Warehouse,
+      href: "/warehouse-dashboard",
+      color: "bg-cyan-500",
+      module: "warehouse",
+      items: [
+        { label: t('subItems.warehouseDashboard'), href: "/warehouse-dashboard", icon: LayoutDashboard },
+        { label: t('subItems.materialRequests'), href: "/material-requests", icon: PackageCheck },
+        { label: t('subItems.transferRequests'), href: "/transfer-requests", icon: Send },
+        { label: t('subItems.warehouseInventory'), href: "/warehouse-inventory", icon: Boxes },
       ],
     },
   ];

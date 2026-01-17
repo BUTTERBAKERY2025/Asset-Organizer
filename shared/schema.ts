@@ -563,6 +563,12 @@ export const SYSTEM_MODULES = [
   "backups",
   "integrations",
   "reports",
+  
+  // المخازن والتحويلات
+  "warehouse",
+  "material_requests",
+  "transfer_requests",
+  "warehouse_inventory",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -691,6 +697,12 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   backups: "النسخ الاحتياطية",
   integrations: "التكاملات",
   reports: "التقارير",
+  
+  // المخازن والتحويلات
+  warehouse: "المخازن",
+  material_requests: "طلبات المواد",
+  transfer_requests: "طلبات التحويل",
+  warehouse_inventory: "مخزون المستودع",
 };
 
 // Action labels for UI display (Arabic)
@@ -799,6 +811,10 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   {
     label: "إدارة النظام",
     modules: ["rbac_management", "audit_logs", "backups", "integrations", "reports"],
+  },
+  {
+    label: "المخازن والتحويلات",
+    modules: ["warehouse", "material_requests", "transfer_requests", "warehouse_inventory"],
   },
 ];
 
