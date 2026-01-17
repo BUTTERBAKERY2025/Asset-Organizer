@@ -16966,6 +16966,62 @@ export async function registerRoutes(
     }
   });
 
+  // Fulfill Material Request - creates a transfer from approved request
+  app.post("/api/warehouse/material-requests/:id/fulfill", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const requestId = parseInt(req.params.id);
+      const { driverName, vehicleNumber, notes } = req.body;
+      
+      // Get the request with items
+      const requestData = await storage.getMaterialRequestWithItems(requestId);
+      if (!requestData) {
+        return res.status(404).json({ error: "الطلب غير موجود" });
+      }
+      
+      if (requestData.request.status !== 'approved') {
+        return res.status(400).json({ error: "يمكن تنفيذ الطلبات الموافق عليها فقط" });
+      }
+      
+      // Generate transfer number
+      const transferNumber = await storage.generateMaterialTransferNumber();
+      
+      // Create the transfer from the request
+      const transfer = await storage.createMaterialTransfer({
+        transferNumber,
+        sourceBranchId: "main_warehouse",
+        destinationBranchId: requestData.request.branchId,
+        transferDate: new Date().toISOString().split('T')[0],
+        status: "pending",
+        driverName: driverName || null,
+        vehicleNumber: vehicleNumber || null,
+        notes: notes || `تنفيذ طلب رقم ${requestData.request.requestNumber}`,
+        requestId: requestId,
+        createdBy: user?.id,
+        createdByName: user?.fullName || user?.username
+      }, requestData.items.map(item => ({
+        itemId: item.itemId,
+        itemName: item.itemName || "",
+        quantity: item.approvedQuantity || item.requestedQuantity,
+        unit: item.unit || "وحدة"
+      })));
+      
+      // Update request status to fulfilled
+      await storage.updateMaterialRequestStatus(
+        requestId,
+        'fulfilled',
+        user?.id,
+        user?.fullName || user?.username,
+        `تم إنشاء تحويل رقم ${transferNumber}`
+      );
+      
+      res.status(201).json({ request: requestData.request, transfer });
+    } catch (error) {
+      console.error("Error fulfilling material request:", error);
+      res.status(500).json({ error: "فشل في تنفيذ الطلب" });
+    }
+  });
+
   // Material Transfers
   app.get("/api/warehouse/material-transfers", isAuthenticated, async (req, res) => {
     try {
@@ -17040,11 +17096,22 @@ export async function registerRoutes(
         }
       }
       
-      const transfer = await storage.updateMaterialTransferStatus(
-        parseInt(req.params.id),
-        status,
-        updateData
-      );
+      let transfer;
+      
+      // When delivered, use atomic transaction for status + stock + logs
+      if (status === 'delivered') {
+        transfer = await storage.deliverMaterialTransferWithStockUpdate(
+          parseInt(req.params.id),
+          updateData,
+          user?.id
+        );
+      } else {
+        transfer = await storage.updateMaterialTransferStatus(
+          parseInt(req.params.id),
+          status,
+          updateData
+        );
+      }
       
       if (!transfer) {
         return res.status(404).json({ error: "التحويل غير موجود" });

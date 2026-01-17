@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   PackageCheck, Plus, Search, Filter, Clock, CheckCircle, XCircle, 
-  AlertCircle, Eye, Edit, Trash2, Send, ArrowLeft, FileText
+  AlertCircle, Eye, Edit, Trash2, Send, ArrowLeft, FileText, Truck
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -115,10 +115,12 @@ export default function MaterialRequestsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isFulfillOpen, setIsFulfillOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<MaterialRequest | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [fulfillData, setFulfillData] = useState({ driverName: "", vehicleNumber: "", notes: "" });
 
   const [newRequest, setNewRequest] = useState({
     branchId: "",
@@ -200,6 +202,35 @@ export default function MaterialRequestsPage() {
     },
   });
 
+  const fulfillMutation = useMutation({
+    mutationFn: async ({ id, driverName, vehicleNumber, notes }: { id: number; driverName: string; vehicleNumber: string; notes: string }) => {
+      const response = await apiRequest("POST", `/api/warehouse/material-requests/${id}/fulfill`, {
+        driverName,
+        vehicleNumber,
+        notes,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
+      setIsFulfillOpen(false);
+      setSelectedRequest(null);
+      setFulfillData({ driverName: "", vehicleNumber: "", notes: "" });
+      toast({ 
+        title: isRTL ? "تم تنفيذ الطلب بنجاح" : "Request fulfilled successfully",
+        description: isRTL ? `تم إنشاء تحويل جديد` : `Transfer created`
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: isRTL ? "فشل في تنفيذ الطلب" : "Failed to fulfill request",
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
   const resetForm = () => {
     setNewRequest({
       branchId: "",
@@ -254,6 +285,12 @@ export default function MaterialRequestsPage() {
   const handleViewDetails = (request: MaterialRequest) => {
     setSelectedRequest(request);
     setIsViewOpen(true);
+  };
+
+  const handleFulfill = (request: MaterialRequest) => {
+    setSelectedRequest(request);
+    setFulfillData({ driverName: "", vehicleNumber: "", notes: "" });
+    setIsFulfillOpen(true);
   };
 
   const filteredRequests = requests.filter(request => {
@@ -562,6 +599,17 @@ export default function MaterialRequestsPage() {
                                 <CheckCircle className="w-4 h-4 text-green-500" />
                               </Button>
                             )}
+                            {request.status === "approved" && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => handleFulfill(request)}
+                                data-testid={`btn-fulfill-${request.id}`}
+                                title={isRTL ? "تنفيذ الطلب" : "Fulfill Request"}
+                              >
+                                <Truck className="w-4 h-4 text-blue-500" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -676,6 +724,70 @@ export default function MaterialRequestsPage() {
                 data-testid="btn-submit-review"
               >
                 {reviewMutation.isPending ? (isRTL ? "جاري التحديث..." : "Updating...") : (isRTL ? "تأكيد" : "Confirm")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isFulfillOpen} onOpenChange={setIsFulfillOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Truck className="w-5 h-5" />
+                {isRTL ? "تنفيذ الطلب" : "Fulfill Request"}
+              </DialogTitle>
+              <DialogDescription>
+                {isRTL ? `إنشاء تحويل لتنفيذ الطلب رقم ${selectedRequest?.requestNumber}` : `Create transfer to fulfill request ${selectedRequest?.requestNumber}`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>{isRTL ? "اسم السائق" : "Driver Name"}</Label>
+                <Input
+                  value={fulfillData.driverName}
+                  onChange={(e) => setFulfillData(prev => ({ ...prev, driverName: e.target.value }))}
+                  placeholder={isRTL ? "أدخل اسم السائق..." : "Enter driver name..."}
+                  data-testid="input-driver-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{isRTL ? "رقم المركبة" : "Vehicle Number"}</Label>
+                <Input
+                  value={fulfillData.vehicleNumber}
+                  onChange={(e) => setFulfillData(prev => ({ ...prev, vehicleNumber: e.target.value }))}
+                  placeholder={isRTL ? "أدخل رقم المركبة..." : "Enter vehicle number..."}
+                  data-testid="input-vehicle-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
+                <Textarea 
+                  value={fulfillData.notes}
+                  onChange={(e) => setFulfillData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder={isRTL ? "ملاحظات إضافية..." : "Additional notes..."}
+                  data-testid="input-fulfill-notes"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsFulfillOpen(false)}>
+                {isRTL ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (selectedRequest) {
+                    fulfillMutation.mutate({
+                      id: selectedRequest.id,
+                      driverName: fulfillData.driverName,
+                      vehicleNumber: fulfillData.vehicleNumber,
+                      notes: fulfillData.notes,
+                    });
+                  }
+                }}
+                disabled={fulfillMutation.isPending}
+                data-testid="btn-submit-fulfill"
+              >
+                {fulfillMutation.isPending ? (isRTL ? "جاري التنفيذ..." : "Processing...") : (isRTL ? "تنفيذ" : "Fulfill")}
               </Button>
             </DialogFooter>
           </DialogContent>

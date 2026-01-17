@@ -8497,6 +8497,64 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async deliverMaterialTransferWithStockUpdate(
+    id: number, 
+    additionalData: { arrivalTime: Date; receivedBy?: string; receivedByName?: string; receiverSignature?: string },
+    userId?: string
+  ): Promise<MaterialTransfer | undefined> {
+    return await db.transaction(async (tx) => {
+      const [transfer] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, id));
+      if (!transfer) throw new Error("التحويل غير موجود");
+      
+      const items = await tx.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, id));
+      if (!items || items.length === 0) throw new Error("لا توجد عناصر في التحويل");
+      
+      const [updated] = await tx.update(materialTransfers)
+        .set({ 
+          status: 'delivered',
+          ...additionalData,
+          updatedAt: new Date() 
+        })
+        .where(eq(materialTransfers.id, id))
+        .returning();
+      
+      for (const item of items) {
+        const existingStock = await tx.select().from(branchStock)
+          .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
+        
+        if (existingStock.length > 0) {
+          await tx.update(branchStock)
+            .set({ 
+              currentQuantity: (existingStock[0].currentQuantity || 0) + item.quantity,
+              lastUpdated: new Date(),
+              updatedBy: userId
+            })
+            .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
+        } else {
+          await tx.insert(branchStock).values({
+            branchId: transfer.destinationBranchId,
+            itemId: item.itemId,
+            currentQuantity: item.quantity,
+            updatedBy: userId
+          });
+        }
+        
+        await tx.insert(warehouseMovementLogs).values({
+          itemId: item.itemId,
+          branchId: transfer.destinationBranchId,
+          movementType: 'transfer_in',
+          quantity: item.quantity,
+          referenceType: 'transfer',
+          referenceId: transfer.id,
+          notes: `استلام من تحويل ${transfer.transferNumber}`,
+          createdBy: userId
+        });
+      }
+      
+      return updated;
+    });
+  }
+
   async generateMaterialTransferNumber(): Promise<string> {
     const today = new Date();
     const year = today.getFullYear();
