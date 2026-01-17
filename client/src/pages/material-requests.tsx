@@ -130,6 +130,7 @@ export default function MaterialRequestsPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [fulfillData, setFulfillData] = useState({ driverName: "", vehicleNumber: "", notes: "" });
 
   const [newRequest, setNewRequest] = useState({
@@ -481,19 +482,38 @@ export default function MaterialRequestsPage() {
                                 updateItem(index, "itemName", selectedItem.name);
                                 updateItem(index, "unit", selectedItem.unit);
                               }
+                              setItemSearchQuery("");
                             }}
                           >
                             <SelectTrigger data-testid={`select-item-${index}`}>
                               <SelectValue placeholder={isRTL ? "اختر المادة" : "Select item"} />
                             </SelectTrigger>
-                            <SelectContent className="max-h-[300px]">
-                              {warehouseItems
-                                .filter(i => !newRequest.requestType || i.category === newRequest.requestType)
-                                .map((wItem) => (
-                                  <SelectItem key={wItem.id} value={String(wItem.id)}>
-                                    {wItem.name} {wItem.sku ? `(${wItem.sku})` : ""}
-                                  </SelectItem>
-                                ))}
+                            <SelectContent className="max-h-[350px]">
+                              <div className="p-2 sticky top-0 bg-background border-b">
+                                <Input
+                                  placeholder={isRTL ? "بحث عن صنف..." : "Search item..."}
+                                  value={itemSearchQuery}
+                                  onChange={(e) => setItemSearchQuery(e.target.value)}
+                                  className="h-8"
+                                  data-testid={`input-item-search-${index}`}
+                                />
+                              </div>
+                              <div className="max-h-[250px] overflow-y-auto">
+                                {warehouseItems
+                                  .filter(i => !newRequest.requestType || i.category === newRequest.requestType)
+                                  .filter(i => {
+                                    if (!itemSearchQuery) return true;
+                                    const query = itemSearchQuery.toLowerCase();
+                                    return i.name.toLowerCase().includes(query) || 
+                                           i.nameEn?.toLowerCase().includes(query) ||
+                                           i.sku?.toLowerCase().includes(query);
+                                  })
+                                  .map((wItem) => (
+                                    <SelectItem key={wItem.id} value={String(wItem.id)}>
+                                      {wItem.name} {wItem.sku ? `(${wItem.sku})` : ""}
+                                    </SelectItem>
+                                  ))}
+                              </div>
                             </SelectContent>
                           </Select>
                         </div>
