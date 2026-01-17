@@ -17126,6 +17126,20 @@ export async function registerRoutes(
     }
   });
 
+  // Get transfer items only
+  app.get("/api/warehouse/material-transfers/:id/items", isAuthenticated, async (req, res) => {
+    try {
+      const result = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
+      if (!result) {
+        return res.status(404).json({ error: "التحويل غير موجود" });
+      }
+      res.json(result.items || []);
+    } catch (error) {
+      console.error("Error fetching transfer items:", error);
+      res.status(500).json({ error: "فشل في جلب بنود التحويل" });
+    }
+  });
+
   app.post("/api/warehouse/material-transfers", isAuthenticated, async (req, res) => {
     try {
       const user = req.user as any;

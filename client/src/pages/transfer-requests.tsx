@@ -13,8 +13,10 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download
 } from "lucide-react";
+import { useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +62,18 @@ type WarehouseItem = {
   isActive: boolean;
 };
 
+type TransferItem = {
+  id: number;
+  transferId: number;
+  itemId: number;
+  itemName: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  receivedQuantity: number | null;
+  notes: string | null;
+};
+
 const STATUS_OPTIONS = [
   { value: "pending", labelAr: "قيد الانتظار", labelEn: "Pending", color: "bg-yellow-500", icon: Clock },
   { value: "approved", labelAr: "تمت الموافقة", labelEn: "Approved", color: "bg-emerald-500", icon: CheckCircle },
@@ -95,6 +109,25 @@ export default function TransferRequestsPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // Print functionality
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: selectedTransfer ? `Transfer-${selectedTransfer.transferNumber}` : "Transfer",
+  });
+
+  // Fetch transfer items when viewing details
+  const { data: transferItems = [], isLoading: isLoadingItems } = useQuery<TransferItem[]>({
+    queryKey: ["/api/warehouse/material-transfers", selectedTransfer?.id, "items"],
+    queryFn: async () => {
+      if (!selectedTransfer) return [];
+      const response = await fetch(`/api/warehouse/material-transfers/${selectedTransfer.id}/items`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!selectedTransfer && isViewOpen,
+  });
 
   // For non-admins, source branch is always their own branch
   const userBranch = branches.find(b => b.id === userBranchId);
@@ -742,86 +775,168 @@ export default function TransferRequestsPage() {
         </Card>
 
         <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Send className="w-5 h-5" />
-                {isRTL ? "تفاصيل التحويل" : "Transfer Details"}
-              </DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle className="flex items-center gap-2">
+                  <Send className="w-5 h-5" />
+                  {isRTL ? "تفاصيل طلب التحويل" : "Transfer Request Details"}
+                </DialogTitle>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="btn-print">
+                    <Printer className="w-4 h-4 mr-1" />
+                    {isRTL ? "طباعة" : "Print"}
+                  </Button>
+                </div>
+              </div>
             </DialogHeader>
             {selectedTransfer && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
+              <div ref={printRef} className="space-y-6 p-4 print:p-8">
+                {/* Header for print */}
+                <div className="hidden print:block text-center mb-6">
+                  <h1 className="text-2xl font-bold">{isRTL ? "أمر تحويل مواد" : "Material Transfer Order"}</h1>
+                  <p className="text-lg">{selectedTransfer.transferNumber}</p>
+                </div>
+
+                {/* Transfer Info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border-b pb-4">
                   <div>
-                    <p className="text-muted-foreground">{isRTL ? "رقم التحويل" : "Transfer #"}</p>
-                    <p className="font-mono">{selectedTransfer.transferNumber}</p>
+                    <p className="text-muted-foreground text-xs">{isRTL ? "رقم التحويل" : "Transfer #"}</p>
+                    <p className="font-mono font-bold">{selectedTransfer.transferNumber}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">{isRTL ? "الحالة" : "Status"}</p>
+                    <p className="text-muted-foreground text-xs">{isRTL ? "الحالة" : "Status"}</p>
                     {getStatusBadge(selectedTransfer.status, isRTL)}
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">{isRTL ? "تاريخ الطلب" : "Request Date"}</p>
+                    <p>{selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US') : "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">{isRTL ? "أنشأه" : "Created By"}</p>
+                    <p>{selectedTransfer.createdByName || "-"}</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+                {/* Source/Destination */}
+                <div className="flex items-center gap-4 p-4 bg-muted rounded-lg print:bg-gray-100">
                   <div className="flex-1 text-center">
-                    <MapPin className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+                    <MapPin className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">{isRTL ? "من" : "From"}</p>
-                    <p className="font-medium">{selectedTransfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}</p>
+                    <p className="font-bold">{selectedTransfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}</p>
                   </div>
-                  <Send className="w-5 h-5 text-primary" />
+                  <Send className="w-6 h-6 text-primary" />
                   <div className="flex-1 text-center">
-                    <MapPin className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+                    <MapPin className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">{isRTL ? "إلى" : "To"}</p>
-                    <p className="font-medium">{selectedTransfer.destinationBranchName}</p>
+                    <p className="font-bold">{selectedTransfer.destinationBranchName}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-muted-foreground">{isRTL ? "السائق" : "Driver"}</p>
-                      <p>{selectedTransfer.driverName || "-"}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-muted-foreground">{isRTL ? "المركبة" : "Vehicle"}</p>
-                      <p>{selectedTransfer.vehicleNumber || "-"}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-muted-foreground">{isRTL ? "تاريخ التحويل" : "Transfer Date"}</p>
-                      <p>{new Date(selectedTransfer.transferDate).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}</p>
-                    </div>
-                  </div>
-                  {selectedTransfer.receivedByName && (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      <div>
-                        <p className="text-muted-foreground">{isRTL ? "استلمه" : "Received By"}</p>
-                        <p>{selectedTransfer.receivedByName}</p>
-                      </div>
-                    </div>
+                {/* Items Table */}
+                <div>
+                  <h3 className="font-bold mb-2 flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    {isRTL ? "الأصناف المحولة" : "Transfer Items"}
+                  </h3>
+                  {isLoadingItems ? (
+                    <p className="text-center py-4 text-muted-foreground">{isRTL ? "جاري التحميل..." : "Loading..."}</p>
+                  ) : transferItems.length === 0 ? (
+                    <p className="text-center py-4 text-muted-foreground">{isRTL ? "لا توجد أصناف" : "No items"}</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">#</TableHead>
+                          <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
+                          <TableHead>{isRTL ? "التصنيف" : "Category"}</TableHead>
+                          <TableHead className="text-center">{isRTL ? "الكمية" : "Qty"}</TableHead>
+                          <TableHead>{isRTL ? "الوحدة" : "Unit"}</TableHead>
+                          {selectedTransfer.status === "delivered" && (
+                            <TableHead className="text-center">{isRTL ? "المستلم" : "Received"}</TableHead>
+                          )}
+                          <TableHead>{isRTL ? "ملاحظات" : "Notes"}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {transferItems.map((item, index) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-mono text-xs">{index + 1}</TableCell>
+                            <TableCell className="font-medium">{item.itemName}</TableCell>
+                            <TableCell>{item.category}</TableCell>
+                            <TableCell className="text-center font-bold">{item.quantity}</TableCell>
+                            <TableCell>{item.unit}</TableCell>
+                            {selectedTransfer.status === "delivered" && (
+                              <TableCell className="text-center">{item.receivedQuantity ?? item.quantity}</TableCell>
+                            )}
+                            <TableCell className="text-xs text-muted-foreground">{item.notes || "-"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   )}
                 </div>
 
+                {/* Dispatch Info (if in transit or delivered) */}
+                {(selectedTransfer.status === "in_transit" || selectedTransfer.status === "delivered") && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm border-t pt-4">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground text-xs">{isRTL ? "السائق" : "Driver"}</p>
+                        <p className="font-medium">{selectedTransfer.driverName || "-"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground text-xs">{isRTL ? "المركبة" : "Vehicle"}</p>
+                        <p className="font-medium">{selectedTransfer.vehicleNumber || "-"}</p>
+                      </div>
+                    </div>
+                    {selectedTransfer.receivedByName && (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <div>
+                          <p className="text-muted-foreground text-xs">{isRTL ? "استلمه" : "Received By"}</p>
+                          <p className="font-medium">{selectedTransfer.receivedByName}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Notes */}
                 {selectedTransfer.notes && (
-                  <div>
-                    <p className="text-muted-foreground text-sm">{isRTL ? "ملاحظات" : "Notes"}</p>
-                    <p className="text-sm">{selectedTransfer.notes}</p>
+                  <div className="border-t pt-4">
+                    <p className="text-muted-foreground text-xs mb-1">{isRTL ? "ملاحظات" : "Notes"}</p>
+                    <p className="text-sm bg-muted p-2 rounded">{selectedTransfer.notes}</p>
                   </div>
                 )}
                 
+                {/* Signature */}
                 {selectedTransfer.receiverSignature && (
-                  <SignatureDisplay 
-                    signature={selectedTransfer.receiverSignature} 
-                    label={isRTL ? "توقيع المستلم" : "Receiver Signature"} 
-                  />
+                  <div className="border-t pt-4">
+                    <SignatureDisplay 
+                      signature={selectedTransfer.receiverSignature} 
+                      label={isRTL ? "توقيع المستلم" : "Receiver Signature"} 
+                    />
+                  </div>
                 )}
+
+                {/* Print Footer */}
+                <div className="hidden print:block border-t pt-4 mt-8">
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="text-center">
+                      <p className="text-sm mb-8">{isRTL ? "توقيع المُرسل" : "Sender Signature"}</p>
+                      <div className="border-t border-dashed pt-2">________________</div>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm mb-8">{isRTL ? "توقيع المستلم" : "Receiver Signature"}</p>
+                      <div className="border-t border-dashed pt-2">________________</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </DialogContent>
