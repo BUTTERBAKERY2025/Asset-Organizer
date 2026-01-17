@@ -8496,10 +8496,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Material Transfers
-  async getMaterialTransfers(filters?: { sourceBranchId?: string; destinationBranchId?: string; status?: string; startDate?: string; endDate?: string }): Promise<MaterialTransfer[]> {
+  async getMaterialTransfers(filters?: { sourceBranchId?: string; destinationBranchId?: string; branchId?: string; status?: string; startDate?: string; endDate?: string }): Promise<MaterialTransfer[]> {
     const conditions = [];
-    if (filters?.sourceBranchId) conditions.push(eq(materialTransfers.sourceBranchId, filters.sourceBranchId));
-    if (filters?.destinationBranchId) conditions.push(eq(materialTransfers.destinationBranchId, filters.destinationBranchId));
+    
+    // branchId filter: match as either source OR destination (for branch-scoped access)
+    if (filters?.branchId) {
+      conditions.push(
+        or(
+          eq(materialTransfers.sourceBranchId, filters.branchId),
+          eq(materialTransfers.destinationBranchId, filters.branchId)
+        )
+      );
+    } else {
+      // Regular source/destination filters
+      if (filters?.sourceBranchId) conditions.push(eq(materialTransfers.sourceBranchId, filters.sourceBranchId));
+      if (filters?.destinationBranchId) conditions.push(eq(materialTransfers.destinationBranchId, filters.destinationBranchId));
+    }
+    
     if (filters?.status) conditions.push(eq(materialTransfers.status, filters.status));
     if (filters?.startDate) conditions.push(gte(materialTransfers.transferDate, filters.startDate));
     if (filters?.endDate) conditions.push(lte(materialTransfers.transferDate, filters.endDate));

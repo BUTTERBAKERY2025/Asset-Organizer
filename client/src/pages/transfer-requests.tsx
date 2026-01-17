@@ -53,6 +53,8 @@ type Branch = {
 
 const STATUS_OPTIONS = [
   { value: "pending", labelAr: "قيد الانتظار", labelEn: "Pending", color: "bg-yellow-500", icon: Clock },
+  { value: "approved", labelAr: "تمت الموافقة", labelEn: "Approved", color: "bg-emerald-500", icon: CheckCircle },
+  { value: "rejected", labelAr: "مرفوض", labelEn: "Rejected", color: "bg-red-500", icon: Clock },
   { value: "in_transit", labelAr: "في الطريق", labelEn: "In Transit", color: "bg-blue-500", icon: Truck },
   { value: "delivered", labelAr: "تم التسليم", labelEn: "Delivered", color: "bg-green-500", icon: CheckCircle },
   { value: "cancelled", labelAr: "ملغي", labelEn: "Cancelled", color: "bg-gray-400", icon: Clock },
@@ -126,12 +128,13 @@ export default function TransferRequestsPage() {
   });
 
   const { data: transfers = [], isLoading } = useQuery<MaterialTransfer[]>({
-    queryKey: ["/api/warehouse/material-transfers", filterStatus, userBranchId],
+    queryKey: ["/api/warehouse/material-transfers", filterStatus, userBranchId, canSelectBranch],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterStatus !== "all") params.append("status", filterStatus);
-      // For branch users, filter by their branch (as source or destination)
-      if (userBranchId) {
+      // For non-admin branch users, filter by their branch (as source or destination)
+      // Admins (canSelectBranch=true) see all transfers
+      if (userBranchId && !canSelectBranch) {
         params.append("branchId", userBranchId);
       }
       const response = await fetch(`/api/warehouse/material-transfers?${params.toString()}`);
@@ -254,11 +257,47 @@ export default function TransferRequestsPage() {
     };
   });
 
-  const getNextStatus = (currentStatus: string): string[] => {
-    switch (currentStatus) {
-      case "pending": return ["in_transit", "cancelled"];
-      case "in_transit": return ["delivered", "cancelled"];
-      default: return [];
+  // Status workflow based on user role and transfer direction
+  const getNextStatus = (transfer: MaterialTransfer): string[] => {
+    // Admins can manage all transfers
+    if (canSelectBranch) {
+      switch (transfer.status) {
+        case "pending": return ["approved", "rejected", "cancelled"];
+        case "approved": return ["in_transit", "cancelled"];
+        case "in_transit": return ["delivered"];
+        default: return [];
+      }
+    }
+    
+    // Non-admin users: check if they are source or destination
+    const isSource = transfer.sourceBranchId === userBranchId;
+    const isDestination = transfer.destinationBranchId === userBranchId;
+    
+    switch (transfer.status) {
+      case "pending":
+        // Destination branch can approve/reject incoming requests
+        if (isDestination) {
+          return ["approved", "rejected"];
+        }
+        // Source can cancel their own outgoing request
+        if (isSource) {
+          return ["cancelled"];
+        }
+        return [];
+      case "approved":
+        // Source branch starts the transit after approval
+        if (isSource) {
+          return ["in_transit", "cancelled"];
+        }
+        return [];
+      case "in_transit":
+        // Destination confirms delivery
+        if (isDestination) {
+          return ["delivered"];
+        }
+        return [];
+      default:
+        return [];
     }
   };
 
@@ -561,7 +600,7 @@ export default function TransferRequestsPage() {
                           >
                             <FileText className="w-4 h-4" />
                           </Button>
-                          {getNextStatus(transfer.status).length > 0 && (
+                          {getNextStatus(transfer).length > 0 && (
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -683,7 +722,7 @@ export default function TransferRequestsPage() {
                     <SelectValue placeholder={isRTL ? "اختر الحالة" : "Select status"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {selectedTransfer && getNextStatus(selectedTransfer.status).map((status) => {
+                    {selectedTransfer && getNextStatus(selectedTransfer).map((status) => {
                       const opt = STATUS_OPTIONS.find(s => s.value === status);
                       return (
                         <SelectItem key={status} value={status}>
