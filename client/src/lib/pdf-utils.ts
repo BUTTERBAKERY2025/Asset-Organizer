@@ -5,6 +5,10 @@ export type MaterialTransferWithNames = MaterialTransfer & {
   destinationBranchName?: string | null;
 };
 
+export type TransferItemWithAvailable = MaterialTransferItem & {
+  availableQuantity?: number | null;
+};
+
 const STATUS_OPTIONS = [
   { value: 'pending', labelAr: 'قيد الانتظار', labelEn: 'Pending' },
   { value: 'approved', labelAr: 'تمت الموافقة', labelEn: 'Approved' },
@@ -42,7 +46,7 @@ async function getPdfMake() {
 
 export async function generateTransferPdf(
   transfer: MaterialTransferWithNames,
-  items: MaterialTransferItem[]
+  items: TransferItemWithAvailable[]
 ): Promise<void> {
   const pdfMake = await getPdfMake();
   
@@ -58,6 +62,7 @@ export async function generateTransferPdf(
       { text: 'ملاحظات', style: 'tableHeader', alignment: 'center' },
       { text: 'الوحدة', style: 'tableHeader', alignment: 'center' },
       { text: 'الكمية', style: 'tableHeader', alignment: 'center' },
+      { text: 'المتوفر', style: 'tableHeader', alignment: 'center' },
       { text: 'التصنيف', style: 'tableHeader', alignment: 'center' },
       { text: 'اسم الصنف', style: 'tableHeader', alignment: 'center' },
       { text: 'م', style: 'tableHeader', alignment: 'center' },
@@ -66,6 +71,7 @@ export async function generateTransferPdf(
       { text: item.notes || '-', fontSize: 8, alignment: 'center' },
       { text: item.unit, fontSize: 9, alignment: 'center' },
       { text: item.quantity.toString(), fontSize: 9, bold: true, alignment: 'center' },
+      { text: item.availableQuantity != null ? item.availableQuantity.toString() : '-', fontSize: 9, alignment: 'center' },
       { text: item.category || '-', fontSize: 8, alignment: 'center' },
       { text: item.itemName, fontSize: 9, alignment: 'center' },
       { text: (index + 1).toString(), fontSize: 9, alignment: 'center' },
@@ -162,7 +168,7 @@ export async function generateTransferPdf(
       {
         table: {
           headerRows: 1,
-          widths: [80, 35, 35, 60, '*', 20],
+          widths: [60, 30, 30, 35, 50, '*', 18],
           body: tableBody
         },
         layout: {

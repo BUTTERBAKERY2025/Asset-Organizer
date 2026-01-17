@@ -73,6 +73,7 @@ type TransferItem = {
   quantity: number;
   receivedQuantity: number | null;
   notes: string | null;
+  availableQuantity?: number | null;
 };
 
 const STATUS_OPTIONS = [
@@ -1227,6 +1228,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           <TableHead className="w-12">#</TableHead>
                           <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
                           <TableHead>{isRTL ? "التصنيف" : "Category"}</TableHead>
+                          <TableHead className="text-center">{isRTL ? "المتوفر" : "Available"}</TableHead>
                           <TableHead className="text-center">{isRTL ? "الكمية" : "Qty"}</TableHead>
                           <TableHead>{isRTL ? "الوحدة" : "Unit"}</TableHead>
                           {selectedTransfer.status === "delivered" && (
@@ -1241,6 +1243,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                             <TableCell className="font-mono text-xs">{index + 1}</TableCell>
                             <TableCell className="font-medium">{item.itemName}</TableCell>
                             <TableCell>{item.category}</TableCell>
+                            <TableCell className="text-center text-muted-foreground">{item.availableQuantity ?? '-'}</TableCell>
                             <TableCell className="text-center font-bold">{item.quantity}</TableCell>
                             <TableCell>{item.unit}</TableCell>
                             {selectedTransfer.status === "delivered" && (
