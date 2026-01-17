@@ -1,10 +1,11 @@
 import type { MaterialTransfer, MaterialTransferItem } from "@shared/schema";
 import pdfMakeRtl from "@digicole/pdfmake-rtl/build/pdfmake";
-import pdfFontsRtl from "@digicole/pdfmake-rtl/build/vfs_fonts";
+import vfs from "@digicole/pdfmake-rtl/build/vfs_fonts";
 
 // Initialize pdfMake-RTL with fonts (supports Arabic)
 const pdfMake = pdfMakeRtl as any;
-pdfMake.vfs = (pdfFontsRtl as any).pdfMake?.vfs || (pdfFontsRtl as any).vfs || {};
+// vfs_fonts exports vfs directly as default export
+pdfMake.vfs = (vfs as any).default || vfs;
 pdfMake.fonts = {
   Nillima: {
     normal: 'Nillima.ttf',
