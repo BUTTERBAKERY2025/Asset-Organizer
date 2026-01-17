@@ -97,6 +97,8 @@ const TransferRequestsPage = lazy(() => import("@/pages/transfer-requests"));
 const WarehouseInventoryPage = lazy(() => import("@/pages/warehouse-inventory"));
 const WarehouseMovementLogsPage = lazy(() => import("@/pages/warehouse-movement-logs"));
 const BranchStockPage = lazy(() => import("@/pages/branch-stock"));
+const WarehouseReportsPage = lazy(() => import("@/pages/warehouse-reports"));
+const PurchasingRequestsPage = lazy(() => import("@/pages/purchasing-requests"));
 
 function AppLoadingFallback() {
   return (
@@ -253,6 +255,8 @@ function Router() {
       <Route path="/warehouse-inventory">{() => <ModulePage component={WarehouseInventoryPage} module="warehouse_inventory" />}</Route>
       <Route path="/warehouse-movement-logs">{() => <ModulePage component={WarehouseMovementLogsPage} module="warehouse" />}</Route>
       <Route path="/branch-stock">{() => <ModulePage component={BranchStockPage} module="warehouse" />}</Route>
+      <Route path="/warehouse-reports">{() => <ModulePage component={WarehouseReportsPage} module="warehouse" />}</Route>
+      <Route path="/purchasing-requests">{() => <ModulePage component={PurchasingRequestsPage} module="warehouse" />}</Route>
       
       <Route component={NotFound} />
     </Switch>

@@ -19,6 +19,7 @@ import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
+import { ExportButtons } from "@/components/export-buttons";
 
 type MaterialTransfer = {
   id: number;
@@ -201,6 +202,29 @@ export default function TransferRequestsPage() {
     return true;
   });
 
+  const exportColumns = [
+    { header: isRTL ? "رقم التحويل" : "Transfer #", key: "transferNumber", width: 18 },
+    { header: isRTL ? "من" : "From", key: "sourceBranchName", width: 18 },
+    { header: isRTL ? "إلى" : "To", key: "destinationBranchName", width: 18 },
+    { header: isRTL ? "الحالة" : "Status", key: "statusText", width: 15 },
+    { header: isRTL ? "السائق" : "Driver", key: "driverName", width: 15 },
+    { header: isRTL ? "رقم المركبة" : "Vehicle #", key: "vehicleNumber", width: 12 },
+    { header: isRTL ? "التاريخ" : "Date", key: "dateText", width: 15 },
+  ];
+
+  const exportData = filteredTransfers.map(t => {
+    const statusOption = STATUS_OPTIONS.find(s => s.value === t.status);
+    return {
+      transferNumber: t.transferNumber,
+      sourceBranchName: t.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse"),
+      destinationBranchName: t.destinationBranchName,
+      statusText: statusOption ? (isRTL ? statusOption.labelAr : statusOption.labelEn) : t.status,
+      driverName: t.driverName || "",
+      vehicleNumber: t.vehicleNumber || "",
+      dateText: t.transferDate ? new Date(t.transferDate).toLocaleDateString("ar-SA") : "",
+    };
+  });
+
   const getNextStatus = (currentStatus: string): string[] => {
     switch (currentStatus) {
       case "pending": return ["in_transit", "cancelled"];
@@ -231,14 +255,22 @@ export default function TransferRequestsPage() {
               </p>
             </div>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="btn-create-transfer">
-                <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-                {isRTL ? "تحويل جديد" : "New Transfer"}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              data={exportData}
+              columns={exportColumns}
+              fileName={`transfers-${new Date().toISOString().split('T')[0]}`}
+              title={isRTL ? "طلبات التحويل" : "Transfer Requests"}
+              sheetName={isRTL ? "التحويلات" : "Transfers"}
+            />
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="btn-create-transfer">
+                  <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                  {isRTL ? "تحويل جديد" : "New Transfer"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>{isRTL ? "إنشاء أمر تحويل جديد" : "Create New Transfer"}</DialogTitle>
                 <DialogDescription>

@@ -18,6 +18,7 @@ import {
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ExportButtons } from "@/components/export-buttons";
 
 type MaterialRequest = {
   id: number;
@@ -305,6 +306,28 @@ export default function MaterialRequestsPage() {
     return true;
   });
 
+  const exportColumns = [
+    { header: isRTL ? "رقم الطلب" : "Request #", key: "requestNumber", width: 18 },
+    { header: isRTL ? "الفرع" : "Branch", key: "branchName", width: 20 },
+    { header: isRTL ? "الحالة" : "Status", key: "statusText", width: 15 },
+    { header: isRTL ? "الأولوية" : "Priority", key: "priorityText", width: 12 },
+    { header: isRTL ? "تاريخ الطلب" : "Request Date", key: "dateText", width: 15 },
+    { header: isRTL ? "الطالب" : "Requested By", key: "requestedByName", width: 18 },
+  ];
+
+  const exportData = filteredRequests.map(r => {
+    const statusOption = STATUS_OPTIONS.find(s => s.value === r.status);
+    const priorityOption = PRIORITY_OPTIONS.find(p => p.value === r.priority);
+    return {
+      requestNumber: r.requestNumber,
+      branchName: r.branchName,
+      statusText: statusOption ? (isRTL ? statusOption.labelAr : statusOption.labelEn) : r.status,
+      priorityText: priorityOption ? (isRTL ? priorityOption.labelAr : priorityOption.labelEn) : r.priority,
+      dateText: r.requestDate ? new Date(r.requestDate).toLocaleDateString("ar-SA") : "",
+      requestedByName: r.requestedByName || "",
+    };
+  });
+
   return (
     <Layout>
       <div className="p-4 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
@@ -327,13 +350,21 @@ export default function MaterialRequestsPage() {
               </p>
             </div>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="btn-create-request">
-                <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-                {isRTL ? "طلب جديد" : "New Request"}
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              data={exportData}
+              columns={exportColumns}
+              fileName={`material-requests-${new Date().toISOString().split('T')[0]}`}
+              title={isRTL ? "طلبات المواد" : "Material Requests"}
+              sheetName={isRTL ? "الطلبات" : "Requests"}
+            />
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="btn-create-request">
+                  <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                  {isRTL ? "طلب جديد" : "New Request"}
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{isRTL ? "إنشاء طلب مواد جديد" : "Create New Material Request"}</DialogTitle>

@@ -372,6 +372,12 @@ import {
   warehouseMovementLogs,
   type WarehouseMovementLog,
   type InsertWarehouseMovementLog,
+  purchasingRequests,
+  type PurchasingRequest,
+  type InsertPurchasingRequest,
+  purchasingRequestItems,
+  type PurchasingRequestItem,
+  type InsertPurchasingRequestItem,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -8634,6 +8640,118 @@ export class DatabaseStorage implements IStorage {
       inTransitTransfers: Number(inTransitResult[0]?.count || 0),
       lowStockItems: Number(lowStockResult[0]?.count || 0),
     };
+  }
+
+  // Purchasing Requests
+  async getPurchasingRequests(filters?: { branchId?: string; status?: string }): Promise<PurchasingRequest[]> {
+    const conditions = [];
+    if (filters?.branchId) conditions.push(eq(purchasingRequests.branchId, filters.branchId));
+    if (filters?.status) conditions.push(eq(purchasingRequests.status, filters.status));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(purchasingRequests).where(and(...conditions)).orderBy(desc(purchasingRequests.createdAt));
+    }
+    return await db.select().from(purchasingRequests).orderBy(desc(purchasingRequests.createdAt));
+  }
+
+  async getPurchasingRequest(id: number): Promise<PurchasingRequest | undefined> {
+    const [request] = await db.select().from(purchasingRequests).where(eq(purchasingRequests.id, id));
+    return request || undefined;
+  }
+
+  async getPurchasingRequestWithItems(id: number): Promise<{ request: PurchasingRequest; items: PurchasingRequestItem[] } | undefined> {
+    const [request] = await db.select().from(purchasingRequests).where(eq(purchasingRequests.id, id));
+    if (!request) return undefined;
+    
+    const items = await db.select().from(purchasingRequestItems).where(eq(purchasingRequestItems.purchasingRequestId, id));
+    return { request, items };
+  }
+
+  async createPurchasingRequest(request: InsertPurchasingRequest, items: InsertPurchasingRequestItem[]): Promise<PurchasingRequest> {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(purchasingRequests).values(request).returning();
+      
+      if (items.length > 0) {
+        await tx.insert(purchasingRequestItems).values(
+          items.map(item => ({ ...item, purchasingRequestId: created.id }))
+        );
+      }
+      
+      return created;
+    });
+  }
+
+  async updatePurchasingRequestStatus(id: number, status: string, additionalData?: Partial<InsertPurchasingRequest>): Promise<PurchasingRequest | undefined> {
+    const [updated] = await db.update(purchasingRequests)
+      .set({ 
+        status,
+        ...additionalData,
+        updatedAt: new Date() 
+      })
+      .where(eq(purchasingRequests.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async generatePurchasingRequestNumber(): Promise<string> {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const prefix = `PR-${year}${month}`;
+    
+    const existing = await db.select()
+      .from(purchasingRequests)
+      .where(sql`${purchasingRequests.requestNumber} LIKE ${prefix + '%'}`)
+      .orderBy(desc(purchasingRequests.requestNumber));
+    
+    let nextNum = 1;
+    if (existing.length > 0) {
+      const lastNum = existing[0].requestNumber.split('-').pop();
+      nextNum = parseInt(lastNum || '0') + 1;
+    }
+    
+    return `${prefix}-${String(nextNum).padStart(4, '0')}`;
+  }
+
+  async createPurchasingRequestFromMaterialRequest(materialRequestId: number, userId?: string, userName?: string): Promise<PurchasingRequest | undefined> {
+    return await db.transaction(async (tx) => {
+      const [matRequest] = await tx.select().from(materialRequests).where(eq(materialRequests.id, materialRequestId));
+      if (!matRequest) throw new Error("طلب المواد غير موجود");
+      
+      const matItems = await tx.select().from(materialRequestItems).where(eq(materialRequestItems.requestId, materialRequestId));
+      
+      const requestNumber = await this.generatePurchasingRequestNumber();
+      
+      const [purchaseRequest] = await tx.insert(purchasingRequests).values({
+        requestNumber,
+        sourceMaterialRequestId: materialRequestId,
+        branchId: matRequest.branchId,
+        status: 'pending',
+        priority: 'normal',
+        notes: `تم إنشاؤه من طلب المواد ${matRequest.requestNumber}`,
+        requestedBy: userId,
+        requestedByName: userName,
+      }).returning();
+      
+      if (matItems.length > 0) {
+        await tx.insert(purchasingRequestItems).values(
+          matItems.map(item => ({
+            purchasingRequestId: purchaseRequest.id,
+            itemId: item.itemId,
+            itemName: item.itemName,
+            category: item.category,
+            unit: item.unit,
+            requestedQuantity: item.approvedQuantity || item.requestedQuantity,
+          }))
+        );
+      }
+      
+      await tx.update(materialRequests)
+        .set({ status: 'forwarded_to_purchasing', updatedAt: new Date() })
+        .where(eq(materialRequests.id, materialRequestId));
+      
+      return purchaseRequest;
+    });
   }
 }
 

@@ -17140,5 +17140,102 @@ export async function registerRoutes(
     }
   });
 
+  // Purchasing Requests
+  app.get("/api/purchasing/requests", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { branchId?: string; status?: string } = {};
+      if (req.query.branchId) filters.branchId = req.query.branchId as string;
+      if (req.query.status) filters.status = req.query.status as string;
+      
+      const requests = await storage.getPurchasingRequests(filters);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching purchasing requests:", error);
+      res.status(500).json({ error: "فشل في جلب طلبات المشتريات" });
+    }
+  });
+
+  app.get("/api/purchasing/requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const result = await storage.getPurchasingRequestWithItems(parseInt(req.params.id));
+      if (!result) {
+        return res.status(404).json({ error: "طلب المشتريات غير موجود" });
+      }
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching purchasing request:", error);
+      res.status(500).json({ error: "فشل في جلب طلب المشتريات" });
+    }
+  });
+
+  app.post("/api/purchasing/requests", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { items, ...requestData } = req.body;
+      
+      const requestNumber = await storage.generatePurchasingRequestNumber();
+      
+      const request = await storage.createPurchasingRequest(
+        { ...requestData, requestNumber, requestedBy: user?.id, requestedByName: user?.username },
+        items || []
+      );
+      
+      res.json(request);
+    } catch (error) {
+      console.error("Error creating purchasing request:", error);
+      res.status(500).json({ error: "فشل في إنشاء طلب المشتريات" });
+    }
+  });
+
+  app.post("/api/purchasing/requests/from-material-request/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const materialRequestId = parseInt(req.params.id);
+      
+      const request = await storage.createPurchasingRequestFromMaterialRequest(
+        materialRequestId,
+        user?.id,
+        user?.username
+      );
+      
+      if (!request) {
+        return res.status(404).json({ error: "فشل في إنشاء طلب المشتريات" });
+      }
+      
+      res.json(request);
+    } catch (error) {
+      console.error("Error creating purchasing request from material request:", error);
+      res.status(500).json({ error: "فشل في إنشاء طلب المشتريات" });
+    }
+  });
+
+  app.put("/api/purchasing/requests/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { status, ...additionalData } = req.body;
+      
+      if (status === 'approved') {
+        additionalData.approvedBy = user?.id;
+        additionalData.approvedByName = user?.username;
+        additionalData.approvedAt = new Date();
+      }
+      
+      const request = await storage.updatePurchasingRequestStatus(
+        parseInt(req.params.id),
+        status,
+        additionalData
+      );
+      
+      if (!request) {
+        return res.status(404).json({ error: "طلب المشتريات غير موجود" });
+      }
+      
+      res.json(request);
+    } catch (error) {
+      console.error("Error updating purchasing request status:", error);
+      res.status(500).json({ error: "فشل في تحديث حالة طلب المشتريات" });
+    }
+  });
+
   return httpServer;
 }

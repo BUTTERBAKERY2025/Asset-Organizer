@@ -5815,3 +5815,69 @@ export const insertWarehouseMovementLogSchema = createInsertSchema(warehouseMove
 
 export type WarehouseMovementLog = typeof warehouseMovementLogs.$inferSelect;
 export type InsertWarehouseMovementLog = z.infer<typeof insertWarehouseMovementLogSchema>;
+
+// Purchasing Requests - طلبات المشتريات
+export const purchasingRequests = pgTable("purchasing_requests", {
+  id: serial("id").primaryKey(),
+  requestNumber: text("request_number").notNull(),
+  sourceMaterialRequestId: integer("source_material_request_id")
+    .references(() => materialRequests.id),
+  branchId: varchar("branch_id")
+    .notNull()
+    .references(() => branches.id),
+  status: text("status").notNull().default("pending"), // pending, approved, rejected, ordered, received, cancelled
+  priority: text("priority").default("normal"), // normal, urgent, critical
+  totalEstimatedCost: numeric("total_estimated_cost", { precision: 12, scale: 2 }).default("0"),
+  approvedBudget: numeric("approved_budget", { precision: 12, scale: 2 }),
+  vendorId: integer("vendor_id"),
+  vendorName: text("vendor_name"),
+  expectedDeliveryDate: text("expected_delivery_date"),
+  actualDeliveryDate: text("actual_delivery_date"),
+  notes: text("notes"),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  requestedByName: text("requested_by_name"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedByName: text("approved_by_name"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_purchasing_requests_branch").on(table.branchId),
+  index("idx_purchasing_requests_status").on(table.status),
+  uniqueIndex("purchasing_requests_number_unique").on(table.requestNumber),
+]);
+
+export const insertPurchasingRequestSchema = createInsertSchema(purchasingRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PurchasingRequest = typeof purchasingRequests.$inferSelect;
+export type InsertPurchasingRequest = z.infer<typeof insertPurchasingRequestSchema>;
+
+// Purchasing Request Items - بنود طلب المشتريات
+export const purchasingRequestItems = pgTable("purchasing_request_items", {
+  id: serial("id").primaryKey(),
+  purchasingRequestId: integer("purchasing_request_id")
+    .notNull()
+    .references(() => purchasingRequests.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").references(() => warehouseItems.id),
+  itemName: text("item_name").notNull(),
+  category: text("category"),
+  unit: text("unit"),
+  requestedQuantity: integer("requested_quantity").notNull().default(0),
+  approvedQuantity: integer("approved_quantity").default(0),
+  orderedQuantity: integer("ordered_quantity").default(0),
+  receivedQuantity: integer("received_quantity").default(0),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
+  totalPrice: numeric("total_price", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+});
+
+export const insertPurchasingRequestItemSchema = createInsertSchema(purchasingRequestItems).omit({
+  id: true,
+});
+
+export type PurchasingRequestItem = typeof purchasingRequestItems.$inferSelect;
+export type InsertPurchasingRequestItem = z.infer<typeof insertPurchasingRequestItemSchema>;

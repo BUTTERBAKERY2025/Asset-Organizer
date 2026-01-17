@@ -62,6 +62,20 @@ export default function WarehouseDashboardPage() {
       href: "/branch-stock",
       color: "bg-purple-500",
     },
+    {
+      title: isRTL ? "التقارير" : "Reports",
+      description: isRTL ? "تقارير شاملة عن المخزون والطلبات والتحويلات" : "Comprehensive inventory and transfer reports",
+      icon: History,
+      href: "/warehouse-reports",
+      color: "bg-rose-500",
+    },
+    {
+      title: isRTL ? "طلبات المشتريات" : "Purchasing Requests",
+      description: isRTL ? "إدارة طلبات الشراء من الموردين" : "Manage purchase orders from vendors",
+      icon: Warehouse,
+      href: "/purchasing-requests",
+      color: "bg-pink-500",
+    },
   ];
 
   const statCards = [
