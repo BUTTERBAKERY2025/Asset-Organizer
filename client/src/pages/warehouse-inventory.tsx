@@ -84,6 +84,7 @@ export default function WarehouseInventoryPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WarehouseItem | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterStock, setFilterStock] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [formData, setFormData] = useState({
@@ -205,6 +206,8 @@ export default function WarehouseInventoryPage() {
   };
 
   const filteredItems = items.filter(item => {
+    if (filterStock === "low" && item.currentStock > item.reorderPoint) return false;
+    if (filterStock === "ok" && item.currentStock <= item.reorderPoint) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -395,14 +398,23 @@ export default function WarehouseInventoryPage() {
           <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                <div>
+                <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                <div className="flex-1">
                   <p className="font-medium text-yellow-800 dark:text-yellow-200">
                     {isRTL ? `${lowStockItems.length} مواد تحتاج إعادة طلب` : `${lowStockItems.length} items need reordering`}
                   </p>
-                  <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                    {lowStockItems.map(i => i.name).join('، ')}
-                  </p>
+                  {lowStockItems.length <= 5 ? (
+                    <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                      {lowStockItems.map(i => i.name).join('، ')}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                      {isRTL 
+                        ? `انقر على فلتر "منخفض" لعرض جميع المواد التي تحتاج إعادة طلب`
+                        : `Click "Low Stock" filter to view all items needing reorder`
+                      }
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -432,6 +444,16 @@ export default function WarehouseInventoryPage() {
                   {isRTL ? cat.labelAr : cat.labelEn}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterStock} onValueChange={setFilterStock}>
+            <SelectTrigger className="w-[150px]" data-testid="filter-stock">
+              <SelectValue placeholder={isRTL ? "حالة المخزون" : "Stock Status"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{isRTL ? "كل الحالات" : "All Status"}</SelectItem>
+              <SelectItem value="low">{isRTL ? "منخفض" : "Low Stock"}</SelectItem>
+              <SelectItem value="ok">{isRTL ? "متوفر" : "In Stock"}</SelectItem>
             </SelectContent>
           </Select>
         </div>
