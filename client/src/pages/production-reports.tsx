@@ -175,11 +175,11 @@ interface InventoryItem {
   productName: string;
   productNameNormalized: string;
   productCategory: string | null;
-  currentBalance: number;
+  quantity: number;
   unit: string | null;
   productionDate: string;
-  lastUpdated: string;
-  sourceBatchId: number | null;
+  updatedAt: string;
+  lastBatchId: number | null;
 }
 
 interface TransferItem {
@@ -195,9 +195,10 @@ interface TransferItem {
   destinationBranchId: string | null;
   destinationBranchName?: string;
   notes: string | null;
-  transferredAt: string;
-  transferredById: string | null;
-  transferredByName: string | null;
+  transferDate: string;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
   status: string;
 }
 
@@ -216,14 +217,14 @@ function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string
   });
 
   const totalBalance = useMemo(() => 
-    inventory?.reduce((sum, item) => sum + (item.currentBalance || 0), 0) || 0
+    inventory?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0
   , [inventory]);
 
   const byCategory = useMemo(() => {
     const categories: Record<string, number> = {};
     inventory?.forEach(item => {
       const cat = item.productCategory || "غير مصنف";
-      categories[cat] = (categories[cat] || 0) + (item.currentBalance || 0);
+      categories[cat] = (categories[cat] || 0) + (item.quantity || 0);
     });
     return Object.entries(categories).map(([name, value]) => ({ name, value }));
   }, [inventory]);
@@ -323,7 +324,7 @@ function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string
           <CardContent>
             <div className="space-y-2" data-testid="top-inventory-list">
               {inventory?.slice()
-                .sort((a, b) => b.currentBalance - a.currentBalance)
+                .sort((a, b) => b.quantity - a.quantity)
                 .slice(0, 8)
                 .map((item, i) => (
                   <div key={item.id} className="flex justify-between items-center p-2 rounded-lg bg-gray-50" data-testid={`row-inventory-${i}`}>
@@ -338,7 +339,7 @@ function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string
                         )}
                       </div>
                     </div>
-                    <Badge className="text-xs bg-purple-600">{item.currentBalance} {item.unit || "وحدة"}</Badge>
+                    <Badge className="text-xs bg-purple-600">{item.quantity} {item.unit || "وحدة"}</Badge>
                   </div>
                 ))}
               {(!inventory || inventory.length === 0) && (
@@ -373,12 +374,12 @@ function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string
                     <td className="p-2 text-gray-500">{item.productCategory || "-"}</td>
                     <td className="p-2 text-gray-500">{item.branchName || "-"}</td>
                     <td className="p-2">
-                      <Badge variant={item.currentBalance > 0 ? "default" : "destructive"}>
-                        {item.currentBalance} {item.unit || "وحدة"}
+                      <Badge variant={item.quantity > 0 ? "default" : "destructive"}>
+                        {item.quantity} {item.unit || "وحدة"}
                       </Badge>
                     </td>
                     <td className="p-2 text-gray-500">{item.productionDate}</td>
-                    <td className="p-2 text-gray-500">{format(new Date(item.lastUpdated), "yyyy/MM/dd HH:mm")}</td>
+                    <td className="p-2 text-gray-500">{format(new Date(item.updatedAt), "yyyy/MM/dd HH:mm")}</td>
                   </tr>
                 ))}
                 {(!inventory || inventory.length === 0) && (
@@ -537,7 +538,7 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
                   <div className="flex items-center gap-2">
                     <Badge className="text-xs bg-blue-600">{t.quantity} {t.unit || "وحدة"}</Badge>
                     <span className="text-xs text-gray-400">
-                      {format(new Date(t.transferredAt), "MM/dd HH:mm")}
+                      {format(new Date(t.createdAt), "MM/dd HH:mm")}
                     </span>
                   </div>
                 </div>
@@ -584,8 +585,8 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
                           : t.destinationBranchName || "فرع"}
                       </Badge>
                     </td>
-                    <td className="p-2 text-gray-500">{t.transferredByName || "-"}</td>
-                    <td className="p-2 text-gray-500">{format(new Date(t.transferredAt), "yyyy/MM/dd HH:mm")}</td>
+                    <td className="p-2 text-gray-500">{t.createdByName || "-"}</td>
+                    <td className="p-2 text-gray-500">{format(new Date(t.createdAt), "yyyy/MM/dd HH:mm")}</td>
                     <td className="p-2 text-gray-500">{t.notes || "-"}</td>
                   </tr>
                 ))}
