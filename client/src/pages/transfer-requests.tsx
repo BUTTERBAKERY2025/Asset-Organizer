@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle
 } from "lucide-react";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
@@ -111,11 +111,47 @@ export default function TransferRequestsPage() {
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const printRef = useRef<HTMLDivElement>(null);
 
-  // Print functionality
+  // Print functionality with portrait orientation
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: selectedTransfer ? `Transfer-${selectedTransfer.transferNumber}` : "Transfer",
+    pageStyle: `
+      @page {
+        size: A4 portrait;
+        margin: 15mm;
+      }
+      @media print {
+        body { -webkit-print-color-adjust: exact; }
+      }
+    `,
   });
+
+  // WhatsApp share function
+  const handleWhatsAppShare = () => {
+    if (!selectedTransfer) return;
+    
+    const itemsList = transferItems.map((item, i) => 
+      `${i + 1}. ${item.itemName} - ${item.quantity} ${item.unit}`
+    ).join('\n');
+    
+    const message = `📦 *طلب تحويل مواد*
+━━━━━━━━━━━━━━
+رقم التحويل: ${selectedTransfer.transferNumber}
+الحالة: ${STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status}
+━━━━━━━━━━━━━━
+من: ${selectedTransfer.sourceBranchName || "المستودع الرئيسي"}
+إلى: ${selectedTransfer.destinationBranchName}
+━━━━━━━━━━━━━━
+*الأصناف:*
+${itemsList || "لا توجد أصناف"}
+━━━━━━━━━━━━━━
+${selectedTransfer.driverName ? `السائق: ${selectedTransfer.driverName}` : ''}
+${selectedTransfer.vehicleNumber ? `المركبة: ${selectedTransfer.vehicleNumber}` : ''}
+${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
+    
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
 
   // Fetch transfer items when viewing details
   const { data: transferItems = [], isLoading: isLoadingItems } = useQuery<TransferItem[]>({
@@ -786,6 +822,16 @@ export default function TransferRequestsPage() {
                   <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="btn-print">
                     <Printer className="w-4 h-4 mr-1" />
                     {isRTL ? "طباعة" : "Print"}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleWhatsAppShare}
+                    className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                    data-testid="btn-whatsapp"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-1" />
+                    {isRTL ? "واتساب" : "WhatsApp"}
                   </Button>
                 </div>
               </div>
