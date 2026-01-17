@@ -112,6 +112,7 @@ export default function TransferRequestsPage() {
   const [isUpdateStatusOpen, setIsUpdateStatusOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<MaterialTransfer | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const printRef = useRef<HTMLDivElement>(null);
@@ -579,6 +580,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
   };
 
   const filteredTransfers = transfers.filter(transfer => {
+    // Filter by branch (destination or source)
+    if (filterBranch !== "all") {
+      const matchesBranch = transfer.destinationBranchId === filterBranch || 
+                           transfer.sourceBranchId === filterBranch;
+      if (!matchesBranch) return false;
+    }
+    
+    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -1008,6 +1017,21 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               {STATUS_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {isRTL ? opt.labelAr : opt.labelEn}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterBranch} onValueChange={setFilterBranch}>
+            <SelectTrigger className="w-[180px]" data-testid="filter-branch">
+              <Building2 className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+              <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
+              <SelectItem value="main_warehouse">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</SelectItem>
+              {branches.map((branch) => (
+                <SelectItem key={branch.id} value={branch.id}>
+                  {branch.name}
                 </SelectItem>
               ))}
             </SelectContent>
