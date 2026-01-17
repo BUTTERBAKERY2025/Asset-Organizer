@@ -8528,30 +8528,13 @@ export class DatabaseStorage implements IStorage {
     return transfer || undefined;
   }
 
-  async getMaterialTransferWithItems(id: number): Promise<{ transfer: MaterialTransfer; items: (MaterialTransferItem & { availableQuantity?: number | null })[] } | undefined> {
+  async getMaterialTransferWithItems(id: number): Promise<{ transfer: MaterialTransfer; items: MaterialTransferItem[] } | undefined> {
     const [transfer] = await db.select().from(materialTransfers).where(eq(materialTransfers.id, id));
     if (!transfer) return undefined;
     
     const items = await db.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, id));
     
-    // Get available quantities from source branch stock
-    const sourceBranchId = transfer.sourceBranchId;
-    if (sourceBranchId) {
-      const stockData = await db.select()
-        .from(branchStock)
-        .where(eq(branchStock.branchId, sourceBranchId));
-      
-      const stockMap = new Map(stockData.map(s => [s.itemId, s.currentQuantity]));
-      
-      const itemsWithAvailable = items.map(item => ({
-        ...item,
-        availableQuantity: stockMap.get(item.itemId) ?? null
-      }));
-      
-      return { transfer, items: itemsWithAvailable };
-    }
-    
-    return { transfer, items: items.map(item => ({ ...item, availableQuantity: null })) };
+    return { transfer, items };
   }
 
   async createMaterialTransfer(transfer: InsertMaterialTransfer, items: InsertMaterialTransferItem[]): Promise<MaterialTransfer> {

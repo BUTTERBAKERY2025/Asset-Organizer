@@ -5769,6 +5769,7 @@ export const materialTransferItems = pgTable("material_transfer_items", {
   category: text("category").notNull(),
   unit: text("unit").notNull(),
   quantity: integer("quantity").notNull(), // الكمية المحولة
+  availableQuantity: integer("available_quantity"), // الكمية المتوفرة وقت الإنشاء
   receivedQuantity: integer("received_quantity"), // الكمية المستلمة (قد تختلف)
   notes: text("notes"),
 }, (table) => [
