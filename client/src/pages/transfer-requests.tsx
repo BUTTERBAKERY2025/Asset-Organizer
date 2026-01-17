@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy, Check, ChevronsUpDown
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy, Check, ChevronsUpDown, AlertTriangle
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useReactToPrint } from "react-to-print";
@@ -223,6 +223,18 @@ export default function TransferRequestsPage() {
     transferDate: new Date().toISOString().split('T')[0],
   });
 
+  // State for delivery confirmation with received quantities
+  const [isDeliveryConfirmOpen, setIsDeliveryConfirmOpen] = useState(false);
+  const [deliveryConfirmData, setDeliveryConfirmData] = useState<{
+    receivedItems: Array<{ itemId: number; itemName: string; sentQuantity: number; receivedQuantity: number; unit: string; discrepancyNotes: string }>;
+    receiverSignature: string | null;
+    deliveryNotes: string;
+  }>({
+    receivedItems: [],
+    receiverSignature: null,
+    deliveryNotes: ""
+  });
+
   const { data: transfers = [], isLoading } = useQuery<MaterialTransfer[]>({
     queryKey: ["/api/warehouse/material-transfers", filterStatus, userBranchId, canSelectBranch],
     queryFn: async () => {
@@ -300,6 +312,37 @@ export default function TransferRequestsPage() {
     },
   });
 
+  // Mutation for confirming delivery with received quantities
+  const confirmDeliveryMutation = useMutation({
+    mutationFn: async ({ id, receivedItems, receiverSignature, deliveryNotes }: {
+      id: number;
+      receivedItems: Array<{ itemId: number; receivedQuantity: number; discrepancyNotes?: string }>;
+      receiverSignature?: string | null;
+      deliveryNotes?: string;
+    }) => {
+      const response = await apiRequest("POST", `/api/warehouse/material-transfers/${id}/confirm-delivery`, {
+        receivedItems,
+        receiverSignature,
+        deliveryNotes
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/branch-stock"] });
+      setIsDeliveryConfirmOpen(false);
+      setSelectedTransfer(null);
+      toast({ title: isRTL ? "تم تأكيد الاستلام بنجاح" : "Delivery confirmed successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: isRTL ? "فشل في تأكيد الاستلام" : "Failed to confirm delivery",
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
   const resetForm = () => {
     // Reset to correct flow: source = warehouse, destination = branch
     setNewTransfer({
@@ -329,6 +372,33 @@ export default function TransferRequestsPage() {
       transferDate: new Date().toISOString().split('T')[0],
     });
     setIsUpdateStatusOpen(true);
+  };
+
+  // Handle delivery confirmation with received quantities
+  const handleConfirmDelivery = async (transfer: MaterialTransfer) => {
+    setSelectedTransfer(transfer);
+    // Fetch transfer items to populate received quantities
+    try {
+      const response = await fetch(`/api/warehouse/material-transfers/${transfer.id}/items`);
+      if (response.ok) {
+        const items = await response.json();
+        setDeliveryConfirmData({
+          receivedItems: items.map((item: TransferItem) => ({
+            itemId: item.itemId,
+            itemName: item.itemName,
+            sentQuantity: item.quantity,
+            receivedQuantity: item.quantity, // Default to sent quantity
+            unit: item.unit,
+            discrepancyNotes: ""
+          })),
+          receiverSignature: null,
+          deliveryNotes: ""
+        });
+        setIsDeliveryConfirmOpen(true);
+      }
+    } catch (error) {
+      console.error("Error fetching items for delivery confirmation:", error);
+    }
   };
 
   // Quick WhatsApp share from table row
@@ -1192,7 +1262,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                               <Button 
                                 variant="default" 
                                 size="sm" 
-                                onClick={() => handleUpdateStatus(transfer)}
+                                onClick={() => nextStatuses.includes("delivered") ? handleConfirmDelivery(transfer) : handleUpdateStatus(transfer)}
                                 data-testid={`btn-update-${transfer.id}`}
                                 className={
                                   nextStatuses.includes("approved") ? "bg-blue-600 hover:bg-blue-700" :
@@ -1569,6 +1639,149 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 data-testid="btn-confirm-status"
               >
                 {updateStatusMutation.isPending ? (isRTL ? "جاري التحديث..." : "Updating...") : (isRTL ? "تأكيد" : "Confirm")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delivery Confirmation Dialog with Received Quantities */}
+        <Dialog open={isDeliveryConfirmOpen} onOpenChange={setIsDeliveryConfirmOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                {isRTL ? "تأكيد استلام التحويل" : "Confirm Transfer Delivery"}
+              </DialogTitle>
+              <DialogDescription>
+                {isRTL ? `تأكيد استلام التحويل رقم ${selectedTransfer?.transferNumber}` : `Confirm delivery for transfer ${selectedTransfer?.transferNumber}`}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              {/* Items with received quantities */}
+              <div className="space-y-2">
+                <Label className="font-medium">{isRTL ? "الأصناف المستلمة" : "Received Items"}</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="text-right">{isRTL ? "الصنف" : "Item"}</TableHead>
+                        <TableHead className="text-center w-24">{isRTL ? "المرسل" : "Sent"}</TableHead>
+                        <TableHead className="text-center w-28">{isRTL ? "المستلم" : "Received"}</TableHead>
+                        <TableHead className="text-center w-20">{isRTL ? "الفرق" : "Diff"}</TableHead>
+                        <TableHead className="text-right">{isRTL ? "ملاحظات" : "Notes"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {deliveryConfirmData.receivedItems.map((item, idx) => {
+                        const diff = item.receivedQuantity - item.sentQuantity;
+                        return (
+                          <TableRow key={item.itemId}>
+                            <TableCell className="font-medium">
+                              {item.itemName}
+                              <span className="text-xs text-muted-foreground mr-1">({item.unit})</span>
+                            </TableCell>
+                            <TableCell className="text-center font-mono">{item.sentQuantity}</TableCell>
+                            <TableCell className="text-center">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={item.receivedQuantity}
+                                onChange={(e) => {
+                                  const newItems = [...deliveryConfirmData.receivedItems];
+                                  newItems[idx].receivedQuantity = parseInt(e.target.value) || 0;
+                                  setDeliveryConfirmData(prev => ({ ...prev, receivedItems: newItems }));
+                                }}
+                                className="w-20 text-center mx-auto"
+                                data-testid={`input-received-qty-${item.itemId}`}
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className={`font-mono font-bold ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                {diff > 0 ? `+${diff}` : diff}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                placeholder={isRTL ? "سبب الفرق..." : "Reason..."}
+                                value={item.discrepancyNotes}
+                                onChange={(e) => {
+                                  const newItems = [...deliveryConfirmData.receivedItems];
+                                  newItems[idx].discrepancyNotes = e.target.value;
+                                  setDeliveryConfirmData(prev => ({ ...prev, receivedItems: newItems }));
+                                }}
+                                className="w-full text-sm"
+                                data-testid={`input-discrepancy-notes-${item.itemId}`}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                {/* Summary */}
+                {deliveryConfirmData.receivedItems.some(item => item.receivedQuantity !== item.sentQuantity) && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      {isRTL ? "يوجد فرق في الكميات المستلمة" : "There are discrepancies in received quantities"}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Delivery Notes */}
+              <div className="space-y-2">
+                <Label>{isRTL ? "ملاحظات التسليم" : "Delivery Notes"}</Label>
+                <Textarea 
+                  value={deliveryConfirmData.deliveryNotes}
+                  onChange={(e) => setDeliveryConfirmData(prev => ({ ...prev, deliveryNotes: e.target.value }))}
+                  placeholder={isRTL ? "ملاحظات إضافية عن التسليم..." : "Additional delivery notes..."}
+                  data-testid="input-delivery-notes"
+                />
+              </div>
+              
+              {/* Signature */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <PenTool className="w-4 h-4" />
+                  {isRTL ? "توقيع المستلم" : "Receiver Signature"}
+                </Label>
+                <SignaturePad
+                  onSignatureChange={(sig) => setDeliveryConfirmData(prev => ({ ...prev, receiverSignature: sig }))}
+                  label={isRTL ? "وقّع هنا لتأكيد الاستلام" : "Sign here to confirm receipt"}
+                />
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeliveryConfirmOpen(false)}>
+                {isRTL ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (selectedTransfer) {
+                    confirmDeliveryMutation.mutate({
+                      id: selectedTransfer.id,
+                      receivedItems: deliveryConfirmData.receivedItems.map(item => ({
+                        itemId: item.itemId,
+                        receivedQuantity: item.receivedQuantity,
+                        discrepancyNotes: item.discrepancyNotes || undefined
+                      })),
+                      receiverSignature: deliveryConfirmData.receiverSignature,
+                      deliveryNotes: deliveryConfirmData.deliveryNotes
+                    });
+                  }
+                }}
+                disabled={!deliveryConfirmData.receiverSignature || confirmDeliveryMutation.isPending}
+                className="bg-green-600 hover:bg-green-700"
+                data-testid="btn-confirm-delivery"
+              >
+                {confirmDeliveryMutation.isPending 
+                  ? (isRTL ? "جاري التأكيد..." : "Confirming...") 
+                  : (isRTL ? "تأكيد الاستلام" : "Confirm Delivery")}
               </Button>
             </DialogFooter>
           </DialogContent>

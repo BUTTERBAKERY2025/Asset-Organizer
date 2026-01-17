@@ -17037,6 +17037,56 @@ export async function registerRoutes(
     }
   });
 
+  // Confirm delivery with received quantities for each item
+  app.post("/api/warehouse/material-transfers/:id/confirm-delivery", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { receivedItems, receiverSignature, deliveryNotes } = req.body;
+      
+      // receivedItems: [{ itemId: number, receivedQuantity: number, discrepancyNotes?: string }]
+      if (!receivedItems || !Array.isArray(receivedItems)) {
+        return res.status(400).json({ error: "يجب توفير بيانات الاستلام" });
+      }
+      
+      const transfer = await storage.confirmMaterialTransferDelivery(
+        parseInt(req.params.id),
+        receivedItems,
+        {
+          receivedBy: user?.id,
+          receivedByName: user?.fullName || user?.username,
+          receiverSignature,
+          deliveryNotes
+        },
+        user?.id
+      );
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "التحويل غير موجود" });
+      }
+      
+      // Create notification for delivery confirmation
+      try {
+        await storage.createWarehouseNotification({
+          type: "transfer_delivered",
+          title: `تم تأكيد استلام: ${transfer.transferNumber}`,
+          titleEn: `Delivery Confirmed: ${transfer.transferNumber}`,
+          body: transfer.hasDiscrepancy ? "تم الاستلام مع وجود فروقات في الكميات" : "تم استلام الشحنة كاملة بنجاح",
+          bodyEn: transfer.hasDiscrepancy ? "Delivery confirmed with quantity discrepancies" : "Shipment received in full successfully",
+          branchId: transfer.sourceBranchId || undefined,
+          targetBranchId: transfer.destinationBranchId,
+          entityType: "transfer",
+          entityId: transfer.id,
+          priority: transfer.hasDiscrepancy ? "high" : "normal",
+        });
+      } catch (e) { console.error("Failed to create notification:", e); }
+      
+      res.json(transfer);
+    } catch (error) {
+      console.error("Error confirming delivery:", error);
+      res.status(500).json({ error: "فشل في تأكيد الاستلام" });
+    }
+  });
+
   // Warehouse Movement Logs
   app.get("/api/warehouse/movement-logs", isAuthenticated, async (req, res) => {
     try {
@@ -17050,6 +17100,26 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching movement logs:", error);
       res.status(500).json({ error: "فشل في جلب سجل الحركات" });
+    }
+  });
+
+  // Monthly Movement Report - تقرير الحركة الشهري
+  app.get("/api/warehouse/monthly-report", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, month, year } = req.query;
+      const targetMonth = month ? parseInt(month as string) : new Date().getMonth() + 1;
+      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      
+      const report = await storage.getMonthlyMovementReport(
+        branchId as string | undefined,
+        targetMonth,
+        targetYear
+      );
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching monthly report:", error);
+      res.status(500).json({ error: "فشل في جلب التقرير الشهري" });
     }
   });
 

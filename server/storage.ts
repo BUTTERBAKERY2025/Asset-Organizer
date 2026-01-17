@@ -8472,6 +8472,121 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async confirmMaterialTransferDelivery(
+    id: number,
+    receivedItems: Array<{ itemId: number; receivedQuantity: number; discrepancyNotes?: string }>,
+    deliveryData: { receivedBy?: string; receivedByName?: string; receiverSignature?: string; deliveryNotes?: string },
+    userId?: string
+  ): Promise<MaterialTransfer | undefined> {
+    return await db.transaction(async (tx) => {
+      const [transfer] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, id));
+      if (!transfer) throw new Error("التحويل غير موجود");
+      
+      const items = await tx.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, id));
+      if (!items || items.length === 0) throw new Error("لا توجد عناصر في التحويل");
+      
+      let hasDiscrepancy = false;
+      
+      // Update each item with received quantity and calculate discrepancy
+      for (const item of items) {
+        const receivedItem = receivedItems.find(ri => ri.itemId === item.itemId);
+        const receivedQty = receivedItem?.receivedQuantity ?? item.quantity;
+        const discrepancy = receivedQty - item.quantity;
+        
+        if (discrepancy !== 0) hasDiscrepancy = true;
+        
+        await tx.update(materialTransferItems)
+          .set({
+            receivedQuantity: receivedQty,
+            discrepancy: discrepancy,
+            discrepancyNotes: receivedItem?.discrepancyNotes || null
+          })
+          .where(eq(materialTransferItems.id, item.id));
+        
+        // Update destination branch stock with RECEIVED quantity (not sent quantity)
+        const existingStock = await tx.select().from(branchStock)
+          .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
+        
+        if (existingStock.length > 0) {
+          await tx.update(branchStock)
+            .set({ 
+              currentQuantity: (existingStock[0].currentQuantity || 0) + receivedQty,
+              lastUpdated: new Date(),
+              updatedBy: userId
+            })
+            .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
+        } else {
+          await tx.insert(branchStock).values({
+            branchId: transfer.destinationBranchId,
+            itemId: item.itemId,
+            currentQuantity: receivedQty,
+            updatedBy: userId
+          });
+        }
+        
+        // Deduct from source branch stock (if branch-to-branch transfer)
+        if (transfer.sourceBranchId) {
+          const sourceStock = await tx.select().from(branchStock)
+            .where(and(eq(branchStock.branchId, transfer.sourceBranchId), eq(branchStock.itemId, item.itemId)));
+          
+          if (sourceStock.length > 0) {
+            await tx.update(branchStock)
+              .set({ 
+                currentQuantity: Math.max(0, (sourceStock[0].currentQuantity || 0) - item.quantity),
+                lastUpdated: new Date(),
+                updatedBy: userId
+              })
+              .where(and(eq(branchStock.branchId, transfer.sourceBranchId), eq(branchStock.itemId, item.itemId)));
+          }
+        }
+        
+        // Log the movement
+        await tx.insert(warehouseMovementLogs).values({
+          itemId: item.itemId,
+          branchId: transfer.destinationBranchId,
+          movementType: 'transfer_in',
+          quantity: receivedQty,
+          referenceType: 'transfer',
+          referenceId: transfer.id,
+          notes: `استلام ${receivedQty} من تحويل ${transfer.transferNumber}${discrepancy !== 0 ? ` (فرق: ${discrepancy})` : ''}`,
+          createdBy: userId
+        });
+        
+        // Log outgoing from source if branch-to-branch
+        if (transfer.sourceBranchId) {
+          await tx.insert(warehouseMovementLogs).values({
+            itemId: item.itemId,
+            branchId: transfer.sourceBranchId,
+            movementType: 'transfer_out',
+            quantity: item.quantity,
+            referenceType: 'transfer',
+            referenceId: transfer.id,
+            notes: `إرسال ${item.quantity} في تحويل ${transfer.transferNumber}`,
+            createdBy: userId
+          });
+        }
+      }
+      
+      // Update transfer header
+      const [updated] = await tx.update(materialTransfers)
+        .set({ 
+          status: 'delivered',
+          arrivalTime: new Date(),
+          deliveryDate: new Date().toISOString().split('T')[0],
+          hasDiscrepancy,
+          receivedBy: deliveryData.receivedBy,
+          receivedByName: deliveryData.receivedByName,
+          receiverSignature: deliveryData.receiverSignature,
+          deliveryNotes: deliveryData.deliveryNotes,
+          updatedAt: new Date() 
+        })
+        .where(eq(materialTransfers.id, id))
+        .returning();
+      
+      return updated;
+    });
+  }
+
   async generateMaterialTransferNumber(): Promise<string> {
     const today = new Date();
     const year = today.getFullYear();
@@ -8508,6 +8623,185 @@ export class DatabaseStorage implements IStorage {
   async createWarehouseMovementLog(log: InsertWarehouseMovementLog): Promise<WarehouseMovementLog> {
     const [created] = await db.insert(warehouseMovementLogs).values(log).returning();
     return created;
+  }
+
+  // Monthly Movement Report - تقرير الحركة الشهري
+  async getMonthlyMovementReport(branchId: string | undefined, month: number, year: number): Promise<{
+    byBranch: Array<{
+      branchId: string;
+      branchName: string;
+      totalIncoming: number;
+      totalOutgoing: number;
+      netMovement: number;
+      transferCount: number;
+    }>;
+    byItem: Array<{
+      itemId: number;
+      itemName: string;
+      category: string;
+      unit: string;
+      totalIncoming: number;
+      totalOutgoing: number;
+      netMovement: number;
+    }>;
+    transfers: Array<{
+      id: number;
+      transferNumber: string;
+      sourceBranchName: string | null;
+      destinationBranchName: string;
+      status: string;
+      deliveryDate: string | null;
+      hasDiscrepancy: boolean | null;
+      itemCount: number;
+      totalQuantity: number;
+    }>;
+    summary: {
+      totalTransfers: number;
+      deliveredTransfers: number;
+      totalItemsReceived: number;
+      transfersWithDiscrepancy: number;
+    };
+  }> {
+    // Build date range for the month
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = month === 12 
+      ? `${year + 1}-01-01` 
+      : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+
+    // Get delivered transfers for the month
+    const transfersQuery = branchId
+      ? db.select().from(materialTransfers)
+          .where(and(
+            eq(materialTransfers.status, 'delivered'),
+            or(
+              eq(materialTransfers.destinationBranchId, branchId),
+              eq(materialTransfers.sourceBranchId, branchId)
+            ),
+            sql`${materialTransfers.deliveryDate} >= ${startDate}`,
+            sql`${materialTransfers.deliveryDate} < ${endDate}`
+          ))
+      : db.select().from(materialTransfers)
+          .where(and(
+            eq(materialTransfers.status, 'delivered'),
+            sql`${materialTransfers.deliveryDate} >= ${startDate}`,
+            sql`${materialTransfers.deliveryDate} < ${endDate}`
+          ));
+
+    const deliveredTransfers = await transfersQuery;
+
+    // Get all branches for name lookup
+    const allBranches = await db.select().from(branches);
+    const branchMap = new Map(allBranches.map(b => [b.id, b.name]));
+
+    // Get all items for name lookup
+    const allItems = await db.select().from(warehouseItems);
+    const itemMap = new Map(allItems.map(i => [i.id, { name: i.name, category: i.category, unit: i.unit }]));
+
+    // Get transfer items for all delivered transfers
+    const transferIds = deliveredTransfers.map(t => t.id);
+    const allTransferItems = transferIds.length > 0
+      ? await db.select().from(materialTransferItems)
+          .where(sql`${materialTransferItems.transferId} IN (${sql.join(transferIds.map(id => sql`${id}`), sql`,`)})`)
+      : [];
+
+    // Calculate by branch
+    const branchStats: Map<string, { incoming: number; outgoing: number; count: number }> = new Map();
+    
+    for (const transfer of deliveredTransfers) {
+      const destBranch = transfer.destinationBranchId;
+      const srcBranch = transfer.sourceBranchId;
+      
+      const items = allTransferItems.filter(item => item.transferId === transfer.id);
+      const totalQty = items.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0);
+      
+      // Incoming to destination
+      if (!branchStats.has(destBranch)) {
+        branchStats.set(destBranch, { incoming: 0, outgoing: 0, count: 0 });
+      }
+      const destStats = branchStats.get(destBranch)!;
+      destStats.incoming += totalQty;
+      destStats.count++;
+      
+      // Outgoing from source (if branch-to-branch)
+      if (srcBranch && srcBranch !== 'main_warehouse') {
+        if (!branchStats.has(srcBranch)) {
+          branchStats.set(srcBranch, { incoming: 0, outgoing: 0, count: 0 });
+        }
+        const srcStats = branchStats.get(srcBranch)!;
+        srcStats.outgoing += items.reduce((sum, item) => sum + item.quantity, 0);
+      }
+    }
+
+    const byBranch = Array.from(branchStats.entries()).map(([bId, stats]) => ({
+      branchId: bId,
+      branchName: branchMap.get(bId) || bId,
+      totalIncoming: stats.incoming,
+      totalOutgoing: stats.outgoing,
+      netMovement: stats.incoming - stats.outgoing,
+      transferCount: stats.count
+    }));
+
+    // Calculate by item - track both incoming and outgoing for branch-to-branch transfers
+    const itemStats: Map<number, { incoming: number; outgoing: number }> = new Map();
+    
+    for (const transfer of deliveredTransfers) {
+      const items = allTransferItems.filter(item => item.transferId === transfer.id);
+      const srcBranch = transfer.sourceBranchId;
+      
+      for (const item of items) {
+        if (!itemStats.has(item.itemId)) {
+          itemStats.set(item.itemId, { incoming: 0, outgoing: 0 });
+        }
+        const stats = itemStats.get(item.itemId)!;
+        
+        // Incoming: received quantities at destination
+        stats.incoming += item.receivedQuantity || item.quantity;
+        
+        // Outgoing: sent quantities from source (only for branch-to-branch transfers)
+        if (srcBranch && srcBranch !== 'main_warehouse') {
+          stats.outgoing += item.quantity;
+        }
+      }
+    }
+
+    const byItem = Array.from(itemStats.entries()).map(([itemId, stats]) => {
+      const itemInfo = itemMap.get(itemId);
+      return {
+        itemId,
+        itemName: itemInfo?.name || `صنف ${itemId}`,
+        category: itemInfo?.category || '',
+        unit: itemInfo?.unit || '',
+        totalIncoming: stats.incoming,
+        totalOutgoing: stats.outgoing,
+        netMovement: stats.incoming - stats.outgoing
+      };
+    });
+
+    // Build transfers list
+    const transfers = deliveredTransfers.map(t => {
+      const items = allTransferItems.filter(item => item.transferId === t.id);
+      return {
+        id: t.id,
+        transferNumber: t.transferNumber,
+        sourceBranchName: t.sourceBranchId ? branchMap.get(t.sourceBranchId) || 'المستودع الرئيسي' : 'المستودع الرئيسي',
+        destinationBranchName: branchMap.get(t.destinationBranchId) || t.destinationBranchId,
+        status: t.status,
+        deliveryDate: t.deliveryDate,
+        hasDiscrepancy: t.hasDiscrepancy,
+        itemCount: items.length,
+        totalQuantity: items.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0)
+      };
+    });
+
+    // Summary
+    const summary = {
+      totalTransfers: deliveredTransfers.length,
+      deliveredTransfers: deliveredTransfers.length,
+      totalItemsReceived: allTransferItems.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0),
+      transfersWithDiscrepancy: deliveredTransfers.filter(t => t.hasDiscrepancy).length
+    };
+
+    return { byBranch, byItem, transfers, summary };
   }
 
   // Warehouse Dashboard Stats

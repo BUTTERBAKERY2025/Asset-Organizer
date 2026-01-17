@@ -5652,7 +5652,16 @@ export const materialTransfers = pgTable("material_transfers", {
     .references(() => branches.id),
   transferDate: text("transfer_date").notNull(), // تاريخ التحويل
   deliveryDate: text("delivery_date"), // تاريخ التسليم الفعلي
-  status: text("status").notNull().default("pending"), // pending, in_transit, delivered, cancelled
+  status: text("status").notNull().default("pending"), // pending, approved, rejected, in_transit, delivered, cancelled
+  // حقول الموافقة
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedByName: text("approved_by_name"),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: varchar("rejected_by").references(() => users.id),
+  rejectedByName: text("rejected_by_name"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  // حقول الإرسال والتسليم
   driverName: text("driver_name"),
   vehicleNumber: text("vehicle_number"),
   departureTime: timestamp("departure_time"),
@@ -5660,6 +5669,8 @@ export const materialTransfers = pgTable("material_transfers", {
   receivedBy: varchar("received_by").references(() => users.id),
   receivedByName: text("received_by_name"),
   receiverSignature: text("receiver_signature"), // توقيع المستلم الإلكتروني
+  deliveryNotes: text("delivery_notes"), // ملاحظات التسليم
+  hasDiscrepancy: boolean("has_discrepancy").default(false), // هل يوجد فرق في الكميات
   notes: text("notes"),
   createdBy: varchar("created_by").references(() => users.id),
   createdByName: text("created_by_name"),
@@ -5695,9 +5706,11 @@ export const materialTransferItems = pgTable("material_transfer_items", {
   itemName: text("item_name").notNull(),
   category: text("category").notNull(),
   unit: text("unit").notNull(),
-  quantity: integer("quantity").notNull(), // الكمية المحولة
+  quantity: integer("quantity").notNull(), // الكمية المرسلة
   availableQuantity: integer("available_quantity"), // الكمية المتوفرة وقت الإنشاء
-  receivedQuantity: integer("received_quantity"), // الكمية المستلمة (قد تختلف)
+  receivedQuantity: integer("received_quantity"), // الكمية المستلمة فعلياً
+  discrepancy: integer("discrepancy"), // الفرق (مستلم - مرسل)
+  discrepancyNotes: text("discrepancy_notes"), // ملاحظات الفرق (تالف، ناقص، إلخ)
   notes: text("notes"),
 }, (table) => [
   index("idx_material_transfer_items_transfer").on(table.transferId),
