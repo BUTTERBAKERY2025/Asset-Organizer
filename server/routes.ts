@@ -16765,5 +16765,310 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Warehouse Management Routes ====================
+
+  // Warehouse Dashboard Stats
+  app.get("/api/warehouse/dashboard-stats", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const stats = await storage.getWarehouseDashboardStats(branchId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching warehouse dashboard stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات المستودع" });
+    }
+  });
+
+  // Warehouse Items
+  app.get("/api/warehouse/items", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { category?: string; isActive?: boolean } = {};
+      if (req.query.category) filters.category = req.query.category as string;
+      if (req.query.isActive !== undefined) filters.isActive = req.query.isActive === 'true';
+      
+      const items = await storage.getWarehouseItems(filters);
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching warehouse items:", error);
+      res.status(500).json({ error: "فشل في جلب المواد" });
+    }
+  });
+
+  app.get("/api/warehouse/items/:id", isAuthenticated, async (req, res) => {
+    try {
+      const item = await storage.getWarehouseItem(parseInt(req.params.id));
+      if (!item) {
+        return res.status(404).json({ error: "المادة غير موجودة" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Error fetching warehouse item:", error);
+      res.status(500).json({ error: "فشل في جلب المادة" });
+    }
+  });
+
+  app.post("/api/warehouse/items", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const item = await storage.createWarehouseItem({
+        ...req.body,
+        createdBy: user?.id
+      });
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error creating warehouse item:", error);
+      res.status(500).json({ error: "فشل في إضافة المادة" });
+    }
+  });
+
+  app.put("/api/warehouse/items/:id", isAuthenticated, async (req, res) => {
+    try {
+      const item = await storage.updateWarehouseItem(parseInt(req.params.id), req.body);
+      if (!item) {
+        return res.status(404).json({ error: "المادة غير موجودة" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Error updating warehouse item:", error);
+      res.status(500).json({ error: "فشل في تحديث المادة" });
+    }
+  });
+
+  app.delete("/api/warehouse/items/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteWarehouseItem(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting warehouse item:", error);
+      res.status(500).json({ error: "فشل في حذف المادة" });
+    }
+  });
+
+  // Branch Stock
+  app.get("/api/warehouse/branch-stock/:branchId", isAuthenticated, async (req, res) => {
+    try {
+      const stock = await storage.getBranchStock(req.params.branchId);
+      res.json(stock);
+    } catch (error) {
+      console.error("Error fetching branch stock:", error);
+      res.status(500).json({ error: "فشل في جلب مخزون الفرع" });
+    }
+  });
+
+  app.put("/api/warehouse/branch-stock/:branchId/:itemId", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { quantity, dailyConsumption } = req.body;
+      const stock = await storage.updateBranchStock(
+        req.params.branchId,
+        parseInt(req.params.itemId),
+        quantity,
+        dailyConsumption,
+        user?.id
+      );
+      res.json(stock);
+    } catch (error) {
+      console.error("Error updating branch stock:", error);
+      res.status(500).json({ error: "فشل في تحديث مخزون الفرع" });
+    }
+  });
+
+  // Material Requests
+  app.get("/api/warehouse/material-requests", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { branchId?: string; status?: string; requestType?: string; startDate?: string; endDate?: string } = {};
+      if (req.query.branchId) filters.branchId = req.query.branchId as string;
+      if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.requestType) filters.requestType = req.query.requestType as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
+      
+      const requests = await storage.getMaterialRequests(filters);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching material requests:", error);
+      res.status(500).json({ error: "فشل في جلب طلبات المواد" });
+    }
+  });
+
+  app.get("/api/warehouse/material-requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const result = await storage.getMaterialRequestWithItems(parseInt(req.params.id));
+      if (!result) {
+        return res.status(404).json({ error: "الطلب غير موجود" });
+      }
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching material request:", error);
+      res.status(500).json({ error: "فشل في جلب الطلب" });
+    }
+  });
+
+  app.post("/api/warehouse/material-requests", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { items, ...requestData } = req.body;
+      
+      const requestNumber = await storage.generateMaterialRequestNumber();
+      
+      const request = await storage.createMaterialRequest({
+        ...requestData,
+        requestNumber,
+        requestedBy: user?.id,
+        requestedByName: user?.fullName || user?.username
+      }, items || []);
+      
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating material request:", error);
+      res.status(500).json({ error: "فشل في إنشاء طلب المواد" });
+    }
+  });
+
+  app.put("/api/warehouse/material-requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const request = await storage.updateMaterialRequest(parseInt(req.params.id), req.body);
+      if (!request) {
+        return res.status(404).json({ error: "الطلب غير موجود" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error updating material request:", error);
+      res.status(500).json({ error: "فشل في تحديث الطلب" });
+    }
+  });
+
+  app.post("/api/warehouse/material-requests/:id/review", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { status, reviewNotes } = req.body;
+      
+      if (!['approved', 'rejected', 'forwarded_to_purchasing'].includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+      
+      const request = await storage.updateMaterialRequestStatus(
+        parseInt(req.params.id),
+        status,
+        user?.id,
+        user?.fullName || user?.username,
+        reviewNotes
+      );
+      
+      if (!request) {
+        return res.status(404).json({ error: "الطلب غير موجود" });
+      }
+      
+      res.json(request);
+    } catch (error) {
+      console.error("Error reviewing material request:", error);
+      res.status(500).json({ error: "فشل في مراجعة الطلب" });
+    }
+  });
+
+  // Material Transfers
+  app.get("/api/warehouse/material-transfers", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { sourceBranchId?: string; destinationBranchId?: string; status?: string; startDate?: string; endDate?: string } = {};
+      if (req.query.sourceBranchId) filters.sourceBranchId = req.query.sourceBranchId as string;
+      if (req.query.destinationBranchId) filters.destinationBranchId = req.query.destinationBranchId as string;
+      if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
+      
+      const transfers = await storage.getMaterialTransfers(filters);
+      res.json(transfers);
+    } catch (error) {
+      console.error("Error fetching material transfers:", error);
+      res.status(500).json({ error: "فشل في جلب التحويلات" });
+    }
+  });
+
+  app.get("/api/warehouse/material-transfers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const result = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
+      if (!result) {
+        return res.status(404).json({ error: "التحويل غير موجود" });
+      }
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching material transfer:", error);
+      res.status(500).json({ error: "فشل في جلب التحويل" });
+    }
+  });
+
+  app.post("/api/warehouse/material-transfers", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { items, ...transferData } = req.body;
+      
+      const transferNumber = await storage.generateMaterialTransferNumber();
+      
+      const transfer = await storage.createMaterialTransfer({
+        ...transferData,
+        transferNumber,
+        createdBy: user?.id,
+        createdByName: user?.fullName || user?.username
+      }, items || []);
+      
+      res.status(201).json(transfer);
+    } catch (error) {
+      console.error("Error creating material transfer:", error);
+      res.status(500).json({ error: "فشل في إنشاء التحويل" });
+    }
+  });
+
+  app.put("/api/warehouse/material-transfers/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { status, ...additionalData } = req.body;
+      
+      if (!['in_transit', 'delivered', 'cancelled'].includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+      
+      const updateData: any = { ...additionalData };
+      
+      if (status === 'in_transit') {
+        updateData.departureTime = new Date();
+      } else if (status === 'delivered') {
+        updateData.arrivalTime = new Date();
+        updateData.receivedBy = user?.id;
+        updateData.receivedByName = user?.fullName || user?.username;
+      }
+      
+      const transfer = await storage.updateMaterialTransferStatus(
+        parseInt(req.params.id),
+        status,
+        updateData
+      );
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "التحويل غير موجود" });
+      }
+      
+      res.json(transfer);
+    } catch (error) {
+      console.error("Error updating transfer status:", error);
+      res.status(500).json({ error: "فشل في تحديث حالة التحويل" });
+    }
+  });
+
+  // Warehouse Movement Logs
+  app.get("/api/warehouse/movement-logs", isAuthenticated, async (req, res) => {
+    try {
+      const filters: { itemId?: number; branchId?: string; movementType?: string } = {};
+      if (req.query.itemId) filters.itemId = parseInt(req.query.itemId as string);
+      if (req.query.branchId) filters.branchId = req.query.branchId as string;
+      if (req.query.movementType) filters.movementType = req.query.movementType as string;
+      
+      const logs = await storage.getWarehouseMovementLogs(filters);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching movement logs:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الحركات" });
+    }
+  });
+
   return httpServer;
 }
