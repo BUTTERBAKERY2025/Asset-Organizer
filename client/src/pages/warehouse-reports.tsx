@@ -498,12 +498,6 @@ export default function WarehouseReportsPage() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Link href="/material-requests">
-                    <Button variant="outline" size="sm" className="gap-2" data-testid="btn-view-requests">
-                      {isRTL ? "عرض الطلبات" : "View Requests"}
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
                   <ExportButtons
                     data={requestExportData}
                     columns={requestColumns}

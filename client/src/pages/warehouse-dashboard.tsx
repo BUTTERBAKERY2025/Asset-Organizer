@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
-  Warehouse, PackageCheck, Send, Boxes, History, Store,
+  Warehouse, Send, Boxes, History, Store,
   ArrowRight, Clock, CheckCircle, AlertTriangle, Truck,
   Bell, BellRing, Building2, ShoppingCart, FileText,
   Package, ArrowLeftRight, ClipboardList, BarChart3, X
@@ -113,15 +113,6 @@ export default function WarehouseDashboardPage() {
   });
 
   const quickLinks = [
-    {
-      title: isRTL ? "طلبات المواد" : "Material Requests",
-      description: isRTL ? "إنشاء ومتابعة طلبات المواد الخام والمستلزمات" : "Create and track raw material requests",
-      icon: PackageCheck,
-      href: `/material-requests${selectedBranch !== "all" ? `?branchId=${selectedBranch}` : ""}`,
-      color: "bg-blue-500",
-      stats: stats?.pendingRequests,
-      statLabel: isRTL ? "طلب قيد الانتظار" : "pending",
-    },
     {
       title: isRTL ? "طلبات التحويل" : "Transfer Requests",
       description: isRTL ? "طلبات التحويل بين الفروع والمستودع الرئيسي" : "Transfer requests between branches and warehouse",
