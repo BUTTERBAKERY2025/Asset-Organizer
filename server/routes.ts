@@ -17106,7 +17106,22 @@ export async function registerRoutes(
       if (req.query.endDate) filters.endDate = req.query.endDate as string;
       
       const transfers = await storage.getMaterialTransfers(filters);
-      res.json(transfers);
+      
+      // Enrich transfers with branch names
+      const branches = await storage.getAllBranches();
+      const branchMap = new Map(branches.map(b => [b.id, b.name]));
+      
+      const enrichedTransfers = transfers.map(t => ({
+        ...t,
+        sourceBranchName: t.sourceBranchId === "main_warehouse" 
+          ? "المستودع الرئيسي" 
+          : (branchMap.get(t.sourceBranchId) || t.sourceBranchId),
+        destinationBranchName: t.destinationBranchId === "main_warehouse" 
+          ? "المستودع الرئيسي" 
+          : (branchMap.get(t.destinationBranchId) || t.destinationBranchId),
+      }));
+      
+      res.json(enrichedTransfers);
     } catch (error) {
       console.error("Error fetching material transfers:", error);
       res.status(500).json({ error: "فشل في جلب التحويلات" });
