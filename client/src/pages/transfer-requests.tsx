@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,6 @@ import {
   ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -24,27 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
-import pdfMake from "@digicole/pdfmake-rtl/build/pdfmake";
-import pdfFonts from "@digicole/pdfmake-rtl/build/vfs_fonts";
-import XLSX from "xlsx-js-style";
-
-pdfMake.vfs = pdfFonts.pdfMake?.vfs || pdfFonts.vfs;
-
-// Configure Arabic font (Nillima is included in pdfmake-rtl for RTL support)
-pdfMake.fonts = {
-  Roboto: {
-    normal: 'Roboto-Regular.ttf',
-    bold: 'Roboto-Medium.ttf',
-    italics: 'Roboto-Italic.ttf',
-    bolditalics: 'Roboto-MediumItalic.ttf'
-  },
-  Nillima: {
-    normal: 'Nillima.ttf',
-    bold: 'Nillima.ttf',
-    italics: 'Nillima.ttf',
-    bolditalics: 'Nillima.ttf'
-  }
-};
+import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
 
 type MaterialTransfer = {
   id: number;
@@ -148,339 +127,6 @@ export default function TransferRequestsPage() {
       }
     `,
   });
-
-  // Generate PDF document definition - Compact formal style
-  const generatePdfDocDefinition = () => {
-    if (!selectedTransfer) return null;
-    
-    const statusLabel = STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status;
-    const destName = selectedTransfer.destinationBranchName || 'غير محدد';
-    const srcName = selectedTransfer.sourceBranchName || 'المستودع الرئيسي';
-    const requestDate = selectedTransfer.createdAt ? new Date(selectedTransfer.createdAt).toLocaleString('ar-SA') : '-';
-    const printDate = new Date().toLocaleString('ar-SA');
-    const transferDate = selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString('ar-SA') : '-';
-    
-    const tableBody = [
-      [
-        { text: 'ملاحظات', style: 'tableHeader', alignment: 'center' },
-        { text: 'الوحدة', style: 'tableHeader', alignment: 'center' },
-        { text: 'الكمية', style: 'tableHeader', alignment: 'center' },
-        { text: 'التصنيف', style: 'tableHeader', alignment: 'center' },
-        { text: 'اسم الصنف', style: 'tableHeader', alignment: 'center' },
-        { text: 'م', style: 'tableHeader', alignment: 'center' },
-      ],
-      ...transferItems.map((item, index) => [
-        { text: item.notes || '-', fontSize: 8, alignment: 'center' },
-        { text: item.unit, fontSize: 9, alignment: 'center' },
-        { text: item.quantity.toString(), fontSize: 9, bold: true, alignment: 'center' },
-        { text: item.category || '-', fontSize: 8, alignment: 'center' },
-        { text: item.itemName, fontSize: 9, alignment: 'center' },
-        { text: (index + 1).toString(), fontSize: 9, alignment: 'center' },
-      ])
-    ];
-
-    return {
-      pageSize: 'A4',
-      pageOrientation: 'portrait',
-      pageMargins: [20, 15, 20, 30],
-      
-      footer: (currentPage: number, pageCount: number) => ({
-        columns: [
-          { text: `صفحة ${currentPage} من ${pageCount}`, alignment: 'center', fontSize: 8, color: '#666' },
-        ],
-        margin: [20, 5, 20, 0]
-      }),
-      
-      content: [
-        // Compact Header Row
-        {
-          columns: [
-            { text: 'مخابز باتر | BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
-            { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
-          ],
-          margin: [0, 0, 0, 3]
-        },
-        
-        // Thin divider
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 1, lineColor: '#D4A853' }], margin: [0, 0, 0, 6] },
-        
-        // Compact Info Row - Transfer details
-        {
-          table: {
-            widths: ['auto', '*', 'auto', '*', 'auto', '*'],
-            body: [
-              [
-                { text: 'رقم التحويل:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: selectedTransfer.transferNumber, fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: 'الحالة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: statusLabel, fontSize: 9, bold: true, color: '#16a34a', border: [false, false, false, false] },
-                { text: 'التاريخ:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: transferDate, fontSize: 9, bold: true, border: [false, false, false, false] },
-              ]
-            ]
-          },
-          layout: 'noBorders',
-          margin: [0, 0, 0, 4]
-        },
-        
-        // Transfer Flow - Compact inline
-        {
-          table: {
-            widths: ['auto', '*', 'auto', 'auto', 'auto', '*'],
-            body: [
-              [
-                { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
-                { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: '', border: [false, false, false, false] },
-              ]
-            ]
-          },
-          layout: 'noBorders',
-          margin: [0, 0, 0, 4]
-        },
-        
-        // Time info - Compact
-        {
-          columns: [
-            { text: `وقت الطلب: ${requestDate}`, fontSize: 7, color: '#888', alignment: 'right' },
-            { text: `وقت الطباعة: ${printDate}`, fontSize: 7, color: '#888', alignment: 'left' },
-          ],
-          margin: [0, 0, 0, 6]
-        },
-        
-        // Driver & Vehicle - Compact inline (if exists)
-        ...(selectedTransfer.driverName || selectedTransfer.vehicleNumber ? [
-          {
-            table: {
-              widths: ['auto', '*', 'auto', '*'],
-              body: [
-                [
-                  { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                  { text: selectedTransfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-                  { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                  { text: selectedTransfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-                ]
-              ]
-            },
-            layout: 'noBorders',
-            margin: [0, 0, 0, 6]
-          }
-        ] : []),
-        
-        // Items Table Header
-        { text: 'الأصناف المحولة:', fontSize: 10, bold: true, margin: [0, 2, 0, 4] },
-        
-        // Compact Items Table
-        {
-          table: {
-            headerRows: 1,
-            widths: [80, 35, 35, 60, '*', 20],
-            body: tableBody
-          },
-          layout: {
-            hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.5 : 0.25,
-            vLineWidth: () => 0.25,
-            hLineColor: () => '#ccc',
-            vLineColor: () => '#ccc',
-            paddingTop: () => 2,
-            paddingBottom: () => 2,
-            paddingLeft: () => 3,
-            paddingRight: () => 3,
-            fillColor: (rowIndex: number) => rowIndex === 0 ? '#f0f0f0' : null
-          },
-          margin: [0, 0, 0, 6]
-        },
-        
-        // Notes - Compact (if exists)
-        ...(selectedTransfer.notes ? [
-          {
-            columns: [
-              { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
-              { text: selectedTransfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
-            ],
-            margin: [0, 0, 0, 8]
-          }
-        ] : []),
-        
-        // Compact Signatures Row
-        {
-          table: {
-            widths: ['*', '*', '*'],
-            body: [
-              [
-                { 
-                  stack: [
-                    { text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' },
-                    { text: '', margin: [0, 15, 0, 0] },
-                    { text: '_______________', fontSize: 10, alignment: 'center' },
-                  ],
-                  border: [true, true, true, true],
-                  margin: [2, 3, 2, 3]
-                },
-                { 
-                  stack: [
-                    { text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' },
-                    { text: '', margin: [0, 15, 0, 0] },
-                    { text: '_______________', fontSize: 10, alignment: 'center' },
-                  ],
-                  border: [true, true, true, true],
-                  margin: [2, 3, 2, 3]
-                },
-                { 
-                  stack: [
-                    { text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' },
-                    { text: '', margin: [0, 15, 0, 0] },
-                    { text: '_______________', fontSize: 10, alignment: 'center' },
-                  ],
-                  border: [true, true, true, true],
-                  margin: [2, 3, 2, 3]
-                }
-              ]
-            ]
-          },
-          layout: {
-            hLineWidth: () => 0.5,
-            vLineWidth: () => 0.5,
-            hLineColor: () => '#ccc',
-            vLineColor: () => '#ccc',
-          },
-          margin: [0, 6, 0, 0]
-        }
-      ],
-      styles: {
-        tableHeader: { bold: true, fontSize: 8, fillColor: '#f0f0f0' }
-      },
-      defaultStyle: {
-        font: 'Nillima',
-        fontSize: 9,
-        alignment: 'right'
-      }
-    };
-  };
-
-  // Download PDF only
-  const handleDownloadPdf = () => {
-    const docDefinition = generatePdfDocDefinition();
-    if (!docDefinition || !selectedTransfer) return;
-    
-    pdfMake.createPdf(docDefinition as any).download(`transfer-${selectedTransfer.transferNumber}.pdf`);
-    
-    toast({
-      title: isRTL ? "تم تحميل الملف" : "File Downloaded",
-      description: isRTL ? "تم تحميل ملف PDF بنجاح" : "PDF downloaded successfully",
-    });
-  };
-
-  // Share via WhatsApp (text only)
-  const handleWhatsAppShare = () => {
-    if (!selectedTransfer) return;
-    
-    const statusLabel = STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status;
-    const destName = selectedTransfer.destinationBranchName || 'غير محدد';
-    const srcName = selectedTransfer.sourceBranchName || 'المستودع الرئيسي';
-    
-    const itemsList = transferItems.map((item, i) => 
-      `${i + 1}. ${item.itemName} - ${item.quantity} ${item.unit}`
-    ).join('\n');
-    
-    const message = `📦 *أمر تحويل مواد*
-━━━━━━━━━━━━━━
-رقم التحويل: ${selectedTransfer.transferNumber}
-الحالة: ${statusLabel}
-━━━━━━━━━━━━━━
-من: ${srcName}
-إلى: ${destName}
-━━━━━━━━━━━━━━
-*الأصناف:*
-${itemsList || 'لا توجد أصناف'}
-━━━━━━━━━━━━━━
-${selectedTransfer.driverName ? `السائق: ${selectedTransfer.driverName}` : ''}
-${selectedTransfer.vehicleNumber ? `المركبة: ${selectedTransfer.vehicleNumber}` : ''}
-${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
-    
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-  };
-
-  // Export to Excel with Arabic RTL support
-  const handleExportExcel = () => {
-    if (!filteredTransfers || filteredTransfers.length === 0) {
-      toast({
-        title: isRTL ? "لا توجد بيانات" : "No Data",
-        description: isRTL ? "لا توجد طلبات تحويل للتصدير" : "No transfer requests to export",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const headers = ["رقم التحويل", "من", "إلى", "الحالة", "السائق", "المركبة", "تاريخ التحويل", "ملاحظات", "أنشأه"];
-    
-    const rows = filteredTransfers.map((transfer) => [
-      transfer.transferNumber,
-      transfer.sourceBranchName || "المستودع الرئيسي",
-      transfer.destinationBranchName || "-",
-      STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status,
-      transfer.driverName || "-",
-      transfer.vehicleNumber || "-",
-      transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : "-",
-      transfer.notes || "-",
-      transfer.createdByName || "-",
-    ]);
-
-    const data = [headers, ...rows];
-    const worksheet = XLSX.utils.aoa_to_sheet(data);
-    
-    const headerStyle = {
-      font: { name: "Tahoma", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: "D4A853" } },
-      alignment: { horizontal: "right", vertical: "center", wrapText: true },
-      border: {
-        top: { style: "thin", color: { rgb: "000000" } },
-        bottom: { style: "thin", color: { rgb: "000000" } },
-        left: { style: "thin", color: { rgb: "000000" } },
-        right: { style: "thin", color: { rgb: "000000" } },
-      }
-    };
-    
-    const cellStyle = {
-      font: { name: "Tahoma", sz: 11 },
-      alignment: { horizontal: "right", vertical: "center", wrapText: true },
-      border: {
-        top: { style: "thin", color: { rgb: "CCCCCC" } },
-        bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-        left: { style: "thin", color: { rgb: "CCCCCC" } },
-        right: { style: "thin", color: { rgb: "CCCCCC" } },
-      }
-    };
-
-    const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
-    for (let row = range.s.r; row <= range.e.r; row++) {
-      for (let col = range.s.c; col <= range.e.c; col++) {
-        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-        if (!worksheet[cellAddress]) continue;
-        worksheet[cellAddress].s = row === 0 ? headerStyle : cellStyle;
-      }
-    }
-
-    const colWidths = [
-      { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, 
-      { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 15 }
-    ];
-    worksheet['!cols'] = colWidths;
-    
-    worksheet['!views'] = [{ rightToLeft: true }];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "طلبات التحويل");
-    XLSX.writeFile(workbook, `طلبات-التحويل-${new Date().toISOString().split('T')[0]}.xlsx`);
-    
-    toast({
-      title: isRTL ? "تم التصدير" : "Exported",
-      description: isRTL ? "تم تصدير البيانات إلى ملف Excel" : "Data exported to Excel file",
-    });
-  };
 
   // Fetch transfer items when viewing details
   const { data: transferItems = [], isLoading: isLoadingItems } = useQuery<TransferItem[]>({
@@ -703,183 +349,21 @@ _مُرسل من نظام باتر_`;
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
   };
 
-  // Quick PDF download from table row (simplified version without items) - Compact formal style
-  const handleQuickPdf = (transfer: MaterialTransfer) => {
-    const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
-    const destName = transfer.destinationBranchName || 'غير محدد';
-    const srcName = transfer.sourceBranchName || 'المستودع الرئيسي';
-    const requestDate = transfer.createdAt ? new Date(transfer.createdAt).toLocaleString('ar-SA') : '-';
-    const printDate = new Date().toLocaleString('ar-SA');
-    const transferDate = transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-';
-    
-    const docDefinition = {
-      pageSize: 'A4',
-      pageOrientation: 'portrait',
-      pageMargins: [20, 15, 20, 30],
-      
-      footer: {
-        columns: [
-          { text: 'صفحة 1 من 1', alignment: 'center', fontSize: 8, color: '#666' },
-        ],
-        margin: [20, 5, 20, 0]
-      },
-      
-      content: [
-        // Compact Header Row
-        {
-          columns: [
-            { text: 'مخابز باتر | BUTTER BAKERY', fontSize: 14, bold: true, color: '#333', alignment: 'right' },
-            { text: 'أمر تحويل مواد', fontSize: 14, bold: true, alignment: 'left' },
-          ],
-          margin: [0, 0, 0, 3]
-        },
-        
-        // Thin divider
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 1, lineColor: '#D4A853' }], margin: [0, 0, 0, 6] },
-        
-        // Compact Info Row
-        {
-          table: {
-            widths: ['auto', '*', 'auto', '*', 'auto', '*'],
-            body: [
-              [
-                { text: 'رقم التحويل:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: transfer.transferNumber, fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: 'الحالة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: statusLabel, fontSize: 9, bold: true, color: '#16a34a', border: [false, false, false, false] },
-                { text: 'التاريخ:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: transferDate, fontSize: 9, bold: true, border: [false, false, false, false] },
-              ]
-            ]
-          },
-          layout: 'noBorders',
-          margin: [0, 0, 0, 4]
-        },
-        
-        // Transfer Flow - Compact inline
-        {
-          table: {
-            widths: ['auto', '*', 'auto', 'auto', '*', 'auto'],
-            body: [
-              [
-                { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
-                { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: '', border: [false, false, false, false] },
-              ]
-            ]
-          },
-          layout: 'noBorders',
-          margin: [0, 0, 0, 4]
-        },
-        
-        // Time info - Compact
-        {
-          columns: [
-            { text: `وقت الطلب: ${requestDate}`, fontSize: 7, color: '#888', alignment: 'right' },
-            { text: `وقت الطباعة: ${printDate}`, fontSize: 7, color: '#888', alignment: 'left' },
-          ],
-          margin: [0, 0, 0, 6]
-        },
-        
-        // Driver & Vehicle - Compact inline (if exists)
-        ...(transfer.driverName || transfer.vehicleNumber ? [
-          {
-            table: {
-              widths: ['auto', '*', 'auto', '*'],
-              body: [
-                [
-                  { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                  { text: transfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-                  { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                  { text: transfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-                ]
-              ]
-            },
-            layout: 'noBorders',
-            margin: [0, 0, 0, 6]
-          }
-        ] : []),
-        
-        // Note about items
-        {
-          text: 'ملاحظة: للحصول على قائمة الأصناف، استخدم زر عرض ثم PDF',
-          fontSize: 8,
-          color: '#888',
-          alignment: 'center',
-          margin: [0, 10, 0, 10]
-        },
-        
-        // Notes - Compact (if exists)
-        ...(transfer.notes ? [
-          {
-            columns: [
-              { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
-              { text: transfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
-            ],
-            margin: [0, 0, 0, 8]
-          }
-        ] : []),
-        
-        // Compact Signatures Row
-        {
-          table: {
-            widths: ['*', '*', '*'],
-            body: [
-              [
-                { 
-                  stack: [
-                    { text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' },
-                    { text: '', margin: [0, 15, 0, 0] },
-                    { text: '_______________', fontSize: 10, alignment: 'center' },
-                  ],
-                  border: [true, true, true, true],
-                  margin: [2, 3, 2, 3]
-                },
-                { 
-                  stack: [
-                    { text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' },
-                    { text: '', margin: [0, 15, 0, 0] },
-                    { text: '_______________', fontSize: 10, alignment: 'center' },
-                  ],
-                  border: [true, true, true, true],
-                  margin: [2, 3, 2, 3]
-                },
-                { 
-                  stack: [
-                    { text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' },
-                    { text: '', margin: [0, 15, 0, 0] },
-                    { text: '_______________', fontSize: 10, alignment: 'center' },
-                  ],
-                  border: [true, true, true, true],
-                  margin: [2, 3, 2, 3]
-                }
-              ]
-            ]
-          },
-          layout: {
-            hLineWidth: () => 0.5,
-            vLineWidth: () => 0.5,
-            hLineColor: () => '#ccc',
-            vLineColor: () => '#ccc',
-          },
-          margin: [0, 6, 0, 0]
-        }
-      ],
-      defaultStyle: {
-        font: 'Nillima',
-        fontSize: 9,
-        alignment: 'right'
-      }
-    };
-    
-    pdfMake.createPdf(docDefinition as any).download(`transfer-${transfer.transferNumber}.pdf`);
-    toast({
-      title: isRTL ? "تم تحميل الملف" : "File Downloaded",
-      description: isRTL ? "تم تحميل ملف PDF بنجاح" : "PDF downloaded successfully",
-    });
+  // Quick PDF download from table row (lazy-loaded)
+  const handleQuickPdf = async (transfer: MaterialTransfer) => {
+    try {
+      await generateQuickTransferPdf(transfer as any);
+      toast({
+        title: isRTL ? "تم تحميل الملف" : "File Downloaded",
+        description: isRTL ? "تم تحميل ملف PDF بنجاح" : "PDF downloaded successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: isRTL ? "فشل في إنشاء PDF" : "Failed to generate PDF",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   // Cancel/reject a transfer
@@ -903,7 +387,7 @@ _مُرسل من نظام باتر_`;
     }
   };
 
-  const filteredTransfers = transfers.filter(transfer => {
+  const filteredTransfers = useMemo(() => transfers.filter(transfer => {
     // Filter by branch (destination or source)
     if (filterBranch !== "all") {
       const matchesBranch = transfer.destinationBranchId === filterBranch || 
@@ -922,7 +406,143 @@ _مُرسل من نظام باتر_`;
       );
     }
     return true;
-  });
+  }), [transfers, filterBranch, searchQuery]);
+
+  // Download PDF only (lazy-loaded)
+  const handleDownloadPdf = async () => {
+    if (!selectedTransfer) return;
+    try {
+      await generateTransferPdf(selectedTransfer as any, transferItems as any);
+      toast({
+        title: isRTL ? "تم تحميل الملف" : "File Downloaded",
+        description: isRTL ? "تم تحميل ملف PDF بنجاح" : "PDF downloaded successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: isRTL ? "فشل في إنشاء PDF" : "Failed to generate PDF",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Share via WhatsApp (text only)
+  const handleWhatsAppShare = () => {
+    if (!selectedTransfer) return;
+    
+    const statusLabel = STATUS_OPTIONS.find(s => s.value === selectedTransfer.status)?.labelAr || selectedTransfer.status;
+    const destName = selectedTransfer.destinationBranchName || 'غير محدد';
+    const srcName = selectedTransfer.sourceBranchName || 'المستودع الرئيسي';
+    
+    const itemsList = transferItems.map((item, i) => 
+      `${i + 1}. ${item.itemName} - ${item.quantity} ${item.unit}`
+    ).join('\n');
+    
+    const message = `📦 *أمر تحويل مواد*
+━━━━━━━━━━━━━━
+رقم التحويل: ${selectedTransfer.transferNumber}
+الحالة: ${statusLabel}
+━━━━━━━━━━━━━━
+من: ${srcName}
+إلى: ${destName}
+━━━━━━━━━━━━━━
+*الأصناف:*
+${itemsList || 'لا توجد أصناف'}
+━━━━━━━━━━━━━━
+${selectedTransfer.driverName ? `السائق: ${selectedTransfer.driverName}` : ''}
+${selectedTransfer.vehicleNumber ? `المركبة: ${selectedTransfer.vehicleNumber}` : ''}
+${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  // Export to Excel with Arabic RTL support (lazy-loaded)
+  const handleExportExcel = async () => {
+    if (!filteredTransfers || filteredTransfers.length === 0) {
+      toast({
+        title: isRTL ? "لا توجد بيانات" : "No Data",
+        description: isRTL ? "لا توجد طلبات تحويل للتصدير" : "No transfer requests to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const XLSX = await import('xlsx-js-style');
+      
+      const headers = ["رقم التحويل", "من", "إلى", "الحالة", "السائق", "المركبة", "تاريخ التحويل", "ملاحظات", "أنشأه"];
+      
+      const rows = filteredTransfers.map((transfer) => [
+        transfer.transferNumber,
+        transfer.sourceBranchName || "المستودع الرئيسي",
+        transfer.destinationBranchName || "-",
+        STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status,
+        transfer.driverName || "-",
+        transfer.vehicleNumber || "-",
+        transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : "-",
+        transfer.notes || "-",
+        transfer.createdByName || "-",
+      ]);
+
+      const data = [headers, ...rows];
+      const worksheet = XLSX.utils.aoa_to_sheet(data);
+      
+      const headerStyle = {
+        font: { name: "Tahoma", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: "D4A853" } },
+        alignment: { horizontal: "right", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } },
+        }
+      };
+      
+      const cellStyle = {
+        font: { name: "Tahoma", sz: 11 },
+        alignment: { horizontal: "right", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "CCCCCC" } },
+          bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+          left: { style: "thin", color: { rgb: "CCCCCC" } },
+          right: { style: "thin", color: { rgb: "CCCCCC" } },
+        }
+      };
+
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
+      for (let row = range.s.r; row <= range.e.r; row++) {
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!worksheet[cellAddress]) continue;
+          worksheet[cellAddress].s = row === 0 ? headerStyle : cellStyle;
+        }
+      }
+
+      const colWidths = [
+        { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, 
+        { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 15 }
+      ];
+      worksheet['!cols'] = colWidths;
+      
+      (worksheet as any)['!views'] = [{ rightToLeft: true }];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "طلبات التحويل");
+      XLSX.writeFile(workbook, `طلبات-التحويل-${new Date().toISOString().split('T')[0]}.xlsx`);
+      
+      toast({
+        title: isRTL ? "تم التصدير" : "Exported",
+        description: isRTL ? "تم تصدير البيانات إلى ملف Excel" : "Data exported to Excel file",
+      });
+    } catch (error: any) {
+      toast({
+        title: isRTL ? "فشل في التصدير" : "Export failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   const exportColumns = [
     { header: isRTL ? "رقم التحويل" : "Transfer #", key: "transferNumber", width: 18 },
