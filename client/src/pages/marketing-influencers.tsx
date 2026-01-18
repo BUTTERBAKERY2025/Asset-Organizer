@@ -653,14 +653,17 @@ export default function MarketingInfluencersPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label>رابط التغطية</Label>
-          <Input
+          <Label>روابط التغطية</Label>
+          <Textarea
             value={formData.coverageUrl}
             onChange={(e) => setFormData({ ...formData, coverageUrl: e.target.value })}
-            placeholder="https://..."
+            placeholder="أدخل كل رابط في سطر جديد..."
             dir="ltr"
+            rows={3}
+            className="resize-none"
             data-testid="input-influencer-coverage-url"
           />
+          <p className="text-xs text-muted-foreground">يمكنك إضافة عدة روابط، كل رابط في سطر جديد</p>
         </div>
       </div>
 
@@ -1493,15 +1496,25 @@ export default function MarketingInfluencersPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <a
-                                href={influencer.coverageUrl || "#"}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline flex items-center gap-1 text-sm max-w-[200px] truncate"
-                              >
-                                <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                                <span className="truncate">{influencer.coverageUrl}</span>
-                              </a>
+                              <div className="space-y-1">
+                                {(influencer.coverageUrl || "").split('\n').filter(url => url.trim()).slice(0, 3).map((url, idx) => (
+                                  <a
+                                    key={idx}
+                                    href={url.trim()}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:underline flex items-center gap-1 text-sm max-w-[200px] truncate"
+                                  >
+                                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                    <span className="truncate">{url.trim()}</span>
+                                  </a>
+                                ))}
+                                {(influencer.coverageUrl || "").split('\n').filter(url => url.trim()).length > 3 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    +{(influencer.coverageUrl || "").split('\n').filter(url => url.trim()).length - 3} روابط أخرى
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
@@ -1510,10 +1523,11 @@ export default function MarketingInfluencersPage() {
                                   size="icon"
                                   className="h-8 w-8"
                                   onClick={() => {
-                                    navigator.clipboard.writeText(influencer.coverageUrl || "");
+                                    const urls = (influencer.coverageUrl || "").split('\n').filter(url => url.trim());
+                                    navigator.clipboard.writeText(urls.join('\n'));
                                     toast({
                                       title: "تم النسخ",
-                                      description: "تم نسخ رابط التغطية",
+                                      description: `تم نسخ ${urls.length} رابط`,
                                     });
                                   }}
                                   data-testid={`button-copy-coverage-${influencer.id}`}
@@ -1548,13 +1562,19 @@ export default function MarketingInfluencersPage() {
                 </div>
 
                 <div className="text-sm text-muted-foreground">
-                  إجمالي التغطيات: {influencers.filter(inf => inf.coverageUrl).filter(inf => {
+                  إجمالي المؤثرين: {influencers.filter(inf => inf.coverageUrl).filter(inf => {
                     const matchesSearch = coverageSearchQuery === "" || 
                       inf.name.toLowerCase().includes(coverageSearchQuery.toLowerCase());
                     const matchesRegion = coverageRegionFilter === "all" || 
                       inf.region?.toLowerCase().includes(coverageRegionFilter.toLowerCase());
                     return matchesSearch && matchesRegion;
-                  }).length}
+                  }).length} | إجمالي الروابط: {influencers.filter(inf => inf.coverageUrl).filter(inf => {
+                    const matchesSearch = coverageSearchQuery === "" || 
+                      inf.name.toLowerCase().includes(coverageSearchQuery.toLowerCase());
+                    const matchesRegion = coverageRegionFilter === "all" || 
+                      inf.region?.toLowerCase().includes(coverageRegionFilter.toLowerCase());
+                    return matchesSearch && matchesRegion;
+                  }).reduce((acc, inf) => acc + (inf.coverageUrl || "").split('\n').filter(url => url.trim()).length, 0)}
                 </div>
               </CardContent>
             </Card>
@@ -1739,17 +1759,37 @@ export default function MarketingInfluencersPage() {
                           </div>
                         )}
                         {selectedInfluencer.coverageUrl && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">رابط التغطية:</span>
-                            <a 
-                              href={selectedInfluencer.coverageUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline truncate max-w-[200px]"
-                              dir="ltr"
-                            >
-                              {selectedInfluencer.coverageUrl}
-                            </a>
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground">روابط التغطية:</span>
+                            <div className="space-y-1">
+                              {selectedInfluencer.coverageUrl.split('\n').filter(url => url.trim()).map((url, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <a 
+                                    href={url.trim()} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:underline truncate max-w-[250px] text-sm"
+                                    dir="ltr"
+                                  >
+                                    {url.trim()}
+                                  </a>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(url.trim());
+                                      toast({
+                                        title: "تم النسخ",
+                                        description: "تم نسخ الرابط",
+                                      });
+                                    }}
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
