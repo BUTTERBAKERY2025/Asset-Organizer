@@ -12,8 +12,11 @@ import { ExportButtons } from "@/components/export-buttons";
 import { Link } from "wouter";
 import { 
   BarChart3, Package, TrendingUp, TrendingDown, AlertTriangle, 
-  FileText, ArrowRight, Boxes, Send, Clock, CheckCircle, Truck, Calendar
+  FileText, ArrowRight, Boxes, Send, Clock, CheckCircle, Truck, Calendar,
+  Printer, Download
 } from "lucide-react";
+import { useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -180,6 +183,93 @@ export default function WarehouseReportsPage() {
       dateText: t.createdAt ? new Date(t.createdAt).toLocaleDateString("ar-SA") : "",
     };
   });
+
+  // Monthly report export columns and data
+  const monthlyBranchColumns = [
+    { header: isRTL ? "الفرع" : "Branch", key: "branchName", width: 25 },
+    { header: isRTL ? "الوارد" : "Incoming", key: "totalIncoming", width: 15 },
+    { header: isRTL ? "الصادر" : "Outgoing", key: "totalOutgoing", width: 15 },
+    { header: isRTL ? "الصافي" : "Net Movement", key: "netMovement", width: 15 },
+    { header: isRTL ? "عدد التحويلات" : "Transfer Count", key: "transferCount", width: 15 },
+  ];
+
+  const monthlyBranchExportData = monthlyReport?.byBranch?.map(row => ({
+    branchName: row.branchName,
+    totalIncoming: row.totalIncoming,
+    totalOutgoing: row.totalOutgoing,
+    netMovement: row.netMovement,
+    transferCount: row.transferCount,
+  })) || [];
+
+  const monthlyItemColumns = [
+    { header: isRTL ? "الصنف" : "Item", key: "itemName", width: 25 },
+    { header: isRTL ? "الفئة" : "Category", key: "category", width: 15 },
+    { header: isRTL ? "الوحدة" : "Unit", key: "unit", width: 10 },
+    { header: isRTL ? "الوارد" : "Incoming", key: "totalIncoming", width: 12 },
+    { header: isRTL ? "الصادر" : "Outgoing", key: "totalOutgoing", width: 12 },
+    { header: isRTL ? "الصافي" : "Net Movement", key: "netMovement", width: 12 },
+  ];
+
+  const monthlyItemExportData = monthlyReport?.byItem?.map(row => ({
+    itemName: row.itemName,
+    category: row.category,
+    unit: row.unit,
+    totalIncoming: row.totalIncoming,
+    totalOutgoing: row.totalOutgoing,
+    netMovement: row.netMovement,
+  })) || [];
+
+  const monthlyTransfersColumns = [
+    { header: isRTL ? "رقم التحويل" : "Transfer #", key: "transferNumber", width: 15 },
+    { header: isRTL ? "من" : "From", key: "sourceBranchName", width: 18 },
+    { header: isRTL ? "إلى" : "To", key: "destinationBranchName", width: 18 },
+    { header: isRTL ? "تاريخ التسليم" : "Delivery Date", key: "deliveryDate", width: 15 },
+    { header: isRTL ? "عدد الأصناف" : "Item Count", key: "itemCount", width: 10 },
+    { header: isRTL ? "الكمية" : "Total Qty", key: "totalQuantity", width: 10 },
+    { header: isRTL ? "الحالة" : "Status", key: "statusText", width: 12 },
+  ];
+
+  const monthlyTransfersExportData = monthlyReport?.transfers?.map(t => ({
+    transferNumber: t.transferNumber,
+    sourceBranchName: t.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse"),
+    destinationBranchName: t.destinationBranchName,
+    deliveryDate: t.deliveryDate ? new Date(t.deliveryDate).toLocaleDateString(isRTL ? "ar-SA" : "en-US") : "-",
+    itemCount: t.itemCount,
+    totalQuantity: t.totalQuantity,
+    statusText: t.hasDiscrepancy ? (isRTL ? "فرق" : "Discrepancy") : (isRTL ? "مكتمل" : "Complete"),
+  })) || [];
+
+  // Low stock export columns and data
+  const lowStockColumns = [
+    { header: isRTL ? "الصنف" : "Item", key: "itemName", width: 25 },
+    { header: isRTL ? "الفرع" : "Branch", key: "branchName", width: 20 },
+    { header: isRTL ? "الكمية الحالية" : "Current Qty", key: "currentQuantity", width: 15 },
+    { header: isRTL ? "الحد الأدنى" : "Reorder Point", key: "reorderPoint", width: 15 },
+    { header: isRTL ? "الفئة" : "Category", key: "category", width: 15 },
+  ];
+
+  const lowStockExportData = lowStockItems.map(stock => {
+    const item = warehouseItems?.find(i => i.id === stock.itemId);
+    const branch = branches?.find(b => b.id === stock.branchId);
+    return {
+      itemName: item?.name || `صنف ${stock.itemId}`,
+      branchName: branch?.name || stock.branchId,
+      currentQuantity: stock.currentQuantity || 0,
+      reorderPoint: item?.reorderPoint || 0,
+      category: item?.category || "-",
+    };
+  });
+
+  // Print functionality
+  const monthlyReportRef = useRef<HTMLDivElement>(null);
+  const handlePrintMonthly = useReactToPrint({
+    contentRef: monthlyReportRef,
+    documentTitle: `${isRTL ? "التقرير الشهري" : "Monthly Report"} - ${selectedMonth}/${selectedYear}`,
+  });
+
+  const getMonthName = (month: number) => {
+    return new Date(2024, month - 1).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'long' });
+  };
 
   return (
     <Layout>
@@ -373,80 +463,116 @@ export default function WarehouseReportsPage() {
 
           {/* Monthly Report Tab */}
           <TabsContent value="monthly" className="space-y-4">
-            {/* Month/Year Selector */}
+            {/* Month/Year Selector with Export Buttons */}
             <Card>
               <CardContent className="p-4">
-                <div className="flex flex-wrap gap-4 items-end">
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "الشهر" : "Month"}</Label>
-                    <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
-                      <SelectTrigger className="w-32" data-testid="select-month">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
-                          <SelectItem key={m} value={m.toString()}>
-                            {new Date(2024, m-1).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'long' })}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div className="flex flex-wrap gap-4 items-end justify-between">
+                  <div className="flex flex-wrap gap-4 items-end">
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "الشهر" : "Month"}</Label>
+                      <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+                        <SelectTrigger className="w-32" data-testid="select-month">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                            <SelectItem key={m} value={m.toString()}>
+                              {new Date(2024, m-1).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'long' })}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{isRTL ? "السنة" : "Year"}</Label>
+                      <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+                        <SelectTrigger className="w-24" data-testid="select-year">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[2024, 2025, 2026].map(y => (
+                            <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>{isRTL ? "السنة" : "Year"}</Label>
-                    <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
-                      <SelectTrigger className="w-24" data-testid="select-year">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[2024, 2025, 2026].map(y => (
-                          <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handlePrintMonthly()}
+                      className="gap-2"
+                      data-testid="btn-print-monthly"
+                    >
+                      <Printer className="h-4 w-4" />
+                      {isRTL ? "طباعة" : "Print"}
+                    </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Summary Cards */}
-            {monthlyReport?.summary && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-blue-600">{monthlyReport.summary.totalTransfers}</p>
-                    <p className="text-sm text-muted-foreground">{isRTL ? "إجمالي التحويلات" : "Total Transfers"}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-green-600">{monthlyReport.summary.deliveredTransfers}</p>
-                    <p className="text-sm text-muted-foreground">{isRTL ? "تم التسليم" : "Delivered"}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-purple-600">{monthlyReport.summary.totalItemsReceived}</p>
-                    <p className="text-sm text-muted-foreground">{isRTL ? "إجمالي الكميات" : "Total Items"}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-amber-600">{monthlyReport.summary.transfersWithDiscrepancy}</p>
-                    <p className="text-sm text-muted-foreground">{isRTL ? "تحويلات بفروقات" : "With Discrepancy"}</p>
-                  </CardContent>
-                </Card>
+            {/* Printable Monthly Report Content */}
+            <div ref={monthlyReportRef} className="space-y-4 print:p-4">
+              {/* Print Header - only visible when printing */}
+              <div className="hidden print:block print:mb-6">
+                <h1 className="text-2xl font-bold text-center mb-2">
+                  {isRTL ? "التقرير الشهري للمخازن" : "Monthly Warehouse Report"}
+                </h1>
+                <p className="text-center text-muted-foreground">
+                  {getMonthName(selectedMonth)} {selectedYear}
+                </p>
               </div>
-            )}
 
-            {/* By Branch Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Boxes className="w-5 h-5" />
-                  {isRTL ? "حركة المواد حسب الفرع" : "Movement by Branch"}
-                </CardTitle>
-              </CardHeader>
+              {/* Summary Cards */}
+              {monthlyReport?.summary && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-3xl font-bold text-blue-600">{monthlyReport.summary.totalTransfers}</p>
+                      <p className="text-sm text-muted-foreground">{isRTL ? "إجمالي التحويلات" : "Total Transfers"}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-3xl font-bold text-green-600">{monthlyReport.summary.deliveredTransfers}</p>
+                      <p className="text-sm text-muted-foreground">{isRTL ? "تم التسليم" : "Delivered"}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-3xl font-bold text-purple-600">{monthlyReport.summary.totalItemsReceived}</p>
+                      <p className="text-sm text-muted-foreground">{isRTL ? "إجمالي الكميات" : "Total Items"}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-3xl font-bold text-amber-600">{monthlyReport.summary.transfersWithDiscrepancy}</p>
+                      <p className="text-sm text-muted-foreground">{isRTL ? "تحويلات بفروقات" : "With Discrepancy"}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* By Branch Table */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between print:pb-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <Boxes className="w-5 h-5" />
+                    {isRTL ? "حركة المواد حسب الفرع" : "Movement by Branch"}
+                  </CardTitle>
+                  <div className="print:hidden">
+                    <ExportButtons
+                      data={monthlyBranchExportData}
+                      columns={monthlyBranchColumns}
+                      fileName={`monthly-branch-${selectedMonth}-${selectedYear}`}
+                      title={isRTL ? "حركة المواد حسب الفرع" : "Movement by Branch"}
+                      subtitle={`${getMonthName(selectedMonth)} ${selectedYear}`}
+                      sheetName={isRTL ? "حسب الفرع" : "By Branch"}
+                    />
+                  </div>
+                </CardHeader>
               <CardContent>
                 {monthlyReport?.byBranch && monthlyReport.byBranch.length > 0 ? (
                   <Table>
@@ -483,14 +609,24 @@ export default function WarehouseReportsPage() {
               </CardContent>
             </Card>
 
-            {/* By Item Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="w-5 h-5" />
-                  {isRTL ? "حركة المواد حسب الصنف" : "Movement by Item"}
-                </CardTitle>
-              </CardHeader>
+              {/* By Item Table */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between print:pb-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    {isRTL ? "حركة المواد حسب الصنف" : "Movement by Item"}
+                  </CardTitle>
+                  <div className="print:hidden">
+                    <ExportButtons
+                      data={monthlyItemExportData}
+                      columns={monthlyItemColumns}
+                      fileName={`monthly-items-${selectedMonth}-${selectedYear}`}
+                      title={isRTL ? "حركة المواد حسب الصنف" : "Movement by Item"}
+                      subtitle={`${getMonthName(selectedMonth)} ${selectedYear}`}
+                      sheetName={isRTL ? "حسب الصنف" : "By Item"}
+                    />
+                  </div>
+                </CardHeader>
               <CardContent>
                 {monthlyReport?.byItem && monthlyReport.byItem.length > 0 ? (
                   <Table>
@@ -527,14 +663,24 @@ export default function WarehouseReportsPage() {
               </CardContent>
             </Card>
 
-            {/* Transfers List */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Truck className="w-5 h-5" />
-                  {isRTL ? "قائمة التحويلات المستلمة" : "Delivered Transfers List"}
-                </CardTitle>
-              </CardHeader>
+              {/* Transfers List */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between print:pb-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <Truck className="w-5 h-5" />
+                    {isRTL ? "قائمة التحويلات المستلمة" : "Delivered Transfers List"}
+                  </CardTitle>
+                  <div className="print:hidden">
+                    <ExportButtons
+                      data={monthlyTransfersExportData}
+                      columns={monthlyTransfersColumns}
+                      fileName={`monthly-transfers-${selectedMonth}-${selectedYear}`}
+                      title={isRTL ? "قائمة التحويلات المستلمة" : "Delivered Transfers List"}
+                      subtitle={`${getMonthName(selectedMonth)} ${selectedYear}`}
+                      sheetName={isRTL ? "التحويلات" : "Transfers"}
+                    />
+                  </div>
+                </CardHeader>
               <CardContent>
                 {monthlyReport?.transfers && monthlyReport.transfers.length > 0 ? (
                   <Table>
@@ -581,7 +727,8 @@ export default function WarehouseReportsPage() {
                   </div>
                 )}
               </CardContent>
-            </Card>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="stock" className="space-y-4">
@@ -637,11 +784,19 @@ export default function WarehouseReportsPage() {
 
             {lowStockItems.length > 0 && (
               <Card className="border-red-200 bg-red-50/50 dark:bg-red-900/10">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-red-600 flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5" />
                     {isRTL ? "تنبيهات المخزون المنخفض" : "Low Stock Alerts"}
+                    <Badge variant="destructive" className="mr-2">{lowStockItems.length}</Badge>
                   </CardTitle>
+                  <ExportButtons
+                    data={lowStockExportData}
+                    columns={lowStockColumns}
+                    fileName={`low-stock-report-${new Date().toISOString().split('T')[0]}`}
+                    title={isRTL ? "تقرير المخزون المنخفض" : "Low Stock Report"}
+                    sheetName={isRTL ? "المخزون المنخفض" : "Low Stock"}
+                  />
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
