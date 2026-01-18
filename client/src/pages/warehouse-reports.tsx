@@ -333,7 +333,7 @@ export default function WarehouseReportsPage() {
 
   return (
     <Layout>
-      <div className="p-4 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center">

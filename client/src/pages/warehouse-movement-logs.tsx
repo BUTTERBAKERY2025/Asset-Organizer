@@ -99,7 +99,7 @@ export default function WarehouseMovementLogsPage() {
 
   return (
     <Layout>
-      <div className="p-4 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex items-center gap-3">
           <Link href="/warehouse-dashboard">
             <Button variant="ghost" size="icon">

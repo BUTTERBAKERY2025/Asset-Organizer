@@ -228,7 +228,7 @@ export default function WarehouseDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
