@@ -75,6 +75,12 @@ export default function WarehouseReportsPage() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
+  
+  // Advanced reports state
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [reportDateFrom, setReportDateFrom] = useState<string>("");
+  const [reportDateTo, setReportDateTo] = useState<string>("");
+  const [reportBranchId, setReportBranchId] = useState<string>("all");
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -105,6 +111,60 @@ export default function WarehouseReportsPage() {
       params.append("year", selectedYear.toString());
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       const res = await fetch(`/api/warehouse/monthly-report?${params.toString()}`);
+      return res.json();
+    },
+  });
+
+  // Item Account Statement query
+  const { data: itemStatement, isLoading: isLoadingItemStatement } = useQuery({
+    queryKey: ["/api/warehouse/reports/item-statement", selectedItemId, reportBranchId, reportDateFrom, reportDateTo],
+    queryFn: async () => {
+      if (!selectedItemId) return null;
+      const params = new URLSearchParams();
+      if (reportBranchId !== "all") params.append("branchId", reportBranchId);
+      if (reportDateFrom) params.append("startDate", reportDateFrom);
+      if (reportDateTo) params.append("endDate", reportDateTo);
+      const res = await fetch(`/api/warehouse/reports/item-statement/${selectedItemId}?${params.toString()}`);
+      return res.json();
+    },
+    enabled: !!selectedItemId,
+  });
+
+  // Top Requested Products query
+  const { data: topRequested, isLoading: isLoadingTopRequested } = useQuery({
+    queryKey: ["/api/warehouse/reports/top-requested", reportBranchId, reportDateFrom, reportDateTo],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (reportBranchId !== "all") params.append("branchId", reportBranchId);
+      if (reportDateFrom) params.append("startDate", reportDateFrom);
+      if (reportDateTo) params.append("endDate", reportDateTo);
+      params.append("limit", "20");
+      const res = await fetch(`/api/warehouse/reports/top-requested?${params.toString()}`);
+      return res.json();
+    },
+  });
+
+  // Comparisons query
+  const { data: comparisons, isLoading: isLoadingComparisons } = useQuery({
+    queryKey: ["/api/warehouse/reports/comparisons", selectedMonth, selectedYear, reportBranchId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("month", selectedMonth.toString());
+      params.append("year", selectedYear.toString());
+      if (reportBranchId !== "all") params.append("branchId", reportBranchId);
+      const res = await fetch(`/api/warehouse/reports/comparisons?${params.toString()}`);
+      return res.json();
+    },
+  });
+
+  // Branch Performance query
+  const { data: branchPerformance, isLoading: isLoadingPerformance } = useQuery({
+    queryKey: ["/api/warehouse/reports/branch-performance", reportDateFrom, reportDateTo],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (reportDateFrom) params.append("startDate", reportDateFrom);
+      if (reportDateTo) params.append("endDate", reportDateTo);
+      const res = await fetch(`/api/warehouse/reports/branch-performance?${params.toString()}`);
       return res.json();
     },
   });
@@ -381,18 +441,34 @@ export default function WarehouseReportsPage() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview" data-testid="tab-overview">
+          <TabsList className="flex flex-wrap gap-1 h-auto p-1">
+            <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs md:text-sm">
               {isRTL ? "نظرة عامة" : "Overview"}
             </TabsTrigger>
-            <TabsTrigger value="monthly" data-testid="tab-monthly">
-              <Calendar className="w-4 h-4 mr-1" />
-              {isRTL ? "التقرير الشهري" : "Monthly"}
+            <TabsTrigger value="monthly" data-testid="tab-monthly" className="text-xs md:text-sm">
+              <Calendar className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+              {isRTL ? "الشهري" : "Monthly"}
             </TabsTrigger>
-            <TabsTrigger value="stock" data-testid="tab-stock">
+            <TabsTrigger value="item-statement" data-testid="tab-item-statement" className="text-xs md:text-sm">
+              <FileText className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+              {isRTL ? "كشف الصنف" : "Item Statement"}
+            </TabsTrigger>
+            <TabsTrigger value="top-requested" data-testid="tab-top-requested" className="text-xs md:text-sm">
+              <TrendingUp className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+              {isRTL ? "الأكثر طلباً" : "Top Requested"}
+            </TabsTrigger>
+            <TabsTrigger value="comparisons" data-testid="tab-comparisons" className="text-xs md:text-sm">
+              <BarChart3 className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+              {isRTL ? "المقارنات" : "Comparisons"}
+            </TabsTrigger>
+            <TabsTrigger value="performance" data-testid="tab-performance" className="text-xs md:text-sm">
+              <Boxes className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+              {isRTL ? "أداء الفروع" : "Performance"}
+            </TabsTrigger>
+            <TabsTrigger value="stock" data-testid="tab-stock" className="text-xs md:text-sm">
               {isRTL ? "المخزون" : "Stock"}
             </TabsTrigger>
-            <TabsTrigger value="transfers" data-testid="tab-transfers">
+            <TabsTrigger value="transfers" data-testid="tab-transfers" className="text-xs md:text-sm">
               {isRTL ? "التحويلات" : "Transfers"}
             </TabsTrigger>
           </TabsList>
@@ -729,6 +805,660 @@ export default function WarehouseReportsPage() {
               </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Item Account Statement Tab - كشف حساب حسب الصنف */}
+          <TabsContent value="item-statement" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  {isRTL ? "كشف حساب حسب الصنف" : "Item Account Statement"}
+                </CardTitle>
+                <CardDescription>
+                  {isRTL ? "عرض حركة صنف معين خلال فترة محددة" : "View movement history for a specific item"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-4 items-end">
+                  <div className="space-y-2 flex-1 min-w-[200px]">
+                    <Label>{isRTL ? "اختر الصنف" : "Select Item"}</Label>
+                    <Select value={selectedItemId?.toString() || ""} onValueChange={(v) => setSelectedItemId(parseInt(v))}>
+                      <SelectTrigger data-testid="select-item-statement">
+                        <SelectValue placeholder={isRTL ? "اختر صنف..." : "Select item..."} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
+                        {warehouseItems?.map(item => (
+                          <SelectItem key={item.id} value={item.id.toString()}>
+                            {item.name} ({item.category})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "الفرع" : "Branch"}</Label>
+                    <Select value={reportBranchId} onValueChange={setReportBranchId}>
+                      <SelectTrigger className="w-40" data-testid="select-report-branch">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{isRTL ? "كل الفروع" : "All Branches"}</SelectItem>
+                        {branches?.map(branch => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "من تاريخ" : "From Date"}</Label>
+                    <Input
+                      type="date"
+                      value={reportDateFrom}
+                      onChange={(e) => setReportDateFrom(e.target.value)}
+                      className="w-40"
+                      data-testid="input-date-from"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "إلى تاريخ" : "To Date"}</Label>
+                    <Input
+                      type="date"
+                      value={reportDateTo}
+                      onChange={(e) => setReportDateTo(e.target.value)}
+                      className="w-40"
+                      data-testid="input-date-to"
+                    />
+                  </div>
+                </div>
+
+                {selectedItemId && itemStatement && (
+                  <div className="space-y-4 mt-6">
+                    {/* Item Info Card */}
+                    <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+                      <CardContent className="p-4">
+                        <div className="flex flex-wrap gap-6 items-center">
+                          <div>
+                            <p className="text-sm text-muted-foreground">{isRTL ? "الصنف" : "Item"}</p>
+                            <p className="text-lg font-bold">{itemStatement.item?.name}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">{isRTL ? "الفئة" : "Category"}</p>
+                            <p className="font-medium">{itemStatement.item?.category}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">{isRTL ? "الوحدة" : "Unit"}</p>
+                            <p className="font-medium">{itemStatement.item?.unit}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold text-green-600">{itemStatement.summary?.totalIn || 0}</p>
+                          <p className="text-xs text-muted-foreground">{isRTL ? "إجمالي الوارد" : "Total In"}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold text-red-600">{itemStatement.summary?.totalOut || 0}</p>
+                          <p className="text-xs text-muted-foreground">{isRTL ? "إجمالي الصادر" : "Total Out"}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold text-blue-600">{itemStatement.summary?.netChange || 0}</p>
+                          <p className="text-xs text-muted-foreground">{isRTL ? "صافي التغيير" : "Net Change"}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold text-gray-600">{itemStatement.summary?.openingBalance || 0}</p>
+                          <p className="text-xs text-muted-foreground">{isRTL ? "الرصيد الافتتاحي" : "Opening"}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-2xl font-bold text-purple-600">{itemStatement.summary?.closingBalance || 0}</p>
+                          <p className="text-xs text-muted-foreground">{isRTL ? "الرصيد الختامي" : "Closing"}</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Movements Table */}
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle>{isRTL ? "حركات الصنف" : "Item Movements"}</CardTitle>
+                        {itemStatement.movements?.length > 0 && (
+                          <ExportButtons
+                            data={itemStatement.movements.map((m: any) => ({
+                              date: m.date,
+                              type: m.type,
+                              branch: m.branchName,
+                              transferNumber: m.transferNumber || '-',
+                              quantityIn: m.quantityIn,
+                              quantityOut: m.quantityOut,
+                              balance: m.balance,
+                              notes: m.notes || ''
+                            }))}
+                            columns={[
+                              { key: 'date', header: isRTL ? 'التاريخ' : 'Date' },
+                              { key: 'type', header: isRTL ? 'النوع' : 'Type' },
+                              { key: 'branch', header: isRTL ? 'الفرع' : 'Branch' },
+                              { key: 'transferNumber', header: isRTL ? 'رقم التحويل' : 'Transfer #' },
+                              { key: 'quantityIn', header: isRTL ? 'وارد' : 'In' },
+                              { key: 'quantityOut', header: isRTL ? 'صادر' : 'Out' },
+                              { key: 'balance', header: isRTL ? 'الرصيد' : 'Balance' },
+                              { key: 'notes', header: isRTL ? 'ملاحظات' : 'Notes' }
+                            ]}
+                            fileName={`item-statement-${itemStatement.item?.name}-${new Date().toISOString().split('T')[0]}`}
+                            title={`${isRTL ? 'كشف حساب' : 'Account Statement'} - ${itemStatement.item?.name}`}
+                            sheetName={isRTL ? "حركات الصنف" : "Item Movements"}
+                          />
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        {itemStatement.movements?.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
+                                  <TableHead>{isRTL ? "النوع" : "Type"}</TableHead>
+                                  <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                                  <TableHead>{isRTL ? "رقم التحويل" : "Transfer #"}</TableHead>
+                                  <TableHead className="text-center text-green-600">{isRTL ? "وارد" : "In"}</TableHead>
+                                  <TableHead className="text-center text-red-600">{isRTL ? "صادر" : "Out"}</TableHead>
+                                  <TableHead className="text-center">{isRTL ? "الرصيد" : "Balance"}</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {itemStatement.movements.map((m: any, idx: number) => (
+                                  <TableRow key={idx}>
+                                    <TableCell>{m.date ? new Date(m.date).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US') : '-'}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={m.type === 'وارد' ? 'default' : 'secondary'} className={m.type === 'وارد' ? 'bg-green-500' : 'bg-red-500'}>
+                                        {m.type}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>{m.branchName}</TableCell>
+                                    <TableCell className="font-mono text-sm">{m.transferNumber || '-'}</TableCell>
+                                    <TableCell className="text-center text-green-600 font-mono">{m.quantityIn > 0 ? `+${m.quantityIn}` : ''}</TableCell>
+                                    <TableCell className="text-center text-red-600 font-mono">{m.quantityOut > 0 ? `-${m.quantityOut}` : ''}</TableCell>
+                                    <TableCell className="text-center font-bold font-mono">{m.balance}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground">
+                            {isRTL ? "لا توجد حركات لهذا الصنف في الفترة المحددة" : "No movements for this item in the selected period"}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {!selectedItemId && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>{isRTL ? "اختر صنف لعرض كشف الحساب" : "Select an item to view its account statement"}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Top Requested Products Tab - أكثر المنتجات طلباً */}
+          <TabsContent value="top-requested" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  {isRTL ? "أكثر المنتجات طلباً" : "Top Requested Products"}
+                </CardTitle>
+                <CardDescription>
+                  {isRTL ? "ترتيب الأصناف حسب إجمالي الكميات المطلوبة" : "Products ranked by total requested quantities"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4 items-end mb-6">
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "الفرع" : "Branch"}</Label>
+                    <Select value={reportBranchId} onValueChange={setReportBranchId}>
+                      <SelectTrigger className="w-40" data-testid="select-top-requested-branch">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{isRTL ? "كل الفروع" : "All Branches"}</SelectItem>
+                        {branches?.map(branch => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "من تاريخ" : "From Date"}</Label>
+                    <Input type="date" value={reportDateFrom} onChange={(e) => setReportDateFrom(e.target.value)} className="w-40" data-testid="input-top-requested-date-from" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "إلى تاريخ" : "To Date"}</Label>
+                    <Input type="date" value={reportDateTo} onChange={(e) => setReportDateTo(e.target.value)} className="w-40" data-testid="input-top-requested-date-to" />
+                  </div>
+                  {topRequested?.length > 0 && (
+                    <ExportButtons
+                      data={topRequested.map((item: any, idx: number) => ({
+                        rank: idx + 1,
+                        itemName: item.itemName,
+                        category: item.category,
+                        branchName: item.branchName,
+                        requestCount: item.requestCount,
+                        totalQuantityRequested: item.totalQuantityRequested,
+                        unit: item.unit
+                      }))}
+                      columns={[
+                        { key: 'rank', header: isRTL ? 'الترتيب' : 'Rank' },
+                        { key: 'itemName', header: isRTL ? 'الصنف' : 'Item' },
+                        { key: 'category', header: isRTL ? 'الفئة' : 'Category' },
+                        { key: 'branchName', header: isRTL ? 'الفرع' : 'Branch' },
+                        { key: 'requestCount', header: isRTL ? 'عدد الطلبات' : 'Requests' },
+                        { key: 'totalQuantityRequested', header: isRTL ? 'إجمالي الكمية' : 'Total Qty' },
+                        { key: 'unit', header: isRTL ? 'الوحدة' : 'Unit' }
+                      ]}
+                      fileName={`top-requested-${new Date().toISOString().split('T')[0]}`}
+                      title={isRTL ? "أكثر المنتجات طلباً" : "Top Requested Products"}
+                      sheetName={isRTL ? "الأكثر طلباً" : "Top Requested"}
+                    />
+                  )}
+                </div>
+
+                {topRequested?.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Chart */}
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={topRequested.slice(0, 10)} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" />
+                          <YAxis dataKey="itemName" type="category" width={150} tick={{ fontSize: 12 }} />
+                          <Tooltip />
+                          <Bar dataKey="totalQuantityRequested" fill="#8884d8" name={isRTL ? "الكمية المطلوبة" : "Requested Qty"} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Table */}
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-16">#</TableHead>
+                          <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
+                          <TableHead>{isRTL ? "الفئة" : "Category"}</TableHead>
+                          <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                          <TableHead className="text-center">{isRTL ? "عدد الطلبات" : "Requests"}</TableHead>
+                          <TableHead className="text-center">{isRTL ? "إجمالي الكمية" : "Total Qty"}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {topRequested.map((item: any, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-bold">{idx + 1}</TableCell>
+                            <TableCell className="font-medium">{item.itemName}</TableCell>
+                            <TableCell>{item.category}</TableCell>
+                            <TableCell>{item.branchName}</TableCell>
+                            <TableCell className="text-center">{item.requestCount}</TableCell>
+                            <TableCell className="text-center font-mono font-bold">{item.totalQuantityRequested} {item.unit}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>{isRTL ? "لا توجد بيانات طلبات" : "No request data available"}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Comparisons Tab - المقارنات */}
+          <TabsContent value="comparisons" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  {isRTL ? "مقارنة الأعلى استلاماً وطلباً" : "Top Received vs Requested Comparison"}
+                </CardTitle>
+                <CardDescription>
+                  {isRTL ? "مقارنة بين أكثر الأصناف استلاماً وطلباً حسب الشهر" : "Compare top received vs requested items by month"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4 items-end mb-6">
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "الشهر" : "Month"}</Label>
+                    <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+                      <SelectTrigger className="w-32" data-testid="select-comparisons-month">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                          <SelectItem key={m} value={m.toString()}>
+                            {new Date(2024, m-1).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'long' })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "السنة" : "Year"}</Label>
+                    <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+                      <SelectTrigger className="w-24" data-testid="select-comparisons-year">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[2024, 2025, 2026].map(y => (
+                          <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "الفرع" : "Branch"}</Label>
+                    <Select value={reportBranchId} onValueChange={setReportBranchId}>
+                      <SelectTrigger className="w-40" data-testid="select-comparisons-branch">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{isRTL ? "كل الفروع" : "All Branches"}</SelectItem>
+                        {branches?.map(branch => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {comparisons && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Top Received */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-green-600 flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4" />
+                          {isRTL ? "الأعلى استلاماً" : "Top Received"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {comparisons.topReceived?.length > 0 ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>#</TableHead>
+                                <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "الكمية" : "Qty"}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {comparisons.topReceived.map((item: any, idx: number) => (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-bold">{idx + 1}</TableCell>
+                                  <TableCell>{item.itemName}</TableCell>
+                                  <TableCell className="text-center font-mono text-green-600">{item.totalReceived} {item.unit}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <p className="text-center text-muted-foreground py-4">{isRTL ? "لا توجد بيانات" : "No data"}</p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Top Requested */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-blue-600 flex items-center gap-2">
+                          <Send className="w-4 h-4" />
+                          {isRTL ? "الأعلى طلباً" : "Top Requested"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {comparisons.topRequested?.length > 0 ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>#</TableHead>
+                                <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "الكمية" : "Qty"}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {comparisons.topRequested.map((item: any, idx: number) => (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-bold">{idx + 1}</TableCell>
+                                  <TableCell>{item.itemName}</TableCell>
+                                  <TableCell className="text-center font-mono text-blue-600">{item.totalRequested} {item.unit}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <p className="text-center text-muted-foreground py-4">{isRTL ? "لا توجد بيانات" : "No data"}</p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Branch Efficiency */}
+                    <Card className="lg:col-span-2">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2">
+                          <Boxes className="w-4 h-4" />
+                          {isRTL ? "كفاءة التوريد حسب الفرع" : "Supply Efficiency by Branch"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {comparisons.byBranch?.length > 0 ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "المستلم" : "Received"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "المطلوب" : "Requested"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "نسبة الكفاءة" : "Efficiency"}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {comparisons.byBranch.map((branch: any, idx: number) => (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-medium">{branch.branchName}</TableCell>
+                                  <TableCell className="text-center font-mono text-green-600">{branch.totalReceived}</TableCell>
+                                  <TableCell className="text-center font-mono text-blue-600">{branch.totalRequested}</TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge variant={branch.efficiency >= 90 ? 'default' : branch.efficiency >= 70 ? 'secondary' : 'destructive'}>
+                                      {branch.efficiency}%
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <p className="text-center text-muted-foreground py-4">{isRTL ? "لا توجد بيانات" : "No data"}</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Branch Performance Tab - تحليل أداء الفروع */}
+          <TabsContent value="performance" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Boxes className="w-5 h-5" />
+                  {isRTL ? "تحليل أداء الفروع" : "Branch Performance Analysis"}
+                </CardTitle>
+                <CardDescription>
+                  {isRTL ? "مؤشرات أداء كل فرع في البضاعة المستلمة والمحولة" : "KPIs for each branch in received and transferred goods"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4 items-end mb-6">
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "من تاريخ" : "From Date"}</Label>
+                    <Input type="date" value={reportDateFrom} onChange={(e) => setReportDateFrom(e.target.value)} className="w-40" data-testid="input-performance-date-from" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{isRTL ? "إلى تاريخ" : "To Date"}</Label>
+                    <Input type="date" value={reportDateTo} onChange={(e) => setReportDateTo(e.target.value)} className="w-40" data-testid="input-performance-date-to" />
+                  </div>
+                  {branchPerformance?.length > 0 && (
+                    <ExportButtons
+                      data={branchPerformance.map((b: any) => ({
+                        branchName: b.branchName,
+                        totalReceived: b.totalReceived,
+                        totalSent: b.totalSent,
+                        netMovement: b.netMovement,
+                        transfersReceived: b.transfersReceived,
+                        transfersSent: b.transfersSent,
+                        discrepancyCount: b.discrepancyCount,
+                        discrepancyRate: b.discrepancyRate + '%',
+                        avgDeliveryDays: b.avgDeliveryDays,
+                        topReceivedItem: b.topReceivedItem || '-',
+                        topSentItem: b.topSentItem || '-'
+                      }))}
+                      columns={[
+                        { key: 'branchName', header: isRTL ? 'الفرع' : 'Branch' },
+                        { key: 'totalReceived', header: isRTL ? 'المستلم' : 'Received' },
+                        { key: 'totalSent', header: isRTL ? 'المرسل' : 'Sent' },
+                        { key: 'netMovement', header: isRTL ? 'الصافي' : 'Net' },
+                        { key: 'transfersReceived', header: isRTL ? 'تحويلات مستلمة' : 'Transfers Recv' },
+                        { key: 'transfersSent', header: isRTL ? 'تحويلات مرسلة' : 'Transfers Sent' },
+                        { key: 'discrepancyRate', header: isRTL ? 'نسبة الفروقات' : 'Discrepancy %' },
+                        { key: 'avgDeliveryDays', header: isRTL ? 'متوسط أيام التسليم' : 'Avg Delivery Days' },
+                        { key: 'topReceivedItem', header: isRTL ? 'أعلى صنف استلاماً' : 'Top Received' },
+                        { key: 'topSentItem', header: isRTL ? 'أعلى صنف إرسالاً' : 'Top Sent' }
+                      ]}
+                      fileName={`branch-performance-${new Date().toISOString().split('T')[0]}`}
+                      title={isRTL ? "تحليل أداء الفروع" : "Branch Performance Analysis"}
+                      sheetName={isRTL ? "أداء الفروع" : "Performance"}
+                    />
+                  )}
+                </div>
+
+                {branchPerformance?.length > 0 ? (
+                  <div className="space-y-6">
+                    {/* Performance Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {branchPerformance.map((branch: any, idx: number) => (
+                        <Card key={idx} className="border-l-4 border-l-blue-500">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-lg">{branch.branchName}</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <p className="text-muted-foreground">{isRTL ? "المستلم" : "Received"}</p>
+                                <p className="font-bold text-green-600">{branch.totalReceived}</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">{isRTL ? "المرسل" : "Sent"}</p>
+                                <p className="font-bold text-red-600">{branch.totalSent}</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">{isRTL ? "الصافي" : "Net"}</p>
+                                <p className={`font-bold ${branch.netMovement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {branch.netMovement >= 0 ? '+' : ''}{branch.netMovement}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">{isRTL ? "نسبة الفروقات" : "Discrepancy"}</p>
+                                <Badge variant={branch.discrepancyRate <= 5 ? 'default' : branch.discrepancyRate <= 15 ? 'secondary' : 'destructive'}>
+                                  {branch.discrepancyRate}%
+                                </Badge>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">{isRTL ? "متوسط التسليم" : "Avg Delivery"}</p>
+                                <p className="font-bold">{branch.avgDeliveryDays} {isRTL ? "يوم" : "days"}</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">{isRTL ? "عدد التحويلات" : "Transfers"}</p>
+                                <p className="font-bold">{branch.transfersReceived + branch.transfersSent}</p>
+                              </div>
+                            </div>
+                            {branch.topReceivedItem && (
+                              <div className="mt-3 pt-3 border-t">
+                                <p className="text-xs text-muted-foreground">{isRTL ? "أعلى صنف استلاماً:" : "Top received:"}</p>
+                                <p className="text-sm font-medium truncate">{branch.topReceivedItem}</p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    {/* Performance Table */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>{isRTL ? "جدول الأداء التفصيلي" : "Detailed Performance Table"}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "المستلم" : "Recv"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "المرسل" : "Sent"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "تحويلات" : "Transfers"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "فروقات" : "Discrepancy"}</TableHead>
+                                <TableHead className="text-center">{isRTL ? "متوسط التسليم" : "Avg Days"}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {branchPerformance.map((branch: any, idx: number) => (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-medium">{branch.branchName}</TableCell>
+                                  <TableCell className="text-center text-green-600 font-mono">{branch.totalReceived}</TableCell>
+                                  <TableCell className="text-center text-red-600 font-mono">{branch.totalSent}</TableCell>
+                                  <TableCell className={`text-center font-mono font-bold ${branch.netMovement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {branch.netMovement >= 0 ? '+' : ''}{branch.netMovement}
+                                  </TableCell>
+                                  <TableCell className="text-center">{branch.transfersReceived + branch.transfersSent}</TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge variant={branch.discrepancyRate <= 5 ? 'default' : branch.discrepancyRate <= 15 ? 'secondary' : 'destructive'}>
+                                      {branch.discrepancyRate}%
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center font-mono">{branch.avgDeliveryDays}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Boxes className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>{isRTL ? "لا توجد بيانات أداء" : "No performance data available"}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="stock" className="space-y-4">

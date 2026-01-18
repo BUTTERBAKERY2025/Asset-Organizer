@@ -17171,6 +17171,82 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Advanced Warehouse Reports ====================
+
+  // Item Account Statement - كشف حساب حسب الصنف
+  app.get("/api/warehouse/reports/item-statement/:itemId", isAuthenticated, async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.itemId);
+      const { branchId, startDate, endDate } = req.query;
+      
+      const report = await storage.getItemAccountStatement(
+        itemId,
+        branchId as string | undefined,
+        startDate as string | undefined,
+        endDate as string | undefined
+      );
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching item statement:", error);
+      res.status(500).json({ error: "فشل في جلب كشف حساب الصنف" });
+    }
+  });
+
+  // Top Requested Products - أكثر المنتجات طلباً
+  app.get("/api/warehouse/reports/top-requested", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, startDate, endDate, limit } = req.query;
+      
+      const report = await storage.getTopRequestedProducts(
+        branchId as string | undefined,
+        startDate as string | undefined,
+        endDate as string | undefined,
+        limit ? parseInt(limit as string) : 10
+      );
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching top requested:", error);
+      res.status(500).json({ error: "فشل في جلب أكثر المنتجات طلباً" });
+    }
+  });
+
+  // Top Received vs Requested Comparison - مقارنة الأعلى استلاماً وطلباً
+  app.get("/api/warehouse/reports/comparisons", isAuthenticated, async (req, res) => {
+    try {
+      const { month, year, branchId } = req.query;
+      
+      const report = await storage.getTopReceivedVsRequested(
+        month ? parseInt(month as string) : undefined,
+        year ? parseInt(year as string) : undefined,
+        branchId as string | undefined
+      );
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching comparisons:", error);
+      res.status(500).json({ error: "فشل في جلب المقارنات" });
+    }
+  });
+
+  // Branch Performance Report - تحليل أداء الفروع
+  app.get("/api/warehouse/reports/branch-performance", isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      const report = await storage.getBranchPerformanceReport(
+        startDate as string | undefined,
+        endDate as string | undefined
+      );
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching branch performance:", error);
+      res.status(500).json({ error: "فشل في جلب تقرير أداء الفروع" });
+    }
+  });
+
   // ==================== Warehouse Notifications ====================
   
   app.get("/api/warehouse/notifications", isAuthenticated, async (req, res) => {

@@ -8875,6 +8875,473 @@ export class DatabaseStorage implements IStorage {
     return { byBranch, byItem, transfers, summary };
   }
 
+  // Item Account Statement - كشف حساب حسب الصنف
+  async getItemAccountStatement(
+    itemId: number,
+    branchId?: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<{
+    item: { id: number; name: string; category: string; unit: string };
+    movements: Array<{
+      date: string;
+      type: string;
+      branchName: string;
+      transferNumber: string | null;
+      quantityIn: number;
+      quantityOut: number;
+      balance: number;
+      notes: string | null;
+    }>;
+    summary: {
+      totalIn: number;
+      totalOut: number;
+      netChange: number;
+      openingBalance: number;
+      closingBalance: number;
+    };
+  }> {
+    // Get item info
+    const [item] = await db.select().from(warehouseItems).where(eq(warehouseItems.id, itemId));
+    if (!item) throw new Error('الصنف غير موجود');
+
+    const allBranches = await db.select().from(branches);
+    const branchMap = new Map(allBranches.map(b => [b.id, b.name]));
+
+    // Build conditions for transfers
+    const conditions: any[] = [eq(materialTransfers.status, 'delivered')];
+    if (startDate) conditions.push(sql`${materialTransfers.deliveryDate} >= ${startDate}`);
+    if (endDate) conditions.push(sql`${materialTransfers.deliveryDate} <= ${endDate}`);
+
+    const deliveredTransfers = await db.select().from(materialTransfers).where(and(...conditions));
+    
+    // Get all transfer items for this item
+    const transferIds = deliveredTransfers.map(t => t.id);
+    const transferItems = transferIds.length > 0
+      ? await db.select().from(materialTransferItems)
+          .where(and(
+            eq(materialTransferItems.itemId, itemId),
+            sql`${materialTransferItems.transferId} IN (${sql.join(transferIds.map(id => sql`${id}`), sql`,`)})`
+          ))
+      : [];
+
+    // Build movements list
+    const movements: Array<{
+      date: string;
+      type: string;
+      branchName: string;
+      transferNumber: string | null;
+      quantityIn: number;
+      quantityOut: number;
+      balance: number;
+      notes: string | null;
+    }> = [];
+
+    let runningBalance = 0;
+    let totalIn = 0;
+    let totalOut = 0;
+
+    for (const transfer of deliveredTransfers.sort((a, b) => 
+      new Date(a.deliveryDate || '').getTime() - new Date(b.deliveryDate || '').getTime()
+    )) {
+      const items = transferItems.filter(ti => ti.transferId === transfer.id);
+      if (items.length === 0) continue;
+
+      for (const ti of items) {
+        const qty = ti.receivedQuantity || ti.quantity;
+        const isIncoming = !branchId || transfer.destinationBranchId === branchId;
+        const isOutgoing = branchId && transfer.sourceBranchId === branchId;
+
+        if (isIncoming) {
+          totalIn += qty;
+          runningBalance += qty;
+          movements.push({
+            date: transfer.deliveryDate || '',
+            type: 'وارد',
+            branchName: branchMap.get(transfer.destinationBranchId) || transfer.destinationBranchId,
+            transferNumber: transfer.transferNumber,
+            quantityIn: qty,
+            quantityOut: 0,
+            balance: runningBalance,
+            notes: ti.modificationNotes || null
+          });
+        }
+
+        if (isOutgoing) {
+          totalOut += ti.quantity;
+          runningBalance -= ti.quantity;
+          movements.push({
+            date: transfer.deliveryDate || '',
+            type: 'صادر',
+            branchName: branchMap.get(transfer.sourceBranchId!) || transfer.sourceBranchId!,
+            transferNumber: transfer.transferNumber,
+            quantityIn: 0,
+            quantityOut: ti.quantity,
+            balance: runningBalance,
+            notes: ti.modificationNotes || null
+          });
+        }
+      }
+    }
+
+    return {
+      item: { id: item.id, name: item.name, category: item.category, unit: item.unit },
+      movements,
+      summary: {
+        totalIn,
+        totalOut,
+        netChange: totalIn - totalOut,
+        openingBalance: 0,
+        closingBalance: runningBalance
+      }
+    };
+  }
+
+  // Top Requested Products by Branch - أكثر المنتجات طلباً حسب الفرع
+  async getTopRequestedProducts(
+    branchId?: string,
+    startDate?: string,
+    endDate?: string,
+    limit: number = 10
+  ): Promise<Array<{
+    itemId: number;
+    itemName: string;
+    category: string;
+    unit: string;
+    branchId: string;
+    branchName: string;
+    requestCount: number;
+    totalQuantityRequested: number;
+  }>> {
+    const allBranches = await db.select().from(branches);
+    const branchMap = new Map(allBranches.map(b => [b.id, b.name]));
+    
+    const allItems = await db.select().from(warehouseItems);
+    const itemMap = new Map(allItems.map(i => [i.id, { name: i.name, category: i.category, unit: i.unit }]));
+
+    // Build conditions
+    const conditions: any[] = [];
+    if (branchId) conditions.push(eq(materialTransfers.destinationBranchId, branchId));
+    if (startDate) conditions.push(sql`${materialTransfers.createdAt} >= ${startDate}`);
+    if (endDate) conditions.push(sql`${materialTransfers.createdAt} <= ${endDate}`);
+
+    const transfers = conditions.length > 0
+      ? await db.select().from(materialTransfers).where(and(...conditions))
+      : await db.select().from(materialTransfers);
+
+    const transferIds = transfers.map(t => t.id);
+    const allTransferItems = transferIds.length > 0
+      ? await db.select().from(materialTransferItems)
+          .where(sql`${materialTransferItems.transferId} IN (${sql.join(transferIds.map(id => sql`${id}`), sql`,`)})`)
+      : [];
+
+    // Aggregate by item and branch
+    const stats: Map<string, { itemId: number; branchId: string; count: number; totalQty: number }> = new Map();
+    
+    for (const transfer of transfers) {
+      const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
+      for (const item of items) {
+        const key = `${item.itemId}-${transfer.destinationBranchId}`;
+        if (!stats.has(key)) {
+          stats.set(key, { itemId: item.itemId, branchId: transfer.destinationBranchId, count: 0, totalQty: 0 });
+        }
+        const stat = stats.get(key)!;
+        stat.count++;
+        stat.totalQty += item.quantity;
+      }
+    }
+
+    return Array.from(stats.values())
+      .sort((a, b) => b.totalQty - a.totalQty)
+      .slice(0, limit)
+      .map(s => ({
+        itemId: s.itemId,
+        itemName: itemMap.get(s.itemId)?.name || `صنف ${s.itemId}`,
+        category: itemMap.get(s.itemId)?.category || '',
+        unit: itemMap.get(s.itemId)?.unit || '',
+        branchId: s.branchId,
+        branchName: branchMap.get(s.branchId) || s.branchId,
+        requestCount: s.count,
+        totalQuantityRequested: s.totalQty
+      }));
+  }
+
+  // Top Received vs Requested Comparison - مقارنة الأعلى استلاماً وطلباً
+  async getTopReceivedVsRequested(
+    month?: number,
+    year?: number,
+    branchId?: string
+  ): Promise<{
+    topReceived: Array<{
+      itemId: number;
+      itemName: string;
+      totalReceived: number;
+      unit: string;
+    }>;
+    topRequested: Array<{
+      itemId: number;
+      itemName: string;
+      totalRequested: number;
+      unit: string;
+    }>;
+    byBranch: Array<{
+      branchId: string;
+      branchName: string;
+      totalReceived: number;
+      totalRequested: number;
+      efficiency: number;
+    }>;
+  }> {
+    const targetMonth = month || new Date().getMonth() + 1;
+    const targetYear = year || new Date().getFullYear();
+    const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
+    const endDate = targetMonth === 12 
+      ? `${targetYear + 1}-01-01` 
+      : `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-01`;
+
+    const allBranches = await db.select().from(branches);
+    const branchMap = new Map(allBranches.map(b => [b.id, b.name]));
+    
+    const allItems = await db.select().from(warehouseItems);
+    const itemMap = new Map(allItems.map(i => [i.id, { name: i.name, unit: i.unit }]));
+
+    // Get delivered transfers
+    const conditions: any[] = [
+      eq(materialTransfers.status, 'delivered'),
+      sql`${materialTransfers.deliveryDate} >= ${startDate}`,
+      sql`${materialTransfers.deliveryDate} < ${endDate}`
+    ];
+    if (branchId) conditions.push(eq(materialTransfers.destinationBranchId, branchId));
+
+    const deliveredTransfers = await db.select().from(materialTransfers).where(and(...conditions));
+    
+    // Get all transfers (for requested)
+    const requestConditions: any[] = [
+      sql`${materialTransfers.createdAt} >= ${startDate}`,
+      sql`${materialTransfers.createdAt} < ${endDate}`
+    ];
+    if (branchId) requestConditions.push(eq(materialTransfers.destinationBranchId, branchId));
+    
+    const allRequests = await db.select().from(materialTransfers).where(and(...requestConditions));
+
+    const transferIds = [...new Set([...deliveredTransfers.map(t => t.id), ...allRequests.map(t => t.id)])];
+    const allTransferItems = transferIds.length > 0
+      ? await db.select().from(materialTransferItems)
+          .where(sql`${materialTransferItems.transferId} IN (${sql.join(transferIds.map(id => sql`${id}`), sql`,`)})`)
+      : [];
+
+    // Calculate received
+    const receivedStats: Map<number, number> = new Map();
+    for (const transfer of deliveredTransfers) {
+      const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
+      for (const item of items) {
+        const current = receivedStats.get(item.itemId) || 0;
+        receivedStats.set(item.itemId, current + (item.receivedQuantity || item.quantity));
+      }
+    }
+
+    // Calculate requested
+    const requestedStats: Map<number, number> = new Map();
+    for (const transfer of allRequests) {
+      const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
+      for (const item of items) {
+        const current = requestedStats.get(item.itemId) || 0;
+        requestedStats.set(item.itemId, current + item.quantity);
+      }
+    }
+
+    // Calculate by branch
+    const branchStats: Map<string, { received: number; requested: number }> = new Map();
+    for (const transfer of allRequests) {
+      if (!branchStats.has(transfer.destinationBranchId)) {
+        branchStats.set(transfer.destinationBranchId, { received: 0, requested: 0 });
+      }
+      const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
+      const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
+      branchStats.get(transfer.destinationBranchId)!.requested += totalQty;
+    }
+    for (const transfer of deliveredTransfers) {
+      if (!branchStats.has(transfer.destinationBranchId)) {
+        branchStats.set(transfer.destinationBranchId, { received: 0, requested: 0 });
+      }
+      const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
+      const totalQty = items.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0);
+      branchStats.get(transfer.destinationBranchId)!.received += totalQty;
+    }
+
+    return {
+      topReceived: Array.from(receivedStats.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([itemId, total]) => ({
+          itemId,
+          itemName: itemMap.get(itemId)?.name || `صنف ${itemId}`,
+          totalReceived: total,
+          unit: itemMap.get(itemId)?.unit || ''
+        })),
+      topRequested: Array.from(requestedStats.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([itemId, total]) => ({
+          itemId,
+          itemName: itemMap.get(itemId)?.name || `صنف ${itemId}`,
+          totalRequested: total,
+          unit: itemMap.get(itemId)?.unit || ''
+        })),
+      byBranch: Array.from(branchStats.entries()).map(([bId, stats]) => ({
+        branchId: bId,
+        branchName: branchMap.get(bId) || bId,
+        totalReceived: stats.received,
+        totalRequested: stats.requested,
+        efficiency: stats.requested > 0 ? Math.round((stats.received / stats.requested) * 100) : 0
+      }))
+    };
+  }
+
+  // Branch Performance Analysis - تحليل أداء الفروع
+  async getBranchPerformanceReport(
+    startDate?: string,
+    endDate?: string
+  ): Promise<Array<{
+    branchId: string;
+    branchName: string;
+    totalReceived: number;
+    totalSent: number;
+    netMovement: number;
+    transfersReceived: number;
+    transfersSent: number;
+    discrepancyCount: number;
+    discrepancyRate: number;
+    avgDeliveryDays: number;
+    topReceivedItem: string | null;
+    topSentItem: string | null;
+  }>> {
+    const allBranches = await db.select().from(branches);
+    const branchMap = new Map(allBranches.map(b => [b.id, b.name]));
+    
+    const allItems = await db.select().from(warehouseItems);
+    const itemMap = new Map(allItems.map(i => [i.id, i.name]));
+
+    // Build conditions
+    const conditions: any[] = [eq(materialTransfers.status, 'delivered')];
+    if (startDate) conditions.push(sql`${materialTransfers.deliveryDate} >= ${startDate}`);
+    if (endDate) conditions.push(sql`${materialTransfers.deliveryDate} <= ${endDate}`);
+
+    const deliveredTransfers = await db.select().from(materialTransfers).where(and(...conditions));
+    
+    const transferIds = deliveredTransfers.map(t => t.id);
+    const allTransferItems = transferIds.length > 0
+      ? await db.select().from(materialTransferItems)
+          .where(sql`${materialTransferItems.transferId} IN (${sql.join(transferIds.map(id => sql`${id}`), sql`,`)})`)
+      : [];
+
+    // Calculate stats per branch
+    const branchStats: Map<string, {
+      received: number;
+      sent: number;
+      transfersReceived: number;
+      transfersSent: number;
+      discrepancies: number;
+      deliveryDays: number[];
+      itemsReceived: Map<number, number>;
+      itemsSent: Map<number, number>;
+    }> = new Map();
+
+    for (const transfer of deliveredTransfers) {
+      const destBranch = transfer.destinationBranchId;
+      const srcBranch = transfer.sourceBranchId;
+      const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
+      
+      // Calculate delivery days
+      let deliveryDays = 0;
+      if (transfer.deliveryDate && transfer.createdAt) {
+        const created = new Date(transfer.createdAt);
+        const delivered = new Date(transfer.deliveryDate);
+        deliveryDays = Math.ceil((delivered.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+      }
+
+      // Destination stats
+      if (!branchStats.has(destBranch)) {
+        branchStats.set(destBranch, {
+          received: 0, sent: 0, transfersReceived: 0, transfersSent: 0,
+          discrepancies: 0, deliveryDays: [], itemsReceived: new Map(), itemsSent: new Map()
+        });
+      }
+      const destStats = branchStats.get(destBranch)!;
+      destStats.transfersReceived++;
+      destStats.deliveryDays.push(deliveryDays);
+      if (transfer.hasDiscrepancy) destStats.discrepancies++;
+      
+      for (const item of items) {
+        const qty = item.receivedQuantity || item.quantity;
+        destStats.received += qty;
+        const current = destStats.itemsReceived.get(item.itemId) || 0;
+        destStats.itemsReceived.set(item.itemId, current + qty);
+      }
+
+      // Source stats (for branch-to-branch)
+      if (srcBranch && srcBranch !== 'main_warehouse') {
+        if (!branchStats.has(srcBranch)) {
+          branchStats.set(srcBranch, {
+            received: 0, sent: 0, transfersReceived: 0, transfersSent: 0,
+            discrepancies: 0, deliveryDays: [], itemsReceived: new Map(), itemsSent: new Map()
+          });
+        }
+        const srcStats = branchStats.get(srcBranch)!;
+        srcStats.transfersSent++;
+        
+        for (const item of items) {
+          srcStats.sent += item.quantity;
+          const current = srcStats.itemsSent.get(item.itemId) || 0;
+          srcStats.itemsSent.set(item.itemId, current + item.quantity);
+        }
+      }
+    }
+
+    return Array.from(branchStats.entries()).map(([bId, stats]) => {
+      // Find top received item
+      let topReceivedItem: string | null = null;
+      let maxReceived = 0;
+      stats.itemsReceived.forEach((qty, itemId) => {
+        if (qty > maxReceived) {
+          maxReceived = qty;
+          topReceivedItem = itemMap.get(itemId) || null;
+        }
+      });
+
+      // Find top sent item
+      let topSentItem: string | null = null;
+      let maxSent = 0;
+      stats.itemsSent.forEach((qty, itemId) => {
+        if (qty > maxSent) {
+          maxSent = qty;
+          topSentItem = itemMap.get(itemId) || null;
+        }
+      });
+
+      const avgDeliveryDays = stats.deliveryDays.length > 0
+        ? Math.round(stats.deliveryDays.reduce((a, b) => a + b, 0) / stats.deliveryDays.length)
+        : 0;
+
+      return {
+        branchId: bId,
+        branchName: branchMap.get(bId) || bId,
+        totalReceived: stats.received,
+        totalSent: stats.sent,
+        netMovement: stats.received - stats.sent,
+        transfersReceived: stats.transfersReceived,
+        transfersSent: stats.transfersSent,
+        discrepancyCount: stats.discrepancies,
+        discrepancyRate: stats.transfersReceived > 0 
+          ? Math.round((stats.discrepancies / stats.transfersReceived) * 100) 
+          : 0,
+        avgDeliveryDays,
+        topReceivedItem,
+        topSentItem
+      };
+    }).sort((a, b) => b.totalReceived - a.totalReceived);
+  }
+
   // Warehouse Dashboard Stats
   async getWarehouseDashboardStats(branchId?: string): Promise<{
     pendingRequests: number;
