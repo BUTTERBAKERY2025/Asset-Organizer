@@ -17037,6 +17037,54 @@ export async function registerRoutes(
     }
   });
 
+  // Modify transfer quantities by warehouse manager (before dispatch only)
+  app.post("/api/warehouse/material-transfers/:id/modify-quantities", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { modifications } = req.body;
+      
+      // modifications: [{ itemId: number, newQuantity: number, modificationNotes?: string }]
+      if (!modifications || !Array.isArray(modifications)) {
+        return res.status(400).json({ error: "يجب توفير بيانات التعديل" });
+      }
+      
+      // Validate all quantities are positive
+      for (const mod of modifications) {
+        if (mod.newQuantity < 0) {
+          return res.status(400).json({ error: "الكمية يجب أن تكون رقم موجب" });
+        }
+      }
+      
+      const transfer = await storage.modifyTransferQuantities(
+        parseInt(req.params.id),
+        modifications,
+        user?.id,
+        user?.fullName || user?.username
+      );
+      
+      // Create notification about quantity modification
+      try {
+        await storage.createWarehouseNotification({
+          type: "transfer_modified",
+          title: `تم تعديل كميات: ${transfer.transferNumber}`,
+          titleEn: `Quantities Modified: ${transfer.transferNumber}`,
+          body: `تم تعديل بعض الكميات من قبل مسؤول المستودع: ${user?.fullName || user?.username}`,
+          bodyEn: `Some quantities were modified by warehouse manager: ${user?.fullName || user?.username}`,
+          branchId: transfer.sourceBranchId || undefined,
+          targetBranchId: transfer.destinationBranchId,
+          entityType: "transfer",
+          entityId: transfer.id,
+          priority: "normal",
+        });
+      } catch (e) { console.error("Failed to create notification:", e); }
+      
+      res.json(transfer);
+    } catch (error: any) {
+      console.error("Error modifying transfer quantities:", error);
+      res.status(400).json({ error: error.message || "فشل في تعديل الكميات" });
+    }
+  });
+
   // Confirm delivery with received quantities for each item
   app.post("/api/warehouse/material-transfers/:id/confirm-delivery", isAuthenticated, async (req, res) => {
     try {

@@ -8607,6 +8607,77 @@ export class DatabaseStorage implements IStorage {
     return `${prefix}-${String(nextNum).padStart(4, '0')}`;
   }
 
+  // Modify Transfer Quantities - تعديل كميات طلب التحويل (قبل الإرسال فقط)
+  async modifyTransferQuantities(
+    transferId: number,
+    modifications: Array<{
+      itemId: number;
+      newQuantity: number;
+      modificationNotes?: string;
+    }>,
+    modifiedBy: string,
+    modifiedByName: string
+  ): Promise<MaterialTransfer> {
+    return await db.transaction(async (tx) => {
+      // Get the transfer and verify it's in a modifiable state
+      const [transfer] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, transferId));
+      
+      if (!transfer) {
+        throw new Error("طلب التحويل غير موجود");
+      }
+      
+      // Only allow modifications before dispatch (pending or approved status)
+      if (!['pending', 'approved'].includes(transfer.status)) {
+        throw new Error("لا يمكن تعديل الكميات بعد إرسال الشحنة");
+      }
+      
+      // Get current items
+      const items = await tx.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, transferId));
+      
+      let hasModifications = false;
+      
+      // Update each modified item
+      for (const mod of modifications) {
+        const item = items.find(i => i.itemId === mod.itemId);
+        if (!item) continue;
+        
+        // Store original quantity if not already stored
+        const originalQty = item.originalQuantity || item.quantity;
+        
+        // Only update if quantity changed
+        if (mod.newQuantity !== item.quantity) {
+          hasModifications = true;
+          
+          await tx.update(materialTransferItems)
+            .set({
+              originalQuantity: originalQty,
+              quantity: mod.newQuantity,
+              isModified: true,
+              modifiedBy,
+              modifiedByName,
+              modifiedAt: new Date(),
+              modificationNotes: mod.modificationNotes || 'تعديل الكمية حسب المتوفر'
+            })
+            .where(eq(materialTransferItems.id, item.id));
+        }
+      }
+      
+      // Update transfer header if any modifications were made
+      if (hasModifications) {
+        await tx.update(materialTransfers)
+          .set({
+            hasQuantityModifications: true,
+            updatedAt: new Date()
+          })
+          .where(eq(materialTransfers.id, transferId));
+      }
+      
+      // Return updated transfer
+      const [updated] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, transferId));
+      return updated;
+    });
+  }
+
   // Warehouse Movement Logs
   async getWarehouseMovementLogs(filters?: { itemId?: number; branchId?: string; movementType?: string }): Promise<WarehouseMovementLog[]> {
     const conditions = [];
