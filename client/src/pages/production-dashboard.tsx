@@ -360,116 +360,79 @@ export default function ProductionDashboardPage() {
           </div>
 
           {/* Main KPIs Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {/* Production Today */}
-            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-daily-qty">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-green-100 to-transparent rounded-bl-full" />
-              <CardContent className="p-4 relative">
-                <div className="flex items-start justify-between">
-                  <div className="h-10 w-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <Activity className="h-5 w-5 text-green-600" />
+            <Card className="overflow-hidden" data-testid="card-daily-qty">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">إنتاج اليوم</p>
+                    {dailyLoading ? (
+                      <Skeleton className="h-8 w-20 mt-1" />
+                    ) : (
+                      <p className="text-2xl font-bold">{dailyStats?.totalQuantity || 0}</p>
+                    )}
                   </div>
-                  {prevDayStats && (prevDayStats.totalQuantity || 0) > 0 && qtyDiff.percentage > 0 && (
-                    <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-[10px] px-1.5 py-0.5">
-                      {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3 ml-0.5" /> : <TrendingDown className="h-3 w-3 ml-0.5" />}
-                      {qtyDiff.percentage}%
-                    </Badge>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="text-xs text-slate-500 font-medium">إنتاج اليوم</p>
-                  {dailyLoading ? (
-                    <Skeleton className="h-8 w-20 mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold text-slate-800">{dailyStats?.totalQuantity || 0}</p>
-                  )}
-                  <p className="text-[10px] text-slate-400 mt-0.5">قطعة</p>
+                  <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                    <Activity className="w-6 h-6 text-green-600" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Batches Today */}
-            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-daily-batches">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-amber-100 to-transparent rounded-bl-full" />
-              <CardContent className="p-4 relative">
-                <div className="flex items-start justify-between">
-                  <div className="h-10 w-10 bg-amber-100 rounded-xl flex items-center justify-center">
-                    <Package className="h-5 w-5 text-amber-600" />
+            <Card className="overflow-hidden" data-testid="card-daily-batches">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">الدفعات</p>
+                    {dailyLoading ? (
+                      <Skeleton className="h-8 w-16 mt-1" />
+                    ) : (
+                      <p className="text-2xl font-bold">{dailyStats?.totalBatches || 0}</p>
+                    )}
                   </div>
-                  {prevDayStats && (prevDayStats.totalBatches || 0) > 0 && batchDiff.percentage > 0 && (
-                    <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-[10px] px-1.5 py-0.5">
-                      {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3 ml-0.5" /> : <TrendingDown className="h-3 w-3 ml-0.5" />}
-                      {batchDiff.percentage}%
-                    </Badge>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="text-xs text-slate-500 font-medium">الدفعات</p>
-                  {dailyLoading ? (
-                    <Skeleton className="h-8 w-16 mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold text-slate-800">{dailyStats?.totalBatches || 0}</p>
-                  )}
-                  <p className="text-[10px] text-slate-400 mt-0.5">دفعة</p>
+                  <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <Package className="w-6 h-6 text-amber-600" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Display Bar */}
-            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-display">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-blue-100 to-transparent rounded-bl-full" />
-              <CardContent className="p-4 relative">
-                <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <ShoppingCart className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="mt-3">
-                  <p className="text-xs text-slate-500 font-medium">بار العرض</p>
-                  {dailyLoading ? (
-                    <Skeleton className="h-8 w-16 mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold text-slate-800">{dailyStats?.byDestination?.display_bar || 0}</p>
-                  )}
-                  <p className="text-[10px] text-slate-400 mt-0.5">قطعة</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Storage */}
-            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-storage">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-cyan-100 to-transparent rounded-bl-full" />
-              <CardContent className="p-4 relative">
-                <div className="h-10 w-10 bg-cyan-100 rounded-xl flex items-center justify-center">
-                  <Snowflake className="h-5 w-5 text-cyan-600" />
-                </div>
-                <div className="mt-3">
-                  <p className="text-xs text-slate-500 font-medium">التخزين</p>
-                  {dailyLoading ? (
-                    <Skeleton className="h-8 w-16 mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold text-slate-800">
-                      {(dailyStats?.byDestination?.freezer || 0) + (dailyStats?.byDestination?.refrigerator || 0)}
-                    </p>
-                  )}
-                  <p className="text-[10px] text-slate-400 mt-0.5">قطعة</p>
+            <Card className="overflow-hidden" data-testid="card-display">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">بار العرض</p>
+                    {dailyLoading ? (
+                      <Skeleton className="h-8 w-16 mt-1" />
+                    ) : (
+                      <p className="text-2xl font-bold">{dailyStats?.byDestination?.display_bar || 0}</p>
+                    )}
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <ShoppingCart className="w-6 h-6 text-blue-600" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Active Orders */}
-            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow" data-testid="card-active-orders">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-purple-100 to-transparent rounded-bl-full" />
-              <CardContent className="p-4 relative">
-                <div className="h-10 w-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-purple-600" />
-                </div>
-                <div className="mt-3">
-                  <p className="text-xs text-slate-500 font-medium">أوامر نشطة</p>
-                  {statsLoading ? (
-                    <Skeleton className="h-8 w-16 mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold text-slate-800">{activeOrders}</p>
-                  )}
-                  <p className="text-[10px] text-slate-400 mt-0.5">أمر</p>
+            <Card className="overflow-hidden" data-testid="card-active-orders">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">أوامر نشطة</p>
+                    {statsLoading ? (
+                      <Skeleton className="h-8 w-12 mt-1" />
+                    ) : (
+                      <p className="text-2xl font-bold">{hubData?.activeOrders || 0}</p>
+                    )}
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-purple-600" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -477,8 +440,8 @@ export default function ProductionDashboardPage() {
 
           {/* Target Progress Card */}
           {hubData?.target && hubData.target.totalTarget > 0 && (
-            <Card className="border-0 shadow-lg bg-gradient-to-r from-amber-50 via-white to-orange-50" data-testid="card-target-vs-actual">
-              <CardContent className="p-6">
+            <Card data-testid="card-target-vs-actual">
+              <CardContent className="p-4">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="h-10 w-10 bg-amber-100 rounded-xl flex items-center justify-center">
                     <Target className="h-5 w-5 text-amber-600" />
