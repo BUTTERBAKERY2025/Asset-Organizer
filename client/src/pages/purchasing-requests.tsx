@@ -129,7 +129,7 @@ export default function PurchasingRequestsPage() {
     vendorName: "",
     expectedDeliveryDate: "",
     notes: "",
-    items: [] as { itemId: number; itemName: string; quantityRequested: string; unit: string; estimatedUnitCost: string }[]
+    items: [] as { itemId: number; itemName: string; quantityRequested: string; availableQuantity: string; unit: string; estimatedUnitCost: string }[]
   });
 
   // Edit form state
@@ -211,7 +211,7 @@ export default function PurchasingRequestsPage() {
   const addItemToRequest = () => {
     setNewRequest(prev => ({
       ...prev,
-      items: [...prev.items, { itemId: 0, itemName: "", quantityRequested: "1", unit: "unit", estimatedUnitCost: "" }]
+      items: [...prev.items, { itemId: 0, itemName: "", quantityRequested: "1", availableQuantity: "", unit: "unit", estimatedUnitCost: "" }]
     }));
   };
 
@@ -785,7 +785,7 @@ export default function PurchasingRequestsPage() {
                   <div className="space-y-3">
                     {newRequest.items.map((item, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 border rounded">
-                        <div className="col-span-4 space-y-1">
+                        <div className="col-span-3 space-y-1">
                           <Label className="text-xs">{isRTL ? "الصنف" : "Item"}</Label>
                           <Select 
                             value={item.itemId?.toString() || ""} 
@@ -802,7 +802,7 @@ export default function PurchasingRequestsPage() {
                           </Select>
                         </div>
                         <div className="col-span-2 space-y-1">
-                          <Label className="text-xs">{isRTL ? "الكمية" : "Qty"}</Label>
+                          <Label className="text-xs">{isRTL ? "الكمية المطلوبة" : "Req Qty"}</Label>
                           <Input
                             type="number"
                             min="1"
@@ -812,8 +812,20 @@ export default function PurchasingRequestsPage() {
                           />
                         </div>
                         <div className="col-span-2 space-y-1">
+                          <Label className="text-xs text-red-600">{isRTL ? "الكمية المتوفرة *" : "Avail Qty *"}</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.availableQuantity}
+                            onChange={(e) => updateItemInRequest(idx, 'availableQuantity', e.target.value)}
+                            placeholder={isRTL ? "إلزامي" : "Required"}
+                            className={!item.availableQuantity ? "border-red-300" : ""}
+                            data-testid={`item-available-qty-${idx}`}
+                          />
+                        </div>
+                        <div className="col-span-1 space-y-1">
                           <Label className="text-xs">{isRTL ? "الوحدة" : "Unit"}</Label>
-                          <Input value={item.unit} disabled className="bg-muted" />
+                          <Input value={item.unit} disabled className="bg-muted text-xs" />
                         </div>
                         <div className="col-span-3 space-y-1">
                           <Label className="text-xs">{isRTL ? "سعر الوحدة" : "Unit Price"}</Label>
@@ -854,12 +866,23 @@ export default function PurchasingRequestsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setIsCreateOpen(false); resetCreateForm(); }}>
+              <Button variant="outline" onClick={() => { setIsCreateOpen(false); resetCreateForm(); }} data-testid="btn-cancel-create">
                 {isRTL ? "إلغاء" : "Cancel"}
               </Button>
               <Button 
-                onClick={() => createRequestMutation.mutate(newRequest)}
-                disabled={!newRequest.branchId || createRequestMutation.isPending}
+                onClick={() => {
+                  const missingAvailableQty = newRequest.items.some(item => !item.availableQuantity || item.availableQuantity === "");
+                  if (missingAvailableQty) {
+                    toast({
+                      title: isRTL ? "خطأ" : "Error",
+                      description: isRTL ? "يجب إدخال الكمية المتوفرة لجميع الأصناف" : "Available quantity is required for all items",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  createRequestMutation.mutate(newRequest);
+                }}
+                disabled={!newRequest.branchId || newRequest.items.length === 0 || newRequest.items.some(item => !item.availableQuantity) || createRequestMutation.isPending}
                 data-testid="btn-submit-create"
               >
                 {createRequestMutation.isPending ? (isRTL ? "جاري الإنشاء..." : "Creating...") : (isRTL ? "إنشاء الطلب" : "Create Request")}
