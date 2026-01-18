@@ -1,0 +1,1 @@
+DELETE FROM inventory_items WHERE branch_id = 'MA7HEL';
