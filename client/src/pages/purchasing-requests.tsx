@@ -813,12 +813,12 @@ export default function PurchasingRequestsPage() {
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-[300px] p-0" align="start">
-                              <Command>
+                            <PopoverContent className="w-[320px] p-0" align="start" side="bottom" sideOffset={4}>
+                              <Command shouldFilter={true}>
                                 <CommandInput placeholder={isRTL ? "ابحث عن صنف..." : "Search item..."} data-testid={`item-search-${idx}`} />
-                                <CommandList className="max-h-[200px]">
+                                <CommandList className="max-h-[250px] overflow-y-auto">
                                   <CommandEmpty>{isRTL ? "لا توجد نتائج" : "No results found"}</CommandEmpty>
-                                  <CommandGroup>
+                                  <CommandGroup heading={isRTL ? "الأصناف" : "Items"}>
                                     {warehouseItems.map((wi) => (
                                       <CommandItem
                                         key={wi.id}
@@ -827,6 +827,7 @@ export default function PurchasingRequestsPage() {
                                           updateItemInRequest(idx, 'itemId', wi.id);
                                           setOpenItemPopovers(prev => ({ ...prev, [idx]: false }));
                                         }}
+                                        className="cursor-pointer"
                                       >
                                         <Check
                                           className={cn(
@@ -834,8 +835,8 @@ export default function PurchasingRequestsPage() {
                                             item.itemId === wi.id ? "opacity-100" : "opacity-0"
                                           )}
                                         />
-                                        <span className="flex-1">{wi.name}</span>
-                                        <span className="text-xs text-muted-foreground">{wi.category}</span>
+                                        <span className="flex-1 truncate">{wi.name}</span>
+                                        <span className="text-xs text-muted-foreground ml-2">{wi.category}</span>
                                       </CommandItem>
                                     ))}
                                   </CommandGroup>
