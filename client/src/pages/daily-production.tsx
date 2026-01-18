@@ -807,7 +807,7 @@ export default function DailyProductionPage() {
 
   return (
     <Layout>
-      <div className="space-y-6" dir="rtl">
+      <div className="p-4 space-y-6" dir="rtl">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">

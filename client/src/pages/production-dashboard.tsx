@@ -280,23 +280,21 @@ export default function ProductionDashboardPage() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white" dir="rtl">
-        <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4">
+      <div className="p-4 space-y-6" dir="rtl">
           
           {/* Header Section */}
-          <div className="bg-white rounded-2xl shadow-sm border p-4 md:p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-200">
-                  <Factory className="h-7 w-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-l from-amber-600 to-orange-600 bg-clip-text text-transparent" data-testid="page-title">
-                    لوحة الإنتاج
-                  </h1>
-                  <p className="text-gray-500 text-sm mt-1">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
-                </div>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+                <Factory className="w-6 h-6 text-white" />
               </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground" data-testid="page-title">
+                  لوحة الإنتاج
+                </h1>
+                <p className="text-muted-foreground text-sm">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
+              </div>
+            </div>
               
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-2.5 border">
@@ -353,13 +351,12 @@ export default function ProductionDashboardPage() {
                     </Button>
                   </Link>
                 </div>
-              </div>
             </div>
+          </div>
             
-            <div className="mt-3 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 inline-flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              {format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}
-            </div>
+          <div className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            {format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}
           </div>
 
           {/* Main KPIs Grid */}
@@ -827,7 +824,6 @@ export default function ProductionDashboardPage() {
               </Card>
             </div>
           </div>
-        </div>
       </div>
     </Layout>
   );
