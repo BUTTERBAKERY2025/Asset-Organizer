@@ -17392,8 +17392,21 @@ export async function registerRoutes(
         unitPrice: item.estimatedUnitCost ? String(item.estimatedUnitCost) : null,
       }));
       
+      // Calculate total estimated cost from items
+      const totalEstimatedCost = mappedItems.reduce((sum, item) => {
+        const qty = item.requestedQuantity || 0;
+        const price = item.unitPrice ? parseFloat(item.unitPrice) : 0;
+        return sum + (qty * price);
+      }, 0);
+      
       const request = await storage.createPurchasingRequest(
-        { ...requestData, requestNumber, requestedBy: user?.id, requestedByName: user?.username },
+        { 
+          ...requestData, 
+          requestNumber, 
+          requestedBy: user?.id, 
+          requestedByName: user?.username,
+          totalEstimatedCost: totalEstimatedCost > 0 ? String(totalEstimatedCost) : null 
+        },
         mappedItems
       );
       
