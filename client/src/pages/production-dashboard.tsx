@@ -280,7 +280,7 @@ export default function ProductionDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 space-y-6" dir="rtl">
+      <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
           
           {/* Header Section */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
