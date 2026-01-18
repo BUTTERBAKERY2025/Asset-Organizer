@@ -73,9 +73,14 @@ type TransferItem = {
   category: string;
   unit: string;
   quantity: number;
+  originalQuantity: number | null;
   receivedQuantity: number | null;
   notes: string | null;
   availableQuantity?: number | null;
+  isModified?: boolean;
+  modifiedByName?: string | null;
+  modifiedAt?: string | null;
+  modificationNotes?: string | null;
 };
 
 const STATUS_OPTIONS = [
@@ -109,12 +114,22 @@ export default function TransferRequestsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isUpdateStatusOpen, setIsUpdateStatusOpen] = useState(false);
+  const [isModifyQuantitiesOpen, setIsModifyQuantitiesOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<MaterialTransfer | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const [openItemIndex, setOpenItemIndex] = useState<number | null>(null);
+  const [modifyingItems, setModifyingItems] = useState<Array<{ 
+    itemId: number; 
+    itemName: string;
+    originalQuantity: number;
+    currentQuantity: number;
+    newQuantity: number; 
+    unit: string;
+    modificationNotes: string 
+  }>>([]);
   const printRef = useRef<HTMLDivElement>(null);
 
   // Print functionality with portrait orientation
@@ -342,6 +357,56 @@ export default function TransferRequestsPage() {
       });
     },
   });
+
+  // Mutation for modifying quantities by warehouse manager
+  const modifyQuantitiesMutation = useMutation({
+    mutationFn: async ({ id, modifications }: {
+      id: number;
+      modifications: Array<{ itemId: number; newQuantity: number; modificationNotes?: string }>;
+    }) => {
+      const response = await apiRequest("POST", `/api/warehouse/material-transfers/${id}/modify-quantities`, {
+        modifications
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers", selectedTransfer?.id, "items"] });
+      setIsModifyQuantitiesOpen(false);
+      setModifyingItems([]);
+      toast({ title: isRTL ? "تم تعديل الكميات بنجاح" : "Quantities modified successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: isRTL ? "فشل في تعديل الكميات" : "Failed to modify quantities",
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Handle opening modify quantities dialog
+  const handleModifyQuantities = async (transfer: MaterialTransfer) => {
+    setSelectedTransfer(transfer);
+    try {
+      const response = await fetch(`/api/warehouse/material-transfers/${transfer.id}/items`);
+      if (response.ok) {
+        const items = await response.json();
+        setModifyingItems(items.map((item: TransferItem) => ({
+          itemId: item.itemId,
+          itemName: item.itemName,
+          originalQuantity: item.originalQuantity || item.quantity,
+          currentQuantity: item.quantity,
+          newQuantity: item.quantity,
+          unit: item.unit,
+          modificationNotes: ""
+        })));
+        setIsModifyQuantitiesOpen(true);
+      }
+    } catch (error) {
+      console.error("Error fetching items:", error);
+    }
+  };
 
   const resetForm = () => {
     // Reset to correct flow: source = warehouse, destination = branch
@@ -1296,6 +1361,19 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                   <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-red-600`} />
                                   {isRTL ? "تحميل PDF" : "Download PDF"}
                                 </DropdownMenuItem>
+                                {(['pending', 'approved'].includes(transfer.status) && canSelectBranch) && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      onClick={() => handleModifyQuantities(transfer)} 
+                                      className="text-amber-600"
+                                      data-testid={`btn-modify-qty-${transfer.id}`}
+                                    >
+                                      <Package className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                                      {isRTL ? "تعديل الكميات" : "Modify Quantities"}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 {(transfer.status === 'pending' && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
                                   <>
                                     <DropdownMenuSeparator />
@@ -1441,15 +1519,44 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         {transferItems.map((item, index) => (
                           <TableRow key={item.id}>
                             <TableCell className="font-mono text-xs">{index + 1}</TableCell>
-                            <TableCell className="font-medium">{item.itemName}</TableCell>
+                            <TableCell className="font-medium">
+                              {item.itemName}
+                              {item.isModified && (
+                                <Badge variant="outline" className="mr-2 text-xs text-amber-600 border-amber-300">
+                                  {isRTL ? "معدّل" : "Modified"}
+                                </Badge>
+                              )}
+                            </TableCell>
                             <TableCell>{item.category}</TableCell>
                             <TableCell className="text-center text-muted-foreground">{item.availableQuantity ?? '-'}</TableCell>
-                            <TableCell className="text-center font-bold">{item.quantity}</TableCell>
+                            <TableCell className="text-center font-bold">
+                              {item.isModified && item.originalQuantity ? (
+                                <div className="flex flex-col items-center">
+                                  <span className="line-through text-muted-foreground text-xs">{item.originalQuantity}</span>
+                                  <span className="text-amber-600">{item.quantity}</span>
+                                </div>
+                              ) : (
+                                item.quantity
+                              )}
+                            </TableCell>
                             <TableCell>{item.unit}</TableCell>
                             {selectedTransfer.status === "delivered" && (
                               <TableCell className="text-center">{item.receivedQuantity ?? item.quantity}</TableCell>
                             )}
-                            <TableCell className="text-xs text-muted-foreground">{item.notes || "-"}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {item.isModified && item.modificationNotes ? (
+                                <div>
+                                  <span className="text-amber-600">{item.modificationNotes}</span>
+                                  {item.modifiedByName && (
+                                    <span className="block text-xs text-muted-foreground">
+                                      ({isRTL ? "بواسطة" : "by"}: {item.modifiedByName})
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                item.notes || "-"
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1782,6 +1889,144 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 {confirmDeliveryMutation.isPending 
                   ? (isRTL ? "جاري التأكيد..." : "Confirming...") 
                   : (isRTL ? "تأكيد الاستلام" : "Confirm Delivery")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modify Quantities Dialog - تعديل الكميات */}
+        <Dialog open={isModifyQuantitiesOpen} onOpenChange={setIsModifyQuantitiesOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-amber-600" />
+                {isRTL ? "تعديل كميات التحويل" : "Modify Transfer Quantities"}
+              </DialogTitle>
+              <DialogDescription>
+                {isRTL 
+                  ? "يمكنك تعديل الكميات حسب المتوفر في المستودع قبل الإرسال"
+                  : "You can modify quantities based on warehouse availability before dispatch"}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {/* Warning Banner */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-amber-800">
+                  {isRTL 
+                    ? "ملاحظة: سيتم تسجيل التعديلات وإظهارها في بيان التحويل. لا يمكن التعديل بعد الإرسال."
+                    : "Note: Modifications will be recorded and shown in the transfer document. Cannot modify after dispatch."}
+                </div>
+              </div>
+              
+              {/* Items Table */}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
+                    <TableHead className="text-center">{isRTL ? "الكمية الأصلية" : "Original Qty"}</TableHead>
+                    <TableHead className="text-center">{isRTL ? "الكمية الجديدة" : "New Qty"}</TableHead>
+                    <TableHead>{isRTL ? "سبب التعديل" : "Reason"}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {modifyingItems.map((item, idx) => (
+                    <TableRow key={item.itemId}>
+                      <TableCell className="font-medium">
+                        {item.itemName}
+                        <span className="text-xs text-muted-foreground block">{item.unit}</span>
+                      </TableCell>
+                      <TableCell className="text-center font-mono">
+                        {item.originalQuantity}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={item.newQuantity}
+                          onChange={(e) => {
+                            const newItems = [...modifyingItems];
+                            newItems[idx] = { ...item, newQuantity: parseInt(e.target.value) || 0 };
+                            setModifyingItems(newItems);
+                          }}
+                          className="w-20 text-center mx-auto"
+                          data-testid={`input-qty-${item.itemId}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={item.modificationNotes || ""}
+                          onChange={(e) => {
+                            const newItems = [...modifyingItems];
+                            newItems[idx] = { ...item, modificationNotes: e.target.value };
+                            setModifyingItems(newItems);
+                          }}
+                          placeholder={isRTL ? "الكمية غير متوفرة..." : "Quantity unavailable..."}
+                          className="w-full"
+                          data-testid={`input-notes-${item.itemId}`}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              
+              {/* Summary of changes */}
+              {modifyingItems.some((item) => item.newQuantity !== item.originalQuantity) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="text-sm font-medium text-blue-800 mb-2">
+                    {isRTL ? "ملخص التعديلات:" : "Modifications Summary:"}
+                  </div>
+                  <div className="space-y-1">
+                    {modifyingItems.filter((item) => item.newQuantity !== item.originalQuantity).map((item) => (
+                      <div key={item.itemId} className="text-sm text-blue-700 flex justify-between">
+                        <span>{item.itemName}</span>
+                        <span className="font-mono">
+                          {item.originalQuantity} → {item.newQuantity}
+                          <span className={item.newQuantity < item.originalQuantity ? "text-red-600 mr-1" : "text-green-600 mr-1"}>
+                            ({item.newQuantity - item.originalQuantity > 0 ? '+' : ''}{item.newQuantity - item.originalQuantity})
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsModifyQuantitiesOpen(false)}>
+                {isRTL ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (selectedTransfer) {
+                    const changedItems = modifyingItems
+                      .filter((item: any) => item.newQuantity !== item.currentQuantity)
+                      .map((item: any) => ({
+                        itemId: item.itemId,
+                        newQuantity: item.newQuantity,
+                        modificationNotes: item.modificationNotes || undefined
+                      }));
+                    
+                    if (changedItems.length > 0) {
+                      modifyQuantitiesMutation.mutate({
+                        id: selectedTransfer.id,
+                        modifications: changedItems
+                      });
+                    } else {
+                      setIsModifyQuantitiesOpen(false);
+                    }
+                  }
+                }}
+                disabled={modifyQuantitiesMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700"
+                data-testid="btn-save-modifications"
+              >
+                {modifyQuantitiesMutation.isPending 
+                  ? (isRTL ? "جاري الحفظ..." : "Saving...") 
+                  : (isRTL ? "حفظ التعديلات" : "Save Changes")}
               </Button>
             </DialogFooter>
           </DialogContent>
