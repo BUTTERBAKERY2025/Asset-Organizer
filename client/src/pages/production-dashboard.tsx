@@ -292,71 +292,41 @@ export default function ProductionDashboardPage() {
                 <h1 className="text-2xl font-bold text-foreground" data-testid="page-title">
                   لوحة الإنتاج
                 </h1>
-                <p className="text-muted-foreground text-sm">مركز التحكم الشامل لإدارة الإنتاج والتوقعات</p>
+                <p className="text-muted-foreground text-sm">{format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}</p>
               </div>
             </div>
               
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-2.5 border">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">الفرع</Label>
-                    <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
-                      <SelectTrigger className="w-[140px] h-8 text-sm bg-white border-slate-200">
-                        <SelectValue placeholder="كل الفروع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}
-                        {branches?.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-px h-10 bg-slate-200" />
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">التاريخ</Label>
-                    <Input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="w-[130px] h-8 text-sm bg-white border-slate-200"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border">
-                  <Switch
-                    id="auto-refresh"
-                    checked={autoRefresh}
-                    onCheckedChange={setAutoRefresh}
-                    data-testid="switch-auto-refresh"
-                    className="data-[state=checked]:bg-amber-500"
-                  />
-                  <Label htmlFor="auto-refresh" className="text-xs text-slate-600 cursor-pointer whitespace-nowrap">
-                    تحديث تلقائي
-                  </Label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400" data-testid="text-last-updated">
-                    {formatLastUpdated()}
-                  </span>
-                  <Button variant="outline" size="sm" onClick={handleRefresh} className="h-9 px-3" data-testid="btn-refresh">
-                    <RefreshCw className={`h-4 w-4 ${dailyLoading ? 'animate-spin' : ''}`} />
-                  </Button>
-                  <Link href="/advanced-production-orders/new">
-                    <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-9 shadow-md shadow-amber-200" data-testid="btn-new-order">
-                      <Plus className="h-4 w-4 ml-1" />
-                      أمر جديد
-                    </Button>
-                  </Link>
-                </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="كل الفروع" />
+                </SelectTrigger>
+                <SelectContent>
+                  {canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}
+                  {branches?.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-[140px]"
+              />
+              
+              <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="btn-refresh">
+                <RefreshCw className={`h-4 w-4 ${dailyLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              
+              <Link href="/advanced-production-orders/new">
+                <Button data-testid="btn-new-order">
+                  <Plus className="h-4 w-4 ml-1" />
+                  أمر جديد
+                </Button>
+              </Link>
             </div>
-          </div>
-            
-          <div className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 inline-flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            {format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}
           </div>
 
           {/* Main KPIs Grid */}
