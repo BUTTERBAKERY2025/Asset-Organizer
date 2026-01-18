@@ -17366,6 +17366,7 @@ export async function registerRoutes(
           itemId: z.number(),
           itemName: z.string(),
           quantityRequested: z.union([z.string(), z.number()]),
+          availableQuantity: z.union([z.string(), z.number()]).optional(),
           unit: z.string().default("unit"),
           estimatedUnitCost: z.union([z.string(), z.number()]).optional(),
         })).optional(),
@@ -17381,9 +17382,19 @@ export async function registerRoutes(
       
       const requestNumber = await storage.generatePurchasingRequestNumber();
       
+      // Map frontend field names to database field names
+      const mappedItems = (items || []).map(item => ({
+        itemId: item.itemId,
+        itemName: item.itemName,
+        unit: item.unit,
+        requestedQuantity: Number(item.quantityRequested) || 0,
+        approvedQuantity: Number(item.availableQuantity) || 0, // Store availableQuantity as approvedQuantity
+        unitPrice: item.estimatedUnitCost ? String(item.estimatedUnitCost) : null,
+      }));
+      
       const request = await storage.createPurchasingRequest(
         { ...requestData, requestNumber, requestedBy: user?.id, requestedByName: user?.username },
-        items || []
+        mappedItems
       );
       
       res.json(request);

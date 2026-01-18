@@ -49,9 +49,10 @@ type PurchasingRequestItem = {
   id: number;
   itemId: number;
   itemName: string;
-  quantityRequested: string;
+  requestedQuantity: number;  // Database field name
+  approvedQuantity: number;   // Used to store available quantity
   unit: string;
-  estimatedUnitCost: string;
+  unitPrice: string | null;   // Database field name
 };
 
 type PurchasingRequestWithItems = PurchasingRequest & {
@@ -659,7 +660,8 @@ export default function PurchasingRequestsPage() {
                           <TableRow>
                             <TableHead>#</TableHead>
                             <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
-                            <TableHead className="text-center">{isRTL ? "الكمية" : "Qty"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الكمية المطلوبة" : "Req Qty"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الكمية المتوفرة" : "Available"}</TableHead>
                             <TableHead>{isRTL ? "الوحدة" : "Unit"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "سعر الوحدة" : "Unit Price"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الإجمالي" : "Total"}</TableHead>
@@ -670,14 +672,15 @@ export default function PurchasingRequestsPage() {
                             <TableRow key={item.id || idx}>
                               <TableCell>{idx + 1}</TableCell>
                               <TableCell className="font-medium">{item.itemName}</TableCell>
-                              <TableCell className="text-center font-mono">{item.quantityRequested}</TableCell>
+                              <TableCell className="text-center font-mono">{item.requestedQuantity || 0}</TableCell>
+                              <TableCell className="text-center font-mono">{item.approvedQuantity || 0}</TableCell>
                               <TableCell>{item.unit}</TableCell>
                               <TableCell className="text-center font-mono">
-                                {item.estimatedUnitCost ? `${parseFloat(item.estimatedUnitCost).toLocaleString()} ر.س` : "-"}
+                                {item.unitPrice ? `${parseFloat(item.unitPrice).toLocaleString()} ر.س` : "-"}
                               </TableCell>
                               <TableCell className="text-center font-mono font-bold">
-                                {item.estimatedUnitCost && item.quantityRequested 
-                                  ? `${(parseFloat(item.estimatedUnitCost) * parseFloat(item.quantityRequested)).toLocaleString()} ر.س` 
+                                {item.unitPrice && item.requestedQuantity 
+                                  ? `${(parseFloat(item.unitPrice) * item.requestedQuantity).toLocaleString()} ر.س` 
                                   : "-"}
                               </TableCell>
                             </TableRow>
