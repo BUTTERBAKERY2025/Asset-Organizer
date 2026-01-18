@@ -72,6 +72,8 @@ import {
   XCircle,
   TrendingUp,
   BarChart3,
+  Link2,
+  Copy,
 } from "lucide-react";
 import { Link } from "wouter";
 import type { MarketingInfluencer, InfluencerCampaignLink, InfluencerContact, InfluencerPayment, CampaignExpense, MarketingCampaign } from "@shared/schema";
@@ -184,6 +186,10 @@ export default function MarketingInfluencersPage() {
   const [formData, setFormData] = useState<InfluencerFormData>(defaultFormData);
   const [isExporting, setIsExporting] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [activePageTab, setActivePageTab] = useState("influencers");
+  const [coverageSearchQuery, setCoverageSearchQuery] = useState("");
+  const [coverageRegionFilter, setCoverageRegionFilter] = useState<string>("all");
+  const [coverageCampaignFilter, setCoverageCampaignFilter] = useState<string>("all");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -283,7 +289,6 @@ export default function MarketingInfluencersPage() {
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!selectedInfluencer && isDetailSheetOpen,
   });
 
   const getCampaignName = (campaignId: number | null) => {
@@ -966,6 +971,20 @@ export default function MarketingInfluencersPage() {
           </div>
         </div>
 
+        <Tabs value={activePageTab} onValueChange={setActivePageTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="influencers" className="gap-2" data-testid="page-tab-influencers">
+              <Users className="w-4 h-4" />
+              المؤثرين
+            </TabsTrigger>
+            <TabsTrigger value="coverage-links" className="gap-2" data-testid="page-tab-coverage-links">
+              <Link2 className="w-4 h-4" />
+              لينك التغطيات
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="influencers" className="space-y-4 mt-0">
+
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
           <Card>
             <CardContent className="p-3 sm:p-4">
@@ -1370,6 +1389,177 @@ export default function MarketingInfluencersPage() {
             </CardContent>
           </Card>
         )}
+
+          </TabsContent>
+
+          <TabsContent value="coverage-links" className="space-y-4 mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Link2 className="w-5 h-5" />
+                  لينك التغطيات
+                </CardTitle>
+                <CardDescription>
+                  جميع روابط التغطيات مع إمكانية الفلترة حسب الحملة والمنطقة
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      placeholder="البحث بالاسم..."
+                      value={coverageSearchQuery}
+                      onChange={(e) => setCoverageSearchQuery(e.target.value)}
+                      className="pr-10 h-10"
+                      data-testid="input-search-coverage"
+                    />
+                  </div>
+                  <Select value={coverageRegionFilter} onValueChange={setCoverageRegionFilter}>
+                    <SelectTrigger className="w-full sm:w-40 h-10" data-testid="select-coverage-region">
+                      <SelectValue placeholder="المنطقة" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      <SelectItem value="all">جميع المناطق</SelectItem>
+                      {uniqueRegions.map((region) => (
+                        <SelectItem key={region} value={region || ""}>
+                          {region}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={coverageCampaignFilter} onValueChange={setCoverageCampaignFilter}>
+                    <SelectTrigger className="w-full sm:w-48 h-10" data-testid="select-coverage-campaign">
+                      <SelectValue placeholder="الحملة" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      <SelectItem value="all">جميع الحملات</SelectItem>
+                      {allCampaigns.map((campaign) => (
+                        <SelectItem key={campaign.id} value={campaign.id.toString()}>
+                          {campaign.nameAr || campaign.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="text-right">المؤثر</TableHead>
+                        <TableHead className="text-right">المنطقة</TableHead>
+                        <TableHead className="text-right">لينك التغطية</TableHead>
+                        <TableHead className="text-right">الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {influencers
+                        .filter(inf => inf.coverageUrl)
+                        .filter(inf => {
+                          const matchesSearch = coverageSearchQuery === "" || 
+                            inf.name.toLowerCase().includes(coverageSearchQuery.toLowerCase()) ||
+                            (inf.nameAr && inf.nameAr.toLowerCase().includes(coverageSearchQuery.toLowerCase()));
+                          const matchesRegion = coverageRegionFilter === "all" || 
+                            inf.region?.toLowerCase().includes(coverageRegionFilter.toLowerCase());
+                          return matchesSearch && matchesRegion;
+                        })
+                        .map((influencer) => (
+                          <TableRow key={influencer.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {influencer.profileImageUrl ? (
+                                  <img
+                                    src={influencer.profileImageUrl}
+                                    alt={influencer.name}
+                                    className="w-8 h-8 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                                    <User className="w-4 h-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="font-medium text-sm">{influencer.name}</p>
+                                  {influencer.followerCountText && (
+                                    <p className="text-xs text-muted-foreground">{influencer.followerCountText} متابع</p>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {influencer.region || "-"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <a
+                                href={influencer.coverageUrl || "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline flex items-center gap-1 text-sm max-w-[200px] truncate"
+                              >
+                                <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                <span className="truncate">{influencer.coverageUrl}</span>
+                              </a>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(influencer.coverageUrl || "");
+                                    toast({
+                                      title: "تم النسخ",
+                                      description: "تم نسخ رابط التغطية",
+                                    });
+                                  }}
+                                  data-testid={`button-copy-coverage-${influencer.id}`}
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setSelectedInfluencer(influencer);
+                                    setIsDetailSheetOpen(true);
+                                  }}
+                                  data-testid={`button-view-influencer-${influencer.id}`}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      {influencers.filter(inf => inf.coverageUrl).length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                            لا توجد تغطيات متاحة
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  إجمالي التغطيات: {influencers.filter(inf => inf.coverageUrl).filter(inf => {
+                    const matchesSearch = coverageSearchQuery === "" || 
+                      inf.name.toLowerCase().includes(coverageSearchQuery.toLowerCase());
+                    const matchesRegion = coverageRegionFilter === "all" || 
+                      inf.region?.toLowerCase().includes(coverageRegionFilter.toLowerCase());
+                    return matchesSearch && matchesRegion;
+                  }).length}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
         <Dialog
           open={isAddDialogOpen || isEditDialogOpen}
