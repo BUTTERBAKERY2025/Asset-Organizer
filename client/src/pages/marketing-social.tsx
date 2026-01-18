@@ -19,7 +19,7 @@ import {
   BarChart3, Eye, Heart, Share2, Video, Image, Upload, X,
   TrendingUp, Users, Clock, CheckCircle, XCircle, AlertCircle,
   Megaphone, FileText, Hash, Target, UserCheck, Briefcase,
-  Sparkles, Layout as LayoutIcon, Copy, Trash2, Edit2, Play, ArrowRight
+  Sparkles, Layout as LayoutIcon, Copy, Trash2, Edit2, Play, ArrowRight, Linkedin
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -49,6 +49,7 @@ const PLATFORMS = [
   { id: "tiktok", name: "تيك توك", icon: Music, color: "bg-black", textColor: "text-white" },
   { id: "snapchat", name: "سناب شات", icon: Ghost, color: "bg-yellow-400", textColor: "text-black" },
   { id: "youtube", name: "يوتيوب", icon: Youtube, color: "bg-red-600", textColor: "text-white" },
+  { id: "linkedin", name: "لينكد إن", icon: Linkedin, color: "bg-blue-700", textColor: "text-white" },
 ];
 
 const POST_STATUSES = {
@@ -72,6 +73,7 @@ interface SocialAccount {
   platform: string;
   accountName: string;
   accountHandle?: string;
+  profileUrl?: string;
   profileImageUrl?: string;
   followersCount: number;
   followingCount: number;
@@ -178,6 +180,7 @@ export default function MarketingSocialPage() {
   const [showPostDialog, setShowPostDialog] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  const [connectProfileUrl, setConnectProfileUrl] = useState("");
   const [postFilter, setPostFilter] = useState<string>("all");
   
   const [newPost, setNewPost] = useState({
@@ -484,18 +487,23 @@ export default function MarketingSocialPage() {
   };
 
   const handleConnectAccount = () => {
-    if (!selectedPlatform) return;
+    if (!selectedPlatform || !connectProfileUrl.trim()) {
+      toast({ title: "خطأ", description: "الرجاء إدخال رابط الحساب", variant: "destructive" });
+      return;
+    }
     const platformInfo = getPlatformInfo(selectedPlatform);
     const accountData = {
       platform: selectedPlatform,
       accountName: `Butter Bakery ${platformInfo.name}`,
       accountHandle: `@butterbakery_${selectedPlatform}`,
+      profileUrl: connectProfileUrl.trim(),
       isConnected: true,
       followersCount: 0,
       followingCount: 0,
       postsCount: 0,
     };
     createAccountMutation.mutate(accountData);
+    setConnectProfileUrl("");
   };
 
   const handleDisconnectAccount = (accountId: number) => {
@@ -660,6 +668,18 @@ export default function MarketingSocialPage() {
                             </Button>
                           </div>
                           <div className="flex gap-2">
+                            {account.profileUrl && (
+                              <Button 
+                                size="sm" 
+                                variant="default" 
+                                className="flex-1 text-xs" 
+                                data-testid={`button-visit-${platform.id}`}
+                                onClick={() => window.open(account.profileUrl, '_blank')}
+                              >
+                                <Link2 className="h-3 w-3 ml-1" />
+                                زيارة الحساب
+                              </Button>
+                            )}
                             <Button 
                               size="sm" 
                               variant="outline" 
@@ -1400,32 +1420,40 @@ export default function MarketingSocialPage() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
+        <Dialog open={showConnectDialog} onOpenChange={(open) => {
+          setShowConnectDialog(open);
+          if (!open) setConnectProfileUrl("");
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>ربط حساب {selectedPlatform && getPlatformInfo(selectedPlatform).name}</DialogTitle>
               <DialogDescription>
-                سيتم توجيهك لتسجيل الدخول ومنح الصلاحيات المطلوبة
+                أدخل رابط الحساب لربطه بالنظام
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                <p className="font-medium">الصلاحيات المطلوبة:</p>
-                <ul className="text-sm text-muted-foreground space-y-1 mr-4">
-                  <li>• قراءة معلومات الحساب</li>
-                  <li>• نشر المحتوى</li>
-                  <li>• جدولة المنشورات</li>
-                  <li>• قراءة الإحصائيات</li>
-                </ul>
+              <div className="space-y-2">
+                <Label htmlFor="profile-url">رابط الحساب *</Label>
+                <Input
+                  id="profile-url"
+                  placeholder={`https://www.${selectedPlatform === 'twitter' ? 'x' : selectedPlatform}.com/...`}
+                  value={connectProfileUrl}
+                  onChange={(e) => setConnectProfileUrl(e.target.value)}
+                  dir="ltr"
+                  data-testid="input-profile-url"
+                />
+                <p className="text-xs text-muted-foreground">
+                  مثال: https://www.instagram.com/butterbakery_sa
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                لا نقوم بتخزين كلمات المرور. نستخدم OAuth للاتصال الآمن.
-              </p>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowConnectDialog(false)} data-testid="button-cancel-connect">إلغاء</Button>
-              <Button onClick={handleConnectAccount} data-testid="button-confirm-connect">
-                متابعة الربط
+              <Button variant="outline" onClick={() => {
+                setShowConnectDialog(false);
+                setConnectProfileUrl("");
+              }} data-testid="button-cancel-connect">إلغاء</Button>
+              <Button onClick={handleConnectAccount} disabled={!connectProfileUrl.trim()} data-testid="button-confirm-connect">
+                ربط الحساب
               </Button>
             </DialogFooter>
           </DialogContent>

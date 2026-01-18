@@ -5130,6 +5130,7 @@ export const socialAccounts = pgTable("social_accounts", {
   accountId: text("account_id"), // Platform-specific account ID
   accountName: text("account_name").notNull(),
   accountHandle: text("account_handle"), // @username
+  profileUrl: text("profile_url"), // رابط الملف الشخصي
   pageId: text("page_id"), // For Facebook pages
   profileImageUrl: text("profile_image_url"),
   followersCount: integer("followers_count").default(0),
