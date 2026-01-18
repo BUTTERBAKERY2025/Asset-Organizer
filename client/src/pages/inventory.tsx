@@ -254,23 +254,31 @@ export default function InventoryPage() {
 
   const getStatusLabel = (status?: string | null) => {
     switch(status) {
-      case "good": return "جيد";
-      case "maintenance": return "صيانة";
-      case "damaged": return "تالف";
-      case "missing": return "مفقود";
+      case "good":
+      case "جيد": return "جيد";
+      case "maintenance":
+      case "صيانة": return "صيانة";
+      case "damaged":
+      case "تالف": return "تالف";
+      case "missing":
+      case "مفقود": return "مفقود";
       default: return "غير محدد";
     }
   };
 
   const getStatusBadge = (status?: string | null) => {
     switch(status) {
-      case "good": 
+      case "good":
+      case "جيد": 
         return <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200 gap-1"><CheckCircle2 className="w-3 h-3" /> جيد</Badge>;
-      case "maintenance": 
+      case "maintenance":
+      case "صيانة": 
         return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200 gap-1"><AlertTriangle className="w-3 h-3" /> صيانة</Badge>;
-      case "damaged": 
+      case "damaged":
+      case "تالف": 
         return <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 gap-1"><XCircle className="w-3 h-3" /> تالف</Badge>;
-      case "missing": 
+      case "missing":
+      case "مفقود": 
         return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200 gap-1"><HelpCircle className="w-3 h-3" /> مفقود</Badge>;
       default: 
         return <Badge variant="outline" className="gap-1">غير محدد</Badge>;
