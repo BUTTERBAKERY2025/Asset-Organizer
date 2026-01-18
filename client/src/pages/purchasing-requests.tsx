@@ -10,18 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   ShoppingCart, Search, Filter, Clock, CheckCircle, XCircle, 
   ArrowLeft, Eye, Package, Truck, Plus, Printer, Edit, Trash2,
-  AlertTriangle, Calendar
+  AlertTriangle, Calendar, ChevronsUpDown, Check
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ExportButtons } from "@/components/export-buttons";
 import { useReactToPrint } from "react-to-print";
+import { cn } from "@/lib/utils";
 
 type PurchasingRequest = {
   id: number;
@@ -138,6 +141,9 @@ export default function PurchasingRequestsPage() {
     expectedDeliveryDate: "",
     notes: ""
   });
+
+  // Track open state for each item's combobox
+  const [openItemPopovers, setOpenItemPopovers] = useState<Record<number, boolean>>({});
 
   const { data: requests = [] } = useQuery<PurchasingRequest[]>({
     queryKey: ["/api/purchasing/requests"],
@@ -787,19 +793,56 @@ export default function PurchasingRequestsPage() {
                       <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 border rounded">
                         <div className="col-span-3 space-y-1">
                           <Label className="text-xs">{isRTL ? "الصنف" : "Item"}</Label>
-                          <Select 
-                            value={item.itemId?.toString() || ""} 
-                            onValueChange={(v) => updateItemInRequest(idx, 'itemId', parseInt(v))}
+                          <Popover 
+                            open={openItemPopovers[idx] || false} 
+                            onOpenChange={(open) => setOpenItemPopovers(prev => ({ ...prev, [idx]: open }))}
                           >
-                            <SelectTrigger data-testid={`item-select-${idx}`}>
-                              <SelectValue placeholder={isRTL ? "اختر صنف" : "Select item"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {warehouseItems.map((wi) => (
-                                <SelectItem key={wi.id} value={wi.id.toString()}>{wi.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openItemPopovers[idx] || false}
+                                className="w-full justify-between font-normal"
+                                data-testid={`item-select-${idx}`}
+                              >
+                                {item.itemId ? (
+                                  <span className="truncate">{item.itemName}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">{isRTL ? "اختر صنف..." : "Select item..."}</span>
+                                )}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder={isRTL ? "ابحث عن صنف..." : "Search item..."} data-testid={`item-search-${idx}`} />
+                                <CommandList className="max-h-[200px]">
+                                  <CommandEmpty>{isRTL ? "لا توجد نتائج" : "No results found"}</CommandEmpty>
+                                  <CommandGroup>
+                                    {warehouseItems.map((wi) => (
+                                      <CommandItem
+                                        key={wi.id}
+                                        value={wi.name}
+                                        onSelect={() => {
+                                          updateItemInRequest(idx, 'itemId', wi.id);
+                                          setOpenItemPopovers(prev => ({ ...prev, [idx]: false }));
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            item.itemId === wi.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <span className="flex-1">{wi.name}</span>
+                                        <span className="text-xs text-muted-foreground">{wi.category}</span>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                         <div className="col-span-2 space-y-1">
                           <Label className="text-xs">{isRTL ? "الكمية المطلوبة" : "Req Qty"}</Label>
