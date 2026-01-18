@@ -199,7 +199,7 @@ export default function TransferRequestsPage() {
   };
 
   // Update item field
-  const updateTransferItem = (index: number, field: string, value: string | number) => {
+  const updateTransferItem = (index: number, field: string, value: string | number | null) => {
     setNewTransfer(prev => ({
       ...prev,
       items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item),
@@ -1023,7 +1023,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                             <PopoverContent className="w-[400px] p-0" align="start">
                               <Command>
                                 <CommandInput placeholder={isRTL ? "ابحث عن صنف..." : "Search item..."} />
-                                <CommandList>
+                                <CommandList className="max-h-[300px] overflow-y-auto">
                                   <CommandEmpty>{isRTL ? "لم يتم العثور على أصناف" : "No items found"}</CommandEmpty>
                                   <CommandGroup heading={isRTL ? "الأصناف المتاحة" : "Available Items"}>
                                     {warehouseItems.map((wItem) => (
@@ -1072,21 +1072,28 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           <Input value={item.unit || "-"} disabled className="bg-muted/50 text-center" />
                         </div>
                         <div>
-                          <Label className="text-xs text-blue-600 font-medium">
-                            {isRTL ? "المتوفر بالفرع" : "Available"}
+                          <Label className="text-xs text-red-600 font-bold flex items-center gap-1">
+                            <span className="text-red-500">*</span>
+                            {isRTL ? "المتوفر بالفرع (مطلوب)" : "Available (Required)"}
                           </Label>
                           <Input 
                             type="number" 
                             min="0"
                             value={item.availableQuantity ?? ""}
                             onChange={(e) => {
-                              const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+                              const val = e.target.value === "" ? null : parseInt(e.target.value);
                               updateTransferItem(index, "availableQuantity", val);
                             }}
-                            placeholder="0"
-                            className="border-blue-300 focus:border-blue-500 text-center"
+                            placeholder={isRTL ? "أدخل الكمية المتوفرة" : "Enter available qty"}
+                            className={`text-center font-bold ${item.availableQuantity === null ? 'border-red-500 bg-red-50' : 'border-blue-300 focus:border-blue-500'}`}
                             data-testid={`input-available-qty-${index}`}
+                            required
                           />
+                          {item.availableQuantity === null && (
+                            <p className="text-xs text-red-500 mt-1">
+                              {isRTL ? "⚠️ هذا الحقل إلزامي" : "⚠️ This field is required"}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <Label className="text-xs text-orange-600 font-medium">
