@@ -1,22 +1,27 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   ShoppingCart, Search, Filter, Clock, CheckCircle, XCircle, 
-  ArrowLeft, Eye, Package, Truck
+  ArrowLeft, Eye, Package, Truck, Plus, Printer, Edit, Trash2,
+  AlertTriangle, Calendar
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ExportButtons } from "@/components/export-buttons";
+import { useReactToPrint } from "react-to-print";
 
 type PurchasingRequest = {
   id: number;
@@ -36,9 +41,29 @@ type PurchasingRequest = {
   createdAt: string;
 };
 
+type PurchasingRequestItem = {
+  id: number;
+  itemId: number;
+  itemName: string;
+  quantityRequested: string;
+  unit: string;
+  estimatedUnitCost: string;
+};
+
+type PurchasingRequestWithItems = PurchasingRequest & {
+  items: PurchasingRequestItem[];
+};
+
 type Branch = {
   id: string;
   name: string;
+};
+
+type WarehouseItem = {
+  id: number;
+  name: string;
+  unit: string;
+  category: string;
 };
 
 const STATUS_OPTIONS = [
@@ -48,6 +73,13 @@ const STATUS_OPTIONS = [
   { value: "ordered", labelAr: "تم الطلب", labelEn: "Ordered", color: "bg-blue-500", icon: Package },
   { value: "received", labelAr: "تم الاستلام", labelEn: "Received", color: "bg-cyan-500", icon: Truck },
   { value: "cancelled", labelAr: "ملغي", labelEn: "Cancelled", color: "bg-gray-400", icon: XCircle },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: "low", labelAr: "منخفضة", labelEn: "Low", color: "bg-gray-400" },
+  { value: "normal", labelAr: "عادية", labelEn: "Normal", color: "bg-blue-500" },
+  { value: "high", labelAr: "عالية", labelEn: "High", color: "bg-orange-500" },
+  { value: "urgent", labelAr: "عاجلة", labelEn: "Urgent", color: "bg-red-500" },
 ];
 
 function getStatusBadge(status: string, isRTL: boolean) {
@@ -62,16 +94,50 @@ function getStatusBadge(status: string, isRTL: boolean) {
   );
 }
 
+function getPriorityBadge(priority: string, isRTL: boolean) {
+  const priorityOption = PRIORITY_OPTIONS.find(p => p.value === priority);
+  if (!priorityOption) return <Badge variant="outline">{priority}</Badge>;
+  return (
+    <Badge className={`${priorityOption.color} text-white`}>
+      {isRTL ? priorityOption.labelAr : priorityOption.labelEn}
+    </Badge>
+  );
+}
+
 export default function PurchasingRequestsPage() {
   const { i18n } = useTranslation();
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [selectedRequest, setSelectedRequest] = useState<PurchasingRequest | null>(null);
+  const [filterBranch, setFilterBranch] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [selectedRequest, setSelectedRequest] = useState<PurchasingRequestWithItems | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
+  // Create form state
+  const [newRequest, setNewRequest] = useState({
+    branchId: "",
+    priority: "normal",
+    vendorName: "",
+    expectedDeliveryDate: "",
+    notes: "",
+    items: [] as { itemId: number; itemName: string; quantityRequested: string; unit: string; estimatedUnitCost: string }[]
+  });
+
+  // Edit form state
+  const [editData, setEditData] = useState({
+    vendorName: "",
+    expectedDeliveryDate: "",
+    notes: ""
+  });
 
   const { data: requests = [] } = useQuery<PurchasingRequest[]>({
     queryKey: ["/api/purchasing/requests"],
@@ -81,12 +147,13 @@ export default function PurchasingRequestsPage() {
     queryKey: ["/api/branches"],
   });
 
+  const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
+    queryKey: ["/api/warehouse/items"],
+  });
+
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const response = await apiRequest(`/api/purchasing/requests/${id}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ status }),
-      });
+    mutationFn: async ({ id, status, additionalData }: { id: number; status: string; additionalData?: any }) => {
+      const response = await apiRequest("PUT", `/api/purchasing/requests/${id}/status`, { status, ...additionalData });
       return response.json();
     },
     onSuccess: () => {
@@ -95,6 +162,8 @@ export default function PurchasingRequestsPage() {
         title: isRTL ? "تم التحديث" : "Updated",
         description: isRTL ? "تم تحديث حالة الطلب بنجاح" : "Request status updated successfully",
       });
+      setIsDetailsOpen(false);
+      setIsEditOpen(false);
     },
     onError: () => {
       toast({
@@ -105,8 +174,106 @@ export default function PurchasingRequestsPage() {
     },
   });
 
+  const createRequestMutation = useMutation({
+    mutationFn: async (data: typeof newRequest) => {
+      const response = await apiRequest("POST", "/api/purchasing/requests", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/purchasing/requests"] });
+      toast({
+        title: isRTL ? "تم الإنشاء" : "Created",
+        description: isRTL ? "تم إنشاء طلب المشتريات بنجاح" : "Purchasing request created successfully",
+      });
+      setIsCreateOpen(false);
+      resetCreateForm();
+    },
+    onError: () => {
+      toast({
+        title: isRTL ? "خطأ" : "Error",
+        description: isRTL ? "فشل في إنشاء طلب المشتريات" : "Failed to create purchasing request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetCreateForm = () => {
+    setNewRequest({
+      branchId: "",
+      priority: "normal",
+      vendorName: "",
+      expectedDeliveryDate: "",
+      notes: "",
+      items: []
+    });
+  };
+
+  const addItemToRequest = () => {
+    setNewRequest(prev => ({
+      ...prev,
+      items: [...prev.items, { itemId: 0, itemName: "", quantityRequested: "1", unit: "unit", estimatedUnitCost: "" }]
+    }));
+  };
+
+  const removeItemFromRequest = (index: number) => {
+    setNewRequest(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateItemInRequest = (index: number, field: string, value: any) => {
+    setNewRequest(prev => {
+      const items = [...prev.items];
+      if (field === 'itemId') {
+        const item = warehouseItems.find(i => i.id === value);
+        if (item) {
+          items[index] = { ...items[index], itemId: value, itemName: item.name, unit: item.unit };
+        }
+      } else {
+        items[index] = { ...items[index], [field]: value };
+      }
+      return { ...prev, items };
+    });
+  };
+
+  const fetchRequestDetails = async (id: number) => {
+    try {
+      const response = await apiRequest("GET", `/api/purchasing/requests/${id}`);
+      const data = await response.json();
+      setSelectedRequest(data);
+      setIsDetailsOpen(true);
+    } catch (error) {
+      toast({
+        title: isRTL ? "خطأ" : "Error",
+        description: isRTL ? "فشل في جلب تفاصيل الطلب" : "Failed to fetch request details",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openEditDialog = () => {
+    if (selectedRequest) {
+      setEditData({
+        vendorName: selectedRequest.vendorName || "",
+        expectedDeliveryDate: selectedRequest.expectedDeliveryDate || "",
+        notes: selectedRequest.notes || ""
+      });
+      setIsEditOpen(true);
+    }
+  };
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: selectedRequest?.requestNumber || "purchasing-request",
+  });
+
   const filteredRequests = requests.filter(request => {
     if (filterStatus !== "all" && request.status !== filterStatus) return false;
+    if (filterBranch !== "all" && request.branchId !== filterBranch) return false;
+    if (filterPriority !== "all" && request.priority !== filterPriority) return false;
+    if (filterDateFrom && new Date(request.createdAt) < new Date(filterDateFrom)) return false;
+    if (filterDateTo && new Date(request.createdAt) > new Date(filterDateTo + "T23:59:59")) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -123,21 +290,34 @@ export default function PurchasingRequestsPage() {
     return branch?.name || branchId;
   };
 
+  const calculateTotalCost = () => {
+    return newRequest.items.reduce((sum, item) => {
+      const qty = parseFloat(item.quantityRequested) || 0;
+      const cost = parseFloat(item.estimatedUnitCost) || 0;
+      return sum + (qty * cost);
+    }, 0);
+  };
+
   const exportColumns = [
     { header: isRTL ? "رقم الطلب" : "Request #", key: "requestNumber", width: 18 },
     { header: isRTL ? "الفرع" : "Branch", key: "branchName", width: 18 },
     { header: isRTL ? "الحالة" : "Status", key: "statusText", width: 15 },
+    { header: isRTL ? "الأولوية" : "Priority", key: "priorityText", width: 12 },
     { header: isRTL ? "المورد" : "Vendor", key: "vendorName", width: 18 },
+    { header: isRTL ? "التكلفة" : "Cost", key: "cost", width: 15 },
     { header: isRTL ? "التاريخ" : "Date", key: "dateText", width: 15 },
   ];
 
   const exportData = filteredRequests.map(r => {
     const statusOption = STATUS_OPTIONS.find(s => s.value === r.status);
+    const priorityOption = PRIORITY_OPTIONS.find(p => p.value === r.priority);
     return {
       requestNumber: r.requestNumber,
       branchName: getBranchName(r.branchId),
       statusText: statusOption ? (isRTL ? statusOption.labelAr : statusOption.labelEn) : r.status,
+      priorityText: priorityOption ? (isRTL ? priorityOption.labelAr : priorityOption.labelEn) : r.priority,
       vendorName: r.vendorName || "-",
+      cost: r.totalEstimatedCost ? `${parseFloat(r.totalEstimatedCost).toLocaleString()} ر.س` : "-",
       dateText: r.createdAt ? new Date(r.createdAt).toLocaleDateString("ar-SA") : "",
     };
   });
@@ -145,7 +325,7 @@ export default function PurchasingRequestsPage() {
   return (
     <Layout>
       <div className="p-4 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <Link href="/warehouse-dashboard">
               <Button variant="ghost" size="icon" data-testid="btn-back">
@@ -164,15 +344,22 @@ export default function PurchasingRequestsPage() {
               </p>
             </div>
           </div>
-          <ExportButtons
-            data={exportData}
-            columns={exportColumns}
-            fileName={`purchasing-requests-${new Date().toISOString().split('T')[0]}`}
-            title={isRTL ? "طلبات المشتريات" : "Purchasing Requests"}
-            sheetName={isRTL ? "المشتريات" : "Purchasing"}
-          />
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setIsCreateOpen(true)} data-testid="btn-create-request">
+              <Plus className="w-4 h-4 mr-2" />
+              {isRTL ? "طلب جديد" : "New Request"}
+            </Button>
+            <ExportButtons
+              data={exportData}
+              columns={exportColumns}
+              fileName={`purchasing-requests-${new Date().toISOString().split('T')[0]}`}
+              title={isRTL ? "طلبات المشتريات" : "Purchasing Requests"}
+              sheetName={isRTL ? "المشتريات" : "Purchasing"}
+            />
+          </div>
         </div>
 
+        {/* Filters */}
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -185,7 +372,7 @@ export default function PurchasingRequestsPage() {
             />
           </div>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-status">
+            <SelectTrigger className="w-[160px]" data-testid="filter-status">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue placeholder={isRTL ? "الحالة" : "Status"} />
             </SelectTrigger>
@@ -198,6 +385,47 @@ export default function PurchasingRequestsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={filterBranch} onValueChange={setFilterBranch}>
+            <SelectTrigger className="w-[160px]" data-testid="filter-branch">
+              <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{isRTL ? "كل الفروع" : "All Branches"}</SelectItem>
+              {branches.map((branch) => (
+                <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="w-[140px]" data-testid="filter-priority">
+              <SelectValue placeholder={isRTL ? "الأولوية" : "Priority"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{isRTL ? "كل الأولويات" : "All Priorities"}</SelectItem>
+              {PRIORITY_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {isRTL ? opt.labelAr : opt.labelEn}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="w-[140px]"
+              data-testid="filter-date-from"
+            />
+            <span className="text-muted-foreground">-</span>
+            <Input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="w-[140px]"
+              data-testid="filter-date-to"
+            />
+          </div>
         </div>
 
         <Card>
@@ -216,7 +444,9 @@ export default function PurchasingRequestsPage() {
                     <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
                     <TableHead>{isRTL ? "المورد" : "Vendor"}</TableHead>
                     <TableHead>{isRTL ? "الحالة" : "Status"}</TableHead>
+                    <TableHead>{isRTL ? "الأولوية" : "Priority"}</TableHead>
                     <TableHead>{isRTL ? "التكلفة المتوقعة" : "Est. Cost"}</TableHead>
+                    <TableHead>{isRTL ? "تاريخ التسليم" : "Delivery Date"}</TableHead>
                     <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
                     <TableHead>{isRTL ? "الإجراءات" : "Actions"}</TableHead>
                   </TableRow>
@@ -224,7 +454,7 @@ export default function PurchasingRequestsPage() {
                 <TableBody>
                   {filteredRequests.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         {isRTL ? "لا توجد طلبات مشتريات" : "No purchasing requests found"}
                       </TableCell>
                     </TableRow>
@@ -235,21 +465,22 @@ export default function PurchasingRequestsPage() {
                         <TableCell>{getBranchName(request.branchId)}</TableCell>
                         <TableCell>{request.vendorName || "-"}</TableCell>
                         <TableCell>{getStatusBadge(request.status, isRTL)}</TableCell>
+                        <TableCell>{getPriorityBadge(request.priority, isRTL)}</TableCell>
                         <TableCell>
                           {request.totalEstimatedCost ? `${parseFloat(request.totalEstimatedCost).toLocaleString()} ر.س` : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {request.expectedDeliveryDate ? new Date(request.expectedDeliveryDate).toLocaleDateString("ar-SA") : "-"}
                         </TableCell>
                         <TableCell>
                           {request.createdAt ? new Date(request.createdAt).toLocaleDateString("ar-SA") : "-"}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => {
-                                setSelectedRequest(request);
-                                setIsDetailsOpen(true);
-                              }}
+                              onClick={() => fetchRequestDetails(request.id)}
                               data-testid={`btn-view-${request.id}`}
                             >
                               <Eye className="w-4 h-4" />
@@ -258,7 +489,7 @@ export default function PurchasingRequestsPage() {
                               <>
                                 <Button
                                   variant="ghost"
-                                  size="sm"
+                                  size="icon"
                                   className="text-green-600"
                                   onClick={() => updateStatusMutation.mutate({ id: request.id, status: "approved" })}
                                   disabled={updateStatusMutation.isPending}
@@ -268,7 +499,7 @@ export default function PurchasingRequestsPage() {
                                 </Button>
                                 <Button
                                   variant="ghost"
-                                  size="sm"
+                                  size="icon"
                                   className="text-red-600"
                                   onClick={() => updateStatusMutation.mutate({ id: request.id, status: "rejected" })}
                                   disabled={updateStatusMutation.isPending}
@@ -276,12 +507,22 @@ export default function PurchasingRequestsPage() {
                                 >
                                   <XCircle className="w-4 h-4" />
                                 </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-gray-500"
+                                  onClick={() => updateStatusMutation.mutate({ id: request.id, status: "cancelled" })}
+                                  disabled={updateStatusMutation.isPending}
+                                  data-testid={`btn-cancel-${request.id}`}
+                                >
+                                  <AlertTriangle className="w-4 h-4" />
+                                </Button>
                               </>
                             )}
                             {request.status === "approved" && (
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon"
                                 className="text-blue-600"
                                 onClick={() => updateStatusMutation.mutate({ id: request.id, status: "ordered" })}
                                 disabled={updateStatusMutation.isPending}
@@ -293,7 +534,7 @@ export default function PurchasingRequestsPage() {
                             {request.status === "ordered" && (
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon"
                                 className="text-cyan-600"
                                 onClick={() => updateStatusMutation.mutate({ id: request.id, status: "received" })}
                                 disabled={updateStatusMutation.isPending}
@@ -313,57 +554,378 @@ export default function PurchasingRequestsPage() {
           </CardContent>
         </Card>
 
+        {/* Details Dialog with Print */}
         <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{isRTL ? "تفاصيل طلب المشتريات" : "Purchasing Request Details"}</DialogTitle>
+              <DialogTitle className="flex items-center justify-between">
+                <span>{isRTL ? "تفاصيل طلب المشتريات" : "Purchasing Request Details"}</span>
+                <div className="flex gap-2">
+                  {selectedRequest?.status === "pending" && (
+                    <Button variant="outline" size="sm" onClick={openEditDialog} data-testid="btn-edit-request">
+                      <Edit className="w-4 h-4 mr-1" />
+                      {isRTL ? "تعديل" : "Edit"}
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="btn-print-request">
+                    <Printer className="w-4 h-4 mr-1" />
+                    {isRTL ? "طباعة" : "Print"}
+                  </Button>
+                </div>
+              </DialogTitle>
               <DialogDescription>
                 {selectedRequest?.requestNumber}
               </DialogDescription>
             </DialogHeader>
-            {selectedRequest && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">{isRTL ? "الفرع" : "Branch"}</p>
-                    <p className="font-medium">{getBranchName(selectedRequest.branchId)}</p>
+            
+            <div ref={printRef} className="space-y-4 print:p-4">
+              {/* Print Header */}
+              <div className="hidden print:block text-center mb-4">
+                <h1 className="text-xl font-bold">{isRTL ? "طلب مشتريات" : "Purchasing Request"}</h1>
+                <p className="text-lg">{selectedRequest?.requestNumber}</p>
+              </div>
+
+              {selectedRequest && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "الفرع" : "Branch"}</p>
+                      <p className="font-medium">{getBranchName(selectedRequest.branchId)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "الحالة" : "Status"}</p>
+                      <div className="mt-1">{getStatusBadge(selectedRequest.status, isRTL)}</div>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "الأولوية" : "Priority"}</p>
+                      <div className="mt-1">{getPriorityBadge(selectedRequest.priority, isRTL)}</div>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "المورد" : "Vendor"}</p>
+                      <p className="font-medium">{selectedRequest.vendorName || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "التكلفة المتوقعة" : "Est. Cost"}</p>
+                      <p className="font-medium">
+                        {selectedRequest.totalEstimatedCost ? `${parseFloat(selectedRequest.totalEstimatedCost).toLocaleString()} ر.س` : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "تاريخ التسليم المتوقع" : "Expected Delivery"}</p>
+                      <p className="font-medium">
+                        {selectedRequest.expectedDeliveryDate ? new Date(selectedRequest.expectedDeliveryDate).toLocaleDateString("ar-SA") : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "الطالب" : "Requested By"}</p>
+                      <p className="font-medium">{selectedRequest.requestedByName || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{isRTL ? "تاريخ الإنشاء" : "Created"}</p>
+                      <p className="font-medium">
+                        {selectedRequest.createdAt ? new Date(selectedRequest.createdAt).toLocaleDateString("ar-SA") : "-"}
+                      </p>
+                    </div>
+                    {selectedRequest.approvedByName && (
+                      <div>
+                        <p className="text-muted-foreground">{isRTL ? "الموافق" : "Approved By"}</p>
+                        <p className="font-medium">{selectedRequest.approvedByName}</p>
+                      </div>
+                    )}
                   </div>
+
+                  {selectedRequest.notes && (
+                    <div>
+                      <p className="text-muted-foreground text-sm">{isRTL ? "ملاحظات" : "Notes"}</p>
+                      <p className="text-sm mt-1 p-2 bg-muted rounded">{selectedRequest.notes}</p>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Items Table */}
                   <div>
-                    <p className="text-muted-foreground">{isRTL ? "الحالة" : "Status"}</p>
-                    <div className="mt-1">{getStatusBadge(selectedRequest.status, isRTL)}</div>
+                    <h3 className="font-semibold mb-2">{isRTL ? "الأصناف المطلوبة" : "Requested Items"}</h3>
+                    {selectedRequest.items && selectedRequest.items.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>#</TableHead>
+                            <TableHead>{isRTL ? "الصنف" : "Item"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الكمية" : "Qty"}</TableHead>
+                            <TableHead>{isRTL ? "الوحدة" : "Unit"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "سعر الوحدة" : "Unit Price"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "الإجمالي" : "Total"}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedRequest.items.map((item, idx) => (
+                            <TableRow key={item.id || idx}>
+                              <TableCell>{idx + 1}</TableCell>
+                              <TableCell className="font-medium">{item.itemName}</TableCell>
+                              <TableCell className="text-center font-mono">{item.quantityRequested}</TableCell>
+                              <TableCell>{item.unit}</TableCell>
+                              <TableCell className="text-center font-mono">
+                                {item.estimatedUnitCost ? `${parseFloat(item.estimatedUnitCost).toLocaleString()} ر.س` : "-"}
+                              </TableCell>
+                              <TableCell className="text-center font-mono font-bold">
+                                {item.estimatedUnitCost && item.quantityRequested 
+                                  ? `${(parseFloat(item.estimatedUnitCost) * parseFloat(item.quantityRequested)).toLocaleString()} ر.س` 
+                                  : "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-center py-4 text-muted-foreground">
+                        {isRTL ? "لا توجد أصناف في هذا الطلب" : "No items in this request"}
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">{isRTL ? "المورد" : "Vendor"}</p>
-                    <p className="font-medium">{selectedRequest.vendorName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{isRTL ? "التكلفة المتوقعة" : "Est. Cost"}</p>
-                    <p className="font-medium">
-                      {selectedRequest.totalEstimatedCost ? `${parseFloat(selectedRequest.totalEstimatedCost).toLocaleString()} ر.س` : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{isRTL ? "الطالب" : "Requested By"}</p>
-                    <p className="font-medium">{selectedRequest.requestedByName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{isRTL ? "تاريخ الإنشاء" : "Created"}</p>
-                    <p className="font-medium">
-                      {selectedRequest.createdAt ? new Date(selectedRequest.createdAt).toLocaleDateString("ar-SA") : "-"}
-                    </p>
-                  </div>
+                </>
+              )}
+            </div>
+
+            <DialogFooter className="print:hidden">
+              <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>
+                {isRTL ? "إغلاق" : "Close"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Request Dialog */}
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{isRTL ? "إنشاء طلب مشتريات جديد" : "Create New Purchasing Request"}</DialogTitle>
+              <DialogDescription>
+                {isRTL ? "أدخل تفاصيل الطلب والأصناف المطلوبة" : "Enter request details and items"}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{isRTL ? "الفرع" : "Branch"} *</Label>
+                  <Select value={newRequest.branchId} onValueChange={(v) => setNewRequest(prev => ({ ...prev, branchId: v }))}>
+                    <SelectTrigger data-testid="create-branch">
+                      <SelectValue placeholder={isRTL ? "اختر الفرع" : "Select Branch"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                {selectedRequest.notes && (
-                  <div>
-                    <p className="text-muted-foreground text-sm">{isRTL ? "ملاحظات" : "Notes"}</p>
-                    <p className="text-sm mt-1">{selectedRequest.notes}</p>
+                <div className="space-y-2">
+                  <Label>{isRTL ? "الأولوية" : "Priority"}</Label>
+                  <Select value={newRequest.priority} onValueChange={(v) => setNewRequest(prev => ({ ...prev, priority: v }))}>
+                    <SelectTrigger data-testid="create-priority">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRIORITY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {isRTL ? opt.labelAr : opt.labelEn}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{isRTL ? "اسم المورد" : "Vendor Name"}</Label>
+                  <Input
+                    value={newRequest.vendorName}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, vendorName: e.target.value }))}
+                    placeholder={isRTL ? "اسم المورد (اختياري)" : "Vendor name (optional)"}
+                    data-testid="create-vendor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{isRTL ? "تاريخ التسليم المتوقع" : "Expected Delivery Date"}</Label>
+                  <Input
+                    type="date"
+                    value={newRequest.expectedDeliveryDate}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, expectedDeliveryDate: e.target.value }))}
+                    data-testid="create-delivery-date"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
+                <Textarea
+                  value={newRequest.notes}
+                  onChange={(e) => setNewRequest(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder={isRTL ? "ملاحظات إضافية..." : "Additional notes..."}
+                  data-testid="create-notes"
+                />
+              </div>
+
+              <Separator />
+
+              {/* Items Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">{isRTL ? "الأصناف المطلوبة" : "Requested Items"}</Label>
+                  <Button variant="outline" size="sm" onClick={addItemToRequest} data-testid="btn-add-item">
+                    <Plus className="w-4 h-4 mr-1" />
+                    {isRTL ? "إضافة صنف" : "Add Item"}
+                  </Button>
+                </div>
+
+                {newRequest.items.length === 0 ? (
+                  <p className="text-center py-4 text-muted-foreground border rounded">
+                    {isRTL ? "اضغط على 'إضافة صنف' لإضافة أصناف للطلب" : "Click 'Add Item' to add items to the request"}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {newRequest.items.map((item, idx) => (
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-end p-3 border rounded">
+                        <div className="col-span-4 space-y-1">
+                          <Label className="text-xs">{isRTL ? "الصنف" : "Item"}</Label>
+                          <Select 
+                            value={item.itemId?.toString() || ""} 
+                            onValueChange={(v) => updateItemInRequest(idx, 'itemId', parseInt(v))}
+                          >
+                            <SelectTrigger data-testid={`item-select-${idx}`}>
+                              <SelectValue placeholder={isRTL ? "اختر صنف" : "Select item"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouseItems.map((wi) => (
+                                <SelectItem key={wi.id} value={wi.id.toString()}>{wi.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-xs">{isRTL ? "الكمية" : "Qty"}</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantityRequested}
+                            onChange={(e) => updateItemInRequest(idx, 'quantityRequested', e.target.value)}
+                            data-testid={`item-qty-${idx}`}
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-xs">{isRTL ? "الوحدة" : "Unit"}</Label>
+                          <Input value={item.unit} disabled className="bg-muted" />
+                        </div>
+                        <div className="col-span-3 space-y-1">
+                          <Label className="text-xs">{isRTL ? "سعر الوحدة" : "Unit Price"}</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.estimatedUnitCost}
+                            onChange={(e) => updateItemInRequest(idx, 'estimatedUnitCost', e.target.value)}
+                            placeholder="0.00"
+                            data-testid={`item-price-${idx}`}
+                          />
+                        </div>
+                        <div className="col-span-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500"
+                            onClick={() => removeItemFromRequest(idx)}
+                            data-testid={`btn-remove-item-${idx}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {newRequest.items.length > 0 && (
+                  <div className="flex justify-end p-3 bg-muted rounded">
+                    <div className="text-lg font-bold">
+                      {isRTL ? "الإجمالي:" : "Total:"} {calculateTotalCost().toLocaleString()} ر.س
+                    </div>
                   </div>
                 )}
               </div>
-            )}
+            </div>
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>
-                {isRTL ? "إغلاق" : "Close"}
+              <Button variant="outline" onClick={() => { setIsCreateOpen(false); resetCreateForm(); }}>
+                {isRTL ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button 
+                onClick={() => createRequestMutation.mutate(newRequest)}
+                disabled={!newRequest.branchId || createRequestMutation.isPending}
+                data-testid="btn-submit-create"
+              >
+                {createRequestMutation.isPending ? (isRTL ? "جاري الإنشاء..." : "Creating...") : (isRTL ? "إنشاء الطلب" : "Create Request")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Request Dialog */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{isRTL ? "تعديل طلب المشتريات" : "Edit Purchasing Request"}</DialogTitle>
+              <DialogDescription>
+                {selectedRequest?.requestNumber}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>{isRTL ? "اسم المورد" : "Vendor Name"}</Label>
+                <Input
+                  value={editData.vendorName}
+                  onChange={(e) => setEditData(prev => ({ ...prev, vendorName: e.target.value }))}
+                  placeholder={isRTL ? "اسم المورد" : "Vendor name"}
+                  data-testid="edit-vendor"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{isRTL ? "تاريخ التسليم المتوقع" : "Expected Delivery Date"}</Label>
+                <Input
+                  type="date"
+                  value={editData.expectedDeliveryDate}
+                  onChange={(e) => setEditData(prev => ({ ...prev, expectedDeliveryDate: e.target.value }))}
+                  data-testid="edit-delivery-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
+                <Textarea
+                  value={editData.notes}
+                  onChange={(e) => setEditData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder={isRTL ? "ملاحظات..." : "Notes..."}
+                  data-testid="edit-notes"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                {isRTL ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (selectedRequest) {
+                    updateStatusMutation.mutate({ 
+                      id: selectedRequest.id, 
+                      status: selectedRequest.status,
+                      additionalData: editData 
+                    });
+                  }
+                }}
+                disabled={updateStatusMutation.isPending}
+                data-testid="btn-submit-edit"
+              >
+                {updateStatusMutation.isPending ? (isRTL ? "جاري الحفظ..." : "Saving...") : (isRTL ? "حفظ التغييرات" : "Save Changes")}
               </Button>
             </DialogFooter>
           </DialogContent>
