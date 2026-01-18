@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
@@ -816,8 +817,8 @@ export default function PurchasingRequestsPage() {
                             <PopoverContent className="w-[320px] p-0" align="start" side="bottom" sideOffset={4}>
                               <Command shouldFilter={true}>
                                 <CommandInput placeholder={isRTL ? "ابحث عن صنف..." : "Search item..."} data-testid={`item-search-${idx}`} />
-                                <CommandList className="max-h-[250px] overflow-y-auto">
-                                  <CommandEmpty>{isRTL ? "لا توجد نتائج" : "No results found"}</CommandEmpty>
+                                <CommandEmpty>{isRTL ? "لا توجد نتائج" : "No results found"}</CommandEmpty>
+                                <ScrollArea className="h-[250px]">
                                   <CommandGroup heading={isRTL ? "الأصناف" : "Items"}>
                                     {warehouseItems.map((wi) => (
                                       <CommandItem
@@ -840,7 +841,7 @@ export default function PurchasingRequestsPage() {
                                       </CommandItem>
                                     ))}
                                   </CommandGroup>
-                                </CommandList>
+                                </ScrollArea>
                               </Command>
                             </PopoverContent>
                           </Popover>
