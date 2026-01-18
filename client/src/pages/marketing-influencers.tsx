@@ -1637,6 +1637,50 @@ export default function MarketingInfluencersPage() {
               </SheetDescription>
             </SheetHeader>
 
+            {selectedInfluencer && canEdit && (
+              <div className="flex gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setFormData({
+                      name: selectedInfluencer.name,
+                      nameAr: selectedInfluencer.nameAr || "",
+                      email: selectedInfluencer.email || "",
+                      phone: selectedInfluencer.phone || "",
+                      specialty: selectedInfluencer.specialty || "food",
+                      accountUrl: selectedInfluencer.accountUrl || "",
+                      coverageUrl: selectedInfluencer.coverageUrl || "",
+                      platforms: selectedInfluencer.platforms || [],
+                      contentTypes: selectedInfluencer.contentTypes || [],
+                      followerCount: selectedInfluencer.followerCount || 0,
+                      followerCountText: selectedInfluencer.followerCountText || "",
+                      pricePerPost: Number(selectedInfluencer.pricePerPost) || 0,
+                      pricePerStory: Number(selectedInfluencer.pricePerStory) || 0,
+                      pricePerVideo: 0,
+                      engagementRate: Number(selectedInfluencer.engagementRate) || 0,
+                      avgViews: 0,
+                      region: selectedInfluencer.region || "",
+                      city: selectedInfluencer.city || "",
+                      viewRating: selectedInfluencer.viewRating || 0,
+                      bankAccountNumber: selectedInfluencer.bankAccountNumber || "",
+                      bankAccountHolder: "",
+                      bankName: selectedInfluencer.bankName || "",
+                      bestCollaborationTimes: "",
+                      notes: selectedInfluencer.notes || "",
+                      isActive: selectedInfluencer.isActive ?? true,
+                    });
+                    setIsDetailSheetOpen(false);
+                    setIsEditDialogOpen(true);
+                  }}
+                  data-testid="button-edit-from-details"
+                >
+                  <Pencil className="w-4 h-4 ml-2" />
+                  تعديل البيانات
+                </Button>
+              </div>
+            )}
+
             {selectedInfluencer && (
               <Tabs defaultValue="info" className="mt-6">
                 <TabsList className="grid w-full grid-cols-4">
