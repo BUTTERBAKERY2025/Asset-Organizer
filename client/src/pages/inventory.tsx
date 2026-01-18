@@ -588,13 +588,13 @@ export default function InventoryPage() {
           </div>
 
           <Tabs defaultValue={userBranchId || "all"} className="w-full" onValueChange={canSelectBranch ? setActiveBranch : undefined} value={activeBranch}>
-            <TabsList className="w-full md:w-auto grid grid-cols-2 md:inline-flex h-auto p-1 bg-muted/50 print:hidden">
+            <TabsList className="w-full flex flex-nowrap overflow-x-auto h-auto p-1 bg-muted/50 print:hidden gap-1">
+              {canSelectBranch && <TabsTrigger value="all" className="py-2.5 px-4 text-sm whitespace-nowrap font-bold text-primary flex-shrink-0" data-testid="tab-branch-all">المستودع الرئيسي</TabsTrigger>}
               {branches.map(branch => (
-                <TabsTrigger key={branch.id} value={branch.id} className="py-2.5 px-6 text-base" data-testid={`tab-branch-${branch.id}`} disabled={!canSelectBranch && branch.id !== userBranchId}>
+                <TabsTrigger key={branch.id} value={branch.id} className="py-2.5 px-4 text-sm whitespace-nowrap flex-shrink-0" data-testid={`tab-branch-${branch.id}`} disabled={!canSelectBranch && branch.id !== userBranchId}>
                   {branch.name}
                 </TabsTrigger>
               ))}
-              {canSelectBranch && <TabsTrigger value="all" className="py-2.5 px-6 text-base font-bold text-primary" data-testid="tab-branch-all">بحث شامل (كل الفروع)</TabsTrigger>}
             </TabsList>
 
             <div className="mt-6 flex flex-col md:flex-row items-start md:items-center gap-4 bg-card p-4 rounded-lg border border-border shadow-sm print:hidden">
