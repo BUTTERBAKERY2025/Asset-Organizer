@@ -11670,6 +11670,18 @@ export async function registerRoutes(
   // Marketing API Routes - إدارة التسويق
   // ==========================================
 
+  // Marketing Branches - جميع الفروع للتسويق
+  // Returns all branches for marketing module (company-wide marketing functions)
+  app.get("/api/marketing/branches", isAuthenticated, async (req: any, res) => {
+    try {
+      const branches = await getCachedBranches();
+      res.json(branches);
+    } catch (error) {
+      console.error("Error fetching marketing branches:", error);
+      res.status(500).json({ error: "فشل في جلب الفروع" });
+    }
+  });
+
   // Marketing Campaigns - الحملات التسويقية
   app.get("/api/marketing/campaigns", isAuthenticated, async (req: any, res) => {
     try {

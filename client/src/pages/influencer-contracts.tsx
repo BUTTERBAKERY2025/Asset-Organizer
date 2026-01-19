@@ -192,7 +192,7 @@ export default function InfluencerContractsPage() {
   });
 
   const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
+    queryKey: ["/api/marketing/branches"],
   });
 
   const createMutation = useMutation({
