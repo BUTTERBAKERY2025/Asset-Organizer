@@ -4228,6 +4228,106 @@ export default function OperationsReportsDashboardPage() {
                     <div className="flex gap-2">
                       <Button 
                         variant="outline"
+                        className="gap-2 border-red-600 text-red-600 hover:bg-red-50" 
+                        data-testid="button-export-payment-mismatch-pdf"
+                        onClick={() => {
+                          const formatCurrencyLocal = (v: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+                          const html = `
+                            <div dir="rtl" style="font-family: Cairo, sans-serif; padding: 20px;">
+                              <div style="text-align: center; margin-bottom: 20px;">
+                                <h1 style="color: #1e3a5f; margin-bottom: 5px;">تقرير مطابقة طرق الدفع</h1>
+                                <p style="color: #666;">الفترة: ${filters.startDate} إلى ${filters.endDate}</p>
+                                <p style="color: #888; font-size: 12px;">حد الفرق المقبول: 0.50 ريال</p>
+                              </div>
+                              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
+                                <div style="background: #f0f0ff; padding: 15px; border-radius: 8px; text-align: center;">
+                                  <p style="color: #6366f1; font-size: 12px;">إجمالي اليوميات</p>
+                                  <p style="font-size: 20px; font-weight: bold; color: #4f46e5;">${paymentMismatchData.summary.totalJournals}</p>
+                                </div>
+                                <div style="background: #fff7ed; padding: 15px; border-radius: 8px; text-align: center;">
+                                  <p style="color: #f97316; font-size: 12px;">يوميات بها فروقات</p>
+                                  <p style="font-size: 20px; font-weight: bold; color: #ea580c;">${paymentMismatchData.summary.journalsWithMismatch}</p>
+                                </div>
+                                <div style="background: #fef2f2; padding: 15px; border-radius: 8px; text-align: center;">
+                                  <p style="color: #ef4444; font-size: 12px;">نسبة الخطأ</p>
+                                  <p style="font-size: 20px; font-weight: bold; color: #dc2626;">${paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
+                                </div>
+                                <div style="background: #faf5ff; padding: 15px; border-radius: 8px; text-align: center;">
+                                  <p style="color: #a855f7; font-size: 12px;">إجمالي الفروقات</p>
+                                  <p style="font-size: 20px; font-weight: bold; color: #9333ea;">${formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount)}</p>
+                                </div>
+                              </div>
+                              <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; align-items: center;">
+                                <div style="text-align: center;">
+                                  <p style="color: #666; font-size: 12px;">إجمالي POS</p>
+                                  <p style="font-size: 18px; font-weight: bold; color: #3b82f6;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</p>
+                                </div>
+                                <span style="font-size: 24px; color: #ccc;">↔</span>
+                                <div style="text-align: center;">
+                                  <p style="color: #666; font-size: 12px;">إجمالي Terminal</p>
+                                  <p style="font-size: 18px; font-weight: bold; color: #22c55e;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</p>
+                                </div>
+                              </div>
+                              ${paymentMismatchData.byCashier.length > 0 ? `
+                              <h3 style="color: #1e3a5f; margin: 20px 0 10px;">الكاشيرين الأكثر فروقات</h3>
+                              <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px;">
+                                <thead>
+                                  <tr style="background: #f1f5f9;">
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">الكاشير</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">عدد الفروقات</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">إجمالي الفروقات</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">نسبة الخطأ</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  ${paymentMismatchData.byCashier.slice(0, 10).map((c, idx) => `
+                                    <tr style="background: ${idx < 3 ? '#fef2f2' : '#fff'};">
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0;">${c.cashierName}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0;">${c.mismatchCount}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: bold;">${formatCurrencyLocal(c.totalMismatchAmount)}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #dc2626;">${c.errorRate.toFixed(1)}%</td>
+                                    </tr>
+                                  `).join('')}
+                                </tbody>
+                              </table>
+                              ` : ''}
+                              ${paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).length > 0 ? `
+                              <h3 style="color: #1e3a5f; margin: 20px 0 10px;">فروقات طرق الدفع</h3>
+                              <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                <thead>
+                                  <tr style="background: #f1f5f9;">
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">طريقة الدفع</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">POS</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Terminal</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">الفرق</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  ${paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map(m => `
+                                    <tr>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0;">${PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #3b82f6;">${formatCurrencyLocal(m.posTotal)}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #22c55e;">${formatCurrencyLocal(m.terminalTotal)}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: bold;">${formatCurrencyLocal(m.discrepancy)}</td>
+                                    </tr>
+                                  `).join('')}
+                                </tbody>
+                              </table>
+                              ` : ''}
+                              <div style="margin-top: 30px; text-align: center; color: #888; font-size: 11px;">
+                                <p>تم إنشاء التقرير: ${new Date().toLocaleString('ar-SA')}</p>
+                                <p style="color: #dc2626;">🔴 أحمر = فروقات/أخطاء | 🔵 أزرق = POS | 🟢 أخضر = Terminal</p>
+                              </div>
+                            </div>
+                          `;
+                          printHtmlContent(html);
+                        }}
+                      >
+                        <Printer className="w-4 h-4" />
+                        طباعة PDF
+                      </Button>
+                      <Button 
+                        variant="outline"
                         className="gap-2 border-green-600 text-green-600 hover:bg-green-50" 
                         data-testid="button-export-payment-mismatch-excel"
                         onClick={() => {
@@ -4236,6 +4336,7 @@ export default function OperationsReportsDashboardPage() {
                           const summaryData = [
                             ["تقرير مطابقة طرق الدفع - بتر بيكري"],
                             ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
+                            ["حد الفرق المقبول:", "0.50 ريال"],
                             [],
                             ["الملخص"],
                             ["إجمالي اليوميات", paymentMismatchData.summary.totalJournals],
@@ -4298,9 +4399,15 @@ export default function OperationsReportsDashboardPage() {
                     </div>
                   </div>
 
+                  {/* Threshold Note */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2 text-sm text-amber-800">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>حد الفرق المقبول: <strong>0.50 ريال</strong> - يتم احتساب الفروقات الأكبر من هذا الحد فقط لتجنب مشاكل التقريب</span>
+                  </div>
+
                   {/* Summary Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="payment-mismatch-summary-cards">
+                    <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200" data-testid="card-total-journals">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-indigo-500 rounded-lg">
@@ -4308,12 +4415,12 @@ export default function OperationsReportsDashboardPage() {
                           </div>
                           <div>
                             <p className="text-xs text-indigo-700">إجمالي اليوميات</p>
-                            <p className="text-xl font-bold text-indigo-800">{paymentMismatchData.summary.totalJournals}</p>
+                            <p className="text-xl font-bold text-indigo-800" data-testid="text-total-journals">{paymentMismatchData.summary.totalJournals}</p>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                    <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200" data-testid="card-journals-with-mismatch">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-orange-500 rounded-lg">
@@ -4321,12 +4428,12 @@ export default function OperationsReportsDashboardPage() {
                           </div>
                           <div>
                             <p className="text-xs text-orange-700">يوميات بها فروقات</p>
-                            <p className="text-xl font-bold text-orange-800">{paymentMismatchData.summary.journalsWithMismatch}</p>
+                            <p className="text-xl font-bold text-orange-800" data-testid="text-journals-with-mismatch">{paymentMismatchData.summary.journalsWithMismatch}</p>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                    <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200" data-testid="card-error-rate">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-red-500 rounded-lg">
@@ -4334,12 +4441,12 @@ export default function OperationsReportsDashboardPage() {
                           </div>
                           <div>
                             <p className="text-xs text-red-700">نسبة الخطأ</p>
-                            <p className="text-xl font-bold text-red-800">{paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
+                            <p className="text-xl font-bold text-red-800" data-testid="text-error-rate">{paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200" data-testid="card-total-mismatch">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-purple-500 rounded-lg">
