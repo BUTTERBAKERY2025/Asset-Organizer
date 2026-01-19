@@ -3218,6 +3218,89 @@ export default function OperationsReportsDashboardPage() {
                   "غير محدد": "غير محدد"
                 };
 
+                // Excel export for returns
+                const handleExportReturnsExcel = () => {
+                  const wb = XLSX.utils.book_new();
+                  
+                  // Summary sheet
+                  const summaryData = [
+                    ["تقرير المرتجعات التحليلي - بتر بيكري"],
+                    ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
+                    [],
+                    ["الملخص"],
+                    ["عدد عمليات المرتجع", returnsCount],
+                    ["إجمالي المرتجعات", totalReturnAmount],
+                    ["الفروع المتأثرة", Object.keys(returnsByBranch).length],
+                    ["متوسط المرتجع", returnsCount > 0 ? totalReturnAmount / returnsCount : 0],
+                  ];
+                  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+                  XLSX.utils.book_append_sheet(wb, summarySheet, "الملخص");
+                  
+                  // By Branch sheet
+                  const branchData = [
+                    ["المرتجعات حسب الفرع"],
+                    ["الفرع", "العدد", "المبلغ", "النسبة"],
+                    ...Object.entries(returnsByBranch).map(([branch, data]) => [
+                      branch, data.count, data.amount, totalReturnAmount > 0 ? `${((data.amount / totalReturnAmount) * 100).toFixed(1)}%` : "0%"
+                    ])
+                  ];
+                  const branchSheet = XLSX.utils.aoa_to_sheet(branchData);
+                  XLSX.utils.book_append_sheet(wb, branchSheet, "حسب الفرع");
+                  
+                  // By Shift sheet
+                  const shiftData = [
+                    ["المرتجعات حسب الوردية"],
+                    ["الوردية", "العدد", "المبلغ"],
+                    ...Object.entries(returnsByShift).map(([shift, data]) => [
+                      SHIFT_LABELS[shift] || shift, data.count, data.amount
+                    ])
+                  ];
+                  const shiftSheet = XLSX.utils.aoa_to_sheet(shiftData);
+                  XLSX.utils.book_append_sheet(wb, shiftSheet, "حسب الوردية");
+                  
+                  // By Payment Method sheet
+                  const paymentData = [
+                    ["المرتجعات حسب طريقة الدفع"],
+                    ["طريقة الدفع", "العدد", "المبلغ"],
+                    ...Object.entries(returnsByPaymentMethod).map(([method, data]) => [
+                      PAYMENT_METHOD_LABELS[method] || method, data.count, data.amount
+                    ])
+                  ];
+                  const paymentSheet = XLSX.utils.aoa_to_sheet(paymentData);
+                  XLSX.utils.book_append_sheet(wb, paymentSheet, "حسب طريقة الدفع");
+                  
+                  // By Reason sheet
+                  const reasonData = [
+                    ["المرتجعات حسب السبب"],
+                    ["السبب", "العدد", "المبلغ"],
+                    ...Object.entries(returnsByReason).map(([reason, data]) => [
+                      reason, data.count, data.amount
+                    ])
+                  ];
+                  const reasonSheet = XLSX.utils.aoa_to_sheet(reasonData);
+                  XLSX.utils.book_append_sheet(wb, reasonSheet, "حسب السبب");
+                  
+                  // Details sheet
+                  const detailsData = [
+                    ["تفاصيل المرتجعات"],
+                    ["التاريخ", "الفرع", "الكاشير", "الوردية", "مبلغ المرتجع", "طريقة الدفع", "السبب", "رقم الفاتورة"],
+                    ...journalsWithReturns.map(j => [
+                      j.journalDate,
+                      branches?.find(b => b.id === j.branchId)?.name || j.branchId,
+                      j.cashierName || '-',
+                      SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-',
+                      j.returnAmount || 0,
+                      PAYMENT_METHOD_LABELS[j.returnPaymentMethod || ''] || j.returnPaymentMethod || '-',
+                      j.returnReason || '-',
+                      j.returnReference || '-'
+                    ])
+                  ];
+                  const detailsSheet = XLSX.utils.aoa_to_sheet(detailsData);
+                  XLSX.utils.book_append_sheet(wb, detailsSheet, "التفاصيل");
+                  
+                  XLSX.writeFile(wb, `تقرير_المرتجعات_${filters.startDate}_${filters.endDate}.xlsx`);
+                };
+
                 return (
                   <>
                     <div className="flex items-center justify-between">
@@ -3225,11 +3308,21 @@ export default function OperationsReportsDashboardPage() {
                         <Truck className="w-5 h-5 text-orange-600" />
                         تقرير المرتجعات التحليلي
                       </h2>
-                      <Button 
-                        className="gap-2 bg-orange-600 hover:bg-orange-700" 
-                        data-testid="button-export-returns-pdf"
-                        onClick={() => {
-                          const htmlContent = `
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline"
+                          className="gap-2 border-green-600 text-green-600 hover:bg-green-50" 
+                          data-testid="button-export-returns-excel"
+                          onClick={handleExportReturnsExcel}
+                        >
+                          <Download className="w-4 h-4" />
+                          تصدير Excel
+                        </Button>
+                        <Button 
+                          className="gap-2 bg-orange-600 hover:bg-orange-700" 
+                          data-testid="button-export-returns-pdf"
+                          onClick={() => {
+                            const htmlContent = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -3251,6 +3344,7 @@ export default function OperationsReportsDashboardPage() {
     table { width: 100%; border-collapse: collapse; font-size: 9px; }
     th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
     th { background: #f0f0f0; }
+    .amount-red { color: #dc2626; font-weight: bold; }
     .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #e9ecef; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #ea580c; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
     @media print { .print-btn { display: none !important; } }
@@ -3264,31 +3358,50 @@ export default function OperationsReportsDashboardPage() {
   </div>
   <div class="summary-grid">
     <div class="summary-card"><div class="value">${returnsCount}</div><div class="label">عدد عمليات المرتجع</div></div>
-    <div class="summary-card"><div class="value">${formatCurrency(totalReturnAmount)}</div><div class="label">إجمالي المرتجعات</div></div>
+    <div class="summary-card"><div class="value amount-red">${formatCurrency(totalReturnAmount)}</div><div class="label">إجمالي المرتجعات</div></div>
     <div class="summary-card"><div class="value">${Object.keys(returnsByBranch).length}</div><div class="label">الفروع المتأثرة</div></div>
     <div class="summary-card"><div class="value">${returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</div><div class="label">متوسط المرتجع</div></div>
   </div>
   <div class="section">
     <div class="section-title">المرتجعات حسب الفرع</div>
     <table><thead><tr><th>الفرع</th><th>العدد</th><th>المبلغ</th><th>النسبة</th></tr></thead><tbody>
-    ${Object.entries(returnsByBranch).map(([branch, data]) => `<tr><td>${branch}</td><td>${data.count}</td><td>${formatCurrency(data.amount)}</td><td>${totalReturnAmount > 0 ? ((data.amount / totalReturnAmount) * 100).toFixed(1) : 0}%</td></tr>`).join('')}
+    ${Object.entries(returnsByBranch).map(([branch, data]) => `<tr><td>${branch}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td><td>${totalReturnAmount > 0 ? ((data.amount / totalReturnAmount) * 100).toFixed(1) : 0}%</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
     <div class="section-title">المرتجعات حسب الوردية</div>
     <table><thead><tr><th>الوردية</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>
-    ${Object.entries(returnsByShift).map(([shift, data]) => `<tr><td>${SHIFT_LABELS[shift] || shift}</td><td>${data.count}</td><td>${formatCurrency(data.amount)}</td></tr>`).join('')}
+    ${Object.entries(returnsByShift).map(([shift, data]) => `<tr><td>${SHIFT_LABELS[shift] || shift}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span>بتر بيكري</span><span>${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="section">
+    <div class="section-title">المرتجعات حسب طريقة الدفع</div>
+    <table><thead><tr><th>طريقة الدفع</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>
+    ${Object.entries(returnsByPaymentMethod).map(([method, data]) => `<tr><td>${PAYMENT_METHOD_LABELS[method] || method}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="section">
+    <div class="section-title">أسباب المرتجعات</div>
+    <table><thead><tr><th>السبب</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>
+    ${Object.entries(returnsByReason).map(([reason, data]) => `<tr><td>${reason}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="section">
+    <div class="section-title">تفاصيل المرتجعات (${returnsCount})</div>
+    <table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الكاشير</th><th>الوردية</th><th>المبلغ</th><th>طريقة الدفع</th><th>السبب</th></tr></thead><tbody>
+    ${journalsWithReturns.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td class="amount-red">${formatCurrency(j.returnAmount || 0)}</td><td>${PAYMENT_METHOD_LABELS[j.returnPaymentMethod || ''] || j.returnPaymentMethod || '-'}</td><td>${j.returnReason || '-'}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="footer"><span>بتر بيكري - Butter Bakery</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
 </body>
 </html>`;
-                          printHtmlContent(htmlContent);
-                        }}
-                      >
-                        <FileDown className="w-4 h-4" />
-                        تصدير PDF
-                      </Button>
+                            printHtmlContent(htmlContent);
+                          }}
+                        >
+                          <FileDown className="w-4 h-4" />
+                          تصدير PDF
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Summary Cards */}
@@ -3573,6 +3686,79 @@ export default function OperationsReportsDashboardPage() {
                   "غير محدد": "غير محدد"
                 };
 
+                // Excel export for discrepancies
+                const handleExportDiscrepanciesExcel = () => {
+                  const wb = XLSX.utils.book_new();
+                  
+                  // Summary sheet
+                  const summaryData = [
+                    ["تقرير فروقات المدفوعات التحليلي - بتر بيكري"],
+                    ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
+                    [],
+                    ["الملخص"],
+                    ["حالات العجز", shortages.length],
+                    ["إجمالي العجز", totalShortageAmount],
+                    ["حالات الفائض", surpluses.length],
+                    ["إجمالي الفائض", totalSurplusAmount],
+                    ["صافي الفروقات", netDiscrepancy],
+                  ];
+                  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+                  XLSX.utils.book_append_sheet(wb, summarySheet, "الملخص");
+                  
+                  // By Cashier sheet
+                  const cashierData = [
+                    ["الفروقات حسب الكاشير"],
+                    ["الكاشير", "عدد الحالات", "إجمالي العجز", "إجمالي الفائض", "الصافي"],
+                    ...Object.entries(discrepanciesByCashier).map(([cashier, data]) => [
+                      cashier, data.count, data.shortage, data.surplus, data.surplus - data.shortage
+                    ])
+                  ];
+                  const cashierSheet = XLSX.utils.aoa_to_sheet(cashierData);
+                  XLSX.utils.book_append_sheet(wb, cashierSheet, "حسب الكاشير");
+                  
+                  // By Branch sheet
+                  const branchData = [
+                    ["الفروقات حسب الفرع"],
+                    ["الفرع", "عدد الحالات", "إجمالي العجز", "إجمالي الفائض", "الصافي"],
+                    ...Object.entries(discrepanciesByBranch).map(([branch, data]) => [
+                      branch, data.count, data.shortage, data.surplus, data.surplus - data.shortage
+                    ])
+                  ];
+                  const branchSheet = XLSX.utils.aoa_to_sheet(branchData);
+                  XLSX.utils.book_append_sheet(wb, branchSheet, "حسب الفرع");
+                  
+                  // By Shift sheet
+                  const shiftData = [
+                    ["الفروقات حسب الوردية"],
+                    ["الوردية", "عدد الحالات", "إجمالي العجز", "إجمالي الفائض", "الصافي"],
+                    ...Object.entries(discrepanciesByShift).map(([shift, data]) => [
+                      SHIFT_LABELS[shift] || shift, data.count, data.shortage, data.surplus, data.surplus - data.shortage
+                    ])
+                  ];
+                  const shiftSheet = XLSX.utils.aoa_to_sheet(shiftData);
+                  XLSX.utils.book_append_sheet(wb, shiftSheet, "حسب الوردية");
+                  
+                  // Details sheet
+                  const detailsData = [
+                    ["تفاصيل الفروقات"],
+                    ["التاريخ", "الفرع", "الكاشير", "الوردية", "إجمالي المبيعات", "مبلغ الفرق", "الحالة", "ملاحظات"],
+                    ...journalsWithDiscrepancies.map(j => [
+                      j.journalDate,
+                      branches?.find(b => b.id === j.branchId)?.name || j.branchId,
+                      j.cashierName || '-',
+                      SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-',
+                      j.totalSales || 0,
+                      j.discrepancyAmount || 0,
+                      j.discrepancyStatus === 'shortage' ? 'عجز' : j.discrepancyStatus === 'surplus' ? 'فائض' : 'متوازن',
+                      j.notes || '-'
+                    ])
+                  ];
+                  const detailsSheet = XLSX.utils.aoa_to_sheet(detailsData);
+                  XLSX.utils.book_append_sheet(wb, detailsSheet, "التفاصيل");
+                  
+                  XLSX.writeFile(wb, `تقرير_الفروقات_${filters.startDate}_${filters.endDate}.xlsx`);
+                };
+
                 return (
                   <>
                     <div className="flex items-center justify-between">
@@ -3580,11 +3766,21 @@ export default function OperationsReportsDashboardPage() {
                         <AlertTriangle className="w-5 h-5 text-red-600" />
                         تقرير فروقات المدفوعات التحليلي
                       </h2>
-                      <Button 
-                        className="gap-2 bg-red-600 hover:bg-red-700" 
-                        data-testid="button-export-discrepancies-pdf"
-                        onClick={() => {
-                          const htmlContent = `
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline"
+                          className="gap-2 border-green-600 text-green-600 hover:bg-green-50" 
+                          data-testid="button-export-discrepancies-excel"
+                          onClick={handleExportDiscrepanciesExcel}
+                        >
+                          <Download className="w-4 h-4" />
+                          تصدير Excel
+                        </Button>
+                        <Button 
+                          className="gap-2 bg-red-600 hover:bg-red-700" 
+                          data-testid="button-export-discrepancies-pdf"
+                          onClick={() => {
+                            const htmlContent = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -3597,7 +3793,7 @@ export default function OperationsReportsDashboardPage() {
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #dc2626; padding-bottom: 10px; margin-bottom: 15px; }
     .header .title { font-size: 18px; font-weight: bold; color: #dc2626; }
-    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px; }
     .summary-card { padding: 12px; border-radius: 8px; text-align: center; border: 1px solid; }
     .summary-card.shortage { background: #fef2f2; border-color: #fca5a5; }
     .summary-card.surplus { background: #f0fdf4; border-color: #86efac; }
@@ -3609,8 +3805,12 @@ export default function OperationsReportsDashboardPage() {
     table { width: 100%; border-collapse: collapse; font-size: 9px; }
     th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
     th { background: #f0f0f0; }
-    .shortage { color: #dc2626; }
-    .surplus { color: #16a34a; }
+    .shortage { color: #dc2626; font-weight: bold; }
+    .surplus { color: #16a34a; font-weight: bold; }
+    .net-banner { padding: 15px; margin: 15px 0; border-radius: 8px; text-align: center; }
+    .net-banner.negative { background: #fef2f2; border: 2px solid #dc2626; }
+    .net-banner.positive { background: #f0fdf4; border: 2px solid #16a34a; }
+    .net-banner .amount { font-size: 24px; font-weight: bold; }
     .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #e9ecef; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
     @media print { .print-btn { display: none !important; } }
@@ -3627,6 +3827,7 @@ export default function OperationsReportsDashboardPage() {
     <div class="summary-card shortage"><div class="value shortage">${formatCurrency(totalShortageAmount)}</div><div class="label">إجمالي العجز</div></div>
     <div class="summary-card surplus"><div class="value surplus">${surpluses.length}</div><div class="label">حالات الفائض</div></div>
     <div class="summary-card surplus"><div class="value surplus">${formatCurrency(totalSurplusAmount)}</div><div class="label">إجمالي الفائض</div></div>
+    <div class="summary-card ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}"><div class="value ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}">${formatCurrency(netDiscrepancy)}</div><div class="label">صافي الفروقات</div></div>
   </div>
   <div class="section">
     <div class="section-title">الفروقات حسب الكاشير</div>
@@ -3640,15 +3841,28 @@ export default function OperationsReportsDashboardPage() {
     ${Object.entries(discrepanciesByBranch).map(([branch, data]) => `<tr><td>${branch}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span>بتر بيكري</span><span>${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="section">
+    <div class="section-title">الفروقات حسب الوردية</div>
+    <table><thead><tr><th>الوردية</th><th>عدد الحالات</th><th>إجمالي العجز</th><th>إجمالي الفائض</th><th>الصافي</th></tr></thead><tbody>
+    ${Object.entries(discrepanciesByShift).map(([shift, data]) => `<tr><td>${SHIFT_LABELS[shift] || shift}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="section">
+    <div class="section-title">تفاصيل الفروقات (${journalsWithDiscrepancies.length})</div>
+    <table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الكاشير</th><th>الوردية</th><th>المبيعات</th><th>مبلغ الفرق</th><th>الحالة</th></tr></thead><tbody>
+    ${journalsWithDiscrepancies.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td>${formatCurrency(j.totalSales || 0)}</td><td class="${(j.discrepancyAmount || 0) < 0 ? 'shortage' : 'surplus'}">${formatCurrency(j.discrepancyAmount || 0)}</td><td>${j.discrepancyStatus === 'shortage' ? 'عجز' : j.discrepancyStatus === 'surplus' ? 'فائض' : 'متوازن'}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="footer"><span>بتر بيكري - Butter Bakery</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
 </body>
 </html>`;
-                          printHtmlContent(htmlContent);
-                        }}
-                      >
-                        <FileDown className="w-4 h-4" />
-                        تصدير PDF
-                      </Button>
+                            printHtmlContent(htmlContent);
+                          }}
+                        >
+                          <FileDown className="w-4 h-4" />
+                          تصدير PDF
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Summary Cards */}
