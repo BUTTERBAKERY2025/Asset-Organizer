@@ -1475,7 +1475,7 @@ export default function OperationsReportsDashboardPage() {
       case "quality":
         return ["production"];
       default:
-        return ["overview", "sales", "targets", "production", "shifts", "cashier", "branches", "branch-overview", "executive"];
+        return ["overview", "sales", "targets", "production", "shifts", "cashier", "returns", "discrepancies", "branches", "branch-overview", "executive"];
     }
   };
 
@@ -1898,6 +1898,18 @@ export default function OperationsReportsDashboardPage() {
                 <TabsTrigger value="branch-overview" data-testid="tab-branch-overview" className="gap-1">
                   <Package className="w-4 h-4" />
                   نظرة عامة
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("returns") && (
+                <TabsTrigger value="returns" data-testid="tab-returns" className="gap-1">
+                  <Truck className="w-4 h-4" />
+                  المرتجعات
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("discrepancies") && (
+                <TabsTrigger value="discrepancies" data-testid="tab-discrepancies" className="gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  الفروقات
                 </TabsTrigger>
               )}
               {visibleTabs.includes("executive") && (
@@ -3153,6 +3165,759 @@ export default function OperationsReportsDashboardPage() {
                   </Card>
                 </>
               )}
+            </TabsContent>
+
+            {/* تقرير المرتجعات - Returns Report */}
+            <TabsContent value="returns" className="space-y-6">
+              {(() => {
+                const journalsWithReturns = filteredCashierJournals.filter(j => j.hasReturn || (j.returnAmount && j.returnAmount > 0));
+                const totalReturnAmount = journalsWithReturns.reduce((sum, j) => sum + (j.returnAmount || 0), 0);
+                const returnsCount = journalsWithReturns.length;
+                
+                // Group by branch
+                const returnsByBranch = journalsWithReturns.reduce((acc, j) => {
+                  const branchName = branches?.find(b => b.id === j.branchId)?.name || j.branchId;
+                  if (!acc[branchName]) acc[branchName] = { count: 0, amount: 0, journals: [] };
+                  acc[branchName].count++;
+                  acc[branchName].amount += j.returnAmount || 0;
+                  acc[branchName].journals.push(j);
+                  return acc;
+                }, {} as Record<string, { count: number; amount: number; journals: typeof journalsWithReturns }>);
+                
+                // Group by shift
+                const returnsByShift = journalsWithReturns.reduce((acc, j) => {
+                  const shift = j.shiftType || 'غير محدد';
+                  if (!acc[shift]) acc[shift] = { count: 0, amount: 0 };
+                  acc[shift].count++;
+                  acc[shift].amount += j.returnAmount || 0;
+                  return acc;
+                }, {} as Record<string, { count: number; amount: number }>);
+                
+                // Group by payment method
+                const returnsByPaymentMethod = journalsWithReturns.reduce((acc, j) => {
+                  const method = j.returnPaymentMethod || 'غير محدد';
+                  if (!acc[method]) acc[method] = { count: 0, amount: 0 };
+                  acc[method].count++;
+                  acc[method].amount += j.returnAmount || 0;
+                  return acc;
+                }, {} as Record<string, { count: number; amount: number }>);
+                
+                // Group by reason
+                const returnsByReason = journalsWithReturns.reduce((acc, j) => {
+                  const reason = j.returnReason || 'غير محدد';
+                  if (!acc[reason]) acc[reason] = { count: 0, amount: 0 };
+                  acc[reason].count++;
+                  acc[reason].amount += j.returnAmount || 0;
+                  return acc;
+                }, {} as Record<string, { count: number; amount: number }>);
+                
+                const SHIFT_LABELS: Record<string, string> = {
+                  morning: "صباحي",
+                  evening: "مسائي",
+                  night: "ليلي",
+                  "غير محدد": "غير محدد"
+                };
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-orange-600" />
+                        تقرير المرتجعات التحليلي
+                      </h2>
+                      <Button 
+                        className="gap-2 bg-orange-600 hover:bg-orange-700" 
+                        data-testid="button-export-returns-pdf"
+                        onClick={() => {
+                          const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير المرتجعات</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4; margin: 10mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #ea580c; padding-bottom: 10px; margin-bottom: 15px; }
+    .header .title { font-size: 18px; font-weight: bold; color: #ea580c; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
+    .summary-card { background: #fff7ed; padding: 12px; border-radius: 8px; text-align: center; border: 1px solid #fdba74; }
+    .summary-card .value { font-size: 16px; font-weight: bold; color: #ea580c; }
+    .summary-card .label { color: #9a3412; font-size: 9px; }
+    .section { margin-bottom: 15px; }
+    .section-title { font-size: 12px; font-weight: bold; color: white; padding: 6px 12px; background: #ea580c; border-radius: 6px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 9px; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
+    th { background: #f0f0f0; }
+    .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #e9ecef; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .print-btn { position: fixed; top: 10px; left: 10px; background: #ea580c; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
+    @media print { .print-btn { display: none !important; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <div class="header">
+    <div class="title">تقرير المرتجعات التحليلي</div>
+    <div>بتر بيكري | ${filters.startDate} إلى ${filters.endDate}</div>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card"><div class="value">${returnsCount}</div><div class="label">عدد عمليات المرتجع</div></div>
+    <div class="summary-card"><div class="value">${formatCurrency(totalReturnAmount)}</div><div class="label">إجمالي المرتجعات</div></div>
+    <div class="summary-card"><div class="value">${Object.keys(returnsByBranch).length}</div><div class="label">الفروع المتأثرة</div></div>
+    <div class="summary-card"><div class="value">${returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</div><div class="label">متوسط المرتجع</div></div>
+  </div>
+  <div class="section">
+    <div class="section-title">المرتجعات حسب الفرع</div>
+    <table><thead><tr><th>الفرع</th><th>العدد</th><th>المبلغ</th><th>النسبة</th></tr></thead><tbody>
+    ${Object.entries(returnsByBranch).map(([branch, data]) => `<tr><td>${branch}</td><td>${data.count}</td><td>${formatCurrency(data.amount)}</td><td>${totalReturnAmount > 0 ? ((data.amount / totalReturnAmount) * 100).toFixed(1) : 0}%</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="section">
+    <div class="section-title">المرتجعات حسب الوردية</div>
+    <table><thead><tr><th>الوردية</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>
+    ${Object.entries(returnsByShift).map(([shift, data]) => `<tr><td>${SHIFT_LABELS[shift] || shift}</td><td>${data.count}</td><td>${formatCurrency(data.amount)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="footer"><span>بتر بيكري</span><span>${new Date().toLocaleDateString('ar-SA')}</span></div>
+</body>
+</html>`;
+                          printHtmlContent(htmlContent);
+                        }}
+                      >
+                        <FileDown className="w-4 h-4" />
+                        تصدير PDF
+                      </Button>
+                    </div>
+
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-orange-500 rounded-lg">
+                              <Truck className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-orange-700">عدد عمليات المرتجع</p>
+                              <p className="text-xl font-bold text-orange-800">{returnsCount}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-red-500 rounded-lg">
+                              <DollarSign className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-red-700">إجمالي المرتجعات</p>
+                              <p className="text-xl font-bold text-red-800">{formatCurrency(totalReturnAmount)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-amber-500 rounded-lg">
+                              <Building2 className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-amber-700">الفروع المتأثرة</p>
+                              <p className="text-xl font-bold text-amber-800">{Object.keys(returnsByBranch).length}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-purple-500 rounded-lg">
+                              <TrendingDown className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-purple-700">متوسط المرتجع</p>
+                              <p className="text-xl font-bold text-purple-800">{returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {returnsCount > 0 ? (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Returns by Branch */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Building2 className="w-5 h-5 text-orange-600" />
+                              المرتجعات حسب الفرع
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[280px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={Object.entries(returnsByBranch).map(([branch, data]) => ({ branch, ...data }))}>
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="branch" fontSize={10} angle={-45} textAnchor="end" height={60} />
+                                  <YAxis fontSize={10} />
+                                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                  <Bar dataKey="amount" name="المبلغ" fill="#ea580c" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Returns by Shift */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Clock className="w-5 h-5 text-blue-600" />
+                              المرتجعات حسب الوردية
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[280px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={Object.entries(returnsByShift).map(([shift, data]) => ({ 
+                                      name: SHIFT_LABELS[shift] || shift, 
+                                      value: data.amount 
+                                    }))}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="50%"
+                                    outerRadius={90}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                  >
+                                    {Object.keys(returnsByShift).map((_, index) => (
+                                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                  <Legend />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Returns by Payment Method */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <CreditCard className="w-5 h-5 text-green-600" />
+                              المرتجعات حسب طريقة الدفع
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {Object.entries(returnsByPaymentMethod).map(([method, data]) => (
+                                <div key={method} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline">{PAYMENT_METHOD_LABELS[method] || method}</Badge>
+                                    <span className="text-sm text-muted-foreground">({data.count} عملية)</span>
+                                  </div>
+                                  <span className="font-semibold text-red-600">{formatCurrency(data.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Returns by Reason */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <ClipboardList className="w-5 h-5 text-purple-600" />
+                              أسباب المرتجعات
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {Object.entries(returnsByReason).map(([reason, data]) => (
+                                <div key={reason} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                    <span className="text-sm">{reason}</span>
+                                    <span className="text-xs text-muted-foreground">({data.count})</span>
+                                  </div>
+                                  <span className="font-semibold text-red-600">{formatCurrency(data.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ) : (
+                      <Card>
+                        <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                          <Truck className="w-12 h-12 text-muted-foreground" />
+                          <p className="text-muted-foreground">لا توجد مرتجعات في الفترة المحددة</p>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Detailed Returns Table */}
+                    {returnsCount > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-orange-600" />
+                            تفاصيل المرتجعات ({returnsCount})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-muted/50">
+                                  <th className="text-right py-3 px-4">التاريخ</th>
+                                  <th className="text-right py-3 px-4">الفرع</th>
+                                  <th className="text-right py-3 px-4">الكاشير</th>
+                                  <th className="text-right py-3 px-4">الوردية</th>
+                                  <th className="text-right py-3 px-4">مبلغ المرتجع</th>
+                                  <th className="text-right py-3 px-4">طريقة الدفع</th>
+                                  <th className="text-right py-3 px-4">السبب</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {journalsWithReturns.map((journal) => (
+                                  <tr key={journal.id} className="border-b hover:bg-muted/50">
+                                    <td className="py-3 px-4">{journal.journalDate}</td>
+                                    <td className="py-3 px-4">{branches?.find(b => b.id === journal.branchId)?.name || journal.branchId}</td>
+                                    <td className="py-3 px-4">{journal.cashierName || '-'}</td>
+                                    <td className="py-3 px-4">
+                                      <Badge variant="outline">{SHIFT_LABELS[journal.shiftType || ''] || journal.shiftType || '-'}</Badge>
+                                    </td>
+                                    <td className="py-3 px-4 font-semibold text-red-600">{formatCurrency(journal.returnAmount || 0)}</td>
+                                    <td className="py-3 px-4">{PAYMENT_METHOD_LABELS[journal.returnPaymentMethod || ''] || journal.returnPaymentMethod || '-'}</td>
+                                    <td className="py-3 px-4 text-muted-foreground">{journal.returnReason || '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                );
+              })()}
+            </TabsContent>
+
+            {/* تقرير فروقات المدفوعات - Payment Discrepancies Report */}
+            <TabsContent value="discrepancies" className="space-y-6">
+              {(() => {
+                const journalsWithDiscrepancies = filteredCashierJournals.filter(j => 
+                  j.discrepancyStatus !== 'balanced' || 
+                  (j.discrepancyAmount && j.discrepancyAmount !== 0)
+                );
+                
+                const shortages = journalsWithDiscrepancies.filter(j => j.discrepancyStatus === 'shortage' || (j.discrepancyAmount && j.discrepancyAmount < 0));
+                const surpluses = journalsWithDiscrepancies.filter(j => j.discrepancyStatus === 'surplus' || (j.discrepancyAmount && j.discrepancyAmount > 0));
+                const totalShortageAmount = shortages.reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0);
+                const totalSurplusAmount = surpluses.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+                const netDiscrepancy = totalSurplusAmount - totalShortageAmount;
+                
+                // Group by Cashier
+                const discrepanciesByCashier = journalsWithDiscrepancies.reduce((acc, j) => {
+                  const cashierName = j.cashierName || 'غير محدد';
+                  if (!acc[cashierName]) acc[cashierName] = { shortage: 0, surplus: 0, count: 0, journals: [] };
+                  acc[cashierName].count++;
+                  if ((j.discrepancyAmount || 0) < 0) {
+                    acc[cashierName].shortage += Math.abs(j.discrepancyAmount || 0);
+                  } else {
+                    acc[cashierName].surplus += (j.discrepancyAmount || 0);
+                  }
+                  acc[cashierName].journals.push(j);
+                  return acc;
+                }, {} as Record<string, { shortage: number; surplus: number; count: number; journals: typeof journalsWithDiscrepancies }>);
+                
+                // Group by Branch
+                const discrepanciesByBranch = journalsWithDiscrepancies.reduce((acc, j) => {
+                  const branchName = branches?.find(b => b.id === j.branchId)?.name || j.branchId;
+                  if (!acc[branchName]) acc[branchName] = { shortage: 0, surplus: 0, count: 0 };
+                  acc[branchName].count++;
+                  if ((j.discrepancyAmount || 0) < 0) {
+                    acc[branchName].shortage += Math.abs(j.discrepancyAmount || 0);
+                  } else {
+                    acc[branchName].surplus += (j.discrepancyAmount || 0);
+                  }
+                  return acc;
+                }, {} as Record<string, { shortage: number; surplus: number; count: number }>);
+                
+                // Group by Shift
+                const discrepanciesByShift = journalsWithDiscrepancies.reduce((acc, j) => {
+                  const shift = j.shiftType || 'غير محدد';
+                  if (!acc[shift]) acc[shift] = { shortage: 0, surplus: 0, count: 0 };
+                  acc[shift].count++;
+                  if ((j.discrepancyAmount || 0) < 0) {
+                    acc[shift].shortage += Math.abs(j.discrepancyAmount || 0);
+                  } else {
+                    acc[shift].surplus += (j.discrepancyAmount || 0);
+                  }
+                  return acc;
+                }, {} as Record<string, { shortage: number; surplus: number; count: number }>);
+                
+                const SHIFT_LABELS: Record<string, string> = {
+                  morning: "صباحي",
+                  evening: "مسائي",
+                  night: "ليلي",
+                  "غير محدد": "غير محدد"
+                };
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                        تقرير فروقات المدفوعات التحليلي
+                      </h2>
+                      <Button 
+                        className="gap-2 bg-red-600 hover:bg-red-700" 
+                        data-testid="button-export-discrepancies-pdf"
+                        onClick={() => {
+                          const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير فروقات المدفوعات</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4; margin: 10mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #dc2626; padding-bottom: 10px; margin-bottom: 15px; }
+    .header .title { font-size: 18px; font-weight: bold; color: #dc2626; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
+    .summary-card { padding: 12px; border-radius: 8px; text-align: center; border: 1px solid; }
+    .summary-card.shortage { background: #fef2f2; border-color: #fca5a5; }
+    .summary-card.surplus { background: #f0fdf4; border-color: #86efac; }
+    .summary-card.neutral { background: #f3f4f6; border-color: #d1d5db; }
+    .summary-card .value { font-size: 16px; font-weight: bold; }
+    .summary-card .label { font-size: 9px; }
+    .section { margin-bottom: 15px; }
+    .section-title { font-size: 12px; font-weight: bold; color: white; padding: 6px 12px; background: #dc2626; border-radius: 6px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 9px; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
+    th { background: #f0f0f0; }
+    .shortage { color: #dc2626; }
+    .surplus { color: #16a34a; }
+    .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #e9ecef; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .print-btn { position: fixed; top: 10px; left: 10px; background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
+    @media print { .print-btn { display: none !important; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <div class="header">
+    <div class="title">تقرير فروقات المدفوعات التحليلي</div>
+    <div>بتر بيكري | ${filters.startDate} إلى ${filters.endDate}</div>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card shortage"><div class="value shortage">${shortages.length}</div><div class="label">حالات العجز</div></div>
+    <div class="summary-card shortage"><div class="value shortage">${formatCurrency(totalShortageAmount)}</div><div class="label">إجمالي العجز</div></div>
+    <div class="summary-card surplus"><div class="value surplus">${surpluses.length}</div><div class="label">حالات الفائض</div></div>
+    <div class="summary-card surplus"><div class="value surplus">${formatCurrency(totalSurplusAmount)}</div><div class="label">إجمالي الفائض</div></div>
+  </div>
+  <div class="section">
+    <div class="section-title">الفروقات حسب الكاشير</div>
+    <table><thead><tr><th>الكاشير</th><th>عدد الحالات</th><th>إجمالي العجز</th><th>إجمالي الفائض</th><th>الصافي</th></tr></thead><tbody>
+    ${Object.entries(discrepanciesByCashier).map(([cashier, data]) => `<tr><td>${cashier}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="section">
+    <div class="section-title">الفروقات حسب الفرع</div>
+    <table><thead><tr><th>الفرع</th><th>عدد الحالات</th><th>إجمالي العجز</th><th>إجمالي الفائض</th><th>الصافي</th></tr></thead><tbody>
+    ${Object.entries(discrepanciesByBranch).map(([branch, data]) => `<tr><td>${branch}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="footer"><span>بتر بيكري</span><span>${new Date().toLocaleDateString('ar-SA')}</span></div>
+</body>
+</html>`;
+                          printHtmlContent(htmlContent);
+                        }}
+                      >
+                        <FileDown className="w-4 h-4" />
+                        تصدير PDF
+                      </Button>
+                    </div>
+
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-red-500 rounded-lg">
+                              <TrendingDown className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-red-700">حالات العجز</p>
+                              <p className="text-xl font-bold text-red-800">{shortages.length}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-red-600 rounded-lg">
+                              <DollarSign className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-red-700">إجمالي العجز</p>
+                              <p className="text-xl font-bold text-red-800">{formatCurrency(totalShortageAmount)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-green-500 rounded-lg">
+                              <TrendingUp className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-green-700">حالات الفائض</p>
+                              <p className="text-xl font-bold text-green-800">{surpluses.length}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-green-600 rounded-lg">
+                              <DollarSign className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-green-700">إجمالي الفائض</p>
+                              <p className="text-xl font-bold text-green-800">{formatCurrency(totalSurplusAmount)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Net Discrepancy Banner */}
+                    <Card className={`border-2 ${netDiscrepancy < 0 ? 'border-red-300 bg-red-50' : netDiscrepancy > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 bg-gray-50'}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <AlertTriangle className={`w-6 h-6 ${netDiscrepancy < 0 ? 'text-red-600' : netDiscrepancy > 0 ? 'text-green-600' : 'text-gray-600'}`} />
+                            <div>
+                              <p className="text-sm font-medium">صافي الفروقات</p>
+                              <p className="text-xs text-muted-foreground">الفائض - العجز = الصافي</p>
+                            </div>
+                          </div>
+                          <div className={`text-2xl font-bold ${netDiscrepancy < 0 ? 'text-red-600' : netDiscrepancy > 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                            {formatCurrency(netDiscrepancy)}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {journalsWithDiscrepancies.length > 0 ? (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Discrepancies by Cashier */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <User className="w-5 h-5 text-blue-600" />
+                              الفروقات حسب الكاشير
+                            </CardTitle>
+                            <CardDescription>تحليل أداء كل كاشير من حيث العجز والفائض</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {Object.entries(discrepanciesByCashier)
+                                .sort((a, b) => (b[1].shortage - b[1].surplus) - (a[1].shortage - a[1].surplus))
+                                .slice(0, 10)
+                                .map(([cashier, data]) => (
+                                  <div key={cashier} className="p-3 bg-gray-50 rounded-lg border">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center gap-2">
+                                        <User className="w-4 h-4 text-gray-500" />
+                                        <span className="font-medium">{cashier}</span>
+                                        <Badge variant="outline" className="text-xs">{data.count} حالة</Badge>
+                                      </div>
+                                      <span className={`font-bold ${data.surplus - data.shortage < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        {formatCurrency(data.surplus - data.shortage)}
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-4 text-xs">
+                                      <span className="text-red-600">عجز: {formatCurrency(data.shortage)}</span>
+                                      <span className="text-green-600">فائض: {formatCurrency(data.surplus)}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Discrepancies by Branch */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Building2 className="w-5 h-5 text-amber-600" />
+                              الفروقات حسب الفرع
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[280px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart 
+                                  data={Object.entries(discrepanciesByBranch).map(([branch, data]) => ({ 
+                                    branch, 
+                                    shortage: data.shortage,
+                                    surplus: data.surplus
+                                  }))}
+                                  layout="vertical"
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis type="number" fontSize={10} />
+                                  <YAxis dataKey="branch" type="category" fontSize={10} width={80} />
+                                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                  <Legend />
+                                  <Bar dataKey="shortage" name="عجز" fill="#dc2626" stackId="a" />
+                                  <Bar dataKey="surplus" name="فائض" fill="#16a34a" stackId="b" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Discrepancies by Shift */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Clock className="w-5 h-5 text-purple-600" />
+                              الفروقات حسب الوردية
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[250px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={Object.entries(discrepanciesByShift).map(([shift, data]) => ({ 
+                                  shift: SHIFT_LABELS[shift] || shift, 
+                                  shortage: data.shortage,
+                                  surplus: data.surplus,
+                                  net: data.surplus - data.shortage
+                                }))}>
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="shift" fontSize={10} />
+                                  <YAxis fontSize={10} />
+                                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                  <Legend />
+                                  <Bar dataKey="shortage" name="عجز" fill="#dc2626" />
+                                  <Bar dataKey="surplus" name="فائض" fill="#16a34a" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Top Discrepancy Cases */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <AlertTriangle className="w-5 h-5 text-red-600" />
+                              أكبر حالات الفروقات
+                            </CardTitle>
+                            <CardDescription>الحالات التي تحتاج متابعة فورية</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              {journalsWithDiscrepancies
+                                .sort((a, b) => Math.abs(b.discrepancyAmount || 0) - Math.abs(a.discrepancyAmount || 0))
+                                .slice(0, 8)
+                                .map((journal) => (
+                                  <div key={journal.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant={journal.discrepancyStatus === 'shortage' ? 'destructive' : 'default'} className="text-xs">
+                                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                                      </Badge>
+                                      <span className="text-sm">{journal.cashierName}</span>
+                                      <span className="text-xs text-muted-foreground">{journal.journalDate}</span>
+                                    </div>
+                                    <span className={`font-bold ${(journal.discrepancyAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      {formatCurrency(journal.discrepancyAmount || 0)}
+                                    </span>
+                                  </div>
+                                ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ) : (
+                      <Card>
+                        <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                          <CheckCircle className="w-12 h-12 text-green-600" />
+                          <p className="text-green-700 font-medium">لا توجد فروقات في الفترة المحددة - أداء ممتاز!</p>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Detailed Discrepancies Table */}
+                    {journalsWithDiscrepancies.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-red-600" />
+                            تفاصيل الفروقات ({journalsWithDiscrepancies.length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-muted/50">
+                                  <th className="text-right py-3 px-4">التاريخ</th>
+                                  <th className="text-right py-3 px-4">الفرع</th>
+                                  <th className="text-right py-3 px-4">الكاشير</th>
+                                  <th className="text-right py-3 px-4">الوردية</th>
+                                  <th className="text-right py-3 px-4">المبيعات</th>
+                                  <th className="text-right py-3 px-4">مبلغ الفرق</th>
+                                  <th className="text-right py-3 px-4">الحالة</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {journalsWithDiscrepancies.map((journal) => (
+                                  <tr key={journal.id} className="border-b hover:bg-muted/50">
+                                    <td className="py-3 px-4">{journal.journalDate}</td>
+                                    <td className="py-3 px-4">{branches?.find(b => b.id === journal.branchId)?.name || journal.branchId}</td>
+                                    <td className="py-3 px-4 font-medium">{journal.cashierName || '-'}</td>
+                                    <td className="py-3 px-4">
+                                      <Badge variant="outline">{SHIFT_LABELS[journal.shiftType || ''] || journal.shiftType || '-'}</Badge>
+                                    </td>
+                                    <td className="py-3 px-4">{formatCurrency(journal.totalSales || 0)}</td>
+                                    <td className={`py-3 px-4 font-bold ${(journal.discrepancyAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      {formatCurrency(journal.discrepancyAmount || 0)}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <Badge variant={journal.discrepancyStatus === 'shortage' ? 'destructive' : journal.discrepancyStatus === 'surplus' ? 'default' : 'secondary'}>
+                                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                                      </Badge>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="executive" className="space-y-6">
