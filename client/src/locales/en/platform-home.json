@@ -4,7 +4,7 @@
     "afternoon": "Good Afternoon",
     "evening": "Good Evening"
   },
-  "welcome": "Welcome to Butter Bakery Management Platform",
+  "welcome": "Welcome to Butter Bakery System",
   "systemModules": "System Modules",
   "loginRequired": "Login Required",
   "loginRequiredDesc": "To access all platform features, please login first",
@@ -12,7 +12,8 @@
   "logout": "Logout",
   "todaySales": "Today's Sales",
   "currency": "SAR",
-  "platformName": "Butter Bakery Management Platform",
+  "platformName": "BUTTER BAKERY SYSTEM",
+  "systemSubtitle": "CEO COMMAND",
   "modules": {
     "hr": {
       "title": "Human Resources",
@@ -124,7 +125,11 @@
     "warehouseDashboard": "Warehouse Dashboard",
     "materialRequests": "Material Requests",
     "transferRequests": "Transfer Requests",
-    "warehouseInventory": "Warehouse Inventory"
+    "warehouseInventory": "Warehouse Inventory",
+    "branchStock": "Branch Stock",
+    "warehouseMovementLogs": "Movement Logs",
+    "purchasingRequests": "Purchasing Requests",
+    "warehouseReports": "Warehouse Reports"
   },
   "roles": {
     "admin": "Admin",

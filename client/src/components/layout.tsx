@@ -12,7 +12,8 @@ import {
   FileSearch, HardDrive, Link2, Home, Settings, Boxes, Factory, Clock, ClipboardCheck, 
   ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, 
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
-  Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages
+  Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
+  PackageCheck, Send, ShoppingCart
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -64,6 +65,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     assets: false,
     construction: false,
     marketing: false,
+    warehouse: false,
     settings: false,
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -88,6 +90,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       "/dashboard": ["/api/dashboard/stats"],
       "/construction-projects": ["/api/construction-projects"],
       "/operations": ["/api/operations/products"],
+      "/warehouse": ["/api/warehouse/items", "/api/warehouse/dashboard-stats"],
+      "/transfer-requests": ["/api/warehouse/material-requests"],
+      "/warehouse-inventory": ["/api/warehouse/items"],
     };
     const queries = apiMap[href];
     if (queries) {
@@ -247,6 +252,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
       },
     },
     {
+      key: "warehouse",
+      group: {
+        label: t("sidebar.warehouse"),
+        icon: Warehouse,
+        items: [
+          { href: "/warehouse", label: t("sidebar.warehouseDashboard"), icon: LayoutDashboard, module: "warehouse", isHeader: true },
+          { href: "/transfer-requests", label: t("sidebar.transferRequests"), icon: Send, module: "transfer_requests", indent: true },
+          { href: "/warehouse-inventory", label: t("sidebar.warehouseInventory"), icon: Boxes, module: "warehouse_inventory", indent: true },
+          { href: "/branch-stock", label: t("sidebar.branchStock"), icon: PackageCheck, module: "warehouse", indent: true },
+          { href: "/warehouse-movement-logs", label: t("sidebar.warehouseMovementLogs"), icon: FileBarChart, module: "warehouse", indent: true },
+          { href: "/purchasing-requests", label: t("sidebar.purchasingRequests"), icon: ShoppingCart, module: "warehouse", indent: true },
+          { href: "/warehouse-reports", label: t("sidebar.warehouseReports"), icon: BarChart3, module: "warehouse", indent: true },
+        ],
+      },
+    },
+    {
       key: "settings",
       group: {
         label: t("sidebar.settings"),
@@ -317,9 +338,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-full px-2 mb-2 flex items-center justify-between">
             <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-20" />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-center gap-1">
             {isAuthenticated && <NotificationsDropdown />}
-            <p className="text-[10px] text-muted-foreground text-center leading-tight">{t("platformName")}</p>
+            <p className="text-[10px] font-bold text-foreground text-center leading-tight">{t("platformName")}</p>
+            <p className="text-[9px] text-primary font-medium tracking-wider">{t("systemSubtitle")}</p>
           </div>
           {isAuthenticated && (
             <div className="mt-2 w-full">
@@ -429,7 +451,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
                 <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16" />
-                <p className="text-[10px] text-muted-foreground text-center mt-2">{t("platformName")}</p>
+                <div className="text-center mt-2">
+                  <p className="text-[10px] font-bold text-foreground">{t("platformName")}</p>
+                  <p className="text-[9px] text-primary font-medium tracking-wider">{t("systemSubtitle")}</p>
+                </div>
               </div>
               
               <nav className="p-3 space-y-1">

@@ -4,7 +4,7 @@
     "afternoon": "مساء الخير",
     "evening": "مساء الخير"
   },
-  "welcome": "مرحباً بك في منصة بتر بيكري الشاملة",
+  "welcome": "مرحباً بك في نظام باتر بيكري",
   "systemModules": "أقسام النظام",
   "loginRequired": "تسجيل الدخول مطلوب",
   "loginRequiredDesc": "للوصول إلى جميع ميزات المنصة، يرجى تسجيل الدخول أولاً",
@@ -12,7 +12,8 @@
   "logout": "تسجيل الخروج",
   "todaySales": "مبيعات اليوم",
   "currency": "ر.س",
-  "platformName": "منصة بتر بيكري الشاملة",
+  "platformName": "BUTTER BAKERY SYSTEM",
+  "systemSubtitle": "CEO COMMAND",
   "modules": {
     "hr": {
       "title": "الموارد البشرية",
@@ -124,7 +125,11 @@
     "warehouseDashboard": "لوحة المخازن",
     "materialRequests": "طلبات المواد",
     "transferRequests": "طلبات التحويل",
-    "warehouseInventory": "مخزون المستودع"
+    "warehouseInventory": "مخزون المستودع",
+    "branchStock": "مخزون الفروع",
+    "warehouseMovementLogs": "سجل الحركات",
+    "purchasingRequests": "طلبات الشراء",
+    "warehouseReports": "تقارير المخازن"
   },
   "roles": {
     "admin": "مدير",

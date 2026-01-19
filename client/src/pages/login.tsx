@@ -118,9 +118,12 @@ export default function LoginPage() {
               
               <div className="space-y-3">
                 <h1 className="text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl font-bold text-[#1a3a2f] leading-tight">
-                  <span className="text-[#e67e22]">Butter</span> Bakery
+                  <span className="text-[#e67e22]">BUTTER</span> BAKERY
                 </h1>
-                <p className="text-xs lg:text-sm text-[#1a3a2f]/70 font-medium tracking-[0.3em] uppercase">
+                <p className="text-lg lg:text-xl text-[#1a3a2f]/80 font-bold tracking-[0.2em] uppercase">
+                  SYSTEM
+                </p>
+                <p className="text-xs lg:text-sm text-[#e67e22] font-medium tracking-[0.3em] uppercase">
                   CEO COMMAND
                 </p>
                 <div className="w-20 h-1 bg-[#e67e22] rounded-full mx-auto"></div>
@@ -171,9 +174,9 @@ export default function LoginPage() {
                 className="h-16 sm:h-20 md:h-24 w-auto drop-shadow-lg mb-3" 
               />
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1a3a2f] text-center">
-                <span className="text-[#e67e22]">Butter</span> Bakery
+                <span className="text-[#e67e22]">BUTTER</span> BAKERY SYSTEM
               </h1>
-              <p className="text-[#1a3a2f]/60 text-xs sm:text-sm mt-1 tracking-widest">CEO COMMAND</p>
+              <p className="text-[#e67e22] text-xs sm:text-sm mt-1 tracking-widest font-medium">CEO COMMAND</p>
             </div>
 
             <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 shadow-xl border border-[#1a3a2f]/10">
