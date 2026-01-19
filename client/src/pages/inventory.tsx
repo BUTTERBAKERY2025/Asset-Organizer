@@ -62,6 +62,8 @@ export default function InventoryPage() {
       if (!res.ok) throw new Error("Failed to fetch inventory");
       return res.json();
     },
+    staleTime: 1000 * 60 * 2, // 2 minutes - inventory updates moderately
+    placeholderData: (prev) => prev, // Keep previous data during refetch
   });
 
   const isLoading = branchesLoading || inventoryLoading;

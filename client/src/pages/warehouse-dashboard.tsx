@@ -59,6 +59,7 @@ export default function WarehouseDashboardPage() {
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
+    staleTime: 1000 * 60 * 60, // 1 hour - branches rarely change
   });
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
@@ -69,6 +70,8 @@ export default function WarehouseDashboardPage() {
       return res.json();
     },
     refetchInterval: 60000,
+    staleTime: 1000 * 30, // 30 seconds - dashboard stats
+    placeholderData: (prev) => prev, // Keep previous data while loading
   });
 
   const { data: notifications = [] } = useQuery<Notification[]>({
@@ -79,6 +82,8 @@ export default function WarehouseDashboardPage() {
       return res.json();
     },
     refetchInterval: 30000,
+    staleTime: 1000 * 30, // 30 seconds
+    placeholderData: (prev) => prev,
   });
 
   const { data: unreadCount = { count: 0 } } = useQuery<{ count: number }>({
@@ -89,6 +94,8 @@ export default function WarehouseDashboardPage() {
       return res.json();
     },
     refetchInterval: 30000,
+    staleTime: 1000 * 30, // 30 seconds
+    placeholderData: (prev) => prev,
   });
 
   const markAsReadMutation = useMutation({

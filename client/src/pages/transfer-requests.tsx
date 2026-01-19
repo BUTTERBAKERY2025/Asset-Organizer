@@ -180,6 +180,8 @@ export default function TransferRequestsPage() {
       if (!response.ok) throw new Error("Failed to fetch items");
       return response.json();
     },
+    staleTime: 1000 * 60 * 30, // 30 minutes - catalog data
+    placeholderData: (prev) => prev,
   });
 
   // Add item to transfer
@@ -264,6 +266,8 @@ export default function TransferRequestsPage() {
       if (!response.ok) throw new Error("Failed to fetch transfers");
       return response.json();
     },
+    staleTime: 1000 * 60 * 2, // 2 minutes - frequently changing
+    placeholderData: (prev) => prev,
   });
 
   const createMutation = useMutation({

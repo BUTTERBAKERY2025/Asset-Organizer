@@ -186,6 +186,8 @@ export default function ProductionDashboardPage() {
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<OrderStats>({
     queryKey: ["/api/advanced-production-orders/stats"],
+    staleTime: 1000 * 30, // 30 seconds - production stats are dynamic
+    placeholderData: (prev) => prev,
   });
 
   const { data: hubData, isLoading: dailyLoading, refetch: refetchDaily } = useQuery<ProductionHubData>({
@@ -210,6 +212,9 @@ export default function ProductionDashboardPage() {
       }
       return data;
     },
+    enabled: !!selectedBranch && !!selectedDate,
+    staleTime: 1000 * 30, // 30 seconds
+    placeholderData: (prev) => prev,
   });
 
   const dailyStats = hubData?.today;

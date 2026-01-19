@@ -212,6 +212,8 @@ export default function MarketingInfluencersPage() {
       if (!res.ok) throw new Error("Failed to fetch influencers");
       return res.json();
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: (prev) => prev,
   });
 
   const { data: campaignLinks = [] } = useQuery<InfluencerCampaignLink[]>({
@@ -289,6 +291,8 @@ export default function MarketingInfluencersPage() {
       if (!res.ok) return [];
       return res.json();
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: (prev) => prev,
   });
 
   const { data: allCampaignLinks = [] } = useQuery<InfluencerCampaignLink[]>({

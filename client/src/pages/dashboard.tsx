@@ -19,6 +19,8 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch inventory");
       return res.json();
     },
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    placeholderData: (prev) => prev,
   });
 
   const branchMap = useMemo(() => {

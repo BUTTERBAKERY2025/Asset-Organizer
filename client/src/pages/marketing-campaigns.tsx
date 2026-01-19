@@ -308,6 +308,8 @@ export default function MarketingCampaignsPage() {
       if (!res.ok) throw new Error("Failed to fetch campaigns");
       return res.json();
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: (prev) => prev,
   });
 
   const form = useForm<CampaignFormData>({

@@ -110,6 +110,8 @@ export default function WarehouseInventoryPage() {
       if (!response.ok) throw new Error("Failed to fetch items");
       return response.json();
     },
+    staleTime: 1000 * 60 * 30, // 30 minutes - warehouse catalog
+    placeholderData: (prev) => prev,
   });
 
   const createMutation = useMutation({

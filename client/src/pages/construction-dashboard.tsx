@@ -58,6 +58,8 @@ export default function ConstructionDashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch projects");
       return res.json();
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: (prev) => prev,
   });
 
   const { data: contractors = [] } = useQuery<Contractor[]>({
@@ -67,6 +69,8 @@ export default function ConstructionDashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch contractors");
       return res.json();
     },
+    staleTime: 1000 * 60 * 30, // 30 minutes - rarely changes
+    placeholderData: (prev) => prev,
   });
 
   const { data: categories = [] } = useQuery<ConstructionCategory[]>({
@@ -76,6 +80,8 @@ export default function ConstructionDashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch categories");
       return res.json();
     },
+    staleTime: 1000 * 60 * 60, // 1 hour - static data
+    placeholderData: (prev) => prev,
   });
 
   const { data: allWorkItems = [] } = useQuery<ProjectWorkItem[]>({
@@ -85,6 +91,8 @@ export default function ConstructionDashboardPage() {
       if (!res.ok) return [];
       return res.json();
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: (prev) => prev,
   });
 
   const isLoading = branchesLoading || projectsLoading;
