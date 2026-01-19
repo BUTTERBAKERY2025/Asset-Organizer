@@ -14,6 +14,7 @@ Preferred communication style: Simple, everyday language.
 **Required Migrations:**
 - `migrations/001_finished_goods_unique_index.sql` - Functional unique index for Finished Goods Inventory system (required for atomic UPSERT operations)
 - `migrations/003_marketing_tables_complete.sql` - جداول عقود ومدفوعات المؤثرين (influencer_contracts, influencer_payments)
+- `migrations/004_performance_indexes.sql` - فهارس الأداء للجداول الكبيرة (production, inventory, cashier, warehouse)
 
 ## System Architecture
 The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
@@ -57,13 +58,24 @@ The system uses a modern web architecture with a React-based frontend and a Node
   - **Transfer Numbers**: Auto-generated format MT-YYYYMM-XXXX.
 
 ### Performance Optimization
-- **Tiered Caching Strategy**: Three-tier cache system based on data volatility:
-  - STATIC (1 hour): Branches, permissions - rarely changing data
-  - MEDIUM (10 minutes): Marketing campaigns, influencers, inventory - moderately changing data  
-  - DYNAMIC (2 minutes): Dashboard stats - frequently updating data
+- **Tiered Caching Strategy**: Five-tier cache system based on data volatility:
+  - STATIC (1 hour): Branches - rarely changing reference data
+  - LONG (30 minutes): Users, products, warehouse items - slowly changing catalog data
+  - MEDIUM (5 minutes): Permissions, marketing campaigns, inventory - moderately changing data
+  - SHORT (2 minutes): Material requests, transfers - frequently changing operational data
+  - DYNAMIC (30 seconds): Dashboard stats, production data - real-time data
+- **Server-side Caching**: Memoized data fetchers for frequently accessed data:
+  - Branches cached for 1 minute
+  - Users cached for 30 seconds
+  - Per-user permissions cached for 30 seconds
 - **Prefetch on Hover**: Navigation links prefetch API data on mouse hover to reduce perceived load time
-- **Static Data Prefetching**: Branches and permissions are prefetched on authentication
-- **Smart Cache Guards**: Prefetching checks query state to avoid redundant requests for in-flight or fresh data
+- **Smart Prefetch Guards**: 
+  - Prefetching checks query state to avoid redundant requests for in-flight or fresh data
+  - Large dataset endpoints (audit logs, inventory, production) excluded from hover prefetch
+- **Database Indexes**: Composite indexes for common query patterns (see `migrations/004_performance_indexes.sql`):
+  - Branch + Date indexes for production and cashier queries
+  - Status indexes for filtering workflows
+  - Category indexes for inventory and warehouse items
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema ensures type consistency between frontend and backend.

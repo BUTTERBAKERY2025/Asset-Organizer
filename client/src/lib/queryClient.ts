@@ -1,9 +1,11 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 const CACHE_TIMES = {
-  STATIC: 1000 * 60 * 60, // 1 hour - for rarely changing data (branches, users)
-  MEDIUM: 1000 * 60 * 10, // 10 minutes - for moderately changing data
-  DYNAMIC: 1000 * 60 * 2, // 2 minutes - for frequently changing data
+  STATIC: 1000 * 60 * 60, // 1 hour - for rarely changing data (branches, permissions)
+  LONG: 1000 * 60 * 30, // 30 minutes - for slowly changing data (users, products)
+  MEDIUM: 1000 * 60 * 5, // 5 minutes - for moderately changing data
+  SHORT: 1000 * 60 * 2, // 2 minutes - for frequently changing data
+  DYNAMIC: 1000 * 30, // 30 seconds - for real-time data (dashboards)
 };
 
 async function throwIfResNotOk(res: Response) {
@@ -66,19 +68,48 @@ export const queryClient = new QueryClient({
 });
 
 const ENDPOINT_CACHE_TIERS: Record<string, number> = {
+  // Static data - rarely changes
   "/api/branches": CACHE_TIMES.STATIC,
-  "/api/my-permissions": CACHE_TIMES.STATIC,
+  "/api/my-permissions": CACHE_TIMES.MEDIUM, // Permissions need to refresh reasonably quickly
+  "/api/users": CACHE_TIMES.LONG,
+  
+  // Product/catalog data - changes slowly
+  "/api/operations/products": CACHE_TIMES.LONG,
+  "/api/warehouse/items": CACHE_TIMES.LONG,
+  
+  // Moderate change frequency
   "/api/marketing/campaigns": CACHE_TIMES.MEDIUM,
   "/api/marketing/influencers": CACHE_TIMES.MEDIUM,
   "/api/marketing/influencer-contracts": CACHE_TIMES.MEDIUM,
   "/api/inventory": CACHE_TIMES.MEDIUM,
-  "/api/dashboard/stats": CACHE_TIMES.DYNAMIC,
   "/api/construction-projects": CACHE_TIMES.MEDIUM,
-  "/api/operations/products": CACHE_TIMES.MEDIUM,
+  "/api/assets": CACHE_TIMES.MEDIUM,
+  "/api/material-requests": CACHE_TIMES.SHORT,
+  "/api/material-transfers": CACHE_TIMES.SHORT,
+  
+  // Real-time data - needs fresh data
+  "/api/dashboard/stats": CACHE_TIMES.DYNAMIC,
+  "/api/daily-production": CACHE_TIMES.DYNAMIC,
+  "/api/cashier-journals": CACHE_TIMES.DYNAMIC,
 };
+
+// Endpoints that should NOT be prefetched on hover (large datasets)
+const SKIP_PREFETCH_ENDPOINTS = new Set([
+  "/api/audit-logs",
+  "/api/system-audit-logs",
+  "/api/warehouse-movement-logs",
+  "/api/inventory",
+  "/api/daily-production",
+]);
 
 export function prefetchQuery(queryKey: string[]) {
   const key = queryKey[0];
+  
+  // Skip prefetching large datasets to avoid slow hover prefetch
+  if (SKIP_PREFETCH_ENDPOINTS.has(key)) {
+    return;
+  }
+  
   const state = queryClient.getQueryState(queryKey);
   if (state?.status === "pending" || (state?.data !== undefined && !state?.isStale)) {
     return;
@@ -94,7 +125,7 @@ export function prefetchQuery(queryKey: string[]) {
 
 export const STATIC_QUERIES = [
   ["/api/branches"],
-  ["/api/my-permissions"],
+  // Note: /api/my-permissions uses MEDIUM cache tier, prefetched on auth only
 ];
 
 export function prefetchStaticData() {

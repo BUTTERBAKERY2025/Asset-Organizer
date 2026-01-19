@@ -24,7 +24,7 @@ import {
   users,
   COMPARISON_STATUS,
   RISK_SEVERITY,
-  ALERT_STATUS
+  ALERT_STATUS,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -86,10 +86,11 @@ export async function registerRoutes(
     return users.map(({ password, ...user }) => user);
   }, { promise: true, maxAge: 30000 }); // Cache for 30 seconds
 
-  // Add more caching for common data if needed
+  // Per-user permissions cache
   const getCachedPermissions = memoize(async (userId: string) => {
     return await storage.getUserPermissions(userId);
-  }, { promise: true, maxAge: 10000, length: 1 }); // Cache per-user permissions for 10s
+  }, { promise: true, maxAge: 30000, length: 1 }); // Cache per-user permissions for 30s
+  
 
   // Admin routes for user management
   app.get("/api/users", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
@@ -279,7 +280,8 @@ export async function registerRoutes(
         return res.json(allPermissions);
       }
       
-      const permissions = await storage.getUserPermissions(currentUser.id);
+      // Use cached permissions for better performance
+      const permissions = await getCachedPermissions(currentUser.id);
       res.json(permissions);
     } catch (error) {
       console.error("Error fetching my permissions:", error);
