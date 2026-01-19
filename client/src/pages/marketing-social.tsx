@@ -1114,12 +1114,12 @@ export default function MarketingSocialPage() {
         </Tabs>
 
         <Dialog open={showPostDialog} onOpenChange={setShowPostDialog}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>إنشاء منشور جديد</DialogTitle>
               <DialogDescription>أنشئ منشوراً جديداً لنشره على منصات التواصل الاجتماعي</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto space-y-4 px-1">
               <div>
                 <Label>المنصات</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
@@ -1411,7 +1411,7 @@ export default function MarketingSocialPage() {
                 </div>
               )}
             </div>
-            <DialogFooter>
+            <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
               <Button variant="outline" onClick={() => setShowPostDialog(false)} data-testid="button-cancel-post">إلغاء</Button>
               <Button onClick={handleCreatePost} disabled={!newPost.content || newPost.platforms.length === 0} data-testid="button-submit-post">
                 {newPost.scheduledAt ? 'جدولة المنشور' : 'نشر الآن'}
