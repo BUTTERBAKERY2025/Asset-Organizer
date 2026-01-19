@@ -13,6 +13,10 @@ export function useBranches() {
       if (!res.ok) return [];
       return res.json();
     },
+    staleTime: 1000 * 60 * 60, // 1 hour - branches rarely change
+    placeholderData: (prev) => prev,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const userBranchId = isAdmin ? null : (user?.branchId || null);

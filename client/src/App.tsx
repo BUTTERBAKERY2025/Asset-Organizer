@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -17,6 +17,17 @@ import type { SystemModule } from "@shared/schema";
 // Essential pages loaded eagerly (small, frequently used)
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
+
+// Preload critical pages after initial render for faster navigation
+const preloadCriticalPages = () => {
+  setTimeout(() => {
+    import("@/pages/warehouse-dashboard");
+    import("@/pages/production-dashboard");
+    import("@/pages/inventory");
+    import("@/pages/transfer-requests");
+    import("@/pages/marketing-campaigns");
+  }, 1000); // Delay to not block initial render
+};
 
 // All other pages loaded lazily for better performance
 const PlatformHomePage = lazy(() => import("@/pages/platform-home"));
@@ -263,6 +274,11 @@ function Router() {
 }
 
 function App() {
+  // Preload critical pages after app mounts
+  useEffect(() => {
+    preloadCriticalPages();
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
