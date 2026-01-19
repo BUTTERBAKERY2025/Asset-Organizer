@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "@/lib/i18n";
-import { prefetchStaticData, prefetchQuery } from "@/lib/queryClient";
+import { prefetchQuery } from "@/lib/queryClient";
 import { 
   LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, 
   CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, 
@@ -74,11 +74,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   }, [location]);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      prefetchStaticData();
-    }
-  }, [isAuthenticated]);
+  // Note: Removed prefetchStaticData() - queries handle their own caching
+  // This reduces duplicate requests on initial load
 
   const handleLinkHover = useCallback((href: string) => {
     const apiMap: Record<string, string[]> = {
@@ -117,6 +114,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       return res.json();
     },
     enabled: isAuthenticated,
+    staleTime: 1000 * 60 * 60, // 1 hour - branches rarely change
   });
 
   const availableBranches = isAdmin ? fetchedBranches : fetchedBranches.filter(b => 

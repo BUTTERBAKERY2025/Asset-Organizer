@@ -20,7 +20,7 @@ export function usePermissions() {
       return res.json();
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 5, // 5 minutes - matches MEDIUM cache tier
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
