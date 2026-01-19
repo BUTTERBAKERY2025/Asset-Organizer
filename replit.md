@@ -13,6 +13,7 @@ Preferred communication style: Simple, everyday language.
 
 **Required Migrations:**
 - `migrations/001_finished_goods_unique_index.sql` - Functional unique index for Finished Goods Inventory system (required for atomic UPSERT operations)
+- `migrations/003_marketing_tables_complete.sql` - جداول عقود ومدفوعات المؤثرين (influencer_contracts, influencer_payments)
 
 ## System Architecture
 The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
