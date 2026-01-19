@@ -4062,8 +4062,8 @@ export default function OperationsReportsDashboardPage() {
                                       <span className="text-sm">{journal.cashierName}</span>
                                       <span className="text-xs text-muted-foreground">{journal.journalDate}</span>
                                     </div>
-                                    <span className={`font-bold ${(journal.discrepancyAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                      {formatCurrency(journal.discrepancyAmount || 0)}
+                                    <span className={`font-bold ${journal.discrepancyStatus === 'shortage' ? 'text-red-600' : journal.discrepancyStatus === 'surplus' ? 'text-green-600' : 'text-gray-600'}`}>
+                                      {journal.discrepancyStatus === 'shortage' ? '-' : ''}{formatCurrency(Math.abs(journal.discrepancyAmount || 0))}
                                     </span>
                                   </div>
                                 ))}
@@ -4113,8 +4113,8 @@ export default function OperationsReportsDashboardPage() {
                                       <Badge variant="outline">{SHIFT_LABELS[journal.shiftType || ''] || journal.shiftType || '-'}</Badge>
                                     </td>
                                     <td className="py-3 px-4">{formatCurrency(journal.totalSales || 0)}</td>
-                                    <td className={`py-3 px-4 font-bold ${(journal.discrepancyAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                      {formatCurrency(journal.discrepancyAmount || 0)}
+                                    <td className={`py-3 px-4 font-bold ${journal.discrepancyStatus === 'shortage' ? 'text-red-600' : journal.discrepancyStatus === 'surplus' ? 'text-green-600' : 'text-gray-600'}`}>
+                                      {journal.discrepancyStatus === 'shortage' ? '-' : ''}{formatCurrency(Math.abs(journal.discrepancyAmount || 0))}
                                     </td>
                                     <td className="py-3 px-4">
                                       <Badge variant={journal.discrepancyStatus === 'shortage' ? 'destructive' : journal.discrepancyStatus === 'surplus' ? 'default' : 'secondary'}>
