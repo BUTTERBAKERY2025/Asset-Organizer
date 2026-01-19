@@ -3410,7 +3410,11 @@ export default function OperationsReportsDashboardPage() {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #ea580c; padding-bottom: 10px; margin-bottom: 15px; }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo .logo-circle { width: 50px; height: 50px; background: linear-gradient(135deg, #D4A574 0%, #8B6914 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .header-logo .logo-text { font-size: 20px; font-weight: bold; color: #fff; }
     .header .title { font-size: 18px; font-weight: bold; color: #ea580c; }
+    .header .brand { font-size: 14px; font-weight: bold; color: #8B6914; }
     .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
     .summary-card { background: #fff7ed; padding: 12px; border-radius: 8px; text-align: center; border: 1px solid #fdba74; }
     .summary-card .value { font-size: 16px; font-weight: bold; color: #ea580c; }
@@ -3421,7 +3425,8 @@ export default function OperationsReportsDashboardPage() {
     th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
     th { background: #f0f0f0; }
     .amount-red { color: #dc2626; font-weight: bold; }
-    .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #e9ecef; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #D4A574; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .footer .brand { color: #8B6914; font-weight: bold; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #ea580c; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
     @media print { .print-btn { display: none !important; } }
   </style>
@@ -3429,8 +3434,17 @@ export default function OperationsReportsDashboardPage() {
 <body>
   <button class="print-btn" onclick="window.print()">طباعة</button>
   <div class="header">
-    <div class="title">تقرير المرتجعات التحليلي</div>
-    <div>بتر بيكري | ${filters.startDate} إلى ${filters.endDate}</div>
+    <div class="header-logo">
+      <div class="logo-circle"><span class="logo-text">B</span></div>
+      <div>
+        <div class="brand">BUTTER BAKERY</div>
+        <div class="title">تقرير المرتجعات التحليلي</div>
+      </div>
+    </div>
+    <div style="text-align: left; font-size: 11px;">
+      <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
+      <div>${filters.startDate} إلى ${filters.endDate}</div>
+    </div>
   </div>
   <div class="summary-grid">
     <div class="summary-card"><div class="value">${returnsCount}</div><div class="label">عدد عمليات المرتجع</div></div>
@@ -3468,7 +3482,7 @@ export default function OperationsReportsDashboardPage() {
     ${journalsWithReturns.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td class="amount-red">${formatCurrency(j.returnAmount || 0)}</td><td>${PAYMENT_METHOD_LABELS[j.returnPaymentMethod || ''] || j.returnPaymentMethod || '-'}</td><td>${j.returnReason || '-'}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span>بتر بيكري - Butter Bakery</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="footer"><span class="brand">بتر بيكري - BUTTER BAKERY | CEO COMMAND CENTER</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
@@ -3868,11 +3882,15 @@ export default function OperationsReportsDashboardPage() {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #dc2626; padding-bottom: 10px; margin-bottom: 15px; }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo .logo-circle { width: 50px; height: 50px; background: linear-gradient(135deg, #D4A574 0%, #8B6914 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .header-logo .logo-text { font-size: 20px; font-weight: bold; color: #fff; }
     .header .title { font-size: 18px; font-weight: bold; color: #dc2626; }
+    .header .brand { font-size: 14px; font-weight: bold; color: #8B6914; }
     .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px; }
     .summary-card { padding: 12px; border-radius: 8px; text-align: center; border: 1px solid; }
     .summary-card.shortage { background: #fef2f2; border-color: #fca5a5; }
-    .summary-card.surplus { background: #f0fdf4; border-color: #86efac; }
+    .summary-card.surplus { background: #dcfce7; border-color: #166534; }
     .summary-card.neutral { background: #f3f4f6; border-color: #d1d5db; }
     .summary-card .value { font-size: 16px; font-weight: bold; }
     .summary-card .label { font-size: 9px; }
@@ -3882,12 +3900,13 @@ export default function OperationsReportsDashboardPage() {
     th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
     th { background: #f0f0f0; }
     .shortage { color: #dc2626; font-weight: bold; }
-    .surplus { color: #16a34a; font-weight: bold; }
+    .surplus { color: #166534; font-weight: bold; }
     .net-banner { padding: 15px; margin: 15px 0; border-radius: 8px; text-align: center; }
     .net-banner.negative { background: #fef2f2; border: 2px solid #dc2626; }
-    .net-banner.positive { background: #f0fdf4; border: 2px solid #16a34a; }
+    .net-banner.positive { background: #dcfce7; border: 2px solid #166534; }
     .net-banner .amount { font-size: 24px; font-weight: bold; }
-    .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #e9ecef; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .footer { margin-top: 15px; padding-top: 10px; border-top: 2px solid #D4A574; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+    .footer .brand { color: #8B6914; font-weight: bold; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
     @media print { .print-btn { display: none !important; } }
   </style>
@@ -3895,8 +3914,17 @@ export default function OperationsReportsDashboardPage() {
 <body>
   <button class="print-btn" onclick="window.print()">طباعة</button>
   <div class="header">
-    <div class="title">تقرير فروقات المدفوعات التحليلي</div>
-    <div>بتر بيكري | ${filters.startDate} إلى ${filters.endDate}</div>
+    <div class="header-logo">
+      <div class="logo-circle"><span class="logo-text">B</span></div>
+      <div>
+        <div class="brand">BUTTER BAKERY</div>
+        <div class="title">تقرير فروقات المدفوعات التحليلي</div>
+      </div>
+    </div>
+    <div style="text-align: left; font-size: 11px;">
+      <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
+      <div>${filters.startDate} إلى ${filters.endDate}</div>
+    </div>
   </div>
   <div class="summary-grid">
     <div class="summary-card shortage"><div class="value shortage">${shortages.length}</div><div class="label">حالات العجز</div></div>
@@ -3929,7 +3957,7 @@ export default function OperationsReportsDashboardPage() {
     ${journalsWithDiscrepancies.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td>${formatCurrency(j.totalSales || 0)}</td><td class="${(j.discrepancyAmount || 0) < 0 ? 'shortage' : 'surplus'}">${formatCurrency(j.discrepancyAmount || 0)}</td><td>${j.discrepancyStatus === 'shortage' ? 'عجز' : j.discrepancyStatus === 'surplus' ? 'فائض' : 'متوازن'}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span>بتر بيكري - Butter Bakery</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="footer"><span class="brand">بتر بيكري - BUTTER BAKERY | CEO COMMAND CENTER</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
@@ -4234,38 +4262,49 @@ export default function OperationsReportsDashboardPage() {
                           const formatCurrencyLocal = (v: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
                           const html = `
                             <div dir="rtl" style="font-family: Cairo, sans-serif; padding: 20px;">
-                              <div style="text-align: center; margin-bottom: 20px;">
-                                <h1 style="color: #1e3a5f; margin-bottom: 5px;">تقرير مطابقة طرق الدفع</h1>
-                                <p style="color: #666;">الفترة: ${filters.startDate} إلى ${filters.endDate}</p>
-                                <p style="color: #888; font-size: 12px;">حد الفرق المقبول: 0.50 ريال</p>
+                              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #6366f1; padding-bottom: 15px; margin-bottom: 20px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                  <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #D4A574 0%, #8B6914 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                    <span style="font-size: 20px; font-weight: bold; color: #fff;">B</span>
+                                  </div>
+                                  <div>
+                                    <div style="font-size: 14px; font-weight: bold; color: #8B6914;">BUTTER BAKERY</div>
+                                    <h1 style="color: #6366f1; font-size: 18px; font-weight: bold; margin: 0;">تقرير مطابقة طرق الدفع</h1>
+                                  </div>
+                                </div>
+                                <div style="text-align: left; font-size: 11px;">
+                                  <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
+                                  <div style="color: #666;">${filters.startDate} إلى ${filters.endDate}</div>
+                                  <div style="color: #888; font-size: 10px;">حد الفرق المقبول: 0.50 ريال</div>
+                                </div>
                               </div>
                               <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
-                                <div style="background: #f0f0ff; padding: 15px; border-radius: 8px; text-align: center;">
-                                  <p style="color: #6366f1; font-size: 12px;">إجمالي اليوميات</p>
+                                <div style="background: #f0f0ff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #6366f1;">
+                                  <p style="color: #4f46e5; font-size: 12px;">إجمالي اليوميات</p>
                                   <p style="font-size: 20px; font-weight: bold; color: #4f46e5;">${paymentMismatchData.summary.totalJournals}</p>
                                 </div>
-                                <div style="background: #fff7ed; padding: 15px; border-radius: 8px; text-align: center;">
-                                  <p style="color: #f97316; font-size: 12px;">يوميات بها فروقات</p>
-                                  <p style="font-size: 20px; font-weight: bold; color: #ea580c;">${paymentMismatchData.summary.journalsWithMismatch}</p>
+                                <div style="background: #fff7ed; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #f97316;">
+                                  <p style="color: #c2410c; font-size: 12px;">يوميات بها فروقات</p>
+                                  <p style="font-size: 20px; font-weight: bold; color: #c2410c;">${paymentMismatchData.summary.journalsWithMismatch}</p>
                                 </div>
-                                <div style="background: #fef2f2; padding: 15px; border-radius: 8px; text-align: center;">
-                                  <p style="color: #ef4444; font-size: 12px;">نسبة الخطأ</p>
-                                  <p style="font-size: 20px; font-weight: bold; color: #dc2626;">${paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
+                                <div style="background: #fef2f2; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dc2626;">
+                                  <p style="color: #b91c1c; font-size: 12px;">نسبة الخطأ</p>
+                                  <p style="font-size: 20px; font-weight: bold; color: #b91c1c;">${paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
                                 </div>
-                                <div style="background: #faf5ff; padding: 15px; border-radius: 8px; text-align: center;">
-                                  <p style="color: #a855f7; font-size: 12px;">إجمالي الفروقات</p>
-                                  <p style="font-size: 20px; font-weight: bold; color: #9333ea;">${formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount)}</p>
+                                <div style="background: #faf5ff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #9333ea;">
+                                  <p style="color: #7e22ce; font-size: 12px;">إجمالي الفروقات</p>
+                                  <p style="font-size: 20px; font-weight: bold; color: #7e22ce;">${formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount)}</p>
                                 </div>
                               </div>
-                              <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; align-items: center;">
+                              <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; align-items: center; border: 1px solid #3b82f6;">
                                 <div style="text-align: center;">
-                                  <p style="color: #666; font-size: 12px;">إجمالي POS</p>
-                                  <p style="font-size: 18px; font-weight: bold; color: #3b82f6;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</p>
+                                  <p style="color: #1e40af; font-size: 12px;">إجمالي POS</p>
+                                  <p style="font-size: 18px; font-weight: bold; color: #1e40af;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</p>
                                 </div>
-                                <span style="font-size: 24px; color: #ccc;">↔</span>
+                                <span style="font-size: 24px; color: #999;">↔</span>
                                 <div style="text-align: center;">
-                                  <p style="color: #666; font-size: 12px;">إجمالي Terminal</p>
-                                  <p style="font-size: 18px; font-weight: bold; color: #22c55e;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</p>
+                                  <p style="color: #166534; font-size: 12px;">إجمالي Terminal</p>
+                                  <p style="font-size: 18px; font-weight: bold; color: #166534;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</p>
                                 </div>
                               </div>
                               ${paymentMismatchData.byCashier.length > 0 ? `
@@ -4306,17 +4345,22 @@ export default function OperationsReportsDashboardPage() {
                                   ${paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map(m => `
                                     <tr>
                                       <td style="padding: 8px; border: 1px solid #e2e8f0;">${PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod}</td>
-                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #3b82f6;">${formatCurrencyLocal(m.posTotal)}</td>
-                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #22c55e;">${formatCurrencyLocal(m.terminalTotal)}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #1e40af;">${formatCurrencyLocal(m.posTotal)}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0; color: #166534;">${formatCurrencyLocal(m.terminalTotal)}</td>
                                       <td style="padding: 8px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: bold;">${formatCurrencyLocal(m.discrepancy)}</td>
                                     </tr>
                                   `).join('')}
                                 </tbody>
                               </table>
                               ` : ''}
-                              <div style="margin-top: 30px; text-align: center; color: #888; font-size: 11px;">
-                                <p>تم إنشاء التقرير: ${new Date().toLocaleString('ar-SA')}</p>
-                                <p style="color: #dc2626;">🔴 أحمر = فروقات/أخطاء | 🔵 أزرق = POS | 🟢 أخضر = Terminal</p>
+                              <div style="margin-top: 30px; padding-top: 15px; border-top: 2px solid #D4A574; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
+                                <span style="color: #8B6914; font-weight: bold;">بتر بيكري - BUTTER BAKERY | CEO COMMAND CENTER</span>
+                                <span style="color: #666;">تم إنشاء التقرير: ${new Date().toLocaleString('ar-SA')}</span>
+                              </div>
+                              <div style="text-align: center; margin-top: 10px; font-size: 10px; color: #666;">
+                                <span style="color: #b91c1c;">● أحمر = فروقات/أخطاء</span> | 
+                                <span style="color: #1e40af;">● أزرق = POS</span> | 
+                                <span style="color: #166534;">● أخضر = Terminal</span>
                               </div>
                             </div>
                           `;
