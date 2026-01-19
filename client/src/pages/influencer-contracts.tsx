@@ -303,6 +303,25 @@ export default function InfluencerContractsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.influencerName.trim()) {
+      toast({ title: "يرجى إدخال اسم المؤثر", variant: "destructive" });
+      return;
+    }
+    if (!formData.campaignName.trim()) {
+      toast({ title: "يرجى إدخال اسم الحملة", variant: "destructive" });
+      return;
+    }
+    if (!formData.contractAmount || formData.contractAmount <= 0) {
+      toast({ title: "يرجى إدخال قيمة العقد", variant: "destructive" });
+      return;
+    }
+    if (!formData.contractStartDate) {
+      toast({ title: "يرجى إدخال تاريخ بداية العقد", variant: "destructive" });
+      return;
+    }
+    
     if (selectedContract) {
       updateMutation.mutate({ id: selectedContract.id, data: formData });
     } else {
@@ -788,9 +807,10 @@ export default function InfluencerContractsPage() {
                   />
                 </div>
                 <div>
-                  <Label>تاريخ بداية العقد</Label>
+                  <Label>تاريخ بداية العقد *</Label>
                   <Input
                     type="date"
+                    required
                     value={formData.contractStartDate}
                     onChange={(e) => setFormData(prev => ({ ...prev, contractStartDate: e.target.value }))}
                     data-testid="input-start-date"
