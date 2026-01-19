@@ -4198,6 +4198,207 @@ export async function registerRoutes(
     }
   });
 
+  // Payment Method Mismatch Analysis Report - تحليل فروقات طرق الدفع بين POS والتيرمنال
+  app.get("/api/reports/payment-mismatch-analysis", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
+    try {
+      const { branchId, startDate, endDate } = req.query;
+      
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = mandatoryBranch || branchId as string | undefined;
+      
+      // Get cashier journals for the date range
+      const conditions = [];
+      if (effectiveBranchId) {
+        conditions.push(eq(cashierSalesJournals.branchId, effectiveBranchId));
+      }
+      if (startDate) {
+        conditions.push(gte(cashierSalesJournals.journalDate, startDate as string));
+      }
+      if (endDate) {
+        conditions.push(lte(cashierSalesJournals.journalDate, endDate as string));
+      }
+      
+      const journals = await db.select()
+        .from(cashierSalesJournals)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+      
+      if (journals.length === 0) {
+        return res.json({
+          summary: {
+            totalJournals: 0,
+            journalsWithMismatch: 0,
+            mismatchRate: 0,
+            totalMismatchAmount: 0,
+            totalPosAmount: 0,
+            totalTerminalAmount: 0,
+          },
+          byCashier: [],
+          byBranch: [],
+          byPaymentMethod: [],
+          detailedMismatches: [],
+        });
+      }
+      
+      // Get payment breakdowns for all journals
+      const journalIds = journals.map(j => j.id);
+      const paymentBreakdowns = await db.select()
+        .from(cashierPaymentBreakdowns)
+        .where(inArray(cashierPaymentBreakdowns.journalId, journalIds));
+      
+      // Calculate mismatches
+      const journalMismatches: any[] = [];
+      const cashierStats: Record<string, { 
+        cashierName: string; 
+        totalMismatchAmount: number; 
+        mismatchCount: number; 
+        totalTransactions: number;
+        methodErrors: Record<string, number>;
+      }> = {};
+      const branchStats: Record<string, { 
+        branchName: string; 
+        totalMismatchAmount: number; 
+        mismatchCount: number;
+      }> = {};
+      const methodStats: Record<string, {
+        posTotal: number;
+        terminalTotal: number;
+        discrepancy: number;
+        discrepancyCount: number;
+      }> = {};
+      
+      // Get all branches for name lookup
+      const allBranches = await storage.getAllBranches();
+      const branchNameMap = Object.fromEntries(allBranches.map(b => [b.id, b.name]));
+      
+      for (const journal of journals) {
+        const journalBreakdowns = paymentBreakdowns.filter(pb => pb.journalId === journal.id);
+        const cashierName = journal.cashierName || 'غير محدد';
+        const branchName = branchNameMap[journal.branchId] || journal.branchId;
+        
+        let journalHasMismatch = false;
+        let journalMismatchAmount = 0;
+        const methodMismatches: any[] = [];
+        
+        for (const pb of journalBreakdowns) {
+          const posAmount = pb.posAmount || 0;
+          const terminalAmount = pb.terminalAmount || 0;
+          const discrepancy = Math.abs(posAmount - terminalAmount);
+          
+          // Track method stats
+          if (!methodStats[pb.paymentMethod]) {
+            methodStats[pb.paymentMethod] = { posTotal: 0, terminalTotal: 0, discrepancy: 0, discrepancyCount: 0 };
+          }
+          methodStats[pb.paymentMethod].posTotal += posAmount;
+          methodStats[pb.paymentMethod].terminalTotal += terminalAmount;
+          
+          // Consider mismatch if discrepancy > 0.5 SAR (to avoid floating point issues)
+          if (discrepancy > 0.5) {
+            journalHasMismatch = true;
+            journalMismatchAmount += discrepancy;
+            methodStats[pb.paymentMethod].discrepancy += discrepancy;
+            methodStats[pb.paymentMethod].discrepancyCount++;
+            
+            methodMismatches.push({
+              paymentMethod: pb.paymentMethod,
+              posAmount,
+              terminalAmount,
+              discrepancy,
+              discrepancyType: posAmount > terminalAmount ? 'pos_higher' : 'terminal_higher',
+            });
+          }
+        }
+        
+        // Track cashier stats
+        if (!cashierStats[journal.cashierId]) {
+          cashierStats[journal.cashierId] = {
+            cashierName,
+            totalMismatchAmount: 0,
+            mismatchCount: 0,
+            totalTransactions: 0,
+            methodErrors: {},
+          };
+        }
+        cashierStats[journal.cashierId].totalTransactions++;
+        
+        // Track branch stats
+        if (!branchStats[journal.branchId]) {
+          branchStats[journal.branchId] = {
+            branchName,
+            totalMismatchAmount: 0,
+            mismatchCount: 0,
+          };
+        }
+        
+        if (journalHasMismatch) {
+          cashierStats[journal.cashierId].mismatchCount++;
+          cashierStats[journal.cashierId].totalMismatchAmount += journalMismatchAmount;
+          branchStats[journal.branchId].mismatchCount++;
+          branchStats[journal.branchId].totalMismatchAmount += journalMismatchAmount;
+          
+          // Track method errors per cashier
+          for (const mm of methodMismatches) {
+            if (!cashierStats[journal.cashierId].methodErrors[mm.paymentMethod]) {
+              cashierStats[journal.cashierId].methodErrors[mm.paymentMethod] = 0;
+            }
+            cashierStats[journal.cashierId].methodErrors[mm.paymentMethod]++;
+          }
+          
+          journalMismatches.push({
+            journalId: journal.id,
+            journalDate: journal.journalDate,
+            branchId: journal.branchId,
+            branchName,
+            cashierId: journal.cashierId,
+            cashierName,
+            shiftType: journal.shiftType,
+            totalSales: journal.totalSales,
+            totalMismatchAmount: journalMismatchAmount,
+            methodMismatches,
+          });
+        }
+      }
+      
+      // Calculate summary
+      const totalMismatchAmount = Object.values(cashierStats).reduce((sum, c) => sum + c.totalMismatchAmount, 0);
+      const journalsWithMismatch = Object.values(cashierStats).reduce((sum, c) => sum + c.mismatchCount, 0);
+      const totalPosAmount = Object.values(methodStats).reduce((sum, m) => sum + m.posTotal, 0);
+      const totalTerminalAmount = Object.values(methodStats).reduce((sum, m) => sum + m.terminalTotal, 0);
+      
+      res.json({
+        summary: {
+          totalJournals: journals.length,
+          journalsWithMismatch,
+          mismatchRate: journals.length > 0 ? (journalsWithMismatch / journals.length) * 100 : 0,
+          totalMismatchAmount,
+          totalPosAmount,
+          totalTerminalAmount,
+        },
+        byCashier: Object.entries(cashierStats)
+          .map(([cashierId, stats]) => ({
+            cashierId,
+            ...stats,
+            errorRate: stats.totalTransactions > 0 ? (stats.mismatchCount / stats.totalTransactions) * 100 : 0,
+          }))
+          .sort((a, b) => b.totalMismatchAmount - a.totalMismatchAmount),
+        byBranch: Object.entries(branchStats)
+          .map(([branchId, stats]) => ({ branchId, ...stats }))
+          .sort((a, b) => b.totalMismatchAmount - a.totalMismatchAmount),
+        byPaymentMethod: Object.entries(methodStats)
+          .map(([method, stats]) => ({
+            paymentMethod: method,
+            ...stats,
+            discrepancyPercent: stats.terminalTotal > 0 ? (stats.discrepancy / stats.terminalTotal) * 100 : 0,
+          }))
+          .sort((a, b) => b.discrepancy - a.discrepancy),
+        detailedMismatches: journalMismatches.slice(0, 100), // Limit to 100 records
+      });
+    } catch (error) {
+      console.error("Error fetching payment mismatch analysis:", error);
+      res.status(500).json({ error: "Failed to fetch payment mismatch analysis" });
+    }
+  });
+
   // ==========================================
   // Targets & Incentives API Routes
   // ==========================================

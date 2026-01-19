@@ -66,6 +66,14 @@ const DISCREPANCY_STATUS_LABELS: Record<string, string> = {
   surplus: "فائض",
 };
 
+const SHIFT_LABELS: Record<string, string> = {
+  morning: "الصباحية",
+  evening: "المسائية",
+  night: "الليلية",
+  full_day: "يوم كامل",
+  split: "مقسمة",
+};
+
 const REPORT_TYPES = [
   { value: "all", label: "جميع التقارير", icon: BarChart3 },
   { value: "cashier", label: "تقارير الكاشير", icon: Wallet },
@@ -891,6 +899,68 @@ export default function OperationsReportsDashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Query for payment mismatch analysis - lazy load when tab is active
+  const { data: paymentMismatchData, isLoading: paymentMismatchLoading } = useQuery<{
+    summary: {
+      totalJournals: number;
+      journalsWithMismatch: number;
+      mismatchRate: number;
+      totalMismatchAmount: number;
+      totalPosAmount: number;
+      totalTerminalAmount: number;
+    };
+    byCashier: {
+      cashierId: string;
+      cashierName: string;
+      totalMismatchAmount: number;
+      mismatchCount: number;
+      totalTransactions: number;
+      errorRate: number;
+      methodErrors: Record<string, number>;
+    }[];
+    byBranch: {
+      branchId: string;
+      branchName: string;
+      totalMismatchAmount: number;
+      mismatchCount: number;
+    }[];
+    byPaymentMethod: {
+      paymentMethod: string;
+      posTotal: number;
+      terminalTotal: number;
+      discrepancy: number;
+      discrepancyCount: number;
+      discrepancyPercent: number;
+    }[];
+    detailedMismatches: {
+      journalId: number;
+      journalDate: string;
+      branchId: string;
+      branchName: string;
+      cashierId: string;
+      cashierName: string;
+      shiftType: string;
+      totalSales: number;
+      totalMismatchAmount: number;
+      methodMismatches: {
+        paymentMethod: string;
+        posAmount: number;
+        terminalAmount: number;
+        discrepancy: number;
+        discrepancyType: string;
+      }[];
+    }[];
+  }>({
+    queryKey: [`/api/reports/payment-mismatch-analysis?${queryString}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/payment-mismatch-analysis?${queryString}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: activeTab === 'payment-mismatch',
+    staleTime: 5 * 60 * 1000,
+  });
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-SA", {
       style: "currency",
@@ -1475,7 +1545,7 @@ export default function OperationsReportsDashboardPage() {
       case "quality":
         return ["production"];
       default:
-        return ["overview", "sales", "targets", "production", "shifts", "cashier", "returns", "discrepancies", "branches", "branch-overview", "executive"];
+        return ["overview", "sales", "targets", "production", "shifts", "cashier", "returns", "discrepancies", "payment-mismatch", "branches", "branch-overview", "executive"];
     }
   };
 
@@ -1910,6 +1980,12 @@ export default function OperationsReportsDashboardPage() {
                 <TabsTrigger value="discrepancies" data-testid="tab-discrepancies" className="gap-1">
                   <AlertTriangle className="w-4 h-4" />
                   الفروقات
+                </TabsTrigger>
+              )}
+              {visibleTabs.includes("payment-mismatch") && (
+                <TabsTrigger value="payment-mismatch" data-testid="tab-payment-mismatch" className="gap-1">
+                  <CreditCard className="w-4 h-4" />
+                  مطابقة الدفع
                 </TabsTrigger>
               )}
               {visibleTabs.includes("executive") && (
@@ -4132,6 +4208,390 @@ export default function OperationsReportsDashboardPage() {
                   </>
                 );
               })()}
+            </TabsContent>
+
+            {/* تقرير مطابقة طرق الدفع - Payment Method Mismatch Report */}
+            <TabsContent value="payment-mismatch" className="space-y-6">
+              {paymentMismatchLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-24" />
+                  ))}
+                </div>
+              ) : paymentMismatchData ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-indigo-600" />
+                      تحليل مطابقة طرق الدفع (POS vs Terminal)
+                    </h2>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline"
+                        className="gap-2 border-green-600 text-green-600 hover:bg-green-50" 
+                        data-testid="button-export-payment-mismatch-excel"
+                        onClick={() => {
+                          const wb = XLSX.utils.book_new();
+                          
+                          const summaryData = [
+                            ["تقرير مطابقة طرق الدفع - بتر بيكري"],
+                            ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
+                            [],
+                            ["الملخص"],
+                            ["إجمالي اليوميات", paymentMismatchData.summary.totalJournals],
+                            ["يوميات بها فروقات", paymentMismatchData.summary.journalsWithMismatch],
+                            ["نسبة الخطأ", `${paymentMismatchData.summary.mismatchRate.toFixed(1)}%`],
+                            ["إجمالي الفروقات", paymentMismatchData.summary.totalMismatchAmount],
+                            ["إجمالي POS", paymentMismatchData.summary.totalPosAmount],
+                            ["إجمالي Terminal", paymentMismatchData.summary.totalTerminalAmount],
+                          ];
+                          const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+                          XLSX.utils.book_append_sheet(wb, summarySheet, "الملخص");
+                          
+                          const cashierData = [
+                            ["فروقات الكاشيرين"],
+                            ["الكاشير", "عدد الفروقات", "إجمالي الفروقات", "إجمالي العمليات", "نسبة الخطأ"],
+                            ...paymentMismatchData.byCashier.map(c => [
+                              c.cashierName, c.mismatchCount, c.totalMismatchAmount, c.totalTransactions, `${c.errorRate.toFixed(1)}%`
+                            ])
+                          ];
+                          const cashierSheet = XLSX.utils.aoa_to_sheet(cashierData);
+                          XLSX.utils.book_append_sheet(wb, cashierSheet, "حسب الكاشير");
+                          
+                          const methodData = [
+                            ["فروقات طرق الدفع"],
+                            ["طريقة الدفع", "إجمالي POS", "إجمالي Terminal", "الفرق", "عدد الفروقات", "نسبة الفرق"],
+                            ...paymentMismatchData.byPaymentMethod.map(m => [
+                              PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod,
+                              m.posTotal,
+                              m.terminalTotal,
+                              m.discrepancy,
+                              m.discrepancyCount,
+                              `${m.discrepancyPercent.toFixed(1)}%`
+                            ])
+                          ];
+                          const methodSheet = XLSX.utils.aoa_to_sheet(methodData);
+                          XLSX.utils.book_append_sheet(wb, methodSheet, "حسب طريقة الدفع");
+                          
+                          const detailsData = [
+                            ["تفاصيل الفروقات"],
+                            ["التاريخ", "الفرع", "الكاشير", "الوردية", "المبيعات", "إجمالي الفروقات", "التفاصيل"],
+                            ...paymentMismatchData.detailedMismatches.map(d => [
+                              d.journalDate,
+                              d.branchName,
+                              d.cashierName,
+                              SHIFT_LABELS[d.shiftType] || d.shiftType,
+                              d.totalSales,
+                              d.totalMismatchAmount,
+                              d.methodMismatches.map(m => `${PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod}: POS ${m.posAmount} vs Terminal ${m.terminalAmount}`).join('; ')
+                            ])
+                          ];
+                          const detailsSheet = XLSX.utils.aoa_to_sheet(detailsData);
+                          XLSX.utils.book_append_sheet(wb, detailsSheet, "التفاصيل");
+                          
+                          XLSX.writeFile(wb, `تقرير_مطابقة_الدفع_${filters.startDate}_${filters.endDate}.xlsx`);
+                        }}
+                      >
+                        <Download className="w-4 h-4" />
+                        تصدير Excel
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-indigo-500 rounded-lg">
+                            <FileText className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-indigo-700">إجمالي اليوميات</p>
+                            <p className="text-xl font-bold text-indigo-800">{paymentMismatchData.summary.totalJournals}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-orange-500 rounded-lg">
+                            <AlertTriangle className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-orange-700">يوميات بها فروقات</p>
+                            <p className="text-xl font-bold text-orange-800">{paymentMismatchData.summary.journalsWithMismatch}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-red-500 rounded-lg">
+                            <TrendingDown className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-red-700">نسبة الخطأ</p>
+                            <p className="text-xl font-bold text-red-800">{paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-500 rounded-lg">
+                            <DollarSign className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-purple-700">إجمالي الفروقات</p>
+                            <p className="text-xl font-bold text-purple-800">{formatCurrency(paymentMismatchData.summary.totalMismatchAmount)}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* POS vs Terminal Comparison */}
+                  <Card className="border-2 border-indigo-200 bg-indigo-50/50">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-6">
+                          <div className="text-center">
+                            <p className="text-sm text-muted-foreground">إجمالي POS</p>
+                            <p className="text-2xl font-bold text-blue-600">{formatCurrency(paymentMismatchData.summary.totalPosAmount)}</p>
+                          </div>
+                          <div className="text-3xl text-gray-400">↔</div>
+                          <div className="text-center">
+                            <p className="text-sm text-muted-foreground">إجمالي Terminal</p>
+                            <p className="text-2xl font-bold text-green-600">{formatCurrency(paymentMismatchData.summary.totalTerminalAmount)}</p>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">الفرق الكلي</p>
+                          <p className={`text-2xl font-bold ${Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount) > 0.5 ? 'text-red-600' : 'text-green-600'}`}>
+                            {formatCurrency(Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount))}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {paymentMismatchData.byCashier.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Cashiers with Most Errors */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <User className="w-5 h-5 text-red-600" />
+                            الكاشيرين الأكثر أخطاءً في الإدخال
+                          </CardTitle>
+                          <CardDescription>فروقات بين POS والتيرمنال حسب الكاشير</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {paymentMismatchData.byCashier.slice(0, 10).map((cashier, idx) => (
+                              <div key={cashier.cashierId} className={`p-3 rounded-lg border ${idx < 3 ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={idx < 3 ? 'destructive' : 'outline'} className="text-xs">#{idx + 1}</Badge>
+                                    <span className="font-medium">{cashier.cashierName}</span>
+                                  </div>
+                                  <span className="font-bold text-red-600">{formatCurrency(cashier.totalMismatchAmount)}</span>
+                                </div>
+                                <div className="flex gap-4 text-xs text-muted-foreground">
+                                  <span>{cashier.mismatchCount} حالة خطأ</span>
+                                  <span>من {cashier.totalTransactions} عملية</span>
+                                  <span className="text-red-600">نسبة الخطأ: {cashier.errorRate.toFixed(1)}%</span>
+                                </div>
+                                {Object.keys(cashier.methodErrors).length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {Object.entries(cashier.methodErrors).map(([method, count]) => (
+                                      <Badge key={method} variant="secondary" className="text-xs">
+                                        {PAYMENT_METHOD_LABELS[method] || method}: {count}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Payment Method Breakdown */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <CreditCard className="w-5 h-5 text-indigo-600" />
+                            فروقات طرق الدفع
+                          </CardTitle>
+                          <CardDescription>مقارنة POS vs Terminal لكل طريقة دفع</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map((method) => (
+                              <div key={method.paymentMethod} className="p-3 bg-gray-50 rounded-lg border">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium">{PAYMENT_METHOD_LABELS[method.paymentMethod] || method.paymentMethod}</span>
+                                  <span className="font-bold text-red-600">{formatCurrency(method.discrepancy)}</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                  <div className="text-center p-2 bg-blue-50 rounded">
+                                    <p className="text-muted-foreground">POS</p>
+                                    <p className="font-medium text-blue-600">{formatCurrency(method.posTotal)}</p>
+                                  </div>
+                                  <div className="text-center p-2 bg-green-50 rounded">
+                                    <p className="text-muted-foreground">Terminal</p>
+                                    <p className="font-medium text-green-600">{formatCurrency(method.terminalTotal)}</p>
+                                  </div>
+                                  <div className="text-center p-2 bg-red-50 rounded">
+                                    <p className="text-muted-foreground">الفرق</p>
+                                    <p className="font-medium text-red-600">{method.discrepancyPercent.toFixed(1)}%</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).length === 0 && (
+                              <div className="text-center py-8 text-muted-foreground">
+                                <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
+                                <p>لا توجد فروقات في طرق الدفع</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Branch Breakdown */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-amber-600" />
+                            الفروقات حسب الفرع
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={paymentMismatchData.byBranch} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" fontSize={10} />
+                                <YAxis dataKey="branchName" type="category" fontSize={10} width={80} />
+                                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                <Bar dataKey="totalMismatchAmount" name="إجمالي الفروقات" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Mismatch Distribution Chart */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <PieChartIcon className="w-5 h-5 text-purple-600" />
+                            توزيع الفروقات حسب طريقة الدفع
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map(m => ({
+                                    name: PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod,
+                                    value: m.discrepancy
+                                  }))}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  cx="50%"
+                                  cy="50%"
+                                  outerRadius={80}
+                                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                >
+                                  {paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map((_, index) => (
+                                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                        <CheckCircle className="w-12 h-12 text-green-600" />
+                        <p className="text-green-700 font-medium">لا توجد فروقات في طرق الدفع - تطابق ممتاز بين POS والتيرمنال!</p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Detailed Mismatches Table */}
+                  {paymentMismatchData.detailedMismatches.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <FileText className="w-5 h-5 text-red-600" />
+                          تفاصيل الفروقات ({paymentMismatchData.detailedMismatches.length})
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-muted/50">
+                                <th className="text-right py-3 px-4">التاريخ</th>
+                                <th className="text-right py-3 px-4">الفرع</th>
+                                <th className="text-right py-3 px-4">الكاشير</th>
+                                <th className="text-right py-3 px-4">الوردية</th>
+                                <th className="text-right py-3 px-4">إجمالي الفرق</th>
+                                <th className="text-right py-3 px-4">تفاصيل الفروقات</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paymentMismatchData.detailedMismatches.map((mismatch) => (
+                                <tr key={mismatch.journalId} className="border-b hover:bg-muted/50">
+                                  <td className="py-3 px-4">{mismatch.journalDate}</td>
+                                  <td className="py-3 px-4">{mismatch.branchName}</td>
+                                  <td className="py-3 px-4 font-medium">{mismatch.cashierName}</td>
+                                  <td className="py-3 px-4">
+                                    <Badge variant="outline">{SHIFT_LABELS[mismatch.shiftType] || mismatch.shiftType || '-'}</Badge>
+                                  </td>
+                                  <td className="py-3 px-4 font-bold text-red-600">{formatCurrency(mismatch.totalMismatchAmount)}</td>
+                                  <td className="py-3 px-4">
+                                    <div className="flex flex-wrap gap-1">
+                                      {mismatch.methodMismatches.map((mm, idx) => (
+                                        <Badge key={idx} variant="secondary" className="text-xs">
+                                          {PAYMENT_METHOD_LABELS[mm.paymentMethod] || mm.paymentMethod}: 
+                                          <span className="text-blue-600 mx-1">POS {formatCurrency(mm.posAmount)}</span>
+                                          vs
+                                          <span className="text-green-600 mx-1">Terminal {formatCurrency(mm.terminalAmount)}</span>
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                    <CreditCard className="w-12 h-12 text-muted-foreground" />
+                    <p className="text-muted-foreground">لا توجد بيانات متاحة</p>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="executive" className="space-y-6">
