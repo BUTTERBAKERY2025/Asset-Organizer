@@ -197,7 +197,10 @@ export default function InfluencerContractsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: ContractFormData) => {
-      const numberRes = await fetch("/api/marketing/influencer-contracts/generate-number");
+      const numberRes = await fetch("/api/marketing/influencer-contracts/generate-number", {
+        credentials: "include",
+      });
+      if (!numberRes.ok) throw new Error("فشل في توليد رقم العقد");
       const { contractNumber } = await numberRes.json();
       
       const response = await fetch("/api/marketing/influencer-contracts", {
