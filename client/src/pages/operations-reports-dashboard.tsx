@@ -742,7 +742,7 @@ export default function OperationsReportsDashboardPage() {
 
   const { data: cashierJournals, isLoading: cashierJournalsLoading } = useQuery<CashierSalesJournal[]>({
     queryKey: [`/api/cashier-journals?${cashierQueryString}`],
-    enabled: activeTab === 'cashier' || activeTab === 'overview',
+    enabled: activeTab === 'cashier' || activeTab === 'overview' || activeTab === 'returns' || activeTab === 'discrepancies',
     staleTime: 5 * 60 * 1000,
   });
 
