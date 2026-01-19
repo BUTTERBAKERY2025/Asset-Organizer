@@ -12718,11 +12718,13 @@ export async function registerRoutes(
     try {
       const currentUser = req.currentUser;
       const data = { ...req.body, createdBy: currentUser?.id };
+      console.log("Creating influencer contract with data:", JSON.stringify(data, null, 2));
       const validatedData = insertInfluencerContractSchema.parse(data);
       const contract = await storage.createInfluencerContract(validatedData);
       res.status(201).json(contract);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Zod validation error:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
       }
       console.error("Error creating influencer contract:", error);

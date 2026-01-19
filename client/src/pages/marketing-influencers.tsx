@@ -291,6 +291,16 @@ export default function MarketingInfluencersPage() {
     },
   });
 
+  const { data: allCampaignLinks = [] } = useQuery<InfluencerCampaignLink[]>({
+    queryKey: ["/api/marketing/influencer-links/all"],
+    queryFn: async () => {
+      const res = await fetch("/api/marketing/influencer-links");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: activePageTab === "coverage-links",
+  });
+
   const getCampaignName = (campaignId: number | null) => {
     if (!campaignId) return "-";
     const campaign = allCampaigns.find(c => c.id === campaignId);
@@ -1465,7 +1475,12 @@ export default function MarketingInfluencersPage() {
                             (inf.nameAr && inf.nameAr.toLowerCase().includes(coverageSearchQuery.toLowerCase()));
                           const matchesRegion = coverageRegionFilter === "all" || 
                             inf.region?.toLowerCase().includes(coverageRegionFilter.toLowerCase());
-                          return matchesSearch && matchesRegion;
+                          const matchesCampaign = coverageCampaignFilter === "all" ||
+                            allCampaignLinks.some(link => 
+                              link.influencerId === inf.id && 
+                              link.campaignId === parseInt(coverageCampaignFilter)
+                            );
+                          return matchesSearch && matchesRegion && matchesCampaign;
                         })
                         .map((influencer) => (
                           <TableRow key={influencer.id}>
@@ -1567,13 +1582,23 @@ export default function MarketingInfluencersPage() {
                       inf.name.toLowerCase().includes(coverageSearchQuery.toLowerCase());
                     const matchesRegion = coverageRegionFilter === "all" || 
                       inf.region?.toLowerCase().includes(coverageRegionFilter.toLowerCase());
-                    return matchesSearch && matchesRegion;
+                    const matchesCampaign = coverageCampaignFilter === "all" ||
+                      allCampaignLinks.some(link => 
+                        link.influencerId === inf.id && 
+                        link.campaignId === parseInt(coverageCampaignFilter)
+                      );
+                    return matchesSearch && matchesRegion && matchesCampaign;
                   }).length} | إجمالي الروابط: {influencers.filter(inf => inf.coverageUrl).filter(inf => {
                     const matchesSearch = coverageSearchQuery === "" || 
                       inf.name.toLowerCase().includes(coverageSearchQuery.toLowerCase());
                     const matchesRegion = coverageRegionFilter === "all" || 
                       inf.region?.toLowerCase().includes(coverageRegionFilter.toLowerCase());
-                    return matchesSearch && matchesRegion;
+                    const matchesCampaign = coverageCampaignFilter === "all" ||
+                      allCampaignLinks.some(link => 
+                        link.influencerId === inf.id && 
+                        link.campaignId === parseInt(coverageCampaignFilter)
+                      );
+                    return matchesSearch && matchesRegion && matchesCampaign;
                   }).reduce((acc, inf) => acc + (inf.coverageUrl || "").split('\n').filter(url => url.trim()).length, 0)}
                 </div>
               </CardContent>
