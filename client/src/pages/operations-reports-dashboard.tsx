@@ -4371,27 +4371,43 @@ export default function OperationsReportsDashboardPage() {
                         onClick={() => {
                           const formatCurrencyLocal = (v: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
                           const html = `
-                            <div dir="rtl" style="font-family: Cairo, sans-serif; padding: 20px;">
-                              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #6366f1; padding-bottom: 15px; margin-bottom: 20px;">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير مطابقة طرق الدفع</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4 portrait; margin: 10mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
+    .print-btn { position: fixed; top: 10px; left: 10px; background: #6366f1; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
+    @media print { .print-btn { display: none !important; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <div style="padding: 5px;">
+                              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #6366f1; padding-bottom: 15px; margin-bottom: 15px;">
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                  <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #D4A574 0%, #8B6914 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                                    <span style="font-size: 20px; font-weight: bold; color: #fff;">B</span>
+                                  <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #D4A574 0%, #8B6914 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                    <span style="font-size: 18px; font-weight: bold; color: #fff;">B</span>
                                   </div>
                                   <div>
-                                    <div style="font-size: 14px; font-weight: bold; color: #8B6914;">BUTTER BAKERY</div>
-                                    <h1 style="color: #6366f1; font-size: 18px; font-weight: bold; margin: 0;">تقرير مطابقة طرق الدفع (POS vs Terminal)</h1>
+                                    <div style="font-size: 12px; font-weight: bold; color: #8B6914;">BUTTER BAKERY</div>
+                                    <h1 style="color: #6366f1; font-size: 16px; font-weight: bold; margin: 0;">تقرير مطابقة طرق الدفع (POS vs Terminal)</h1>
                                   </div>
                                 </div>
-                                <div style="text-align: left; font-size: 11px;">
+                                <div style="text-align: left; font-size: 10px;">
                                   <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
-                                  <div style="background: #dbeafe; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border: 1px solid #3b82f6;">
+                                  <div style="background: #dbeafe; padding: 3px 6px; border-radius: 4px; margin-top: 3px; border: 1px solid #3b82f6;">
                                     <strong style="color: #1e40af;">🏢 الفرع:</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : 'جميع الفروع'}</span>
                                   </div>
-                                  <div style="background: #e0e7ff; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
+                                  <div style="background: #e0e7ff; padding: 3px 6px; border-radius: 4px; margin-top: 3px;">
                                     <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
-                                    <br/><span style="font-size: 9px; color: #4338ca;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
+                                    <br/><span style="font-size: 8px; color: #4338ca;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
                                   </div>
-                                  <div style="color: #888; font-size: 10px; margin-top: 4px;">⚙️ حد الفرق المقبول: 0.50 ريال</div>
+                                  <div style="color: #888; font-size: 9px; margin-top: 3px;">⚙️ حد الفرق: 0.50 ريال</div>
                                 </div>
                               </div>
 
@@ -4527,6 +4543,9 @@ export default function OperationsReportsDashboardPage() {
                                 <span style="color: #166534;">● أخضر = Terminal</span>
                               </div>
                             </div>
+  </div>
+</body>
+</html>
                           `;
                           printHtmlContent(html);
                         }}
