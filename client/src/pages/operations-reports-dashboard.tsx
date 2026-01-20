@@ -3406,9 +3406,14 @@ export default function OperationsReportsDashboardPage() {
   <title>تقرير المرتجعات</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4; margin: 10mm; }
+    @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
+    @media print {
+      @page { margin-top: 10mm; margin-bottom: 20mm; }
+      body::after { content: "تقرير المرتجعات التحليلي - بتر بيكري | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
+    .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; padding: 5px; border-top: 1px solid #eee; background: white; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #ea580c; padding-bottom: 10px; margin-bottom: 15px; }
     .header-logo { display: flex; align-items: center; gap: 12px; }
     .header-logo .logo-circle { width: 50px; height: 50px; background: linear-gradient(135deg, #D4A574 0%, #8B6914 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
@@ -3926,9 +3931,14 @@ export default function OperationsReportsDashboardPage() {
   <title>تقرير فروقات المدفوعات</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4; margin: 10mm; }
+    @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
+    @media print {
+      @page { margin-top: 10mm; margin-bottom: 20mm; }
+      body::after { content: "تقرير فروقات المدفوعات - بتر بيكري | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
+    .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; padding: 5px; border-top: 1px solid #eee; background: white; }
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #dc2626; padding-bottom: 10px; margin-bottom: 15px; }
     .header-logo { display: flex; align-items: center; gap: 12px; }
     .header-logo .logo-circle { width: 50px; height: 50px; background: linear-gradient(135deg, #D4A574 0%, #8B6914 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
@@ -4378,11 +4388,15 @@ export default function OperationsReportsDashboardPage() {
   <title>تقرير مطابقة طرق الدفع</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 10mm; }
+    @page { size: A4 portrait; margin: 10mm 10mm 20mm 10mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
     .print-btn { position: fixed; top: 10px; left: 10px; background: #6366f1; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: 'Cairo', sans-serif; }
-    @media print { .print-btn { display: none !important; } }
+    .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; padding: 5px; border-top: 1px solid #eee; background: white; }
+    @media print { 
+      .print-btn { display: none !important; }
+      body::after { content: "تقرير مطابقة طرق الدفع - بتر بيكري | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+    }
   </style>
 </head>
 <body>
