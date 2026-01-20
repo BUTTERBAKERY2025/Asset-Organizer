@@ -3923,9 +3923,54 @@ export default function OperationsReportsDashboardPage() {
     </div>
     <div style="text-align: left; font-size: 11px;">
       <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
-      <div>${filters.startDate} إلى ${filters.endDate}</div>
+      <div style="background: #fef3c7; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
+        <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
+        <br/><span style="font-size: 9px; color: #92400e;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
+      </div>
     </div>
   </div>
+  
+  <!-- ملخص تحليلي شامل -->
+  <div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+    <div style="text-align: center; margin-bottom: 10px;">
+      <span style="font-size: 14px; font-weight: bold;">📊 الملخص التحليلي الشامل</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center;">
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: #fbbf24;">${journalsWithDiscrepancies.length}</div>
+        <div style="font-size: 9px; opacity: 0.8;">إجمالي حالات الفروقات</div>
+      </div>
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: #f87171;">${formatCurrency(totalShortageAmount)}</div>
+        <div style="font-size: 9px; opacity: 0.8;">إجمالي العجز</div>
+      </div>
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: #4ade80;">${formatCurrency(totalSurplusAmount)}</div>
+        <div style="font-size: 9px; opacity: 0.8;">إجمالي الفائض</div>
+      </div>
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: ${netDiscrepancy < 0 ? '#f87171' : '#4ade80'};">${formatCurrency(netDiscrepancy)}</div>
+        <div style="font-size: 9px; opacity: 0.8;">صافي الفروقات</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مؤشرات الأداء الرئيسية -->
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+    <div style="background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 10px; color: #991b1b;">📉 متوسط العجز اليومي</div>
+      <div style="font-size: 16px; font-weight: bold; color: #dc2626;">${formatCurrency(totalShortageAmount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}</div>
+    </div>
+    <div style="background: #dcfce7; border: 2px solid #166534; border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 10px; color: #166534;">📈 متوسط الفائض اليومي</div>
+      <div style="font-size: 16px; font-weight: bold; color: #166534;">${formatCurrency(totalSurplusAmount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}</div>
+    </div>
+    <div style="background: #fef3c7; border: 2px solid #d97706; border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 10px; color: #92400e;">⚖️ نسبة العجز للفائض</div>
+      <div style="font-size: 16px; font-weight: bold; color: #d97706;">${totalSurplusAmount > 0 ? (totalShortageAmount / totalSurplusAmount * 100).toFixed(0) : 0}%</div>
+    </div>
+  </div>
+
   <div class="summary-grid">
     <div class="summary-card shortage"><div class="value shortage">${shortages.length}</div><div class="label">حالات العجز</div></div>
     <div class="summary-card shortage"><div class="value shortage">${formatCurrency(totalShortageAmount)}</div><div class="label">إجمالي العجز</div></div>
@@ -3933,6 +3978,20 @@ export default function OperationsReportsDashboardPage() {
     <div class="summary-card surplus"><div class="value surplus">${formatCurrency(totalSurplusAmount)}</div><div class="label">إجمالي الفائض</div></div>
     <div class="summary-card ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}"><div class="value ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}">${formatCurrency(netDiscrepancy)}</div><div class="label">صافي الفروقات</div></div>
   </div>
+
+  <!-- أكبر الفروقات -->
+  ${journalsWithDiscrepancies.length > 0 ? `
+  <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+    <div style="font-size: 11px; font-weight: bold; color: #991b1b; margin-bottom: 8px;">⚠️ أكبر 3 فروقات في الفترة:</div>
+    ${[...journalsWithDiscrepancies].sort((a, b) => Math.abs(b.discrepancyAmount || 0) - Math.abs(a.discrepancyAmount || 0)).slice(0, 3).map((j, i) => `
+      <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #fca5a5; font-size: 9px;">
+        <span>#${i + 1} ${j.journalDate} - ${j.cashierName || 'غير محدد'} (${branches?.find(b => b.id === j.branchId)?.name || j.branchId})</span>
+        <span style="font-weight: bold; color: ${(j.discrepancyAmount || 0) < 0 ? '#dc2626' : '#166534'};">${formatCurrency(j.discrepancyAmount || 0)}</span>
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+
   <div class="section">
     <div class="section-title">الفروقات حسب الكاشير</div>
     <table><thead><tr><th>الكاشير</th><th>عدد الحالات</th><th>إجمالي العجز</th><th>إجمالي الفائض</th><th>الصافي</th></tr></thead><tbody>
@@ -4269,46 +4328,97 @@ export default function OperationsReportsDashboardPage() {
                                   </div>
                                   <div>
                                     <div style="font-size: 14px; font-weight: bold; color: #8B6914;">BUTTER BAKERY</div>
-                                    <h1 style="color: #6366f1; font-size: 18px; font-weight: bold; margin: 0;">تقرير مطابقة طرق الدفع</h1>
+                                    <h1 style="color: #6366f1; font-size: 18px; font-weight: bold; margin: 0;">تقرير مطابقة طرق الدفع (POS vs Terminal)</h1>
                                   </div>
                                 </div>
                                 <div style="text-align: left; font-size: 11px;">
                                   <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
-                                  <div style="color: #666;">${filters.startDate} إلى ${filters.endDate}</div>
-                                  <div style="color: #888; font-size: 10px;">حد الفرق المقبول: 0.50 ريال</div>
+                                  <div style="background: #e0e7ff; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
+                                    <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
+                                    <br/><span style="font-size: 9px; color: #4338ca;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
+                                  </div>
+                                  <div style="color: #888; font-size: 10px; margin-top: 4px;">⚙️ حد الفرق المقبول: 0.50 ريال</div>
                                 </div>
                               </div>
-                              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
-                                <div style="background: #f0f0ff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #6366f1;">
-                                  <p style="color: #4f46e5; font-size: 12px;">إجمالي اليوميات</p>
-                                  <p style="font-size: 20px; font-weight: bold; color: #4f46e5;">${paymentMismatchData.summary.totalJournals}</p>
+
+                              <!-- الملخص التحليلي الشامل -->
+                              <div style="background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                                <div style="text-align: center; margin-bottom: 10px;">
+                                  <span style="font-size: 14px; font-weight: bold;">📊 الملخص التحليلي الشامل لمطابقة طرق الدفع</span>
                                 </div>
-                                <div style="background: #fff7ed; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #f97316;">
-                                  <p style="color: #c2410c; font-size: 12px;">يوميات بها فروقات</p>
-                                  <p style="font-size: 20px; font-weight: bold; color: #c2410c;">${paymentMismatchData.summary.journalsWithMismatch}</p>
-                                </div>
-                                <div style="background: #fef2f2; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dc2626;">
-                                  <p style="color: #b91c1c; font-size: 12px;">نسبة الخطأ</p>
-                                  <p style="font-size: 20px; font-weight: bold; color: #b91c1c;">${paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
-                                </div>
-                                <div style="background: #faf5ff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #9333ea;">
-                                  <p style="color: #7e22ce; font-size: 12px;">إجمالي الفروقات</p>
-                                  <p style="font-size: 20px; font-weight: bold; color: #7e22ce;">${formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount)}</p>
+                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center;">
+                                  <div>
+                                    <div style="font-size: 20px; font-weight: bold; color: #a5b4fc;">${paymentMismatchData.summary.totalJournals}</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">إجمالي اليوميات</div>
+                                  </div>
+                                  <div>
+                                    <div style="font-size: 20px; font-weight: bold; color: #fbbf24;">${paymentMismatchData.summary.journalsWithMismatch}</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">يوميات بها فروقات</div>
+                                  </div>
+                                  <div>
+                                    <div style="font-size: 20px; font-weight: bold; color: #f87171;">${paymentMismatchData.summary.mismatchRate.toFixed(1)}%</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">نسبة الخطأ</div>
+                                  </div>
+                                  <div>
+                                    <div style="font-size: 20px; font-weight: bold; color: #c084fc;">${formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount)}</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">إجمالي الفروقات</div>
+                                  </div>
+                                  <div>
+                                    <div style="font-size: 20px; font-weight: bold; color: ${paymentMismatchData.summary.journalsWithMismatch > 0 ? '#f87171' : '#4ade80'};">${paymentMismatchData.summary.journalsWithMismatch > 0 ? '⚠️' : '✅'}</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">الحالة</div>
+                                  </div>
                                 </div>
                               </div>
-                              <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; align-items: center; border: 1px solid #3b82f6;">
-                                <div style="text-align: center;">
-                                  <p style="color: #1e40af; font-size: 12px;">إجمالي POS</p>
-                                  <p style="font-size: 18px; font-weight: bold; color: #1e40af;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</p>
+
+                              <!-- مؤشرات الأداء -->
+                              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 15px;">
+                                <div style="background: #eff6ff; border: 2px solid #2563eb; border-radius: 8px; padding: 10px; text-align: center;">
+                                  <div style="font-size: 9px; color: #1e40af;">💰 إجمالي POS</div>
+                                  <div style="font-size: 14px; font-weight: bold; color: #1e40af;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</div>
                                 </div>
-                                <span style="font-size: 24px; color: #999;">↔</span>
-                                <div style="text-align: center;">
-                                  <p style="color: #166534; font-size: 12px;">إجمالي Terminal</p>
-                                  <p style="font-size: 18px; font-weight: bold; color: #166534;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</p>
+                                <div style="background: #dcfce7; border: 2px solid #166534; border-radius: 8px; padding: 10px; text-align: center;">
+                                  <div style="font-size: 9px; color: #166534;">🏦 إجمالي Terminal</div>
+                                  <div style="font-size: 14px; font-weight: bold; color: #166534;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</div>
+                                </div>
+                                <div style="background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 10px; text-align: center;">
+                                  <div style="font-size: 9px; color: #991b1b;">📉 الفرق الكلي</div>
+                                  <div style="font-size: 14px; font-weight: bold; color: #dc2626;">${formatCurrencyLocal(Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount))}</div>
+                                </div>
+                                <div style="background: #fef3c7; border: 2px solid #d97706; border-radius: 8px; padding: 10px; text-align: center;">
+                                  <div style="font-size: 9px; color: #92400e;">📊 متوسط الخطأ/يومية</div>
+                                  <div style="font-size: 14px; font-weight: bold; color: #d97706;">${paymentMismatchData.summary.journalsWithMismatch > 0 ? formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount / paymentMismatchData.summary.journalsWithMismatch) : '0'}</div>
                                 </div>
                               </div>
+
+                              <!-- مقارنة POS vs Terminal -->
+                              <div style="background: linear-gradient(90deg, #eff6ff 0%, #dcfce7 100%); padding: 12px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-around; align-items: center; border: 1px solid #94a3b8;">
+                                <div style="text-align: center; flex: 1;">
+                                  <div style="font-size: 10px; color: #1e40af; font-weight: bold;">💳 نظام نقاط البيع (POS)</div>
+                                  <div style="font-size: 22px; font-weight: bold; color: #1e40af;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</div>
+                                </div>
+                                <div style="text-align: center; padding: 0 20px;">
+                                  <div style="font-size: 28px; color: #dc2626;">⚡</div>
+                                  <div style="font-size: 10px; color: #dc2626; font-weight: bold;">الفرق</div>
+                                  <div style="font-size: 14px; font-weight: bold; color: #dc2626;">${formatCurrencyLocal(Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount))}</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                  <div style="font-size: 10px; color: #166534; font-weight: bold;">🏦 جهاز الدفع (Terminal)</div>
+                                  <div style="font-size: 22px; font-weight: bold; color: #166534;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</div>
+                                </div>
+                              </div>
+
                               ${paymentMismatchData.byCashier.length > 0 ? `
-                              <h3 style="color: #1e3a5f; margin: 20px 0 10px;">الكاشيرين الأكثر فروقات</h3>
+                              <!-- أكثر الكاشيرين أخطاء -->
+                              <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                                <div style="font-size: 11px; font-weight: bold; color: #991b1b; margin-bottom: 8px;">⚠️ أعلى 3 كاشيرين في أخطاء الإدخال:</div>
+                                ${paymentMismatchData.byCashier.slice(0, 3).map((c, i) => `
+                                  <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #fca5a5; font-size: 9px;">
+                                    <span>#${i + 1} ${c.cashierName} (${c.mismatchCount} خطأ)</span>
+                                    <span style="font-weight: bold; color: #dc2626;">${formatCurrencyLocal(c.totalMismatchAmount)} | نسبة الخطأ: ${c.errorRate.toFixed(1)}%</span>
+                                  </div>
+                                `).join('')}
+                              </div>
+                              <h3 style="color: #1e3a5f; margin: 15px 0 10px; font-size: 12px; background: #f1f5f9; padding: 6px 10px; border-radius: 4px;">📋 جدول الكاشيرين الأكثر فروقات</h3>
                               <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px;">
                                 <thead>
                                   <tr style="background: #f1f5f9;">
