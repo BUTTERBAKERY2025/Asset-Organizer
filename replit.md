@@ -67,6 +67,18 @@ The system uses a modern web architecture with a React-based frontend and a Node
   - **Security**: MD5 checksum calculation for file integrity, file type validation on upload, server-side access control enforcement.
   - **Tables**: `documents`, `document_categories`, `document_folders`, `document_versions`, `document_shares`, `document_access_logs`.
   - **Migration**: `migrations/006_documents_tables.sql` - Complete schema with indexes, foreign keys, and default categories.
+- **Executive Secretariat System (السكرتارية التنفيذية)**: Comprehensive CEO command center with integrated modules.
+  - **Dashboard**: Unified view of meetings, tasks, correspondence, visitors, and travel with quick access links.
+  - **Meetings Management**: Schedule, track, and manage meetings with support for in-person, virtual, hybrid, and phone meetings.
+  - **Tasks Management**: Track CEO tasks with priority levels (urgent, high, normal, low) and status tracking.
+  - **Correspondence**: Manage incoming and outgoing correspondence with reference numbers.
+  - **Visitor Management**: Track visitor check-ins with badge numbers, host assignments, and access logging.
+  - **Travel Requests**: Manage travel requests with budget tracking and approval workflow.
+  - **Unified PDF Reports**: Generate printable reports (weekly, monthly, by category) using react-to-print.
+  - **System Notifications**: Real-time notification system with priorities and read status.
+  - **RBAC Integration**: 9 Executive Secretariat modules (exec_dashboard, exec_meetings, exec_tasks, exec_correspondence, exec_documents, exec_visitors, exec_travel, exec_reports, exec_notifications) with granular permissions.
+  - **Tables**: `executive_meetings`, `executive_meeting_attendees`, `executive_tasks`, `executive_task_assignments`, `executive_correspondence`, `visitors`, `travel_requests`, `notifications`.
+  - **Migrations**: `migrations/007_visitors_travel_tables.sql`, `migrations/008_notifications_table.sql`.
 
 ### Performance Optimization
 - **Tiered Caching Strategy**: Five-tier cache system based on data volatility:
