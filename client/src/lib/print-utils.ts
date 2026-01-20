@@ -1,46 +1,32 @@
 export function printHtmlContent(htmlContent: string): void {
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = 'none';
-  iframe.style.visibility = 'hidden';
+  const printWindow = window.open('', '_blank', 'width=800,height=600');
   
-  document.body.appendChild(iframe);
-  
-  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!iframeDoc) {
-    alert('فشل في إنشاء نافذة الطباعة');
-    document.body.removeChild(iframe);
+  if (!printWindow) {
+    alert('الرجاء السماح بالنوافذ المنبثقة لطباعة التقرير');
     return;
   }
   
-  iframeDoc.open();
-  iframeDoc.write(htmlContent);
-  iframeDoc.close();
+  printWindow.document.open();
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
   
-  const printAndCleanup = () => {
+  const printAndCheck = () => {
     try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
+      printWindow.focus();
+      printWindow.print();
     } catch (e) {
       console.error('Print error:', e);
     }
-    setTimeout(() => {
-      document.body.removeChild(iframe);
-    }, 1000);
   };
   
-  if (iframeDoc.fonts && iframeDoc.fonts.ready) {
-    iframeDoc.fonts.ready.then(() => {
-      setTimeout(printAndCleanup, 300);
+  if (printWindow.document.fonts && printWindow.document.fonts.ready) {
+    printWindow.document.fonts.ready.then(() => {
+      setTimeout(printAndCheck, 500);
     }).catch(() => {
-      setTimeout(printAndCleanup, 1000);
+      setTimeout(printAndCheck, 1500);
     });
   } else {
-    setTimeout(printAndCleanup, 1500);
+    setTimeout(printAndCheck, 2000);
   }
 }
 
