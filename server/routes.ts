@@ -19028,9 +19028,16 @@ export async function registerRoutes(
           fileType: doc.fileType,
           fileSize: doc.fileSize,
           mimeType: doc.mimeType,
+          filePath: doc.filePath,
+          accessLevel: doc.accessLevel,
+          currentVersion: doc.currentVersion,
+          createdAt: doc.createdAt,
         },
         permission: share.permission,
         canDownload: share.permission !== 'view',
+        expiresAt: share.expiresAt,
+        accessCount: share.accessCount,
+        maxAccessCount: share.maxAccessCount,
       });
     } catch (error) {
       console.error("Error accessing share:", error);
