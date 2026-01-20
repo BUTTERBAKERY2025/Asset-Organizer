@@ -133,7 +133,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/users/:id", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+  app.patch("/api/users/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { firstName, lastName, username, role, password, branchId, isActive } = req.body;
       const updateData: any = {};
@@ -185,7 +185,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/users/:id", isAuthenticated, requirePermission("users", "delete"), async (req: any, res) => {
+  app.delete("/api/users/:id", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       if (currentUser.id === req.params.id) {
@@ -214,7 +214,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/users/:id/permissions", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+  app.put("/api/users/:id/permissions", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { permissions, templateApplied } = req.body;
       const currentUser = req.currentUser;
@@ -265,7 +265,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/my-permissions", isAuthenticated, async (req: any, res) => {
+  app.get("/api/my-permissions", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       if (!currentUser) {
@@ -291,7 +291,7 @@ export async function registerRoutes(
   });
 
   // Branches - Returns all branches for admins, only assigned branch for non-admins
-  app.get("/api/branches", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branches", isAuthenticated, async (req, res) => {
     try {
       const branches = await getCachedBranches();
       
@@ -314,7 +314,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/branches/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branches/:id", isAuthenticated, async (req, res) => {
     try {
       const branchId = req.params.id;
       
@@ -352,7 +352,7 @@ export async function registerRoutes(
   });
 
   // Inventory Items
-  app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+  app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
@@ -383,7 +383,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/needs-inspection", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+  app.get("/api/inventory/needs-inspection", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -407,7 +407,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+  app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -429,7 +429,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+  app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -453,7 +453,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+  app.get("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const item = await storage.getInventoryItem(req.params.id);
       if (!item) {
@@ -476,7 +476,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/inventory/:id/audit-logs", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+  app.get("/api/inventory/:id/audit-logs", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       // SECURITY: First verify user has access to the inventory item
       const item = await storage.getInventoryItem(req.params.id);
@@ -499,7 +499,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/inventory", isAuthenticated, requirePermission("inventory", "create"), requireBranchAccess, async (req: any, res) => {
+  app.post("/api/inventory", isAuthenticated, requirePermission("inventory", "create"), requireBranchAccess, async (req, res) => {
     try {
       const validatedData = insertInventoryItemSchema.parse(req.body);
       const normalizedData = normalizeInventoryData(validatedData);
@@ -525,7 +525,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "edit"), async (req: any, res) => {
+  app.patch("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "edit"), async (req, res) => {
     try {
       // First check if user can access the existing item's branch
       const existingItem = await storage.getInventoryItem(req.params.id);
@@ -564,7 +564,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "delete"), async (req: any, res) => {
+  app.delete("/api/inventory/:id", isAuthenticated, requirePermission("inventory", "delete"), async (req, res) => {
     try {
       // Check if user can access the item's branch
       const existingItem = await storage.getInventoryItem(req.params.id);
@@ -635,7 +635,7 @@ export async function registerRoutes(
   });
 
   // Excel Import Route
-  app.post("/api/inventory/import", isAuthenticated, requirePermission("inventory", "create"), async (req: any, res) => {
+  app.post("/api/inventory/import", isAuthenticated, requirePermission("inventory", "create"), async (req, res) => {
     try {
       const { items, branchId } = req.body;
       
@@ -708,7 +708,7 @@ export async function registerRoutes(
   // ===== Asset Transfers Routes =====
 
   // Get all asset transfers
-  app.get("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
+  app.get("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
     try {
       // SECURITY: Apply mandatory branch filter for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -724,7 +724,7 @@ export async function registerRoutes(
   });
 
   // Get transfers by item
-  app.get("/api/asset-transfers/by-item/:itemId", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
+  app.get("/api/asset-transfers/by-item/:itemId", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
     try {
       // SECURITY: Apply mandatory branch filter for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -740,7 +740,7 @@ export async function registerRoutes(
   });
 
   // Get single transfer
-  app.get("/api/asset-transfers/:id", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
+  app.get("/api/asset-transfers/:id", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -763,7 +763,7 @@ export async function registerRoutes(
   });
 
   // Get transfer events
-  app.get("/api/asset-transfers/:id/events", isAuthenticated, requirePermission("asset_transfers", "view"), async (req: any, res) => {
+  app.get("/api/asset-transfers/:id/events", isAuthenticated, requirePermission("asset_transfers", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -786,7 +786,7 @@ export async function registerRoutes(
   });
 
   // Create new transfer
-  app.post("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "create"), async (req: any, res) => {
+  app.post("/api/asset-transfers", isAuthenticated, requirePermission("asset_transfers", "create"), async (req, res) => {
     try {
       const { itemId, quantity, fromBranchId, toBranchId, reason, notes } = req.body;
       
@@ -823,7 +823,7 @@ export async function registerRoutes(
   });
 
   // Approve transfer
-  app.post("/api/asset-transfers/:id/approve", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req: any, res) => {
+  app.post("/api/asset-transfers/:id/approve", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -854,7 +854,7 @@ export async function registerRoutes(
   });
 
   // Confirm receipt
-  app.post("/api/asset-transfers/:id/confirm", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req: any, res) => {
+  app.post("/api/asset-transfers/:id/confirm", isAuthenticated, requirePermission("asset_transfers", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -891,7 +891,7 @@ export async function registerRoutes(
   });
 
   // Cancel transfer
-  app.post("/api/asset-transfers/:id/cancel", isAuthenticated, requirePermission("asset_transfers", "edit"), async (req: any, res) => {
+  app.post("/api/asset-transfers/:id/cancel", isAuthenticated, requirePermission("asset_transfers", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1016,7 +1016,7 @@ export async function registerRoutes(
   });
 
   // Construction Projects
-  app.get("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "view"), async (req: any, res) => {
+  app.get("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
     try {
       // SECURITY: Apply mandatory branch filter for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -1033,7 +1033,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "view"), async (req: any, res) => {
+  app.get("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1055,7 +1055,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "create"), async (req: any, res) => {
+  app.post("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -1074,7 +1074,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "edit"), async (req: any, res) => {
+  app.patch("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1103,7 +1103,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "delete"), async (req: any, res) => {
+  app.delete("/api/construction/projects/:id", isAuthenticated, requirePermission("construction_projects", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1130,7 +1130,7 @@ export async function registerRoutes(
 
   // Project Work Items
   // Helper: Check project branch access
-  async function checkProjectBranchAccess(req: any, projectId: number): Promise<{allowed: boolean, branchId?: string}> {
+  async function checkProjectBranchAccess(req: Request, projectId: number): Promise<{allowed: boolean, branchId?: string}> {
     const mandatoryBranch = getMandatoryBranchFilter(req);
     if (!mandatoryBranch) return { allowed: true };
     const project = await storage.getConstructionProject(projectId);
@@ -1138,7 +1138,7 @@ export async function registerRoutes(
     return { allowed: project.branchId === mandatoryBranch, branchId: project.branchId || undefined };
   }
 
-  app.get("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req: any, res) => {
+  app.get("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
     try {
       // SECURITY: Filter work items by project branch for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -1161,7 +1161,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/projects/:projectId/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req: any, res) => {
+  app.get("/api/construction/projects/:projectId/work-items", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId, 10);
       if (isNaN(projectId)) {
@@ -1180,7 +1180,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "view"), async (req: any, res) => {
+  app.get("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1202,7 +1202,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "create"), async (req: any, res) => {
+  app.post("/api/construction/work-items", isAuthenticated, requirePermission("construction_work_items", "create"), async (req, res) => {
     try {
       const validatedData = insertProjectWorkItemSchema.parse(req.body);
       // SECURITY: Verify project branch access for non-admins
@@ -1221,7 +1221,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "edit"), async (req: any, res) => {
+  app.patch("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1250,7 +1250,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "delete"), async (req: any, res) => {
+  app.delete("/api/construction/work-items/:id", isAuthenticated, requirePermission("construction_work_items", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1276,7 +1276,7 @@ export async function registerRoutes(
   });
 
   // Budget Allocations
-  app.get("/api/construction/projects/:projectId/budget-allocations", isAuthenticated, requirePermission("budget_planning", "view"), async (req: any, res) => {
+  app.get("/api/construction/projects/:projectId/budget-allocations", isAuthenticated, requirePermission("budget_planning", "view"), async (req, res) => {
     try {
       const projectId = parseInt(req.params.projectId, 10);
       if (isNaN(projectId)) {
@@ -1295,7 +1295,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/budget-allocations", isAuthenticated, requirePermission("budget_planning", "create"), async (req: any, res) => {
+  app.post("/api/construction/budget-allocations", isAuthenticated, requirePermission("budget_planning", "create"), async (req, res) => {
     try {
       const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
       // SECURITY: Verify project branch access for non-admins
@@ -1314,7 +1314,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/budget-allocations/upsert", isAuthenticated, requireAnyPermission("budget_planning", ["create", "edit"]), async (req: any, res) => {
+  app.post("/api/construction/budget-allocations/upsert", isAuthenticated, requireAnyPermission("budget_planning", ["create", "edit"]), async (req, res) => {
     try {
       const validatedData = insertProjectBudgetAllocationSchema.parse(req.body);
       // SECURITY: Verify project branch access for non-admins
@@ -1438,7 +1438,7 @@ export async function registerRoutes(
 
   // ===== Construction Contracts Routes =====
   
-  app.get("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
+  app.get("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const projectId = req.query.projectId as string | undefined;
       // SECURITY: Apply mandatory branch filter for non-admins
@@ -1474,7 +1474,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
+  app.get("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1496,7 +1496,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
+  app.post("/api/construction/contracts", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
     try {
       // SECURITY: Verify project branch access for non-admins
       const access = await checkProjectBranchAccess(req, req.body.projectId);
@@ -1518,7 +1518,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req: any, res) => {
+  app.patch("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1547,7 +1547,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req: any, res) => {
+  app.delete("/api/construction/contracts/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1574,7 +1574,7 @@ export async function registerRoutes(
 
   // Contract Items
   // Helper: Check contract branch access via project
-  async function checkContractBranchAccess(req: any, contractId: number): Promise<{allowed: boolean}> {
+  async function checkContractBranchAccess(req: Request, contractId: number): Promise<{allowed: boolean}> {
     const mandatoryBranch = getMandatoryBranchFilter(req);
     if (!mandatoryBranch) return { allowed: true };
     const contract = await storage.getContract(contractId);
@@ -1582,7 +1582,7 @@ export async function registerRoutes(
     return checkProjectBranchAccess(req, contract.projectId);
   }
 
-  app.get("/api/construction/contracts/:contractId/items", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
+  app.get("/api/construction/contracts/:contractId/items", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const contractId = parseInt(req.params.contractId, 10);
       if (isNaN(contractId)) {
@@ -1601,7 +1601,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contract-items", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
+  app.post("/api/construction/contract-items", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
     try {
       // SECURITY: Verify contract branch access for non-admins
       const access = await checkContractBranchAccess(req, req.body.contractId);
@@ -1620,7 +1620,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req: any, res) => {
+  app.patch("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1649,7 +1649,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req: any, res) => {
+  app.delete("/api/construction/contract-items/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1675,7 +1675,7 @@ export async function registerRoutes(
   });
 
   // Contract Payments
-  app.get("/api/construction/contracts/:contractId/payments", isAuthenticated, requirePermission("contracts", "view"), async (req: any, res) => {
+  app.get("/api/construction/contracts/:contractId/payments", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
     try {
       const contractId = parseInt(req.params.contractId, 10);
       if (isNaN(contractId)) {
@@ -1694,7 +1694,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/construction/contract-payments", isAuthenticated, requirePermission("contracts", "create"), async (req: any, res) => {
+  app.post("/api/construction/contract-payments", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
     try {
       // SECURITY: Verify contract branch access for non-admins
       const access = await checkContractBranchAccess(req, req.body.contractId);
@@ -1718,7 +1718,7 @@ export async function registerRoutes(
 
   // ===== Payment Requests Routes =====
   
-  app.get("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "view"), async (req: any, res) => {
+  app.get("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "view"), async (req, res) => {
     try {
       const { projectId, status } = req.query;
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -1767,7 +1767,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "view"), async (req: any, res) => {
+  app.get("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1789,7 +1789,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "create"), async (req: any, res) => {
+  app.post("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "create"), async (req, res) => {
     try {
       // SECURITY: Verify project branch access for non-admins
       const access = await checkProjectBranchAccess(req, req.body.projectId);
@@ -1813,7 +1813,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "edit"), async (req: any, res) => {
+  app.patch("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1842,7 +1842,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/approve", isAuthenticated, requirePermission("payment_requests", "approve"), async (req: any, res) => {
+  app.post("/api/payment-requests/:id/approve", isAuthenticated, requirePermission("payment_requests", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1867,7 +1867,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/reject", isAuthenticated, requirePermission("payment_requests", "approve"), async (req: any, res) => {
+  app.post("/api/payment-requests/:id/reject", isAuthenticated, requirePermission("payment_requests", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1896,7 +1896,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/payment-requests/:id/mark-paid", isAuthenticated, requirePermission("payment_requests", "approve"), async (req: any, res) => {
+  app.post("/api/payment-requests/:id/mark-paid", isAuthenticated, requirePermission("payment_requests", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1921,7 +1921,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "delete"), async (req: any, res) => {
+  app.delete("/api/payment-requests/:id", isAuthenticated, requirePermission("payment_requests", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -1993,7 +1993,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/backups", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+  app.post("/api/backups", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { name, type } = req.body;
       const backup = await storage.createBackup({
@@ -2198,7 +2198,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/import-jobs", isAuthenticated, requirePermission("inventory", "edit"), async (req: any, res) => {
+  app.post("/api/import-jobs", isAuthenticated, requirePermission("inventory", "edit"), async (req, res) => {
     try {
       const { sourceSystem, targetModule, fileName, totalRecords } = req.body;
       const job = await storage.createDataImportJob({
@@ -2229,7 +2229,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/accounting-exports/inventory-valuation", isAuthenticated, requirePermission("inventory", "view"), async (req: any, res) => {
+  app.post("/api/accounting-exports/inventory-valuation", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
       const { branchId } = req.body;
       const data = await storage.generateInventoryValuation(branchId);
@@ -2249,7 +2249,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/accounting-exports/asset-movements", isAuthenticated, requirePermission("transfers", "view"), async (req: any, res) => {
+  app.post("/api/accounting-exports/asset-movements", isAuthenticated, requirePermission("transfers", "view"), async (req, res) => {
     try {
       const { dateFrom, dateTo } = req.body;
       const data = await storage.generateAssetMovementsReport(dateFrom, dateTo);
@@ -2270,7 +2270,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/accounting-exports/project-costs", isAuthenticated, requirePermission("projects", "view"), async (req: any, res) => {
+  app.post("/api/accounting-exports/project-costs", isAuthenticated, requirePermission("projects", "view"), async (req, res) => {
     try {
       const { projectId } = req.body;
       const data = await storage.generateProjectCostsReport(projectId);
@@ -2375,7 +2375,7 @@ export async function registerRoutes(
   });
 
   // Shifts Routes
-  app.get("/api/shifts", isAuthenticated, requirePermission("shifts", "view"), async (req: any, res) => {
+  app.get("/api/shifts", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.query;
       
@@ -2409,7 +2409,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "view"), async (req: any, res) => {
+  app.get("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const shift = await storage.getShift(id);
@@ -2432,7 +2432,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/shifts", isAuthenticated, requirePermission("shifts", "create"), async (req: any, res) => {
+  app.post("/api/shifts", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const validatedData = insertShiftSchema.parse({
         ...req.body,
@@ -2530,7 +2530,7 @@ export async function registerRoutes(
   });
 
   // Production Orders Routes
-  app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.query;
       
@@ -2566,7 +2566,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/production-orders/:id", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-orders/:id", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const order = await storage.getProductionOrder(id);
@@ -2589,7 +2589,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/production-orders", isAuthenticated, requirePermission("production", "create"), requireBranchAccess, async (req: any, res) => {
+  app.post("/api/production-orders", isAuthenticated, requirePermission("production", "create"), requireBranchAccess, async (req, res) => {
     try {
       // Verify user has access to the target branch
       const user = req.currentUser;
@@ -2612,7 +2612,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/production-orders/:id", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.patch("/api/production-orders/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       // SECURITY: Verify branch access for non-admins
@@ -2634,7 +2634,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
+  app.delete("/api/production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       // SECURITY: Verify branch access for non-admins
@@ -2657,7 +2657,7 @@ export async function registerRoutes(
   });
 
   // Quality Checks Routes
-  app.get("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "view"), async (req: any, res) => {
+  app.get("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.query;
       // SECURITY: Apply mandatory branch filter for non-admins
@@ -2684,7 +2684,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quality-checks/:id", isAuthenticated, requirePermission("quality_control", "view"), async (req: any, res) => {
+  app.get("/api/quality-checks/:id", isAuthenticated, requirePermission("quality_control", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const check = await storage.getQualityCheck(id);
@@ -2705,7 +2705,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "create"), async (req: any, res) => {
+  app.post("/api/quality-checks", isAuthenticated, requirePermission("quality_control", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admins
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -2920,7 +2920,7 @@ export async function registerRoutes(
   // ==================== Cashier Sales Journal Routes ====================
 
   // Get all cashier journals with filters (supports combined filters)
-  app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
+  app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus, limit, offset } = req.query;
       
@@ -2986,7 +2986,7 @@ export async function registerRoutes(
   });
 
   // Get single cashier journal with payment breakdowns and signatures
-  app.get("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
+  app.get("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const journal = await storage.getCashierJournal(id);
@@ -3016,7 +3016,7 @@ export async function registerRoutes(
   });
 
   // Create new cashier journal
-  app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), requireBranchAccess, async (req: any, res) => {
+  app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), requireBranchAccess, async (req, res) => {
     try {
       const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
       
@@ -3111,7 +3111,7 @@ export async function registerRoutes(
   });
 
   // Update cashier journal
-  app.patch("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req: any, res) => {
+  app.patch("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
@@ -3225,7 +3225,7 @@ export async function registerRoutes(
   });
 
   // Delete cashier journal
-  app.delete("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "delete"), async (req: any, res) => {
+  app.delete("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const existing = await storage.getCashierJournal(id);
@@ -3252,7 +3252,7 @@ export async function registerRoutes(
   });
 
   // Submit cashier journal with signature
-  app.post("/api/cashier-journals/:id/submit", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+  app.post("/api/cashier-journals/:id/submit", isAuthenticated, requirePermission("cashier_journal", "create"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { signatureData, signerName } = req.body;
@@ -3289,7 +3289,7 @@ export async function registerRoutes(
   });
 
   // Post cashier journal (finalize - no more edits allowed)
-  app.post("/api/cashier-journals/:id/post", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+  app.post("/api/cashier-journals/:id/post", isAuthenticated, requirePermission("cashier_journal", "create"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { signatureData, signerName } = req.body;
@@ -3330,7 +3330,7 @@ export async function registerRoutes(
   });
 
   // Approve cashier journal
-  app.post("/api/cashier-journals/:id/approve", isAuthenticated, requirePermission("cashier_journal", "approve"), async (req: any, res) => {
+  app.post("/api/cashier-journals/:id/approve", isAuthenticated, requirePermission("cashier_journal", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { signatureData, signerName } = req.body;
@@ -3386,7 +3386,7 @@ export async function registerRoutes(
   });
 
   // Get cashier journal stats
-  app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
+  app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const { branchId } = req.query;
       const user = req.currentUser;
@@ -3480,7 +3480,7 @@ export async function registerRoutes(
   });
 
   // Journal Attachments - Upload attachment
-  app.post("/api/cashier-journals/:id/attachments", isAuthenticated, requirePermission("cashier_journal", "create"), async (req: any, res) => {
+  app.post("/api/cashier-journals/:id/attachments", isAuthenticated, requirePermission("cashier_journal", "create"), async (req, res) => {
     try {
       const journalId = parseInt(req.params.id, 10);
       const { attachmentType, fileName, fileData, mimeType, fileSize, notes } = req.body;
@@ -3540,7 +3540,7 @@ export async function registerRoutes(
   // ==================== Branch Daily Closures Module ====================
 
   // Get all branch daily closures
-  app.get("/api/branch-daily-closures", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branch-daily-closures", isAuthenticated, async (req, res) => {
     try {
       const { branchId, startDate, endDate, status } = req.query;
       
@@ -3575,7 +3575,7 @@ export async function registerRoutes(
 
   // Get journals for a specific date and branch (for creating closure)
   // IMPORTANT: This must be defined BEFORE /:id to avoid "journals-preview" being matched as an ID
-  app.get("/api/branch-daily-closures/journals-preview", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branch-daily-closures/journals-preview", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date } = req.query;
       
@@ -3694,7 +3694,7 @@ export async function registerRoutes(
   });
 
   // Get single branch daily closure with details
-  app.get("/api/branch-daily-closures/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       
@@ -3739,7 +3739,7 @@ export async function registerRoutes(
   });
 
   // Create branch daily closure
-  app.post("/api/branch-daily-closures", isAuthenticated, async (req: any, res) => {
+  app.post("/api/branch-daily-closures", isAuthenticated, async (req, res) => {
     try {
       const user = req.user;
       const { branchId, closureDate, journalIds, notes } = req.body;
@@ -3871,7 +3871,7 @@ export async function registerRoutes(
   });
 
   // Close (finalize) branch daily closure
-  app.post("/api/branch-daily-closures/:id/close", isAuthenticated, async (req: any, res) => {
+  app.post("/api/branch-daily-closures/:id/close", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const user = req.user;
@@ -3906,7 +3906,7 @@ export async function registerRoutes(
   });
 
   // Delete branch daily closure (only if open)
-  app.delete("/api/branch-daily-closures/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const user = req.user;
@@ -3941,7 +3941,7 @@ export async function registerRoutes(
   // ==================== End Branch Daily Closures Module ====================
 
   // Comprehensive Operations Reports Dashboard
-  app.get("/api/operations/reports", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/operations/reports", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId, startDate, endDate } = req.query;
       // SECURITY: Apply mandatory branch filter for non-admins
@@ -3961,7 +3961,7 @@ export async function registerRoutes(
   });
 
   // Branch Overview Report - Asset Readiness, Inventory, Maintenance
-  app.get("/api/reports/branch-overview", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/reports/branch-overview", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId } = req.query;
       // SECURITY: Apply mandatory branch filter for non-admins
@@ -4075,7 +4075,7 @@ export async function registerRoutes(
   });
 
   // Executive Summary Report - Comprehensive data for PDF/Excel export
-  app.get("/api/reports/executive-summary", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/reports/executive-summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { startDate, endDate, branchId } = req.query;
       // SECURITY: Apply mandatory branch filter for non-admins
@@ -4200,7 +4200,7 @@ export async function registerRoutes(
   });
 
   // Payment Method Mismatch Analysis Report - تحليل فروقات طرق الدفع بين POS والتيرمنال
-  app.get("/api/reports/payment-mismatch-analysis", isAuthenticated, requirePermission("cashier_journal", "view"), async (req: any, res) => {
+  app.get("/api/reports/payment-mismatch-analysis", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const { branchId, startDate, endDate } = req.query;
       
@@ -4439,7 +4439,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/targets/profiles", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/targets/profiles", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const parseResult = insertTargetWeightProfileSchema.safeParse(req.body);
       if (!parseResult.success) {
@@ -4525,7 +4525,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/targets/monthly", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/targets/monthly", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { branchId, yearMonth, targetAmount, profileId, notes } = req.body;
       
@@ -4602,7 +4602,7 @@ export async function registerRoutes(
   });
 
   // Generate daily allocations for a monthly target
-  app.post("/api/targets/monthly/:id/generate-allocations", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+  app.post("/api/targets/monthly/:id/generate-allocations", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const target = await storage.getBranchMonthlyTarget(id);
@@ -4775,7 +4775,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/incentives/tiers", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/incentives/tiers", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { name, description, minAchievementPercent, maxAchievementPercent, rewardType, fixedAmount, percentageRate, applicableTo, sortOrder, isActive } = req.body;
       
@@ -4890,7 +4890,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/incentives/awards", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/incentives/awards", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { awardType, branchId, cashierId, periodStart, periodEnd, targetAmount, achievedAmount, achievementPercent, tierId, calculatedReward, finalReward, notes } = req.body;
       
@@ -4980,7 +4980,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/incentives/awards/:id/approve", isAuthenticated, requirePermission("operations", "approve"), async (req: any, res) => {
+  app.post("/api/incentives/awards/:id/approve", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const award = await storage.approveIncentiveAward(id, req.currentUser?.id);
@@ -5009,7 +5009,7 @@ export async function registerRoutes(
   });
 
   // Branch Daily Sales Progress
-  app.get("/api/targets/progress/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/targets/progress/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId } = req.params;
       const { yearMonth } = req.query;
@@ -5036,7 +5036,7 @@ export async function registerRoutes(
   });
 
   // All Branches Sales Progress Summary
-  app.get("/api/targets/progress-summary", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/targets/progress-summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { yearMonth } = req.query;
       
@@ -5058,7 +5058,7 @@ export async function registerRoutes(
   });
 
   // Performance & Leaderboard
-  app.get("/api/targets/performance/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/targets/performance/:branchId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId } = req.params;
       const { yearMonth } = req.query;
@@ -5081,7 +5081,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/targets/leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/targets/leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { yearMonth } = req.query;
       
@@ -5107,7 +5107,7 @@ export async function registerRoutes(
   });
 
   // Calculate incentives for a period
-  app.post("/api/incentives/calculate", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/incentives/calculate", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { yearMonth, branchId } = req.body;
       
@@ -5216,7 +5216,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/seasons-holidays", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/seasons-holidays", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { name, type, category, startDate, endDate, color, icon, weightMultiplier, applicableBranches, description, isRecurring, recurringPattern } = req.body;
       
@@ -5259,7 +5259,7 @@ export async function registerRoutes(
   });
 
   // Seed default holidays for Saudi Arabia (national + international)
-  app.post("/api/seasons-holidays/seed-defaults", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/seasons-holidays/seed-defaults", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { year } = req.body;
       const targetYear = year || new Date().getFullYear();
@@ -5364,7 +5364,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/commission-rates", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/commission-rates", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { name, description, minSalesAmount, maxSalesAmount, commissionType, fixedAmount, percentageRate, applicableTo, applicableBranches, validFrom, validTo } = req.body;
       
@@ -5454,7 +5454,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/commissions/calculate", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/commissions/calculate", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { cashierId, periodStart, periodEnd } = req.body;
       
@@ -5470,7 +5470,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/commissions", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/commissions", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { cashierId, branchId, periodStart, periodEnd, totalSales, targetAmount, achievementPercent, rateId, calculatedCommission, finalCommission, journalIds, notes } = req.body;
       
@@ -5509,7 +5509,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/commissions/:id/approve", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+  app.patch("/api/commissions/:id/approve", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -5547,7 +5547,7 @@ export async function registerRoutes(
   // Target Alerts Routes
   // ==========================================
 
-  app.get("/api/targets/alerts", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/targets/alerts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { yearMonth } = req.query;
       
@@ -5573,7 +5573,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Targets vs Actuals - مقارنة الأهداف بالفعليات
-  app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/analytics/targets-vs-actuals", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5600,7 +5600,7 @@ export async function registerRoutes(
   });
 
   // Shift Analytics - تحليلات الورديات
-  app.get("/api/analytics/shifts", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/analytics/shifts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5627,7 +5627,7 @@ export async function registerRoutes(
   });
 
   // Cashier Leaderboard - ترتيب الكاشيرين
-  app.get("/api/analytics/cashier-leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/analytics/cashier-leaderboard", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5706,7 +5706,7 @@ export async function registerRoutes(
   });
 
   // Branch Competition - منافسة الفروع
-  app.get("/api/analytics/branch-competition", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/analytics/branch-competition", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5801,7 +5801,7 @@ export async function registerRoutes(
   });
 
   // Average Ticket Analysis - تحليل متوسط الفاتورة
-  app.get("/api/analytics/average-ticket", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/analytics/average-ticket", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId, groupBy, fromDate, toDate, status, discrepancyType } = req.query;
       
@@ -5850,7 +5850,7 @@ export async function registerRoutes(
   // ===== Display Bar Routes =====
 
   // Get Display Bar Receipts
-  app.get("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const queryBranchId = req.query.branchId as string | undefined;
       const date = req.query.date as string | undefined;
@@ -5874,7 +5874,7 @@ export async function registerRoutes(
   });
 
   // Create Display Bar Receipt
-  app.post("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req: any, res) => {
+  app.post("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req, res) => {
     try {
       // Verify branch access
       const user = req.currentUser;
@@ -5898,7 +5898,7 @@ export async function registerRoutes(
   });
 
   // Get Display Bar Daily Summary
-  app.get("/api/display-bar/summary", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/display-bar/summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const queryBranchId = req.query.branchId as string | undefined;
       const date = req.query.date as string | undefined;
@@ -5922,7 +5922,7 @@ export async function registerRoutes(
   });
 
   // Update Display Bar Daily Summary
-  app.patch("/api/display-bar/summary/:id", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+  app.patch("/api/display-bar/summary/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -5965,7 +5965,7 @@ export async function registerRoutes(
   // ===== Waste Reports Routes =====
 
   // Get Waste Analytics - waste vs sales comparison (must be before /:id route)
-  app.get("/api/waste-reports/analytics", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/waste-reports/analytics", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const queryBranchId = req.query.branchId as string | undefined;
       const date = req.query.date as string || new Date().toISOString().split('T')[0];
@@ -6055,7 +6055,7 @@ export async function registerRoutes(
   });
 
   // Get Waste Stats - today's summary by branch (must be before /:id route)
-  app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const queryBranchId = req.query.branchId as string | undefined;
@@ -6099,7 +6099,7 @@ export async function registerRoutes(
   });
 
   // Get All Waste Reports
-  app.get("/api/waste-reports", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/waste-reports", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const queryBranchId = req.query.branchId as string | undefined;
       const dateFrom = req.query.dateFrom as string | undefined;
@@ -6124,7 +6124,7 @@ export async function registerRoutes(
   });
 
   // Get Single Waste Report
-  app.get("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6152,7 +6152,7 @@ export async function registerRoutes(
   });
 
   // Create Waste Report
-  app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req: any, res) => {
+  app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       
@@ -6181,7 +6181,7 @@ export async function registerRoutes(
   });
 
   // Update Waste Report
-  app.patch("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+  app.patch("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6221,7 +6221,7 @@ export async function registerRoutes(
   });
 
   // Delete Waste Report
-  app.delete("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "delete"), async (req: any, res) => {
+  app.delete("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6256,7 +6256,7 @@ export async function registerRoutes(
   // ===== Waste Items Routes =====
 
   // Get Waste Items for a Report
-  app.get("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "view"), async (req: any, res) => {
+  app.get("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const reportId = parseInt(req.params.reportId, 10);
       if (isNaN(reportId)) {
@@ -6286,7 +6286,7 @@ export async function registerRoutes(
   });
 
   // Create Waste Item
-  app.post("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "create"), async (req: any, res) => {
+  app.post("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const reportId = parseInt(req.params.reportId, 10);
       if (isNaN(reportId)) {
@@ -6329,7 +6329,7 @@ export async function registerRoutes(
   });
 
   // Update Waste Item
-  app.patch("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "edit"), async (req: any, res) => {
+  app.patch("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6378,7 +6378,7 @@ export async function registerRoutes(
   });
 
   // Delete Waste Item
-  app.delete("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "delete"), async (req: any, res) => {
+  app.delete("/api/waste-items/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6573,7 +6573,7 @@ export async function registerRoutes(
   });
 
   // Delete production order
-  app.delete("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
+  app.delete("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6606,7 +6606,7 @@ export async function registerRoutes(
   // ==================== Production Order Items ====================
   
   // Add item to order
-  app.post("/api/advanced-production-orders/:orderId/items", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/advanced-production-orders/:orderId/items", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const orderId = parseInt(req.params.orderId, 10);
       if (isNaN(orderId)) {
@@ -6647,7 +6647,7 @@ export async function registerRoutes(
   });
 
   // Update order item
-  app.patch("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.patch("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6692,7 +6692,7 @@ export async function registerRoutes(
   });
 
   // Delete order item
-  app.delete("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
+  app.delete("/api/production-order-items/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -6727,7 +6727,7 @@ export async function registerRoutes(
   // ==================== Production vs Sales Comparisons ====================
   
   // Get all comparisons with filters
-  app.get("/api/production-comparisons", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparisons", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const { branchId, startDate, endDate, category } = req.query;
       
@@ -6766,7 +6766,7 @@ export async function registerRoutes(
   });
 
   // Get comparison summary
-  app.get("/api/production-comparisons/summary", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparisons/summary", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const { branchId, startDate, endDate } = req.query;
       
@@ -6810,7 +6810,7 @@ export async function registerRoutes(
   // ========== Production Comparison Reports API ==========
   
   // Monthly Waste Report - comprehensive waste analysis
-  app.get("/api/production-comparison-reports/monthly-waste", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparison-reports/monthly-waste", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { year, month, branchId } = req.query;
@@ -6934,7 +6934,7 @@ export async function registerRoutes(
   });
 
   // Branch Performance Comparison Report
-  app.get("/api/production-comparison-reports/branch-performance", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparison-reports/branch-performance", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { startDate, endDate } = req.query;
@@ -7017,7 +7017,7 @@ export async function registerRoutes(
   });
 
   // Trend Analysis Report - daily/weekly trends
-  app.get("/api/production-comparison-reports/trends", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparison-reports/trends", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { startDate, endDate, branchId, groupBy: rawGroupBy } = req.query;
@@ -7094,7 +7094,7 @@ export async function registerRoutes(
   });
 
   // Top Waste Products Report
-  app.get("/api/production-comparison-reports/top-waste-products", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparison-reports/top-waste-products", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { startDate, endDate, branchId, limit: rawLimit } = req.query;
@@ -7171,7 +7171,7 @@ export async function registerRoutes(
   });
 
   // Export comparisons to Excel/CSV (with branch isolation)
-  app.get("/api/production-comparisons/export", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparisons/export", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const XLSX = (await import("xlsx")).default;
       const { branchId, startDate, endDate, category, format: exportFormat = "xlsx" } = req.query;
@@ -7264,7 +7264,7 @@ export async function registerRoutes(
   });
 
   // Upload sales file and process it
-  app.post("/api/production-comparisons/upload-sales", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
+  app.post("/api/production-comparisons/upload-sales", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const multer = (await import("multer")).default;
       const XLSX = (await import("xlsx")).default;
@@ -7432,7 +7432,7 @@ export async function registerRoutes(
   });
 
   // Run comparison between production and sales
-  app.post("/api/production-comparisons/run", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
+  app.post("/api/production-comparisons/run", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const { branchId, startDate, endDate } = req.body;
       
@@ -7616,7 +7616,7 @@ export async function registerRoutes(
   });
 
   // Update comparison status (with branch isolation)
-  app.patch("/api/production-comparisons/:id/status", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.patch("/api/production-comparisons/:id/status", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
@@ -7687,7 +7687,7 @@ export async function registerRoutes(
   });
 
   // Bulk update comparison statuses (with branch isolation)
-  app.post("/api/production-comparisons/bulk-status", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/production-comparisons/bulk-status", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { ids, status, reason } = req.body;
@@ -7755,7 +7755,7 @@ export async function registerRoutes(
   });
 
   // Get comparison status history (with branch isolation)
-  app.get("/api/production-comparisons/:id/history", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-comparisons/:id/history", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
@@ -7800,7 +7800,7 @@ export async function registerRoutes(
   // ========== Product Prices API ==========
   
   // Get all product prices (with branch isolation)
-  app.get("/api/product-prices", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/product-prices", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { branchId } = req.query;
@@ -7824,7 +7824,7 @@ export async function registerRoutes(
   });
 
   // Get latest prices for all products (with branch isolation)
-  app.get("/api/product-prices/latest", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/product-prices/latest", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { branchId } = req.query;
@@ -7853,7 +7853,7 @@ export async function registerRoutes(
   });
 
   // Add or update product price (with branch isolation)
-  app.post("/api/product-prices", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/product-prices", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { productName, price, costPrice, branchId, source } = req.body;
@@ -7886,7 +7886,7 @@ export async function registerRoutes(
   });
 
   // Bulk import product prices (with branch isolation)
-  app.post("/api/product-prices/bulk", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/product-prices/bulk", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { prices } = req.body; // Array of { productName, price, costPrice? }
@@ -7929,7 +7929,7 @@ export async function registerRoutes(
   // ========== Waste Risk Rules API ==========
   
   // Get all waste risk rules (with branch isolation)
-  app.get("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       
@@ -7951,7 +7951,7 @@ export async function registerRoutes(
   });
 
   // Create waste risk rule (with branch isolation)
-  app.post("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/waste-risk-rules", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { name, branchId, category, productName, thresholdType, thresholdValue, periodDays, severity } = req.body;
@@ -7987,7 +7987,7 @@ export async function registerRoutes(
   });
 
   // Update waste risk rule (with branch isolation)
-  app.patch("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.patch("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
@@ -8023,7 +8023,7 @@ export async function registerRoutes(
   });
 
   // Delete waste risk rule (with branch isolation)
-  app.delete("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
+  app.delete("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
@@ -8052,7 +8052,7 @@ export async function registerRoutes(
   // ========== Waste Risk Alerts API ==========
   
   // Get all waste risk alerts (with branch isolation)
-  app.get("/api/waste-risk-alerts", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/waste-risk-alerts", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { status, branchId, severity, startDate, endDate } = req.query;
@@ -8082,7 +8082,7 @@ export async function registerRoutes(
   });
 
   // Get open alerts count (with branch isolation)
-  app.get("/api/waste-risk-alerts/count", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/waste-risk-alerts/count", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       
@@ -8104,7 +8104,7 @@ export async function registerRoutes(
   });
 
   // Acknowledge alert (with branch isolation)
-  app.post("/api/waste-risk-alerts/:id/acknowledge", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/waste-risk-alerts/:id/acknowledge", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
@@ -8139,7 +8139,7 @@ export async function registerRoutes(
   });
 
   // Resolve alert (with branch isolation)
-  app.post("/api/waste-risk-alerts/:id/resolve", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/waste-risk-alerts/:id/resolve", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { id } = req.params;
@@ -8176,7 +8176,7 @@ export async function registerRoutes(
   });
 
   // Get product storage settings
-  app.get("/api/product-storage-settings", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/product-storage-settings", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const settings = await db.select().from(productStorageSettings);
       res.json(settings);
@@ -8187,7 +8187,7 @@ export async function registerRoutes(
   });
 
   // Update product storage settings
-  app.post("/api/product-storage-settings", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/product-storage-settings", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const { productName, productCategory, isStorable, maxStorageDays, storageType, notes } = req.body;
       
@@ -8240,7 +8240,7 @@ export async function registerRoutes(
   });
 
   // Get uncategorized products from daily sales data
-  app.get("/api/uncategorized-products", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/uncategorized-products", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       // Get distinct products from daily_sales_data without category
       const uncategorized = await db
@@ -8290,7 +8290,7 @@ export async function registerRoutes(
   });
 
   // Bulk update product categories
-  app.post("/api/bulk-categorize-products", isAuthenticated, requirePermission("production", "edit"), async (req: any, res) => {
+  app.post("/api/bulk-categorize-products", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const { products } = req.body; // Array of { productName, productCategory }
       
@@ -8365,7 +8365,7 @@ export async function registerRoutes(
   // ==================== AI Production Plans ====================
   
   // Get all AI plans
-  app.get("/api/production-ai-plans", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production-ai-plans", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       // SECURITY: Apply mandatory branch filter for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -8406,7 +8406,7 @@ export async function registerRoutes(
   });
 
   // Delete AI production plan
-  app.delete("/api/production-ai-plans/:id", isAuthenticated, requirePermission("production", "delete"), async (req: any, res) => {
+  app.delete("/api/production-ai-plans/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -8434,7 +8434,7 @@ export async function registerRoutes(
   });
 
   // Generate AI production plan
-  app.post("/api/production-ai-plans/generate", isAuthenticated, requirePermission("production", "create"), async (req: any, res) => {
+  app.post("/api/production-ai-plans/generate", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const { branchId, targetSalesValue, planDate, uploadId } = req.body;
       
@@ -9841,7 +9841,7 @@ export async function registerRoutes(
   });
 
   // Production Hub - unified endpoint for dashboard (supports branchId=all)
-  app.get("/api/production/hub", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production/hub", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const { branchId: queryBranchId, date } = req.query;
       if (!queryBranchId || !date) {
@@ -9948,7 +9948,7 @@ export async function registerRoutes(
   });
 
   // Production Reports API - comprehensive reports with date range
-  app.get("/api/production/reports", isAuthenticated, requirePermission("production", "view"), async (req: any, res) => {
+  app.get("/api/production/reports", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       // SECURITY: Apply mandatory branch filter for non-admins
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -10282,7 +10282,7 @@ export async function registerRoutes(
   });
 
   // Unified Command Center API - aggregates all KPIs in one call
-  app.get("/api/command-center", isAuthenticated, async (req: any, res) => {
+  app.get("/api/command-center", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
@@ -10466,7 +10466,7 @@ export async function registerRoutes(
   });
 
   // User Assignments
-  app.get("/api/rbac/users/:userId/assignments", isAuthenticated, async (req: any, res) => {
+  app.get("/api/rbac/users/:userId/assignments", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const targetUserId = req.params.userId;
@@ -10541,7 +10541,7 @@ export async function registerRoutes(
   });
 
   // User Permission Overrides
-  app.get("/api/rbac/users/:userId/overrides", isAuthenticated, async (req: any, res) => {
+  app.get("/api/rbac/users/:userId/overrides", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const targetUserId = req.params.userId;
@@ -10562,7 +10562,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/rbac/users/:userId/overrides", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+  app.post("/api/rbac/users/:userId/overrides", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const userId = req.params.userId;
       const { permissionId, allow, reason, expiresAt } = req.body;
@@ -10600,7 +10600,7 @@ export async function registerRoutes(
   });
 
   // User Branch Access
-  app.get("/api/rbac/users/:userId/branches", isAuthenticated, async (req: any, res) => {
+  app.get("/api/rbac/users/:userId/branches", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const targetUserId = req.params.userId;
@@ -10621,7 +10621,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/rbac/users/:userId/branches", isAuthenticated, requirePermission("users", "edit"), async (req: any, res) => {
+  app.post("/api/rbac/users/:userId/branches", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const userId = req.params.userId;
       const { branchId, isDefault, accessLevel } = req.body;
@@ -10669,7 +10669,7 @@ export async function registerRoutes(
   });
 
   // User Effective Permissions
-  app.get("/api/rbac/users/:userId/effective-permissions", isAuthenticated, async (req: any, res) => {
+  app.get("/api/rbac/users/:userId/effective-permissions", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const targetUserId = req.params.userId;
@@ -10691,7 +10691,7 @@ export async function registerRoutes(
   });
 
   // Current User Permissions (for frontend)
-  app.get("/api/rbac/my-permissions", isAuthenticated, async (req: any, res) => {
+  app.get("/api/rbac/my-permissions", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const effectivePermissions = await storage.getUserEffectivePermissions(currentUser.id);
@@ -10703,7 +10703,7 @@ export async function registerRoutes(
   });
 
   // Check Permission (utility endpoint)
-  app.get("/api/rbac/check-permission", isAuthenticated, async (req: any, res) => {
+  app.get("/api/rbac/check-permission", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const module = req.query.module as string;
@@ -10727,7 +10727,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Get user security settings
-  app.get("/api/security/users/:userId/settings", isAuthenticated, async (req: any, res) => {
+  app.get("/api/security/users/:userId/settings", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const { userId } = req.params;
@@ -10746,7 +10746,7 @@ export async function registerRoutes(
   });
 
   // Update user security settings
-  app.patch("/api/security/users/:userId/settings", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/security/users/:userId/settings", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const { userId } = req.params;
@@ -10794,7 +10794,7 @@ export async function registerRoutes(
   });
 
   // Check if user is locked (requires authentication, admin only or self-check)
-  app.get("/api/security/users/:userId/locked", isAuthenticated, async (req: any, res) => {
+  app.get("/api/security/users/:userId/locked", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const { userId } = req.params;
@@ -10817,7 +10817,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Get current user's active sessions
-  app.get("/api/security/sessions", isAuthenticated, async (req: any, res) => {
+  app.get("/api/security/sessions", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const sessions = await storage.getUserSessions(currentUser.id);
@@ -10829,7 +10829,7 @@ export async function registerRoutes(
   });
 
   // Get specific user's sessions (admin only)
-  app.get("/api/security/users/:userId/sessions", isAuthenticated, requirePermission("users", "view"), async (req: any, res) => {
+  app.get("/api/security/users/:userId/sessions", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const { userId } = req.params;
       const sessions = await storage.getUserSessions(userId);
@@ -10841,7 +10841,7 @@ export async function registerRoutes(
   });
 
   // Invalidate a session (user can only invalidate their own sessions, admins can invalidate any)
-  app.delete("/api/security/sessions/:sessionId", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/security/sessions/:sessionId", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const { sessionId } = req.params;
@@ -10876,7 +10876,7 @@ export async function registerRoutes(
   });
 
   // Invalidate all user sessions (logout everywhere)
-  app.delete("/api/security/users/:userId/sessions", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/security/users/:userId/sessions", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const { userId } = req.params;
@@ -10911,7 +10911,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Get all security alerts
-  app.get("/api/security/alerts", isAuthenticated, requirePermission("rbac_management", "view"), async (req: any, res) => {
+  app.get("/api/security/alerts", isAuthenticated, requirePermission("rbac_management", "view"), async (req, res) => {
     try {
       const { userId, violationType, isResolved } = req.query;
       const filters: any = {};
@@ -10939,7 +10939,7 @@ export async function registerRoutes(
   });
 
   // Resolve a security alert
-  app.patch("/api/security/alerts/:id/resolve", isAuthenticated, requirePermission("rbac_management", "edit"), async (req: any, res) => {
+  app.patch("/api/security/alerts/:id/resolve", isAuthenticated, requirePermission("rbac_management", "edit"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const id = parseInt(req.params.id);
@@ -10974,7 +10974,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Get permission check logs
-  app.get("/api/security/permission-logs", isAuthenticated, requirePermission("rbac_management", "view"), async (req: any, res) => {
+  app.get("/api/security/permission-logs", isAuthenticated, requirePermission("rbac_management", "view"), async (req, res) => {
     try {
       const { userId, module, allowed, limit } = req.query;
       const filters: any = {};
@@ -11034,7 +11034,7 @@ export async function registerRoutes(
   });
 
   // Create role template
-  app.post("/api/rbac/role-templates", isAuthenticated, requirePermission("rbac_management", "create"), async (req: any, res) => {
+  app.post("/api/rbac/role-templates", isAuthenticated, requirePermission("rbac_management", "create"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       
@@ -11126,7 +11126,7 @@ export async function registerRoutes(
   });
 
   // Delete role template
-  app.delete("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "delete"), async (req: any, res) => {
+  app.delete("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "delete"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const id = parseInt(req.params.id);
@@ -11155,7 +11155,7 @@ export async function registerRoutes(
   });
 
   // Apply role template to a role
-  app.post("/api/rbac/roles/:roleId/apply-template/:templateId", isAuthenticated, requirePermission("rbac_management", "edit"), async (req: any, res) => {
+  app.post("/api/rbac/roles/:roleId/apply-template/:templateId", isAuthenticated, requirePermission("rbac_management", "edit"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const roleId = parseInt(req.params.roleId);
@@ -11186,7 +11186,7 @@ export async function registerRoutes(
   // Cashier Shift Targets API - أهداف الكاشير للشفت
   // ==========================================
 
-  app.get("/api/cashier-shift-targets", isAuthenticated, async (req: any, res) => {
+  app.get("/api/cashier-shift-targets", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date, shiftType } = req.query;
       const filters: any = {};
@@ -11236,7 +11236,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/cashier-shift-targets/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const target = await storage.getCashierShiftTarget(id);
@@ -11259,7 +11259,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/branch/:branchId/date/:date", isAuthenticated, async (req: any, res) => {
+  app.get("/api/cashier-shift-targets/branch/:branchId/date/:date", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date } = req.params;
       
@@ -11282,7 +11282,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/cashier/:cashierId", isAuthenticated, async (req: any, res) => {
+  app.get("/api/cashier-shift-targets/cashier/:cashierId", isAuthenticated, async (req, res) => {
     try {
       const { cashierId } = req.params;
       const { startDate, endDate } = req.query;
@@ -11309,7 +11309,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/cashier-shift-targets", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
+  app.post("/api/cashier-shift-targets", isAuthenticated, requirePermission("sales", "create"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       
@@ -11330,7 +11330,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/cashier-shift-targets/bulk", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
+  app.post("/api/cashier-shift-targets/bulk", isAuthenticated, requirePermission("sales", "create"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       
@@ -11354,7 +11354,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req: any, res) => {
+  app.patch("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const existing = await storage.getCashierShiftTarget(id);
@@ -11383,7 +11383,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req: any, res) => {
+  app.delete("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -11412,7 +11412,7 @@ export async function registerRoutes(
   // Average Ticket Targets API - أهداف متوسط الفاتورة
   // ==========================================
 
-  app.get("/api/average-ticket-targets", isAuthenticated, async (req: any, res) => {
+  app.get("/api/average-ticket-targets", isAuthenticated, async (req, res) => {
     try {
       const { branchId, isActive } = req.query;
       
@@ -11439,7 +11439,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/average-ticket-targets/active", isAuthenticated, async (req: any, res) => {
+  app.get("/api/average-ticket-targets/active", isAuthenticated, async (req, res) => {
     try {
       const { branchId, cashierId } = req.query;
       
@@ -11465,7 +11465,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/average-ticket-targets/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/average-ticket-targets/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const target = await storage.getAverageTicketTarget(id);
@@ -11488,7 +11488,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/average-ticket-targets", isAuthenticated, requirePermission("sales", "create"), async (req: any, res) => {
+  app.post("/api/average-ticket-targets", isAuthenticated, requirePermission("sales", "create"), async (req, res) => {
     try {
       const currentUser = req.currentUser;
       
@@ -11509,7 +11509,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req: any, res) => {
+  app.patch("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -11539,7 +11539,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req: any, res) => {
+  app.delete("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("sales", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -11568,7 +11568,7 @@ export async function registerRoutes(
   // Performance Alerts API - تنبيهات الأداء
   // ==========================================
 
-  app.get("/api/performance-alerts", isAuthenticated, async (req: any, res) => {
+  app.get("/api/performance-alerts", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date, isRead } = req.query;
       const filters: any = {};
@@ -11593,7 +11593,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/performance-alerts/unread/:branchId", isAuthenticated, async (req: any, res) => {
+  app.get("/api/performance-alerts/unread/:branchId", isAuthenticated, async (req, res) => {
     try {
       const { branchId } = req.params;
       
@@ -11616,7 +11616,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/performance-alerts/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/performance-alerts/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const alert = await storage.getPerformanceAlert(id);
@@ -11639,7 +11639,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/performance-alerts", isAuthenticated, async (req: any, res) => {
+  app.post("/api/performance-alerts", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Validate branch access for non-admin users
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -11657,7 +11657,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/performance-alerts/:id/read", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/performance-alerts/:id/read", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -11682,7 +11682,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/performance-alerts/:id/acknowledge", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/performance-alerts/:id/acknowledge", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const currentUser = req.currentUser;
@@ -11708,7 +11708,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/performance-alerts/bulk-read", isAuthenticated, async (req: any, res) => {
+  app.post("/api/performance-alerts/bulk-read", isAuthenticated, async (req, res) => {
     try {
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
@@ -11743,7 +11743,7 @@ export async function registerRoutes(
   // Shift Performance Tracking API - تتبع أداء الشفت
   // ==========================================
 
-  app.get("/api/shift-performance-tracking", isAuthenticated, async (req: any, res) => {
+  app.get("/api/shift-performance-tracking", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date } = req.query;
       const filters: any = {};
@@ -11767,7 +11767,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shift-performance-tracking/active/:branchId/:date/:shiftType", isAuthenticated, async (req: any, res) => {
+  app.get("/api/shift-performance-tracking/active/:branchId/:date/:shiftType", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date, shiftType } = req.params;
       
@@ -11793,7 +11793,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shift-performance-tracking/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const tracking = await storage.getShiftPerformanceTracking(id);
@@ -11816,7 +11816,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/shift-performance-tracking", isAuthenticated, async (req: any, res) => {
+  app.post("/api/shift-performance-tracking", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Validate branch access for non-admin users
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -11834,7 +11834,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/shift-performance-tracking/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -11864,7 +11864,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/shift-performance-tracking/upsert", isAuthenticated, async (req: any, res) => {
+  app.put("/api/shift-performance-tracking/upsert", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Validate branch access for non-admin users
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -11888,7 +11888,7 @@ export async function registerRoutes(
 
   // Marketing Branches - جميع الفروع للتسويق
   // Returns all branches for marketing module (company-wide marketing functions)
-  app.get("/api/marketing/branches", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/branches", isAuthenticated, async (req, res) => {
     try {
       const branches = await getCachedBranches();
       res.json(branches);
@@ -11899,7 +11899,7 @@ export async function registerRoutes(
   });
 
   // Marketing Campaigns - الحملات التسويقية
-  app.get("/api/marketing/campaigns", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/campaigns", isAuthenticated, async (req, res) => {
     try {
       const { status, season, objective } = req.query;
       const filters: { status?: string; season?: string; objective?: string } = {};
@@ -11932,7 +11932,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/campaigns", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingCampaignSchema.parse(req.body);
       const campaign = await storage.createMarketingCampaign(validatedData);
@@ -11999,7 +11999,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -12070,7 +12070,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -12127,7 +12127,7 @@ export async function registerRoutes(
   });
 
   // Campaign Expenses - مصروفات الحملات
-  app.get("/api/marketing/expenses", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/expenses", isAuthenticated, async (req, res) => {
     try {
       const { campaignId, category, status, startDate, endDate } = req.query;
       const expenses = await storage.getAllCampaignExpenses({
@@ -12186,7 +12186,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -12209,7 +12209,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/expenses/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/marketing/expenses/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -12256,7 +12256,7 @@ export async function registerRoutes(
   });
 
   // Marketing Calendar Events - تقويم التسويق
-  app.get("/api/marketing/calendar-events", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/calendar-events", isAuthenticated, async (req, res) => {
     try {
       const { campaignId, startDate, endDate } = req.query;
       const filters: { campaignId?: number; startDate?: string; endDate?: string } = {};
@@ -12272,7 +12272,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/calendar-events", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/calendar-events", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingCalendarEventSchema.parse(req.body);
       const event = await storage.createMarketingCalendarEvent(validatedData);
@@ -12325,7 +12325,7 @@ export async function registerRoutes(
   });
 
   // Marketing Influencers - المؤثرين
-  app.get("/api/marketing/influencers", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/influencers", isAuthenticated, async (req, res) => {
     try {
       const { specialty, isActive } = req.query;
       const filters: { specialty?: string; isActive?: boolean } = {};
@@ -12341,7 +12341,7 @@ export async function registerRoutes(
   });
 
   // Export Influencers to Excel - MUST be before /:id route
-  app.get("/api/marketing/influencers/export/excel", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/influencers/export/excel", isAuthenticated, async (req, res) => {
     try {
       const influencers = await storage.getAllMarketingInfluencers({});
       
@@ -12384,7 +12384,7 @@ export async function registerRoutes(
   });
 
   // Export Influencers to PDF - MUST be before /:id route
-  app.get("/api/marketing/influencers/export/pdf", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/influencers/export/pdf", isAuthenticated, async (req, res) => {
     try {
       const influencers = await storage.getAllMarketingInfluencers({});
       const { generatePdfFromHtml } = await import("./pdf-generator");
@@ -12520,7 +12520,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencers", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/influencers", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingInfluencerSchema.parse(req.body);
       const influencer = await storage.createMarketingInfluencer(validatedData);
@@ -12573,7 +12573,7 @@ export async function registerRoutes(
   });
 
   // Import influencers from Excel - استيراد المؤثرين من Excel
-  app.post("/api/marketing/influencers/import", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/influencers/import", isAuthenticated, async (req, res) => {
     try {
       const { items } = req.body;
       if (!items || !Array.isArray(items) || items.length === 0) {
@@ -12631,7 +12631,7 @@ export async function registerRoutes(
   });
 
   // Influencer Campaign Links - روابط المؤثرين بالحملات
-  app.get("/api/marketing/influencer-links", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/influencer-links", isAuthenticated, async (req, res) => {
     try {
       const { campaignId, influencerId } = req.query;
       const filters: { campaignId?: number; influencerId?: number } = {};
@@ -12646,7 +12646,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-links", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/influencer-links", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertInfluencerCampaignLinkSchema.parse(req.body);
       const link = await storage.createInfluencerCampaignLink(validatedData);
@@ -12713,7 +12713,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-contacts", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/influencer-contacts", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertInfluencerContactSchema.parse(req.body);
       const contact = await storage.createInfluencerContact(validatedData);
@@ -12745,7 +12745,7 @@ export async function registerRoutes(
   });
 
   // Influencer Payments - كشف حساب المؤثرين
-  app.get("/api/marketing/influencer-payments", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/influencer-payments", isAuthenticated, async (req, res) => {
     try {
       const { influencerId, campaignId, status, startDate, endDate } = req.query;
       const filters: any = {};
@@ -12835,7 +12835,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-payments", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/influencer-payments", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const data = { ...req.body, createdBy: currentUser?.id };
@@ -12886,7 +12886,7 @@ export async function registerRoutes(
   });
 
   // Influencer Contracts - عقود المؤثرين
-  app.get("/api/marketing/influencer-contracts", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/influencer-contracts", isAuthenticated, async (req, res) => {
     try {
       const { status, influencerId, branchId, paymentStatus } = req.query;
       const filters: { status?: string; influencerId?: number; branchId?: string; paymentStatus?: string } = {};
@@ -12930,7 +12930,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-contracts", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/influencer-contracts", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const data = { ...req.body, createdBy: currentUser?.id };
@@ -13197,7 +13197,7 @@ export async function registerRoutes(
   });
 
   // Marketing Tasks - مهام التسويق
-  app.get("/api/marketing/tasks", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/tasks", isAuthenticated, async (req, res) => {
     try {
       const { campaignId, assignedTo, status } = req.query;
       const filters: { campaignId?: number; assignedTo?: string; status?: string } = {};
@@ -13230,7 +13230,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/tasks", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/tasks", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingTaskSchema.parse(req.body);
       const task = await storage.createMarketingTask(validatedData);
@@ -13297,7 +13297,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/task-activities", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/task-activities", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingTaskActivitySchema.parse(req.body);
       const activity = await storage.createMarketingTaskActivity(validatedData);
@@ -13312,7 +13312,7 @@ export async function registerRoutes(
   });
 
   // Marketing Performance Reports - تقارير أداء التسويق
-  app.get("/api/marketing/reports", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/reports", isAuthenticated, async (req, res) => {
     try {
       const { reportType, campaignId } = req.query;
       const filters: { reportType?: string; campaignId?: number } = {};
@@ -13344,7 +13344,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/reports", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/reports", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingPerformanceReportSchema.parse(req.body);
       const report = await storage.createMarketingPerformanceReport(validatedData);
@@ -13359,7 +13359,7 @@ export async function registerRoutes(
   });
 
   // Marketing Assets - أصول التسويق
-  app.get("/api/marketing/assets", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/assets", isAuthenticated, async (req, res) => {
     try {
       const { campaignId, assetType } = req.query;
       const filters: { campaignId?: number; assetType?: string } = {};
@@ -13374,7 +13374,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/assets", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/assets", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingAssetSchema.parse(req.body);
       const asset = await storage.createMarketingAsset(validatedData);
@@ -13427,7 +13427,7 @@ export async function registerRoutes(
   });
 
   // Marketing Team Members - فريق التسويق
-  app.get("/api/marketing/team", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/team", isAuthenticated, async (req, res) => {
     try {
       const { isActive } = req.query;
       const filters: { isActive?: boolean } = {};
@@ -13441,7 +13441,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/team", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/team", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingTeamMemberSchema.parse(req.body);
       const member = await storage.createMarketingTeamMember(validatedData);
@@ -13494,7 +13494,7 @@ export async function registerRoutes(
   });
 
   // Marketing Alerts - تنبيهات التسويق
-  app.get("/api/marketing/alerts", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/alerts", isAuthenticated, async (req, res) => {
     try {
       const { targetUserId, isRead } = req.query;
       const filters: { targetUserId?: string; isRead?: boolean } = {};
@@ -13509,7 +13509,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/alerts", isAuthenticated, async (req: any, res) => {
+  app.post("/api/marketing/alerts", isAuthenticated, async (req, res) => {
     try {
       const validatedData = insertMarketingAlertSchema.parse(req.body);
       const alert = await storage.createMarketingAlert(validatedData);
@@ -13540,7 +13540,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/alerts/:id/acknowledge", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/marketing/alerts/:id/acknowledge", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -13559,7 +13559,7 @@ export async function registerRoutes(
   });
 
   // Marketing Statistics API endpoint
-  app.get("/api/marketing/statistics", isAuthenticated, async (req: any, res) => {
+  app.get("/api/marketing/statistics", isAuthenticated, async (req, res) => {
     try {
       const campaigns = await storage.getAllMarketingCampaigns({});
       const influencers = await storage.getAllMarketingInfluencers({});
@@ -13738,7 +13738,7 @@ export async function registerRoutes(
   });
 
   // Schedule Templates - قوالب الجداول
-  app.get("/api/schedule-templates", isAuthenticated, async (req: any, res) => {
+  app.get("/api/schedule-templates", isAuthenticated, async (req, res) => {
     try {
       const { branchId } = req.query;
       const templates = await storage.getAllScheduleTemplates(branchId as string);
@@ -13762,7 +13762,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/schedule-templates", isAuthenticated, async (req: any, res) => {
+  app.post("/api/schedule-templates", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const validatedData = insertScheduleTemplateSchema.parse({
@@ -13810,7 +13810,7 @@ export async function registerRoutes(
   });
 
   // Schedule Periods - فترات الجدول
-  app.get("/api/schedule-periods", isAuthenticated, async (req: any, res) => {
+  app.get("/api/schedule-periods", isAuthenticated, async (req, res) => {
     try {
       const { branchId } = req.query;
       const periods = await storage.getAllSchedulePeriods(branchId as string);
@@ -13834,7 +13834,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/schedule-periods", isAuthenticated, async (req: any, res) => {
+  app.post("/api/schedule-periods", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const validatedData = insertSchedulePeriodSchema.parse({
@@ -13869,7 +13869,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/schedule-periods/:id/publish", isAuthenticated, async (req: any, res) => {
+  app.post("/api/schedule-periods/:id/publish", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -13896,7 +13896,7 @@ export async function registerRoutes(
   });
 
   // Employee Schedules - جداول الموظفين
-  app.get("/api/employee-schedules", isAuthenticated, async (req: any, res) => {
+  app.get("/api/employee-schedules", isAuthenticated, async (req, res) => {
     try {
       const { periodId, employeeId, date, branchId, startDate, endDate } = req.query;
       
@@ -13946,7 +13946,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/employee-schedules/bulk", isAuthenticated, async (req: any, res) => {
+  app.post("/api/employee-schedules/bulk", isAuthenticated, async (req, res) => {
     try {
       const { schedules } = req.body;
       if (!Array.isArray(schedules)) {
@@ -14019,7 +14019,7 @@ export async function registerRoutes(
   });
 
   // Attendance Records - سجلات الحضور
-  app.get("/api/attendance", isAuthenticated, async (req: any, res) => {
+  app.get("/api/attendance", isAuthenticated, async (req, res) => {
     try {
       const { branchId, employeeId, startDate, endDate, status } = req.query;
       
@@ -14050,7 +14050,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/attendance/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/attendance/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -14072,7 +14072,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance", isAuthenticated, async (req: any, res) => {
+  app.post("/api/attendance", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admins
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -14093,7 +14093,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/attendance/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/attendance/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -14119,7 +14119,7 @@ export async function registerRoutes(
   });
 
   // Check-in / Check-out with signature
-  app.post("/api/attendance/check-in", isAuthenticated, async (req: any, res) => {
+  app.post("/api/attendance/check-in", isAuthenticated, async (req, res) => {
     try {
       const { branchId, signature, deviceInfo } = req.body;
       const currentUser = req.currentUser;
@@ -14157,7 +14157,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance/check-out", isAuthenticated, async (req: any, res) => {
+  app.post("/api/attendance/check-out", isAuthenticated, async (req, res) => {
     try {
       const { signature } = req.body;
       const currentUser = req.currentUser;
@@ -14178,7 +14178,7 @@ export async function registerRoutes(
   });
 
   // Get scheduled employees for attendance (branch manager tool)
-  app.get("/api/scheduled-employees-for-attendance", isAuthenticated, async (req: any, res) => {
+  app.get("/api/scheduled-employees-for-attendance", isAuthenticated, async (req, res) => {
     try {
       const { branchId, shiftType, date } = req.query;
       
@@ -14196,7 +14196,7 @@ export async function registerRoutes(
   });
 
   // Check-in employee by manager
-  app.post("/api/attendance/check-in-employee", isAuthenticated, async (req: any, res) => {
+  app.post("/api/attendance/check-in-employee", isAuthenticated, async (req, res) => {
     try {
       const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName } = req.body;
       
@@ -14223,7 +14223,7 @@ export async function registerRoutes(
   });
 
   // Check-out employee by manager
-  app.post("/api/attendance/check-out-employee", isAuthenticated, async (req: any, res) => {
+  app.post("/api/attendance/check-out-employee", isAuthenticated, async (req, res) => {
     try {
       const { employeeId, scheduleId, signature } = req.body;
       
@@ -14246,7 +14246,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance/:id/approve", isAuthenticated, async (req: any, res) => {
+  app.post("/api/attendance/:id/approve", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -14260,7 +14260,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/attendance/my-today", isAuthenticated, async (req: any, res) => {
+  app.get("/api/attendance/my-today", isAuthenticated, async (req, res) => {
     try {
       const currentUser = req.currentUser;
       const today = new Date().toISOString().split('T')[0];
@@ -14304,7 +14304,7 @@ export async function registerRoutes(
   });
 
   // Attendance Summary - ملخص الحضور
-  app.get("/api/attendance-summary", isAuthenticated, async (req: any, res) => {
+  app.get("/api/attendance-summary", isAuthenticated, async (req, res) => {
     try {
       const { branchId, month } = req.query;
       
@@ -14332,7 +14332,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/attendance-summary/:employeeId/:month", isAuthenticated, async (req: any, res) => {
+  app.get("/api/attendance-summary/:employeeId/:month", isAuthenticated, async (req, res) => {
     try {
       const { employeeId, month } = req.params;
       
@@ -14359,7 +14359,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance-summary/calculate/:employeeId/:month", isAuthenticated, async (req: any, res) => {
+  app.post("/api/attendance-summary/calculate/:employeeId/:month", isAuthenticated, async (req, res) => {
     try {
       const { employeeId, month } = req.params;
       
@@ -14383,7 +14383,7 @@ export async function registerRoutes(
   });
 
   // Attendance Statistics
-  app.get("/api/attendance/stats/today", isAuthenticated, async (req: any, res) => {
+  app.get("/api/attendance/stats/today", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
@@ -14424,7 +14424,7 @@ export async function registerRoutes(
 
   // ==================== Attendance Dashboard Stats - إحصائيات لوحة الحضور ====================
   
-  app.get("/api/attendance-dashboard-stats", isAuthenticated, async (req: any, res) => {
+  app.get("/api/attendance-dashboard-stats", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -14506,7 +14506,7 @@ export async function registerRoutes(
   // ==================== Timesheet Reports - تقارير التايم شيت ====================
   
   // Get all timesheet reports with filters
-  app.get("/api/timesheet-reports", isAuthenticated, async (req: any, res) => {
+  app.get("/api/timesheet-reports", isAuthenticated, async (req, res) => {
     try {
       const { employeeId, branchId, status } = req.query;
       
@@ -14536,7 +14536,7 @@ export async function registerRoutes(
   });
 
   // Get single timesheet report by ID
-  app.get("/api/timesheet-reports/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/timesheet-reports/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -14560,7 +14560,7 @@ export async function registerRoutes(
   });
 
   // Get timesheet report entries
-  app.get("/api/timesheet-reports/:id/entries", isAuthenticated, async (req: any, res) => {
+  app.get("/api/timesheet-reports/:id/entries", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -14585,7 +14585,7 @@ export async function registerRoutes(
   });
 
   // Generate timesheet report for an employee
-  app.post("/api/timesheet-reports/generate", isAuthenticated, async (req: any, res) => {
+  app.post("/api/timesheet-reports/generate", isAuthenticated, async (req, res) => {
     try {
       const { employeeId, branchId, startDate, endDate } = req.body;
       
@@ -14761,7 +14761,7 @@ export async function registerRoutes(
   });
 
   // Sign timesheet report (employee or manager)
-  app.post("/api/timesheet-reports/:id/sign", isAuthenticated, async (req: any, res) => {
+  app.post("/api/timesheet-reports/:id/sign", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -14826,7 +14826,7 @@ export async function registerRoutes(
   // =====================================================
   
   // Get all branch employees or filter by branch
-  app.get("/api/branch-employees", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branch-employees", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
@@ -14858,7 +14858,7 @@ export async function registerRoutes(
   });
 
   // Get branch employees statistics
-  app.get("/api/branch-employees/stats", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branch-employees/stats", isAuthenticated, async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
@@ -14876,7 +14876,7 @@ export async function registerRoutes(
   });
 
   // Get single branch employee
-  app.get("/api/branch-employees/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -14941,7 +14941,7 @@ export async function registerRoutes(
   });
 
   // Delete branch employee - مدير النظام فقط
-  app.delete("/api/branch-employees/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
     try {
       // التحقق من صلاحية مدير النظام فقط
       const userRole = req.currentUser?.role || req.user?.role;
@@ -15768,7 +15768,7 @@ export async function registerRoutes(
   // ==================== P&L (Profit & Loss) Dashboard Routes ====================
 
   // Get all financial periods with optional filters
-  app.get("/api/financials/periods", isAuthenticated, async (req: any, res) => {
+  app.get("/api/financials/periods", isAuthenticated, async (req, res) => {
     try {
       const { branchId, year, month } = req.query;
       
@@ -15797,7 +15797,7 @@ export async function registerRoutes(
   });
 
   // Get a single financial period
-  app.get("/api/financials/periods/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/financials/periods/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const period = await storage.getFinancialPeriod(id);
@@ -15821,7 +15821,7 @@ export async function registerRoutes(
   });
 
   // Get complete P&L data for a period
-  app.get("/api/financials/periods/:id/complete", isAuthenticated, async (req: any, res) => {
+  app.get("/api/financials/periods/:id/complete", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const data = await storage.getCompletePnLData(id);
@@ -16299,7 +16299,7 @@ export async function registerRoutes(
   });
 
   // Get branch ranking
-  app.get("/api/financials/ranking", isAuthenticated, async (req: any, res) => {
+  app.get("/api/financials/ranking", isAuthenticated, async (req, res) => {
     try {
       const { year, month, metric } = req.query;
       const yearNum = parseInt(year as string) || new Date().getFullYear();
@@ -16726,7 +16726,7 @@ export async function registerRoutes(
   });
 
   // Social Media File Upload
-  app.post("/api/social-media/upload", isAuthenticated, async (req: any, res) => {
+  app.post("/api/social-media/upload", isAuthenticated, async (req, res) => {
     try {
       const multer = (await import("multer")).default;
       const path = await import("path");
