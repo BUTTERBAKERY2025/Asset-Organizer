@@ -13,7 +13,7 @@ import {
   ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, 
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
-  PackageCheck, Send, ShoppingCart, FolderOpen
+  PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -278,6 +278,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/executive/tasks", label: t("sidebar.executiveTasks", "المهام"), icon: ClipboardCheck, indent: true },
           { href: "/executive/correspondence", label: t("sidebar.executiveCorrespondence", "المراسلات"), icon: FileText, indent: true },
           { href: "/documents", label: t("sidebar.documents", "الوثائق والأرشفة"), icon: FolderOpen, indent: true },
+          { href: "/governance", label: t("sidebar.governance", "الحوكمة ومجلس الإدارة"), icon: Landmark, indent: true },
           { href: "/visitors", label: t("sidebar.visitors", "الزوار"), icon: UserCheck, indent: true },
           { href: "/travel-requests", label: t("sidebar.travelRequests", "طلبات السفر"), icon: MapPin, indent: true },
           { href: "/executive/reports", label: t("sidebar.executiveReports", "التقارير"), icon: BarChart3, indent: true },

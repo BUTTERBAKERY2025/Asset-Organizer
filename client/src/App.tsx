@@ -115,6 +115,7 @@ const ExecutiveTasksPage = lazy(() => import("@/pages/executive-tasks"));
 const ExecutiveCorrespondencePage = lazy(() => import("@/pages/executive-correspondence"));
 const DocumentsPage = lazy(() => import("@/pages/documents"));
 const SharedDocumentPage = lazy(() => import("@/pages/shared-document"));
+const GovernancePage = lazy(() => import("@/pages/governance"));
 const VisitorsPage = lazy(() => import("@/pages/visitors"));
 const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 const ExecutiveReportsPage = lazy(() => import("@/pages/executive-reports"));
@@ -287,6 +288,7 @@ function Router() {
       <Route path="/executive/tasks">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveTasksPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/executive/correspondence">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveCorrespondencePage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/documents">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DocumentsPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><GovernancePage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/visitors">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><VisitorsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/travel-requests">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><TravelRequestsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/executive/reports">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveReportsPage /></Suspense></ProtectedRoute>}</Route>
