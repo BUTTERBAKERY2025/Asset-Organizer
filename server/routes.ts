@@ -19003,6 +19003,23 @@ export async function registerRoutes(
         return res.status(403).json({ error: "تم تجاوز الحد الأقصى للوصول" });
       }
 
+      // Check password if required
+      if (share.sharePassword) {
+        const providedPassword = req.query.password as string;
+        if (!providedPassword) {
+          return res.status(401).json({ 
+            error: "هذا الرابط محمي بكلمة مرور",
+            requiresPassword: true 
+          });
+        }
+        if (providedPassword !== share.sharePassword) {
+          return res.status(401).json({ 
+            error: "كلمة المرور غير صحيحة",
+            requiresPassword: true 
+          });
+        }
+      }
+
       // Increment access count
       await storage.incrementShareAccessCount(share.id);
 
