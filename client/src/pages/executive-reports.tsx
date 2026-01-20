@@ -1,12 +1,15 @@
 import { useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useReactToPrint } from "react-to-print";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
+import * as XLSX from "xlsx";
 import { 
   FileText, 
   Printer, 
@@ -19,7 +22,10 @@ import {
   ArrowRight,
   BarChart3,
   PieChart,
-  TrendingUp
+  TrendingUp,
+  FileSpreadsheet,
+  Bell,
+  RefreshCw
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -69,6 +75,7 @@ const reportTypes = [
 export default function ExecutiveReports() {
   const [reportType, setReportType] = useState("weekly");
   const printRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const { data: stats, isLoading: statsLoading } = useQuery<any>({
     queryKey: ["/api/executive/dashboard"],
@@ -94,10 +101,69 @@ export default function ExecutiveReports() {
     queryKey: ["/api/travel-stats"],
   });
 
+  const { data: visitors = [] } = useQuery<any[]>({
+    queryKey: ["/api/visitors"],
+  });
+
+  const generateRemindersMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/system-notifications/generate-reminders");
+    },
+    onSuccess: (data: any) => {
+      toast({ 
+        title: "تم إنشاء التذكيرات",
+        description: `تم إنشاء ${data.remindersCreated || 0} تذكير جديد`
+      });
+    },
+    onError: () => {
+      toast({ title: "فشل في إنشاء التذكيرات", variant: "destructive" });
+    },
+  });
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `تقرير السكرتارية التنفيذية - ${format(new Date(), 'yyyy-MM-dd')}`,
   });
+
+  const exportToExcel = (data: any[], filename: string, sheetName: string) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `${filename}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast({ title: `تم تصدير ${filename} بنجاح` });
+  };
+
+  const exportMeetings = () => {
+    const exportData = meetings.map((m: any) => ({
+      'العنوان': m.title,
+      'التاريخ': format(new Date(m.startAt), 'yyyy/MM/dd HH:mm'),
+      'النوع': m.meetingType,
+      'الحالة': m.status,
+      'الموقع': m.location || '-',
+    }));
+    exportToExcel(exportData, 'الاجتماعات', 'Meetings');
+  };
+
+  const exportTasks = () => {
+    const exportData = tasks.map((t: any) => ({
+      'العنوان': t.title,
+      'الأولوية': t.priority,
+      'تاريخ الاستحقاق': t.dueDate ? format(new Date(t.dueDate), 'yyyy/MM/dd') : '-',
+      'الحالة': t.status,
+    }));
+    exportToExcel(exportData, 'المهام', 'Tasks');
+  };
+
+  const exportVisitors = () => {
+    const exportData = visitors.map((v: any) => ({
+      'الاسم': v.name,
+      'الشركة': v.company || '-',
+      'الغرض': v.purpose || '-',
+      'وقت الدخول': v.checkInTime ? format(new Date(v.checkInTime), 'yyyy/MM/dd HH:mm') : '-',
+      'وقت الخروج': v.checkOutTime ? format(new Date(v.checkOutTime), 'yyyy/MM/dd HH:mm') : '-',
+    }));
+    exportToExcel(exportData, 'الزوار', 'Visitors');
+  };
 
   const getReportTitle = () => {
     const type = reportTypes.find(r => r.value === reportType);
@@ -162,6 +228,44 @@ export default function ExecutiveReports() {
           </Button>
         </div>
       </div>
+
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Download className="h-5 w-5" />
+            تصدير البيانات والتذكيرات
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportMeetings} className="gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              تصدير الاجتماعات
+            </Button>
+            <Button variant="outline" onClick={exportTasks} className="gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              تصدير المهام
+            </Button>
+            <Button variant="outline" onClick={exportVisitors} className="gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              تصدير الزوار
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => generateRemindersMutation.mutate()}
+              disabled={generateRemindersMutation.isPending}
+              className="gap-2 bg-blue-50 hover:bg-blue-100"
+            >
+              {generateRemindersMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Bell className="h-4 w-4" />
+              )}
+              إنشاء تذكيرات تلقائية
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div ref={printRef} className="bg-white p-8 rounded-lg shadow print:shadow-none">
         <div className="print:block">

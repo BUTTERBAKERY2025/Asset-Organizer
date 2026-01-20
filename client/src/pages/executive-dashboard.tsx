@@ -1,10 +1,13 @@
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Link } from "wouter";
-import { Calendar, CheckSquare, Mail, AlertTriangle, Clock, Users, ArrowLeft, ArrowRight, Plus, FileText, Plane, Bell, UserCheck, BarChart3 } from "lucide-react";
+import { Calendar, CheckSquare, Mail, AlertTriangle, Clock, Users, ArrowLeft, ArrowRight, Plus, FileText, Plane, Bell, UserCheck, BarChart3, CalendarDays, Settings2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -18,7 +21,34 @@ interface DashboardStats {
   recentCorrespondence: any[];
 }
 
+interface WidgetSettings {
+  showMeetings: boolean;
+  showTasks: boolean;
+  showCorrespondence: boolean;
+  showStats: boolean;
+}
+
+const defaultWidgetSettings: WidgetSettings = {
+  showMeetings: true,
+  showTasks: true,
+  showCorrespondence: true,
+  showStats: true,
+};
+
 export default function ExecutiveDashboard() {
+  const [widgetSettings, setWidgetSettings] = useState<WidgetSettings>(() => {
+    const saved = localStorage.getItem('executive-dashboard-widgets');
+    return saved ? JSON.parse(saved) : defaultWidgetSettings;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('executive-dashboard-widgets', JSON.stringify(widgetSettings));
+  }, [widgetSettings]);
+
+  const toggleWidget = (key: keyof WidgetSettings) => {
+    setWidgetSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/executive/dashboard"],
   });
@@ -121,9 +151,58 @@ export default function ExecutiveDashboard() {
               التقارير
             </Button>
           </Link>
+          <Link href="/executive/calendar">
+            <Button variant="outline" className="gap-2 bg-blue-100 hover:bg-blue-200">
+              <CalendarDays className="h-4 w-4" />
+              التقويم
+            </Button>
+          </Link>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" title="تخصيص لوحة التحكم">
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64" dir="rtl">
+              <div className="space-y-4">
+                <h4 className="font-medium">تخصيص الويدجت</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">الإحصائيات</span>
+                    <Switch 
+                      checked={widgetSettings.showStats} 
+                      onCheckedChange={() => toggleWidget('showStats')} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">الاجتماعات القادمة</span>
+                    <Switch 
+                      checked={widgetSettings.showMeetings} 
+                      onCheckedChange={() => toggleWidget('showMeetings')} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">المهام العاجلة</span>
+                    <Switch 
+                      checked={widgetSettings.showTasks} 
+                      onCheckedChange={() => toggleWidget('showTasks')} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">المراسلات الأخيرة</span>
+                    <Switch 
+                      checked={widgetSettings.showCorrespondence} 
+                      onCheckedChange={() => toggleWidget('showCorrespondence')} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
+      {widgetSettings.showStats && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
           <CardHeader className="pb-2">
@@ -181,8 +260,10 @@ export default function ExecutiveDashboard() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {widgetSettings.showMeetings && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -234,7 +315,9 @@ export default function ExecutiveDashboard() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {widgetSettings.showTasks && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -288,7 +371,9 @@ export default function ExecutiveDashboard() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {widgetSettings.showCorrespondence && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -347,6 +432,7 @@ export default function ExecutiveDashboard() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
       <div className="flex justify-center gap-4 pt-4">

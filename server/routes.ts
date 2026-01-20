@@ -19642,5 +19642,111 @@ export async function registerRoutes(
     }
   });
 
+  // Generate automatic reminders for upcoming meetings and tasks
+  app.post("/api/system-notifications/generate-reminders", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const now = new Date();
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      
+      // Get upcoming meetings (next 24 hours)
+      const meetings = await storage.getExecMeetings();
+      const upcomingMeetings = meetings.filter((m: any) => {
+        const meetingDate = new Date(m.startAt);
+        return meetingDate >= now && meetingDate <= tomorrow && m.status === 'scheduled';
+      });
+
+      // Get tasks due soon (next 24 hours)
+      const tasks = await storage.getExecTasks();
+      const upcomingTasks = tasks.filter((t: any) => {
+        if (!t.dueDate) return false;
+        const dueDate = new Date(t.dueDate);
+        return dueDate >= now && dueDate <= tomorrow && t.status !== 'completed';
+      });
+
+      const createdReminders: any[] = [];
+
+      // Create meeting reminders
+      for (const meeting of upcomingMeetings) {
+        const notification = await storage.createSystemNotification({
+          type: 'meeting',
+          title: `تذكير: ${meeting.title}`,
+          message: `لديك اجتماع قادم في ${new Date(meeting.startAt).toLocaleTimeString('ar-SA')}`,
+          priority: 'high',
+          userId: user.id,
+          createdBy: user.id,
+        });
+        createdReminders.push(notification);
+      }
+
+      // Create task reminders
+      for (const task of upcomingTasks) {
+        const notification = await storage.createSystemNotification({
+          type: 'task',
+          title: `تذكير: ${task.title}`,
+          message: `موعد استحقاق المهمة يقترب`,
+          priority: task.priority === 'urgent' ? 'urgent' : 'high',
+          userId: user.id,
+          createdBy: user.id,
+        });
+        createdReminders.push(notification);
+      }
+
+      res.json({ 
+        success: true, 
+        remindersCreated: createdReminders.length,
+        meetings: upcomingMeetings.length,
+        tasks: upcomingTasks.length
+      });
+    } catch (error) {
+      console.error("Error generating reminders:", error);
+      res.status(500).json({ error: "فشل في إنشاء التذكيرات" });
+    }
+  });
+
+  // Export meetings to JSON (for Excel export on frontend)
+  app.get("/api/executive/meetings/export", isAuthenticated, async (req, res) => {
+    try {
+      const meetings = await storage.getExecMeetings();
+      res.json(meetings);
+    } catch (error) {
+      console.error("Error exporting meetings:", error);
+      res.status(500).json({ error: "فشل في تصدير الاجتماعات" });
+    }
+  });
+
+  // Export tasks to JSON
+  app.get("/api/executive/tasks/export", isAuthenticated, async (req, res) => {
+    try {
+      const tasks = await storage.getExecTasks();
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error exporting tasks:", error);
+      res.status(500).json({ error: "فشل في تصدير المهام" });
+    }
+  });
+
+  // Export visitors to JSON
+  app.get("/api/visitors/export", isAuthenticated, async (req, res) => {
+    try {
+      const visitors = await storage.getVisitors();
+      res.json(visitors);
+    } catch (error) {
+      console.error("Error exporting visitors:", error);
+      res.status(500).json({ error: "فشل في تصدير الزوار" });
+    }
+  });
+
+  // Export travel requests to JSON
+  app.get("/api/travel-requests/export", isAuthenticated, async (req, res) => {
+    try {
+      const travelRequests = await storage.getTravelRequests();
+      res.json(travelRequests);
+    } catch (error) {
+      console.error("Error exporting travel requests:", error);
+      res.status(500).json({ error: "فشل في تصدير طلبات السفر" });
+    }
+  });
+
   return httpServer;
 }
