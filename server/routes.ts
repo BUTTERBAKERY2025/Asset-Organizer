@@ -18545,7 +18545,7 @@ export async function registerRoutes(
       await storage.logDocumentAccess({
         documentId: doc.id,
         userId: user.id,
-        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || undefined,
         action: 'view',
       });
 
@@ -18595,9 +18595,11 @@ export async function registerRoutes(
 
       const doc = await storage.createDocument({
         ...parseResult.data,
+        documentDate: parseResult.data.documentDate ? new Date(parseResult.data.documentDate) : undefined,
+        expiryDate: parseResult.data.expiryDate ? new Date(parseResult.data.expiryDate) : undefined,
         branchId: mandatoryBranch || req.body.branchId,
         ownerId: user.id,
-        ownerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        ownerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || undefined,
         createdBy: user.id,
       });
 
@@ -18648,7 +18650,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
       }
 
-      const doc = await storage.updateDocument(parseInt(req.params.id), parseResult.data);
+      const updateData = {
+        ...parseResult.data,
+        documentDate: parseResult.data.documentDate ? new Date(parseResult.data.documentDate) : parseResult.data.documentDate === null ? null : undefined,
+        expiryDate: parseResult.data.expiryDate ? new Date(parseResult.data.expiryDate) : parseResult.data.expiryDate === null ? null : undefined,
+      };
+      const doc = await storage.updateDocument(parseInt(req.params.id), updateData);
       if (!doc) {
         return res.status(404).json({ error: "الوثيقة غير موجودة" });
       }
@@ -18666,7 +18673,7 @@ export async function registerRoutes(
       await storage.logDocumentAccess({
         documentId: parseInt(req.params.id),
         userId: user.id,
-        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || undefined,
         action: 'delete',
       });
       res.status(204).send();
@@ -18687,7 +18694,7 @@ export async function registerRoutes(
       await storage.logDocumentAccess({
         documentId: doc.id,
         userId: user.id,
-        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || undefined,
         action: 'archive',
       });
       res.json(doc);
@@ -18707,7 +18714,7 @@ export async function registerRoutes(
       await storage.logDocumentAccess({
         documentId: doc.id,
         userId: user.id,
-        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || undefined,
         action: 'restore',
       });
       res.json(doc);
@@ -18806,9 +18813,10 @@ export async function registerRoutes(
       const share = await storage.createDocumentShare({
         documentId: parseInt(req.params.id),
         ...parseResult.data,
+        expiresAt: parseResult.data.expiresAt ? new Date(parseResult.data.expiresAt) : undefined,
         shareLink: parseResult.data.shareType === 'public' ? crypto.randomUUID() : undefined,
         sharedBy: user.id,
-        sharedByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        sharedByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || undefined,
       });
 
       res.status(201).json(share);
@@ -18855,7 +18863,7 @@ export async function registerRoutes(
       await storage.logDocumentAccess({
         documentId: doc.id,
         userId: user.id,
-        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || undefined,
         action: 'download',
       });
 
@@ -18863,6 +18871,205 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error processing download:", error);
       res.status(500).json({ error: "فشل في معالجة التحميل" });
+    }
+  });
+
+  // Upload Document File
+  app.post("/api/documents/upload", isAuthenticated, async (req, res) => {
+    try {
+      const multer = (await import("multer")).default;
+      const path = await import("path");
+      const fs = await import("fs");
+      const crypto = await import("crypto");
+
+      const uploadsDir = "./uploads/documents";
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const storage_multer = multer.diskStorage({
+        destination: (_req, _file, cb) => {
+          cb(null, uploadsDir);
+        },
+        filename: (_req, file, cb) => {
+          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const ext = path.extname(file.originalname);
+          cb(null, `doc-${uniqueSuffix}${ext}`);
+        },
+      });
+
+      const upload = multer({
+        storage: storage_multer,
+        limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+        fileFilter: (_req, file, cb) => {
+          const allowedTypes = [
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "text/plain",
+            "text/csv",
+            "application/zip",
+            "application/x-rar-compressed",
+          ];
+          if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+          } else {
+            cb(new Error("نوع الملف غير مسموح") as any, false);
+          }
+        },
+      });
+
+      upload.single("file")(req, res, async (err: any) => {
+        if (err) {
+          console.error("Upload error:", err);
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ error: "حجم الملف يتجاوز الحد المسموح (50MB)" });
+          }
+          return res.status(400).json({ error: err.message || "فشل في رفع الملف" });
+        }
+
+        const file = (req as any).file;
+        if (!file) {
+          return res.status(400).json({ error: "لم يتم تحديد ملف للرفع" });
+        }
+
+        // Calculate file checksum
+        const fileBuffer = fs.readFileSync(file.path);
+        const checksum = crypto.createHash("md5").update(fileBuffer).digest("hex");
+
+        // Extract file type from extension
+        const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
+
+        res.json({
+          fileName: file.originalname,
+          fileType: ext,
+          fileSize: file.size,
+          filePath: file.path,
+          mimeType: file.mimetype,
+          checksum: checksum,
+        });
+      });
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ error: "فشل في رفع الملف" });
+    }
+  });
+
+  // Serve uploaded files
+  app.get("/api/documents/file/:filename", isAuthenticated, async (req, res) => {
+    try {
+      const path = await import("path");
+      const fs = await import("fs");
+      
+      const filename = req.params.filename;
+      const filePath = path.join("./uploads/documents", filename);
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "الملف غير موجود" });
+      }
+      
+      res.sendFile(path.resolve(filePath));
+    } catch (error) {
+      console.error("Error serving file:", error);
+      res.status(500).json({ error: "فشل في جلب الملف" });
+    }
+  });
+
+  // Public share link access (no auth required)
+  app.get("/api/documents/share/:shareLink", async (req, res) => {
+    try {
+      const share = await storage.getDocumentShareByLink(req.params.shareLink);
+      if (!share) {
+        return res.status(404).json({ error: "رابط المشاركة غير صالح" });
+      }
+
+      if (!share.isActive) {
+        return res.status(403).json({ error: "رابط المشاركة غير نشط" });
+      }
+
+      if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+        return res.status(403).json({ error: "انتهت صلاحية رابط المشاركة" });
+      }
+
+      if (share.maxAccessCount && (share.accessCount ?? 0) >= share.maxAccessCount) {
+        return res.status(403).json({ error: "تم تجاوز الحد الأقصى للوصول" });
+      }
+
+      // Increment access count
+      await storage.incrementShareAccessCount(share.id);
+
+      // Get document
+      const doc = await storage.getDocument(share.documentId);
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+
+      // Log access
+      await storage.logDocumentAccess({
+        documentId: doc.id,
+        action: 'view',
+        actionDetails: `الوصول عبر رابط المشاركة: ${share.shareLink}`,
+      });
+
+      res.json({
+        document: {
+          id: doc.id,
+          title: doc.title,
+          description: doc.description,
+          fileName: doc.fileName,
+          fileType: doc.fileType,
+          fileSize: doc.fileSize,
+          mimeType: doc.mimeType,
+        },
+        permission: share.permission,
+        canDownload: share.permission !== 'view',
+      });
+    } catch (error) {
+      console.error("Error accessing share:", error);
+      res.status(500).json({ error: "فشل في الوصول للمشاركة" });
+    }
+  });
+
+  // Generate public share link
+  app.post("/api/documents/:id/generate-share-link", isAuthenticated, async (req, res) => {
+    try {
+      const crypto = await import("crypto");
+      const user = getCurrentUser(req);
+      const doc = await storage.getDocument(parseInt(req.params.id));
+      
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+
+      const shareLink = crypto.randomBytes(16).toString("hex");
+      
+      const share = await storage.createDocumentShare({
+        documentId: doc.id,
+        shareType: "public",
+        permission: req.body.permission || "view",
+        shareLink: shareLink,
+        sharePassword: req.body.password,
+        expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : undefined,
+        maxAccessCount: req.body.maxAccessCount,
+        sharedBy: user.id,
+        sharedByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+      });
+
+      res.json({
+        ...share,
+        fullLink: `/share/${shareLink}`,
+      });
+    } catch (error) {
+      console.error("Error generating share link:", error);
+      res.status(500).json({ error: "فشل في إنشاء رابط المشاركة" });
     }
   });
 

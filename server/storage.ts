@@ -10288,6 +10288,12 @@ export class DatabaseStorage implements IStorage {
     return share;
   }
 
+  async incrementShareAccessCount(shareId: number): Promise<void> {
+    await db.update(documentShares)
+      .set({ accessCount: sql`${documentShares.accessCount} + 1` })
+      .where(eq(documentShares.id, shareId));
+  }
+
   // Document Access Logs
   async logDocumentAccess(data: { documentId: number; userId?: string; userName?: string; action: string; actionDetails?: string; ipAddress?: string; userAgent?: string; versionNumber?: number }): Promise<void> {
     await db.insert(documentAccessLogs).values(data);

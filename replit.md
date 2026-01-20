@@ -15,6 +15,7 @@ Preferred communication style: Simple, everyday language.
 - `migrations/001_finished_goods_unique_index.sql` - Functional unique index for Finished Goods Inventory system (required for atomic UPSERT operations)
 - `migrations/003_marketing_tables_complete.sql` - جداول عقود ومدفوعات المؤثرين (influencer_contracts, influencer_payments)
 - `migrations/004_performance_indexes.sql` - فهارس الأداء للجداول الكبيرة (production, inventory, cashier, warehouse)
+- `migrations/006_documents_tables.sql` - جداول إدارة الوثائق والأرشفة (documents, document_categories, document_folders, document_versions, document_shares, document_access_logs)
 
 ## System Architecture
 The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
@@ -56,6 +57,16 @@ The system uses a modern web architecture with a React-based frontend and a Node
   - **Tables**: `warehouse_items`, `branch_stock`, `material_requests`, `material_request_items`, `material_transfers`, `material_transfer_items`, `warehouse_movement_logs`.
   - **Request Numbers**: Auto-generated format MR-YYYYMM-XXXX.
   - **Transfer Numbers**: Auto-generated format MT-YYYYMM-XXXX.
+- **Document Management & Archiving (إدارة الوثائق والأرشفة)**: Comprehensive document management system for storing, organizing, and sharing company documents.
+  - **File Upload**: Drag-and-drop and click-to-select upload with XHR progress tracking. Supports PDF, Word, Excel, PowerPoint, images, text, CSV, and archives (15+ types). Maximum file size 50MB.
+  - **Document Organization**: Folder hierarchy with path calculation, category classification (7 default categories: Contracts, Policies, Reports, Correspondence, Financial, HR, Others), tags, and access levels (public/internal/confidential/restricted).
+  - **Version Control**: Automatic version tracking with change notes and previous version history.
+  - **Document Preview**: In-dialog preview for PDF (iframe) and images (jpg/png/gif/webp), fallback download for unsupported types.
+  - **Share Links**: Public share links with crypto-random tokens (32 hex chars), access control (expiry date, max access count, password protection), and access logging.
+  - **Access Logging**: Complete audit trail of document views, downloads, and share link access with timestamps and user information.
+  - **Security**: MD5 checksum calculation for file integrity, file type validation on upload, server-side access control enforcement.
+  - **Tables**: `documents`, `document_categories`, `document_folders`, `document_versions`, `document_shares`, `document_access_logs`.
+  - **Migration**: `migrations/006_documents_tables.sql` - Complete schema with indexes, foreign keys, and default categories.
 
 ### Performance Optimization
 - **Tiered Caching Strategy**: Five-tier cache system based on data volatility:

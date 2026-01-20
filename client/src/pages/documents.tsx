@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Progress } from "@/components/ui/progress";
 import {
   Folder,
   FileText,
@@ -44,6 +45,11 @@ import {
   Grid,
   List,
   Filter,
+  Upload,
+  X,
+  Loader2,
+  Link2,
+  Copy,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -82,6 +88,8 @@ interface Document {
   fileName: string;
   fileType: string;
   fileSize: number;
+  filePath: string;
+  mimeType?: string;
   status: string;
   accessLevel: string;
   ownerName?: string;
@@ -179,10 +187,22 @@ export default function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(false);
   const [isNewCategoryDialogOpen, setIsNewCategoryDialogOpen] = useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderDescription, setNewFolderDescription] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#6B7280");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadCategoryId, setUploadCategoryId] = useState<string>("");
+  const [shareLink, setShareLink] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: stats } = useQuery<DocumentStats>({
     queryKey: ["/api/documents/stats"],
@@ -317,6 +337,145 @@ export default function DocumentsPage() {
     });
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(progress);
+        }
+      });
+
+      const uploadPromise = new Promise<any>((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            reject(new Error(xhr.responseText));
+          }
+        };
+        xhr.onerror = () => reject(new Error("فشل في رفع الملف"));
+        xhr.open("POST", "/api/documents/upload");
+        xhr.send(formData);
+      });
+
+      const uploadResult = await uploadPromise;
+
+      const docData = {
+        title: uploadTitle.trim() || file.name.replace(/\.[^/.]+$/, ""),
+        description: uploadDescription.trim() || undefined,
+        fileName: uploadResult.fileName,
+        fileType: uploadResult.fileType,
+        fileSize: uploadResult.fileSize,
+        filePath: uploadResult.filePath,
+        mimeType: uploadResult.mimeType,
+        folderId: currentFolderId,
+        categoryId: uploadCategoryId ? parseInt(uploadCategoryId) : undefined,
+        status: "active" as const,
+      };
+
+      await apiRequest("POST", "/api/documents", docData);
+
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/stats"] });
+      
+      setIsUploadDialogOpen(false);
+      setUploadTitle("");
+      setUploadDescription("");
+      setUploadCategoryId("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      
+      toast({ title: "تم رفع الوثيقة بنجاح" });
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({ title: "فشل في رفع الوثيقة", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handlePreviewDocument = (doc: Document) => {
+    setSelectedDocument(doc);
+    setIsPreviewDialogOpen(true);
+  };
+
+  const handleDownloadDocument = async (doc: Document) => {
+    try {
+      await apiRequest("POST", `/api/documents/${doc.id}/download`, {});
+      const filename = doc.filePath.split("/").pop();
+      window.open(`/api/documents/file/${filename}`, "_blank");
+      toast({ title: "جاري تحميل الوثيقة..." });
+    } catch (error) {
+      toast({ title: "فشل في تحميل الوثيقة", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateShareLink = async (doc: Document) => {
+    try {
+      const result = await apiRequest("POST", `/api/documents/${doc.id}/generate-share-link`, {
+        permission: "view",
+      });
+      const data = await result.json();
+      setShareLink(window.location.origin + data.fullLink);
+      setSelectedDocument(doc);
+      setIsShareDialogOpen(true);
+      toast({ title: "تم إنشاء رابط المشاركة" });
+    } catch (error) {
+      toast({ title: "فشل في إنشاء رابط المشاركة", variant: "destructive" });
+    }
+  };
+
+  const copyShareLink = () => {
+    navigator.clipboard.writeText(shareLink);
+    toast({ title: "تم نسخ الرابط" });
+  };
+
+  const getPreviewUrl = (doc: Document) => {
+    const filename = doc.filePath.split("/").pop();
+    return `/api/documents/file/${filename}`;
+  };
+
+  const canPreview = (fileType: string) => {
+    return ["pdf", "jpg", "jpeg", "png", "gif", "webp"].includes(fileType.toLowerCase());
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const fakeEvent = {
+        target: { files }
+      } as React.ChangeEvent<HTMLInputElement>;
+      handleFileUpload(fakeEvent);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
@@ -410,12 +569,172 @@ export default function DocumentsPage() {
             </DialogContent>
           </Dialog>
 
-          <Button className="bg-amber-600 hover:bg-amber-700" data-testid="btn-upload-document">
-            <Plus className="h-4 w-4 ml-2" />
-            رفع وثيقة
-          </Button>
+          <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-amber-600 hover:bg-amber-700" data-testid="btn-upload-document">
+                <Upload className="h-4 w-4 ml-2" />
+                رفع وثيقة
+              </Button>
+            </DialogTrigger>
+            <DialogContent dir="rtl" className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>رفع وثيقة جديدة</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>عنوان الوثيقة</Label>
+                  <Input
+                    value={uploadTitle}
+                    onChange={(e) => setUploadTitle(e.target.value)}
+                    placeholder="أدخل عنوان الوثيقة (اختياري)"
+                    data-testid="input-upload-title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>الوصف</Label>
+                  <Textarea
+                    value={uploadDescription}
+                    onChange={(e) => setUploadDescription(e.target.value)}
+                    placeholder="أدخل وصف الوثيقة (اختياري)"
+                    data-testid="input-upload-description"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>التصنيف</Label>
+                  <Select value={uploadCategoryId} onValueChange={setUploadCategoryId}>
+                    <SelectTrigger data-testid="select-upload-category">
+                      <SelectValue placeholder="اختر التصنيف (اختياري)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id.toString()}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>اختر الملف</Label>
+                  <div 
+                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                      isDragging 
+                        ? "border-amber-500 bg-amber-50" 
+                        : "border-gray-300 hover:border-amber-400"
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.csv,.zip,.rar"
+                      data-testid="input-file-upload"
+                    />
+                    {isUploading ? (
+                      <div className="space-y-3">
+                        <Loader2 className="h-8 w-8 mx-auto text-amber-600 animate-spin" />
+                        <p className="text-sm text-gray-600">جاري رفع الملف...</p>
+                        <Progress value={uploadProgress} className="w-full" />
+                        <p className="text-xs text-gray-500">{uploadProgress}%</p>
+                      </div>
+                    ) : (
+                      <div
+                        className="cursor-pointer"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className={`h-8 w-8 mx-auto mb-2 ${isDragging ? "text-amber-500" : "text-gray-400"}`} />
+                        <p className="text-sm text-gray-600">
+                          {isDragging ? "أفلت الملف هنا" : "اضغط لاختيار ملف أو اسحبه هنا"}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, صور (حتى 50MB)</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
+
+      {/* Preview Dialog */}
+      <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
+        <DialogContent dir="rtl" className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>{selectedDocument?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {selectedDocument && canPreview(selectedDocument.fileType) ? (
+              <div className="w-full h-[60vh] border rounded-lg overflow-hidden">
+                {selectedDocument.fileType === "pdf" ? (
+                  <iframe
+                    src={getPreviewUrl(selectedDocument)}
+                    className="w-full h-full"
+                    title={selectedDocument.title}
+                  />
+                ) : (
+                  <img
+                    src={getPreviewUrl(selectedDocument)}
+                    alt={selectedDocument.title}
+                    className="w-full h-full object-contain"
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <File className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-600">لا يمكن معاينة هذا النوع من الملفات</p>
+                <Button
+                  onClick={() => selectedDocument && handleDownloadDocument(selectedDocument)}
+                  className="mt-4"
+                >
+                  <Download className="h-4 w-4 ml-2" />
+                  تحميل الملف
+                </Button>
+              </div>
+            )}
+          </div>
+          {selectedDocument && (
+            <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-4">
+              <span>النوع: {selectedDocument.fileType.toUpperCase()}</span>
+              <span>الحجم: {formatFileSize(selectedDocument.fileSize)}</span>
+              <span>الإصدار: {selectedDocument.currentVersion}</span>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Dialog */}
+      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>مشاركة الوثيقة</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>رابط المشاركة</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={shareLink}
+                  readOnly
+                  className="flex-1"
+                  data-testid="input-share-link"
+                />
+                <Button onClick={copyShareLink} variant="outline" data-testid="btn-copy-link">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500">
+              يمكن لأي شخص لديه هذا الرابط عرض الوثيقة
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -655,10 +974,20 @@ export default function DocumentsPage() {
                         </Badge>
                       </div>
                       <div className="flex justify-center gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button size="sm" variant="ghost" data-testid={`btn-view-doc-${doc.id}`}>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => handlePreviewDocument(doc)}
+                          data-testid={`btn-view-doc-${doc.id}`}
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" data-testid={`btn-download-doc-${doc.id}`}>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => handleDownloadDocument(doc)}
+                          data-testid={`btn-download-doc-${doc.id}`}
+                        >
                           <Download className="h-4 w-4" />
                         </Button>
                         <DropdownMenu>
@@ -668,7 +997,7 @@ export default function DocumentsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleGenerateShareLink(doc)}>
                               <Share2 className="h-4 w-4 ml-2" />
                               مشاركة
                             </DropdownMenuItem>
@@ -730,10 +1059,18 @@ export default function DocumentsPage() {
                           {statusLabels[doc.status]}
                         </Badge>
                         <div className="flex gap-1">
-                          <Button size="sm" variant="ghost">
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handlePreviewDocument(doc)}
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost">
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleDownloadDocument(doc)}
+                          >
                             <Download className="h-4 w-4" />
                           </Button>
                           <DropdownMenu>
@@ -743,7 +1080,7 @@ export default function DocumentsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleGenerateShareLink(doc)}>
                                 <Share2 className="h-4 w-4 ml-2" />
                                 مشاركة
                               </DropdownMenuItem>
