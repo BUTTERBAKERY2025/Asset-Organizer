@@ -144,6 +144,8 @@ export const systemAuditLogs = pgTable("system_audit_logs", {
   details: text("details"), // JSON string with change details
   userId: varchar("user_id").references(() => users.id),
   userName: text("user_name"),
+  targetId: text("target_id"), // Target entity ID for security/RBAC actions
+  description: text("description"), // Human-readable description of the action
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

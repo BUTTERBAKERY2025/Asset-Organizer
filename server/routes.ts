@@ -7779,7 +7779,7 @@ export async function registerRoutes(
           reason: comparisonStatusHistory.reason,
           changedBy: comparisonStatusHistory.changedBy,
           createdAt: comparisonStatusHistory.createdAt,
-          userName: users.fullName,
+          userName: sql<string>`COALESCE(${users.firstName}, '') || ' ' || COALESCE(${users.lastName}, '')`.as('userName'),
         })
         .from(comparisonStatusHistory)
         .leftJoin(users, eq(comparisonStatusHistory.changedBy, users.id))
@@ -8543,7 +8543,7 @@ export async function registerRoutes(
               // Use actual average price from sales data
               unitPrice = analytics.totalRevenue / analytics.totalQuantitySold;
             } else if (product) {
-              unitPrice = product.basePrice || product.price || 15;
+              unitPrice = product.basePrice || 15;
             } else {
               unitPrice = 15; // Default fallback
             }
@@ -8588,7 +8588,7 @@ export async function registerRoutes(
               p.name?.toLowerCase() === analytics.productName?.toLowerCase()
             );
             
-            const unitPrice = product?.basePrice || product?.price || 15;
+            const unitPrice = product?.basePrice || 15;
             const allocatedValue = targetSalesValue * quantityShare;
             const quantity = Math.max(1, Math.round(allocatedValue / unitPrice));
             const totalPrice = quantity * unitPrice;
@@ -8622,7 +8622,7 @@ export async function registerRoutes(
         const equalShare = 1 / activeProducts.length;
         
         recommendedProducts = activeProducts.slice(0, 30).map(product => {
-          const unitPrice = product.basePrice || product.price || 15;
+          const unitPrice = product.basePrice || 15;
           const allocatedValue = targetSalesValue * equalShare;
           const quantity = Math.max(1, Math.round(allocatedValue / unitPrice));
           const totalPrice = quantity * unitPrice;
@@ -10773,6 +10773,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'security',
         action: 'update_security_settings',
+        entityId: userId,
         userId: currentUser.id,
         targetId: userId,
         description: `تحديث إعدادات الأمان للمستخدم`,
@@ -10855,6 +10856,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'security',
         action: 'invalidate_session',
+        entityId: sessionId,
         userId: currentUser.id,
         targetId: sessionId,
         description: `إنهاء جلسة`,
@@ -10885,6 +10887,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'security',
         action: 'invalidate_all_sessions',
+        entityId: userId,
         userId: currentUser.id,
         targetId: userId,
         description: `إنهاء جميع جلسات المستخدم`,
@@ -10946,6 +10949,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'security',
         action: 'resolve_security_alert',
+        entityId: String(id),
         userId: currentUser.id,
         targetId: String(id),
         description: `حل تنبيه أمان`,
@@ -11056,6 +11060,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'rbac_management',
         action: 'create_role_template',
+        entityId: String(template.id),
         userId: currentUser.id,
         targetId: String(template.id),
         description: `إنشاء قالب دور: ${template.name}`,
@@ -11100,6 +11105,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'rbac_management',
         action: 'update_role_template',
+        entityId: String(id),
         userId: (req as any).currentUser.id,
         targetId: String(id),
         description: `تحديث قالب دور: ${template.name}`,
@@ -11129,6 +11135,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'rbac_management',
         action: 'delete_role_template',
+        entityId: String(id),
         userId: currentUser.id,
         targetId: String(id),
         description: `حذف قالب دور${template ? ': ' + template.name : ''}`,
@@ -11155,6 +11162,7 @@ export async function registerRoutes(
       await storage.createSystemAuditLog({
         module: 'rbac_management',
         action: 'apply_role_template',
+        entityId: String(roleId),
         userId: currentUser.id,
         targetId: String(roleId),
         description: `تطبيق قالب رقم ${templateId} على الدور رقم ${roleId}`,
@@ -14456,10 +14464,11 @@ export async function registerRoutes(
       endOfMonth.setMonth(endOfMonth.getMonth() + 1);
       endOfMonth.setDate(0);
       
-      const schedules = await storage.getEmployeeSchedules({
-        startDate: startOfMonth.toISOString().split('T')[0],
-        endDate: endOfMonth.toISOString().split('T')[0]
-      });
+      const schedules = await storage.getEmployeeSchedulesByBranchAndDateRange(
+        effectiveBranchId || '',
+        startOfMonth.toISOString().split('T')[0],
+        endOfMonth.toISOString().split('T')[0]
+      );
       const schedulesCount = schedules.length;
       
       // Get reports count
