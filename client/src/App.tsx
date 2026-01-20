@@ -116,6 +116,11 @@ const ExecutiveCorrespondencePage = lazy(() => import("@/pages/executive-corresp
 const DocumentsPage = lazy(() => import("@/pages/documents"));
 const SharedDocumentPage = lazy(() => import("@/pages/shared-document"));
 const GovernancePage = lazy(() => import("@/pages/governance"));
+const BoardMembersPage = lazy(() => import("@/pages/governance/board-members"));
+const ShareholdersPage = lazy(() => import("@/pages/governance/shareholders"));
+const GovernanceMeetingsPage = lazy(() => import("@/pages/governance/meetings"));
+const ResolutionsPage = lazy(() => import("@/pages/governance/resolutions"));
+const CompliancePage = lazy(() => import("@/pages/governance/compliance"));
 const VisitorsPage = lazy(() => import("@/pages/visitors"));
 const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 const ExecutiveReportsPage = lazy(() => import("@/pages/executive-reports"));
@@ -289,6 +294,11 @@ function Router() {
       <Route path="/executive/correspondence">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveCorrespondencePage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/documents">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DocumentsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/governance">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><GovernancePage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/board">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><BoardMembersPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/shareholders">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ShareholdersPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/meetings">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><GovernanceMeetingsPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/resolutions">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ResolutionsPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/compliance">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><CompliancePage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/visitors">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><VisitorsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/travel-requests">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><TravelRequestsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/executive/reports">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveReportsPage /></Suspense></ProtectedRoute>}</Route>

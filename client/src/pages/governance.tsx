@@ -47,7 +47,6 @@ const governanceModules: GovernanceModule[] = [
     color: "text-violet-600",
     bgColor: "bg-violet-100",
     href: "/governance/board",
-    comingSoon: true,
   },
   {
     id: "assembly",
@@ -56,8 +55,7 @@ const governanceModules: GovernanceModule[] = [
     icon: Building2,
     color: "text-blue-600",
     bgColor: "bg-blue-100",
-    href: "/governance/assembly",
-    comingSoon: true,
+    href: "/governance/meetings",
   },
   {
     id: "minutes",
@@ -66,8 +64,7 @@ const governanceModules: GovernanceModule[] = [
     icon: FileText,
     color: "text-emerald-600",
     bgColor: "bg-emerald-100",
-    href: "/governance/minutes",
-    comingSoon: true,
+    href: "/governance/meetings",
   },
   {
     id: "shareholders",
@@ -77,7 +74,6 @@ const governanceModules: GovernanceModule[] = [
     color: "text-amber-600",
     bgColor: "bg-amber-100",
     href: "/governance/shareholders",
-    comingSoon: true,
   },
   {
     id: "resolutions",
@@ -87,7 +83,6 @@ const governanceModules: GovernanceModule[] = [
     color: "text-indigo-600",
     bgColor: "bg-indigo-100",
     href: "/governance/resolutions",
-    comingSoon: true,
   },
   {
     id: "voting",
@@ -96,8 +91,7 @@ const governanceModules: GovernanceModule[] = [
     icon: Vote,
     color: "text-pink-600",
     bgColor: "bg-pink-100",
-    href: "/governance/voting",
-    comingSoon: true,
+    href: "/governance/resolutions",
   },
   {
     id: "attendance",
@@ -106,8 +100,7 @@ const governanceModules: GovernanceModule[] = [
     icon: ClipboardList,
     color: "text-cyan-600",
     bgColor: "bg-cyan-100",
-    href: "/governance/attendance",
-    comingSoon: true,
+    href: "/governance/meetings",
   },
   {
     id: "shares",
@@ -116,8 +109,7 @@ const governanceModules: GovernanceModule[] = [
     icon: Briefcase,
     color: "text-orange-600",
     bgColor: "bg-orange-100",
-    href: "/governance/shares",
-    comingSoon: true,
+    href: "/governance/shareholders",
   },
   {
     id: "disclosures",
@@ -126,8 +118,7 @@ const governanceModules: GovernanceModule[] = [
     icon: FileCheck,
     color: "text-teal-600",
     bgColor: "bg-teal-100",
-    href: "/governance/disclosures",
-    comingSoon: true,
+    href: "/governance/compliance",
   },
   {
     id: "compliance",
@@ -137,7 +128,6 @@ const governanceModules: GovernanceModule[] = [
     color: "text-red-600",
     bgColor: "bg-red-100",
     href: "/governance/compliance",
-    comingSoon: true,
   },
 ];
 
@@ -191,35 +181,36 @@ export default function GovernancePage() {
           <TabsContent value="overview" className="mt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {governanceModules.map((module) => (
-                <Card 
-                  key={module.id} 
-                  className="hover:shadow-lg transition-shadow cursor-pointer group relative"
-                  data-testid={`module-${module.id}`}
-                >
-                  {module.comingSoon && (
-                    <Badge 
-                      variant="secondary" 
-                      className="absolute top-2 left-2 text-xs"
-                    >
-                      قريباً
-                    </Badge>
-                  )}
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-3 rounded-lg ${module.bgColor}`}>
-                        <module.icon className={`h-6 w-6 ${module.color}`} />
+                <Link href={module.href} key={module.id}>
+                  <Card 
+                    className="hover:shadow-lg transition-shadow cursor-pointer group relative h-full"
+                    data-testid={`module-${module.id}`}
+                  >
+                    {module.comingSoon && (
+                      <Badge 
+                        variant="secondary" 
+                        className="absolute top-2 left-2 text-xs"
+                      >
+                        قريباً
+                      </Badge>
+                    )}
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-3 rounded-lg ${module.bgColor}`}>
+                          <module.icon className={`h-6 w-6 ${module.color}`} />
+                        </div>
+                        <CardTitle className="text-lg group-hover:text-violet-600 transition-colors">
+                          {module.title}
+                        </CardTitle>
                       </div>
-                      <CardTitle className="text-lg group-hover:text-violet-600 transition-colors">
-                        {module.title}
-                      </CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription className="text-sm">
-                      {module.description}
-                    </CardDescription>
-                  </CardContent>
-                </Card>
+                    </CardHeader>
+                    <CardContent>
+                      <CardDescription className="text-sm">
+                        {module.description}
+                      </CardDescription>
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           </TabsContent>
