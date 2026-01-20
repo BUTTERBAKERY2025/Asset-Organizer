@@ -6344,3 +6344,241 @@ export const documentAccessLogs = pgTable("document_access_logs", {
   index("idx_doc_access_action").on(table.action),
   index("idx_doc_access_date").on(table.accessedAt),
 ]);
+
+export const insertDocumentAccessLogSchema = createInsertSchema(documentAccessLogs).omit({
+  id: true,
+  accessedAt: true,
+});
+
+export type DocumentAccessLog = typeof documentAccessLogs.$inferSelect;
+export type InsertDocumentAccessLog = z.infer<typeof insertDocumentAccessLogSchema>;
+
+// =====================================================
+// سجل الزوار - Visitor Management
+// =====================================================
+
+// Visitors - الزوار
+export const visitors = pgTable("visitors", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // بيانات الزائر
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"), // رقم الهوية
+  phone: text("phone"),
+  email: text("email"),
+  company: text("company"), // الجهة/الشركة
+  nationality: text("nationality"),
+  idType: text("id_type").default("national_id"), // national_id, passport, iqama
+  photoUrl: text("photo_url"), // صورة الزائر
+  // معلومات إضافية
+  notes: text("notes"),
+  isBlacklisted: boolean("is_blacklisted").default(false), // قائمة سوداء
+  blacklistReason: text("blacklist_reason"),
+  visitCount: integer("visit_count").default(0), // عدد الزيارات
+  lastVisitAt: timestamp("last_visit_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_visitors_branch").on(table.branchId),
+  index("idx_visitors_national_id").on(table.nationalId),
+  index("idx_visitors_phone").on(table.phone),
+  index("idx_visitors_company").on(table.company),
+]);
+
+export const insertVisitorSchema = createInsertSchema(visitors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Visitor = typeof visitors.$inferSelect;
+export type InsertVisitor = z.infer<typeof insertVisitorSchema>;
+
+// Visitor Logs - سجل الزيارات
+export const visitorLogs = pgTable("visitor_logs", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  visitorId: integer("visitor_id").references(() => visitors.id),
+  // بيانات الزيارة
+  visitNumber: text("visit_number"), // رقم الزيارة VIS-YYYYMM-XXXX
+  visitDate: timestamp("visit_date").defaultNow().notNull(),
+  visitPurpose: text("visit_purpose").notNull(), // غرض الزيارة
+  visitType: text("visit_type").default("business"), // business, personal, delivery, interview, meeting, other
+  // المضيف
+  hostId: varchar("host_id").references(() => users.id),
+  hostName: text("host_name"),
+  hostDepartment: text("host_department"),
+  // أوقات الدخول والخروج
+  checkInTime: timestamp("check_in_time"),
+  checkOutTime: timestamp("check_out_time"),
+  expectedDuration: integer("expected_duration"), // المدة المتوقعة بالدقائق
+  actualDuration: integer("actual_duration"), // المدة الفعلية بالدقائق
+  // حالة الزيارة
+  status: text("status").default("checked_in"), // pending, checked_in, checked_out, cancelled, no_show
+  // بطاقة الزائر
+  badgeNumber: text("badge_number"),
+  badgeIssued: boolean("badge_issued").default(false),
+  badgeReturned: boolean("badge_returned").default(false),
+  // معلومات إضافية
+  vehiclePlate: text("vehicle_plate"), // لوحة السيارة
+  itemsCarried: text("items_carried"), // الأغراض المحمولة
+  accessAreas: text("access_areas").array(), // المناطق المسموح بها
+  escortRequired: boolean("escort_required").default(false), // يتطلب مرافق
+  escortName: text("escort_name"),
+  // ملاحظات وتوقيعات
+  notes: text("notes"),
+  visitorSignature: text("visitor_signature"),
+  hostSignature: text("host_signature"),
+  securityNotes: text("security_notes"),
+  // المسجل
+  registeredBy: varchar("registered_by").references(() => users.id),
+  registeredByName: text("registered_by_name"),
+  checkedOutBy: varchar("checked_out_by").references(() => users.id),
+  checkedOutByName: text("checked_out_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_visitor_logs_branch").on(table.branchId),
+  index("idx_visitor_logs_visitor").on(table.visitorId),
+  index("idx_visitor_logs_host").on(table.hostId),
+  index("idx_visitor_logs_date").on(table.visitDate),
+  index("idx_visitor_logs_status").on(table.status),
+  index("idx_visitor_logs_number").on(table.visitNumber),
+]);
+
+export const insertVisitorLogSchema = createInsertSchema(visitorLogs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type VisitorLog = typeof visitorLogs.$inferSelect;
+export type InsertVisitorLog = z.infer<typeof insertVisitorLogSchema>;
+
+// =====================================================
+// إدارة السفر والحجوزات - Travel Management
+// =====================================================
+
+// Travel Requests - طلبات السفر
+export const travelRequests = pgTable("travel_requests", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // رقم الطلب
+  requestNumber: text("request_number"), // TR-YYYYMM-XXXX
+  // مقدم الطلب
+  requesterId: varchar("requester_id").references(() => users.id),
+  requesterName: text("requester_name"),
+  requesterDepartment: text("requester_department"),
+  requesterJobTitle: text("requester_job_title"),
+  // تفاصيل الرحلة
+  tripTitle: text("trip_title").notNull(), // عنوان الرحلة
+  tripPurpose: text("trip_purpose").notNull(), // الغرض من السفر
+  tripType: text("trip_type").default("business"), // business, training, conference, client_visit, other
+  // الوجهات والتواريخ
+  departureCity: text("departure_city").notNull(),
+  destinationCity: text("destination_city").notNull(),
+  destinationCountry: text("destination_country"),
+  departureDate: timestamp("departure_date").notNull(),
+  returnDate: timestamp("return_date").notNull(),
+  tripDuration: integer("trip_duration"), // عدد الأيام
+  // احتياجات السفر
+  needsFlight: boolean("needs_flight").default(true),
+  needsHotel: boolean("needs_hotel").default(true),
+  needsTransportation: boolean("needs_transportation").default(false),
+  needsVisa: boolean("needs_visa").default(false),
+  // الميزانية التقديرية
+  estimatedFlightCost: numeric("estimated_flight_cost", { precision: 12, scale: 2 }),
+  estimatedHotelCost: numeric("estimated_hotel_cost", { precision: 12, scale: 2 }),
+  estimatedTransportCost: numeric("estimated_transport_cost", { precision: 12, scale: 2 }),
+  estimatedMealsCost: numeric("estimated_meals_cost", { precision: 12, scale: 2 }),
+  estimatedOtherCost: numeric("estimated_other_cost", { precision: 12, scale: 2 }),
+  totalEstimatedCost: numeric("total_estimated_cost", { precision: 12, scale: 2 }),
+  currency: text("currency").default("SAR"),
+  // حالة الطلب
+  status: text("status").default("draft"), // draft, pending, approved, rejected, cancelled, completed
+  // الموافقات
+  managerApproval: text("manager_approval").default("pending"), // pending, approved, rejected
+  managerApprovalDate: timestamp("manager_approval_date"),
+  managerApprovalBy: varchar("manager_approval_by").references(() => users.id),
+  managerApprovalNotes: text("manager_approval_notes"),
+  financeApproval: text("finance_approval").default("pending"),
+  financeApprovalDate: timestamp("finance_approval_date"),
+  financeApprovalBy: varchar("finance_approval_by").references(() => users.id),
+  financeApprovalNotes: text("finance_approval_notes"),
+  // التنفيذ
+  actualFlightCost: numeric("actual_flight_cost", { precision: 12, scale: 2 }),
+  actualHotelCost: numeric("actual_hotel_cost", { precision: 12, scale: 2 }),
+  actualTransportCost: numeric("actual_transport_cost", { precision: 12, scale: 2 }),
+  actualMealsCost: numeric("actual_meals_cost", { precision: 12, scale: 2 }),
+  actualOtherCost: numeric("actual_other_cost", { precision: 12, scale: 2 }),
+  totalActualCost: numeric("total_actual_cost", { precision: 12, scale: 2 }),
+  // تفاصيل الحجوزات
+  flightDetails: jsonb("flight_details"), // تفاصيل حجز الطيران
+  hotelDetails: jsonb("hotel_details"), // تفاصيل حجز الفندق
+  transportDetails: jsonb("transport_details"), // تفاصيل النقل
+  // ملفات مرفقة
+  attachments: jsonb("attachments"), // قائمة الملفات المرفقة
+  // ملاحظات
+  notes: text("notes"),
+  tripReport: text("trip_report"), // تقرير بعد الرحلة
+  tripReportDate: timestamp("trip_report_date"),
+  // المعلومات الإدارية
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_travel_requests_branch").on(table.branchId),
+  index("idx_travel_requests_requester").on(table.requesterId),
+  index("idx_travel_requests_status").on(table.status),
+  index("idx_travel_requests_dates").on(table.departureDate, table.returnDate),
+  index("idx_travel_requests_number").on(table.requestNumber),
+]);
+
+export const insertTravelRequestSchema = createInsertSchema(travelRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type TravelRequest = typeof travelRequests.$inferSelect;
+export type InsertTravelRequest = z.infer<typeof insertTravelRequestSchema>;
+
+// Travel Expenses - مصروفات السفر
+export const travelExpenses = pgTable("travel_expenses", {
+  id: serial("id").primaryKey(),
+  travelRequestId: integer("travel_request_id")
+    .notNull()
+    .references(() => travelRequests.id, { onDelete: "cascade" }),
+  // تفاصيل المصروف
+  expenseType: text("expense_type").notNull(), // flight, hotel, transport, meals, visa, other
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: text("currency").default("SAR"),
+  expenseDate: timestamp("expense_date").notNull(),
+  // الإيصال
+  receiptNumber: text("receipt_number"),
+  receiptUrl: text("receipt_url"),
+  vendor: text("vendor"), // المورد/الجهة
+  // الموافقة
+  status: text("status").default("pending"), // pending, approved, rejected
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  // ملاحظات
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_travel_expenses_request").on(table.travelRequestId),
+  index("idx_travel_expenses_type").on(table.expenseType),
+  index("idx_travel_expenses_status").on(table.status),
+]);
+
+export const insertTravelExpenseSchema = createInsertSchema(travelExpenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TravelExpense = typeof travelExpenses.$inferSelect;
+export type InsertTravelExpense = z.infer<typeof insertTravelExpenseSchema>;
