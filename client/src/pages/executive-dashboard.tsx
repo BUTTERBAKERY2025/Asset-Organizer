@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { Calendar, CheckSquare, Mail, AlertTriangle, Clock, Users, ArrowLeft, ArrowRight, Plus } from "lucide-react";
+import { Calendar, CheckSquare, Mail, AlertTriangle, Clock, Users, ArrowLeft, ArrowRight, Plus, FileText, Plane, Bell, UserCheck, BarChart3 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -78,7 +78,7 @@ export default function ExecutiveDashboard() {
             BUTTER BAKERY SYSTEM - CEO COMMAND CENTER
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/executive/meetings">
             <Button variant="outline" className="gap-2">
               <Calendar className="h-4 w-4" />
@@ -95,6 +95,30 @@ export default function ExecutiveDashboard() {
             <Button variant="outline" className="gap-2">
               <Mail className="h-4 w-4" />
               المراسلات
+            </Button>
+          </Link>
+          <Link href="/documents">
+            <Button variant="outline" className="gap-2">
+              <FileText className="h-4 w-4" />
+              الوثائق
+            </Button>
+          </Link>
+          <Link href="/visitors">
+            <Button variant="outline" className="gap-2">
+              <UserCheck className="h-4 w-4" />
+              الزوار
+            </Button>
+          </Link>
+          <Link href="/travel-requests">
+            <Button variant="outline" className="gap-2">
+              <Plane className="h-4 w-4" />
+              السفر
+            </Button>
+          </Link>
+          <Link href="/executive/reports">
+            <Button variant="outline" className="gap-2 bg-amber-100 hover:bg-amber-200">
+              <BarChart3 className="h-4 w-4" />
+              التقارير
             </Button>
           </Link>
         </div>
