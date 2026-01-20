@@ -792,7 +792,7 @@ export default function DailyProductionPage() {
         </table>
         
         <div class="footer">
-          <p>نظام باتر لإدارة المخابز - يومية الإنتاج الفعلي</p>
+          <p>BUTTER BAKERY SYSTEM - يومية الإنتاج الفعلي</p>
           <p>تم إنشاء هذا التقرير تلقائياً</p>
         </div>
       </body>

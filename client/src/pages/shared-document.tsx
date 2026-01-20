@@ -359,7 +359,7 @@ export default function SharedDocumentPage() {
         )}
 
         <div className="text-center text-sm text-gray-500" data-testid="footer-text">
-          <p>تم مشاركة هذه الوثيقة من نظام باتر لإدارة المخابز</p>
+          <p>تم مشاركة هذه الوثيقة من BUTTER BAKERY SYSTEM</p>
         </div>
       </div>
     </div>

@@ -8905,7 +8905,7 @@ export async function registerRoutes(
 <body>
   <div class="header">
     <h1>خطة الإنتاج الذكية</h1>
-    <div style="font-size: 12px;">نظام باتر للإدارة</div>
+    <div style="font-size: 12px;">BUTTER BAKERY SYSTEM</div>
   </div>
   
   <div class="info-row">
@@ -8957,7 +8957,7 @@ export async function registerRoutes(
   </table>
   
   <div style="margin-top: 30px; text-align: center; color: #666; font-size: 9px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
-    تم التوليد بواسطة نظام باتر للإدارة الذكية - ${new Date().toLocaleString('ar-SA')}
+    تم التوليد بواسطة BUTTER BAKERY SYSTEM - ${new Date().toLocaleString('ar-SA')}
   </div>
 </body>
 </html>`;

@@ -486,7 +486,7 @@ export default function TransferRequestsPage() {
 ${transfer.driverName ? `🚚 *السائق:* ${transfer.driverName}` : ''}
 ${transfer.vehicleNumber ? `🚗 *المركبة:* ${transfer.vehicleNumber}` : ''}
 
-_مُرسل من نظام باتر_`;
+_مُرسل من BUTTER BAKERY SYSTEM_`;
     
     const encodedMessage = encodeURIComponent(message);
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
