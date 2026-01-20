@@ -113,6 +113,7 @@ const ExecutiveDashboardPage = lazy(() => import("@/pages/executive-dashboard"))
 const ExecutiveMeetingsPage = lazy(() => import("@/pages/executive-meetings"));
 const ExecutiveTasksPage = lazy(() => import("@/pages/executive-tasks"));
 const ExecutiveCorrespondencePage = lazy(() => import("@/pages/executive-correspondence"));
+const DocumentsPage = lazy(() => import("@/pages/documents"));
 
 function AppLoadingFallback() {
   return (
@@ -277,6 +278,7 @@ function Router() {
       <Route path="/executive/meetings">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveMeetingsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/executive/tasks">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveTasksPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/executive/correspondence">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveCorrespondencePage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/documents">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DocumentsPage /></Suspense></ProtectedRoute>}</Route>
       
       <Route component={NotFound} />
     </Switch>

@@ -17796,6 +17796,8 @@ export async function registerRoutes(
       
       const meetingData = {
         ...parseResult.data,
+        startAt: parseResult.data.startAt ? new Date(parseResult.data.startAt) : new Date(),
+        endAt: parseResult.data.endAt ? new Date(parseResult.data.endAt) : undefined,
         branchId: mandatoryBranch || req.body.branchId,
         organizerId: user.id,
         organizerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
@@ -17842,7 +17844,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
       }
       
-      const meeting = await storage.updateExecMeeting(parseInt(req.params.id), parseResult.data);
+      const updateData = {
+        ...parseResult.data,
+        startAt: parseResult.data.startAt ? new Date(parseResult.data.startAt) : undefined,
+        endAt: parseResult.data.endAt ? new Date(parseResult.data.endAt) : undefined,
+      };
+      
+      const meeting = await storage.updateExecMeeting(parseInt(req.params.id), updateData);
       if (!meeting) {
         return res.status(404).json({ error: "الاجتماع غير موجود" });
       }
@@ -17967,6 +17975,7 @@ export async function registerRoutes(
       
       const taskData = {
         ...parseResult.data,
+        dueDate: parseResult.data.dueDate ? new Date(parseResult.data.dueDate) : undefined,
         branchId: mandatoryBranch || req.body.branchId,
         createdBy: user.id,
         createdByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
@@ -18016,7 +18025,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
       }
       
-      const task = await storage.updateExecTask(parseInt(req.params.id), parseResult.data);
+      const updateData = {
+        ...parseResult.data,
+        dueDate: parseResult.data.dueDate ? new Date(parseResult.data.dueDate) : parseResult.data.dueDate === null ? null : undefined,
+      };
+      
+      const task = await storage.updateExecTask(parseInt(req.params.id), updateData);
       if (!task) {
         return res.status(404).json({ error: "المهمة غير موجودة" });
       }
@@ -18267,6 +18281,588 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error marking notification as read:", error);
       res.status(500).json({ error: "فشل في تحديث الإشعار" });
+    }
+  });
+
+  // ========== Document Management API - إدارة الوثائق ==========
+
+  // Document Stats Dashboard
+  app.get("/api/documents/stats", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const stats = await storage.getDocumentStats(mandatoryBranch || parseQueryString(req.query.branchId));
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching document stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات الوثائق" });
+    }
+  });
+
+  // Document Categories
+  app.get("/api/documents/categories", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const categories = await storage.getDocumentCategories({
+        branchId: mandatoryBranch || parseQueryString(req.query.branchId),
+        isActive: req.query.isActive === 'true' ? true : req.query.isActive === 'false' ? false : undefined,
+      });
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ error: "فشل في جلب التصنيفات" });
+    }
+  });
+
+  app.get("/api/documents/categories/:id", isAuthenticated, async (req, res) => {
+    try {
+      const category = await storage.getDocumentCategory(parseInt(req.params.id));
+      if (!category) {
+        return res.status(404).json({ error: "التصنيف غير موجود" });
+      }
+      res.json(category);
+    } catch (error) {
+      console.error("Error fetching category:", error);
+      res.status(500).json({ error: "فشل في جلب التصنيف" });
+    }
+  });
+
+  app.post("/api/documents/categories", isAuthenticated, async (req, res) => {
+    try {
+      const categorySchema = z.object({
+        name: z.string().min(1, "الاسم مطلوب"),
+        nameEn: z.string().optional(),
+        description: z.string().optional(),
+        color: z.string().optional(),
+        icon: z.string().optional(),
+        parentId: z.number().optional().nullable(),
+        sortOrder: z.number().optional(),
+      });
+
+      const parseResult = categorySchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const user = getCurrentUser(req);
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+
+      const category = await storage.createDocumentCategory({
+        ...parseResult.data,
+        branchId: mandatoryBranch || req.body.branchId,
+        createdBy: user.id,
+      });
+
+      res.status(201).json(category);
+    } catch (error) {
+      console.error("Error creating category:", error);
+      res.status(500).json({ error: "فشل في إنشاء التصنيف" });
+    }
+  });
+
+  app.put("/api/documents/categories/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        nameEn: z.string().optional(),
+        description: z.string().optional(),
+        color: z.string().optional(),
+        icon: z.string().optional(),
+        parentId: z.number().optional().nullable(),
+        sortOrder: z.number().optional(),
+        isActive: z.boolean().optional(),
+      });
+
+      const parseResult = updateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const category = await storage.updateDocumentCategory(parseInt(req.params.id), parseResult.data);
+      if (!category) {
+        return res.status(404).json({ error: "التصنيف غير موجود" });
+      }
+      res.json(category);
+    } catch (error) {
+      console.error("Error updating category:", error);
+      res.status(500).json({ error: "فشل في تحديث التصنيف" });
+    }
+  });
+
+  app.delete("/api/documents/categories/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteDocumentCategory(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      res.status(500).json({ error: "فشل في حذف التصنيف" });
+    }
+  });
+
+  // Document Folders
+  app.get("/api/documents/folders", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const parentId = req.query.parentId;
+      const folders = await storage.getDocumentFolders({
+        branchId: mandatoryBranch || parseQueryString(req.query.branchId),
+        parentId: parentId === 'null' ? null : parentId ? parseInt(parseQueryString(parentId) || "0") : undefined,
+        categoryId: req.query.categoryId ? parseInt(parseQueryString(req.query.categoryId) || "0") : undefined,
+      });
+      res.json(folders);
+    } catch (error) {
+      console.error("Error fetching folders:", error);
+      res.status(500).json({ error: "فشل في جلب المجلدات" });
+    }
+  });
+
+  app.get("/api/documents/folders/:id", isAuthenticated, async (req, res) => {
+    try {
+      const folder = await storage.getDocumentFolder(parseInt(req.params.id));
+      if (!folder) {
+        return res.status(404).json({ error: "المجلد غير موجود" });
+      }
+      res.json(folder);
+    } catch (error) {
+      console.error("Error fetching folder:", error);
+      res.status(500).json({ error: "فشل في جلب المجلد" });
+    }
+  });
+
+  app.post("/api/documents/folders", isAuthenticated, async (req, res) => {
+    try {
+      const folderSchema = z.object({
+        name: z.string().min(1, "الاسم مطلوب"),
+        nameEn: z.string().optional(),
+        description: z.string().optional(),
+        parentId: z.number().optional().nullable(),
+        categoryId: z.number().optional().nullable(),
+        accessLevel: z.enum(["private", "internal", "public", "confidential"]).optional(),
+        color: z.string().optional(),
+        icon: z.string().optional(),
+        sortOrder: z.number().optional(),
+      });
+
+      const parseResult = folderSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const user = getCurrentUser(req);
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+
+      const folder = await storage.createDocumentFolder({
+        ...parseResult.data,
+        branchId: mandatoryBranch || req.body.branchId,
+        ownerId: user.id,
+        ownerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        createdBy: user.id,
+      });
+
+      res.status(201).json(folder);
+    } catch (error) {
+      console.error("Error creating folder:", error);
+      res.status(500).json({ error: "فشل في إنشاء المجلد" });
+    }
+  });
+
+  app.put("/api/documents/folders/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        nameEn: z.string().optional(),
+        description: z.string().optional(),
+        parentId: z.number().optional().nullable(),
+        categoryId: z.number().optional().nullable(),
+        accessLevel: z.enum(["private", "internal", "public", "confidential"]).optional(),
+        color: z.string().optional(),
+        icon: z.string().optional(),
+        sortOrder: z.number().optional(),
+        isLocked: z.boolean().optional(),
+      });
+
+      const parseResult = updateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const folder = await storage.updateDocumentFolder(parseInt(req.params.id), parseResult.data);
+      if (!folder) {
+        return res.status(404).json({ error: "المجلد غير موجود" });
+      }
+      res.json(folder);
+    } catch (error) {
+      console.error("Error updating folder:", error);
+      res.status(500).json({ error: "فشل في تحديث المجلد" });
+    }
+  });
+
+  app.delete("/api/documents/folders/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteDocumentFolder(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting folder:", error);
+      res.status(500).json({ error: "فشل في حذف المجلد" });
+    }
+  });
+
+  // Documents
+  app.get("/api/documents", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const folderId = req.query.folderId;
+      const docs = await storage.getDocuments({
+        branchId: mandatoryBranch || parseQueryString(req.query.branchId),
+        folderId: folderId === 'null' ? null : folderId ? parseInt(parseQueryString(folderId) || "0") : undefined,
+        categoryId: req.query.categoryId ? parseInt(parseQueryString(req.query.categoryId) || "0") : undefined,
+        status: parseQueryString(req.query.status),
+        accessLevel: parseQueryString(req.query.accessLevel),
+        fileType: parseQueryString(req.query.fileType),
+        ownerId: parseQueryString(req.query.ownerId),
+        relatedType: parseQueryString(req.query.relatedType),
+        relatedId: req.query.relatedId ? parseInt(parseQueryString(req.query.relatedId) || "0") : undefined,
+        searchTerm: parseQueryString(req.query.search),
+        isTemplate: req.query.isTemplate === 'true' ? true : req.query.isTemplate === 'false' ? false : undefined,
+        limit: req.query.limit ? parseInt(parseQueryString(req.query.limit) || "100") : undefined,
+      });
+      res.json(docs);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ error: "فشل في جلب الوثائق" });
+    }
+  });
+
+  app.get("/api/documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const doc = await storage.getDocument(parseInt(req.params.id));
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+
+      // Log access and increment view count
+      await storage.incrementDocumentViewCount(doc.id, user.id);
+      await storage.logDocumentAccess({
+        documentId: doc.id,
+        userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        action: 'view',
+      });
+
+      // Get versions
+      const versions = await storage.getDocumentVersions(doc.id);
+      res.json({ ...doc, versions });
+    } catch (error) {
+      console.error("Error fetching document:", error);
+      res.status(500).json({ error: "فشل في جلب الوثيقة" });
+    }
+  });
+
+  app.post("/api/documents", isAuthenticated, async (req, res) => {
+    try {
+      const docSchema = z.object({
+        title: z.string().min(1, "العنوان مطلوب"),
+        titleEn: z.string().optional(),
+        description: z.string().optional(),
+        descriptionEn: z.string().optional(),
+        documentNumber: z.string().optional(),
+        documentDate: z.string().optional(),
+        fileName: z.string().min(1, "اسم الملف مطلوب"),
+        fileType: z.string().min(1, "نوع الملف مطلوب"),
+        fileSize: z.number().min(1, "حجم الملف مطلوب"),
+        filePath: z.string().min(1, "مسار الملف مطلوب"),
+        mimeType: z.string().optional(),
+        folderId: z.number().optional().nullable(),
+        categoryId: z.number().optional().nullable(),
+        accessLevel: z.enum(["private", "internal", "public", "confidential"]).optional(),
+        status: z.enum(["draft", "active", "archived"]).optional(),
+        tags: z.array(z.string()).optional(),
+        isTemplate: z.boolean().optional(),
+        templateFor: z.string().optional(),
+        relatedType: z.string().optional(),
+        relatedId: z.number().optional(),
+        expiryDate: z.string().optional(),
+        retentionPeriod: z.number().optional(),
+      });
+
+      const parseResult = docSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const user = getCurrentUser(req);
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+
+      const doc = await storage.createDocument({
+        ...parseResult.data,
+        branchId: mandatoryBranch || req.body.branchId,
+        ownerId: user.id,
+        ownerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        createdBy: user.id,
+      });
+
+      // Create initial version
+      await storage.createDocumentVersion({
+        documentId: doc.id,
+        versionNumber: 1,
+        fileName: doc.fileName,
+        fileSize: doc.fileSize,
+        filePath: doc.filePath,
+        mimeType: doc.mimeType,
+        changeNotes: 'الإصدار الأولي',
+        changedBy: user.id,
+        changedByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+      });
+
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error("Error creating document:", error);
+      res.status(500).json({ error: "فشل في إنشاء الوثيقة" });
+    }
+  });
+
+  app.put("/api/documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        title: z.string().min(1).optional(),
+        titleEn: z.string().optional(),
+        description: z.string().optional(),
+        descriptionEn: z.string().optional(),
+        documentNumber: z.string().optional(),
+        documentDate: z.string().optional().nullable(),
+        folderId: z.number().optional().nullable(),
+        categoryId: z.number().optional().nullable(),
+        accessLevel: z.enum(["private", "internal", "public", "confidential"]).optional(),
+        status: z.enum(["draft", "active", "archived"]).optional(),
+        tags: z.array(z.string()).optional(),
+        isTemplate: z.boolean().optional(),
+        templateFor: z.string().optional(),
+        relatedType: z.string().optional(),
+        relatedId: z.number().optional().nullable(),
+        expiryDate: z.string().optional().nullable(),
+        retentionPeriod: z.number().optional().nullable(),
+      });
+
+      const parseResult = updateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const doc = await storage.updateDocument(parseInt(req.params.id), parseResult.data);
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+      res.json(doc);
+    } catch (error) {
+      console.error("Error updating document:", error);
+      res.status(500).json({ error: "فشل في تحديث الوثيقة" });
+    }
+  });
+
+  app.delete("/api/documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      await storage.deleteDocument(parseInt(req.params.id));
+      await storage.logDocumentAccess({
+        documentId: parseInt(req.params.id),
+        userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        action: 'delete',
+      });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ error: "فشل في حذف الوثيقة" });
+    }
+  });
+
+  // Archive/Restore Document
+  app.post("/api/documents/:id/archive", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const doc = await storage.archiveDocument(parseInt(req.params.id), user.id);
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+      await storage.logDocumentAccess({
+        documentId: doc.id,
+        userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        action: 'archive',
+      });
+      res.json(doc);
+    } catch (error) {
+      console.error("Error archiving document:", error);
+      res.status(500).json({ error: "فشل في أرشفة الوثيقة" });
+    }
+  });
+
+  app.post("/api/documents/:id/restore", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const doc = await storage.restoreDocument(parseInt(req.params.id));
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+      await storage.logDocumentAccess({
+        documentId: doc.id,
+        userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        action: 'restore',
+      });
+      res.json(doc);
+    } catch (error) {
+      console.error("Error restoring document:", error);
+      res.status(500).json({ error: "فشل في استعادة الوثيقة" });
+    }
+  });
+
+  // Document Versions
+  app.get("/api/documents/:id/versions", isAuthenticated, async (req, res) => {
+    try {
+      const versions = await storage.getDocumentVersions(parseInt(req.params.id));
+      res.json(versions);
+    } catch (error) {
+      console.error("Error fetching versions:", error);
+      res.status(500).json({ error: "فشل في جلب الإصدارات" });
+    }
+  });
+
+  app.post("/api/documents/:id/versions", isAuthenticated, async (req, res) => {
+    try {
+      const versionSchema = z.object({
+        fileName: z.string().min(1),
+        fileSize: z.number().min(1),
+        filePath: z.string().min(1),
+        mimeType: z.string().optional(),
+        checksum: z.string().optional(),
+        changeNotes: z.string().optional(),
+      });
+
+      const parseResult = versionSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const user = getCurrentUser(req);
+      const doc = await storage.getDocument(parseInt(req.params.id));
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+
+      const version = await storage.createDocumentVersion({
+        documentId: doc.id,
+        versionNumber: (doc.currentVersion || 0) + 1,
+        ...parseResult.data,
+        changedBy: user.id,
+        changedByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+      });
+
+      // Update document with new file info
+      await storage.updateDocument(doc.id, {
+        fileName: parseResult.data.fileName,
+        fileSize: parseResult.data.fileSize,
+        filePath: parseResult.data.filePath,
+        mimeType: parseResult.data.mimeType,
+      });
+
+      res.status(201).json(version);
+    } catch (error) {
+      console.error("Error creating version:", error);
+      res.status(500).json({ error: "فشل في إنشاء الإصدار" });
+    }
+  });
+
+  // Document Shares
+  app.get("/api/documents/:id/shares", isAuthenticated, async (req, res) => {
+    try {
+      const shares = await storage.getDocumentShares({ documentId: parseInt(req.params.id) });
+      res.json(shares);
+    } catch (error) {
+      console.error("Error fetching shares:", error);
+      res.status(500).json({ error: "فشل في جلب المشاركات" });
+    }
+  });
+
+  app.post("/api/documents/:id/shares", isAuthenticated, async (req, res) => {
+    try {
+      const shareSchema = z.object({
+        sharedWithUserId: z.string().optional(),
+        sharedWithUserName: z.string().optional(),
+        sharedWithBranchId: z.string().optional(),
+        shareType: z.enum(["user", "branch", "department", "public"]).optional(),
+        permission: z.enum(["view", "download", "edit", "full"]).optional(),
+        expiresAt: z.string().optional(),
+        sharePassword: z.string().optional(),
+        maxAccessCount: z.number().optional(),
+      });
+
+      const parseResult = shareSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+
+      const user = getCurrentUser(req);
+      const share = await storage.createDocumentShare({
+        documentId: parseInt(req.params.id),
+        ...parseResult.data,
+        shareLink: parseResult.data.shareType === 'public' ? crypto.randomUUID() : undefined,
+        sharedBy: user.id,
+        sharedByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+      });
+
+      res.status(201).json(share);
+    } catch (error) {
+      console.error("Error creating share:", error);
+      res.status(500).json({ error: "فشل في إنشاء المشاركة" });
+    }
+  });
+
+  app.delete("/api/documents/shares/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteDocumentShare(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting share:", error);
+      res.status(500).json({ error: "فشل في حذف المشاركة" });
+    }
+  });
+
+  // Document Access Logs
+  app.get("/api/documents/:id/access-logs", isAuthenticated, async (req, res) => {
+    try {
+      const logs = await storage.getDocumentAccessLogs(
+        parseInt(req.params.id),
+        req.query.limit ? parseInt(parseQueryString(req.query.limit) || "50") : 50
+      );
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching access logs:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الوصول" });
+    }
+  });
+
+  // Download Document (increment download count)
+  app.post("/api/documents/:id/download", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const doc = await storage.getDocument(parseInt(req.params.id));
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+
+      await storage.incrementDocumentDownloadCount(doc.id, user.id);
+      await storage.logDocumentAccess({
+        documentId: doc.id,
+        userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        action: 'download',
+      });
+
+      res.json({ filePath: doc.filePath, fileName: doc.fileName });
+    } catch (error) {
+      console.error("Error processing download:", error);
+      res.status(500).json({ error: "فشل في معالجة التحميل" });
     }
   });
 

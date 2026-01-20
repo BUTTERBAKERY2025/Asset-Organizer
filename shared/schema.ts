@@ -6114,3 +6114,233 @@ export const insertExecNotificationSchema = createInsertSchema(execNotifications
 
 export type ExecNotification = typeof execNotifications.$inferSelect;
 export type InsertExecNotification = z.infer<typeof insertExecNotificationSchema>;
+
+// ==========================================
+// Document Management Module - إدارة الوثائق والأرشفة
+// ==========================================
+
+// Document Status Constants
+export const DOCUMENT_STATUS = ["draft", "active", "archived", "deleted"] as const;
+export type DocumentStatus = typeof DOCUMENT_STATUS[number];
+
+// Document Access Level Constants
+export const DOCUMENT_ACCESS_LEVEL = ["private", "internal", "public", "confidential"] as const;
+export type DocumentAccessLevel = typeof DOCUMENT_ACCESS_LEVEL[number];
+
+// Document Categories - تصنيفات الوثائق
+export const documentCategories = pgTable("document_categories", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  description: text("description"),
+  color: text("color").default("#6B7280"),
+  icon: text("icon").default("folder"),
+  parentId: integer("parent_id"),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_categories_branch").on(table.branchId),
+  index("idx_doc_categories_parent").on(table.parentId),
+]);
+
+export const insertDocumentCategorySchema = createInsertSchema(documentCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DocumentCategory = typeof documentCategories.$inferSelect;
+export type InsertDocumentCategory = z.infer<typeof insertDocumentCategorySchema>;
+
+// Document Folders - مجلدات الوثائق
+export const documentFolders = pgTable("document_folders", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  description: text("description"),
+  parentId: integer("parent_id"),
+  path: text("path").notNull().default("/"), // المسار الكامل للمجلد
+  categoryId: integer("category_id").references(() => documentCategories.id),
+  accessLevel: text("access_level").default("internal"), // private, internal, public, confidential
+  ownerId: varchar("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
+  color: text("color"),
+  icon: text("icon"),
+  isLocked: boolean("is_locked").default(false),
+  sortOrder: integer("sort_order").default(0),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_folders_branch").on(table.branchId),
+  index("idx_doc_folders_parent").on(table.parentId),
+  index("idx_doc_folders_category").on(table.categoryId),
+  index("idx_doc_folders_owner").on(table.ownerId),
+  index("idx_doc_folders_path").on(table.path),
+]);
+
+export const insertDocumentFolderSchema = createInsertSchema(documentFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DocumentFolder = typeof documentFolders.$inferSelect;
+export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
+
+// Documents - الوثائق
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  folderId: integer("folder_id").references(() => documentFolders.id),
+  categoryId: integer("category_id").references(() => documentCategories.id),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  descriptionEn: text("description_en"),
+  documentNumber: text("document_number"), // رقم الوثيقة
+  documentDate: timestamp("document_date"), // تاريخ الوثيقة
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(), // pdf, docx, xlsx, etc.
+  fileSize: integer("file_size").notNull(), // بالبايت
+  filePath: text("file_path").notNull(), // مسار التخزين
+  mimeType: text("mime_type"),
+  checksum: text("checksum"), // للتحقق من سلامة الملف
+  currentVersion: integer("current_version").default(1),
+  accessLevel: text("access_level").default("internal"), // private, internal, public, confidential
+  status: text("status").notNull().default("active"), // draft, active, archived, deleted
+  tags: text("tags").array(), // الكلمات المفتاحية
+  metadata: jsonb("metadata").default({}), // بيانات إضافية
+  expiryDate: timestamp("expiry_date"), // تاریخ انتهاء الصلاحية
+  retentionPeriod: integer("retention_period"), // فترة الاحتفاظ بالأيام
+  isTemplate: boolean("is_template").default(false),
+  templateFor: text("template_for"), // نوع القالب
+  relatedType: text("related_type"), // meeting, task, correspondence, contract
+  relatedId: integer("related_id"),
+  ownerId: varchar("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
+  lastAccessedAt: timestamp("last_accessed_at"),
+  lastAccessedBy: varchar("last_accessed_by").references(() => users.id),
+  downloadCount: integer("download_count").default(0),
+  viewCount: integer("view_count").default(0),
+  isLocked: boolean("is_locked").default(false),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  lockedAt: timestamp("locked_at"),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_documents_branch").on(table.branchId),
+  index("idx_documents_folder").on(table.folderId),
+  index("idx_documents_category").on(table.categoryId),
+  index("idx_documents_owner").on(table.ownerId),
+  index("idx_documents_status").on(table.status),
+  index("idx_documents_access").on(table.accessLevel),
+  index("idx_documents_type").on(table.fileType),
+  index("idx_documents_related").on(table.relatedType, table.relatedId),
+  index("idx_documents_date").on(table.documentDate),
+]);
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+
+// Document Versions - إصدارات الوثائق
+export const documentVersions = pgTable("document_versions", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  versionNumber: integer("version_number").notNull(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  filePath: text("file_path").notNull(),
+  mimeType: text("mime_type"),
+  checksum: text("checksum"),
+  changeNotes: text("change_notes"), // ملاحظات التغيير
+  changedBy: varchar("changed_by").references(() => users.id),
+  changedByName: text("changed_by_name"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_versions_document").on(table.documentId),
+  index("idx_doc_versions_number").on(table.documentId, table.versionNumber),
+]);
+
+export const insertDocumentVersionSchema = createInsertSchema(documentVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type InsertDocumentVersion = z.infer<typeof insertDocumentVersionSchema>;
+
+// Document Shares - مشاركة الوثائق
+export const documentShares = pgTable("document_shares", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  folderId: integer("folder_id").references(() => documentFolders.id, { onDelete: "cascade" }),
+  sharedWithUserId: varchar("shared_with_user_id").references(() => users.id),
+  sharedWithUserName: text("shared_with_user_name"),
+  sharedWithBranchId: varchar("shared_with_branch_id").references(() => branches.id),
+  shareType: text("share_type").default("user"), // user, branch, department, public
+  permission: text("permission").default("view"), // view, download, edit, full
+  expiresAt: timestamp("expires_at"), // تاریخ انتهاء المشاركة
+  shareLink: text("share_link"), // رابط المشاركة العام
+  sharePassword: text("share_password"), // كلمة مرور للرابط
+  accessCount: integer("access_count").default(0),
+  maxAccessCount: integer("max_access_count"), // الحد الأقصى للوصول
+  isActive: boolean("is_active").default(true),
+  sharedBy: varchar("shared_by").references(() => users.id),
+  sharedByName: text("shared_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_shares_document").on(table.documentId),
+  index("idx_doc_shares_folder").on(table.folderId),
+  index("idx_doc_shares_user").on(table.sharedWithUserId),
+  index("idx_doc_shares_branch").on(table.sharedWithBranchId),
+  index("idx_doc_shares_link").on(table.shareLink),
+]);
+
+export const insertDocumentShareSchema = createInsertSchema(documentShares).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DocumentShare = typeof documentShares.$inferSelect;
+export type InsertDocumentShare = z.infer<typeof insertDocumentShareSchema>;
+
+// Document Access Logs - سجل الوصول للوثائق
+export const documentAccessLogs = pgTable("document_access_logs", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  userName: text("user_name"),
+  action: text("action").notNull(), // view, download, print, edit, share, delete, restore
+  actionDetails: text("action_details"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  versionNumber: integer("version_number"),
+  accessedAt: timestamp("accessed_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_doc_access_document").on(table.documentId),
+  index("idx_doc_access_user").on(table.userId),
+  index("idx_doc_access_action").on(table.action),
+  index("idx_doc_access_date").on(table.accessedAt),
+]);

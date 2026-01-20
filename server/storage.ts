@@ -393,11 +393,27 @@ import {
   execNotifications,
   type ExecNotification,
   type InsertExecNotification,
+  documentCategories,
+  type DocumentCategory,
+  type InsertDocumentCategory,
+  documentFolders,
+  type DocumentFolder,
+  type InsertDocumentFolder,
+  documents,
+  type Document,
+  type InsertDocument,
+  documentVersions,
+  type DocumentVersion,
+  type InsertDocumentVersion,
+  documentShares,
+  type DocumentShare,
+  type InsertDocumentShare,
+  documentAccessLogs,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db } from "./db";
-import { eq, and, gte, lte, desc, or, inArray, sql, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, desc, or, inArray, sql, isNull, ilike } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export interface IStorage {
@@ -10008,6 +10024,327 @@ export class DatabaseStorage implements IStorage {
       upcomingMeetings,
       urgentTasks,
       recentCorrespondence,
+    };
+  }
+
+  // ========== Document Management - إدارة الوثائق ==========
+
+  // Document Categories
+  async getDocumentCategories(filters?: { branchId?: string; isActive?: boolean }): Promise<DocumentCategory[]> {
+    const conditions: any[] = [];
+    if (filters?.branchId) conditions.push(eq(documentCategories.branchId, filters.branchId));
+    if (filters?.isActive !== undefined) conditions.push(eq(documentCategories.isActive, filters.isActive));
+
+    return db.select().from(documentCategories)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(documentCategories.sortOrder, documentCategories.name);
+  }
+
+  async getDocumentCategory(id: number): Promise<DocumentCategory | undefined> {
+    const [category] = await db.select().from(documentCategories).where(eq(documentCategories.id, id));
+    return category;
+  }
+
+  async createDocumentCategory(data: InsertDocumentCategory): Promise<DocumentCategory> {
+    const [category] = await db.insert(documentCategories).values(data).returning();
+    return category;
+  }
+
+  async updateDocumentCategory(id: number, data: Partial<InsertDocumentCategory>): Promise<DocumentCategory | undefined> {
+    const [category] = await db.update(documentCategories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(documentCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  async deleteDocumentCategory(id: number): Promise<void> {
+    await db.delete(documentCategories).where(eq(documentCategories.id, id));
+  }
+
+  // Document Folders
+  async getDocumentFolders(filters?: { branchId?: string; parentId?: number | null; categoryId?: number }): Promise<DocumentFolder[]> {
+    const conditions: any[] = [];
+    if (filters?.branchId) conditions.push(eq(documentFolders.branchId, filters.branchId));
+    if (filters?.parentId !== undefined) {
+      if (filters.parentId === null) {
+        conditions.push(isNull(documentFolders.parentId));
+      } else {
+        conditions.push(eq(documentFolders.parentId, filters.parentId));
+      }
+    }
+    if (filters?.categoryId) conditions.push(eq(documentFolders.categoryId, filters.categoryId));
+
+    return db.select().from(documentFolders)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(documentFolders.sortOrder, documentFolders.name);
+  }
+
+  async getDocumentFolder(id: number): Promise<DocumentFolder | undefined> {
+    const [folder] = await db.select().from(documentFolders).where(eq(documentFolders.id, id));
+    return folder;
+  }
+
+  async createDocumentFolder(data: InsertDocumentFolder): Promise<DocumentFolder> {
+    let path = "/";
+    if (data.parentId) {
+      const parent = await this.getDocumentFolder(data.parentId);
+      if (parent) {
+        path = `${parent.path}${parent.id}/`;
+      }
+    }
+    const [folder] = await db.insert(documentFolders).values({ ...data, path }).returning();
+    return folder;
+  }
+
+  async updateDocumentFolder(id: number, data: Partial<InsertDocumentFolder>): Promise<DocumentFolder | undefined> {
+    const [folder] = await db.update(documentFolders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(documentFolders.id, id))
+      .returning();
+    return folder;
+  }
+
+  async deleteDocumentFolder(id: number): Promise<void> {
+    await db.delete(documentFolders).where(eq(documentFolders.id, id));
+  }
+
+  // Documents
+  async getDocuments(filters?: {
+    branchId?: string;
+    folderId?: number | null;
+    categoryId?: number;
+    status?: string;
+    accessLevel?: string;
+    fileType?: string;
+    ownerId?: string;
+    relatedType?: string;
+    relatedId?: number;
+    searchTerm?: string;
+    isTemplate?: boolean;
+    limit?: number;
+  }): Promise<Document[]> {
+    const conditions: any[] = [];
+    if (filters?.branchId) conditions.push(eq(documents.branchId, filters.branchId));
+    if (filters?.folderId !== undefined) {
+      if (filters.folderId === null) {
+        conditions.push(isNull(documents.folderId));
+      } else {
+        conditions.push(eq(documents.folderId, filters.folderId));
+      }
+    }
+    if (filters?.categoryId) conditions.push(eq(documents.categoryId, filters.categoryId));
+    if (filters?.status) conditions.push(eq(documents.status, filters.status));
+    if (filters?.accessLevel) conditions.push(eq(documents.accessLevel, filters.accessLevel));
+    if (filters?.fileType) conditions.push(eq(documents.fileType, filters.fileType));
+    if (filters?.ownerId) conditions.push(eq(documents.ownerId, filters.ownerId));
+    if (filters?.relatedType) conditions.push(eq(documents.relatedType, filters.relatedType));
+    if (filters?.relatedId) conditions.push(eq(documents.relatedId, filters.relatedId));
+    if (filters?.isTemplate !== undefined) conditions.push(eq(documents.isTemplate, filters.isTemplate));
+    if (filters?.searchTerm) {
+      conditions.push(or(
+        ilike(documents.title, `%${filters.searchTerm}%`),
+        ilike(documents.fileName, `%${filters.searchTerm}%`),
+        ilike(documents.documentNumber, `%${filters.searchTerm}%`)
+      ));
+    }
+
+    let query = db.select().from(documents)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(documents.createdAt));
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+
+    return query;
+  }
+
+  async getDocument(id: number): Promise<Document | undefined> {
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    return doc;
+  }
+
+  async createDocument(data: InsertDocument): Promise<Document> {
+    const [doc] = await db.insert(documents).values(data).returning();
+    return doc;
+  }
+
+  async updateDocument(id: number, data: Partial<InsertDocument>): Promise<Document | undefined> {
+    const [doc] = await db.update(documents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(documents.id, id))
+      .returning();
+    return doc;
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    await db.update(documents)
+      .set({ status: 'deleted', updatedAt: new Date() })
+      .where(eq(documents.id, id));
+  }
+
+  async archiveDocument(id: number, userId: string): Promise<Document | undefined> {
+    const [doc] = await db.update(documents)
+      .set({ 
+        status: 'archived', 
+        archivedAt: new Date(),
+        archivedBy: userId,
+        updatedAt: new Date() 
+      })
+      .where(eq(documents.id, id))
+      .returning();
+    return doc;
+  }
+
+  async restoreDocument(id: number): Promise<Document | undefined> {
+    const [doc] = await db.update(documents)
+      .set({ 
+        status: 'active', 
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date() 
+      })
+      .where(eq(documents.id, id))
+      .returning();
+    return doc;
+  }
+
+  async incrementDocumentViewCount(id: number, userId?: string): Promise<void> {
+    await db.update(documents)
+      .set({ 
+        viewCount: sql`${documents.viewCount} + 1`,
+        lastAccessedAt: new Date(),
+        lastAccessedBy: userId || null
+      })
+      .where(eq(documents.id, id));
+  }
+
+  async incrementDocumentDownloadCount(id: number, userId?: string): Promise<void> {
+    await db.update(documents)
+      .set({ 
+        downloadCount: sql`${documents.downloadCount} + 1`,
+        lastAccessedAt: new Date(),
+        lastAccessedBy: userId || null
+      })
+      .where(eq(documents.id, id));
+  }
+
+  // Document Versions
+  async getDocumentVersions(documentId: number): Promise<DocumentVersion[]> {
+    return db.select().from(documentVersions)
+      .where(eq(documentVersions.documentId, documentId))
+      .orderBy(desc(documentVersions.versionNumber));
+  }
+
+  async getDocumentVersion(id: number): Promise<DocumentVersion | undefined> {
+    const [version] = await db.select().from(documentVersions).where(eq(documentVersions.id, id));
+    return version;
+  }
+
+  async createDocumentVersion(data: InsertDocumentVersion): Promise<DocumentVersion> {
+    const [version] = await db.insert(documentVersions).values(data).returning();
+    await db.update(documents)
+      .set({ currentVersion: data.versionNumber, updatedAt: new Date() })
+      .where(eq(documents.id, data.documentId));
+    return version;
+  }
+
+  // Document Shares
+  async getDocumentShares(filters?: { documentId?: number; folderId?: number; sharedWithUserId?: string }): Promise<DocumentShare[]> {
+    const conditions: any[] = [];
+    if (filters?.documentId) conditions.push(eq(documentShares.documentId, filters.documentId));
+    if (filters?.folderId) conditions.push(eq(documentShares.folderId, filters.folderId));
+    if (filters?.sharedWithUserId) conditions.push(eq(documentShares.sharedWithUserId, filters.sharedWithUserId));
+
+    return db.select().from(documentShares)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(documentShares.createdAt));
+  }
+
+  async createDocumentShare(data: InsertDocumentShare): Promise<DocumentShare> {
+    const [share] = await db.insert(documentShares).values(data).returning();
+    return share;
+  }
+
+  async updateDocumentShare(id: number, data: Partial<InsertDocumentShare>): Promise<DocumentShare | undefined> {
+    const [share] = await db.update(documentShares)
+      .set(data)
+      .where(eq(documentShares.id, id))
+      .returning();
+    return share;
+  }
+
+  async deleteDocumentShare(id: number): Promise<void> {
+    await db.delete(documentShares).where(eq(documentShares.id, id));
+  }
+
+  async getDocumentShareByLink(shareLink: string): Promise<DocumentShare | undefined> {
+    const [share] = await db.select().from(documentShares)
+      .where(and(
+        eq(documentShares.shareLink, shareLink),
+        eq(documentShares.isActive, true)
+      ));
+    return share;
+  }
+
+  // Document Access Logs
+  async logDocumentAccess(data: { documentId: number; userId?: string; userName?: string; action: string; actionDetails?: string; ipAddress?: string; userAgent?: string; versionNumber?: number }): Promise<void> {
+    await db.insert(documentAccessLogs).values(data);
+  }
+
+  async getDocumentAccessLogs(documentId: number, limit = 50): Promise<any[]> {
+    return db.select().from(documentAccessLogs)
+      .where(eq(documentAccessLogs.documentId, documentId))
+      .orderBy(desc(documentAccessLogs.accessedAt))
+      .limit(limit);
+  }
+
+  // Document Stats
+  async getDocumentStats(branchId?: string): Promise<{
+    totalDocuments: number;
+    activeDocuments: number;
+    archivedDocuments: number;
+    totalFolders: number;
+    totalCategories: number;
+    recentDocuments: Document[];
+  }> {
+    const branchCondition = branchId ? eq(documents.branchId, branchId) : undefined;
+    const folderBranchCondition = branchId ? eq(documentFolders.branchId, branchId) : undefined;
+    const categoryBranchCondition = branchId ? eq(documentCategories.branchId, branchId) : undefined;
+
+    const [totalCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(documents)
+      .where(and(branchCondition, sql`${documents.status} != 'deleted'`));
+
+    const [activeCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(documents)
+      .where(and(branchCondition, eq(documents.status, 'active')));
+
+    const [archivedCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(documents)
+      .where(and(branchCondition, eq(documents.status, 'archived')));
+
+    const [folderCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(documentFolders)
+      .where(folderBranchCondition);
+
+    const [categoryCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(documentCategories)
+      .where(categoryBranchCondition);
+
+    const recentDocuments = await db.select().from(documents)
+      .where(and(branchCondition, eq(documents.status, 'active')))
+      .orderBy(desc(documents.createdAt))
+      .limit(5);
+
+    return {
+      totalDocuments: Number(totalCount?.count || 0),
+      activeDocuments: Number(activeCount?.count || 0),
+      archivedDocuments: Number(archivedCount?.count || 0),
+      totalFolders: Number(folderCount?.count || 0),
+      totalCategories: Number(categoryCount?.count || 0),
+      recentDocuments,
     };
   }
 }
