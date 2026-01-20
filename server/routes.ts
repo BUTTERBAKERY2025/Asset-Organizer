@@ -4,7 +4,21 @@ import memoize from "memoizee";
 import { storage } from "./storage";
 import { db } from "./db";
 import type { AuthenticatedRequest } from "./types/express";
-import { eq, and, desc, inArray, gte, lte, sql, or, isNull } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
+import type { User } from "@shared/schema";
+
+// Helper to safely get current user from authenticated request
+function getCurrentUser(req: Request): User {
+  if (!req.currentUser) {
+    throw new Error("User not authenticated");
+  }
+  return req.currentUser;
+}
+
+// Helper to parse query params to string | undefined
+function parseQueryString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
 import { 
   branchDailyClosures, 
   branchDailyClosurePayments, 
@@ -6738,7 +6752,7 @@ export async function registerRoutes(
       
       const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (effectiveBranchId) {
         conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
       }
@@ -6773,7 +6787,7 @@ export async function registerRoutes(
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (effectiveBranchId) {
         conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
       }
@@ -6939,7 +6953,7 @@ export async function registerRoutes(
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { startDate, endDate } = req.query;
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
       if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
       if (mandatoryBranch) conditions.push(eq(dailyComparisons.branchId, mandatoryBranch));
@@ -7028,7 +7042,7 @@ export async function registerRoutes(
       
       const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
       if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
       if (effectiveBranchId) conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
@@ -7106,7 +7120,7 @@ export async function registerRoutes(
       
       const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
       if (endDate) conditions.push(lte(dailyComparisons.comparisonDate, endDate as string));
       if (effectiveBranchId) conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
@@ -7188,7 +7202,7 @@ export async function registerRoutes(
         effectiveBranchId = branchId !== "all" ? branchId : undefined;
       }
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (effectiveBranchId) {
         conditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
       }
@@ -7806,7 +7820,7 @@ export async function registerRoutes(
       const { branchId } = req.query;
       const effectiveBranchId = mandatoryBranch || branchId;
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (effectiveBranchId) {
         conditions.push(or(eq(productPrices.branchId, effectiveBranchId), isNull(productPrices.branchId)));
       }
@@ -7933,7 +7947,7 @@ export async function registerRoutes(
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       if (mandatoryBranch) {
         conditions.push(or(eq(wasteRiskRules.branchId, mandatoryBranch), isNull(wasteRiskRules.branchId)));
       }
@@ -8059,7 +8073,7 @@ export async function registerRoutes(
       
       const effectiveBranchId = mandatoryBranch || branchId;
       
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
       
       if (effectiveBranchId) conditions.push(eq(wasteRiskAlerts.branchId, effectiveBranchId));
       if (status) conditions.push(eq(wasteRiskAlerts.status, status));
