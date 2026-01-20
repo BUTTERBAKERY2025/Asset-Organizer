@@ -121,6 +121,11 @@ const ShareholdersPage = lazy(() => import("@/pages/governance/shareholders"));
 const GovernanceMeetingsPage = lazy(() => import("@/pages/governance/meetings"));
 const ResolutionsPage = lazy(() => import("@/pages/governance/resolutions"));
 const CompliancePage = lazy(() => import("@/pages/governance/compliance"));
+const ShareTransfersPage = lazy(() => import("@/pages/governance/share-transfers"));
+const DisclosuresPage = lazy(() => import("@/pages/governance/disclosures"));
+const DividendsPage = lazy(() => import("@/pages/governance/dividends"));
+const CapitalPage = lazy(() => import("@/pages/governance/capital"));
+const VotingPage = lazy(() => import("@/pages/governance/voting"));
 const VisitorsPage = lazy(() => import("@/pages/visitors"));
 const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 const ExecutiveReportsPage = lazy(() => import("@/pages/executive-reports"));
@@ -299,6 +304,11 @@ function Router() {
       <Route path="/governance/meetings">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><GovernanceMeetingsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/governance/resolutions">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ResolutionsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/governance/compliance">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><CompliancePage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/transfers">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ShareTransfersPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/disclosures">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DisclosuresPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/dividends">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DividendsPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/capital">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><CapitalPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/governance/voting">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><VotingPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/visitors">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><VisitorsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/travel-requests">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><TravelRequestsPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/executive/reports">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveReportsPage /></Suspense></ProtectedRoute>}</Route>

@@ -753,6 +753,250 @@ export function registerGovernanceRoutes(app: Express) {
   });
 
   // =====================================================
+  // Share Transfers - تحويلات الأسهم
+  // =====================================================
+  
+  app.get("/api/governance/share-transfers", isAuthenticated, async (req, res) => {
+    try {
+      const result = await db.select().from(shareTransfers).orderBy(desc(shareTransfers.createdAt));
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching share transfers:", error);
+      res.status(500).json({ error: "فشل في جلب تحويلات الأسهم" });
+    }
+  });
+
+  app.post("/api/governance/share-transfers", isAuthenticated, async (req, res) => {
+    try {
+      const year = new Date().getFullYear();
+      const count = await db.select({ count: sql<number>`count(*)` }).from(shareTransfers);
+      const transferNumber = `TRF-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
+      
+      const data = insertShareTransferSchema.parse({
+        ...req.body,
+        transferNumber,
+        approvalStatus: 'pending',
+        createdBy: getCurrentUserId(req),
+      });
+      const [transfer] = await db.insert(shareTransfers).values(data).returning();
+      res.status(201).json(transfer);
+    } catch (error) {
+      console.error("Error creating share transfer:", error);
+      res.status(500).json({ error: "فشل في إنشاء تحويل الأسهم" });
+    }
+  });
+
+  app.patch("/api/governance/share-transfers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateData: any = { ...req.body };
+      if (req.body.approvalStatus === 'approved') {
+        updateData.approvedBy = getCurrentUserId(req);
+        updateData.approvedAt = new Date();
+      }
+      const [transfer] = await db.update(shareTransfers)
+        .set(updateData)
+        .where(eq(shareTransfers.id, parseInt(req.params.id)))
+        .returning();
+      res.json(transfer);
+    } catch (error) {
+      console.error("Error updating share transfer:", error);
+      res.status(500).json({ error: "فشل في تحديث تحويل الأسهم" });
+    }
+  });
+
+  // =====================================================
+  // Disclosures - الإفصاحات
+  // =====================================================
+  
+  app.get("/api/governance/disclosures", isAuthenticated, async (req, res) => {
+    try {
+      const result = await db.select().from(disclosures).orderBy(desc(disclosures.createdAt));
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching disclosures:", error);
+      res.status(500).json({ error: "فشل في جلب الإفصاحات" });
+    }
+  });
+
+  app.post("/api/governance/disclosures", isAuthenticated, async (req, res) => {
+    try {
+      const year = new Date().getFullYear();
+      const count = await db.select({ count: sql<number>`count(*)` }).from(disclosures);
+      const disclosureNumber = `DSC-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
+      
+      const data = insertDisclosureSchema.parse({
+        ...req.body,
+        disclosureNumber,
+        status: 'draft',
+        createdBy: getCurrentUserId(req),
+      });
+      const [disclosure] = await db.insert(disclosures).values(data).returning();
+      res.status(201).json(disclosure);
+    } catch (error) {
+      console.error("Error creating disclosure:", error);
+      res.status(500).json({ error: "فشل في إنشاء الإفصاح" });
+    }
+  });
+
+  app.patch("/api/governance/disclosures/:id", isAuthenticated, async (req, res) => {
+    try {
+      const [disclosure] = await db.update(disclosures)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(disclosures.id, parseInt(req.params.id)))
+        .returning();
+      res.json(disclosure);
+    } catch (error) {
+      console.error("Error updating disclosure:", error);
+      res.status(500).json({ error: "فشل في تحديث الإفصاح" });
+    }
+  });
+
+  // =====================================================
+  // Dividends - توزيعات الأرباح
+  // =====================================================
+  
+  app.get("/api/governance/dividends", isAuthenticated, async (req, res) => {
+    try {
+      const result = await db.select().from(dividendDistributions).orderBy(desc(dividendDistributions.createdAt));
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching dividends:", error);
+      res.status(500).json({ error: "فشل في جلب توزيعات الأرباح" });
+    }
+  });
+
+  app.post("/api/governance/dividends", isAuthenticated, async (req, res) => {
+    try {
+      const year = new Date().getFullYear();
+      const count = await db.select({ count: sql<number>`count(*)` }).from(dividendDistributions);
+      const distributionNumber = `DIV-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
+      
+      const data = insertDividendDistributionSchema.parse({
+        ...req.body,
+        distributionNumber,
+        status: 'announced',
+        createdBy: getCurrentUserId(req),
+      });
+      const [distribution] = await db.insert(dividendDistributions).values(data).returning();
+      res.status(201).json(distribution);
+    } catch (error) {
+      console.error("Error creating dividend distribution:", error);
+      res.status(500).json({ error: "فشل في إنشاء توزيع الأرباح" });
+    }
+  });
+
+  app.patch("/api/governance/dividends/:id", isAuthenticated, async (req, res) => {
+    try {
+      const [distribution] = await db.update(dividendDistributions)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(dividendDistributions.id, parseInt(req.params.id)))
+        .returning();
+      res.json(distribution);
+    } catch (error) {
+      console.error("Error updating dividend distribution:", error);
+      res.status(500).json({ error: "فشل في تحديث توزيع الأرباح" });
+    }
+  });
+
+  // =====================================================
+  // Capital Transactions - معاملات رأس المال
+  // =====================================================
+  
+  app.get("/api/governance/capital", isAuthenticated, async (req, res) => {
+    try {
+      const result = await db.select().from(capitalTransactions).orderBy(desc(capitalTransactions.effectiveDate));
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching capital transactions:", error);
+      res.status(500).json({ error: "فشل في جلب معاملات رأس المال" });
+    }
+  });
+
+  app.post("/api/governance/capital", isAuthenticated, async (req, res) => {
+    try {
+      const year = new Date().getFullYear();
+      const count = await db.select({ count: sql<number>`count(*)` }).from(capitalTransactions);
+      const transactionNumber = `CAP-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
+      
+      const data = insertCapitalTransactionSchema.parse({
+        ...req.body,
+        transactionNumber,
+        status: 'pending',
+        createdBy: getCurrentUserId(req),
+      });
+      const [transaction] = await db.insert(capitalTransactions).values(data).returning();
+      res.status(201).json(transaction);
+    } catch (error) {
+      console.error("Error creating capital transaction:", error);
+      res.status(500).json({ error: "فشل في إنشاء معاملة رأس المال" });
+    }
+  });
+
+  app.patch("/api/governance/capital/:id", isAuthenticated, async (req, res) => {
+    try {
+      const [transaction] = await db.update(capitalTransactions)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(capitalTransactions.id, parseInt(req.params.id)))
+        .returning();
+      res.json(transaction);
+    } catch (error) {
+      console.error("Error updating capital transaction:", error);
+      res.status(500).json({ error: "فشل في تحديث معاملة رأس المال" });
+    }
+  });
+
+  // =====================================================
+  // Votes - الأصوات
+  // =====================================================
+  
+  app.get("/api/governance/votes", isAuthenticated, async (req, res) => {
+    try {
+      const resolutionId = req.query.resolutionId ? parseInt(req.query.resolutionId as string) : undefined;
+      let query = db.select().from(resolutionVotes);
+      if (resolutionId) {
+        query = query.where(eq(resolutionVotes.resolutionId, resolutionId)) as any;
+      }
+      const result = await query.orderBy(desc(resolutionVotes.votedAt));
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching votes:", error);
+      res.status(500).json({ error: "فشل في جلب الأصوات" });
+    }
+  });
+
+  app.post("/api/governance/votes", isAuthenticated, async (req, res) => {
+    try {
+      const data = insertResolutionVoteSchema.parse({
+        ...req.body,
+        votedAt: new Date(),
+      });
+      const [vote] = await db.insert(resolutionVotes).values(data).returning();
+      
+      // Update resolution vote counts
+      const resolutionId = data.resolutionId;
+      const votes = await db.select().from(resolutionVotes).where(eq(resolutionVotes.resolutionId, resolutionId));
+      const forVotes = votes.filter(v => v.vote === 'for').length;
+      const againstVotes = votes.filter(v => v.vote === 'against').length;
+      const abstainVotes = votes.filter(v => v.vote === 'abstain').length;
+      
+      await db.update(boardResolutions)
+        .set({
+          forVotes,
+          againstVotes,
+          abstainVotes,
+          totalVotes: votes.length,
+          updatedAt: new Date(),
+        })
+        .where(eq(boardResolutions.id, resolutionId));
+      
+      res.status(201).json(vote);
+    } catch (error) {
+      console.error("Error creating vote:", error);
+      res.status(500).json({ error: "فشل في تسجيل التصويت" });
+    }
+  });
+
+  // =====================================================
   // Dashboard Stats - إحصائيات اللوحة
   // =====================================================
   
