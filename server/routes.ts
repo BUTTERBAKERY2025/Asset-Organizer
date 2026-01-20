@@ -151,7 +151,7 @@ export async function registerRoutes(
     try {
       const { firstName, lastName, username, role, password, branchId, isActive } = req.body;
       const updateData: any = {};
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       if (firstName !== undefined) updateData.firstName = firstName;
       if (lastName !== undefined) updateData.lastName = lastName;
@@ -201,7 +201,7 @@ export async function registerRoutes(
 
   app.delete("/api/users/:id", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       if (currentUser.id === req.params.id) {
         return res.status(400).json({ error: "لا يمكنك حذف حسابك الخاص" });
       }
@@ -231,7 +231,7 @@ export async function registerRoutes(
   app.put("/api/users/:id/permissions", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { permissions, templateApplied } = req.body;
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       if (!Array.isArray(permissions)) {
         return res.status(400).json({ error: "Invalid permissions format" });
@@ -281,7 +281,7 @@ export async function registerRoutes(
 
   app.get("/api/my-permissions", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       if (!currentUser) {
         return res.status(401).json({ error: "Not authenticated" });
       }
@@ -475,7 +475,7 @@ export async function registerRoutes(
       }
       
       // Verify branch access for non-admin users
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && item.branchId) {
         const hasAccess = await canAccessBranch(req, item.branchId);
         if (!hasAccess) {
@@ -519,7 +519,7 @@ export async function registerRoutes(
       const normalizedData = normalizeInventoryData(validatedData);
       
       // Verify user has access to the target branch
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && normalizedData.branchId) {
         const hasAccess = await canAccessBranch(req, normalizedData.branchId);
         if (!hasAccess) {
@@ -527,7 +527,7 @@ export async function registerRoutes(
         }
       }
       
-      const userId = req.currentUser.id;
+      const userId = getCurrentUser(req).id;
       const item = await storage.createInventoryItem(normalizedData, userId);
       res.status(201).json(item);
     } catch (error) {
@@ -547,7 +547,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Item not found" });
       }
       
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && existingItem.branchId) {
         const hasAccess = await canAccessBranch(req, existingItem.branchId);
         if (!hasAccess) {
@@ -566,7 +566,7 @@ export async function registerRoutes(
       }
       
       const normalizedData = normalizeInventoryData(partialData);
-      const userId = req.currentUser.id;
+      const userId = getCurrentUser(req).id;
       const item = await storage.updateInventoryItem(req.params.id, normalizedData, userId);
       res.json(item);
     } catch (error) {
@@ -586,7 +586,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Item not found" });
       }
       
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && existingItem.branchId) {
         const hasAccess = await canAccessBranch(req, existingItem.branchId);
         if (!hasAccess) {
@@ -594,7 +594,7 @@ export async function registerRoutes(
         }
       }
       
-      const userId = req.currentUser.id;
+      const userId = getCurrentUser(req).id;
       const success = await storage.deleteInventoryItem(req.params.id, userId);
       if (!success) {
         return res.status(404).json({ error: "Item not found" });
@@ -677,7 +677,7 @@ export async function registerRoutes(
         }
       }
       
-      const userId = req.currentUser.id;
+      const userId = getCurrentUser(req).id;
       const results = { success: 0, failed: 0, errors: [] as string[] };
       
       for (const item of items) {
@@ -818,7 +818,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكنك إنشاء تحويل من فرع غير فرعك" });
       }
       
-      const userId = req.currentUser!.id;
+      const userId = getCurrentUser(req).id;
       const transfer = await storage.createAssetTransfer({
         itemId,
         quantity: quantity || 1,
@@ -853,7 +853,7 @@ export async function registerRoutes(
         }
       }
       
-      const userId = req.currentUser!.id;
+      const userId = getCurrentUser(req).id;
       const approvedTransfer = await storage.approveAssetTransfer(id, userId);
       
       if (!approvedTransfer) {
@@ -890,7 +890,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Receiver name is required" });
       }
       
-      const userId = req.currentUser!.id;
+      const userId = getCurrentUser(req).id;
       const transfer = await storage.confirmAssetTransfer(id, userId, receiverName, signature);
       
       if (!transfer) {
@@ -922,7 +922,7 @@ export async function registerRoutes(
       }
       
       const { reason } = req.body;
-      const userId = req.currentUser!.id;
+      const userId = getCurrentUser(req).id;
       const transfer = await storage.cancelAssetTransfer(id, userId, reason);
       
       if (!transfer) {
@@ -1870,7 +1870,7 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بالموافقة على هذا الطلب" });
         }
       }
-      const request = await storage.approvePaymentRequest(id, req.currentUser?.id);
+      const request = await storage.approvePaymentRequest(id, getCurrentUser(req).id);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
       }
@@ -2606,7 +2606,7 @@ export async function registerRoutes(
   app.post("/api/production-orders", isAuthenticated, requirePermission("production", "create"), requireBranchAccess, async (req, res) => {
     try {
       // Verify user has access to the target branch
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && req.body.branchId) {
         const hasAccess = await canAccessBranch(req, req.body.branchId);
         if (!hasAccess) {
@@ -2940,7 +2940,7 @@ export async function registerRoutes(
       
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       
       // Determine effective branch filter
       let effectiveBranchId: string | undefined;
@@ -3035,7 +3035,7 @@ export async function registerRoutes(
       const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
       
       // Verify user has access to the target branch
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && journalData.branchId) {
         const hasAccess = await canAccessBranch(req, journalData.branchId);
         if (!hasAccess) {
@@ -3369,7 +3369,7 @@ export async function registerRoutes(
         });
       }
       
-      const journal = await storage.approveCashierJournal(id, req.currentUser?.id);
+      const journal = await storage.approveCashierJournal(id, getCurrentUser(req).id);
       res.json(journal);
     } catch (error) {
       console.error("Error approving cashier journal:", error);
@@ -3403,7 +3403,7 @@ export async function registerRoutes(
   app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const { branchId } = req.query;
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
@@ -3755,7 +3755,7 @@ export async function registerRoutes(
   // Create branch daily closure
   app.post("/api/branch-daily-closures", isAuthenticated, async (req, res) => {
     try {
-      const user = req.user;
+      const user = getCurrentUser(req);
       const { branchId, closureDate, journalIds, notes } = req.body;
       
       if (!branchId || !closureDate || !journalIds || journalIds.length === 0) {
@@ -3888,7 +3888,7 @@ export async function registerRoutes(
   app.post("/api/branch-daily-closures/:id/close", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const user = req.user;
+      const user = getCurrentUser(req);
       
       const [closure] = await db.select()
         .from(branchDailyClosures)
@@ -3923,7 +3923,7 @@ export async function registerRoutes(
   app.delete("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const user = req.user;
+      const user = getCurrentUser(req);
       
       // Only admins can delete
       if (user.role !== 'admin') {
@@ -4997,7 +4997,7 @@ export async function registerRoutes(
   app.post("/api/incentives/awards/:id/approve", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const award = await storage.approveIncentiveAward(id, req.currentUser?.id);
+      const award = await storage.approveIncentiveAward(id, getCurrentUser(req).id);
       if (!award) {
         return res.status(404).json({ error: "Award not found" });
       }
@@ -5529,7 +5529,7 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const commission = await storage.approveCommissionCalculation(id, req.currentUser?.id);
+      const commission = await storage.approveCommissionCalculation(id, getCurrentUser(req).id);
       if (!commission) {
         return res.status(404).json({ error: "العمولة غير موجودة" });
       }
@@ -5891,7 +5891,7 @@ export async function registerRoutes(
   app.post("/api/display-bar/receipts", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req, res) => {
     try {
       // Verify branch access
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && req.body.branchId) {
         const hasAccess = await canAccessBranch(req, req.body.branchId);
         if (!hasAccess) {
@@ -5950,7 +5950,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Summary not found" });
       }
       
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && existingSummary.branchId) {
         const hasAccess = await canAccessBranch(req, existingSummary.branchId);
         if (!hasAccess) {
@@ -6150,7 +6150,7 @@ export async function registerRoutes(
       }
       
       // Verify branch access for non-admin users
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && report.branchId) {
         const hasAccess = await canAccessBranch(req, report.branchId);
         if (!hasAccess) {
@@ -6168,7 +6168,7 @@ export async function registerRoutes(
   // Create Waste Report
   app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       // Verify user has access to the target branch
       if (currentUser?.role !== "admin" && req.body.branchId) {
@@ -6208,7 +6208,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Report not found" });
       }
       
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && existingReport.branchId) {
         const hasAccess = await canAccessBranch(req, existingReport.branchId);
         if (!hasAccess) {
@@ -6248,7 +6248,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Report not found" });
       }
       
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && existingReport.branchId) {
         const hasAccess = await canAccessBranch(req, existingReport.branchId);
         if (!hasAccess) {
@@ -6283,7 +6283,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Report not found" });
       }
       
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && report.branchId) {
         const hasAccess = await canAccessBranch(req, report.branchId);
         if (!hasAccess) {
@@ -6313,7 +6313,7 @@ export async function registerRoutes(
       }
       
       // Verify branch access for the parent report
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && report.branchId) {
         const hasAccess = await canAccessBranch(req, report.branchId);
         if (!hasAccess) {
@@ -6358,7 +6358,7 @@ export async function registerRoutes(
       
       // Check branch access via parent report BEFORE updating
       const report = await storage.getWasteReport(existingItem.wasteReportId);
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && report?.branchId) {
         const hasAccess = await canAccessBranch(req, report.branchId);
         if (!hasAccess) {
@@ -6412,7 +6412,7 @@ export async function registerRoutes(
       }
       
       // Check branch access via parent report BEFORE deleting
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       if (user?.role !== "admin" && parentReport.branchId) {
         const hasAccess = await canAccessBranch(req, parentReport.branchId);
         if (!hasAccess) {
@@ -6750,7 +6750,7 @@ export async function registerRoutes(
         return res.json([]);
       }
       
-      const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId !== "all" ? branchId : undefined);
       
       const conditions: SQL[] = [];
       if (effectiveBranchId) {
@@ -6785,7 +6785,7 @@ export async function registerRoutes(
       const { branchId, startDate, endDate } = req.query;
       
       const mandatoryBranch = getMandatoryBranchFilter(req);
-      const effectiveBranchId = mandatoryBranch || (branchId !== "all" ? branchId : undefined);
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId !== "all" ? branchId : undefined);
       
       const conditions: SQL[] = [];
       if (effectiveBranchId) {
@@ -6829,7 +6829,7 @@ export async function registerRoutes(
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { year, month, branchId } = req.query;
       
-      const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId && branchId !== "all" ? branchId : undefined);
       
       // Validate year and month with sensible defaults
       const currentDate = new Date();
@@ -7040,7 +7040,7 @@ export async function registerRoutes(
       const validGroupByOptions = ["daily", "weekly", "monthly"];
       const groupBy = validGroupByOptions.includes(rawGroupBy as string) ? rawGroupBy : "daily";
       
-      const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId && branchId !== "all" ? branchId : undefined);
       
       const conditions: SQL[] = [];
       if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
@@ -7118,7 +7118,7 @@ export async function registerRoutes(
       if (isNaN(limit) || limit < 1) limit = 10;
       if (limit > 100) limit = 100;
       
-      const effectiveBranchId = mandatoryBranch || (branchId && branchId !== "all" ? branchId : undefined);
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId && branchId !== "all" ? branchId : undefined);
       
       const conditions: SQL[] = [];
       if (startDate) conditions.push(gte(dailyComparisons.comparisonDate, startDate as string));
@@ -7199,7 +7199,7 @@ export async function registerRoutes(
         effectiveBranchId = mandatoryBranch;
       } else {
         // Admins can filter by any branch or see all
-        effectiveBranchId = branchId !== "all" ? branchId : undefined;
+        effectiveBranchId = parseQueryString(branchId !== "all" ? branchId : undefined);
       }
       
       const conditions: SQL[] = [];
@@ -7818,11 +7818,12 @@ export async function registerRoutes(
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { branchId } = req.query;
-      const effectiveBranchId = mandatoryBranch || branchId;
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId);
       
       const conditions: SQL[] = [];
       if (effectiveBranchId) {
-        conditions.push(or(eq(productPrices.branchId, effectiveBranchId), isNull(productPrices.branchId)));
+        const orCondition = or(eq(productPrices.branchId, effectiveBranchId), isNull(productPrices.branchId));
+        if (orCondition) conditions.push(orCondition);
       }
       
       const prices = await db
@@ -7842,7 +7843,7 @@ export async function registerRoutes(
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { branchId } = req.query;
-      const effectiveBranchId = mandatoryBranch || branchId;
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId);
       
       // Get the latest price for each product (branch-specific or global)
       const latestPrices = await db
@@ -7855,7 +7856,7 @@ export async function registerRoutes(
         })
         .from(productPrices)
         .where(effectiveBranchId 
-          ? or(eq(productPrices.branchId, effectiveBranchId), isNull(productPrices.branchId))
+          ? or(eq(productPrices.branchId, effectiveBranchId), isNull(productPrices.branchId)) ?? sql`true`
           : sql`true`)
         .orderBy(productPrices.productName, desc(productPrices.effectiveDate));
       
@@ -7949,7 +7950,8 @@ export async function registerRoutes(
       
       const conditions: SQL[] = [];
       if (mandatoryBranch) {
-        conditions.push(or(eq(wasteRiskRules.branchId, mandatoryBranch), isNull(wasteRiskRules.branchId)));
+        const orCondition = or(eq(wasteRiskRules.branchId, mandatoryBranch), isNull(wasteRiskRules.branchId));
+        if (orCondition) conditions.push(orCondition);
       }
       
       const rules = await db
@@ -8071,13 +8073,15 @@ export async function registerRoutes(
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { status, branchId, severity, startDate, endDate } = req.query;
       
-      const effectiveBranchId = mandatoryBranch || branchId;
+      const effectiveBranchId = mandatoryBranch || parseQueryString(branchId);
+      const statusStr = parseQueryString(status);
+      const severityStr = parseQueryString(severity);
       
       const conditions: SQL[] = [];
       
       if (effectiveBranchId) conditions.push(eq(wasteRiskAlerts.branchId, effectiveBranchId));
-      if (status) conditions.push(eq(wasteRiskAlerts.status, status));
-      if (severity) conditions.push(eq(wasteRiskAlerts.severity, severity));
+      if (statusStr) conditions.push(eq(wasteRiskAlerts.status, statusStr));
+      if (severityStr) conditions.push(eq(wasteRiskAlerts.severity, severityStr));
       if (startDate) conditions.push(gte(wasteRiskAlerts.alertDate, startDate as string));
       if (endDate) conditions.push(lte(wasteRiskAlerts.alertDate, endDate as string));
       
@@ -10482,7 +10486,7 @@ export async function registerRoutes(
   // User Assignments
   app.get("/api/rbac/users/:userId/assignments", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
       
       // Users can view their own assignments, or need users:view permission for others
@@ -10557,7 +10561,7 @@ export async function registerRoutes(
   // User Permission Overrides
   app.get("/api/rbac/users/:userId/overrides", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
       
       // Users can view their own overrides, or need users:view permission for others
@@ -10580,7 +10584,7 @@ export async function registerRoutes(
     try {
       const userId = req.params.userId;
       const { permissionId, allow, reason, expiresAt } = req.body;
-      const grantedBy = req.currentUser.id;
+      const grantedBy = getCurrentUser(req).id;
       
       if (permissionId === undefined || allow === undefined) {
         return res.status(400).json({ error: "معرف الصلاحية وحالة السماح مطلوبان" });
@@ -10616,7 +10620,7 @@ export async function registerRoutes(
   // User Branch Access
   app.get("/api/rbac/users/:userId/branches", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
       
       // Users can view their own branch access, or need users:view permission for others
@@ -10685,7 +10689,7 @@ export async function registerRoutes(
   // User Effective Permissions
   app.get("/api/rbac/users/:userId/effective-permissions", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
       
       // Users can view their own effective permissions, or need users:view permission for others
@@ -10707,7 +10711,7 @@ export async function registerRoutes(
   // Current User Permissions (for frontend)
   app.get("/api/rbac/my-permissions", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const effectivePermissions = await storage.getUserEffectivePermissions(currentUser.id);
       res.json(effectivePermissions);
     } catch (error) {
@@ -10719,7 +10723,7 @@ export async function registerRoutes(
   // Check Permission (utility endpoint)
   app.get("/api/rbac/check-permission", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const module = req.query.module as string;
       const action = req.query.action as string;
       const branchId = req.query.branchId as string | undefined;
@@ -10743,7 +10747,7 @@ export async function registerRoutes(
   // Get user security settings
   app.get("/api/security/users/:userId/settings", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const { userId } = req.params;
       
       // Only admins or the user themselves can view security settings
@@ -10762,7 +10766,7 @@ export async function registerRoutes(
   // Update user security settings
   app.patch("/api/security/users/:userId/settings", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const { userId } = req.params;
       
       // Only admins or the user themselves can update security settings
@@ -10810,7 +10814,7 @@ export async function registerRoutes(
   // Check if user is locked (requires authentication, admin only or self-check)
   app.get("/api/security/users/:userId/locked", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const { userId } = req.params;
       
       // Only admins or the user themselves can check lock status
@@ -10833,7 +10837,7 @@ export async function registerRoutes(
   // Get current user's active sessions
   app.get("/api/security/sessions", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const sessions = await storage.getUserSessions(currentUser.id);
       res.json(sessions);
     } catch (error) {
@@ -10857,7 +10861,7 @@ export async function registerRoutes(
   // Invalidate a session (user can only invalidate their own sessions, admins can invalidate any)
   app.delete("/api/security/sessions/:sessionId", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const { sessionId } = req.params;
       
       // Get all user sessions to verify ownership
@@ -10892,7 +10896,7 @@ export async function registerRoutes(
   // Invalidate all user sessions (logout everywhere)
   app.delete("/api/security/users/:userId/sessions", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const { userId } = req.params;
       
       // Only admins or the user themselves can invalidate all sessions
@@ -10955,7 +10959,7 @@ export async function registerRoutes(
   // Resolve a security alert
   app.patch("/api/security/alerts/:id/resolve", isAuthenticated, requirePermission("rbac_management", "edit"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const id = parseInt(req.params.id);
       const { notes } = req.body;
       
@@ -10992,10 +10996,11 @@ export async function registerRoutes(
     try {
       const { userId, module, allowed, limit } = req.query;
       const filters: any = {};
-      if (userId) filters.userId = userId;
-      if (module) filters.module = module;
+      if (userId) filters.userId = parseQueryString(userId);
+      if (module) filters.module = parseQueryString(module);
       if (allowed !== undefined) filters.allowed = allowed === 'true';
-      if (limit) filters.limit = parseInt(limit);
+      const limitStr = parseQueryString(limit);
+      if (limitStr) filters.limit = parseInt(limitStr);
       
       const logs = await storage.getPermissionCheckLogs(filters);
       res.json(logs);
@@ -11050,7 +11055,7 @@ export async function registerRoutes(
   // Create role template
   app.post("/api/rbac/role-templates", isAuthenticated, requirePermission("rbac_management", "create"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       // Validate using Zod schema
       const roleTemplateCreateSchema = z.object({
@@ -11142,7 +11147,7 @@ export async function registerRoutes(
   // Delete role template
   app.delete("/api/rbac/role-templates/:id", isAuthenticated, requirePermission("rbac_management", "delete"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const id = parseInt(req.params.id);
       
       // Get template before deletion for audit
@@ -11171,7 +11176,7 @@ export async function registerRoutes(
   // Apply role template to a role
   app.post("/api/rbac/roles/:roleId/apply-template/:templateId", isAuthenticated, requirePermission("rbac_management", "edit"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const roleId = parseInt(req.params.roleId);
       const templateId = parseInt(req.params.templateId);
       
@@ -11213,7 +11218,7 @@ export async function registerRoutes(
       let targets = await storage.getAllCashierShiftTargets(filters);
       console.log("[cashier-shift-targets] Storage returned:", targets.length, "targets");
       
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       // SECURITY: Enforce branch filtering for non-admin users
       const mandatoryBranch = getMandatoryBranchFilter(req);
       console.log("[cashier-shift-targets] User:", user?.id, "Role:", user?.role, "MandatoryBranch:", mandatoryBranch);
@@ -11325,7 +11330,7 @@ export async function registerRoutes(
 
   app.post("/api/cashier-shift-targets", isAuthenticated, requirePermission("sales", "create"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       // SECURITY: Validate branch access for non-admin users
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -11346,7 +11351,7 @@ export async function registerRoutes(
 
   app.post("/api/cashier-shift-targets/bulk", isAuthenticated, requirePermission("sales", "create"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       // SECURITY: Validate branch access for non-admin users
       if (!isUserAdmin(req)) {
@@ -11504,7 +11509,7 @@ export async function registerRoutes(
 
   app.post("/api/average-ticket-targets", isAuthenticated, requirePermission("sales", "create"), async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       // SECURITY: Validate branch access for non-admin users
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -11699,7 +11704,7 @@ export async function registerRoutes(
   app.patch("/api/performance-alerts/:id/acknowledge", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       // SECURITY: Verify branch access for non-admin users
       const alert = await storage.getPerformanceAlert(id);
@@ -12144,12 +12149,13 @@ export async function registerRoutes(
   app.get("/api/marketing/expenses", isAuthenticated, async (req, res) => {
     try {
       const { campaignId, category, status, startDate, endDate } = req.query;
+      const campaignIdStr = parseQueryString(campaignId);
       const expenses = await storage.getAllCampaignExpenses({
-        campaignId: campaignId ? parseInt(campaignId) : undefined,
-        category: category as string,
-        status: status as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
+        campaignId: campaignIdStr ? parseInt(campaignIdStr) : undefined,
+        category: parseQueryString(category) as string,
+        status: parseQueryString(status) as string,
+        startDate: parseQueryString(startDate) as string,
+        endDate: parseQueryString(endDate) as string,
       });
       res.json(expenses);
     } catch (error) {
@@ -12206,7 +12212,7 @@ export async function registerRoutes(
       if (isNaN(campaignId)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const validatedData = insertCampaignExpenseSchema.parse({ 
         ...req.body, 
         campaignId,
@@ -12229,7 +12235,7 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const partialData = insertCampaignExpenseSchema.partial().parse(req.body);
       
       // If status is being changed to approved, set approvedBy and approvedAt
@@ -12762,12 +12768,14 @@ export async function registerRoutes(
   app.get("/api/marketing/influencer-payments", isAuthenticated, async (req, res) => {
     try {
       const { influencerId, campaignId, status, startDate, endDate } = req.query;
+      const influencerIdStr = parseQueryString(influencerId);
+      const campaignIdStr = parseQueryString(campaignId);
       const filters: any = {};
-      if (influencerId) filters.influencerId = parseInt(influencerId);
-      if (campaignId) filters.campaignId = parseInt(campaignId);
-      if (status) filters.status = status;
-      if (startDate) filters.startDate = startDate;
-      if (endDate) filters.endDate = endDate;
+      if (influencerIdStr) filters.influencerId = parseInt(influencerIdStr);
+      if (campaignIdStr) filters.campaignId = parseInt(campaignIdStr);
+      if (status) filters.status = parseQueryString(status);
+      if (startDate) filters.startDate = parseQueryString(startDate);
+      if (endDate) filters.endDate = parseQueryString(endDate);
       const payments = await storage.getAllInfluencerPayments(filters);
       res.json(payments);
     } catch (error) {
@@ -12851,7 +12859,7 @@ export async function registerRoutes(
 
   app.post("/api/marketing/influencer-payments", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const data = { ...req.body, createdBy: currentUser?.id };
       const validatedData = insertInfluencerPaymentSchema.parse(data);
       const payment = await storage.createInfluencerPayment(validatedData);
@@ -12946,7 +12954,7 @@ export async function registerRoutes(
 
   app.post("/api/marketing/influencer-contracts", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const data = { ...req.body, createdBy: currentUser?.id };
       console.log("Creating influencer contract with data:", JSON.stringify(data, null, 2));
       const validatedData = insertInfluencerContractSchema.parse(data);
@@ -13560,7 +13568,7 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const alert = await storage.acknowledgeMarketingAlert(id, currentUser.id);
       if (!alert) {
         return res.status(404).json({ error: "التنبيه غير موجود" });
@@ -13778,7 +13786,7 @@ export async function registerRoutes(
 
   app.post("/api/schedule-templates", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const validatedData = insertScheduleTemplateSchema.parse({
         ...req.body,
         createdBy: currentUser?.id
@@ -13850,7 +13858,7 @@ export async function registerRoutes(
 
   app.post("/api/schedule-periods", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const validatedData = insertSchedulePeriodSchema.parse({
         ...req.body,
         createdBy: currentUser?.id
@@ -13887,7 +13895,7 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const period = await storage.publishSchedulePeriod(id, currentUser?.id);
       if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
       res.json(period);
@@ -14136,7 +14144,7 @@ export async function registerRoutes(
   app.post("/api/attendance/check-in", isAuthenticated, async (req, res) => {
     try {
       const { branchId, signature, deviceInfo } = req.body;
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       
       if (!branchId) {
         return res.status(400).json({ error: "الفرع مطلوب" });
@@ -14174,7 +14182,7 @@ export async function registerRoutes(
   app.post("/api/attendance/check-out", isAuthenticated, async (req, res) => {
     try {
       const { signature } = req.body;
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
 
       if (signature && signature.length > 500000) {
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
@@ -14201,7 +14209,13 @@ export async function registerRoutes(
       }
 
       // Get employees scheduled for this branch, shift, and date
-      const scheduledEmployees = await storage.getScheduledEmployeesForAttendance(branchId, shiftType, date);
+      const branchIdStr = parseQueryString(branchId);
+      const shiftTypeStr = parseQueryString(shiftType);
+      const dateStr = parseQueryString(date);
+      if (!branchIdStr || !shiftTypeStr || !dateStr) {
+        return res.status(400).json({ error: "الفرع والوردية والتاريخ مطلوبين" });
+      }
+      const scheduledEmployees = await storage.getScheduledEmployeesForAttendance(branchIdStr, shiftTypeStr, dateStr);
       res.json(scheduledEmployees);
     } catch (error) {
       console.error("Error fetching scheduled employees:", error);
@@ -14264,7 +14278,7 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const record = await storage.approveAttendance(id, currentUser?.id);
       if (!record) return res.status(404).json({ error: "السجل غير موجود" });
       res.json(record);
@@ -14276,7 +14290,7 @@ export async function registerRoutes(
 
   app.get("/api/attendance/my-today", isAuthenticated, async (req, res) => {
     try {
-      const currentUser = req.currentUser;
+      const currentUser = getCurrentUser(req);
       const today = new Date().toISOString().split('T')[0];
       const records = await storage.getAllAttendanceRecords({
         employeeId: currentUser?.id,
