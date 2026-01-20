@@ -18983,8 +18983,8 @@ export async function registerRoutes(
     }
   });
 
-  // Public share link access (no auth required)
-  app.get("/api/documents/share/:shareLink", async (req, res) => {
+  // Public share link access (no auth required) - uses POST for password security
+  app.post("/api/documents/share/:shareLink", async (req, res) => {
     try {
       const share = await storage.getDocumentShareByLink(req.params.shareLink);
       if (!share) {
@@ -19005,7 +19005,7 @@ export async function registerRoutes(
 
       // Check password if required
       if (share.sharePassword) {
-        const providedPassword = req.query.password as string;
+        const providedPassword = req.body?.password as string;
         if (!providedPassword) {
           return res.status(401).json({ 
             error: "هذا الرابط محمي بكلمة مرور",

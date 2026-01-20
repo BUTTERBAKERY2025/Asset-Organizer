@@ -67,8 +67,11 @@ export default function SharedDocumentPage() {
 
   const fetchDocument = async (sharePassword?: string) => {
     try {
-      const url = `/api/documents/share/${params.shareLink}${sharePassword ? `?password=${encodeURIComponent(sharePassword)}` : ''}`;
-      const response = await fetch(url);
+      const response = await fetch(`/api/documents/share/${params.shareLink}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: sharePassword }),
+      });
       const data = await response.json();
       
       if (!response.ok) {
