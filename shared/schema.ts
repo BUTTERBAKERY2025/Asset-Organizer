@@ -571,6 +571,17 @@ export const SYSTEM_MODULES = [
   "material_requests",
   "transfer_requests",
   "warehouse_inventory",
+  
+  // السكرتارية التنفيذية
+  "executive_dashboard",
+  "executive_meetings",
+  "executive_tasks",
+  "executive_correspondence",
+  "executive_documents",
+  "executive_visitors",
+  "executive_travel",
+  "executive_reports",
+  "executive_notifications",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -705,6 +716,17 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   material_requests: "طلبات المواد",
   transfer_requests: "طلبات التحويل",
   warehouse_inventory: "مخزون المستودع",
+  
+  // السكرتارية التنفيذية
+  executive_dashboard: "لوحة السكرتارية التنفيذية",
+  executive_meetings: "الاجتماعات",
+  executive_tasks: "المهام التنفيذية",
+  executive_correspondence: "المراسلات",
+  executive_documents: "الوثائق والأرشفة",
+  executive_visitors: "سجل الزوار",
+  executive_travel: "إدارة السفر",
+  executive_reports: "تقارير السكرتارية",
+  executive_notifications: "التنبيهات",
 };
 
 // Action labels for UI display (Arabic)
@@ -818,6 +840,20 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
     label: "المخازن والتحويلات",
     modules: ["warehouse", "material_requests", "transfer_requests", "warehouse_inventory"],
   },
+  {
+    label: "السكرتارية التنفيذية",
+    modules: [
+      "executive_dashboard",
+      "executive_meetings",
+      "executive_tasks",
+      "executive_correspondence",
+      "executive_documents",
+      "executive_visitors",
+      "executive_travel",
+      "executive_reports",
+      "executive_notifications",
+    ],
+  },
 ];
 
 // Role permission templates - قوالب الصلاحيات الافتراضية لكل دور
@@ -878,6 +914,7 @@ export const JOB_TITLES = [
   "delivery",
   "cleaner",
   "maintenance",
+  "executive_secretary",
   "other",
 ] as const;
 
@@ -894,6 +931,7 @@ export const JOB_TITLE_LABELS: Record<JobTitle, string> = {
   delivery: "توصيل",
   cleaner: "نظافة",
   maintenance: "صيانة",
+  executive_secretary: "سكرتير تنفيذي",
   other: "أخرى",
 };
 
@@ -979,6 +1017,20 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     { module: "dashboard", actions: ["view"] },
     { module: "inventory", actions: ["view", "edit"] },
     { module: "asset_transfers", actions: ["view", "create"] },
+  ],
+
+  // سكرتير تنفيذي - صلاحيات السكرتارية التنفيذية الكاملة
+  executive_secretary: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "executive_dashboard", actions: ["view", "export"] },
+    { module: "executive_meetings", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "executive_tasks", actions: ["view", "create", "edit", "delete", "change_status"] },
+    { module: "executive_correspondence", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "executive_documents", actions: ["view", "create", "edit", "delete", "manage_attachments", "export"] },
+    { module: "executive_visitors", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "executive_travel", actions: ["view", "create", "edit", "submit", "approve", "reject", "export"] },
+    { module: "executive_reports", actions: ["view", "export", "print"] },
+    { module: "executive_notifications", actions: ["view", "create", "edit", "delete", "notify"] },
   ],
 
   // أخرى - عرض لوحة التحكم فقط
@@ -6582,3 +6634,50 @@ export const insertTravelExpenseSchema = createInsertSchema(travelExpenses).omit
 
 export type TravelExpense = typeof travelExpenses.$inferSelect;
 export type InsertTravelExpense = z.infer<typeof insertTravelExpenseSchema>;
+
+// =====================================================
+// نظام التنبيهات - Notifications System
+// =====================================================
+
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  // المستلم
+  userId: varchar("user_id").references(() => users.id), // null = إشعار عام
+  // محتوى التنبيه
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").default("info"), // info, warning, error, success, reminder
+  category: text("category"), // meeting, task, correspondence, visitor, travel, system
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  // الرابط المرتبط
+  linkType: text("link_type"), // meeting, task, correspondence, visitor, travel_request
+  linkId: integer("link_id"),
+  linkUrl: text("link_url"),
+  // الحالة
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  isDismissed: boolean("is_dismissed").default(false),
+  dismissedAt: timestamp("dismissed_at"),
+  // التوقيت
+  scheduledFor: timestamp("scheduled_for"), // للتذكيرات المجدولة
+  expiresAt: timestamp("expires_at"), // تاريخ انتهاء الصلاحية
+  // المرسل
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_notifications_user").on(table.userId),
+  index("idx_notifications_branch").on(table.branchId),
+  index("idx_notifications_type").on(table.type),
+  index("idx_notifications_category").on(table.category),
+  index("idx_notifications_read").on(table.isRead),
+  index("idx_notifications_scheduled").on(table.scheduledFor),
+]);
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;

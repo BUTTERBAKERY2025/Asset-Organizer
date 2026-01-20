@@ -19538,5 +19538,109 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // نظام التنبيهات الموحدة - System Notifications API
+  // =====================================================
+
+  // Get all notifications for current user
+  app.get("/api/system-notifications", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const branchId = parseQueryString(req.query.branchId);
+      const notifications = await storage.getSystemNotifications(user.id, branchId);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error getting notifications:", error);
+      res.status(500).json({ error: "فشل في جلب التنبيهات" });
+    }
+  });
+
+  // Get unread notifications
+  app.get("/api/system-notifications/unread", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const notifications = await storage.getUnreadSystemNotifications(user.id);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error getting unread notifications:", error);
+      res.status(500).json({ error: "فشل في جلب التنبيهات غير المقروءة" });
+    }
+  });
+
+  // Get notification stats
+  app.get("/api/system-notifications/stats", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const stats = await storage.getSystemNotificationStats(user.id);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting notification stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات التنبيهات" });
+    }
+  });
+
+  // Create notification
+  app.post("/api/system-notifications", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const notification = await storage.createSystemNotification({
+        ...req.body,
+        createdBy: user.id,
+      });
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error("Error creating notification:", error);
+      res.status(500).json({ error: "فشل في إنشاء التنبيه" });
+    }
+  });
+
+  // Mark notification as read
+  app.post("/api/system-notifications/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const notification = await storage.markSystemNotificationAsRead(parseInt(req.params.id));
+      if (!notification) {
+        return res.status(404).json({ error: "التنبيه غير موجود" });
+      }
+      res.json(notification);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "فشل في تحديث التنبيه" });
+    }
+  });
+
+  // Mark all notifications as read
+  app.post("/api/system-notifications/read-all", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      await storage.markAllSystemNotificationsAsRead(user.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ error: "فشل في تحديث التنبيهات" });
+    }
+  });
+
+  // Dismiss notification
+  app.post("/api/system-notifications/:id/dismiss", isAuthenticated, async (req, res) => {
+    try {
+      await storage.dismissSystemNotification(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error dismissing notification:", error);
+      res.status(500).json({ error: "فشل في إخفاء التنبيه" });
+    }
+  });
+
+  // Delete notification
+  app.delete("/api/system-notifications/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteSystemNotification(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      res.status(500).json({ error: "فشل في حذف التنبيه" });
+    }
+  });
+
   return httpServer;
 }

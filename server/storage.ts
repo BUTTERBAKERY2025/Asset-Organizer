@@ -421,6 +421,9 @@ import {
   travelExpenses,
   type TravelExpense,
   type InsertTravelExpense,
+  notifications,
+  type Notification,
+  type InsertNotification,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -10847,6 +10850,118 @@ export class DatabaseStorage implements IStorage {
       completedTrips: Number(completedCount?.count || 0),
       totalBudget: Number(budgetSum?.total || 0),
       totalSpent: Number(spentSum?.total || 0),
+    };
+  }
+
+  // =====================================================
+  // التنبيهات الموحدة - System Notifications
+  // =====================================================
+
+  async getSystemNotifications(userId?: string, branchId?: string): Promise<Notification[]> {
+    const conditions = [];
+    if (userId) {
+      conditions.push(or(eq(notifications.userId, userId), isNull(notifications.userId)));
+    }
+    if (branchId) {
+      conditions.push(or(eq(notifications.branchId, branchId), isNull(notifications.branchId)));
+    }
+    conditions.push(eq(notifications.isDismissed, false));
+
+    return db.select()
+      .from(notifications)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadSystemNotifications(userId: string): Promise<Notification[]> {
+    return db.select()
+      .from(notifications)
+      .where(and(
+        or(eq(notifications.userId, userId), isNull(notifications.userId)),
+        eq(notifications.isRead, false),
+        eq(notifications.isDismissed, false)
+      ))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getSystemNotificationById(id: number): Promise<Notification | undefined> {
+    const [notification] = await db.select()
+      .from(notifications)
+      .where(eq(notifications.id, id));
+    return notification;
+  }
+
+  async createSystemNotification(data: InsertNotification): Promise<Notification> {
+    const [notification] = await db.insert(notifications)
+      .values(data)
+      .returning();
+    return notification;
+  }
+
+  async markSystemNotificationAsRead(id: number): Promise<Notification | undefined> {
+    const [notification] = await db.update(notifications)
+      .set({
+        isRead: true,
+        readAt: new Date(),
+      })
+      .where(eq(notifications.id, id))
+      .returning();
+    return notification;
+  }
+
+  async markAllSystemNotificationsAsRead(userId: string): Promise<boolean> {
+    await db.update(notifications)
+      .set({
+        isRead: true,
+        readAt: new Date(),
+      })
+      .where(and(
+        or(eq(notifications.userId, userId), isNull(notifications.userId)),
+        eq(notifications.isRead, false)
+      ));
+    return true;
+  }
+
+  async dismissSystemNotification(id: number): Promise<boolean> {
+    await db.update(notifications)
+      .set({
+        isDismissed: true,
+        dismissedAt: new Date(),
+      })
+      .where(eq(notifications.id, id));
+    return true;
+  }
+
+  async deleteSystemNotification(id: number): Promise<boolean> {
+    await db.delete(notifications)
+      .where(eq(notifications.id, id));
+    return true;
+  }
+
+  async getSystemNotificationStats(userId: string): Promise<{
+    total: number;
+    unread: number;
+    urgent: number;
+  }> {
+    const userCondition = or(eq(notifications.userId, userId), isNull(notifications.userId));
+    const notDismissed = eq(notifications.isDismissed, false);
+
+    const [totalCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(and(userCondition, notDismissed));
+
+    const [unreadCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(and(userCondition, notDismissed, eq(notifications.isRead, false)));
+
+    const [urgentCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(and(userCondition, notDismissed, eq(notifications.priority, 'urgent')));
+
+    return {
+      total: Number(totalCount?.count || 0),
+      unread: Number(unreadCount?.count || 0),
+      urgent: Number(urgentCount?.count || 0),
     };
   }
 }
