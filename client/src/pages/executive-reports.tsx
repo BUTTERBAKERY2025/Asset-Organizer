@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
+import { Layout } from "@/components/layout";
 import { 
   FileText, 
   Printer, 
@@ -180,19 +181,22 @@ export default function ExecutiveReports() {
 
   if (statsLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6" dir="rtl">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
+      <Layout>
+        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
+    <Layout>
+      <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <Link href="/executive">
@@ -611,6 +615,7 @@ export default function ExecutiveReports() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </Layout>
   );
 }

@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Link } from "wouter";
+import { Layout } from "@/components/layout";
 import { 
   Calendar as CalendarIcon, 
   ChevronRight, 
@@ -197,15 +198,18 @@ export default function ExecutiveCalendar() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6" dir="rtl">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-[600px]" />
-      </div>
+      <Layout>
+        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-[600px]" />
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
+    <Layout>
+      <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <Link href="/executive">
@@ -447,6 +451,7 @@ export default function ExecutiveCalendar() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </Layout>
   );
 }

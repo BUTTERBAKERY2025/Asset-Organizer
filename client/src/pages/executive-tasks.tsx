@@ -15,6 +15,7 @@ import { Link } from "wouter";
 import { CheckSquare, Clock, Plus, ArrowRight, Search, Filter, Edit, Trash2, User, Calendar, AlertTriangle, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { Layout } from "@/components/layout";
 
 interface Task {
   id: number;
@@ -196,14 +197,16 @@ export default function ExecutiveTasks() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6" dir="rtl">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-48" />
-          ))}
+      <Layout>
+        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-48" />
+            ))}
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
@@ -290,43 +293,44 @@ export default function ExecutiveTasks() {
   );
 
   return (
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/executive">
-            <Button variant="ghost" size="sm" className="gap-1">
-              <ArrowRight className="h-4 w-4" />
-              العودة
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
-              إدارة المهام
-            </h1>
-            <p className="text-gray-600">
-              BUTTER BAKERY - TASKS MANAGEMENT
-            </p>
+    <Layout>
+      <div className="container mx-auto p-6 space-y-6" dir="rtl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/executive">
+              <Button variant="ghost" size="sm" className="gap-1">
+                <ArrowRight className="h-4 w-4" />
+                العودة
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+                إدارة المهام
+              </h1>
+              <p className="text-gray-600">
+                BUTTER BAKERY - TASKS MANAGEMENT
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex border rounded-lg overflow-hidden">
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className={viewMode === "list" ? "bg-amber-600" : ""}
-            >
-              قائمة
-            </Button>
-            <Button
-              variant={viewMode === "kanban" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("kanban")}
-              className={viewMode === "kanban" ? "bg-amber-600" : ""}
-            >
-              Kanban
-            </Button>
-          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === "list" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+                className={viewMode === "list" ? "bg-amber-600" : ""}
+              >
+                قائمة
+              </Button>
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("kanban")}
+                className={viewMode === "kanban" ? "bg-amber-600" : ""}
+              >
+                Kanban
+              </Button>
+            </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => setSelectedTask(null)}>
@@ -549,6 +553,7 @@ export default function ExecutiveTasks() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </Layout>
   );
 }

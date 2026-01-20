@@ -15,6 +15,7 @@ import { Link } from "wouter";
 import { Calendar, Clock, MapPin, Users, Plus, ArrowRight, Search, Filter, Edit, Trash2, Eye, Video, Phone } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { Layout } from "@/components/layout";
 
 interface Meeting {
   id: number;
@@ -170,19 +171,22 @@ export default function ExecutiveMeetings() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6" dir="rtl">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-48" />
-          ))}
+      <Layout>
+        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-48" />
+            ))}
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
+    <Layout>
+      <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/executive">
@@ -472,6 +476,7 @@ export default function ExecutiveMeetings() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </Layout>
   );
 }

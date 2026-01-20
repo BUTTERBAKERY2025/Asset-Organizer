@@ -10,6 +10,7 @@ import { Link } from "wouter";
 import { Calendar, CheckSquare, Mail, AlertTriangle, Clock, Users, ArrowLeft, ArrowRight, Plus, FileText, Plane, Bell, UserCheck, BarChart3, CalendarDays, Settings2, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { Layout } from "@/components/layout";
 
 interface DashboardStats {
   meetingsThisWeek: number;
@@ -79,84 +80,39 @@ export default function ExecutiveDashboard() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-10 w-64" />
+      <Layout>
+        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-10 w-64" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-64" />
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-64" />
-          ))}
-        </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
+    <Layout>
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
             السكرتارية التنفيذية
           </h1>
           <p className="text-gray-600">
-            BUTTER BAKERY SYSTEM - CEO COMMAND CENTER
+            مركز قيادة الرئيس التنفيذي - BUTTER BAKERY
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/executive/meetings">
-            <Button variant="outline" className="gap-2">
-              <Calendar className="h-4 w-4" />
-              الاجتماعات
-            </Button>
-          </Link>
-          <Link href="/executive/tasks">
-            <Button variant="outline" className="gap-2">
-              <CheckSquare className="h-4 w-4" />
-              المهام
-            </Button>
-          </Link>
-          <Link href="/executive/correspondence">
-            <Button variant="outline" className="gap-2">
-              <Mail className="h-4 w-4" />
-              المراسلات
-            </Button>
-          </Link>
-          <Link href="/documents">
-            <Button variant="outline" className="gap-2">
-              <FileText className="h-4 w-4" />
-              الوثائق
-            </Button>
-          </Link>
-          <Link href="/visitors">
-            <Button variant="outline" className="gap-2">
-              <UserCheck className="h-4 w-4" />
-              الزوار
-            </Button>
-          </Link>
-          <Link href="/travel-requests">
-            <Button variant="outline" className="gap-2">
-              <Plane className="h-4 w-4" />
-              السفر
-            </Button>
-          </Link>
-          <Link href="/executive/reports">
-            <Button variant="outline" className="gap-2 bg-amber-100 hover:bg-amber-200">
-              <BarChart3 className="h-4 w-4" />
-              التقارير
-            </Button>
-          </Link>
-          <Link href="/executive/calendar">
-            <Button variant="outline" className="gap-2 bg-blue-100 hover:bg-blue-200">
-              <CalendarDays className="h-4 w-4" />
-              التقويم
-            </Button>
-          </Link>
+        <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="icon" title="تخصيص لوحة التحكم">
@@ -200,6 +156,62 @@ export default function ExecutiveDashboard() {
             </PopoverContent>
           </Popover>
         </div>
+      </div>
+
+      {/* اختصارات الإجراءات السريعة */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Link href="/executive/meetings">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="p-2 rounded-lg bg-blue-500 text-white">
+                <Calendar className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-blue-800">الاجتماعات</p>
+                <p className="text-xs text-blue-600">{stats?.meetingsThisWeek || 0} هذا الأسبوع</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/executive/tasks">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="p-2 rounded-lg bg-amber-500 text-white">
+                <CheckSquare className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-amber-800">المهام</p>
+                <p className="text-xs text-amber-600">{stats?.pendingTasks || 0} معلقة</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/executive/correspondence">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="p-2 rounded-lg bg-green-500 text-white">
+                <Mail className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-green-800">المراسلات</p>
+                <p className="text-xs text-green-600">{stats?.unreadCorrespondence || 0} جديدة</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/executive/calendar">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="p-2 rounded-lg bg-purple-500 text-white">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-purple-800">التقويم</p>
+                <p className="text-xs text-purple-600">عرض الجدول</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {widgetSettings.showStats && (
@@ -435,26 +447,50 @@ export default function ExecutiveDashboard() {
         )}
       </div>
 
-      <div className="flex justify-center gap-4 pt-4">
-        <Link href="/executive/meetings/new">
-          <Button className="gap-2 bg-amber-600 hover:bg-amber-700">
-            <Plus className="h-4 w-4" />
-            اجتماع جديد
-          </Button>
+      {/* روابط سريعة إضافية */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Link href="/documents">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="flex items-center gap-2 p-3">
+              <FileText className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-medium">الوثائق</span>
+            </CardContent>
+          </Card>
         </Link>
-        <Link href="/executive/tasks/new">
-          <Button className="gap-2 bg-amber-600 hover:bg-amber-700">
-            <Plus className="h-4 w-4" />
-            مهمة جديدة
-          </Button>
+        <Link href="/visitors">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="flex items-center gap-2 p-3">
+              <UserCheck className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-medium">الزوار</span>
+            </CardContent>
+          </Card>
         </Link>
-        <Link href="/executive/correspondence/new">
-          <Button className="gap-2 bg-amber-600 hover:bg-amber-700">
-            <Plus className="h-4 w-4" />
-            مراسلة جديدة
-          </Button>
+        <Link href="/travel-requests">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="flex items-center gap-2 p-3">
+              <Plane className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-medium">طلبات السفر</span>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/executive/reports">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="flex items-center gap-2 p-3">
+              <BarChart3 className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-medium">التقارير</span>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/executive/meetings">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow bg-amber-50 border-amber-200">
+            <CardContent className="flex items-center gap-2 p-3">
+              <Plus className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-medium text-amber-700">إضافة جديد</span>
+            </CardContent>
+          </Card>
         </Link>
       </div>
     </div>
+    </Layout>
   );
 }

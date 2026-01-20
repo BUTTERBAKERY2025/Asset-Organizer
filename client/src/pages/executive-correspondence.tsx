@@ -16,6 +16,7 @@ import { Link } from "wouter";
 import { Mail, Plus, ArrowRight, Search, Filter, Edit, Trash2, Inbox, Send, Lock, Calendar, User, FileText, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { Layout } from "@/components/layout";
 
 interface Correspondence {
   id: number;
@@ -225,20 +226,23 @@ export default function ExecutiveCorrespondence() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6" dir="rtl">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-12 w-full" />
-        <div className="space-y-4">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
+      <Layout>
+        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-12 w-full" />
+          <div className="space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-24" />
+            ))}
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
+    <Layout>
+      <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/executive">
@@ -712,6 +716,7 @@ export default function ExecutiveCorrespondence() {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </Layout>
   );
 }
