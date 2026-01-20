@@ -5955,7 +5955,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateShiftPerformanceTracking(id: number, tracking: Partial<InsertShiftPerformanceTracking>): Promise<ShiftPerformanceTracking | undefined> {
-    const [updated] = await db.update(shiftPerformanceTracking).set({ ...tracking, lastUpdatedAt: new Date() }).where(eq(shiftPerformanceTracking.id, id)).returning();
+    const [updated] = await db.update(shiftPerformanceTracking).set({ ...tracking, updatedAt: new Date() }).where(eq(shiftPerformanceTracking.id, id)).returning();
     return updated;
   }
 
@@ -6083,7 +6083,7 @@ export class DatabaseStorage implements IStorage {
   async createCampaignExpense(expense: InsertCampaignExpense): Promise<CampaignExpense> {
     const [created] = await db.insert(campaignExpenses).values(expense).returning();
     // Update campaign spent budget
-    if (expense.status === 'paid' || expense.status === 'approved') {
+    if (expense.campaignId && (expense.status === 'paid' || expense.status === 'approved')) {
       const campaign = await this.getMarketingCampaign(expense.campaignId);
       if (campaign) {
         await this.updateMarketingCampaign(expense.campaignId, {
@@ -6104,7 +6104,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     // Update campaign spent budget if status changed to paid/approved
-    if (expense.status && (expense.status === 'paid' || expense.status === 'approved') && 
+    if (existing.campaignId && expense.status && (expense.status === 'paid' || expense.status === 'approved') && 
         existing.status !== 'paid' && existing.status !== 'approved') {
       const campaign = await this.getMarketingCampaign(existing.campaignId);
       if (campaign) {
@@ -6119,7 +6119,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCampaignExpense(id: number): Promise<boolean> {
     const expense = await this.getCampaignExpense(id);
-    if (expense && (expense.status === 'paid' || expense.status === 'approved')) {
+    if (expense && expense.campaignId && (expense.status === 'paid' || expense.status === 'approved')) {
       // Reduce campaign spent budget
       const campaign = await this.getMarketingCampaign(expense.campaignId);
       if (campaign) {
@@ -9124,7 +9124,7 @@ export class DatabaseStorage implements IStorage {
     
     const allRequests = await db.select().from(materialTransfers).where(and(...requestConditions));
 
-    const transferIds = [...new Set([...deliveredTransfers.map(t => t.id), ...allRequests.map(t => t.id)])];
+    const transferIds = Array.from(new Set([...deliveredTransfers.map(t => t.id), ...allRequests.map(t => t.id)]));
     const allTransferItems = transferIds.length > 0
       ? await db.select().from(materialTransferItems)
           .where(sql`${materialTransferItems.transferId} IN (${sql.join(transferIds.map(id => sql`${id}`), sql`,`)})`)
@@ -9410,7 +9410,7 @@ export class DatabaseStorage implements IStorage {
     return { request, items };
   }
 
-  async createPurchasingRequest(request: InsertPurchasingRequest, items: InsertPurchasingRequestItem[]): Promise<PurchasingRequest> {
+  async createPurchasingRequest(request: InsertPurchasingRequest, items: Omit<InsertPurchasingRequestItem, 'purchasingRequestId'>[]): Promise<PurchasingRequest> {
     return await db.transaction(async (tx) => {
       const [created] = await tx.insert(purchasingRequests).values(request).returning();
       

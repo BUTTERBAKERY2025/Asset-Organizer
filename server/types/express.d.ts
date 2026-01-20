@@ -1,3 +1,4 @@
+import { Request } from "express";
 import { User } from "../../shared/schema";
 
 declare global {
@@ -7,6 +8,11 @@ declare global {
       currentUser?: User;
     }
   }
+}
+
+export interface AuthenticatedRequest extends Request {
+  user: User;
+  currentUser: User;
 }
 
 export {};

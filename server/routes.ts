@@ -1,8 +1,9 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
 import { db } from "./db";
+import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, sql, or, isNull } from "drizzle-orm";
 import { 
   branchDailyClosures, 
@@ -4545,10 +4546,11 @@ export async function registerRoutes(
       // Validate profileId if provided
       let validProfileId: number | null = null;
       if (profileId !== undefined && profileId !== null && profileId !== '') {
-        validProfileId = typeof profileId === 'string' ? parseInt(profileId, 10) : profileId;
-        if (isNaN(validProfileId)) {
+        const tempProfileId = typeof profileId === 'string' ? parseInt(profileId, 10) : profileId;
+        if (isNaN(tempProfileId)) {
           return res.status(400).json({ error: "معرف ملف التوزيع غير صالح" });
         }
+        validProfileId = tempProfileId;
       }
       
       // Check if target already exists for this branch/month
@@ -4791,10 +4793,11 @@ export async function registerRoutes(
       // Parse and validate maxAchievementPercent if provided
       let parsedMax: number | null = null;
       if (maxAchievementPercent !== undefined && maxAchievementPercent !== null && maxAchievementPercent !== '') {
-        parsedMax = typeof maxAchievementPercent === 'string' ? parseFloat(maxAchievementPercent) : maxAchievementPercent;
-        if (isNaN(parsedMax) || parsedMax <= parsedMin) {
+        const tempMax = typeof maxAchievementPercent === 'string' ? parseFloat(maxAchievementPercent) : maxAchievementPercent;
+        if (isNaN(tempMax) || tempMax <= parsedMin) {
           return res.status(400).json({ error: "الحد الأقصى يجب أن يكون أكبر من الحد الأدنى" });
         }
+        parsedMax = tempMax;
       }
       
       if (!['fixed', 'percentage', 'both'].includes(rewardType)) {
@@ -4933,10 +4936,11 @@ export async function registerRoutes(
       // Parse tierId if provided
       let parsedTierId: number | null = null;
       if (tierId !== undefined && tierId !== null && tierId !== '') {
-        parsedTierId = typeof tierId === 'string' ? parseInt(tierId, 10) : tierId;
-        if (isNaN(parsedTierId)) {
+        const tempTierId = typeof tierId === 'string' ? parseInt(tierId, 10) : tierId;
+        if (isNaN(tempTierId)) {
           return res.status(400).json({ error: "معرف مستوى الحافز غير صالح" });
         }
+        parsedTierId = tempTierId;
       }
       
       const award = await storage.createIncentiveAward({
@@ -5861,7 +5865,7 @@ export async function registerRoutes(
         return res.json([]);
       }
       
-      const receipts = await storage.getDisplayBarReceipts(effectiveBranchId, date);
+      const receipts = await storage.getDisplayBarReceipts(effectiveBranchId ?? undefined, date);
       res.json(receipts);
     } catch (error) {
       console.error("Error fetching display bar receipts:", error);
@@ -5909,7 +5913,7 @@ export async function registerRoutes(
         return res.json([]);
       }
       
-      const summaries = await storage.getDisplayBarDailySummary(effectiveBranchId, date);
+      const summaries = await storage.getDisplayBarDailySummary(effectiveBranchId ?? undefined, date);
       res.json(summaries);
     } catch (error) {
       console.error("Error fetching display bar summary:", error);
@@ -5984,12 +5988,12 @@ export async function registerRoutes(
       const monthEnd = `${currentMonth}-31`;
       
       // Get daily waste reports
-      const dailyWasteReports = await storage.getWasteReports(branchId, date, date);
+      const dailyWasteReports = await storage.getWasteReports(branchId ?? undefined, date, date);
       const dailyWasteValue = dailyWasteReports.reduce((sum, r) => sum + (r.totalValue || 0), 0);
       const dailyWasteItems = dailyWasteReports.reduce((sum, r) => sum + (r.totalItems || 0), 0);
       
       // Get monthly waste reports
-      const monthlyWasteReports = await storage.getWasteReports(branchId, monthStart, monthEnd);
+      const monthlyWasteReports = await storage.getWasteReports(branchId ?? undefined, monthStart, monthEnd);
       const monthlyWasteValue = monthlyWasteReports.reduce((sum, r) => sum + (r.totalValue || 0), 0);
       const monthlyWasteItems = monthlyWasteReports.reduce((sum, r) => sum + (r.totalItems || 0), 0);
       
@@ -6068,7 +6072,7 @@ export async function registerRoutes(
       
       const branchId = effectiveBranchId;
       
-      const reports = await storage.getWasteReports(branchId, today, today);
+      const reports = await storage.getWasteReports(branchId ?? undefined, today, today);
       
       const branchStats = new Map<string, { totalItems: number; totalValue: number; reportCount: number }>();
       
@@ -6111,7 +6115,7 @@ export async function registerRoutes(
         return res.json([]);
       }
       
-      const reports = await storage.getWasteReports(effectiveBranchId, dateFrom, dateTo);
+      const reports = await storage.getWasteReports(effectiveBranchId ?? undefined, dateFrom, dateTo);
       res.json(reports);
     } catch (error) {
       console.error("Error fetching waste reports:", error);
@@ -7519,7 +7523,7 @@ export async function registerRoutes(
       }
       
       // Create comparisons
-      const allKeys = new Set([...salesByKey.keys(), ...productionByKey.keys()]);
+      const allKeys = Array.from(new Set([...Array.from(salesByKey.keys()), ...Array.from(productionByKey.keys())]));
       let comparisonsCreated = 0;
       
       // Batch fetch all storage settings to avoid N+1 queries
@@ -7530,7 +7534,7 @@ export async function registerRoutes(
       const comparisonsToInsert: any[] = [];
       const keysToDelete: { branchId: string; date: string; productName: string }[] = [];
       
-      for (const key of allKeys) {
+      for (const key of allKeys as string[]) {
         const [keyBranchId, date, productName] = key.split("|");
         const sales = salesByKey.get(key) || { quantity: 0, value: 0, category: null };
         const production = productionByKey.get(key) || { quantity: 0, value: 0, category: null };
@@ -8946,7 +8950,7 @@ export async function registerRoutes(
       
       const browser = await puppeteer.default.launch({
         args: chromium.default.args,
-        defaultViewport: chromium.default.defaultViewport,
+        defaultViewport: { width: 1200, height: 800 },
         executablePath: await chromium.default.executablePath(),
         headless: true,
       });
@@ -9321,8 +9325,9 @@ export async function registerRoutes(
         const forecastedSalesAmount = targetSalesNum * ratio;
         
         // Get average price per unit from historical data
-        const avgPricePerUnit = product.totalQuantitySold > 0 && product.totalRevenue 
-          ? product.totalRevenue / product.totalQuantitySold 
+        const totalQty = product.totalQuantitySold || 0;
+        const avgPricePerUnit = totalQty > 0 && product.totalRevenue 
+          ? product.totalRevenue / totalQty 
           : 0;
         
         // Calculate forecasted quantity with fallback
@@ -11450,7 +11455,7 @@ export async function registerRoutes(
       }
       
       const targets = await storage.getActiveAverageTicketTargets(
-        effectiveBranchId,
+        effectiveBranchId ?? undefined,
         cashierId as string | undefined
       );
       res.json(targets);
@@ -14608,7 +14613,7 @@ export async function registerRoutes(
         if (!user) {
           return res.status(404).json({ error: "الموظف غير موجود" });
         }
-        employeeName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username;
+        employeeName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '';
       }
 
       // Get schedules and attendance for the date range
@@ -14862,7 +14867,7 @@ export async function registerRoutes(
         ? (queryBranchId || mandatoryBranch) 
         : mandatoryBranch;
       
-      const stats = await storage.getBranchEmployeeStats(effectiveBranchId);
+      const stats = await storage.getBranchEmployeeStats(effectiveBranchId ?? undefined);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching branch employee stats:", error);
@@ -17121,10 +17126,10 @@ export async function registerRoutes(
         ...t,
         sourceBranchName: t.sourceBranchId === "main_warehouse" 
           ? "المستودع الرئيسي" 
-          : (branchMap.get(t.sourceBranchId) || t.sourceBranchId),
+          : (t.sourceBranchId ? (branchMap.get(t.sourceBranchId) || t.sourceBranchId) : ""),
         destinationBranchName: t.destinationBranchId === "main_warehouse" 
           ? "المستودع الرئيسي" 
-          : (branchMap.get(t.destinationBranchId) || t.destinationBranchId),
+          : (t.destinationBranchId ? (branchMap.get(t.destinationBranchId) || t.destinationBranchId) : ""),
       }));
       
       res.json(enrichedTransfers);
