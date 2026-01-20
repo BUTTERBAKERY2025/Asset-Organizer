@@ -19073,5 +19073,470 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // سجل الزوار - Visitor Management API
+  // =====================================================
+
+  // Get visitors
+  app.get("/api/visitors", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = parseQueryString(req.query.branchId);
+      const visitors = await storage.getVisitors(branchId);
+      res.json(visitors);
+    } catch (error) {
+      console.error("Error getting visitors:", error);
+      res.status(500).json({ error: "فشل في جلب قائمة الزوار" });
+    }
+  });
+
+  // Search visitors
+  app.get("/api/visitors/search", isAuthenticated, async (req, res) => {
+    try {
+      const query = parseQueryString(req.query.q) || "";
+      const branchId = parseQueryString(req.query.branchId);
+      const visitors = await storage.searchVisitors(query, branchId);
+      res.json(visitors);
+    } catch (error) {
+      console.error("Error searching visitors:", error);
+      res.status(500).json({ error: "فشل في البحث عن الزوار" });
+    }
+  });
+
+  // Get blacklisted visitors
+  app.get("/api/visitors/blacklist", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = parseQueryString(req.query.branchId);
+      const visitors = await storage.getBlacklistedVisitors(branchId);
+      res.json(visitors);
+    } catch (error) {
+      console.error("Error getting blacklist:", error);
+      res.status(500).json({ error: "فشل في جلب القائمة السوداء" });
+    }
+  });
+
+  // Get visitor by ID
+  app.get("/api/visitors/:id", isAuthenticated, async (req, res) => {
+    try {
+      const visitor = await storage.getVisitor(parseInt(req.params.id));
+      if (!visitor) {
+        return res.status(404).json({ error: "الزائر غير موجود" });
+      }
+      res.json(visitor);
+    } catch (error) {
+      console.error("Error getting visitor:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الزائر" });
+    }
+  });
+
+  // Get visitor by national ID
+  app.get("/api/visitors/national-id/:nationalId", isAuthenticated, async (req, res) => {
+    try {
+      const visitor = await storage.getVisitorByNationalId(req.params.nationalId);
+      res.json(visitor || null);
+    } catch (error) {
+      console.error("Error getting visitor by national ID:", error);
+      res.status(500).json({ error: "فشل في البحث برقم الهوية" });
+    }
+  });
+
+  // Create visitor
+  app.post("/api/visitors", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const visitor = await storage.createVisitor({
+        ...req.body,
+        createdBy: user.id,
+      });
+      res.status(201).json(visitor);
+    } catch (error) {
+      console.error("Error creating visitor:", error);
+      res.status(500).json({ error: "فشل في إنشاء الزائر" });
+    }
+  });
+
+  // Update visitor
+  app.patch("/api/visitors/:id", isAuthenticated, async (req, res) => {
+    try {
+      const visitor = await storage.updateVisitor(parseInt(req.params.id), req.body);
+      if (!visitor) {
+        return res.status(404).json({ error: "الزائر غير موجود" });
+      }
+      res.json(visitor);
+    } catch (error) {
+      console.error("Error updating visitor:", error);
+      res.status(500).json({ error: "فشل في تحديث بيانات الزائر" });
+    }
+  });
+
+  // Delete visitor
+  app.delete("/api/visitors/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteVisitor(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting visitor:", error);
+      res.status(500).json({ error: "فشل في حذف الزائر" });
+    }
+  });
+
+  // Visitor Logs
+
+  // Get visitor logs
+  app.get("/api/visitor-logs", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = parseQueryString(req.query.branchId);
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      const logs = await storage.getVisitorLogs(branchId, startDate, endDate);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error getting visitor logs:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الزيارات" });
+    }
+  });
+
+  // Get active visitors (currently checked in)
+  app.get("/api/visitor-logs/active", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = parseQueryString(req.query.branchId);
+      const logs = await storage.getActiveVisitorLogs(branchId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error getting active visitors:", error);
+      res.status(500).json({ error: "فشل في جلب الزوار النشطين" });
+    }
+  });
+
+  // Get visitor stats
+  app.get("/api/visitor-stats", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = parseQueryString(req.query.branchId);
+      const stats = await storage.getVisitorStats(branchId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting visitor stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات الزوار" });
+    }
+  });
+
+  // Get visitor log by ID
+  app.get("/api/visitor-logs/:id", isAuthenticated, async (req, res) => {
+    try {
+      const log = await storage.getVisitorLog(parseInt(req.params.id));
+      if (!log) {
+        return res.status(404).json({ error: "سجل الزيارة غير موجود" });
+      }
+      res.json(log);
+    } catch (error) {
+      console.error("Error getting visitor log:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الزيارة" });
+    }
+  });
+
+  // Get visitor's history
+  app.get("/api/visitors/:id/logs", isAuthenticated, async (req, res) => {
+    try {
+      const logs = await storage.getVisitorLogsByVisitor(parseInt(req.params.id));
+      res.json(logs);
+    } catch (error) {
+      console.error("Error getting visitor history:", error);
+      res.status(500).json({ error: "فشل في جلب سجل زيارات الزائر" });
+    }
+  });
+
+  // Check-in visitor (create visit log)
+  app.post("/api/visitor-logs", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const log = await storage.createVisitorLog({
+        ...req.body,
+        registeredBy: user.id,
+        registeredByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        status: 'checked_in',
+      });
+      res.status(201).json(log);
+    } catch (error) {
+      console.error("Error creating visitor log:", error);
+      res.status(500).json({ error: "فشل في تسجيل دخول الزائر" });
+    }
+  });
+
+  // Update visitor log
+  app.patch("/api/visitor-logs/:id", isAuthenticated, async (req, res) => {
+    try {
+      const log = await storage.updateVisitorLog(parseInt(req.params.id), req.body);
+      if (!log) {
+        return res.status(404).json({ error: "سجل الزيارة غير موجود" });
+      }
+      res.json(log);
+    } catch (error) {
+      console.error("Error updating visitor log:", error);
+      res.status(500).json({ error: "فشل في تحديث سجل الزيارة" });
+    }
+  });
+
+  // Check-out visitor
+  app.post("/api/visitor-logs/:id/checkout", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const log = await storage.checkOutVisitor(
+        parseInt(req.params.id),
+        user.id,
+        `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
+      );
+      if (!log) {
+        return res.status(404).json({ error: "سجل الزيارة غير موجود" });
+      }
+      res.json(log);
+    } catch (error) {
+      console.error("Error checking out visitor:", error);
+      res.status(500).json({ error: "فشل في تسجيل خروج الزائر" });
+    }
+  });
+
+  // =====================================================
+  // إدارة السفر والحجوزات - Travel Management API
+  // =====================================================
+
+  // Get travel requests
+  app.get("/api/travel-requests", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = parseQueryString(req.query.branchId);
+      const status = parseQueryString(req.query.status);
+      const requests = await storage.getTravelRequests(branchId, status);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error getting travel requests:", error);
+      res.status(500).json({ error: "فشل في جلب طلبات السفر" });
+    }
+  });
+
+  // Get my travel requests
+  app.get("/api/travel-requests/my", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const requests = await storage.getTravelRequestsByRequester(user.id);
+      res.json(requests);
+    } catch (error) {
+      console.error("Error getting my travel requests:", error);
+      res.status(500).json({ error: "فشل في جلب طلبات السفر الخاصة بي" });
+    }
+  });
+
+  // Get travel stats
+  app.get("/api/travel-stats", isAuthenticated, async (req, res) => {
+    try {
+      const branchId = parseQueryString(req.query.branchId);
+      const stats = await storage.getTravelStats(branchId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting travel stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات السفر" });
+    }
+  });
+
+  // Get travel request by ID
+  app.get("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const request = await storage.getTravelRequest(parseInt(req.params.id));
+      if (!request) {
+        return res.status(404).json({ error: "طلب السفر غير موجود" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error getting travel request:", error);
+      res.status(500).json({ error: "فشل في جلب طلب السفر" });
+    }
+  });
+
+  // Create travel request
+  app.post("/api/travel-requests", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const request = await storage.createTravelRequest({
+        ...req.body,
+        requesterId: user.id,
+        requesterName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        createdBy: user.id,
+      });
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating travel request:", error);
+      res.status(500).json({ error: "فشل في إنشاء طلب السفر" });
+    }
+  });
+
+  // Update travel request
+  app.patch("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const request = await storage.updateTravelRequest(parseInt(req.params.id), req.body);
+      if (!request) {
+        return res.status(404).json({ error: "طلب السفر غير موجود" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error updating travel request:", error);
+      res.status(500).json({ error: "فشل في تحديث طلب السفر" });
+    }
+  });
+
+  // Delete travel request
+  app.delete("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteTravelRequest(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting travel request:", error);
+      res.status(500).json({ error: "فشل في حذف طلب السفر" });
+    }
+  });
+
+  // Submit travel request for approval
+  app.post("/api/travel-requests/:id/submit", isAuthenticated, async (req, res) => {
+    try {
+      const request = await storage.submitTravelRequest(parseInt(req.params.id));
+      if (!request) {
+        return res.status(404).json({ error: "طلب السفر غير موجود" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error submitting travel request:", error);
+      res.status(500).json({ error: "فشل في تقديم طلب السفر" });
+    }
+  });
+
+  // Approve/reject travel request (manager)
+  app.post("/api/travel-requests/:id/manager-approval", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const { approved, notes } = req.body;
+      const request = await storage.approveTravelRequest(
+        parseInt(req.params.id),
+        'manager',
+        user.id,
+        approved,
+        notes
+      );
+      if (!request) {
+        return res.status(404).json({ error: "طلب السفر غير موجود" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error processing manager approval:", error);
+      res.status(500).json({ error: "فشل في معالجة موافقة المدير" });
+    }
+  });
+
+  // Approve/reject travel request (finance)
+  app.post("/api/travel-requests/:id/finance-approval", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const { approved, notes } = req.body;
+      const request = await storage.approveTravelRequest(
+        parseInt(req.params.id),
+        'finance',
+        user.id,
+        approved,
+        notes
+      );
+      if (!request) {
+        return res.status(404).json({ error: "طلب السفر غير موجود" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error processing finance approval:", error);
+      res.status(500).json({ error: "فشل في معالجة موافقة المالية" });
+    }
+  });
+
+  // Complete travel request with report
+  app.post("/api/travel-requests/:id/complete", isAuthenticated, async (req, res) => {
+    try {
+      const { tripReport } = req.body;
+      const request = await storage.completeTravelRequest(parseInt(req.params.id), tripReport);
+      if (!request) {
+        return res.status(404).json({ error: "طلب السفر غير موجود" });
+      }
+      res.json(request);
+    } catch (error) {
+      console.error("Error completing travel request:", error);
+      res.status(500).json({ error: "فشل في إكمال طلب السفر" });
+    }
+  });
+
+  // Travel Expenses
+
+  // Get travel expenses
+  app.get("/api/travel-requests/:requestId/expenses", isAuthenticated, async (req, res) => {
+    try {
+      const expenses = await storage.getTravelExpenses(parseInt(req.params.requestId));
+      res.json(expenses);
+    } catch (error) {
+      console.error("Error getting travel expenses:", error);
+      res.status(500).json({ error: "فشل في جلب مصروفات السفر" });
+    }
+  });
+
+  // Create travel expense
+  app.post("/api/travel-expenses", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const expense = await storage.createTravelExpense({
+        ...req.body,
+        createdBy: user.id,
+      });
+      res.status(201).json(expense);
+    } catch (error) {
+      console.error("Error creating travel expense:", error);
+      res.status(500).json({ error: "فشل في إنشاء مصروف السفر" });
+    }
+  });
+
+  // Update travel expense
+  app.patch("/api/travel-expenses/:id", isAuthenticated, async (req, res) => {
+    try {
+      const expense = await storage.updateTravelExpense(parseInt(req.params.id), req.body);
+      if (!expense) {
+        return res.status(404).json({ error: "مصروف السفر غير موجود" });
+      }
+      res.json(expense);
+    } catch (error) {
+      console.error("Error updating travel expense:", error);
+      res.status(500).json({ error: "فشل في تحديث مصروف السفر" });
+    }
+  });
+
+  // Delete travel expense
+  app.delete("/api/travel-expenses/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteTravelExpense(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting travel expense:", error);
+      res.status(500).json({ error: "فشل في حذف مصروف السفر" });
+    }
+  });
+
+  // Approve/reject travel expense
+  app.post("/api/travel-expenses/:id/approve", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const { approved, reason } = req.body;
+      const expense = await storage.approveTravelExpense(
+        parseInt(req.params.id),
+        user.id,
+        approved,
+        reason
+      );
+      if (!expense) {
+        return res.status(404).json({ error: "مصروف السفر غير موجود" });
+      }
+      res.json(expense);
+    } catch (error) {
+      console.error("Error approving travel expense:", error);
+      res.status(500).json({ error: "فشل في معالجة موافقة المصروف" });
+    }
+  });
+
   return httpServer;
 }

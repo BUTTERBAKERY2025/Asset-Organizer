@@ -409,6 +409,18 @@ import {
   type DocumentShare,
   type InsertDocumentShare,
   documentAccessLogs,
+  visitors,
+  type Visitor,
+  type InsertVisitor,
+  visitorLogs,
+  type VisitorLog,
+  type InsertVisitorLog,
+  travelRequests,
+  type TravelRequest,
+  type InsertTravelRequest,
+  travelExpenses,
+  type TravelExpense,
+  type InsertTravelExpense,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -10351,6 +10363,490 @@ export class DatabaseStorage implements IStorage {
       totalFolders: Number(folderCount?.count || 0),
       totalCategories: Number(categoryCount?.count || 0),
       recentDocuments,
+    };
+  }
+
+  // =====================================================
+  // سجل الزوار - Visitor Management
+  // =====================================================
+
+  // Visitors CRUD
+  async getVisitors(branchId?: string): Promise<Visitor[]> {
+    if (branchId) {
+      return db.select().from(visitors)
+        .where(eq(visitors.branchId, branchId))
+        .orderBy(desc(visitors.createdAt));
+    }
+    return db.select().from(visitors).orderBy(desc(visitors.createdAt));
+  }
+
+  async getVisitor(id: number): Promise<Visitor | undefined> {
+    const [visitor] = await db.select().from(visitors).where(eq(visitors.id, id));
+    return visitor;
+  }
+
+  async getVisitorByNationalId(nationalId: string): Promise<Visitor | undefined> {
+    const [visitor] = await db.select().from(visitors).where(eq(visitors.nationalId, nationalId));
+    return visitor;
+  }
+
+  async createVisitor(data: InsertVisitor): Promise<Visitor> {
+    const [visitor] = await db.insert(visitors).values(data).returning();
+    return visitor;
+  }
+
+  async updateVisitor(id: number, data: Partial<InsertVisitor>): Promise<Visitor | undefined> {
+    const [visitor] = await db.update(visitors)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(visitors.id, id))
+      .returning();
+    return visitor;
+  }
+
+  async deleteVisitor(id: number): Promise<boolean> {
+    const result = await db.delete(visitors).where(eq(visitors.id, id));
+    return true;
+  }
+
+  async searchVisitors(query: string, branchId?: string): Promise<Visitor[]> {
+    const conditions = [];
+    if (branchId) {
+      conditions.push(eq(visitors.branchId, branchId));
+    }
+    conditions.push(
+      or(
+        ilike(visitors.fullName, `%${query}%`),
+        ilike(visitors.phone, `%${query}%`),
+        ilike(visitors.nationalId, `%${query}%`),
+        ilike(visitors.company, `%${query}%`)
+      )
+    );
+    return db.select().from(visitors)
+      .where(and(...conditions))
+      .orderBy(desc(visitors.createdAt))
+      .limit(50);
+  }
+
+  async getBlacklistedVisitors(branchId?: string): Promise<Visitor[]> {
+    const conditions = [eq(visitors.isBlacklisted, true)];
+    if (branchId) {
+      conditions.push(eq(visitors.branchId, branchId));
+    }
+    return db.select().from(visitors)
+      .where(and(...conditions))
+      .orderBy(desc(visitors.createdAt));
+  }
+
+  // Visitor Logs CRUD
+  async getVisitorLogs(branchId?: string, startDate?: Date, endDate?: Date): Promise<VisitorLog[]> {
+    const conditions = [];
+    if (branchId) {
+      conditions.push(eq(visitorLogs.branchId, branchId));
+    }
+    if (startDate) {
+      conditions.push(gte(visitorLogs.visitDate, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(visitorLogs.visitDate, endDate));
+    }
+    if (conditions.length > 0) {
+      return db.select().from(visitorLogs)
+        .where(and(...conditions))
+        .orderBy(desc(visitorLogs.visitDate));
+    }
+    return db.select().from(visitorLogs).orderBy(desc(visitorLogs.visitDate));
+  }
+
+  async getVisitorLog(id: number): Promise<VisitorLog | undefined> {
+    const [log] = await db.select().from(visitorLogs).where(eq(visitorLogs.id, id));
+    return log;
+  }
+
+  async getActiveVisitorLogs(branchId?: string): Promise<VisitorLog[]> {
+    const conditions = [eq(visitorLogs.status, 'checked_in')];
+    if (branchId) {
+      conditions.push(eq(visitorLogs.branchId, branchId));
+    }
+    return db.select().from(visitorLogs)
+      .where(and(...conditions))
+      .orderBy(desc(visitorLogs.checkInTime));
+  }
+
+  async createVisitorLog(data: InsertVisitorLog): Promise<VisitorLog> {
+    // Generate visit number
+    const now = new Date();
+    const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [countResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(visitorLogs)
+      .where(ilike(visitorLogs.visitNumber, `VIS-${yearMonth}-%`));
+    const nextNum = (Number(countResult?.count || 0) + 1).toString().padStart(4, '0');
+    const visitNumber = `VIS-${yearMonth}-${nextNum}`;
+
+    const [log] = await db.insert(visitorLogs).values({
+      ...data,
+      visitNumber,
+      checkInTime: data.checkInTime || new Date(),
+    }).returning();
+
+    // Update visitor's visit count and last visit
+    if (data.visitorId) {
+      await db.update(visitors)
+        .set({
+          visitCount: sql`${visitors.visitCount} + 1`,
+          lastVisitAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(visitors.id, data.visitorId));
+    }
+
+    return log;
+  }
+
+  async updateVisitorLog(id: number, data: Partial<InsertVisitorLog>): Promise<VisitorLog | undefined> {
+    const [log] = await db.update(visitorLogs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(visitorLogs.id, id))
+      .returning();
+    return log;
+  }
+
+  async checkOutVisitor(id: number, checkedOutBy: string, checkedOutByName: string): Promise<VisitorLog | undefined> {
+    const log = await this.getVisitorLog(id);
+    if (!log) return undefined;
+
+    const checkOutTime = new Date();
+    const actualDuration = log.checkInTime
+      ? Math.round((checkOutTime.getTime() - new Date(log.checkInTime).getTime()) / 60000)
+      : null;
+
+    const [updated] = await db.update(visitorLogs)
+      .set({
+        status: 'checked_out',
+        checkOutTime,
+        actualDuration,
+        badgeReturned: true,
+        checkedOutBy,
+        checkedOutByName,
+        updatedAt: new Date(),
+      })
+      .where(eq(visitorLogs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getVisitorLogsByVisitor(visitorId: number): Promise<VisitorLog[]> {
+    return db.select().from(visitorLogs)
+      .where(eq(visitorLogs.visitorId, visitorId))
+      .orderBy(desc(visitorLogs.visitDate));
+  }
+
+  async getVisitorStats(branchId?: string): Promise<{
+    todayVisitors: number;
+    activeVisitors: number;
+    totalVisitors: number;
+    blacklistedCount: number;
+  }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const branchCondition = branchId ? eq(visitorLogs.branchId, branchId) : undefined;
+    const visitorBranchCondition = branchId ? eq(visitors.branchId, branchId) : undefined;
+
+    const [todayCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(visitorLogs)
+      .where(and(branchCondition, gte(visitorLogs.visitDate, today)));
+
+    const [activeCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(visitorLogs)
+      .where(and(branchCondition, eq(visitorLogs.status, 'checked_in')));
+
+    const [totalCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(visitors)
+      .where(visitorBranchCondition);
+
+    const [blacklistedCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(visitors)
+      .where(and(visitorBranchCondition, eq(visitors.isBlacklisted, true)));
+
+    return {
+      todayVisitors: Number(todayCount?.count || 0),
+      activeVisitors: Number(activeCount?.count || 0),
+      totalVisitors: Number(totalCount?.count || 0),
+      blacklistedCount: Number(blacklistedCount?.count || 0),
+    };
+  }
+
+  // =====================================================
+  // إدارة السفر والحجوزات - Travel Management
+  // =====================================================
+
+  // Travel Requests CRUD
+  async getTravelRequests(branchId?: string, status?: string): Promise<TravelRequest[]> {
+    const conditions = [];
+    if (branchId) {
+      conditions.push(eq(travelRequests.branchId, branchId));
+    }
+    if (status) {
+      conditions.push(eq(travelRequests.status, status));
+    }
+    if (conditions.length > 0) {
+      return db.select().from(travelRequests)
+        .where(and(...conditions))
+        .orderBy(desc(travelRequests.createdAt));
+    }
+    return db.select().from(travelRequests).orderBy(desc(travelRequests.createdAt));
+  }
+
+  async getTravelRequest(id: number): Promise<TravelRequest | undefined> {
+    const [request] = await db.select().from(travelRequests).where(eq(travelRequests.id, id));
+    return request;
+  }
+
+  async getTravelRequestsByRequester(requesterId: string): Promise<TravelRequest[]> {
+    return db.select().from(travelRequests)
+      .where(eq(travelRequests.requesterId, requesterId))
+      .orderBy(desc(travelRequests.createdAt));
+  }
+
+  async createTravelRequest(data: InsertTravelRequest): Promise<TravelRequest> {
+    // Generate request number
+    const now = new Date();
+    const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [countResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(travelRequests)
+      .where(ilike(travelRequests.requestNumber, `TR-${yearMonth}-%`));
+    const nextNum = (Number(countResult?.count || 0) + 1).toString().padStart(4, '0');
+    const requestNumber = `TR-${yearMonth}-${nextNum}`;
+
+    // Calculate trip duration
+    const departureDate = new Date(data.departureDate);
+    const returnDate = new Date(data.returnDate);
+    const tripDuration = Math.ceil((returnDate.getTime() - departureDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    const [request] = await db.insert(travelRequests).values({
+      ...data,
+      requestNumber,
+      tripDuration,
+    }).returning();
+    return request;
+  }
+
+  async updateTravelRequest(id: number, data: Partial<InsertTravelRequest>): Promise<TravelRequest | undefined> {
+    // Recalculate trip duration if dates changed
+    let tripDuration = undefined;
+    if (data.departureDate && data.returnDate) {
+      const departureDate = new Date(data.departureDate);
+      const returnDate = new Date(data.returnDate);
+      tripDuration = Math.ceil((returnDate.getTime() - departureDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    const [request] = await db.update(travelRequests)
+      .set({ ...data, tripDuration, updatedAt: new Date() })
+      .where(eq(travelRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  async deleteTravelRequest(id: number): Promise<boolean> {
+    await db.delete(travelRequests).where(eq(travelRequests.id, id));
+    return true;
+  }
+
+  async approveTravelRequest(
+    id: number,
+    approvalType: 'manager' | 'finance',
+    approvedBy: string,
+    approved: boolean,
+    notes?: string
+  ): Promise<TravelRequest | undefined> {
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (approvalType === 'manager') {
+      updateData.managerApproval = approved ? 'approved' : 'rejected';
+      updateData.managerApprovalDate = new Date();
+      updateData.managerApprovalBy = approvedBy;
+      updateData.managerApprovalNotes = notes;
+    } else {
+      updateData.financeApproval = approved ? 'approved' : 'rejected';
+      updateData.financeApprovalDate = new Date();
+      updateData.financeApprovalBy = approvedBy;
+      updateData.financeApprovalNotes = notes;
+    }
+
+    // Update overall status if both approvals are done
+    const request = await this.getTravelRequest(id);
+    if (request) {
+      if (approvalType === 'manager' && approved && request.financeApproval === 'approved') {
+        updateData.status = 'approved';
+      } else if (approvalType === 'finance' && approved && request.managerApproval === 'approved') {
+        updateData.status = 'approved';
+      } else if (!approved) {
+        updateData.status = 'rejected';
+      }
+    }
+
+    const [updated] = await db.update(travelRequests)
+      .set(updateData)
+      .where(eq(travelRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  async submitTravelRequest(id: number): Promise<TravelRequest | undefined> {
+    const [request] = await db.update(travelRequests)
+      .set({ status: 'pending', updatedAt: new Date() })
+      .where(eq(travelRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  async completeTravelRequest(id: number, tripReport?: string): Promise<TravelRequest | undefined> {
+    const [request] = await db.update(travelRequests)
+      .set({
+        status: 'completed',
+        tripReport,
+        tripReportDate: tripReport ? new Date() : undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(travelRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  // Travel Expenses CRUD
+  async getTravelExpenses(travelRequestId: number): Promise<TravelExpense[]> {
+    return db.select().from(travelExpenses)
+      .where(eq(travelExpenses.travelRequestId, travelRequestId))
+      .orderBy(desc(travelExpenses.expenseDate));
+  }
+
+  async getTravelExpense(id: number): Promise<TravelExpense | undefined> {
+    const [expense] = await db.select().from(travelExpenses).where(eq(travelExpenses.id, id));
+    return expense;
+  }
+
+  async createTravelExpense(data: InsertTravelExpense): Promise<TravelExpense> {
+    const [expense] = await db.insert(travelExpenses).values(data).returning();
+    
+    // Update total actual cost in travel request
+    await this.updateTravelRequestActualCosts(data.travelRequestId);
+    
+    return expense;
+  }
+
+  async updateTravelExpense(id: number, data: Partial<InsertTravelExpense>): Promise<TravelExpense | undefined> {
+    const [expense] = await db.update(travelExpenses)
+      .set(data)
+      .where(eq(travelExpenses.id, id))
+      .returning();
+    
+    if (expense) {
+      await this.updateTravelRequestActualCosts(expense.travelRequestId);
+    }
+    
+    return expense;
+  }
+
+  async deleteTravelExpense(id: number): Promise<boolean> {
+    const expense = await this.getTravelExpense(id);
+    await db.delete(travelExpenses).where(eq(travelExpenses.id, id));
+    if (expense) {
+      await this.updateTravelRequestActualCosts(expense.travelRequestId);
+    }
+    return true;
+  }
+
+  async approveTravelExpense(id: number, approvedBy: string, approved: boolean, reason?: string): Promise<TravelExpense | undefined> {
+    const [expense] = await db.update(travelExpenses)
+      .set({
+        status: approved ? 'approved' : 'rejected',
+        approvedBy,
+        approvedAt: new Date(),
+        rejectionReason: approved ? null : reason,
+      })
+      .where(eq(travelExpenses.id, id))
+      .returning();
+    return expense;
+  }
+
+  private async updateTravelRequestActualCosts(travelRequestId: number): Promise<void> {
+    const expenses = await this.getTravelExpenses(travelRequestId);
+    
+    const costsByType: Record<string, number> = {
+      flight: 0,
+      hotel: 0,
+      transport: 0,
+      meals: 0,
+      other: 0,
+    };
+
+    for (const expense of expenses) {
+      if (expense.status === 'approved') {
+        const type = expense.expenseType;
+        if (type in costsByType) {
+          costsByType[type] += Number(expense.amount);
+        } else {
+          costsByType.other += Number(expense.amount);
+        }
+      }
+    }
+
+    const totalActualCost = Object.values(costsByType).reduce((a, b) => a + b, 0);
+
+    await db.update(travelRequests)
+      .set({
+        actualFlightCost: costsByType.flight.toString(),
+        actualHotelCost: costsByType.hotel.toString(),
+        actualTransportCost: costsByType.transport.toString(),
+        actualMealsCost: costsByType.meals.toString(),
+        actualOtherCost: costsByType.other.toString(),
+        totalActualCost: totalActualCost.toString(),
+        updatedAt: new Date(),
+      })
+      .where(eq(travelRequests.id, travelRequestId));
+  }
+
+  async getTravelStats(branchId?: string): Promise<{
+    pendingRequests: number;
+    approvedRequests: number;
+    completedTrips: number;
+    totalBudget: number;
+    totalSpent: number;
+  }> {
+    const branchCondition = branchId ? eq(travelRequests.branchId, branchId) : undefined;
+
+    const [pendingCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(travelRequests)
+      .where(and(branchCondition, eq(travelRequests.status, 'pending')));
+
+    const [approvedCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(travelRequests)
+      .where(and(branchCondition, eq(travelRequests.status, 'approved')));
+
+    const [completedCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(travelRequests)
+      .where(and(branchCondition, eq(travelRequests.status, 'completed')));
+
+    const [budgetSum] = await db.select({ 
+      total: sql<number>`COALESCE(SUM(${travelRequests.totalEstimatedCost}::numeric), 0)` 
+    })
+      .from(travelRequests)
+      .where(branchCondition);
+
+    const [spentSum] = await db.select({ 
+      total: sql<number>`COALESCE(SUM(${travelRequests.totalActualCost}::numeric), 0)` 
+    })
+      .from(travelRequests)
+      .where(branchCondition);
+
+    return {
+      pendingRequests: Number(pendingCount?.count || 0),
+      approvedRequests: Number(approvedCount?.count || 0),
+      completedTrips: Number(completedCount?.count || 0),
+      totalBudget: Number(budgetSum?.total || 0),
+      totalSpent: Number(spentSum?.total || 0),
     };
   }
 }
