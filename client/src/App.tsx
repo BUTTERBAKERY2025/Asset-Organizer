@@ -114,6 +114,8 @@ const ExecutiveMeetingsPage = lazy(() => import("@/pages/executive-meetings"));
 const ExecutiveTasksPage = lazy(() => import("@/pages/executive-tasks"));
 const ExecutiveCorrespondencePage = lazy(() => import("@/pages/executive-correspondence"));
 const DocumentsPage = lazy(() => import("@/pages/documents"));
+const VisitorsPage = lazy(() => import("@/pages/visitors"));
+const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 
 function AppLoadingFallback() {
   return (
@@ -279,6 +281,8 @@ function Router() {
       <Route path="/executive/tasks">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveTasksPage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/executive/correspondence">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveCorrespondencePage /></Suspense></ProtectedRoute>}</Route>
       <Route path="/documents">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DocumentsPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/visitors">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><VisitorsPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/travel-requests">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><TravelRequestsPage /></Suspense></ProtectedRoute>}</Route>
       
       <Route component={NotFound} />
     </Switch>

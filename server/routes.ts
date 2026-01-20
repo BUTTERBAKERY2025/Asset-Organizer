@@ -19282,7 +19282,7 @@ export async function registerRoutes(
       const log = await storage.checkOutVisitor(
         parseInt(req.params.id),
         user.id,
-        `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username
+        `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'مستخدم'
       );
       if (!log) {
         return res.status(404).json({ error: "سجل الزيارة غير موجود" });
