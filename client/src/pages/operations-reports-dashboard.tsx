@@ -3443,9 +3443,57 @@ export default function OperationsReportsDashboardPage() {
     </div>
     <div style="text-align: left; font-size: 11px;">
       <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
-      <div>${filters.startDate} إلى ${filters.endDate}</div>
+      <div style="background: #dbeafe; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border: 1px solid #3b82f6;">
+        <strong style="color: #1e40af;">🏢 الفرع:</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : 'جميع الفروع'}</span>
+      </div>
+      <div style="background: #fff7ed; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
+        <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
+        <br/><span style="font-size: 9px; color: #9a3412;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
+      </div>
     </div>
   </div>
+  
+  <!-- ملخص تحليلي للمرتجعات -->
+  <div style="background: linear-gradient(135deg, #9a3412 0%, #7c2d12 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+    <div style="text-align: center; margin-bottom: 10px;">
+      <span style="font-size: 14px; font-weight: bold;">📊 الملخص التحليلي للمرتجعات</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center;">
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: #fbbf24;">${returnsCount}</div>
+        <div style="font-size: 9px; opacity: 0.8;">عدد عمليات المرتجع</div>
+      </div>
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: #f87171;">${formatCurrency(totalReturnAmount)}</div>
+        <div style="font-size: 9px; opacity: 0.8;">إجمالي المرتجعات</div>
+      </div>
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: #a5b4fc;">${Object.keys(returnsByBranch).length}</div>
+        <div style="font-size: 9px; opacity: 0.8;">الفروع المتأثرة</div>
+      </div>
+      <div>
+        <div style="font-size: 22px; font-weight: bold; color: #fcd34d;">${returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</div>
+        <div style="font-size: 9px; opacity: 0.8;">متوسط المرتجع</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مؤشرات الأداء -->
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+    <div style="background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 10px; color: #991b1b;">📉 متوسط المرتجع اليومي</div>
+      <div style="font-size: 16px; font-weight: bold; color: #dc2626;">${formatCurrency(totalReturnAmount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}</div>
+    </div>
+    <div style="background: #fff7ed; border: 2px solid #ea580c; border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 10px; color: #9a3412;">📊 عدد المرتجعات/يوم</div>
+      <div style="font-size: 16px; font-weight: bold; color: #ea580c;">${(returnsCount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1)).toFixed(1)}</div>
+    </div>
+    <div style="background: #fef3c7; border: 2px solid #d97706; border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 10px; color: #92400e;">🏢 أكثر فرع مرتجعات</div>
+      <div style="font-size: 14px; font-weight: bold; color: #d97706;">${Object.entries(returnsByBranch).sort((a, b) => b[1].amount - a[1].amount)[0]?.[0] || '-'}</div>
+    </div>
+  </div>
+
   <div class="summary-grid">
     <div class="summary-card"><div class="value">${returnsCount}</div><div class="label">عدد عمليات المرتجع</div></div>
     <div class="summary-card"><div class="value amount-red">${formatCurrency(totalReturnAmount)}</div><div class="label">إجمالي المرتجعات</div></div>
@@ -3923,6 +3971,9 @@ export default function OperationsReportsDashboardPage() {
     </div>
     <div style="text-align: left; font-size: 11px;">
       <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
+      <div style="background: #dbeafe; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border: 1px solid #3b82f6;">
+        <strong style="color: #1e40af;">🏢 الفرع:</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : 'جميع الفروع'}</span>
+      </div>
       <div style="background: #fef3c7; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
         <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
         <br/><span style="font-size: 9px; color: #92400e;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
@@ -4333,6 +4384,9 @@ export default function OperationsReportsDashboardPage() {
                                 </div>
                                 <div style="text-align: left; font-size: 11px;">
                                   <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
+                                  <div style="background: #dbeafe; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border: 1px solid #3b82f6;">
+                                    <strong style="color: #1e40af;">🏢 الفرع:</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : 'جميع الفروع'}</span>
+                                  </div>
                                   <div style="background: #e0e7ff; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
                                     <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
                                     <br/><span style="font-size: 9px; color: #4338ca;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
