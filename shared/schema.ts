@@ -6681,3 +6681,574 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+// =====================================================
+// نظام الحوكمة ومجلس الإدارة - Corporate Governance System
+// =====================================================
+
+// أعضاء مجلس الإدارة - Board Members
+export const boardMembers = pgTable("board_members", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id),
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"),
+  email: text("email"),
+  phone: text("phone"),
+  position: text("position").notNull(), // chairman, vice_chairman, member, secretary, independent_member
+  memberType: text("member_type").default("executive"), // executive, non_executive, independent
+  nationality: text("nationality"),
+  dateOfBirth: date("date_of_birth"),
+  qualifications: text("qualifications"),
+  experience: text("experience"),
+  currentEmployer: text("current_employer"),
+  otherBoardMemberships: text("other_board_memberships"),
+  appointmentDate: date("appointment_date").notNull(),
+  termEndDate: date("term_end_date"),
+  termNumber: integer("term_number").default(1),
+  status: text("status").default("active"), // active, resigned, expired, suspended
+  resignationDate: date("resignation_date"),
+  resignationReason: text("resignation_reason"),
+  photoUrl: text("photo_url"),
+  signatureUrl: text("signature_url"),
+  committees: text("committees").array(), // لجان المجلس
+  votingPower: numeric("voting_power", { precision: 5, scale: 2 }).default("1.00"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_members_status").on(table.status),
+  index("idx_board_members_position").on(table.position),
+  index("idx_board_members_type").on(table.memberType),
+]);
+
+export const insertBoardMemberSchema = createInsertSchema(boardMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BoardMember = typeof boardMembers.$inferSelect;
+export type InsertBoardMember = z.infer<typeof insertBoardMemberSchema>;
+
+// المساهمون - Shareholders
+export const shareholders = pgTable("shareholders", {
+  id: serial("id").primaryKey(),
+  shareholderType: text("shareholder_type").notNull(), // individual, company, government, institution
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"),
+  commercialRegister: text("commercial_register"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  nationality: text("nationality"),
+  numberOfShares: integer("number_of_shares").notNull(),
+  sharePercentage: numeric("share_percentage", { precision: 8, scale: 4 }).notNull(),
+  shareClass: text("share_class").default("common"), // common, preferred, founders
+  acquisitionDate: date("acquisition_date").notNull(),
+  acquisitionPrice: numeric("acquisition_price", { precision: 12, scale: 2 }),
+  certificateNumber: text("certificate_number"),
+  bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
+  iban: text("iban"),
+  isBoardMember: boolean("is_board_member").default(false),
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  votingRights: boolean("voting_rights").default(true),
+  dividendRights: boolean("dividend_rights").default(true),
+  status: text("status").default("active"), // active, frozen, transferred
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholders_type").on(table.shareholderType),
+  index("idx_shareholders_status").on(table.status),
+  index("idx_shareholders_percentage").on(table.sharePercentage),
+]);
+
+export const insertShareholderSchema = createInsertSchema(shareholders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Shareholder = typeof shareholders.$inferSelect;
+export type InsertShareholder = z.infer<typeof insertShareholderSchema>;
+
+// تحويلات الأسهم - Share Transfers
+export const shareTransfers = pgTable("share_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: text("transfer_number").notNull().unique(),
+  fromShareholderId: integer("from_shareholder_id").notNull().references(() => shareholders.id),
+  toShareholderId: integer("to_shareholder_id").notNull().references(() => shareholders.id),
+  numberOfShares: integer("number_of_shares").notNull(),
+  pricePerShare: numeric("price_per_share", { precision: 12, scale: 2 }).notNull(),
+  totalValue: numeric("total_value", { precision: 15, scale: 2 }).notNull(),
+  transferDate: date("transfer_date").notNull(),
+  transferType: text("transfer_type").notNull(), // sale, gift, inheritance, split
+  approvalStatus: text("approval_status").default("pending"), // pending, approved, rejected, cancelled
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  boardResolutionId: integer("board_resolution_id"),
+  certificateOldNumber: text("certificate_old_number"),
+  certificateNewNumber: text("certificate_new_number"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_share_transfers_from").on(table.fromShareholderId),
+  index("idx_share_transfers_to").on(table.toShareholderId),
+  index("idx_share_transfers_status").on(table.approvalStatus),
+  index("idx_share_transfers_date").on(table.transferDate),
+]);
+
+export const insertShareTransferSchema = createInsertSchema(shareTransfers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShareTransfer = typeof shareTransfers.$inferSelect;
+export type InsertShareTransfer = z.infer<typeof insertShareTransferSchema>;
+
+// اجتماعات مجلس الإدارة والجمعية العمومية - Board & Assembly Meetings
+export const governanceMeetings = pgTable("governance_meetings", {
+  id: serial("id").primaryKey(),
+  meetingNumber: text("meeting_number").notNull().unique(),
+  meetingType: text("meeting_type").notNull(), // board, ordinary_assembly, extraordinary_assembly, committee
+  title: text("title").notNull(),
+  description: text("description"),
+  meetingDate: timestamp("meeting_date").notNull(),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  location: text("location"),
+  locationType: text("location_type").default("in_person"), // in_person, virtual, hybrid
+  virtualMeetingLink: text("virtual_meeting_link"),
+  agenda: text("agenda"),
+  agendaItems: jsonb("agenda_items"), // [{order: 1, title: "", description: "", presenter: "", duration: 15}]
+  quorumRequired: numeric("quorum_required", { precision: 5, scale: 2 }).default("50.00"),
+  quorumAchieved: boolean("quorum_achieved"),
+  attendanceCount: integer("attendance_count").default(0),
+  totalEligibleVotes: integer("total_eligible_votes"),
+  status: text("status").default("scheduled"), // scheduled, in_progress, completed, cancelled, postponed
+  postponedTo: timestamp("postponed_to"),
+  cancellationReason: text("cancellation_reason"),
+  invitationSentAt: timestamp("invitation_sent_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  minutesStatus: text("minutes_status").default("pending"), // pending, draft, approved, signed
+  minutesApprovedAt: timestamp("minutes_approved_at"),
+  minutesApprovedBy: varchar("minutes_approved_by").references(() => users.id),
+  fiscalYear: text("fiscal_year"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_governance_meetings_type").on(table.meetingType),
+  index("idx_governance_meetings_status").on(table.status),
+  index("idx_governance_meetings_date").on(table.meetingDate),
+  index("idx_governance_meetings_fiscal_year").on(table.fiscalYear),
+]);
+
+export const insertGovernanceMeetingSchema = createInsertSchema(governanceMeetings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GovernanceMeeting = typeof governanceMeetings.$inferSelect;
+export type InsertGovernanceMeeting = z.infer<typeof insertGovernanceMeetingSchema>;
+
+// سجل حضور الاجتماعات - Meeting Attendance
+export const meetingAttendance = pgTable("meeting_attendance", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  attendeeType: text("attendee_type").notNull(), // board_member, shareholder, proxy, observer, secretary
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id),
+  attendeeName: text("attendee_name").notNull(),
+  attendeeRole: text("attendee_role"),
+  representedShares: integer("represented_shares"),
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }),
+  attendanceStatus: text("attendance_status").default("expected"), // expected, present, absent, excused, late, left_early
+  arrivalTime: timestamp("arrival_time"),
+  departureTime: timestamp("departure_time"),
+  attendanceMethod: text("attendance_method").default("in_person"), // in_person, virtual, proxy
+  proxyHolderName: text("proxy_holder_name"),
+  proxyDocumentUrl: text("proxy_document_url"),
+  signatureUrl: text("signature_url"),
+  signedAt: timestamp("signed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_meeting_attendance_meeting").on(table.meetingId),
+  index("idx_meeting_attendance_board_member").on(table.boardMemberId),
+  index("idx_meeting_attendance_shareholder").on(table.shareholderId),
+  index("idx_meeting_attendance_status").on(table.attendanceStatus),
+]);
+
+export const insertMeetingAttendanceSchema = createInsertSchema(meetingAttendance).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MeetingAttendance = typeof meetingAttendance.$inferSelect;
+export type InsertMeetingAttendance = z.infer<typeof insertMeetingAttendanceSchema>;
+
+// محاضر الاجتماعات - Meeting Minutes
+export const meetingMinutes = pgTable("meeting_minutes", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  minutesNumber: text("minutes_number").notNull().unique(),
+  content: text("content").notNull(),
+  summary: text("summary"),
+  attendanceList: jsonb("attendance_list"), // [{name, role, status}]
+  discussionPoints: jsonb("discussion_points"), // [{topic, discussion, conclusion}]
+  decisions: jsonb("decisions"), // [{number, description, responsible, deadline}]
+  votingResults: jsonb("voting_results"), // [{item, forVotes, againstVotes, abstain, result}]
+  nextMeetingDate: timestamp("next_meeting_date"),
+  attachments: jsonb("attachments"), // [{name, url, type}]
+  status: text("status").default("draft"), // draft, pending_review, pending_signature, signed, archived
+  preparedBy: varchar("prepared_by").references(() => users.id),
+  preparedAt: timestamp("prepared_at"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  signedBy: jsonb("signed_by"), // [{userId, name, role, signatureUrl, signedAt}]
+  archivedAt: timestamp("archived_at"),
+  archiveReference: text("archive_reference"),
+  pdfUrl: text("pdf_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_meeting_minutes_meeting").on(table.meetingId),
+  index("idx_meeting_minutes_status").on(table.status),
+  index("idx_meeting_minutes_number").on(table.minutesNumber),
+]);
+
+export const insertMeetingMinutesSchema = createInsertSchema(meetingMinutes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MeetingMinutes = typeof meetingMinutes.$inferSelect;
+export type InsertMeetingMinutes = z.infer<typeof insertMeetingMinutesSchema>;
+
+// قرارات مجلس الإدارة - Board Resolutions
+export const boardResolutions = pgTable("board_resolutions", {
+  id: serial("id").primaryKey(),
+  resolutionNumber: text("resolution_number").notNull().unique(),
+  meetingId: integer("meeting_id").references(() => governanceMeetings.id),
+  resolutionType: text("resolution_type").notNull(), // regular, circular, emergency, administrative, financial
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category"), // financial, operational, strategic, hr, legal, governance
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  proposedBy: varchar("proposed_by").references(() => users.id),
+  proposedAt: timestamp("proposed_at").notNull(),
+  votingRequired: boolean("voting_required").default(true),
+  votingDeadline: timestamp("voting_deadline"),
+  forVotes: integer("for_votes").default(0),
+  againstVotes: integer("against_votes").default(0),
+  abstainVotes: integer("abstain_votes").default(0),
+  totalVotes: integer("total_votes").default(0),
+  requiredMajority: numeric("required_majority", { precision: 5, scale: 2 }).default("50.00"),
+  status: text("status").default("draft"), // draft, proposed, voting, approved, rejected, implemented, cancelled
+  approvedAt: timestamp("approved_at"),
+  implementationDeadline: date("implementation_deadline"),
+  implementationStatus: text("implementation_status").default("pending"), // pending, in_progress, completed, overdue
+  implementedAt: timestamp("implemented_at"),
+  responsiblePerson: varchar("responsible_person").references(() => users.id),
+  financialImpact: numeric("financial_impact", { precision: 15, scale: 2 }),
+  attachments: jsonb("attachments"),
+  relatedResolutions: integer("related_resolutions").array(),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_resolutions_meeting").on(table.meetingId),
+  index("idx_board_resolutions_type").on(table.resolutionType),
+  index("idx_board_resolutions_status").on(table.status),
+  index("idx_board_resolutions_category").on(table.category),
+  index("idx_board_resolutions_implementation").on(table.implementationStatus),
+]);
+
+export const insertBoardResolutionSchema = createInsertSchema(boardResolutions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BoardResolution = typeof boardResolutions.$inferSelect;
+export type InsertBoardResolution = z.infer<typeof insertBoardResolutionSchema>;
+
+// التصويت على القرارات - Resolution Votes
+export const resolutionVotes = pgTable("resolution_votes", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
+  voterType: text("voter_type").notNull(), // board_member, shareholder
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id),
+  voterName: text("voter_name").notNull(),
+  vote: text("vote").notNull(), // for, against, abstain
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }).default("1.00"),
+  weightedVote: numeric("weighted_vote", { precision: 8, scale: 4 }),
+  votedAt: timestamp("voted_at").defaultNow().notNull(),
+  voteMethod: text("vote_method").default("in_meeting"), // in_meeting, electronic, written
+  ipAddress: text("ip_address"),
+  deviceInfo: text("device_info"),
+  signatureUrl: text("signature_url"),
+  comments: text("comments"),
+  isValid: boolean("is_valid").default(true),
+  invalidationReason: text("invalidation_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_resolution_votes_resolution").on(table.resolutionId),
+  index("idx_resolution_votes_board_member").on(table.boardMemberId),
+  index("idx_resolution_votes_shareholder").on(table.shareholderId),
+  index("idx_resolution_votes_vote").on(table.vote),
+]);
+
+export const insertResolutionVoteSchema = createInsertSchema(resolutionVotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ResolutionVote = typeof resolutionVotes.$inferSelect;
+export type InsertResolutionVote = z.infer<typeof insertResolutionVoteSchema>;
+
+// رأس المال والأسهم - Capital & Shares Management
+export const capitalTransactions = pgTable("capital_transactions", {
+  id: serial("id").primaryKey(),
+  transactionNumber: text("transaction_number").notNull().unique(),
+  transactionType: text("transaction_type").notNull(), // increase, decrease, split, merge, bonus_issue
+  description: text("description").notNull(),
+  previousCapital: numeric("previous_capital", { precision: 15, scale: 2 }).notNull(),
+  newCapital: numeric("new_capital", { precision: 15, scale: 2 }).notNull(),
+  changeAmount: numeric("change_amount", { precision: 15, scale: 2 }).notNull(),
+  previousShares: integer("previous_shares").notNull(),
+  newShares: integer("new_shares").notNull(),
+  shareChange: integer("share_change").notNull(),
+  pricePerShare: numeric("price_per_share", { precision: 12, scale: 2 }),
+  effectiveDate: date("effective_date").notNull(),
+  boardResolutionId: integer("board_resolution_id").references(() => boardResolutions.id),
+  assemblyApprovalRequired: boolean("assembly_approval_required").default(true),
+  assemblyMeetingId: integer("assembly_meeting_id").references(() => governanceMeetings.id),
+  regulatoryApprovalDate: date("regulatory_approval_date"),
+  regulatoryApprovalNumber: text("regulatory_approval_number"),
+  registrationDate: date("registration_date"),
+  status: text("status").default("pending"), // pending, approved, registered, completed, cancelled
+  attachments: jsonb("attachments"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_capital_transactions_type").on(table.transactionType),
+  index("idx_capital_transactions_status").on(table.status),
+  index("idx_capital_transactions_date").on(table.effectiveDate),
+]);
+
+export const insertCapitalTransactionSchema = createInsertSchema(capitalTransactions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CapitalTransaction = typeof capitalTransactions.$inferSelect;
+export type InsertCapitalTransaction = z.infer<typeof insertCapitalTransactionSchema>;
+
+// توزيعات الأرباح - Dividend Distributions
+export const dividendDistributions = pgTable("dividend_distributions", {
+  id: serial("id").primaryKey(),
+  distributionNumber: text("distribution_number").notNull().unique(),
+  fiscalYear: text("fiscal_year").notNull(),
+  distributionType: text("distribution_type").notNull(), // cash, stock, mixed
+  description: text("description"),
+  totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).notNull(),
+  amountPerShare: numeric("amount_per_share", { precision: 12, scale: 4 }).notNull(),
+  eligibleShares: integer("eligible_shares").notNull(),
+  recordDate: date("record_date").notNull(),
+  paymentDate: date("payment_date").notNull(),
+  boardResolutionId: integer("board_resolution_id").references(() => boardResolutions.id),
+  assemblyMeetingId: integer("assembly_meeting_id").references(() => governanceMeetings.id),
+  status: text("status").default("announced"), // announced, record_closed, in_payment, completed
+  paidAmount: numeric("paid_amount", { precision: 15, scale: 2 }).default("0"),
+  withholdingTaxRate: numeric("withholding_tax_rate", { precision: 5, scale: 2 }).default("0"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_dividend_distributions_year").on(table.fiscalYear),
+  index("idx_dividend_distributions_status").on(table.status),
+  index("idx_dividend_distributions_payment_date").on(table.paymentDate),
+]);
+
+export const insertDividendDistributionSchema = createInsertSchema(dividendDistributions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DividendDistribution = typeof dividendDistributions.$inferSelect;
+export type InsertDividendDistribution = z.infer<typeof insertDividendDistributionSchema>;
+
+// مدفوعات الأرباح للمساهمين - Shareholder Dividend Payments
+export const shareholderDividends = pgTable("shareholder_dividends", {
+  id: serial("id").primaryKey(),
+  distributionId: integer("distribution_id").notNull().references(() => dividendDistributions.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id),
+  sharesHeld: integer("shares_held").notNull(),
+  grossAmount: numeric("gross_amount", { precision: 12, scale: 2 }).notNull(),
+  withholdingTax: numeric("withholding_tax", { precision: 12, scale: 2 }).default("0"),
+  netAmount: numeric("net_amount", { precision: 12, scale: 2 }).notNull(),
+  paymentMethod: text("payment_method").default("bank_transfer"), // bank_transfer, cheque, cash
+  paymentReference: text("payment_reference"),
+  paymentDate: date("payment_date"),
+  status: text("status").default("pending"), // pending, processing, paid, failed, returned
+  failureReason: text("failure_reason"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_dividends_distribution").on(table.distributionId),
+  index("idx_shareholder_dividends_shareholder").on(table.shareholderId),
+  index("idx_shareholder_dividends_status").on(table.status),
+]);
+
+export const insertShareholderDividendSchema = createInsertSchema(shareholderDividends).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShareholderDividend = typeof shareholderDividends.$inferSelect;
+export type InsertShareholderDividend = z.infer<typeof insertShareholderDividendSchema>;
+
+// الإفصاحات والتقارير النظامية - Disclosures & Regulatory Reports
+export const disclosures = pgTable("disclosures", {
+  id: serial("id").primaryKey(),
+  disclosureNumber: text("disclosure_number").notNull().unique(),
+  disclosureType: text("disclosure_type").notNull(), // annual_report, quarterly_report, material_event, ownership_change, related_party
+  title: text("title").notNull(),
+  description: text("description"),
+  fiscalYear: text("fiscal_year"),
+  fiscalQuarter: text("fiscal_quarter"),
+  reportingPeriodStart: date("reporting_period_start"),
+  reportingPeriodEnd: date("reporting_period_end"),
+  dueDate: date("due_date"),
+  submissionDate: timestamp("submission_date"),
+  publishDate: timestamp("publish_date"),
+  regulatoryBody: text("regulatory_body"), // ministry_of_commerce, capital_market_authority, stock_exchange
+  referenceNumber: text("reference_number"),
+  category: text("category"), // financial, operational, governance, legal
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  status: text("status").default("draft"), // draft, pending_review, pending_approval, submitted, published, rejected
+  content: text("content"),
+  attachments: jsonb("attachments"),
+  financialStatements: jsonb("financial_statements"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  isConfidential: boolean("is_confidential").default(false),
+  publishUrl: text("publish_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_disclosures_type").on(table.disclosureType),
+  index("idx_disclosures_status").on(table.status),
+  index("idx_disclosures_fiscal_year").on(table.fiscalYear),
+  index("idx_disclosures_due_date").on(table.dueDate),
+  index("idx_disclosures_category").on(table.category),
+]);
+
+export const insertDisclosureSchema = createInsertSchema(disclosures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Disclosure = typeof disclosures.$inferSelect;
+export type InsertDisclosure = z.infer<typeof insertDisclosureSchema>;
+
+// الامتثال والمتطلبات النظامية - Compliance Requirements
+export const complianceRequirements = pgTable("compliance_requirements", {
+  id: serial("id").primaryKey(),
+  requirementCode: text("requirement_code").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // license, registration, permit, certification, report, filing
+  regulatoryBody: text("regulatory_body").notNull(),
+  applicableLaw: text("applicable_law"),
+  frequency: text("frequency").notNull(), // one_time, annual, semi_annual, quarterly, monthly, as_needed
+  isRecurring: boolean("is_recurring").default(true),
+  currentStatus: text("current_status").default("pending"), // pending, valid, expiring_soon, expired, under_renewal
+  validFrom: date("valid_from"),
+  validUntil: date("valid_until"),
+  lastRenewalDate: date("last_renewal_date"),
+  nextDueDate: date("next_due_date"),
+  reminderDays: integer("reminder_days").default(30),
+  documentNumber: text("document_number"),
+  documentUrl: text("document_url"),
+  cost: numeric("cost", { precision: 12, scale: 2 }),
+  responsiblePerson: varchar("responsible_person").references(() => users.id),
+  priority: text("priority").default("normal"), // low, normal, high, critical
+  penaltyForNonCompliance: text("penalty_for_non_compliance"),
+  notes: text("notes"),
+  attachments: jsonb("attachments"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_compliance_requirements_category").on(table.category),
+  index("idx_compliance_requirements_status").on(table.currentStatus),
+  index("idx_compliance_requirements_due_date").on(table.nextDueDate),
+  index("idx_compliance_requirements_frequency").on(table.frequency),
+]);
+
+export const insertComplianceRequirementSchema = createInsertSchema(complianceRequirements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ComplianceRequirement = typeof complianceRequirements.$inferSelect;
+export type InsertComplianceRequirement = z.infer<typeof insertComplianceRequirementSchema>;
+
+// سجل الامتثال والتجديدات - Compliance History
+export const complianceHistory = pgTable("compliance_history", {
+  id: serial("id").primaryKey(),
+  requirementId: integer("requirement_id").notNull().references(() => complianceRequirements.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // renewal, submission, approval, expiry, penalty, update
+  actionDate: timestamp("action_date").notNull(),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  documentNumber: text("document_number"),
+  documentUrl: text("document_url"),
+  validFrom: date("valid_from"),
+  validUntil: date("valid_until"),
+  cost: numeric("cost", { precision: 12, scale: 2 }),
+  penaltyAmount: numeric("penalty_amount", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+  performedBy: varchar("performed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_compliance_history_requirement").on(table.requirementId),
+  index("idx_compliance_history_action").on(table.action),
+  index("idx_compliance_history_date").on(table.actionDate),
+]);
+
+export const insertComplianceHistorySchema = createInsertSchema(complianceHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ComplianceHistory = typeof complianceHistory.$inferSelect;
+export type InsertComplianceHistory = z.infer<typeof insertComplianceHistorySchema>;
