@@ -114,6 +114,7 @@ const ExecutiveMeetingsPage = lazy(() => import("@/pages/executive-meetings"));
 const ExecutiveTasksPage = lazy(() => import("@/pages/executive-tasks"));
 const ExecutiveCorrespondencePage = lazy(() => import("@/pages/executive-correspondence"));
 const DocumentsPage = lazy(() => import("@/pages/documents"));
+const SharedDocumentPage = lazy(() => import("@/pages/shared-document"));
 const VisitorsPage = lazy(() => import("@/pages/visitors"));
 const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 const ExecutiveReportsPage = lazy(() => import("@/pages/executive-reports"));
@@ -177,6 +178,9 @@ function Router() {
           </PublicOnlyRoute>
         )}
       </Route>
+      
+      {/* Public shared document page - no auth required */}
+      <Route path="/share/:shareLink">{() => <Suspense fallback={<PageLoadingFallback />}><SharedDocumentPage /></Suspense>}</Route>
       
       {/* HR - الموارد البشرية */}
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
