@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Layout } from "@/components/layout";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -24,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Folder,
   FileText,
@@ -50,6 +53,9 @@ import {
   Loader2,
   Link2,
   Copy,
+  ExternalLink,
+  Calendar,
+  CheckCircle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -477,11 +483,14 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="p-6 space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
+    <Layout>
+    <div className="container mx-auto p-6 space-y-6" dir="rtl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">إدارة الوثائق والأرشفة</h1>
-          <p className="text-gray-500 mt-1">تنظيم وإدارة ملفات ووثائق المؤسسة</p>
+          <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+            إدارة الوثائق والأرشفة
+          </h1>
+          <p className="text-gray-600 mt-1">تنظيم وإدارة ملفات ووثائق المؤسسة</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={isNewCategoryDialogOpen} onOpenChange={setIsNewCategoryDialogOpen}>
@@ -710,28 +719,85 @@ export default function DocumentsPage() {
 
       {/* Share Dialog */}
       <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-        <DialogContent dir="rtl">
+        <DialogContent dir="rtl" className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>مشاركة الوثيقة</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-amber-600" />
+              مشاركة الوثيقة
+            </DialogTitle>
+            <DialogDescription>
+              {selectedDocument?.title && `مشاركة: ${selectedDocument.title}`}
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>رابط المشاركة</Label>
+          <div className="space-y-5 py-4">
+            {selectedDocument && (
+              <div className="bg-gray-50 rounded-lg p-4 border">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <FileText className="h-6 w-6 text-amber-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{selectedDocument.title}</p>
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                      <span>{selectedDocument.fileType.toUpperCase()}</span>
+                      <span>•</span>
+                      <span>{formatFileSize(selectedDocument.fileSize)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-3">
+              <Label className="text-base font-medium">رابط المشاركة</Label>
               <div className="flex gap-2">
                 <Input
                   value={shareLink}
                   readOnly
-                  className="flex-1"
+                  className="flex-1 text-sm bg-gray-50"
+                  dir="ltr"
                   data-testid="input-share-link"
                 />
-                <Button onClick={copyShareLink} variant="outline" data-testid="btn-copy-link">
+                <Button 
+                  onClick={copyShareLink} 
+                  variant="default" 
+                  className="gap-2 bg-amber-600 hover:bg-amber-700"
+                  data-testid="btn-copy-link"
+                >
                   <Copy className="h-4 w-4" />
+                  نسخ
                 </Button>
               </div>
             </div>
-            <p className="text-sm text-gray-500">
-              يمكن لأي شخص لديه هذا الرابط عرض الوثيقة
-            </p>
+            
+            <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+              <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+              <div className="text-sm text-blue-800">
+                <p className="font-medium">رابط عام</p>
+                <p className="text-blue-600 mt-1">
+                  يمكن لأي شخص لديه هذا الرابط عرض الوثيقة وتحميلها
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1 gap-2"
+                onClick={() => {
+                  window.open(shareLink, '_blank');
+                }}
+              >
+                <ExternalLink className="h-4 w-4" />
+                فتح الرابط
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsShareDialogOpen(false)}
+              >
+                إغلاق
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1112,5 +1178,6 @@ export default function DocumentsPage() {
         </Card>
       </div>
     </div>
+    </Layout>
   );
 }
