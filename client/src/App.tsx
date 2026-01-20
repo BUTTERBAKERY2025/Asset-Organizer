@@ -109,6 +109,10 @@ const WarehouseMovementLogsPage = lazy(() => import("@/pages/warehouse-movement-
 const BranchStockPage = lazy(() => import("@/pages/branch-stock"));
 const WarehouseReportsPage = lazy(() => import("@/pages/warehouse-reports"));
 const PurchasingRequestsPage = lazy(() => import("@/pages/purchasing-requests"));
+const ExecutiveDashboardPage = lazy(() => import("@/pages/executive-dashboard"));
+const ExecutiveMeetingsPage = lazy(() => import("@/pages/executive-meetings"));
+const ExecutiveTasksPage = lazy(() => import("@/pages/executive-tasks"));
+const ExecutiveCorrespondencePage = lazy(() => import("@/pages/executive-correspondence"));
 
 function AppLoadingFallback() {
   return (
@@ -267,6 +271,12 @@ function Router() {
       <Route path="/branch-stock">{() => <ModulePage component={BranchStockPage} module="warehouse" />}</Route>
       <Route path="/warehouse-reports">{() => <ModulePage component={WarehouseReportsPage} module="warehouse" />}</Route>
       <Route path="/purchasing-requests">{() => <ModulePage component={PurchasingRequestsPage} module="warehouse" />}</Route>
+      
+      {/* Executive Secretariat - السكرتارية التنفيذية */}
+      <Route path="/executive">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveDashboardPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/executive/meetings">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveMeetingsPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/executive/tasks">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveTasksPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/executive/correspondence">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveCorrespondencePage /></Suspense></ProtectedRoute>}</Route>
       
       <Route component={NotFound} />
     </Switch>

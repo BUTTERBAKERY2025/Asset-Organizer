@@ -17716,5 +17716,559 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // Executive Secretariat API - السكرتارية التنفيذية
+  // ==========================================
+
+  // Dashboard Stats
+  app.get("/api/executive/dashboard", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const stats = await storage.getExecDashboardStats(mandatoryBranch || undefined);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching executive dashboard:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات لوحة التحكم" });
+    }
+  });
+
+  // ========== Executive Meetings API - الاجتماعات ==========
+
+  app.get("/api/executive/meetings", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { status, startDate, endDate, organizerId, limit } = req.query;
+      
+      const meetings = await storage.getExecMeetings({
+        branchId: mandatoryBranch || parseQueryString(req.query.branchId),
+        status: parseQueryString(status),
+        startDate: parseQueryString(startDate),
+        endDate: parseQueryString(endDate),
+        organizerId: parseQueryString(organizerId),
+        limit: limit ? parseInt(parseQueryString(limit) || "100") : undefined,
+      });
+      
+      res.json(meetings);
+    } catch (error) {
+      console.error("Error fetching meetings:", error);
+      res.status(500).json({ error: "فشل في جلب الاجتماعات" });
+    }
+  });
+
+  app.get("/api/executive/meetings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const meeting = await storage.getExecMeeting(parseInt(req.params.id));
+      if (!meeting) {
+        return res.status(404).json({ error: "الاجتماع غير موجود" });
+      }
+      
+      const attendees = await storage.getExecMeetingAttendees(meeting.id);
+      res.json({ ...meeting, attendees });
+    } catch (error) {
+      console.error("Error fetching meeting:", error);
+      res.status(500).json({ error: "فشل في جلب الاجتماع" });
+    }
+  });
+
+  app.post("/api/executive/meetings", isAuthenticated, async (req, res) => {
+    try {
+      const meetingSchema = z.object({
+        title: z.string().min(1, "العنوان مطلوب"),
+        titleEn: z.string().optional(),
+        description: z.string().optional(),
+        location: z.string().optional(),
+        meetingType: z.enum(["in_person", "virtual", "hybrid", "phone"]).default("in_person"),
+        meetingLink: z.string().optional(),
+        startAt: z.string().or(z.date()),
+        endAt: z.string().or(z.date()).optional(),
+        agenda: z.string().optional(),
+        status: z.enum(["scheduled", "in_progress", "completed", "cancelled", "postponed"]).default("scheduled"),
+        attendees: z.array(z.any()).optional(),
+      });
+      
+      const parseResult = meetingSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+      
+      const user = getCurrentUser(req);
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      const meetingData = {
+        ...parseResult.data,
+        branchId: mandatoryBranch || req.body.branchId,
+        organizerId: user.id,
+        organizerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        createdBy: user.id,
+      };
+      
+      const meeting = await storage.createExecMeeting(meetingData);
+      
+      // Add attendees if provided
+      if (req.body.attendees && Array.isArray(req.body.attendees)) {
+        for (const attendee of req.body.attendees) {
+          await storage.addExecMeetingAttendee({
+            meetingId: meeting.id,
+            ...attendee,
+          });
+        }
+      }
+      
+      res.status(201).json(meeting);
+    } catch (error) {
+      console.error("Error creating meeting:", error);
+      res.status(500).json({ error: "فشل في إنشاء الاجتماع" });
+    }
+  });
+
+  app.put("/api/executive/meetings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        title: z.string().min(1).optional(),
+        titleEn: z.string().optional(),
+        description: z.string().optional(),
+        location: z.string().optional(),
+        meetingType: z.enum(["in_person", "virtual", "hybrid", "phone"]).optional(),
+        meetingLink: z.string().optional(),
+        startAt: z.string().or(z.date()).optional(),
+        endAt: z.string().or(z.date()).optional().nullable(),
+        agenda: z.string().optional(),
+        minutes: z.string().optional(),
+        status: z.enum(["scheduled", "in_progress", "completed", "cancelled", "postponed"]).optional(),
+      });
+      
+      const parseResult = updateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+      
+      const meeting = await storage.updateExecMeeting(parseInt(req.params.id), parseResult.data);
+      if (!meeting) {
+        return res.status(404).json({ error: "الاجتماع غير موجود" });
+      }
+      res.json(meeting);
+    } catch (error) {
+      console.error("Error updating meeting:", error);
+      res.status(500).json({ error: "فشل في تحديث الاجتماع" });
+    }
+  });
+
+  app.delete("/api/executive/meetings/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteExecMeeting(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting meeting:", error);
+      res.status(500).json({ error: "فشل في حذف الاجتماع" });
+    }
+  });
+
+  // Meeting Attendees
+  app.post("/api/executive/meetings/:id/attendees", isAuthenticated, async (req, res) => {
+    try {
+      const attendee = await storage.addExecMeetingAttendee({
+        meetingId: parseInt(req.params.id),
+        ...req.body,
+      });
+      res.status(201).json(attendee);
+    } catch (error) {
+      console.error("Error adding attendee:", error);
+      res.status(500).json({ error: "فشل في إضافة الحضور" });
+    }
+  });
+
+  app.put("/api/executive/meetings/:meetingId/attendees/:id", isAuthenticated, async (req, res) => {
+    try {
+      const attendee = await storage.updateExecMeetingAttendee(parseInt(req.params.id), req.body);
+      if (!attendee) {
+        return res.status(404).json({ error: "الحضور غير موجود" });
+      }
+      res.json(attendee);
+    } catch (error) {
+      console.error("Error updating attendee:", error);
+      res.status(500).json({ error: "فشل في تحديث الحضور" });
+    }
+  });
+
+  app.delete("/api/executive/meetings/:meetingId/attendees/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.removeExecMeetingAttendee(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing attendee:", error);
+      res.status(500).json({ error: "فشل في إزالة الحضور" });
+    }
+  });
+
+  // ========== Executive Tasks API - المهام التنفيذية ==========
+
+  app.get("/api/executive/tasks", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const user = getCurrentUser(req);
+      const { status, priority, assignedTo, dueDateFrom, dueDateTo, relatedType, relatedId, limit } = req.query;
+      
+      const tasks = await storage.getExecTasks({
+        branchId: mandatoryBranch || parseQueryString(req.query.branchId),
+        status: parseQueryString(status),
+        priority: parseQueryString(priority),
+        assignedTo: parseQueryString(assignedTo) || (req.query.myTasks === 'true' ? user.id : undefined),
+        dueDateFrom: parseQueryString(dueDateFrom),
+        dueDateTo: parseQueryString(dueDateTo),
+        relatedType: parseQueryString(relatedType),
+        relatedId: relatedId ? parseInt(parseQueryString(relatedId) || "0") : undefined,
+        limit: limit ? parseInt(parseQueryString(limit) || "100") : undefined,
+      });
+      
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ error: "فشل في جلب المهام" });
+    }
+  });
+
+  app.get("/api/executive/tasks/:id", isAuthenticated, async (req, res) => {
+    try {
+      const task = await storage.getExecTask(parseInt(req.params.id));
+      if (!task) {
+        return res.status(404).json({ error: "المهمة غير موجودة" });
+      }
+      
+      const comments = await storage.getExecTaskComments(task.id);
+      res.json({ ...task, comments });
+    } catch (error) {
+      console.error("Error fetching task:", error);
+      res.status(500).json({ error: "فشل في جلب المهمة" });
+    }
+  });
+
+  app.post("/api/executive/tasks", isAuthenticated, async (req, res) => {
+    try {
+      const taskSchema = z.object({
+        title: z.string().min(1, "العنوان مطلوب"),
+        titleEn: z.string().optional(),
+        description: z.string().optional(),
+        priority: z.enum(["urgent", "high", "normal", "low"]).default("normal"),
+        status: z.enum(["pending", "in_progress", "completed", "cancelled"]).default("pending"),
+        assignedTo: z.string().optional(),
+        assignedToName: z.string().optional(),
+        dueDate: z.string().or(z.date()).optional(),
+        relatedType: z.string().optional(),
+        relatedId: z.number().optional(),
+      });
+      
+      const parseResult = taskSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+      
+      const user = getCurrentUser(req);
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      const taskData = {
+        ...parseResult.data,
+        branchId: mandatoryBranch || req.body.branchId,
+        createdBy: user.id,
+        createdByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+      };
+      
+      const task = await storage.createExecTask(taskData);
+      
+      // Create notification for assigned user
+      if (task.assignedTo && task.assignedTo !== user.id) {
+        await storage.createExecNotification({
+          userId: task.assignedTo,
+          branchId: task.branchId,
+          type: 'task_assigned',
+          title: 'مهمة جديدة مسندة إليك',
+          titleEn: 'New Task Assigned',
+          body: task.title,
+          bodyEn: task.titleEn || task.title,
+          entityType: 'task',
+          entityId: task.id,
+          priority: task.priority,
+        });
+      }
+      
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Error creating task:", error);
+      res.status(500).json({ error: "فشل في إنشاء المهمة" });
+    }
+  });
+
+  app.put("/api/executive/tasks/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        title: z.string().min(1).optional(),
+        titleEn: z.string().optional(),
+        description: z.string().optional(),
+        priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
+        status: z.enum(["pending", "in_progress", "completed", "cancelled"]).optional(),
+        assignedTo: z.string().optional(),
+        assignedToName: z.string().optional(),
+        dueDate: z.string().or(z.date()).optional().nullable(),
+        completionNotes: z.string().optional(),
+      });
+      
+      const parseResult = updateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+      
+      const task = await storage.updateExecTask(parseInt(req.params.id), parseResult.data);
+      if (!task) {
+        return res.status(404).json({ error: "المهمة غير موجودة" });
+      }
+      res.json(task);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      res.status(500).json({ error: "فشل في تحديث المهمة" });
+    }
+  });
+
+  app.delete("/api/executive/tasks/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteExecTask(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      res.status(500).json({ error: "فشل في حذف المهمة" });
+    }
+  });
+
+  // Task Comments
+  app.post("/api/executive/tasks/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const comment = await storage.addExecTaskComment({
+        taskId: parseInt(req.params.id),
+        userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        content: req.body.content,
+      });
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      res.status(500).json({ error: "فشل في إضافة التعليق" });
+    }
+  });
+
+  app.delete("/api/executive/tasks/:taskId/comments/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteExecTaskComment(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      res.status(500).json({ error: "فشل في حذف التعليق" });
+    }
+  });
+
+  // ========== Executive Correspondence API - المراسلات ==========
+
+  app.get("/api/executive/correspondence", isAuthenticated, async (req, res) => {
+    try {
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { type, status, category, ownerId, assignedTo, isConfidential, startDate, endDate, limit } = req.query;
+      
+      const correspondence = await storage.getExecCorrespondence({
+        branchId: mandatoryBranch || parseQueryString(req.query.branchId),
+        type: parseQueryString(type),
+        status: parseQueryString(status),
+        category: parseQueryString(category),
+        ownerId: parseQueryString(ownerId),
+        assignedTo: parseQueryString(assignedTo),
+        isConfidential: isConfidential === 'true' ? true : isConfidential === 'false' ? false : undefined,
+        startDate: parseQueryString(startDate),
+        endDate: parseQueryString(endDate),
+        limit: limit ? parseInt(parseQueryString(limit) || "100") : undefined,
+      });
+      
+      res.json(correspondence);
+    } catch (error) {
+      console.error("Error fetching correspondence:", error);
+      res.status(500).json({ error: "فشل في جلب المراسلات" });
+    }
+  });
+
+  app.get("/api/executive/correspondence/:id", isAuthenticated, async (req, res) => {
+    try {
+      const corr = await storage.getExecCorrespondenceById(parseInt(req.params.id));
+      if (!corr) {
+        return res.status(404).json({ error: "المراسلة غير موجودة" });
+      }
+      res.json(corr);
+    } catch (error) {
+      console.error("Error fetching correspondence:", error);
+      res.status(500).json({ error: "فشل في جلب المراسلة" });
+    }
+  });
+
+  app.post("/api/executive/correspondence", isAuthenticated, async (req, res) => {
+    try {
+      const corrSchema = z.object({
+        type: z.enum(["incoming", "outgoing"]).default("incoming"),
+        subject: z.string().min(1, "الموضوع مطلوب"),
+        subjectEn: z.string().optional(),
+        content: z.string().optional(),
+        priority: z.enum(["urgent", "high", "normal", "low"]).default("normal"),
+        status: z.enum(["received", "in_review", "pending_response", "responded", "archived", "draft", "sent"]).optional(),
+        category: z.enum(["official", "internal", "external", "complaint", "request", "report", "notification"]).optional(),
+        senderName: z.string().optional(),
+        senderOrg: z.string().optional(),
+        senderContact: z.string().optional(),
+        recipientName: z.string().optional(),
+        recipientOrg: z.string().optional(),
+        recipientContact: z.string().optional(),
+        assignedTo: z.string().optional(),
+        assignedToName: z.string().optional(),
+        isConfidential: z.boolean().default(false),
+        responseRequired: z.boolean().default(false),
+        dueDate: z.string().or(z.date()).optional(),
+      });
+      
+      const parseResult = corrSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+      
+      const user = getCurrentUser(req);
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      // Generate reference number
+      const refNumber = await storage.generateCorrespondenceRefNumber(
+        parseResult.data.type || 'incoming',
+        mandatoryBranch || req.body.branchId
+      );
+      
+      const corrData = {
+        ...parseResult.data,
+        refNumber,
+        branchId: mandatoryBranch || req.body.branchId,
+        ownerId: user.id,
+        ownerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+        createdBy: user.id,
+        receivedAt: parseResult.data.type === 'incoming' ? new Date() : null,
+        sentAt: parseResult.data.type === 'outgoing' && parseResult.data.status === 'sent' ? new Date() : null,
+      };
+      
+      const correspondence = await storage.createExecCorrespondence(corrData);
+      
+      // Create notification for assigned user
+      if (correspondence.assignedTo && correspondence.assignedTo !== user.id) {
+        await storage.createExecNotification({
+          userId: correspondence.assignedTo,
+          branchId: correspondence.branchId,
+          type: 'correspondence_received',
+          title: correspondence.type === 'incoming' ? 'مراسلة واردة جديدة' : 'مراسلة صادرة للمراجعة',
+          titleEn: correspondence.type === 'incoming' ? 'New Incoming Correspondence' : 'Outgoing Correspondence for Review',
+          body: correspondence.subject,
+          bodyEn: correspondence.subjectEn || correspondence.subject,
+          entityType: 'correspondence',
+          entityId: correspondence.id,
+          priority: correspondence.priority,
+        });
+      }
+      
+      res.status(201).json(correspondence);
+    } catch (error) {
+      console.error("Error creating correspondence:", error);
+      res.status(500).json({ error: "فشل في إنشاء المراسلة" });
+    }
+  });
+
+  app.put("/api/executive/correspondence/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        subject: z.string().min(1).optional(),
+        subjectEn: z.string().optional(),
+        content: z.string().optional(),
+        priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
+        status: z.enum(["received", "in_review", "pending_response", "responded", "archived", "draft", "sent"]).optional(),
+        category: z.enum(["official", "internal", "external", "complaint", "request", "report", "notification"]).optional(),
+        senderName: z.string().optional(),
+        senderOrg: z.string().optional(),
+        senderContact: z.string().optional(),
+        recipientName: z.string().optional(),
+        recipientOrg: z.string().optional(),
+        recipientContact: z.string().optional(),
+        assignedTo: z.string().optional(),
+        assignedToName: z.string().optional(),
+        isConfidential: z.boolean().optional(),
+        responseRequired: z.boolean().optional(),
+        dueDate: z.string().or(z.date()).optional().nullable(),
+      });
+      
+      const parseResult = updateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
+      }
+      
+      const corr = await storage.updateExecCorrespondence(parseInt(req.params.id), parseResult.data);
+      if (!corr) {
+        return res.status(404).json({ error: "المراسلة غير موجودة" });
+      }
+      res.json(corr);
+    } catch (error) {
+      console.error("Error updating correspondence:", error);
+      res.status(500).json({ error: "فشل في تحديث المراسلة" });
+    }
+  });
+
+  app.delete("/api/executive/correspondence/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteExecCorrespondence(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting correspondence:", error);
+      res.status(500).json({ error: "فشل في حذف المراسلة" });
+    }
+  });
+
+  // ========== Executive Notifications API - الإشعارات ==========
+
+  app.get("/api/executive/notifications", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const { type, isRead, limit } = req.query;
+      
+      const notifications = await storage.getExecNotifications({
+        userId: user.id,
+        type: parseQueryString(type),
+        isRead: isRead === 'true' ? true : isRead === 'false' ? false : undefined,
+        limit: limit ? parseInt(parseQueryString(limit) || "50") : undefined,
+      });
+      
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "فشل في جلب الإشعارات" });
+    }
+  });
+
+  app.get("/api/executive/notifications/unread-count", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const count = await storage.getExecUnreadNotificationCount(user.id);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ error: "فشل في جلب عدد الإشعارات" });
+    }
+  });
+
+  app.put("/api/executive/notifications/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const notification = await storage.markExecNotificationAsRead(parseInt(req.params.id));
+      if (!notification) {
+        return res.status(404).json({ error: "الإشعار غير موجود" });
+      }
+      res.json(notification);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "فشل في تحديث الإشعار" });
+    }
+  });
+
   return httpServer;
 }

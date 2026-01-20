@@ -66,6 +66,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     construction: false,
     marketing: false,
     warehouse: false,
+    executive: false,
     settings: false,
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -262,6 +263,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/warehouse-movement-logs", label: t("sidebar.warehouseMovementLogs"), icon: FileBarChart, module: "warehouse", indent: true },
           { href: "/purchasing-requests", label: t("sidebar.purchasingRequests"), icon: ShoppingCart, module: "warehouse", indent: true },
           { href: "/warehouse-reports", label: t("sidebar.warehouseReports"), icon: BarChart3, module: "warehouse", indent: true },
+        ],
+      },
+    },
+    {
+      key: "executive",
+      group: {
+        label: t("sidebar.executive", "السكرتارية التنفيذية"),
+        icon: Briefcase,
+        items: [
+          { href: "/executive", label: t("sidebar.executiveDashboard", "لوحة التحكم"), icon: LayoutDashboard, isHeader: true },
+          { href: "/executive/meetings", label: t("sidebar.executiveMeetings", "الاجتماعات"), icon: Calendar, indent: true },
+          { href: "/executive/tasks", label: t("sidebar.executiveTasks", "المهام"), icon: ClipboardCheck, indent: true },
+          { href: "/executive/correspondence", label: t("sidebar.executiveCorrespondence", "المراسلات"), icon: FileText, indent: true },
         ],
       },
     },

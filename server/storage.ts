@@ -375,6 +375,24 @@ import {
   warehouseNotifications,
   type WarehouseNotification,
   type InsertWarehouseNotification,
+  execMeetings,
+  type ExecMeeting,
+  type InsertExecMeeting,
+  execMeetingAttendees,
+  type ExecMeetingAttendee,
+  type InsertExecMeetingAttendee,
+  execTasks,
+  type ExecTask,
+  type InsertExecTask,
+  execCorrespondence,
+  type ExecCorrespondence,
+  type InsertExecCorrespondence,
+  execTaskComments,
+  type ExecTaskComment,
+  type InsertExecTaskComment,
+  execNotifications,
+  type ExecNotification,
+  type InsertExecNotification,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -9566,6 +9584,431 @@ export class DatabaseStorage implements IStorage {
 
   async deleteWarehouseNotification(id: number): Promise<void> {
     await db.delete(warehouseNotifications).where(eq(warehouseNotifications.id, id));
+  }
+
+  // ==========================================
+  // Executive Secretariat - السكرتارية التنفيذية
+  // ==========================================
+
+  // Executive Meetings - الاجتماعات
+  async getExecMeetings(filters?: {
+    branchId?: string;
+    status?: string;
+    organizerId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }): Promise<ExecMeeting[]> {
+    let query = db.select().from(execMeetings);
+    const conditions: any[] = [];
+
+    if (filters?.branchId) {
+      conditions.push(eq(execMeetings.branchId, filters.branchId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(execMeetings.status, filters.status));
+    }
+    if (filters?.organizerId) {
+      conditions.push(eq(execMeetings.organizerId, filters.organizerId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(execMeetings.startAt, new Date(filters.startDate)));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(execMeetings.startAt, new Date(filters.endDate)));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+
+    return await query.orderBy(desc(execMeetings.startAt)).limit(filters?.limit || 100);
+  }
+
+  async getExecMeeting(id: number): Promise<ExecMeeting | undefined> {
+    const [meeting] = await db.select().from(execMeetings).where(eq(execMeetings.id, id));
+    return meeting || undefined;
+  }
+
+  async createExecMeeting(data: InsertExecMeeting): Promise<ExecMeeting> {
+    const [meeting] = await db.insert(execMeetings).values(data).returning();
+    return meeting;
+  }
+
+  async updateExecMeeting(id: number, data: Partial<InsertExecMeeting>): Promise<ExecMeeting | undefined> {
+    const [updated] = await db.update(execMeetings)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(execMeetings.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteExecMeeting(id: number): Promise<boolean> {
+    const result = await db.delete(execMeetings).where(eq(execMeetings.id, id));
+    return true;
+  }
+
+  // Meeting Attendees - حضور الاجتماعات
+  async getExecMeetingAttendees(meetingId: number): Promise<ExecMeetingAttendee[]> {
+    return await db.select().from(execMeetingAttendees)
+      .where(eq(execMeetingAttendees.meetingId, meetingId));
+  }
+
+  async addExecMeetingAttendee(data: InsertExecMeetingAttendee): Promise<ExecMeetingAttendee> {
+    const [attendee] = await db.insert(execMeetingAttendees).values(data).returning();
+    return attendee;
+  }
+
+  async updateExecMeetingAttendee(id: number, data: Partial<InsertExecMeetingAttendee>): Promise<ExecMeetingAttendee | undefined> {
+    const [updated] = await db.update(execMeetingAttendees)
+      .set(data)
+      .where(eq(execMeetingAttendees.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async removeExecMeetingAttendee(id: number): Promise<boolean> {
+    await db.delete(execMeetingAttendees).where(eq(execMeetingAttendees.id, id));
+    return true;
+  }
+
+  // Executive Tasks - المهام التنفيذية
+  async getExecTasks(filters?: {
+    branchId?: string;
+    status?: string;
+    priority?: string;
+    assignedTo?: string;
+    createdBy?: string;
+    relatedType?: string;
+    relatedId?: number;
+    dueDateFrom?: string;
+    dueDateTo?: string;
+    limit?: number;
+  }): Promise<ExecTask[]> {
+    let query = db.select().from(execTasks);
+    const conditions: any[] = [];
+
+    if (filters?.branchId) {
+      conditions.push(eq(execTasks.branchId, filters.branchId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(execTasks.status, filters.status));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(execTasks.priority, filters.priority));
+    }
+    if (filters?.assignedTo) {
+      conditions.push(eq(execTasks.assignedTo, filters.assignedTo));
+    }
+    if (filters?.createdBy) {
+      conditions.push(eq(execTasks.createdBy, filters.createdBy));
+    }
+    if (filters?.relatedType) {
+      conditions.push(eq(execTasks.relatedType, filters.relatedType));
+    }
+    if (filters?.relatedId) {
+      conditions.push(eq(execTasks.relatedId, filters.relatedId));
+    }
+    if (filters?.dueDateFrom) {
+      conditions.push(gte(execTasks.dueDate, new Date(filters.dueDateFrom)));
+    }
+    if (filters?.dueDateTo) {
+      conditions.push(lte(execTasks.dueDate, new Date(filters.dueDateTo)));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+
+    return await query.orderBy(desc(execTasks.createdAt)).limit(filters?.limit || 100);
+  }
+
+  async getExecTask(id: number): Promise<ExecTask | undefined> {
+    const [task] = await db.select().from(execTasks).where(eq(execTasks.id, id));
+    return task || undefined;
+  }
+
+  async createExecTask(data: InsertExecTask): Promise<ExecTask> {
+    const [task] = await db.insert(execTasks).values(data).returning();
+    return task;
+  }
+
+  async updateExecTask(id: number, data: Partial<InsertExecTask>): Promise<ExecTask | undefined> {
+    const updateData: any = { ...data, updatedAt: new Date() };
+    
+    // If status is being set to 'completed', set completedAt
+    if (data.status === 'completed' && !data.completedAt) {
+      updateData.completedAt = new Date();
+    }
+    
+    const [updated] = await db.update(execTasks)
+      .set(updateData)
+      .where(eq(execTasks.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteExecTask(id: number): Promise<boolean> {
+    await db.delete(execTasks).where(eq(execTasks.id, id));
+    return true;
+  }
+
+  // Task Comments - تعليقات المهام
+  async getExecTaskComments(taskId: number): Promise<ExecTaskComment[]> {
+    return await db.select().from(execTaskComments)
+      .where(eq(execTaskComments.taskId, taskId))
+      .orderBy(desc(execTaskComments.createdAt));
+  }
+
+  async addExecTaskComment(data: InsertExecTaskComment): Promise<ExecTaskComment> {
+    const [comment] = await db.insert(execTaskComments).values(data).returning();
+    return comment;
+  }
+
+  async deleteExecTaskComment(id: number): Promise<boolean> {
+    await db.delete(execTaskComments).where(eq(execTaskComments.id, id));
+    return true;
+  }
+
+  // Executive Correspondence - المراسلات
+  async getExecCorrespondence(filters?: {
+    branchId?: string;
+    type?: string;
+    status?: string;
+    category?: string;
+    ownerId?: string;
+    assignedTo?: string;
+    isConfidential?: boolean;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<ExecCorrespondence[]> {
+    let query = db.select().from(execCorrespondence);
+    const conditions: any[] = [];
+
+    if (filters?.branchId) {
+      conditions.push(eq(execCorrespondence.branchId, filters.branchId));
+    }
+    if (filters?.type) {
+      conditions.push(eq(execCorrespondence.type, filters.type));
+    }
+    if (filters?.status) {
+      conditions.push(eq(execCorrespondence.status, filters.status));
+    }
+    if (filters?.category) {
+      conditions.push(eq(execCorrespondence.category, filters.category));
+    }
+    if (filters?.ownerId) {
+      conditions.push(eq(execCorrespondence.ownerId, filters.ownerId));
+    }
+    if (filters?.assignedTo) {
+      conditions.push(eq(execCorrespondence.assignedTo, filters.assignedTo));
+    }
+    if (filters?.isConfidential !== undefined) {
+      conditions.push(eq(execCorrespondence.isConfidential, filters.isConfidential));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(execCorrespondence.createdAt, new Date(filters.startDate)));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(execCorrespondence.createdAt, new Date(filters.endDate)));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+
+    return await query.orderBy(desc(execCorrespondence.createdAt)).limit(filters?.limit || 100);
+  }
+
+  async getExecCorrespondenceById(id: number): Promise<ExecCorrespondence | undefined> {
+    const [corr] = await db.select().from(execCorrespondence).where(eq(execCorrespondence.id, id));
+    return corr || undefined;
+  }
+
+  async getExecCorrespondenceByRef(refNumber: string): Promise<ExecCorrespondence | undefined> {
+    const [corr] = await db.select().from(execCorrespondence).where(eq(execCorrespondence.refNumber, refNumber));
+    return corr || undefined;
+  }
+
+  async createExecCorrespondence(data: InsertExecCorrespondence): Promise<ExecCorrespondence> {
+    const [corr] = await db.insert(execCorrespondence).values(data).returning();
+    return corr;
+  }
+
+  async updateExecCorrespondence(id: number, data: Partial<InsertExecCorrespondence>): Promise<ExecCorrespondence | undefined> {
+    const [updated] = await db.update(execCorrespondence)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(execCorrespondence.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteExecCorrespondence(id: number): Promise<boolean> {
+    await db.delete(execCorrespondence).where(eq(execCorrespondence.id, id));
+    return true;
+  }
+
+  async generateCorrespondenceRefNumber(type: string, branchId?: string): Promise<string> {
+    const year = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const prefix = type === 'incoming' ? 'IN' : 'OUT';
+    
+    // Count existing correspondence for this month
+    const [countResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(execCorrespondence)
+      .where(sql`ref_number LIKE ${`BTR-${prefix}-${year}${month}%`}`);
+    
+    const sequence = String((countResult?.count || 0) + 1).padStart(4, '0');
+    return `BTR-${prefix}-${year}${month}-${sequence}`;
+  }
+
+  // Executive Notifications - تنبيهات السكرتارية
+  async getExecNotifications(filters?: {
+    userId?: string;
+    branchId?: string;
+    type?: string;
+    isRead?: boolean;
+    limit?: number;
+  }): Promise<ExecNotification[]> {
+    let query = db.select().from(execNotifications);
+    const conditions: any[] = [];
+
+    if (filters?.userId) {
+      conditions.push(eq(execNotifications.userId, filters.userId));
+    }
+    if (filters?.branchId) {
+      conditions.push(eq(execNotifications.branchId, filters.branchId));
+    }
+    if (filters?.type) {
+      conditions.push(eq(execNotifications.type, filters.type));
+    }
+    if (filters?.isRead !== undefined) {
+      conditions.push(eq(execNotifications.isRead, filters.isRead));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+
+    return await query.orderBy(desc(execNotifications.createdAt)).limit(filters?.limit || 50);
+  }
+
+  async createExecNotification(data: InsertExecNotification): Promise<ExecNotification> {
+    const [notification] = await db.insert(execNotifications).values(data).returning();
+    return notification;
+  }
+
+  async markExecNotificationAsRead(id: number): Promise<ExecNotification | undefined> {
+    const [updated] = await db.update(execNotifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(execNotifications.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getExecUnreadNotificationCount(userId: string): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)` })
+      .from(execNotifications)
+      .where(and(
+        eq(execNotifications.userId, userId),
+        eq(execNotifications.isRead, false)
+      ));
+    return Number(result?.count || 0);
+  }
+
+  // Executive Dashboard Stats - إحصائيات لوحة التحكم
+  async getExecDashboardStats(branchId?: string): Promise<{
+    meetingsThisWeek: number;
+    pendingTasks: number;
+    overdueTasks: number;
+    unreadCorrespondence: number;
+    upcomingMeetings: ExecMeeting[];
+    urgentTasks: ExecTask[];
+    recentCorrespondence: ExecCorrespondence[];
+  }> {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    const branchCondition = branchId ? eq(execMeetings.branchId, branchId) : sql`true`;
+    const taskBranchCondition = branchId ? eq(execTasks.branchId, branchId) : sql`true`;
+    const corrBranchCondition = branchId ? eq(execCorrespondence.branchId, branchId) : sql`true`;
+
+    // Meetings this week
+    const [meetingsCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(execMeetings)
+      .where(and(
+        branchCondition,
+        gte(execMeetings.startAt, startOfWeek),
+        lte(execMeetings.startAt, endOfWeek)
+      ));
+
+    // Pending tasks
+    const [pendingCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(execTasks)
+      .where(and(
+        taskBranchCondition,
+        eq(execTasks.status, 'pending')
+      ));
+
+    // Overdue tasks
+    const [overdueCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(execTasks)
+      .where(and(
+        taskBranchCondition,
+        sql`status NOT IN ('completed', 'cancelled')`,
+        lte(execTasks.dueDate, now)
+      ));
+
+    // Unread correspondence
+    const [unreadCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(execCorrespondence)
+      .where(and(
+        corrBranchCondition,
+        eq(execCorrespondence.status, 'received')
+      ));
+
+    // Upcoming meetings (next 7 days)
+    const upcomingMeetings = await db.select().from(execMeetings)
+      .where(and(
+        branchCondition,
+        gte(execMeetings.startAt, now),
+        lte(execMeetings.startAt, endOfWeek),
+        eq(execMeetings.status, 'scheduled')
+      ))
+      .orderBy(execMeetings.startAt)
+      .limit(5);
+
+    // Urgent tasks
+    const urgentTasks = await db.select().from(execTasks)
+      .where(and(
+        taskBranchCondition,
+        eq(execTasks.priority, 'urgent'),
+        sql`status NOT IN ('completed', 'cancelled')`
+      ))
+      .orderBy(execTasks.dueDate)
+      .limit(5);
+
+    // Recent correspondence
+    const recentCorrespondence = await db.select().from(execCorrespondence)
+      .where(corrBranchCondition)
+      .orderBy(desc(execCorrespondence.createdAt))
+      .limit(5);
+
+    return {
+      meetingsThisWeek: Number(meetingsCount?.count || 0),
+      pendingTasks: Number(pendingCount?.count || 0),
+      overdueTasks: Number(overdueCount?.count || 0),
+      unreadCorrespondence: Number(unreadCount?.count || 0),
+      upcomingMeetings,
+      urgentTasks,
+      recentCorrespondence,
+    };
   }
 }
 

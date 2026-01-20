@@ -5865,3 +5865,252 @@ export const insertWarehouseNotificationSchema = createInsertSchema(warehouseNot
 
 export type WarehouseNotification = typeof warehouseNotifications.$inferSelect;
 export type InsertWarehouseNotification = z.infer<typeof insertWarehouseNotificationSchema>;
+
+// ==========================================
+// Executive Secretariat Module - السكرتارية التنفيذية
+// ==========================================
+
+// Meeting Status Constants
+export const MEETING_STATUS = ["scheduled", "in_progress", "completed", "cancelled", "postponed"] as const;
+export type MeetingStatus = typeof MEETING_STATUS[number];
+
+// Task Status Constants
+export const EXEC_TASK_STATUS = ["pending", "in_progress", "completed", "cancelled", "on_hold"] as const;
+export type ExecTaskStatus = typeof EXEC_TASK_STATUS[number];
+
+// Task Priority Constants
+export const EXEC_TASK_PRIORITY = ["low", "medium", "high", "urgent"] as const;
+export type ExecTaskPriority = typeof EXEC_TASK_PRIORITY[number];
+
+// Correspondence Type Constants
+export const CORRESPONDENCE_TYPE = ["incoming", "outgoing"] as const;
+export type CorrespondenceType = typeof CORRESPONDENCE_TYPE[number];
+
+// Correspondence Status Constants
+export const CORRESPONDENCE_STATUS = ["draft", "sent", "received", "archived", "pending_review"] as const;
+export type CorrespondenceStatus = typeof CORRESPONDENCE_STATUS[number];
+
+// Executive Meetings - الاجتماعات التنفيذية
+export const execMeetings = pgTable("exec_meetings", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  agenda: text("agenda"),
+  agendaEn: text("agenda_en"),
+  meetingType: text("meeting_type").default("regular"), // regular, urgent, board, department, external
+  startAt: timestamp("start_at").notNull(),
+  endAt: timestamp("end_at"),
+  location: text("location"),
+  locationEn: text("location_en"),
+  isVirtual: boolean("is_virtual").default(false),
+  virtualMeetingLink: text("virtual_meeting_link"),
+  organizerId: varchar("organizer_id").references(() => users.id),
+  organizerName: text("organizer_name"),
+  status: text("status").notNull().default("scheduled"), // scheduled, in_progress, completed, cancelled, postponed
+  notes: text("notes"),
+  minutes: text("minutes"), // محضر الاجتماع
+  decisions: text("decisions"), // القرارات
+  reminderSent: boolean("reminder_sent").default(false),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_meetings_branch").on(table.branchId),
+  index("idx_exec_meetings_organizer").on(table.organizerId),
+  index("idx_exec_meetings_status").on(table.status),
+  index("idx_exec_meetings_start").on(table.startAt),
+]);
+
+export const insertExecMeetingSchema = createInsertSchema(execMeetings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExecMeeting = typeof execMeetings.$inferSelect;
+export type InsertExecMeeting = z.infer<typeof insertExecMeetingSchema>;
+
+// Meeting Attendees - حضور الاجتماعات
+export const execMeetingAttendees = pgTable("exec_meeting_attendees", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id")
+    .notNull()
+    .references(() => execMeetings.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  attendeeName: text("attendee_name").notNull(),
+  attendeeEmail: text("attendee_email"),
+  attendeePhone: text("attendee_phone"),
+  role: text("role").default("attendee"), // organizer, attendee, presenter, guest
+  isExternal: boolean("is_external").default(false),
+  externalOrganization: text("external_organization"),
+  attendanceStatus: text("attendance_status").default("invited"), // invited, confirmed, declined, attended, absent
+  attendedAt: timestamp("attended_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_attendees_meeting").on(table.meetingId),
+  index("idx_exec_attendees_user").on(table.userId),
+]);
+
+export const insertExecMeetingAttendeeSchema = createInsertSchema(execMeetingAttendees).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ExecMeetingAttendee = typeof execMeetingAttendees.$inferSelect;
+export type InsertExecMeetingAttendee = z.infer<typeof insertExecMeetingAttendeeSchema>;
+
+// Executive Tasks - المهام التنفيذية
+export const execTasks = pgTable("exec_tasks", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  descriptionEn: text("description_en"),
+  taskType: text("task_type").default("general"), // general, meeting_followup, correspondence_followup, urgent
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  assignedToName: text("assigned_to_name"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  relatedType: text("related_type"), // meeting, correspondence, document
+  relatedId: integer("related_id"),
+  dueDate: timestamp("due_date"),
+  startDate: timestamp("start_date"),
+  completedAt: timestamp("completed_at"),
+  priority: text("priority").notNull().default("medium"), // low, medium, high, urgent
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, cancelled, on_hold
+  progress: integer("progress").default(0), // 0-100
+  notes: text("notes"),
+  reminderSent: boolean("reminder_sent").default(false),
+  reminderDate: timestamp("reminder_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_tasks_branch").on(table.branchId),
+  index("idx_exec_tasks_assigned").on(table.assignedTo),
+  index("idx_exec_tasks_created_by").on(table.createdBy),
+  index("idx_exec_tasks_status").on(table.status),
+  index("idx_exec_tasks_priority").on(table.priority),
+  index("idx_exec_tasks_due_date").on(table.dueDate),
+]);
+
+export const insertExecTaskSchema = createInsertSchema(execTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExecTask = typeof execTasks.$inferSelect;
+export type InsertExecTask = z.infer<typeof insertExecTaskSchema>;
+
+// Executive Correspondence - المراسلات التنفيذية
+export const execCorrespondence = pgTable("exec_correspondence", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  refNumber: text("ref_number").notNull(), // رقم المرجع
+  type: text("type").notNull().default("incoming"), // incoming, outgoing
+  subject: text("subject").notNull(),
+  subjectEn: text("subject_en"),
+  body: text("body"),
+  bodyEn: text("body_en"),
+  senderName: text("sender_name"),
+  senderOrganization: text("sender_organization"),
+  senderEmail: text("sender_email"),
+  senderPhone: text("sender_phone"),
+  receiverName: text("receiver_name"),
+  receiverOrganization: text("receiver_organization"),
+  receiverEmail: text("receiver_email"),
+  receiverPhone: text("receiver_phone"),
+  category: text("category").default("general"), // general, contract, inquiry, complaint, official, financial
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  status: text("status").notNull().default("received"), // draft, sent, received, archived, pending_review
+  receivedAt: timestamp("received_at"),
+  sentAt: timestamp("sent_at"),
+  responseDeadline: timestamp("response_deadline"),
+  respondedAt: timestamp("responded_at"),
+  responseRefNumber: text("response_ref_number"),
+  attachments: jsonb("attachments").default([]), // [{name, url, type, size}]
+  ownerId: varchar("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  assignedToName: text("assigned_to_name"),
+  isConfidential: boolean("is_confidential").default(false),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_corr_branch").on(table.branchId),
+  index("idx_exec_corr_type").on(table.type),
+  index("idx_exec_corr_status").on(table.status),
+  index("idx_exec_corr_category").on(table.category),
+  index("idx_exec_corr_owner").on(table.ownerId),
+  index("idx_exec_corr_assigned").on(table.assignedTo),
+  index("idx_exec_corr_received").on(table.receivedAt),
+  uniqueIndex("exec_correspondence_ref_unique").on(table.refNumber),
+]);
+
+export const insertExecCorrespondenceSchema = createInsertSchema(execCorrespondence).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ExecCorrespondence = typeof execCorrespondence.$inferSelect;
+export type InsertExecCorrespondence = z.infer<typeof insertExecCorrespondenceSchema>;
+
+// Task Comments - تعليقات المهام
+export const execTaskComments = pgTable("exec_task_comments", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id")
+    .notNull()
+    .references(() => execTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  userName: text("user_name"),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_task_comments_task").on(table.taskId),
+]);
+
+export const insertExecTaskCommentSchema = createInsertSchema(execTaskComments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ExecTaskComment = typeof execTaskComments.$inferSelect;
+export type InsertExecTaskComment = z.infer<typeof insertExecTaskCommentSchema>;
+
+// Executive Notifications - تنبيهات السكرتارية
+export const execNotifications = pgTable("exec_notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id),
+  branchId: varchar("branch_id").references(() => branches.id),
+  type: text("type").notNull(), // meeting_reminder, task_due, task_assigned, correspondence_received, correspondence_deadline
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  body: text("body"),
+  bodyEn: text("body_en"),
+  entityType: text("entity_type"), // meeting, task, correspondence
+  entityId: integer("entity_id"),
+  priority: text("priority").default("normal"), // low, normal, high, urgent
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  scheduledAt: timestamp("scheduled_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_exec_notif_user").on(table.userId),
+  index("idx_exec_notif_branch").on(table.branchId),
+  index("idx_exec_notif_read").on(table.isRead),
+  index("idx_exec_notif_entity").on(table.entityType, table.entityId),
+]);
+
+export const insertExecNotificationSchema = createInsertSchema(execNotifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ExecNotification = typeof execNotifications.$inferSelect;
+export type InsertExecNotification = z.infer<typeof insertExecNotificationSchema>;
