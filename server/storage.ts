@@ -10858,37 +10858,52 @@ export class DatabaseStorage implements IStorage {
   // =====================================================
 
   async getSystemNotifications(userId?: string, branchId?: string): Promise<Notification[]> {
-    const conditions = [];
-    if (userId) {
-      conditions.push(or(eq(notifications.userId, userId), isNull(notifications.userId)));
-    }
-    if (branchId) {
-      conditions.push(or(eq(notifications.branchId, branchId), isNull(notifications.branchId)));
-    }
-    conditions.push(eq(notifications.isDismissed, false));
+    try {
+      const conditions = [];
+      if (userId) {
+        conditions.push(or(eq(notifications.userId, userId), isNull(notifications.userId)));
+      }
+      if (branchId) {
+        conditions.push(or(eq(notifications.branchId, branchId), isNull(notifications.branchId)));
+      }
+      conditions.push(eq(notifications.isDismissed, false));
 
-    return db.select()
-      .from(notifications)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(notifications.createdAt));
+      return db.select()
+        .from(notifications)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(notifications.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
   }
 
   async getUnreadSystemNotifications(userId: string): Promise<Notification[]> {
-    return db.select()
-      .from(notifications)
-      .where(and(
-        or(eq(notifications.userId, userId), isNull(notifications.userId)),
-        eq(notifications.isRead, false),
-        eq(notifications.isDismissed, false)
-      ))
-      .orderBy(desc(notifications.createdAt));
+    try {
+      return db.select()
+        .from(notifications)
+        .where(and(
+          or(eq(notifications.userId, userId), isNull(notifications.userId)),
+          eq(notifications.isRead, false),
+          eq(notifications.isDismissed, false)
+        ))
+        .orderBy(desc(notifications.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
   }
 
   async getSystemNotificationById(id: number): Promise<Notification | undefined> {
-    const [notification] = await db.select()
-      .from(notifications)
-      .where(eq(notifications.id, id));
-    return notification;
+    try {
+      const [notification] = await db.select()
+        .from(notifications)
+        .where(eq(notifications.id, id));
+      return notification;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
+    }
   }
 
   async createSystemNotification(data: InsertNotification): Promise<Notification> {
@@ -10899,43 +10914,63 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markSystemNotificationAsRead(id: number): Promise<Notification | undefined> {
-    const [notification] = await db.update(notifications)
-      .set({
-        isRead: true,
-        readAt: new Date(),
-      })
-      .where(eq(notifications.id, id))
-      .returning();
-    return notification;
+    try {
+      const [notification] = await db.update(notifications)
+        .set({
+          isRead: true,
+          readAt: new Date(),
+        })
+        .where(eq(notifications.id, id))
+        .returning();
+      return notification;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
+    }
   }
 
   async markAllSystemNotificationsAsRead(userId: string): Promise<boolean> {
-    await db.update(notifications)
-      .set({
-        isRead: true,
-        readAt: new Date(),
-      })
-      .where(and(
-        or(eq(notifications.userId, userId), isNull(notifications.userId)),
-        eq(notifications.isRead, false)
-      ));
-    return true;
+    try {
+      await db.update(notifications)
+        .set({
+          isRead: true,
+          readAt: new Date(),
+        })
+        .where(and(
+          or(eq(notifications.userId, userId), isNull(notifications.userId)),
+          eq(notifications.isRead, false)
+        ));
+      return true;
+    } catch (error: any) {
+      if (error?.code === '42P01') return true;
+      throw error;
+    }
   }
 
   async dismissSystemNotification(id: number): Promise<boolean> {
-    await db.update(notifications)
-      .set({
-        isDismissed: true,
-        dismissedAt: new Date(),
-      })
-      .where(eq(notifications.id, id));
-    return true;
+    try {
+      await db.update(notifications)
+        .set({
+          isDismissed: true,
+          dismissedAt: new Date(),
+        })
+        .where(eq(notifications.id, id));
+      return true;
+    } catch (error: any) {
+      if (error?.code === '42P01') return true;
+      throw error;
+    }
   }
 
   async deleteSystemNotification(id: number): Promise<boolean> {
-    await db.delete(notifications)
-      .where(eq(notifications.id, id));
-    return true;
+    try {
+      await db.delete(notifications)
+        .where(eq(notifications.id, id));
+      return true;
+    } catch (error: any) {
+      if (error?.code === '42P01') return true;
+      throw error;
+    }
   }
 
   async getSystemNotificationStats(userId: string): Promise<{
@@ -10943,26 +10978,31 @@ export class DatabaseStorage implements IStorage {
     unread: number;
     urgent: number;
   }> {
-    const userCondition = or(eq(notifications.userId, userId), isNull(notifications.userId));
-    const notDismissed = eq(notifications.isDismissed, false);
+    try {
+      const userCondition = or(eq(notifications.userId, userId), isNull(notifications.userId));
+      const notDismissed = eq(notifications.isDismissed, false);
 
-    const [totalCount] = await db.select({ count: sql<number>`count(*)` })
-      .from(notifications)
-      .where(and(userCondition, notDismissed));
+      const [totalCount] = await db.select({ count: sql<number>`count(*)` })
+        .from(notifications)
+        .where(and(userCondition, notDismissed));
 
-    const [unreadCount] = await db.select({ count: sql<number>`count(*)` })
-      .from(notifications)
-      .where(and(userCondition, notDismissed, eq(notifications.isRead, false)));
+      const [unreadCount] = await db.select({ count: sql<number>`count(*)` })
+        .from(notifications)
+        .where(and(userCondition, notDismissed, eq(notifications.isRead, false)));
 
-    const [urgentCount] = await db.select({ count: sql<number>`count(*)` })
-      .from(notifications)
-      .where(and(userCondition, notDismissed, eq(notifications.priority, 'urgent')));
+      const [urgentCount] = await db.select({ count: sql<number>`count(*)` })
+        .from(notifications)
+        .where(and(userCondition, notDismissed, eq(notifications.priority, 'urgent')));
 
-    return {
-      total: Number(totalCount?.count || 0),
-      unread: Number(unreadCount?.count || 0),
-      urgent: Number(urgentCount?.count || 0),
-    };
+      return {
+        total: Number(totalCount?.count || 0),
+        unread: Number(unreadCount?.count || 0),
+        urgent: Number(urgentCount?.count || 0),
+      };
+    } catch (error: any) {
+      if (error?.code === '42P01') return { total: 0, unread: 0, urgent: 0 };
+      throw error;
+    }
   }
 }
 
