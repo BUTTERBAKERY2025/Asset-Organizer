@@ -16,7 +16,7 @@ import {
   Target, UsersRound, ClipboardList, Receipt, TrendingUp, Brain, Upload,
   FileBarChart, Gift, PieChart, Shield, Building, Briefcase, BarChart3,
   Zap, Sun, Moon, CloudSun, Loader2, RefreshCw, Languages, Warehouse,
-  PackageCheck, Send, ClipboardCheck
+  PackageCheck, Send, ClipboardCheck, FileText
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
@@ -321,6 +321,21 @@ export default function PlatformHomePage() {
         { label: t('subItems.warehouseDashboard'), href: "/warehouse-dashboard", icon: LayoutDashboard },
         { label: t('subItems.transferRequests'), href: "/transfer-requests", icon: Send },
         { label: t('subItems.warehouseInventory'), href: "/warehouse-inventory", icon: Boxes },
+      ],
+    },
+    {
+      title: t('modules.executive.title', 'السكرتارية التنفيذية'),
+      description: t('modules.executive.description', 'مركز قيادة الرئيس التنفيذي - إدارة الاجتماعات والمهام والمراسلات'),
+      icon: Briefcase,
+      href: "/executive",
+      color: "bg-violet-600",
+      module: "executive_dashboard",
+      items: [
+        { label: t('subItems.executiveDashboard', 'لوحة التحكم'), href: "/executive", icon: LayoutDashboard },
+        { label: t('subItems.executiveCalendar', 'التقويم'), href: "/executive/calendar", icon: Calendar },
+        { label: t('subItems.executiveMeetings', 'الاجتماعات'), href: "/executive/meetings", icon: Users },
+        { label: t('subItems.executiveTasks', 'المهام'), href: "/executive/tasks", icon: ClipboardCheck },
+        { label: t('subItems.executiveCorrespondence', 'المراسلات'), href: "/executive/correspondence", icon: FileText },
       ],
     },
   ];
