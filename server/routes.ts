@@ -19910,10 +19910,14 @@ export async function registerRoutes(
       if (req.body.openingTime) updateData.openingTime = new Date(req.body.openingTime);
       if (req.body.closingTime) updateData.closingTime = new Date(req.body.closingTime);
       if (req.body.shiftDate) updateData.shiftDate = new Date(req.body.shiftDate);
+      if (req.body.openingCompletedAt) updateData.openingCompletedAt = new Date(req.body.openingCompletedAt);
+      if (req.body.closingCompletedAt) updateData.closingCompletedAt = new Date(req.body.closingCompletedAt);
       if (req.body.status) updateData.status = req.body.status;
       if (req.body.notes !== undefined) updateData.notes = req.body.notes;
       if (req.body.openingNotes !== undefined) updateData.openingNotes = req.body.openingNotes;
       if (req.body.closingNotes !== undefined) updateData.closingNotes = req.body.closingNotes;
+      if (req.body.openingCompleted !== undefined) updateData.openingCompleted = req.body.openingCompleted;
+      if (req.body.closingCompleted !== undefined) updateData.closingCompleted = req.body.closingCompleted;
       
       const [updated] = await db.update(branchShifts)
         .set(updateData)
