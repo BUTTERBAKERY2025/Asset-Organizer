@@ -185,43 +185,53 @@ export default function ShiftReportsPage() {
   return (
     <Layout>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/production">
-              <Button variant="ghost" size="icon" data-testid="btn-back">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">تقارير الفتح والإغلاق</h1>
-              <p className="text-muted-foreground">عرض وطباعة تقارير شفتات الفروع</p>
+        <Card className="bg-gradient-to-l from-amber-50 to-orange-50 border-amber-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Link href="/branch-shifts">
+                  <Button variant="outline" size="icon" className="bg-white hover:bg-amber-100" data-testid="btn-back">
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <div className="p-3 bg-amber-600 rounded-xl">
+                  <FileText className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-amber-900">تقارير الفتح والإغلاق</h1>
+                  <p className="text-amber-700">عرض وطباعة تقارير شفتات الفروع</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="bg-white text-amber-800 border-amber-300 px-4 py-2">
+                {new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+              </Badge>
             </div>
-          </div>
-          <FileText className="h-8 w-8 text-amber-600" />
-        </div>
+          </CardContent>
+        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="border-2 border-amber-100">
+          <CardHeader className="pb-4 bg-gradient-to-l from-gray-50 to-white">
+            <CardTitle className="flex items-center gap-2 text-amber-800">
               <Filter className="h-5 w-5" />
               فلترة التقارير
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label>التاريخ</Label>
+                <Label className="text-sm font-semibold text-gray-700">التاريخ</Label>
                 <Input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
+                  className="border-2 focus:border-amber-400"
                   data-testid="input-report-date"
                 />
               </div>
               <div className="space-y-2">
-                <Label>الفرع</Label>
+                <Label className="text-sm font-semibold text-gray-700">الفرع</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger data-testid="select-report-branch">
+                  <SelectTrigger className="border-2 focus:border-amber-400" data-testid="select-report-branch">
                     <SelectValue placeholder="جميع الفروع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -235,9 +245,9 @@ export default function ShiftReportsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>نوع الشفت</Label>
+                <Label className="text-sm font-semibold text-gray-700">نوع الشفت</Label>
                 <Select value={selectedShiftType} onValueChange={setSelectedShiftType}>
-                  <SelectTrigger data-testid="select-report-shift-type">
+                  <SelectTrigger className="border-2 focus:border-amber-400" data-testid="select-report-shift-type">
                     <SelectValue placeholder="جميع الشفتات" />
                   </SelectTrigger>
                   <SelectContent>
@@ -254,105 +264,137 @@ export default function ShiftReportsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4">
-          {shiftsLoading ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-amber-600" />
-                <p className="text-muted-foreground">جاري تحميل الشفتات...</p>
-              </CardContent>
-            </Card>
-          ) : shiftsError ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-                <p className="text-red-500">حدث خطأ في تحميل الشفتات</p>
-              </CardContent>
-            </Card>
-          ) : filteredShifts.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد شفتات في التاريخ المحدد</p>
-              </CardContent>
-            </Card>
-          ) : (
-            filteredShifts.map((shift) => (
-              <Card key={shift.id} data-testid={`card-shift-${shift.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-amber-100 rounded-lg">
-                        <Building2 className="h-6 w-6 text-amber-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{getBranchName(shift.branchId)}</h3>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            {shift.shiftDate}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            {getShiftTypeName(shift.shiftType)}
-                          </span>
-                          {shift.supervisorName && (
-                            <span className="flex items-center gap-1">
-                              <User className="h-4 w-4" />
-                              {shift.supervisorName}
+        <Card>
+          <CardHeader className="pb-3 bg-gradient-to-l from-gray-50 to-white border-b">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-gray-800">
+                <Building2 className="h-5 w-5 text-amber-600" />
+                الشفتات المسجلة
+              </CardTitle>
+              <Badge variant="secondary" className="px-3">
+                {filteredShifts.length} شفت
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              {shiftsLoading ? (
+                <div className="py-12 text-center">
+                  <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-amber-600" />
+                  <p className="text-muted-foreground">جاري تحميل الشفتات...</p>
+                </div>
+              ) : shiftsError ? (
+                <div className="py-12 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+                  <p className="text-red-500">حدث خطأ في تحميل الشفتات</p>
+                </div>
+              ) : filteredShifts.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">لا توجد شفتات في التاريخ المحدد</p>
+                  <p className="text-sm mt-2">جرب تغيير التاريخ أو الفلاتر الأخرى</p>
+                </div>
+              ) : (
+                filteredShifts.map((shift) => (
+                  <div 
+                    key={shift.id} 
+                    className="p-4 rounded-xl border-2 hover:border-amber-300 transition-all bg-gradient-to-l from-gray-50 to-white"
+                    data-testid={`card-shift-${shift.id}`}
+                  >
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-xl ${
+                          shift.openingCompleted && shift.closingCompleted 
+                            ? "bg-green-100" 
+                            : shift.openingCompleted 
+                              ? "bg-amber-100" 
+                              : "bg-gray-100"
+                        }`}>
+                          <Building2 className={`h-6 w-6 ${
+                            shift.openingCompleted && shift.closingCompleted 
+                              ? "text-green-600" 
+                              : shift.openingCompleted 
+                                ? "text-amber-600" 
+                                : "text-gray-400"
+                          }`} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-lg text-gray-800">{getBranchName(shift.branchId)}</h3>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                            <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                              <Calendar className="h-3 w-3" />
+                              {shift.shiftDate}
                             </span>
-                          )}
+                            <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                              <Clock className="h-3 w-3" />
+                              {getShiftTypeName(shift.shiftType)}
+                            </span>
+                            {shift.supervisorName && (
+                              <span className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded text-blue-700">
+                                <User className="h-3 w-3" />
+                                {shift.supervisorName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex gap-2">
+                          <Badge 
+                            variant={shift.openingCompleted ? "default" : "outline"} 
+                            className={shift.openingCompleted ? "bg-green-600" : ""}
+                          >
+                            {shift.openingCompleted ? (
+                              <CheckCircle2 className="h-3 w-3 ml-1" />
+                            ) : (
+                              <XCircle className="h-3 w-3 ml-1" />
+                            )}
+                            الفتح
+                          </Badge>
+                          <Badge 
+                            variant={shift.closingCompleted ? "default" : "outline"}
+                            className={shift.closingCompleted ? "bg-green-600" : ""}
+                          >
+                            {shift.closingCompleted ? (
+                              <CheckCircle2 className="h-3 w-3 ml-1" />
+                            ) : (
+                              <XCircle className="h-3 w-3 ml-1" />
+                            )}
+                            الإغلاق
+                          </Badge>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant={shift.openingCompleted ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => openReport(shift, "opening")}
+                            disabled={!shift.openingCompleted}
+                            className={shift.openingCompleted ? "bg-amber-600 hover:bg-amber-700" : ""}
+                            data-testid={`btn-view-opening-${shift.id}`}
+                          >
+                            <FileText className="h-4 w-4 ml-1" />
+                            تقرير الفتح
+                          </Button>
+                          <Button
+                            variant={shift.closingCompleted ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => openReport(shift, "closing")}
+                            disabled={!shift.closingCompleted}
+                            className={shift.closingCompleted ? "bg-blue-600 hover:bg-blue-700" : ""}
+                            data-testid={`btn-view-closing-${shift.id}`}
+                          >
+                            <FileText className="h-4 w-4 ml-1" />
+                            تقرير الإغلاق
+                          </Button>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex gap-2">
-                        <Badge variant={shift.openingCompleted ? "default" : "outline"}>
-                          {shift.openingCompleted ? (
-                            <CheckCircle2 className="h-3 w-3 ml-1" />
-                          ) : (
-                            <XCircle className="h-3 w-3 ml-1" />
-                          )}
-                          الفتح
-                        </Badge>
-                        <Badge variant={shift.closingCompleted ? "default" : "outline"}>
-                          {shift.closingCompleted ? (
-                            <CheckCircle2 className="h-3 w-3 ml-1" />
-                          ) : (
-                            <XCircle className="h-3 w-3 ml-1" />
-                          )}
-                          الإغلاق
-                        </Badge>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openReport(shift, "opening")}
-                          disabled={!shift.openingCompleted}
-                          data-testid={`btn-view-opening-${shift.id}`}
-                        >
-                          <FileText className="h-4 w-4 ml-1" />
-                          تقرير الفتح
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openReport(shift, "closing")}
-                          disabled={!shift.closingCompleted}
-                          data-testid={`btn-view-closing-${shift.id}`}
-                        >
-                          <FileText className="h-4 w-4 ml-1" />
-                          تقرير الإغلاق
-                        </Button>
-                      </div>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <Dialog open={!!selectedShift} onOpenChange={() => setSelectedShift(null)}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
