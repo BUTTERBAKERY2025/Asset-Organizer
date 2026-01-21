@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
@@ -204,34 +205,58 @@ export default function MeetingsPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Select onValueChange={(value) => {
-              const exportColumns = [
-                { key: "meetingNumber", header: "رقم الاجتماع", width: 15 },
-                { key: "title", header: "العنوان", width: 30 },
-                { key: "meetingType", header: "النوع", width: 15 },
-                { key: "meetingDate", header: "التاريخ", width: 12 },
-                { key: "location", header: "المكان", width: 15 },
-                { key: "status", header: "الحالة", width: 12 },
-                { key: "attendeesCount", header: "الحضور", width: 10 },
-              ];
-              if (value === "excel") {
-                exportToExcel(filteredMeetings, exportColumns, "الاجتماعات", "الاجتماعات");
-              } else if (value === "csv") {
-                exportToCSV(filteredMeetings, exportColumns, "الاجتماعات");
-              } else if (value === "print") {
-                printAsPDF(filteredMeetings, exportColumns, "سجل الاجتماعات", "اجتماعات مجلس الإدارة والجمعيات العامة");
-              }
-            }}>
-              <SelectTrigger className="w-32">
-                <Download className="h-4 w-4 ml-2" />
-                <SelectValue placeholder="تصدير" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="excel">Excel</SelectItem>
-                <SelectItem value="csv">CSV</SelectItem>
-                <SelectItem value="print">طباعة</SelectItem>
-              </SelectContent>
-            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تصدير
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "meetingNumber", header: "رقم الاجتماع", width: 15 },
+                    { key: "title", header: "العنوان", width: 30 },
+                    { key: "meetingType", header: "النوع", width: 15 },
+                    { key: "meetingDate", header: "التاريخ", width: 12 },
+                    { key: "location", header: "المكان", width: 15 },
+                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "attendeesCount", header: "الحضور", width: 10 },
+                  ];
+                  exportToExcel(filteredMeetings, exportColumns, "الاجتماعات", "الاجتماعات");
+                }}>
+                  Excel تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "meetingNumber", header: "رقم الاجتماع", width: 15 },
+                    { key: "title", header: "العنوان", width: 30 },
+                    { key: "meetingType", header: "النوع", width: 15 },
+                    { key: "meetingDate", header: "التاريخ", width: 12 },
+                    { key: "location", header: "المكان", width: 15 },
+                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "attendeesCount", header: "الحضور", width: 10 },
+                  ];
+                  exportToCSV(filteredMeetings, exportColumns, "الاجتماعات");
+                }}>
+                  CSV تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "meetingNumber", header: "رقم الاجتماع", width: 15 },
+                    { key: "title", header: "العنوان", width: 30 },
+                    { key: "meetingType", header: "النوع", width: 15 },
+                    { key: "meetingDate", header: "التاريخ", width: 12 },
+                    { key: "location", header: "المكان", width: 15 },
+                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "attendeesCount", header: "الحضور", width: 10 },
+                  ];
+                  printAsPDF(filteredMeetings, exportColumns, "سجل الاجتماعات", "اجتماعات مجلس الإدارة والجمعيات العامة");
+                }}>
+                  طباعة
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" className="gap-2">
               <Calendar className="h-4 w-4" />
               عرض التقويم

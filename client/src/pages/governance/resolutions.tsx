@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
@@ -198,35 +199,61 @@ export default function ResolutionsPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Select onValueChange={(value) => {
-              const exportColumns = [
-                { key: "resolutionNumber", header: "رقم القرار", width: 15 },
-                { key: "title", header: "العنوان", width: 40 },
-                { key: "resolutionType", header: "النوع", width: 15 },
-                { key: "category", header: "التصنيف", width: 12 },
-                { key: "status", header: "الحالة", width: 12 },
-                { key: "forVotes", header: "موافق", width: 12 },
-                { key: "againstVotes", header: "رافض", width: 12 },
-                { key: "totalVotes", header: "الإجمالي", width: 12 },
-              ];
-              if (value === "excel") {
-                exportToExcel(filteredResolutions, exportColumns, "قرارات_مجلس_الإدارة", "القرارات");
-              } else if (value === "csv") {
-                exportToCSV(filteredResolutions, exportColumns, "قرارات_مجلس_الإدارة");
-              } else if (value === "print") {
-                printAsPDF(filteredResolutions, exportColumns, "قرارات مجلس الإدارة", "سجل القرارات والتوصيات");
-              }
-            }}>
-              <SelectTrigger className="w-32">
-                <Download className="h-4 w-4 ml-2" />
-                <SelectValue placeholder="تصدير" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="excel">Excel</SelectItem>
-                <SelectItem value="csv">CSV</SelectItem>
-                <SelectItem value="print">طباعة</SelectItem>
-              </SelectContent>
-            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تصدير
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "resolutionNumber", header: "رقم القرار", width: 15 },
+                    { key: "title", header: "العنوان", width: 40 },
+                    { key: "resolutionType", header: "النوع", width: 15 },
+                    { key: "category", header: "التصنيف", width: 12 },
+                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "forVotes", header: "موافق", width: 12 },
+                    { key: "againstVotes", header: "رافض", width: 12 },
+                    { key: "totalVotes", header: "الإجمالي", width: 12 },
+                  ];
+                  exportToExcel(filteredResolutions, exportColumns, "قرارات_مجلس_الإدارة", "القرارات");
+                }}>
+                  Excel تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "resolutionNumber", header: "رقم القرار", width: 15 },
+                    { key: "title", header: "العنوان", width: 40 },
+                    { key: "resolutionType", header: "النوع", width: 15 },
+                    { key: "category", header: "التصنيف", width: 12 },
+                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "forVotes", header: "موافق", width: 12 },
+                    { key: "againstVotes", header: "رافض", width: 12 },
+                    { key: "totalVotes", header: "الإجمالي", width: 12 },
+                  ];
+                  exportToCSV(filteredResolutions, exportColumns, "قرارات_مجلس_الإدارة");
+                }}>
+                  CSV تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "resolutionNumber", header: "رقم القرار", width: 15 },
+                    { key: "title", header: "العنوان", width: 40 },
+                    { key: "resolutionType", header: "النوع", width: 15 },
+                    { key: "category", header: "التصنيف", width: 12 },
+                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "forVotes", header: "موافق", width: 12 },
+                    { key: "againstVotes", header: "رافض", width: 12 },
+                    { key: "totalVotes", header: "الإجمالي", width: 12 },
+                  ];
+                  printAsPDF(filteredResolutions, exportColumns, "قرارات مجلس الإدارة", "سجل القرارات والتوصيات");
+                }}>
+                  طباعة
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700" data-testid="btn-add-resolution">

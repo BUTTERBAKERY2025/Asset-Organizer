@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
@@ -228,34 +229,58 @@ export default function CompliancePage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Select onValueChange={(value) => {
-              const exportColumns = [
-                { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
-                { key: "name", header: "الاسم", width: 30 },
-                { key: "requirementType", header: "النوع", width: 12 },
-                { key: "regulatoryBody", header: "الجهة", width: 15 },
-                { key: "frequency", header: "التكرار", width: 12 },
-                { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
-                { key: "status", header: "الحالة", width: 12 },
-              ];
-              if (value === "excel") {
-                exportToExcel(filteredRequirements, exportColumns, "متطلبات_الامتثال", "الامتثال");
-              } else if (value === "csv") {
-                exportToCSV(filteredRequirements, exportColumns, "متطلبات_الامتثال");
-              } else if (value === "print") {
-                printAsPDF(filteredRequirements, exportColumns, "متطلبات الامتثال", "سجل التراخيص والمتطلبات التنظيمية");
-              }
-            }}>
-              <SelectTrigger className="w-32">
-                <Download className="h-4 w-4 ml-2" />
-                <SelectValue placeholder="تصدير" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="excel">Excel</SelectItem>
-                <SelectItem value="csv">CSV</SelectItem>
-                <SelectItem value="print">طباعة</SelectItem>
-              </SelectContent>
-            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تصدير
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
+                    { key: "name", header: "الاسم", width: 30 },
+                    { key: "requirementType", header: "النوع", width: 12 },
+                    { key: "regulatoryBody", header: "الجهة", width: 15 },
+                    { key: "frequency", header: "التكرار", width: 12 },
+                    { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
+                    { key: "status", header: "الحالة", width: 12 },
+                  ];
+                  exportToExcel(filteredRequirements, exportColumns, "متطلبات_الامتثال", "الامتثال");
+                }}>
+                  Excel تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
+                    { key: "name", header: "الاسم", width: 30 },
+                    { key: "requirementType", header: "النوع", width: 12 },
+                    { key: "regulatoryBody", header: "الجهة", width: 15 },
+                    { key: "frequency", header: "التكرار", width: 12 },
+                    { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
+                    { key: "status", header: "الحالة", width: 12 },
+                  ];
+                  exportToCSV(filteredRequirements, exportColumns, "متطلبات_الامتثال");
+                }}>
+                  CSV تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
+                    { key: "name", header: "الاسم", width: 30 },
+                    { key: "requirementType", header: "النوع", width: 12 },
+                    { key: "regulatoryBody", header: "الجهة", width: 15 },
+                    { key: "frequency", header: "التكرار", width: 12 },
+                    { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
+                    { key: "status", header: "الحالة", width: 12 },
+                  ];
+                  printAsPDF(filteredRequirements, exportColumns, "متطلبات الامتثال", "سجل التراخيص والمتطلبات التنظيمية");
+                }}>
+                  طباعة
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" className="gap-2" onClick={() => setShowChecklist(true)}>
               <ListChecks className="h-4 w-4" />
               قائمة المراجعة

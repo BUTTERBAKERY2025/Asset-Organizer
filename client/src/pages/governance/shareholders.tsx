@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
@@ -214,34 +215,58 @@ export default function ShareholdersPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Select onValueChange={(value) => {
-              const exportColumns = [
-                { key: "shareholderNumber", header: "رقم المساهم", width: 15 },
-                { key: "fullName", header: "الاسم", width: 30 },
-                { key: "shareholderType", header: "النوع", width: 12 },
-                { key: "totalShares", header: "عدد الأسهم", width: 15 },
-                { key: "sharePercentage", header: "النسبة %", width: 10 },
-                { key: "votingPower", header: "قوة التصويت", width: 12 },
-                { key: "status", header: "الحالة", width: 10 },
-              ];
-              if (value === "excel") {
-                exportToExcel(filteredShareholders, exportColumns, "بيانات_المساهمين", "المساهمين");
-              } else if (value === "csv") {
-                exportToCSV(filteredShareholders, exportColumns, "بيانات_المساهمين");
-              } else if (value === "print") {
-                printAsPDF(filteredShareholders, exportColumns, "بيانات المساهمين", "سجل المساهمين وحقوق الملكية");
-              }
-            }}>
-              <SelectTrigger className="w-32">
-                <Download className="h-4 w-4 ml-2" />
-                <SelectValue placeholder="تصدير" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="excel">Excel</SelectItem>
-                <SelectItem value="csv">CSV</SelectItem>
-                <SelectItem value="print">طباعة</SelectItem>
-              </SelectContent>
-            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تصدير
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "shareholderNumber", header: "رقم المساهم", width: 15 },
+                    { key: "fullName", header: "الاسم", width: 30 },
+                    { key: "shareholderType", header: "النوع", width: 12 },
+                    { key: "totalShares", header: "عدد الأسهم", width: 15 },
+                    { key: "sharePercentage", header: "النسبة %", width: 10 },
+                    { key: "votingPower", header: "قوة التصويت", width: 12 },
+                    { key: "status", header: "الحالة", width: 10 },
+                  ];
+                  exportToExcel(filteredShareholders, exportColumns, "بيانات_المساهمين", "المساهمين");
+                }}>
+                  Excel تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "shareholderNumber", header: "رقم المساهم", width: 15 },
+                    { key: "fullName", header: "الاسم", width: 30 },
+                    { key: "shareholderType", header: "النوع", width: 12 },
+                    { key: "totalShares", header: "عدد الأسهم", width: 15 },
+                    { key: "sharePercentage", header: "النسبة %", width: 10 },
+                    { key: "votingPower", header: "قوة التصويت", width: 12 },
+                    { key: "status", header: "الحالة", width: 10 },
+                  ];
+                  exportToCSV(filteredShareholders, exportColumns, "بيانات_المساهمين");
+                }}>
+                  CSV تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "shareholderNumber", header: "رقم المساهم", width: 15 },
+                    { key: "fullName", header: "الاسم", width: 30 },
+                    { key: "shareholderType", header: "النوع", width: 12 },
+                    { key: "totalShares", header: "عدد الأسهم", width: 15 },
+                    { key: "sharePercentage", header: "النسبة %", width: 10 },
+                    { key: "votingPower", header: "قوة التصويت", width: 12 },
+                    { key: "status", header: "الحالة", width: 10 },
+                  ];
+                  printAsPDF(filteredShareholders, exportColumns, "بيانات المساهمين", "سجل المساهمين وحقوق الملكية");
+                }}>
+                  طباعة
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) setEditingShareholder(null);

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -229,34 +230,58 @@ export default function VotingPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Select onValueChange={(value) => {
-              const exportColumns = [
-                { key: "resolutionNumber", header: "رقم القرار", width: 15 },
-                { key: "title", header: "العنوان", width: 30 },
-                { key: "forVotes", header: "موافق", width: 12 },
-                { key: "againstVotes", header: "رافض", width: 12 },
-                { key: "abstainVotes", header: "ممتنع", width: 12 },
-                { key: "totalVotes", header: "الإجمالي", width: 12 },
-                { key: "status", header: "الحالة", width: 12 },
-              ];
-              if (value === "excel") {
-                exportToExcel(votingResolutions, exportColumns, "نتائج_التصويت", "التصويت");
-              } else if (value === "csv") {
-                exportToCSV(votingResolutions, exportColumns, "نتائج_التصويت");
-              } else if (value === "print") {
-                printAsPDF(votingResolutions, exportColumns, "نتائج التصويت", "سجل التصويت الإلكتروني");
-              }
-            }}>
-              <SelectTrigger className="w-32">
-                <Download className="h-4 w-4 ml-2" />
-                <SelectValue placeholder="تصدير" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="excel">Excel</SelectItem>
-                <SelectItem value="csv">CSV</SelectItem>
-                <SelectItem value="print">طباعة</SelectItem>
-              </SelectContent>
-            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تصدير
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "resolutionNumber", header: "رقم القرار", width: 15 },
+                    { key: "title", header: "العنوان", width: 30 },
+                    { key: "forVotes", header: "موافق", width: 12 },
+                    { key: "againstVotes", header: "رافض", width: 12 },
+                    { key: "abstainVotes", header: "ممتنع", width: 12 },
+                    { key: "totalVotes", header: "الإجمالي", width: 12 },
+                    { key: "status", header: "الحالة", width: 12 },
+                  ];
+                  exportToExcel(votingResolutions, exportColumns, "نتائج_التصويت", "التصويت");
+                }}>
+                  Excel تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "resolutionNumber", header: "رقم القرار", width: 15 },
+                    { key: "title", header: "العنوان", width: 30 },
+                    { key: "forVotes", header: "موافق", width: 12 },
+                    { key: "againstVotes", header: "رافض", width: 12 },
+                    { key: "abstainVotes", header: "ممتنع", width: 12 },
+                    { key: "totalVotes", header: "الإجمالي", width: 12 },
+                    { key: "status", header: "الحالة", width: 12 },
+                  ];
+                  exportToCSV(votingResolutions, exportColumns, "نتائج_التصويت");
+                }}>
+                  CSV تصدير
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  const exportColumns = [
+                    { key: "resolutionNumber", header: "رقم القرار", width: 15 },
+                    { key: "title", header: "العنوان", width: 30 },
+                    { key: "forVotes", header: "موافق", width: 12 },
+                    { key: "againstVotes", header: "رافض", width: 12 },
+                    { key: "abstainVotes", header: "ممتنع", width: 12 },
+                    { key: "totalVotes", header: "الإجمالي", width: 12 },
+                    { key: "status", header: "الحالة", width: 12 },
+                  ];
+                  printAsPDF(votingResolutions, exportColumns, "نتائج التصويت", "سجل التصويت الإلكتروني");
+                }}>
+                  طباعة
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" className="gap-2" onClick={() => setShowQuorumDetails(true)}>
               <Scale className="h-4 w-4" />
               النصاب
