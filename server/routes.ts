@@ -20016,8 +20016,9 @@ export async function registerRoutes(
   // Get today's shift status for all branches (dashboard)
   app.get("/api/branch-shifts/dashboard/today", isAuthenticated, async (req, res) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const shifts = await db.select().from(branchShifts).where(eq(branchShifts.shiftDate, today));
+      const dateParam = req.query.date as string | undefined;
+      const targetDate = dateParam || new Date().toISOString().split('T')[0];
+      const shifts = await db.select().from(branchShifts).where(eq(branchShifts.shiftDate, targetDate));
       const branchList = await db.select().from(branches);
       
       const dashboard = branchList.map(branch => {
@@ -20042,7 +20043,7 @@ export async function registerRoutes(
         };
       });
       
-      res.json(dashboard);
+      res.json({ dashboard, shifts });
     } catch (error) {
       console.error("Error fetching dashboard:", error);
       res.status(500).json({ error: "فشل في جلب لوحة المتابعة" });
