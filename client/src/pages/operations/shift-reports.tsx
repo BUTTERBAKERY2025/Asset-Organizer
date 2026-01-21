@@ -50,12 +50,19 @@ interface BranchShift {
 
 interface ChecklistItem {
   id: number;
-  category: string;
-  itemName: string;
-  itemNameEn: string;
-  checklistType: string;
+  title: string;
+  titleEn?: string;
+  templateId: number;
   requiresPhoto: boolean;
-  sortOrder: number;
+  requiresNote: boolean;
+  displayOrder: number;
+}
+
+interface ChecklistTemplate {
+  id: number;
+  name: string;
+  type: string;
+  items: ChecklistItem[];
 }
 
 interface ChecklistResponse {
@@ -86,16 +93,6 @@ const shiftTypes = [
   { value: "night", label: "ليلي" },
 ];
 
-const categoryNames: Record<string, string> = {
-  cleanliness: "النظافة",
-  equipment: "المعدات",
-  products: "المنتجات",
-  inventory: "المخزون",
-  cashier: "الكاشير",
-  employees: "الموظفين",
-  security: "الأمن والسلامة",
-  waste: "الهدر",
-};
 
 export default function ShiftReportsPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -119,7 +116,7 @@ export default function ShiftReportsPage() {
     },
   });
 
-  const { data: checklistItems = [], isLoading: itemsLoading } = useQuery<ChecklistItem[]>({
+  const { data: checklistTemplates = [], isLoading: itemsLoading } = useQuery<ChecklistTemplate[]>({
     queryKey: ["/api/branch-shifts/all-items"],
   });
 
@@ -170,26 +167,20 @@ export default function ShiftReportsPage() {
     setReportType(type);
   };
 
-  const filteredItems = checklistItems.filter((item) => item.checklistType === reportType);
-  const groupedItems = filteredItems.reduce(
-    (acc, item) => {
-      if (!acc[item.category]) acc[item.category] = [];
-      acc[item.category].push(item);
-      return acc;
-    },
-    {} as Record<string, ChecklistItem[]>
-  );
+  const filteredTemplates = checklistTemplates.filter((t) => t.type === reportType);
+  
+  const allItems = filteredTemplates.flatMap((t) => t.items);
 
   const getResponseForItem = (itemId: number) => {
     return shiftResponses.find((r) => r.itemId === itemId && r.checklistType === reportType);
   };
 
-  const completedCount = filteredItems.filter((item) => {
+  const completedCount = allItems.filter((item) => {
     const response = getResponseForItem(item.id);
     return response?.isCompleted;
   }).length;
 
-  const completionPercentage = filteredItems.length > 0 ? Math.round((completedCount / filteredItems.length) * 100) : 0;
+  const completionPercentage = allItems.length > 0 ? Math.round((completedCount / allItems.length) * 100) : 0;
 
   return (
     <Layout>
@@ -423,9 +414,9 @@ export default function ShiftReportsPage() {
 
               <Separator className="my-6" />
 
-              {Object.entries(groupedItems).map(([category, items]) => (
-                <div key={category} className="mb-6">
-                  <h4 className="font-semibold text-lg mb-3 text-amber-700">{categoryNames[category] || category}</h4>
+              {filteredTemplates.map((template) => (
+                <div key={template.id} className="mb-6">
+                  <h4 className="font-semibold text-lg mb-3 text-amber-700">{template.name}</h4>
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-gray-100 print:bg-gray-200">
@@ -437,12 +428,12 @@ export default function ShiftReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item, idx) => {
+                      {template.items.map((item, idx) => {
                         const response = getResponseForItem(item.id);
                         return (
                           <tr key={item.id} className="hover:bg-gray-50">
                             <td className="border p-2 text-center">{idx + 1}</td>
-                            <td className="border p-2">{item.itemName}</td>
+                            <td className="border p-2">{item.title}</td>
                             <td className="border p-2 text-center">
                               {response?.isCompleted ? (
                                 <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto" />
