@@ -104,9 +104,10 @@ export default function BranchShiftsPage() {
     },
   });
 
-  const { data: todayShifts = [] } = useQuery<any[]>({
+  const { data: dashboardData } = useQuery<{ dashboard: any[], shifts: any[] }>({
     queryKey: ["/api/branch-shifts/dashboard/today"],
   });
+  const todayShifts = dashboardData?.dashboard || [];
 
   const { data: shiftHistory = [] } = useQuery<BranchShift[]>({
     queryKey: ["/api/branch-shifts", selectedBranch],
