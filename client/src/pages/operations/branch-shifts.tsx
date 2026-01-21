@@ -326,10 +326,9 @@ export default function BranchShiftsPage() {
       notes: r.notes,
       photoUrl: r.photoUrl,
       status: r.status,
-      completedAt: new Date(),
     }));
 
-    await saveResponseMutation.mutateAsync({ responses: responsesArray });
+    await saveResponseMutation.mutateAsync({ checklistType: activeTab, responses: responsesArray });
 
     completeShiftMutation.mutate(
       activeTab === "opening"
@@ -525,95 +524,85 @@ export default function BranchShiftsPage() {
                         </div>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      <div className="space-y-4">
+                    <AccordionContent className="px-2 pb-2">
+                      <div className="space-y-1.5">
                         {template.items.map((item) => (
                           <div
                             key={item.id}
-                            className={`p-4 rounded-lg border ${
-                              responses[item.id]?.isCompleted ? "bg-green-50 border-green-200" : "bg-gray-50"
+                            className={`p-2 rounded-md border transition-all ${
+                              responses[item.id]?.isCompleted 
+                                ? "bg-green-50 border-green-300" 
+                                : "bg-white border-gray-200 hover:border-gray-300"
                             }`}
                             data-testid={`checklist-item-${item.id}`}
                           >
-                            <div className="flex items-start gap-3">
+                            <div className="flex items-center gap-2">
                               <Checkbox
                                 checked={responses[item.id]?.isCompleted || false}
                                 onCheckedChange={(checked) => toggleItem(item.id, checked as boolean)}
-                                className="mt-1"
+                                className="h-5 w-5"
                                 data-testid={`checkbox-${item.id}`}
                               />
-                              <div className="flex-1 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className={`font-medium ${responses[item.id]?.isCompleted ? "line-through text-gray-500" : ""}`}>
-                                      {item.title}
-                                    </p>
-                                    {item.isCritical && (
-                                      <Badge variant="destructive" className="text-xs mt-1">
-                                        <AlertTriangle className="h-3 w-3 ml-1" />
-                                        بند حرج
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <div className="flex gap-2">
-                                    {item.requiresPhoto && (
-                                      <label className="cursor-pointer">
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          className="hidden"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) handlePhotoUpload(item.id, file);
-                                          }}
-                                        />
-                                        <Button variant="outline" size="sm" className="gap-1" asChild>
-                                          <span>
-                                            {responses[item.id]?.photoUrl ? (
-                                              <Check className="h-3 w-3 text-green-600" />
-                                            ) : (
-                                              <Camera className="h-3 w-3" />
-                                            )}
-                                            صورة
-                                          </span>
-                                        </Button>
-                                      </label>
-                                    )}
-                                  </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-sm font-medium truncate ${responses[item.id]?.isCompleted ? "line-through text-gray-400" : "text-gray-800"}`}>
+                                    {item.title}
+                                  </p>
+                                  {item.isCritical && (
+                                    <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                                  )}
                                 </div>
-
-                                {responses[item.id]?.photoUrl && (
-                                  <div className="relative w-32 h-24">
-                                    <img
-                                      src={responses[item.id].photoUrl!}
-                                      alt="صورة التحقق"
-                                      className="w-full h-full object-cover rounded-lg"
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {item.requiresPhoto && (
+                                  <label className="cursor-pointer">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handlePhotoUpload(item.id, file);
+                                      }}
+                                      data-testid={`photo-input-${item.id}`}
                                     />
-                                    <Button
-                                      variant="destructive"
-                                      size="icon"
-                                      className="absolute -top-2 -right-2 h-6 w-6"
-                                      onClick={() =>
-                                        setResponses((prev) => ({
-                                          ...prev,
-                                          [item.id]: { ...prev[item.id], photoUrl: null },
-                                        }))
-                                      }
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+                                    <div className={`p-1.5 rounded ${responses[item.id]?.photoUrl ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"}`}>
+                                      {responses[item.id]?.photoUrl ? (
+                                        <Check className="h-4 w-4" />
+                                      ) : (
+                                        <Camera className="h-4 w-4" />
+                                      )}
+                                    </div>
+                                  </label>
                                 )}
-
-                                <Textarea
-                                  placeholder="ملاحظات..."
+                                {responses[item.id]?.photoUrl && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-red-500"
+                                    onClick={() =>
+                                      setResponses((prev) => ({
+                                        ...prev,
+                                        [item.id]: { ...prev[item.id], photoUrl: null },
+                                      }))
+                                    }
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            {(item.requiresNote || responses[item.id]?.notes) && (
+                              <div className="mt-1.5 mr-7">
+                                <Input
+                                  placeholder="ملاحظات / عدد..."
                                   value={responses[item.id]?.notes || ""}
                                   onChange={(e) => updateItemNotes(item.id, e.target.value)}
-                                  className="h-16 text-sm"
+                                  className="h-8 text-sm"
                                   data-testid={`notes-${item.id}`}
                                 />
                               </div>
-                            </div>
+                            )}
                           </div>
                         ))}
                       </div>

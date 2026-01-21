@@ -19919,10 +19919,12 @@ export async function registerRoutes(
   app.post("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      const checklistType = req.body.checklistType || 'opening';
       const responses = req.body.responses || [{ ...req.body, shiftId }];
       const processedResponses = responses.map((r: any) => ({
         shiftId,
         itemId: r.itemId,
+        checklistType: r.checklistType || checklistType,
         isCompleted: r.isCompleted || false,
         status: r.status || 'pending',
         notes: r.notes || null,
