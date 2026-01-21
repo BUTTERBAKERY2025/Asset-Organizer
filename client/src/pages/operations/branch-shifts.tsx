@@ -547,9 +547,6 @@ export default function BranchShiftsPage() {
                             }`}>
                               {item.title}
                             </span>
-                            {item.isCritical && (
-                              <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
-                            )}
                             <label className="cursor-pointer flex-shrink-0">
                               <input
                                 type="file"
@@ -561,7 +558,7 @@ export default function BranchShiftsPage() {
                                 }}
                                 data-testid={`photo-input-${item.id}`}
                               />
-                              <div className={`p-1.5 rounded-md ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}>
+                              <div className={`p-1.5 rounded-md ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : "bg-amber-100 text-amber-600 hover:bg-amber-200"}`}>
                                 <Camera className="h-5 w-5" />
                               </div>
                             </label>
