@@ -100,6 +100,7 @@ export default function ShiftReportsPage() {
   const [selectedShiftType, setSelectedShiftType] = useState<string>("all");
   const [selectedShift, setSelectedShift] = useState<BranchShift | null>(null);
   const [reportType, setReportType] = useState<"opening" | "closing">("opening");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -493,8 +494,8 @@ export default function ShiftReportsPage() {
                                 <img
                                   src={response.photoUrl}
                                   alt="صورة البند"
-                                  className="h-16 w-16 object-cover rounded mx-auto cursor-pointer hover:opacity-80"
-                                  onClick={() => window.open(response.photoUrl, '_blank')}
+                                  className="h-16 w-16 object-cover rounded mx-auto cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-amber-400 transition-all"
+                                  onClick={() => setPreviewImage(response.photoUrl || null)}
                                 />
                               ) : (
                                 <span className="text-muted-foreground">-</span>
@@ -539,6 +540,28 @@ export default function ShiftReportsPage() {
                 <p>تم إنشاء هذا التقرير بواسطة نظام إدارة مخبز باتر</p>
                 <p>{new Date().toLocaleString("ar-SA")}</p>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Camera className="h-5 w-5 text-amber-600" />
+                  معاينة الصورة
+                </span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
+              {previewImage && (
+                <img
+                  src={previewImage}
+                  alt="معاينة الصورة"
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg"
+                />
+              )}
             </div>
           </DialogContent>
         </Dialog>
