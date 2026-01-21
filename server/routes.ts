@@ -19904,8 +19904,19 @@ export async function registerRoutes(
   app.patch("/api/branch-shifts/:id", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      const updateData: any = { updatedAt: new Date() };
+      
+      // Convert date strings to Date objects
+      if (req.body.openingTime) updateData.openingTime = new Date(req.body.openingTime);
+      if (req.body.closingTime) updateData.closingTime = new Date(req.body.closingTime);
+      if (req.body.shiftDate) updateData.shiftDate = new Date(req.body.shiftDate);
+      if (req.body.status) updateData.status = req.body.status;
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      if (req.body.openingNotes !== undefined) updateData.openingNotes = req.body.openingNotes;
+      if (req.body.closingNotes !== undefined) updateData.closingNotes = req.body.closingNotes;
+      
       const [updated] = await db.update(branchShifts)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set(updateData)
         .where(eq(branchShifts.id, shiftId))
         .returning();
       res.json(updated);
