@@ -42,6 +42,7 @@ import {
   History,
   CalendarDays,
   RefreshCw,
+  ClipboardList,
 } from "lucide-react";
 import type { ChecklistTemplate, ChecklistItem, BranchShift } from "@shared/schema";
 
@@ -354,6 +355,12 @@ export default function BranchShiftsPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Link href="/shift-reports">
+              <Button variant="default" className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="btn-reports">
+                <ClipboardList className="h-4 w-4" />
+                التقارير
+              </Button>
+            </Link>
             <Button variant="outline" className="gap-2" onClick={() => setShowHistory(true)} data-testid="btn-history">
               <History className="h-4 w-4" />
               السجل
@@ -361,32 +368,57 @@ export default function BranchShiftsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {todayShifts.map((branch: any) => (
-            <Card key={branch.branchId} className={branch.hasShift ? "border-green-200 bg-green-50" : ""} data-testid={`branch-status-${branch.branchId}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium" data-testid={`branch-name-${branch.branchId}`}>{branch.branchName}</span>
-                  {branch.hasShift ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  ) : (
-                    <Circle className="h-5 w-5 text-gray-300" />
-                  )}
+        <Card className="bg-gradient-to-l from-amber-50 to-orange-50 border-amber-200">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-amber-800">
+                <Building2 className="h-5 w-5" />
+                حالة الفروع اليوم
+              </CardTitle>
+              <Badge variant="outline" className="bg-white">
+                {new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {todayShifts.map((branch: any) => (
+                <div 
+                  key={branch.branchId} 
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    branch.openingStatus === "completed" && branch.closingStatus === "completed"
+                      ? "border-green-400 bg-green-50"
+                      : branch.openingStatus === "completed"
+                        ? "border-amber-400 bg-amber-50"
+                        : "border-gray-200 bg-white"
+                  }`}
+                  data-testid={`branch-status-${branch.branchId}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-sm" data-testid={`branch-name-${branch.branchId}`}>{branch.branchName}</span>
+                    {branch.openingStatus === "completed" && branch.closingStatus === "completed" ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : branch.openingStatus === "completed" ? (
+                      <Clock className="h-4 w-4 text-amber-600" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className={`flex items-center gap-1 text-xs ${branch.openingStatus === "completed" ? "text-green-700" : "text-gray-500"}`}>
+                      <DoorOpen className="h-3 w-3" />
+                      {branch.openingStatus === "completed" ? "✓ تم الفتح" : "لم يفتح"}
+                    </div>
+                    <div className={`flex items-center gap-1 text-xs ${branch.closingStatus === "completed" ? "text-green-700" : "text-gray-500"}`}>
+                      <DoorClosed className="h-3 w-3" />
+                      {branch.closingStatus === "completed" ? "✓ تم الإغلاق" : "لم يغلق"}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Badge variant={branch.openingStatus === "completed" ? "default" : "outline"} className="text-xs">
-                    <DoorOpen className="h-3 w-3 ml-1" />
-                    {branch.openingStatus === "completed" ? "تم الفتح" : "لم يفتح"}
-                  </Badge>
-                  <Badge variant={branch.closingStatus === "completed" ? "default" : "outline"} className="text-xs">
-                    <DoorClosed className="h-3 w-3 ml-1" />
-                    {branch.closingStatus === "completed" ? "تم الإغلاق" : "لم يغلق"}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {!currentShift ? (
           <Card>
