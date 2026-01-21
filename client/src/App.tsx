@@ -53,6 +53,7 @@ const BackupsPage = lazy(() => import("@/pages/backups"));
 const IntegrationsPage = lazy(() => import("@/pages/integrations"));
 const OperationsDashboardPage = lazy(() => import("@/pages/operations-dashboard"));
 const BranchShiftsPage = lazy(() => import("@/pages/operations/branch-shifts"));
+const ShiftReportsPage = lazy(() => import("@/pages/operations/shift-reports"));
 const OperationsReportsDashboardPage = lazy(() => import("@/pages/operations-reports-dashboard"));
 const ProductsPage = lazy(() => import("@/pages/products"));
 const ProductionPage = lazy(() => import("@/pages/production"));
@@ -221,6 +222,7 @@ function Router() {
       {/* Operations - التشغيل */}
       <Route path="/operations">{() => <ModulePage component={OperationsDashboardPage} module="operations" />}</Route>
       <Route path="/branch-shifts">{() => <ModulePage component={BranchShiftsPage} module="operations" />}</Route>
+      <Route path="/shift-reports">{() => <ModulePage component={ShiftReportsPage} module="operations" />}</Route>
       <Route path="/products">{() => <ModulePage component={ProductsPage} module="products" />}</Route>
       <Route path="/quality-control">{() => <ModulePage component={QualityControlPage} module="quality_control" />}</Route>
       <Route path="/display-bar-waste">{() => <ModulePage component={DisplayBarWastePage} module="waste_tracking" />}</Route>
