@@ -525,37 +525,41 @@ export default function BranchShiftsPage() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-2 pb-2">
-                      <div className="space-y-1.5">
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                         {template.items.map((item) => (
                           <div
                             key={item.id}
-                            className={`p-2 rounded-md border transition-all ${
+                            onClick={() => !item.requiresNote && toggleItem(item.id, !responses[item.id]?.isCompleted)}
+                            className={`p-2 rounded-lg border-2 transition-all cursor-pointer select-none ${
                               responses[item.id]?.isCompleted 
-                                ? "bg-green-50 border-green-300" 
-                                : "bg-white border-gray-200 hover:border-gray-300"
+                                ? "bg-green-100 border-green-500 shadow-sm" 
+                                : "bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50"
                             }`}
                             data-testid={`checklist-item-${item.id}`}
                           >
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                checked={responses[item.id]?.isCompleted || false}
-                                onCheckedChange={(checked) => toggleItem(item.id, checked as boolean)}
-                                className="h-5 w-5"
-                                data-testid={`checkbox-${item.id}`}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className={`text-sm font-medium truncate ${responses[item.id]?.isCompleted ? "line-through text-gray-400" : "text-gray-800"}`}>
-                                    {item.title}
-                                  </p>
-                                  {item.isCritical && (
-                                    <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
-                                  )}
-                                </div>
+                            <div className="flex flex-col items-center text-center gap-1">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                responses[item.id]?.isCompleted 
+                                  ? "bg-green-500 text-white" 
+                                  : "bg-gray-100 text-gray-400"
+                              }`}>
+                                {responses[item.id]?.isCompleted ? (
+                                  <Check className="h-5 w-5" />
+                                ) : (
+                                  <span className="text-xs font-bold">{template.items.indexOf(item) + 1}</span>
+                                )}
                               </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
+                              <p className={`text-xs font-medium leading-tight ${
+                                responses[item.id]?.isCompleted ? "text-green-700" : "text-gray-700"
+                              }`}>
+                                {item.title}
+                              </p>
+                              <div className="flex items-center gap-1 mt-1">
+                                {item.isCritical && (
+                                  <AlertTriangle className="h-3 w-3 text-red-500" />
+                                )}
                                 {item.requiresPhoto && (
-                                  <label className="cursor-pointer">
+                                  <label className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                                     <input
                                       type="file"
                                       accept="image/*"
@@ -566,43 +570,26 @@ export default function BranchShiftsPage() {
                                       }}
                                       data-testid={`photo-input-${item.id}`}
                                     />
-                                    <div className={`p-1.5 rounded ${responses[item.id]?.photoUrl ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"}`}>
-                                      {responses[item.id]?.photoUrl ? (
-                                        <Check className="h-4 w-4" />
-                                      ) : (
-                                        <Camera className="h-4 w-4" />
-                                      )}
+                                    <div className={`p-1 rounded ${responses[item.id]?.photoUrl ? "bg-green-200 text-green-700" : "bg-gray-200 text-gray-500"}`}>
+                                      <Camera className="h-3 w-3" />
                                     </div>
                                   </label>
                                 )}
-                                {responses[item.id]?.photoUrl && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-red-500"
-                                    onClick={() =>
-                                      setResponses((prev) => ({
-                                        ...prev,
-                                        [item.id]: { ...prev[item.id], photoUrl: null },
-                                      }))
-                                    }
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                )}
                               </div>
-                            </div>
-                            {(item.requiresNote || responses[item.id]?.notes) && (
-                              <div className="mt-1.5 mr-7">
+                              {item.requiresNote && (
                                 <Input
-                                  placeholder="ملاحظات / عدد..."
+                                  placeholder="عدد / ملاحظة"
                                   value={responses[item.id]?.notes || ""}
-                                  onChange={(e) => updateItemNotes(item.id, e.target.value)}
-                                  className="h-8 text-sm"
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    updateItemNotes(item.id, e.target.value);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-6 text-xs text-center mt-1 w-full"
                                   data-testid={`notes-${item.id}`}
                                 />
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
