@@ -7252,3 +7252,242 @@ export const insertComplianceHistorySchema = createInsertSchema(complianceHistor
 
 export type ComplianceHistory = typeof complianceHistory.$inferSelect;
 export type InsertComplianceHistory = z.infer<typeof insertComplianceHistorySchema>;
+
+// =====================================================
+// جداول إضافية للحوكمة المتقدمة
+// =====================================================
+
+// لجان مجلس الإدارة - Board Committees
+export const boardCommittees = pgTable("board_committees", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  description: text("description"),
+  committeeType: text("committee_type").notNull(), // audit, remuneration, nomination, risk, executive, investment
+  chairmanId: integer("chairman_id").references(() => boardMembers.id),
+  secretaryId: integer("secretary_id").references(() => boardMembers.id),
+  formationDate: date("formation_date").notNull(),
+  termEndDate: date("term_end_date"),
+  mandateDocument: text("mandate_document"),
+  meetingFrequency: text("meeting_frequency").default("quarterly"), // monthly, quarterly, semi_annually, annually, as_needed
+  quorumRequired: integer("quorum_required").default(2),
+  status: text("status").default("active"), // active, inactive, dissolved
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_committees_type").on(table.committeeType),
+  index("idx_board_committees_status").on(table.status),
+]);
+
+export const insertBoardCommitteeSchema = createInsertSchema(boardCommittees).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BoardCommittee = typeof boardCommittees.$inferSelect;
+export type InsertBoardCommittee = z.infer<typeof insertBoardCommitteeSchema>;
+
+// عضوية اللجان - Committee Memberships
+export const committeeMemberships = pgTable("committee_memberships", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull().references(() => boardCommittees.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
+  role: text("role").default("member"), // chairman, vice_chairman, member, secretary
+  appointmentDate: date("appointment_date").notNull(),
+  endDate: date("end_date"),
+  status: text("status").default("active"), // active, ended, suspended
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_committee_memberships_committee").on(table.committeeId),
+  index("idx_committee_memberships_member").on(table.boardMemberId),
+  index("idx_committee_memberships_status").on(table.status),
+]);
+
+export const insertCommitteeMembershipSchema = createInsertSchema(committeeMemberships).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CommitteeMembership = typeof committeeMemberships.$inferSelect;
+export type InsertCommitteeMembership = z.infer<typeof insertCommitteeMembershipSchema>;
+
+// سجل المصالح والإفصاحات الشخصية - Interest Declarations
+export const interestDeclarations = pgTable("interest_declarations", {
+  id: serial("id").primaryKey(),
+  declarationNumber: text("declaration_number").notNull().unique(),
+  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
+  declarationType: text("declaration_type").notNull(), // annual, transaction, related_party, conflict, update
+  declarationDate: date("declaration_date").notNull(),
+  fiscalYear: text("fiscal_year"),
+  relatedPartyName: text("related_party_name"),
+  relationshipType: text("relationship_type"), // family, business, financial, ownership
+  description: text("description").notNull(),
+  transactionType: text("transaction_type"), // purchase, sale, contract, employment
+  transactionValue: numeric("transaction_value", { precision: 15, scale: 2 }),
+  actionTaken: text("action_taken"), // recused, disclosed, abstained, approved
+  boardDecision: text("board_decision"),
+  status: text("status").default("pending"), // pending, reviewed, acknowledged, requires_action
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  attachments: jsonb("attachments"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_interest_declarations_member").on(table.boardMemberId),
+  index("idx_interest_declarations_type").on(table.declarationType),
+  index("idx_interest_declarations_status").on(table.status),
+  index("idx_interest_declarations_year").on(table.fiscalYear),
+]);
+
+export const insertInterestDeclarationSchema = createInsertSchema(interestDeclarations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InterestDeclaration = typeof interestDeclarations.$inferSelect;
+export type InsertInterestDeclaration = z.infer<typeof insertInterestDeclarationSchema>;
+
+// شهادات التدريب والتأهيل - Training Certificates
+export const boardMemberTraining = pgTable("board_member_training", {
+  id: serial("id").primaryKey(),
+  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
+  trainingType: text("training_type").notNull(), // governance, financial, legal, compliance, leadership, industry
+  title: text("title").notNull(),
+  provider: text("provider"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  duration: integer("duration"), // hours
+  certificateNumber: text("certificate_number"),
+  certificateUrl: text("certificate_url"),
+  expiryDate: date("expiry_date"),
+  status: text("status").default("completed"), // registered, in_progress, completed, expired
+  score: numeric("score", { precision: 5, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_board_member_training_member").on(table.boardMemberId),
+  index("idx_board_member_training_type").on(table.trainingType),
+  index("idx_board_member_training_status").on(table.status),
+]);
+
+export const insertBoardMemberTrainingSchema = createInsertSchema(boardMemberTraining).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BoardMemberTraining = typeof boardMemberTraining.$inferSelect;
+export type InsertBoardMemberTraining = z.infer<typeof insertBoardMemberTrainingSchema>;
+
+// التصويت بالوكالة - Proxy Voting
+export const proxyVotes = pgTable("proxy_votes", {
+  id: serial("id").primaryKey(),
+  proxyNumber: text("proxy_number").notNull().unique(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  principalShareholderId: integer("principal_shareholder_id").notNull().references(() => shareholders.id),
+  proxyHolderShareholderId: integer("proxy_holder_shareholder_id").references(() => shareholders.id),
+  proxyHolderName: text("proxy_holder_name").notNull(),
+  proxyHolderNationalId: text("proxy_holder_national_id"),
+  sharesRepresented: integer("shares_represented").notNull(),
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }).notNull(),
+  proxyType: text("proxy_type").notNull(), // general, specific, limited
+  votingInstructions: jsonb("voting_instructions"), // [{resolutionId, vote}]
+  documentUrl: text("document_url"),
+  validFrom: timestamp("valid_from").notNull(),
+  validUntil: timestamp("valid_until").notNull(),
+  status: text("status").default("pending"), // pending, verified, active, used, expired, revoked
+  verifiedBy: varchar("verified_by").references(() => users.id),
+  verifiedAt: timestamp("verified_at"),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  revocationReason: text("revocation_reason"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_proxy_votes_meeting").on(table.meetingId),
+  index("idx_proxy_votes_principal").on(table.principalShareholderId),
+  index("idx_proxy_votes_holder").on(table.proxyHolderShareholderId),
+  index("idx_proxy_votes_status").on(table.status),
+]);
+
+export const insertProxyVoteSchema = createInsertSchema(proxyVotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProxyVote = typeof proxyVotes.$inferSelect;
+export type InsertProxyVote = z.infer<typeof insertProxyVoteSchema>;
+
+// سجل تدقيق التصويت - Voting Audit Log
+export const votingAuditLog = pgTable("voting_audit_log", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").references(() => boardResolutions.id, { onDelete: "cascade" }),
+  meetingId: integer("meeting_id").references(() => governanceMeetings.id),
+  action: text("action").notNull(), // vote_cast, vote_changed, vote_cancelled, proxy_used, quorum_calculated, results_published
+  actorType: text("actor_type").notNull(), // board_member, shareholder, proxy_holder, system, admin
+  actorId: varchar("actor_id"),
+  actorName: text("actor_name"),
+  voteId: integer("vote_id").references(() => resolutionVotes.id),
+  proxyId: integer("proxy_id").references(() => proxyVotes.id),
+  previousValue: text("previous_value"),
+  newValue: text("new_value"),
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  deviceFingerprint: text("device_fingerprint"),
+  sessionId: text("session_id"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  isValid: boolean("is_valid").default(true),
+  validationNotes: text("validation_notes"),
+}, (table) => [
+  index("idx_voting_audit_resolution").on(table.resolutionId),
+  index("idx_voting_audit_meeting").on(table.meetingId),
+  index("idx_voting_audit_action").on(table.action),
+  index("idx_voting_audit_actor").on(table.actorId),
+  index("idx_voting_audit_timestamp").on(table.timestamp),
+]);
+
+export const insertVotingAuditLogSchema = createInsertSchema(votingAuditLog).omit({
+  id: true,
+});
+
+export type VotingAuditLog = typeof votingAuditLog.$inferSelect;
+export type InsertVotingAuditLog = z.infer<typeof insertVotingAuditLogSchema>;
+
+// حساب النصاب - Quorum Calculations
+export const quorumCalculations = pgTable("quorum_calculations", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  calculationType: text("calculation_type").notNull(), // opening, closing, per_resolution
+  resolutionId: integer("resolution_id").references(() => boardResolutions.id),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+  totalEligibleShares: integer("total_eligible_shares").notNull(),
+  totalEligibleVotes: integer("total_eligible_votes").notNull(),
+  presentShares: integer("present_shares").notNull(),
+  presentVotes: integer("present_votes").notNull(),
+  proxyShares: integer("proxy_shares").default(0),
+  proxyVotes: integer("proxy_votes").default(0),
+  totalRepresentedShares: integer("total_represented_shares").notNull(),
+  totalRepresentedVotes: integer("total_represented_votes").notNull(),
+  percentageRepresented: numeric("percentage_represented", { precision: 8, scale: 4 }).notNull(),
+  requiredQuorum: numeric("required_quorum", { precision: 5, scale: 2 }).notNull(),
+  quorumMet: boolean("quorum_met").notNull(),
+  notes: text("notes"),
+  calculatedBy: varchar("calculated_by").references(() => users.id),
+}, (table) => [
+  index("idx_quorum_calculations_meeting").on(table.meetingId),
+  index("idx_quorum_calculations_resolution").on(table.resolutionId),
+  index("idx_quorum_calculations_type").on(table.calculationType),
+]);
+
+export const insertQuorumCalculationSchema = createInsertSchema(quorumCalculations).omit({
+  id: true,
+});
+
+export type QuorumCalculation = typeof quorumCalculations.$inferSelect;
+export type InsertQuorumCalculation = z.infer<typeof insertQuorumCalculationSchema>;
