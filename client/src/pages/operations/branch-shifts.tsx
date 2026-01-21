@@ -344,9 +344,10 @@ export default function BranchShiftsPage() {
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/production">
-              <Button variant="ghost" size="icon">
-                <ChevronLeft className="h-5 w-5" />
+            <Link href="/operations">
+              <Button variant="outline" size="sm" className="gap-2">
+                <ChevronLeft className="h-4 w-4" />
+                لوحة التشغيل
               </Button>
             </Link>
             <div>
