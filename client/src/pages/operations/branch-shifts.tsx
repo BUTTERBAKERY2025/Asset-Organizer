@@ -550,23 +550,21 @@ export default function BranchShiftsPage() {
                             {item.isCritical && (
                               <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
                             )}
-                            {item.requiresPhoto && (
-                              <label className="cursor-pointer flex-shrink-0">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) handlePhotoUpload(item.id, file);
-                                  }}
-                                  data-testid={`photo-input-${item.id}`}
-                                />
-                                <div className={`p-1 rounded ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400"}`}>
-                                  <Camera className="h-4 w-4" />
-                                </div>
-                              </label>
-                            )}
+                            <label className="cursor-pointer flex-shrink-0">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handlePhotoUpload(item.id, file);
+                                }}
+                                data-testid={`photo-input-${item.id}`}
+                              />
+                              <div className={`p-1.5 rounded-md ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}>
+                                <Camera className="h-5 w-5" />
+                              </div>
+                            </label>
                             {item.requiresNote && (
                               <Input
                                 placeholder="عدد"
