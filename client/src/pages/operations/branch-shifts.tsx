@@ -102,6 +102,8 @@ export default function BranchShiftsPage() {
 
   const { data: branches = [] } = useQuery<any[]>({
     queryKey: ["/api/branches"],
+    retry: 1,
+    retryDelay: 1000,
   });
 
   // جلب موظفي الفرع المختار (مشرف، مدير، مدير صالة)
