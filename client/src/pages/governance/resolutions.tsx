@@ -490,7 +490,7 @@ export default function ResolutionsPage() {
                                   <title>قرار رقم ${resolution.resolutionNumber}</title>
                                   <style>
                                     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-                                    @page { size: A4 portrait; margin: 20mm 15mm; }
+                                    @page { size: A4 portrait; margin: 12mm 12mm; }
                                     * { box-sizing: border-box; margin: 0; padding: 0; }
                                     body { 
                                       font-family: 'Cairo', sans-serif; 
@@ -498,41 +498,46 @@ export default function ResolutionsPage() {
                                       direction: rtl; 
                                       background: white;
                                       color: #1a1a1a;
-                                      line-height: 1.6;
+                                      line-height: 1.4;
+                                      font-size: 13px;
                                     }
                                     .document {
                                       max-width: 210mm;
                                       margin: 0 auto;
-                                      padding: 40px;
+                                      padding: 25px;
                                       background: white;
                                     }
                                     .letterhead {
                                       text-align: center;
-                                      padding-bottom: 25px;
-                                      margin-bottom: 30px;
-                                      border-bottom: 3px double #1a5f3c;
+                                      padding-bottom: 12px;
+                                      margin-bottom: 15px;
+                                      border-bottom: 2px double #1a5f3c;
                                     }
                                     .company-name {
-                                      font-size: 28px;
+                                      font-size: 22px;
                                       font-weight: 800;
                                       color: #1a5f3c;
-                                      margin-bottom: 5px;
-                                      letter-spacing: 1px;
+                                      margin-bottom: 2px;
                                     }
                                     .company-subtitle {
-                                      font-size: 14px;
+                                      font-size: 11px;
                                       color: #666;
-                                      margin-bottom: 15px;
+                                      margin-bottom: 3px;
+                                    }
+                                    .company-info {
+                                      font-size: 10px;
+                                      color: #888;
+                                      margin-bottom: 8px;
                                     }
                                     .document-type {
                                       display: inline-block;
                                       background: linear-gradient(135deg, #1a5f3c 0%, #2d8f5e 100%);
                                       color: white;
-                                      padding: 10px 40px;
-                                      font-size: 20px;
+                                      padding: 6px 30px;
+                                      font-size: 16px;
                                       font-weight: 700;
-                                      border-radius: 5px;
-                                      margin-top: 10px;
+                                      border-radius: 4px;
+                                      margin-top: 5px;
                                     }
                                     .resolution-meta {
                                       display: flex;
@@ -540,106 +545,108 @@ export default function ResolutionsPage() {
                                       align-items: center;
                                       background: #f8f9fa;
                                       border: 1px solid #e9ecef;
-                                      border-radius: 8px;
-                                      padding: 20px 25px;
-                                      margin-bottom: 30px;
+                                      border-radius: 6px;
+                                      padding: 12px 15px;
+                                      margin-bottom: 15px;
                                     }
                                     .meta-right { text-align: right; }
                                     .meta-left { text-align: left; }
                                     .resolution-number-box {
-                                      font-size: 18px;
+                                      font-size: 14px;
                                       font-weight: 700;
                                       color: #1a5f3c;
                                     }
                                     .resolution-date {
-                                      font-size: 14px;
+                                      font-size: 11px;
                                       color: #666;
-                                      margin-top: 5px;
+                                      margin-top: 2px;
                                     }
                                     .meta-badge {
                                       display: inline-block;
-                                      padding: 6px 15px;
-                                      border-radius: 20px;
-                                      font-size: 13px;
+                                      padding: 4px 10px;
+                                      border-radius: 15px;
+                                      font-size: 11px;
                                       font-weight: 600;
                                     }
-                                    .badge-type { background: #e8f5e9; color: #2e7d32; margin-left: 8px; }
+                                    .badge-type { background: #e8f5e9; color: #2e7d32; margin-left: 5px; }
                                     .badge-priority { background: #fff3e0; color: #e65100; }
                                     .main-title {
                                       text-align: center;
-                                      margin: 30px 0;
-                                      padding: 20px;
+                                      margin: 15px 0;
+                                      padding: 12px;
                                       background: linear-gradient(to left, #f8f9fa, white, #f8f9fa);
-                                      border-right: 4px solid #1a5f3c;
-                                      border-left: 4px solid #1a5f3c;
+                                      border-right: 3px solid #1a5f3c;
+                                      border-left: 3px solid #1a5f3c;
                                     }
                                     .main-title h2 {
-                                      font-size: 20px;
+                                      font-size: 16px;
                                       font-weight: 700;
                                       color: #1a1a1a;
-                                      line-height: 1.5;
+                                      line-height: 1.4;
                                     }
                                     .section {
-                                      margin-bottom: 25px;
+                                      margin-bottom: 12px;
                                     }
                                     .section-header {
                                       display: flex;
                                       align-items: center;
-                                      margin-bottom: 15px;
-                                      padding-bottom: 10px;
-                                      border-bottom: 2px solid #1a5f3c;
+                                      margin-bottom: 8px;
+                                      padding-bottom: 5px;
+                                      border-bottom: 1px solid #1a5f3c;
                                     }
                                     .section-icon {
-                                      width: 30px;
-                                      height: 30px;
+                                      width: 22px;
+                                      height: 22px;
                                       background: #1a5f3c;
                                       color: white;
                                       border-radius: 50%;
                                       display: flex;
                                       align-items: center;
                                       justify-content: center;
-                                      margin-left: 12px;
+                                      margin-left: 8px;
+                                      font-size: 11px;
                                       font-weight: bold;
                                     }
                                     .section-title {
-                                      font-size: 16px;
+                                      font-size: 13px;
                                       font-weight: 700;
                                       color: #1a5f3c;
                                     }
                                     .section-content {
-                                      padding: 20px;
+                                      padding: 12px;
                                       background: #fafafa;
                                       border: 1px solid #eee;
-                                      border-radius: 8px;
-                                      line-height: 2;
+                                      border-radius: 5px;
+                                      line-height: 1.7;
                                       text-align: justify;
                                       white-space: pre-wrap;
+                                      font-size: 12px;
                                     }
                                     .voting-section {
-                                      margin: 35px 0;
-                                      padding: 25px;
+                                      margin: 15px 0;
+                                      padding: 12px;
                                       background: #f8f9fa;
-                                      border-radius: 10px;
+                                      border-radius: 6px;
                                       border: 1px solid #e9ecef;
                                     }
                                     .voting-title {
                                       text-align: center;
-                                      font-size: 16px;
+                                      font-size: 13px;
                                       font-weight: 700;
                                       color: #1a5f3c;
-                                      margin-bottom: 20px;
+                                      margin-bottom: 10px;
                                     }
                                     .votes-grid {
                                       display: flex;
                                       justify-content: center;
-                                      gap: 30px;
+                                      gap: 20px;
                                     }
                                     .vote-item {
                                       text-align: center;
-                                      min-width: 100px;
+                                      min-width: 70px;
                                     }
                                     .vote-count {
-                                      font-size: 32px;
+                                      font-size: 24px;
                                       font-weight: 800;
                                       display: block;
                                     }
@@ -647,44 +654,44 @@ export default function ResolutionsPage() {
                                     .vote-count.against { color: #c62828; }
                                     .vote-count.abstain { color: #757575; }
                                     .vote-type {
-                                      font-size: 14px;
+                                      font-size: 11px;
                                       color: #666;
                                       font-weight: 600;
                                     }
                                     .result-box {
                                       text-align: center;
-                                      margin-top: 20px;
-                                      padding: 15px;
+                                      margin-top: 10px;
+                                      padding: 8px;
                                       background: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#e8f5e9' : resolution.status === 'rejected' ? '#ffebee' : '#fff3e0'};
-                                      border-radius: 8px;
-                                      font-size: 18px;
+                                      border-radius: 5px;
+                                      font-size: 14px;
                                       font-weight: 700;
                                       color: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#2e7d32' : resolution.status === 'rejected' ? '#c62828' : '#e65100'};
                                     }
                                     .signatures {
-                                      margin-top: 50px;
+                                      margin-top: 25px;
                                       display: grid;
                                       grid-template-columns: 1fr 1fr;
-                                      gap: 40px;
+                                      gap: 25px;
                                     }
                                     .signature-box {
                                       text-align: center;
-                                      padding-top: 60px;
+                                      padding-top: 35px;
                                       border-top: 1px solid #333;
                                     }
                                     .signature-title {
-                                      font-size: 14px;
+                                      font-size: 12px;
                                       font-weight: 600;
                                       color: #333;
                                     }
                                     .signature-name {
-                                      font-size: 12px;
+                                      font-size: 10px;
                                       color: #666;
-                                      margin-top: 5px;
+                                      margin-top: 3px;
                                     }
                                     .footer {
-                                      margin-top: 40px;
-                                      padding-top: 20px;
+                                      margin-top: 20px;
+                                      padding-top: 10px;
                                       border-top: 1px solid #ddd;
                                       text-align: center;
                                       font-size: 11px;
@@ -704,6 +711,7 @@ export default function ResolutionsPage() {
                                     <div class="letterhead">
                                       <div class="company-name">شركة الزبد الأفضل التجارية</div>
                                       <div class="company-subtitle">BUTTER BAKERY - مخبز باتر</div>
+                                      <div class="company-info">شركة مساهمة | سجل تجاري: 7026155296 | المملكة العربية السعودية</div>
                                       <div class="document-type">قـــرار إداري</div>
                                     </div>
                                     
@@ -765,9 +773,8 @@ export default function ResolutionsPage() {
                                     </div>
 
                                     <div class="footer">
-                                      <div class="footer-line">شركة الزبد الأفضل التجارية - سجل تجاري رقم: XXXXXXXXXX</div>
-                                      <div class="footer-line">المملكة العربية السعودية</div>
-                                      <div class="footer-line">تم الطباعة بتاريخ: ${new Date().toLocaleDateString('ar-SA')} | وثيقة رسمية</div>
+                                      <div class="footer-line">شركة الزبد الأفضل التجارية (شركة مساهمة) - سجل تجاري: 7026155296</div>
+                                      <div class="footer-line">تم الطباعة: ${new Date().toLocaleDateString('ar-SA')} | وثيقة رسمية</div>
                                     </div>
                                   </div>
                                 </body>
