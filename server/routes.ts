@@ -19884,7 +19884,15 @@ export async function registerRoutes(
   // Create new branch shift
   app.post("/api/branch-shifts", isAuthenticated, async (req, res) => {
     try {
-      const [shift] = await db.insert(branchShifts).values(req.body).returning();
+      const { shiftDate, openingTime, closingTime, ...rest } = req.body;
+      const shiftData = {
+        ...rest,
+        shiftDate: shiftDate || new Date().toISOString().split('T')[0],
+        openingTime: openingTime ? new Date(openingTime) : null,
+        closingTime: closingTime ? new Date(closingTime) : null,
+        createdAt: new Date(),
+      };
+      const [shift] = await db.insert(branchShifts).values(shiftData).returning();
       res.status(201).json(shift);
     } catch (error) {
       console.error("Error creating branch shift:", error);
