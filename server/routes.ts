@@ -19930,6 +19930,30 @@ export async function registerRoutes(
     }
   });
 
+  // Get shift responses
+  app.get("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const responses = await db.select().from(shiftChecklistResponses).where(eq(shiftChecklistResponses.shiftId, shiftId));
+      res.json(responses);
+    } catch (error) {
+      console.error("Error fetching shift responses:", error);
+      res.status(500).json({ error: "فشل في جلب استجابات الشفت" });
+    }
+  });
+
+  // Get shift signatures
+  app.get("/api/branch-shifts/:id/signatures", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const signatures = await db.select().from(shiftSignatures).where(eq(shiftSignatures.shiftId, shiftId));
+      res.json(signatures);
+    } catch (error) {
+      console.error("Error fetching shift signatures:", error);
+      res.status(500).json({ error: "فشل في جلب توقيعات الشفت" });
+    }
+  });
+
   // Save checklist response
   app.post("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
     try {

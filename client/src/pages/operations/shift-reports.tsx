@@ -443,7 +443,12 @@ export default function ShiftReportsPage() {
                             </td>
                             <td className="border p-2 text-center">
                               {response?.photoUrl ? (
-                                <Camera className="h-5 w-5 text-green-600 mx-auto" />
+                                <img
+                                  src={response.photoUrl}
+                                  alt="صورة البند"
+                                  className="h-16 w-16 object-cover rounded mx-auto cursor-pointer hover:opacity-80"
+                                  onClick={() => window.open(response.photoUrl, '_blank')}
+                                />
                               ) : (
                                 <span className="text-muted-foreground">-</span>
                               )}
