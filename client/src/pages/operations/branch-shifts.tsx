@@ -524,72 +524,58 @@ export default function BranchShiftsPage() {
                         </div>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-2 pb-2">
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    <AccordionContent className="px-1 pb-2">
+                      <div className="grid grid-cols-2 gap-1">
                         {template.items.map((item) => (
                           <div
                             key={item.id}
-                            onClick={() => !item.requiresNote && toggleItem(item.id, !responses[item.id]?.isCompleted)}
-                            className={`p-2 rounded-lg border-2 transition-all cursor-pointer select-none ${
+                            className={`flex items-center gap-2 p-1.5 rounded border transition-all ${
                               responses[item.id]?.isCompleted 
-                                ? "bg-green-100 border-green-500 shadow-sm" 
-                                : "bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                                ? "bg-green-50 border-green-400" 
+                                : "bg-white border-gray-200"
                             }`}
                             data-testid={`checklist-item-${item.id}`}
                           >
-                            <div className="flex flex-col items-center text-center gap-1">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                responses[item.id]?.isCompleted 
-                                  ? "bg-green-500 text-white" 
-                                  : "bg-gray-100 text-gray-400"
-                              }`}>
-                                {responses[item.id]?.isCompleted ? (
-                                  <Check className="h-5 w-5" />
-                                ) : (
-                                  <span className="text-xs font-bold">{template.items.indexOf(item) + 1}</span>
-                                )}
-                              </div>
-                              <p className={`text-xs font-medium leading-tight ${
-                                responses[item.id]?.isCompleted ? "text-green-700" : "text-gray-700"
-                              }`}>
-                                {item.title}
-                              </p>
-                              <div className="flex items-center gap-1 mt-1">
-                                {item.isCritical && (
-                                  <AlertTriangle className="h-3 w-3 text-red-500" />
-                                )}
-                                {item.requiresPhoto && (
-                                  <label className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handlePhotoUpload(item.id, file);
-                                      }}
-                                      data-testid={`photo-input-${item.id}`}
-                                    />
-                                    <div className={`p-1 rounded ${responses[item.id]?.photoUrl ? "bg-green-200 text-green-700" : "bg-gray-200 text-gray-500"}`}>
-                                      <Camera className="h-3 w-3" />
-                                    </div>
-                                  </label>
-                                )}
-                              </div>
-                              {item.requiresNote && (
-                                <Input
-                                  placeholder="عدد / ملاحظة"
-                                  value={responses[item.id]?.notes || ""}
+                            <Checkbox
+                              checked={responses[item.id]?.isCompleted || false}
+                              onCheckedChange={(checked) => toggleItem(item.id, checked as boolean)}
+                              className="h-5 w-5 flex-shrink-0"
+                              data-testid={`checkbox-${item.id}`}
+                            />
+                            <span className={`text-xs flex-1 leading-tight ${
+                              responses[item.id]?.isCompleted ? "text-green-700 line-through" : "text-gray-800"
+                            }`}>
+                              {item.title}
+                            </span>
+                            {item.isCritical && (
+                              <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                            )}
+                            {item.requiresPhoto && (
+                              <label className="cursor-pointer flex-shrink-0">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
                                   onChange={(e) => {
-                                    e.stopPropagation();
-                                    updateItemNotes(item.id, e.target.value);
+                                    const file = e.target.files?.[0];
+                                    if (file) handlePhotoUpload(item.id, file);
                                   }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="h-6 text-xs text-center mt-1 w-full"
-                                  data-testid={`notes-${item.id}`}
+                                  data-testid={`photo-input-${item.id}`}
                                 />
-                              )}
-                            </div>
+                                <div className={`p-1 rounded ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400"}`}>
+                                  <Camera className="h-4 w-4" />
+                                </div>
+                              </label>
+                            )}
+                            {item.requiresNote && (
+                              <Input
+                                placeholder="عدد"
+                                value={responses[item.id]?.notes || ""}
+                                onChange={(e) => updateItemNotes(item.id, e.target.value)}
+                                className="h-6 w-14 text-xs text-center flex-shrink-0"
+                                data-testid={`notes-${item.id}`}
+                              />
+                            )}
                           </div>
                         ))}
                       </div>
