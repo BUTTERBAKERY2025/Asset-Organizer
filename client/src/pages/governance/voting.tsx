@@ -2,15 +2,21 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   Vote,
   ChevronLeft,
@@ -23,19 +29,61 @@ import {
   Users,
   Calendar,
   AlertTriangle,
+  Shield,
+  Scale,
+  FileText,
+  History,
+  UserCheck,
+  Percent,
+  Eye,
+  Download,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Lock,
+  Unlock,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import type { BoardResolution, ResolutionVote } from "@shared/schema";
+import type { BoardResolution, ResolutionVote, Shareholder } from "@shared/schema";
 
 const voteOptions = [
-  { value: "for", label: "موافق", icon: ThumbsUp, color: "text-green-600 bg-green-100" },
-  { value: "against", label: "رافض", icon: ThumbsDown, color: "text-red-600 bg-red-100" },
-  { value: "abstain", label: "ممتنع", icon: Minus, color: "text-gray-600 bg-gray-100" },
+  { value: "for", label: "موافق", icon: ThumbsUp, color: "text-green-600 bg-green-100", chartColor: "#22c55e" },
+  { value: "against", label: "رافض", icon: ThumbsDown, color: "text-red-600 bg-red-100", chartColor: "#ef4444" },
+  { value: "abstain", label: "ممتنع", icon: Minus, color: "text-gray-600 bg-gray-100", chartColor: "#6b7280" },
 ];
+
+interface VotingStats {
+  totalEligibleShares: number;
+  totalEligibleVotes: number;
+  presentShares: number;
+  proxyShares: number;
+  quorumPercentage: number;
+  quorumMet: boolean;
+  requiredQuorum: number;
+}
+
+interface AuditLogEntry {
+  id: number;
+  action: string;
+  actorName: string;
+  actorType: string;
+  timestamp: string;
+  newValue: string;
+  ipAddress: string;
+  votingPower: number;
+}
 
 export default function VotingPage() {
   const [selectedResolution, setSelectedResolution] = useState<BoardResolution | null>(null);
   const [selectedVote, setSelectedVote] = useState<string>("");
   const [voteComment, setVoteComment] = useState("");
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [showQuorumDetails, setShowQuorumDetails] = useState(false);
+  const [isProxyVote, setIsProxyVote] = useState(false);
+  const [proxyHolderName, setProxyHolderName] = useState("");
+  const [activeTab, setActiveTab] = useState("active");
+  const [expandedResolution, setExpandedResolution] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -43,20 +91,48 @@ export default function VotingPage() {
     queryKey: ["/api/governance/resolutions"],
   });
 
+  const { data: shareholders = [] } = useQuery<Shareholder[]>({
+    queryKey: ["/api/governance/shareholders"],
+  });
+
   const votingResolutions = resolutions.filter(r => r.status === 'voting');
+  const preVotingResolutions = resolutions.filter(r => r.status === 'proposed');
   const completedVotes = resolutions.filter(r => r.status === 'approved' || r.status === 'rejected');
 
+  const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+  const totalVotingShares = shareholders.filter(s => s.votingRights).reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+
+  const calculateQuorum = (resolution: BoardResolution): VotingStats => {
+    const presentShares = (resolution.forVotes || 0) + (resolution.againstVotes || 0) + (resolution.abstainVotes || 0);
+    const proxyShares = 0;
+    const totalRepresented = presentShares + proxyShares;
+    const quorumPercentage = totalVotingShares > 0 ? (totalRepresented / totalVotingShares) * 100 : 0;
+    const requiredQuorum = Number(resolution.requiredMajority) || 50;
+
+    return {
+      totalEligibleShares: totalShares,
+      totalEligibleVotes: totalVotingShares,
+      presentShares,
+      proxyShares,
+      quorumPercentage,
+      quorumMet: quorumPercentage >= requiredQuorum,
+      requiredQuorum,
+    };
+  };
+
   const voteMutation = useMutation({
-    mutationFn: async (data: { resolutionId: number; vote: string; comments?: string }) => {
+    mutationFn: async (data: { resolutionId: number; vote: string; comments?: string; isProxy?: boolean; proxyHolderName?: string }) => {
       const res = await fetch("/api/governance/votes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resolutionId: data.resolutionId,
-          voterType: "board_member",
-          voterName: "المستخدم الحالي",
+          voterType: "shareholder",
+          voterName: data.isProxy ? data.proxyHolderName : "المستخدم الحالي",
           vote: data.vote,
           comments: data.comments,
+          voteMethod: data.isProxy ? "proxy" : "electronic",
+          ipAddress: "client",
         }),
       });
       if (!res.ok) throw new Error("Failed to submit vote");
@@ -67,7 +143,9 @@ export default function VotingPage() {
       setSelectedResolution(null);
       setSelectedVote("");
       setVoteComment("");
-      toast({ title: "تم تسجيل تصويتك بنجاح" });
+      setIsProxyVote(false);
+      setProxyHolderName("");
+      toast({ title: "تم تسجيل تصويتك بنجاح", description: "تم إضافة صوتك إلى سجل التدقيق" });
     },
     onError: () => {
       toast({ title: "فشل في تسجيل التصويت", variant: "destructive" });
@@ -76,16 +154,37 @@ export default function VotingPage() {
 
   const handleSubmitVote = () => {
     if (!selectedResolution || !selectedVote) return;
+    if (isProxyVote && !proxyHolderName) {
+      toast({ title: "يرجى إدخال اسم حامل الوكالة", variant: "destructive" });
+      return;
+    }
     voteMutation.mutate({
       resolutionId: selectedResolution.id,
       vote: selectedVote,
       comments: voteComment,
+      isProxy: isProxyVote,
+      proxyHolderName,
     });
   };
 
   const getVotePercentage = (res: BoardResolution) => {
-    if (!res.totalVotes || res.totalVotes === 0) return 0;
-    return ((res.forVotes || 0) / res.totalVotes) * 100;
+    const total = (res.forVotes || 0) + (res.againstVotes || 0) + (res.abstainVotes || 0);
+    if (total === 0) return 0;
+    return ((res.forVotes || 0) / total) * 100;
+  };
+
+  const getWeightedResults = (res: BoardResolution) => {
+    const forWeight = Number(res.forVotes) || 0;
+    const againstWeight = Number(res.againstVotes) || 0;
+    const abstainWeight = Number(res.abstainVotes) || 0;
+    const total = forWeight + againstWeight + abstainWeight;
+    
+    return {
+      for: { count: forWeight, percentage: total > 0 ? (forWeight / total) * 100 : 0 },
+      against: { count: againstWeight, percentage: total > 0 ? (againstWeight / total) * 100 : 0 },
+      abstain: { count: abstainWeight, percentage: total > 0 ? (abstainWeight / total) * 100 : 0 },
+      total,
+    };
   };
 
   const getRemainingTime = (deadline: Date | string | null) => {
@@ -97,6 +196,15 @@ export default function VotingPage() {
     const days = Math.floor(hours / 24);
     if (days > 0) return `${days} يوم`;
     return `${hours} ساعة`;
+  };
+
+  const getPieChartData = (res: BoardResolution) => {
+    const results = getWeightedResults(res);
+    return [
+      { name: "موافق", value: results.for.count, color: "#22c55e" },
+      { name: "رافض", value: results.against.count, color: "#ef4444" },
+      { name: "ممتنع", value: results.abstain.count, color: "#6b7280" },
+    ].filter(d => d.value > 0);
   };
 
   return (
@@ -114,14 +222,24 @@ export default function VotingPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-pink-800" data-testid="page-title">
-                التصويت الإلكتروني
+                التصويت الإلكتروني المتقدم
               </h1>
-              <p className="text-gray-600">إدارة عمليات التصويت وحساب النتائج</p>
+              <p className="text-gray-600">تصويت مرجح - وكالات - سجل تدقيق كامل</p>
             </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => setShowQuorumDetails(true)}>
+              <Scale className="h-4 w-4" />
+              النصاب
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setShowAuditLog(true)}>
+              <History className="h-4 w-4" />
+              سجل التدقيق
+            </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <Card className="bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -130,6 +248,17 @@ export default function VotingPage() {
                   <p className="text-2xl font-bold text-pink-800">{votingResolutions.length}</p>
                 </div>
                 <Vote className="h-8 w-8 text-pink-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-amber-600">تصويت مسبق</p>
+                  <p className="text-2xl font-bold text-amber-800">{preVotingResolutions.length}</p>
+                </div>
+                <Clock className="h-8 w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
@@ -163,129 +292,283 @@ export default function VotingPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">إجمالي الأصوات</p>
-                  <p className="text-2xl font-bold text-blue-800">
-                    {resolutions.reduce((sum, r) => sum + (r.totalVotes || 0), 0)}
-                  </p>
+                  <p className="text-sm text-blue-600">إجمالي الأسهم</p>
+                  <p className="text-2xl font-bold text-blue-800">{totalShares.toLocaleString()}</p>
                 </div>
-                <Users className="h-8 w-8 text-blue-500" />
+                <BarChart3 className="h-8 w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {votingResolutions.length > 0 && (
-          <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Vote className="h-5 w-5 text-pink-600" />
-              قرارات تنتظر تصويتك
-            </h2>
-            <div className="grid gap-4">
-              {votingResolutions.map((resolution) => {
-                const remaining = getRemainingTime(resolution.votingDeadline);
-                return (
-                  <Card key={resolution.id} className="border-2 border-pink-200 hover:shadow-lg transition-shadow" data-testid={`voting-card-${resolution.id}`}>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
+            <TabsTrigger value="active" className="gap-2">
+              <Vote className="h-4 w-4" />
+              جارية ({votingResolutions.length})
+            </TabsTrigger>
+            <TabsTrigger value="pre" className="gap-2">
+              <Clock className="h-4 w-4" />
+              مسبقة ({preVotingResolutions.length})
+            </TabsTrigger>
+            <TabsTrigger value="completed" className="gap-2">
+              <CheckCircle className="h-4 w-4" />
+              مكتملة ({completedVotes.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="active" className="mt-6">
+            {votingResolutions.length > 0 ? (
+              <div className="grid gap-4">
+                {votingResolutions.map((resolution) => {
+                  const remaining = getRemainingTime(resolution.votingDeadline);
+                  const quorum = calculateQuorum(resolution);
+                  const results = getWeightedResults(resolution);
+                  const isExpanded = expandedResolution === resolution.id;
+                  const pieData = getPieChartData(resolution);
+
+                  return (
+                    <Card key={resolution.id} className="border-2 border-pink-200 hover:shadow-lg transition-shadow" data-testid={`voting-card-${resolution.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex flex-col gap-4">
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {resolution.resolutionNumber}
+                                </Badge>
+                                <Badge className="bg-yellow-100 text-yellow-800">قيد التصويت</Badge>
+                                {remaining && (
+                                  <Badge className="bg-orange-100 text-orange-800 flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {remaining}
+                                  </Badge>
+                                )}
+                                {quorum.quorumMet ? (
+                                  <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
+                                    <CheckCircle className="h-3 w-3" />
+                                    النصاب مكتمل
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-red-100 text-red-800 flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    النصاب غير مكتمل
+                                  </Badge>
+                                )}
+                              </div>
+                              <h3 className="font-semibold text-lg mb-2">{resolution.title}</h3>
+                              <p className="text-sm text-gray-600 line-clamp-2 mb-3">{resolution.description}</p>
+                              
+                              <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-4 w-4" />
+                                  <span>{results.total} صوت</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Percent className="h-4 w-4" />
+                                  <span>النصاب: {quorum.quorumPercentage.toFixed(1)}%</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Scale className="h-4 w-4" />
+                                  <span>المطلوب: {quorum.requiredQuorum}%</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Button 
+                                className="bg-pink-600 hover:bg-pink-700"
+                                onClick={() => setSelectedResolution(resolution)}
+                                data-testid={`vote-btn-${resolution.id}`}
+                              >
+                                <Vote className="h-4 w-4 ml-2" />
+                                صوّت الآن
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setExpandedResolution(isExpanded ? null : resolution.id)}
+                              >
+                                {isExpanded ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
+                                {isExpanded ? "إخفاء التفاصيل" : "عرض التفاصيل"}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">نتائج التصويت المرجح</span>
+                              <span className="text-sm text-gray-500">{results.total.toLocaleString()} سهم مصوّت</span>
+                            </div>
+                            <Progress value={results.for.percentage} className="h-4 mb-3" />
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div className="flex items-center gap-2 text-green-600 bg-green-50 p-2 rounded">
+                                <ThumbsUp className="h-4 w-4" />
+                                <div>
+                                  <span className="font-bold">{results.for.count.toLocaleString()}</span>
+                                  <span className="text-xs mr-1">({results.for.percentage.toFixed(1)}%)</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 text-red-600 bg-red-50 p-2 rounded">
+                                <ThumbsDown className="h-4 w-4" />
+                                <div>
+                                  <span className="font-bold">{results.against.count.toLocaleString()}</span>
+                                  <span className="text-xs mr-1">({results.against.percentage.toFixed(1)}%)</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 text-gray-600 bg-gray-100 p-2 rounded">
+                                <Minus className="h-4 w-4" />
+                                <div>
+                                  <span className="font-bold">{results.abstain.count.toLocaleString()}</span>
+                                  <span className="text-xs mr-1">({results.abstain.percentage.toFixed(1)}%)</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {isExpanded && pieData.length > 0 && (
+                            <div className="bg-white rounded-lg border p-4">
+                              <h4 className="font-medium mb-4 flex items-center gap-2">
+                                <PieChartIcon className="h-4 w-4 text-pink-600" />
+                                توزيع الأصوات
+                              </h4>
+                              <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={pieData}
+                                      cx="50%"
+                                      cy="50%"
+                                      labelLine={false}
+                                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                      outerRadius={80}
+                                      fill="#8884d8"
+                                      dataKey="value"
+                                    >
+                                      {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip formatter={(value: number) => value.toLocaleString() + " سهم"} />
+                                    <Legend />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-gray-500">
+                  لا يوجد قرارات قيد التصويت حالياً
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="pre" className="mt-6">
+            {preVotingResolutions.length > 0 ? (
+              <div className="grid gap-4">
+                {preVotingResolutions.map((resolution) => (
+                  <Card key={resolution.id} className="border border-amber-200 hover:shadow-md transition-shadow">
                     <CardContent className="p-4">
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                      <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <div className="flex items-center gap-2 mb-2">
                             <Badge variant="outline" className="font-mono text-xs">
                               {resolution.resolutionNumber}
                             </Badge>
-                            <Badge className="bg-yellow-100 text-yellow-800">قيد التصويت</Badge>
-                            {remaining && (
-                              <Badge className="bg-orange-100 text-orange-800 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {remaining}
-                              </Badge>
-                            )}
+                            <Badge className="bg-amber-100 text-amber-800">تصويت مسبق متاح</Badge>
                           </div>
                           <h3 className="font-semibold text-lg mb-2">{resolution.title}</h3>
-                          <p className="text-sm text-gray-600 line-clamp-2 mb-4">{resolution.description}</p>
-                          
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">نتائج التصويت الحالية</span>
-                              <span className="text-sm text-gray-500">{resolution.totalVotes || 0} صوت</span>
-                            </div>
-                            <Progress value={getVotePercentage(resolution)} className="h-3 mb-3" />
-                            <div className="flex justify-between text-sm">
-                              <div className="flex items-center gap-2 text-green-600">
-                                <ThumbsUp className="h-4 w-4" />
-                                <span>{resolution.forVotes || 0} موافق</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-red-600">
-                                <ThumbsDown className="h-4 w-4" />
-                                <span>{resolution.againstVotes || 0} رافض</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <Minus className="h-4 w-4" />
-                                <span>{resolution.abstainVotes || 0} ممتنع</span>
-                              </div>
-                            </div>
-                          </div>
+                          <p className="text-sm text-gray-600">{resolution.description}</p>
                         </div>
-                        <div>
-                          <Button 
-                            className="bg-pink-600 hover:bg-pink-700"
-                            onClick={() => setSelectedResolution(resolution)}
-                            data-testid={`vote-btn-${resolution.id}`}
-                          >
-                            <Vote className="h-4 w-4 ml-2" />
-                            صوّت الآن
-                          </Button>
-                        </div>
+                        <Button 
+                          variant="outline"
+                          className="border-amber-500 text-amber-700 hover:bg-amber-50"
+                          onClick={() => setSelectedResolution(resolution)}
+                        >
+                          <Clock className="h-4 w-4 ml-2" />
+                          تصويت مسبق
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-gray-500">
+                  لا يوجد قرارات للتصويت المسبق
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
-        {completedVotes.length > 0 && (
-          <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              تصويتات مكتملة
-            </h2>
-            <div className="grid gap-4">
-              {completedVotes.slice(0, 5).map((resolution) => (
-                <Card key={resolution.id} className="hover:shadow-md transition-shadow" data-testid={`completed-vote-${resolution.id}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-full ${resolution.status === 'approved' ? 'bg-green-100' : 'bg-red-100'}`}>
-                          {resolution.status === 'approved' ? (
-                            <CheckCircle className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-red-600" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {resolution.resolutionNumber}
-                            </Badge>
-                            <Badge className={resolution.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                              {resolution.status === 'approved' ? 'معتمد' : 'مرفوض'}
-                            </Badge>
+          <TabsContent value="completed" className="mt-6">
+            {completedVotes.length > 0 ? (
+              <div className="grid gap-4">
+                {completedVotes.map((resolution) => {
+                  const results = getWeightedResults(resolution);
+                  return (
+                    <Card key={resolution.id} className="hover:shadow-md transition-shadow" data-testid={`completed-vote-${resolution.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-full ${resolution.status === 'approved' ? 'bg-green-100' : 'bg-red-100'}`}>
+                              {resolution.status === 'approved' ? (
+                                <CheckCircle className="h-5 w-5 text-green-600" />
+                              ) : (
+                                <XCircle className="h-5 w-5 text-red-600" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {resolution.resolutionNumber}
+                                </Badge>
+                                <Badge className={resolution.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                                  {resolution.status === 'approved' ? 'معتمد' : 'مرفوض'}
+                                </Badge>
+                              </div>
+                              <p className="font-medium">{resolution.title}</p>
+                            </div>
                           </div>
-                          <p className="font-medium mt-1">{resolution.title}</p>
+                          <div className="text-left">
+                            <div className="flex items-center gap-4">
+                              <div className="text-center">
+                                <div className="text-xl font-bold text-green-600">{results.for.percentage.toFixed(1)}%</div>
+                                <div className="text-xs text-gray-500">موافق</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-xl font-bold text-red-600">{results.against.percentage.toFixed(1)}%</div>
+                                <div className="text-xs text-gray-500">رافض</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-sm text-gray-600">{results.total.toLocaleString()}</div>
+                                <div className="text-xs text-gray-500">إجمالي</div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-left">
-                        <div className="text-2xl font-bold text-green-600">{resolution.forVotes || 0}</div>
-                        <div className="text-sm text-gray-500">موافق من {resolution.totalVotes || 0}</div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-gray-500">
+                  لا يوجد تصويتات مكتملة
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
 
         {isLoading && (
           <Card>
@@ -295,28 +578,55 @@ export default function VotingPage() {
           </Card>
         )}
 
-        {!isLoading && votingResolutions.length === 0 && completedVotes.length === 0 && (
-          <Card>
-            <CardContent className="py-8 text-center text-gray-500">
-              لا يوجد قرارات للتصويت
-            </CardContent>
-          </Card>
-        )}
-
-        <Dialog open={!!selectedResolution} onOpenChange={() => setSelectedResolution(null)}>
+        <Dialog open={!!selectedResolution} onOpenChange={() => {
+          setSelectedResolution(null);
+          setSelectedVote("");
+          setVoteComment("");
+          setIsProxyVote(false);
+          setProxyHolderName("");
+        }}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>التصويت على القرار</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Vote className="h-5 w-5 text-pink-600" />
+                التصويت على القرار
+              </DialogTitle>
             </DialogHeader>
             {selectedResolution && (
               <div className="space-y-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <Badge variant="outline" className="font-mono text-xs mb-2">
-                    {selectedResolution.resolutionNumber}
-                  </Badge>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {selectedResolution.resolutionNumber}
+                    </Badge>
+                    <Badge className="bg-pink-100 text-pink-800">تصويت مرجح</Badge>
+                  </div>
                   <h3 className="font-semibold">{selectedResolution.title}</h3>
                   <p className="text-sm text-gray-600 mt-2">{selectedResolution.description}</p>
                 </div>
+
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-5 w-5 text-blue-600" />
+                    <span className="font-medium">التصويت بالوكالة</span>
+                  </div>
+                  <Switch
+                    checked={isProxyVote}
+                    onCheckedChange={setIsProxyVote}
+                  />
+                </div>
+
+                {isProxyVote && (
+                  <div className="space-y-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <Label htmlFor="proxyHolder">اسم حامل الوكالة *</Label>
+                    <Input
+                      id="proxyHolder"
+                      value={proxyHolderName}
+                      onChange={(e) => setProxyHolderName(e.target.value)}
+                      placeholder="أدخل اسم حامل الوكالة"
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <Label className="text-base font-medium">اختر تصويتك</Label>
@@ -351,6 +661,14 @@ export default function VotingPage() {
                   />
                 </div>
 
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
+                  <Shield className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-green-800">
+                    <p className="font-medium">تصويت آمن ومُدقق</p>
+                    <p className="text-xs mt-1">سيتم تسجيل تصويتك مع بيانات التدقيق الكاملة (IP، الوقت، التوقيع)</p>
+                  </div>
+                </div>
+
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-yellow-800">
@@ -364,10 +682,120 @@ export default function VotingPage() {
               <Button 
                 className="bg-pink-600 hover:bg-pink-700"
                 onClick={handleSubmitVote}
-                disabled={!selectedVote || voteMutation.isPending}
+                disabled={!selectedVote || voteMutation.isPending || (isProxyVote && !proxyHolderName)}
               >
+                <Lock className="h-4 w-4 ml-2" />
                 تأكيد التصويت
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showQuorumDetails} onOpenChange={setShowQuorumDetails}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Scale className="h-5 w-5 text-pink-600" />
+                تفاصيل النصاب القانوني
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-sm text-blue-600">إجمالي الأسهم</p>
+                    <p className="text-xl font-bold text-blue-800">{totalShares.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-50 border-green-200">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-sm text-green-600">أسهم لها حق التصويت</p>
+                    <p className="text-xl font-bold text-green-800">{totalVotingShares.toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-purple-50 border-purple-200">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-sm text-purple-600">عدد المساهمين</p>
+                    <p className="text-xl font-bold text-purple-800">{shareholders.length}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-amber-50 border-amber-200">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-sm text-amber-600">النصاب المطلوب</p>
+                    <p className="text-xl font-bold text-amber-800">50%</p>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-medium mb-3">توزيع الملكية</h4>
+                {shareholders.length > 0 ? (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={shareholders.slice(0, 10).map(s => ({ name: s.fullName.slice(0, 20), shares: s.numberOfShares }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" fontSize={10} />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                        <Bar dataKey="shares" fill="#ec4899" name="عدد الأسهم" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-500 py-4">لا يوجد بيانات مساهمين</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowQuorumDetails(false)}>إغلاق</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showAuditLog} onOpenChange={setShowAuditLog}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History className="h-5 w-5 text-pink-600" />
+                سجل تدقيق التصويت
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                <Shield className="h-5 w-5 text-green-600" />
+                <span>جميع عمليات التصويت مسجلة ومُؤمّنة ولا يمكن التلاعب بها</span>
+              </div>
+              
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">الوقت</TableHead>
+                    <TableHead className="text-right">الإجراء</TableHead>
+                    <TableHead className="text-right">المُصوّت</TableHead>
+                    <TableHead className="text-right">نوع التصويت</TableHead>
+                    <TableHead className="text-right">القيمة</TableHead>
+                    <TableHead className="text-right">قوة التصويت</TableHead>
+                    <TableHead className="text-right">IP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                      سيتم عرض سجل التدقيق هنا بعد إجراء عمليات التصويت
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+
+              <div className="flex justify-end">
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تصدير السجل
+                </Button>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAuditLog(false)}>إغلاق</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

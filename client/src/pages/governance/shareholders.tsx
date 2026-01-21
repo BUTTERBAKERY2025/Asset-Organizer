@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   BarChart3,
   Plus,
@@ -23,14 +25,24 @@ import {
   Landmark,
   TrendingUp,
   Percent,
+  Eye,
+  Vote,
+  DollarSign,
+  ArrowRightLeft,
+  Crown,
+  PieChart as PieChartIcon,
+  Download,
+  Filter,
+  History,
+  Wallet,
 } from "lucide-react";
 import type { Shareholder } from "@shared/schema";
 
 const shareholderTypes = [
-  { value: "individual", label: "فرد", icon: User },
-  { value: "company", label: "شركة", icon: Building2 },
-  { value: "government", label: "جهة حكومية", icon: Landmark },
-  { value: "institution", label: "مؤسسة", icon: TrendingUp },
+  { value: "individual", label: "فرد", icon: User, color: "#22c55e" },
+  { value: "company", label: "شركة", icon: Building2, color: "#3b82f6" },
+  { value: "government", label: "جهة حكومية", icon: Landmark, color: "#8b5cf6" },
+  { value: "institution", label: "مؤسسة", icon: TrendingUp, color: "#f59e0b" },
 ];
 
 const shareClasses = [
@@ -39,10 +51,21 @@ const shareClasses = [
   { value: "founders", label: "مؤسسين" },
 ];
 
+const shareholderCategories = [
+  { value: "major", label: "كبار المساهمين", threshold: 5, color: "bg-amber-100 text-amber-800" },
+  { value: "strategic", label: "استراتيجيين", threshold: 10, color: "bg-purple-100 text-purple-800" },
+  { value: "institutional", label: "مؤسسيين", threshold: 1, color: "bg-blue-100 text-blue-800" },
+  { value: "individual", label: "أفراد", threshold: 0, color: "bg-green-100 text-green-800" },
+];
+
 export default function ShareholdersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingShareholder, setEditingShareholder] = useState<Shareholder | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState("list");
+  const [selectedShareholder, setSelectedShareholder] = useState<Shareholder | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -106,7 +129,7 @@ export default function ShareholdersPage() {
       numberOfShares: parseInt(formData.get("numberOfShares") as string),
       sharePercentage: formData.get("sharePercentage") as string,
       shareClass: formData.get("shareClass") as string,
-      acquisitionDate: acquisitionDateStr ? new Date(acquisitionDateStr) : null,
+      acquisitionDate: acquisitionDateStr || undefined,
       bankName: formData.get("bankName") as string,
       iban: formData.get("iban") as string,
     };
@@ -118,11 +141,15 @@ export default function ShareholdersPage() {
     }
   };
 
-  const filteredShareholders = shareholders.filter((s) =>
-    s.fullName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredShareholders = shareholders.filter((s) => {
+    const matchesSearch = s.fullName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = typeFilter === "all" || s.shareholderType === typeFilter;
+    return matchesSearch && matchesType;
+  });
 
   const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+  const majorShareholders = shareholders.filter(s => Number(s.sharePercentage) >= 5);
+  const votingShares = shareholders.filter(s => s.votingRights).reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
 
   const getTypeIcon = (type: string) => {
     const typeInfo = shareholderTypes.find(t => t.value === type);
@@ -132,6 +159,38 @@ export default function ShareholdersPage() {
     }
     return <User className="h-4 w-4" />;
   };
+
+  const getCategory = (percentage: number, type: string): string => {
+    if (type === "institution" || type === "government") return "institutional";
+    if (percentage >= 10) return "strategic";
+    if (percentage >= 5) return "major";
+    return "individual";
+  };
+
+  const getCategoryBadge = (percentage: number, type: string) => {
+    const cat = getCategory(percentage, type);
+    const category = shareholderCategories.find(c => c.value === cat);
+    return category ? (
+      <Badge className={category.color}>{category.label}</Badge>
+    ) : null;
+  };
+
+  const ownershipByTypeData = shareholderTypes.map(type => ({
+    name: type.label,
+    value: shareholders
+      .filter(s => s.shareholderType === type.value)
+      .reduce((sum, s) => sum + Number(s.sharePercentage || 0), 0),
+    color: type.color,
+  })).filter(d => d.value > 0);
+
+  const top10Shareholders = [...shareholders]
+    .sort((a, b) => Number(b.sharePercentage) - Number(a.sharePercentage))
+    .slice(0, 10);
+
+  const concentrationData = [
+    { name: "أكبر 5 مساهمين", value: shareholders.sort((a, b) => Number(b.sharePercentage) - Number(a.sharePercentage)).slice(0, 5).reduce((sum, s) => sum + Number(s.sharePercentage), 0) },
+    { name: "باقي المساهمين", value: 100 - shareholders.sort((a, b) => Number(b.sharePercentage) - Number(a.sharePercentage)).slice(0, 5).reduce((sum, s) => sum + Number(s.sharePercentage), 0) },
+  ];
 
   return (
     <Layout>
@@ -150,108 +209,114 @@ export default function ShareholdersPage() {
               <h1 className="text-2xl font-bold text-amber-800" data-testid="page-title">
                 بيانات المساهمين
               </h1>
-              <p className="text-gray-600">إدارة بيانات الملكية وسجل التحويلات</p>
+              <p className="text-gray-600">إدارة الملكية والتصويت والأرباح</p>
             </div>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) setEditingShareholder(null);
-          }}>
-            <DialogTrigger asChild>
-              <Button className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="btn-add-shareholder">
-                <Plus className="h-4 w-4" />
-                إضافة مساهم
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingShareholder ? "تعديل بيانات المساهم" : "إضافة مساهم جديد"}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="shareholderType">نوع المساهم *</Label>
-                    <Select name="shareholderType" defaultValue={editingShareholder?.shareholderType || "individual"}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {shareholderTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              تصدير
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) setEditingShareholder(null);
+            }}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="btn-add-shareholder">
+                  <Plus className="h-4 w-4" />
+                  إضافة مساهم
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingShareholder ? "تعديل بيانات المساهم" : "إضافة مساهم جديد"}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="shareholderType">نوع المساهم *</Label>
+                      <Select name="shareholderType" defaultValue={editingShareholder?.shareholderType || "individual"}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {shareholderTypes.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="fullName">الاسم الكامل *</Label>
+                      <Input id="fullName" name="fullName" defaultValue={editingShareholder?.fullName || ""} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nationalId">رقم الهوية / السجل التجاري</Label>
+                      <Input id="nationalId" name="nationalId" defaultValue={editingShareholder?.nationalId || ""} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nationality">الجنسية</Label>
+                      <Input id="nationality" name="nationality" defaultValue={editingShareholder?.nationality || "سعودي"} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">البريد الإلكتروني</Label>
+                      <Input id="email" name="email" type="email" defaultValue={editingShareholder?.email || ""} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">رقم الهاتف</Label>
+                      <Input id="phone" name="phone" defaultValue={editingShareholder?.phone || ""} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="numberOfShares">عدد الأسهم *</Label>
+                      <Input id="numberOfShares" name="numberOfShares" type="number" defaultValue={editingShareholder?.numberOfShares || ""} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sharePercentage">نسبة الملكية (%) *</Label>
+                      <Input id="sharePercentage" name="sharePercentage" type="number" step="0.0001" defaultValue={editingShareholder?.sharePercentage || ""} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="shareClass">فئة الأسهم</Label>
+                      <Select name="shareClass" defaultValue={editingShareholder?.shareClass || "common"}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {shareClasses.map((cls) => (
+                            <SelectItem key={cls.value} value={cls.value}>{cls.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="acquisitionDate">تاريخ الاستحواذ *</Label>
+                      <Input id="acquisitionDate" name="acquisitionDate" type="date" defaultValue={editingShareholder?.acquisitionDate || ""} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bankName">اسم البنك</Label>
+                      <Input id="bankName" name="bankName" defaultValue={editingShareholder?.bankName || ""} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="iban">رقم الآيبان</Label>
+                      <Input id="iban" name="iban" defaultValue={editingShareholder?.iban || ""} />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">الاسم الكامل *</Label>
-                    <Input id="fullName" name="fullName" defaultValue={editingShareholder?.fullName || ""} required />
+                    <Label htmlFor="address">العنوان</Label>
+                    <Input id="address" name="address" defaultValue={editingShareholder?.address || ""} />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nationalId">رقم الهوية / السجل التجاري</Label>
-                    <Input id="nationalId" name="nationalId" defaultValue={editingShareholder?.nationalId || ""} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nationality">الجنسية</Label>
-                    <Input id="nationality" name="nationality" defaultValue={editingShareholder?.nationality || "سعودي"} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">البريد الإلكتروني</Label>
-                    <Input id="email" name="email" type="email" defaultValue={editingShareholder?.email || ""} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">رقم الهاتف</Label>
-                    <Input id="phone" name="phone" defaultValue={editingShareholder?.phone || ""} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="numberOfShares">عدد الأسهم *</Label>
-                    <Input id="numberOfShares" name="numberOfShares" type="number" defaultValue={editingShareholder?.numberOfShares || ""} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sharePercentage">نسبة الملكية (%) *</Label>
-                    <Input id="sharePercentage" name="sharePercentage" type="number" step="0.0001" defaultValue={editingShareholder?.sharePercentage || ""} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="shareClass">فئة الأسهم</Label>
-                    <Select name="shareClass" defaultValue={editingShareholder?.shareClass || "common"}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {shareClasses.map((cls) => (
-                          <SelectItem key={cls.value} value={cls.value}>{cls.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="acquisitionDate">تاريخ الاستحواذ *</Label>
-                    <Input id="acquisitionDate" name="acquisitionDate" type="date" defaultValue={editingShareholder?.acquisitionDate || ""} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bankName">اسم البنك</Label>
-                    <Input id="bankName" name="bankName" defaultValue={editingShareholder?.bankName || ""} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="iban">رقم الآيبان</Label>
-                    <Input id="iban" name="iban" defaultValue={editingShareholder?.iban || ""} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">العنوان</Label>
-                  <Input id="address" name="address" defaultValue={editingShareholder?.address || ""} />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>إلغاء</Button>
-                  <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
-                    {editingShareholder ? "تحديث" : "إضافة"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>إلغاء</Button>
+                    <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
+                      {editingShareholder ? "تحديث" : "إضافة"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -274,131 +339,411 @@ export default function ShareholdersPage() {
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-green-600">أفراد</p>
-                  <p className="text-2xl font-bold text-green-800">
-                    {shareholders.filter(s => s.shareholderType === 'individual').length}
-                  </p>
-                </div>
-                <User className="h-8 w-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
           <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-purple-600">شركات</p>
-                  <p className="text-2xl font-bold text-purple-800">
-                    {shareholders.filter(s => s.shareholderType === 'company').length}
-                  </p>
+                  <p className="text-sm text-purple-600">كبار المساهمين (&gt;5%)</p>
+                  <p className="text-2xl font-bold text-purple-800">{majorShareholders.length}</p>
                 </div>
-                <Building2 className="h-8 w-8 text-purple-500" />
+                <Crown className="h-8 w-8 text-purple-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-green-600">أسهم التصويت</p>
+                  <p className="text-2xl font-bold text-green-800">{votingShares.toLocaleString()}</p>
+                </div>
+                <Vote className="h-8 w-8 text-green-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-pink-600">الأرباح المستحقة</p>
+                  <p className="text-2xl font-bold text-pink-800">0</p>
+                </div>
+                <DollarSign className="h-8 w-8 text-pink-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="relative">
-          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="بحث بالاسم..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-10 max-w-md"
-            data-testid="search-input"
-          />
-        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-xl grid-cols-4">
+            <TabsTrigger value="list" className="gap-2">
+              <User className="h-4 w-4" />
+              القائمة
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="gap-2">
+              <PieChartIcon className="h-4 w-4" />
+              التحليل
+            </TabsTrigger>
+            <TabsTrigger value="dividends" className="gap-2">
+              <Wallet className="h-4 w-4" />
+              الأرباح
+            </TabsTrigger>
+            <TabsTrigger value="transfers" className="gap-2">
+              <ArrowRightLeft className="h-4 w-4" />
+              التحويلات
+            </TabsTrigger>
+          </TabsList>
 
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">المساهم</TableHead>
-                  <TableHead className="text-right">النوع</TableHead>
-                  <TableHead className="text-right">عدد الأسهم</TableHead>
-                  <TableHead className="text-right">نسبة الملكية</TableHead>
-                  <TableHead className="text-right">فئة الأسهم</TableHead>
-                  <TableHead className="text-right">تاريخ الاستحواذ</TableHead>
-                  <TableHead className="text-right">الحالة</TableHead>
-                  <TableHead className="text-right">الإجراءات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                      جاري التحميل...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredShareholders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                      لا يوجد مساهمين
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredShareholders.map((shareholder) => (
-                    <TableRow key={shareholder.id} data-testid={`shareholder-row-${shareholder.id}`}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{shareholder.fullName}</p>
-                          <p className="text-sm text-gray-500">{shareholder.email}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getTypeIcon(shareholder.shareholderType)}
-                          <span>{shareholderTypes.find(t => t.value === shareholder.shareholderType)?.label}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {shareholder.numberOfShares?.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Percent className="h-3 w-3 text-gray-400" />
-                            <span className="font-medium">{Number(shareholder.sharePercentage).toFixed(2)}%</span>
-                          </div>
-                          <Progress value={Number(shareholder.sharePercentage)} className="h-1" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {shareClasses.find(c => c.value === shareholder.shareClass)?.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{shareholder.acquisitionDate}</TableCell>
-                      <TableCell>
-                        <Badge className={shareholder.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
-                          {shareholder.status === 'active' ? 'نشط' : shareholder.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setEditingShareholder(shareholder);
-                            setIsDialogOpen(true);
-                          }}
-                          data-testid={`edit-shareholder-${shareholder.id}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+          <TabsContent value="list" className="mt-6 space-y-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="بحث بالاسم..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pr-10"
+                  data-testid="search-input"
+                />
+              </div>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="جميع الأنواع" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الأنواع</SelectItem>
+                  {shareholderTypes.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">المساهم</TableHead>
+                      <TableHead className="text-right">التصنيف</TableHead>
+                      <TableHead className="text-right">عدد الأسهم</TableHead>
+                      <TableHead className="text-right">نسبة الملكية</TableHead>
+                      <TableHead className="text-right">قوة التصويت</TableHead>
+                      <TableHead className="text-right">الأرباح المستحقة</TableHead>
+                      <TableHead className="text-right">الإجراءات</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                          جاري التحميل...
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredShareholders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                          لا يوجد مساهمين
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredShareholders.map((shareholder) => {
+                        const percentage = Number(shareholder.sharePercentage);
+                        return (
+                          <TableRow key={shareholder.id} data-testid={`shareholder-row-${shareholder.id}`}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${
+                                  shareholder.shareholderType === 'individual' ? 'bg-green-100' :
+                                  shareholder.shareholderType === 'company' ? 'bg-blue-100' :
+                                  shareholder.shareholderType === 'government' ? 'bg-purple-100' : 'bg-amber-100'
+                                }`}>
+                                  {getTypeIcon(shareholder.shareholderType)}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{shareholder.fullName}</p>
+                                  <p className="text-sm text-gray-500">
+                                    {shareholderTypes.find(t => t.value === shareholder.shareholderType)?.label}
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {getCategoryBadge(percentage, shareholder.shareholderType)}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {shareholder.numberOfShares?.toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-lg">{percentage.toFixed(2)}%</span>
+                                </div>
+                                <Progress value={percentage} className="h-2" />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {shareholder.votingRights ? (
+                                <div className="flex items-center gap-1 text-green-600">
+                                  <Vote className="h-4 w-4" />
+                                  <span className="font-medium">{percentage.toFixed(2)}%</span>
+                                </div>
+                              ) : (
+                                <Badge variant="outline" className="text-gray-500">لا يصوت</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-gray-400">0 ر.س</span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedShareholder(shareholder);
+                                    setShowDetails(true);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingShareholder(shareholder);
+                                    setIsDialogOpen(true);
+                                  }}
+                                  data-testid={`edit-shareholder-${shareholder.id}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="analysis" className="mt-6 space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <PieChartIcon className="h-5 w-5 text-amber-600" />
+                    توزيع الملكية حسب النوع
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {ownershipByTypeData.length > 0 ? (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={ownershipByTypeData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {ownershipByTypeData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="text-center text-gray-500 py-8">لا يوجد بيانات</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-amber-600" />
+                    أكبر 10 مساهمين
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {top10Shareholders.length > 0 ? (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={top10Shareholders.map(s => ({ 
+                          name: s.fullName.slice(0, 15), 
+                          percentage: Number(s.sharePercentage) 
+                        }))} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" unit="%" />
+                          <YAxis dataKey="name" type="category" width={100} fontSize={11} />
+                          <Tooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
+                          <Bar dataKey="percentage" fill="#f59e0b" name="نسبة الملكية" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="text-center text-gray-500 py-8">لا يوجد بيانات</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Crown className="h-5 w-5 text-amber-600" />
+                    تحليل تركز الملكية
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-amber-50 p-4 rounded-lg text-center">
+                      <p className="text-sm text-amber-600 mb-1">أكبر مساهم</p>
+                      <p className="text-2xl font-bold text-amber-800">
+                        {top10Shareholders[0] ? `${Number(top10Shareholders[0].sharePercentage).toFixed(1)}%` : "-"}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {top10Shareholders[0]?.fullName || "-"}
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 p-4 rounded-lg text-center">
+                      <p className="text-sm text-blue-600 mb-1">أكبر 5 مساهمين</p>
+                      <p className="text-2xl font-bold text-blue-800">
+                        {concentrationData[0]?.value.toFixed(1) || 0}%
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">من إجمالي الملكية</p>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg text-center">
+                      <p className="text-sm text-green-600 mb-1">تنوع الملكية</p>
+                      <p className="text-2xl font-bold text-green-800">
+                        {shareholders.length > 0 ? (100 - concentrationData[0]?.value).toFixed(1) : 0}%
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">موزعة على باقي المساهمين</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="dividends" className="mt-6">
+            <Card>
+              <CardContent className="py-12 text-center text-gray-500">
+                <DollarSign className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium mb-2">توزيعات الأرباح</h3>
+                <p>لا يوجد توزيعات أرباح مسجلة حالياً</p>
+                <Button variant="outline" className="mt-4 gap-2">
+                  <Plus className="h-4 w-4" />
+                  إضافة توزيع أرباح
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="transfers" className="mt-6">
+            <Card>
+              <CardContent className="py-12 text-center text-gray-500">
+                <ArrowRightLeft className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium mb-2">تحويلات الأسهم</h3>
+                <p>لا يوجد تحويلات مسجلة حالياً</p>
+                <Link href="/governance/transfers">
+                  <Button variant="outline" className="mt-4 gap-2">
+                    <History className="h-4 w-4" />
+                    عرض سجل التحويلات
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <Dialog open={showDetails} onOpenChange={setShowDetails}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>تفاصيل المساهم</DialogTitle>
+            </DialogHeader>
+            {selectedShareholder && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-lg">
+                  <div className={`p-3 rounded-full ${
+                    selectedShareholder.shareholderType === 'individual' ? 'bg-green-100' :
+                    selectedShareholder.shareholderType === 'company' ? 'bg-blue-100' :
+                    selectedShareholder.shareholderType === 'government' ? 'bg-purple-100' : 'bg-amber-100'
+                  }`}>
+                    {getTypeIcon(selectedShareholder.shareholderType)}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">{selectedShareholder.fullName}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="outline">
+                        {shareholderTypes.find(t => t.value === selectedShareholder.shareholderType)?.label}
+                      </Badge>
+                      {getCategoryBadge(Number(selectedShareholder.sharePercentage), selectedShareholder.shareholderType)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">عدد الأسهم</p>
+                    <p className="text-xl font-bold">{selectedShareholder.numberOfShares?.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">نسبة الملكية</p>
+                    <p className="text-xl font-bold">{Number(selectedShareholder.sharePercentage).toFixed(2)}%</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">فئة الأسهم</p>
+                    <p className="font-medium">{shareClasses.find(c => c.value === selectedShareholder.shareClass)?.label}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">تاريخ الاستحواذ</p>
+                    <p className="font-medium">{selectedShareholder.acquisitionDate}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <Card className="bg-green-50 border-green-200">
+                    <CardContent className="p-4 text-center">
+                      <Vote className="h-8 w-8 mx-auto text-green-500 mb-2" />
+                      <p className="text-sm text-green-600">قوة التصويت</p>
+                      <p className="text-xl font-bold text-green-800">
+                        {selectedShareholder.votingRights ? `${Number(selectedShareholder.sharePercentage).toFixed(2)}%` : "0%"}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-blue-50 border-blue-200">
+                    <CardContent className="p-4 text-center">
+                      <DollarSign className="h-8 w-8 mx-auto text-blue-500 mb-2" />
+                      <p className="text-sm text-blue-600">أرباح مستحقة</p>
+                      <p className="text-xl font-bold text-blue-800">0 ر.س</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-purple-50 border-purple-200">
+                    <CardContent className="p-4 text-center">
+                      <ArrowRightLeft className="h-8 w-8 mx-auto text-purple-500 mb-2" />
+                      <p className="text-sm text-purple-600">التحويلات</p>
+                      <p className="text-xl font-bold text-purple-800">0</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDetails(false)}>إغلاق</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

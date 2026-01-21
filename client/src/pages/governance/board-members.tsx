@@ -2,15 +2,17 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,6 +29,18 @@ import {
   Phone,
   Mail,
   Building2,
+  GraduationCap,
+  Award,
+  FileText,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Briefcase,
+  TrendingUp,
+  Eye,
+  UserPlus,
+  CalendarCheck,
+  BookOpen,
 } from "lucide-react";
 import type { BoardMember } from "@shared/schema";
 
@@ -51,16 +65,48 @@ const statuses = [
   { value: "suspended", label: "موقوف", color: "bg-yellow-100 text-yellow-800" },
 ];
 
+const committeeTypes = [
+  { value: "audit", label: "لجنة المراجعة", color: "bg-blue-100 text-blue-800" },
+  { value: "remuneration", label: "لجنة المكافآت", color: "bg-purple-100 text-purple-800" },
+  { value: "nomination", label: "لجنة الترشيحات", color: "bg-indigo-100 text-indigo-800" },
+  { value: "risk", label: "لجنة المخاطر", color: "bg-red-100 text-red-800" },
+  { value: "executive", label: "اللجنة التنفيذية", color: "bg-amber-100 text-amber-800" },
+  { value: "investment", label: "لجنة الاستثمار", color: "bg-green-100 text-green-800" },
+];
+
+const trainingTypes = [
+  { value: "governance", label: "حوكمة الشركات" },
+  { value: "financial", label: "مالية ومحاسبية" },
+  { value: "legal", label: "قانونية" },
+  { value: "compliance", label: "امتثال" },
+  { value: "leadership", label: "قيادة" },
+  { value: "industry", label: "تخصصية" },
+];
+
 export default function BoardMembersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<BoardMember | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState("members");
+  const [selectedMember, setSelectedMember] = useState<BoardMember | null>(null);
+  const [showMemberDetails, setShowMemberDetails] = useState(false);
+  const [showAddTraining, setShowAddTraining] = useState(false);
+  const [showAddDeclaration, setShowAddDeclaration] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: members = [], isLoading } = useQuery<BoardMember[]>({
     queryKey: ["/api/governance/board-members"],
+  });
+
+  const activeMembers = members.filter(m => m.status === "active");
+  const expiringMembers = members.filter(m => {
+    if (!m.termEndDate) return false;
+    const endDate = new Date(m.termEndDate);
+    const now = new Date();
+    const diffDays = (endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays > 0 && diffDays <= 90;
   });
 
   const createMutation = useMutation({
@@ -137,8 +183,8 @@ export default function BoardMembersPage() {
       qualifications: formData.get("qualifications") as string,
       experience: formData.get("experience") as string,
       currentEmployer: formData.get("currentEmployer") as string,
-      appointmentDate: appointmentDateStr ? new Date(appointmentDateStr) : null,
-      termEndDate: termEndDateStr ? new Date(termEndDateStr) : null,
+      appointmentDate: appointmentDateStr || undefined,
+      termEndDate: termEndDateStr || undefined,
       status: formData.get("status") as string || "active",
     };
 
@@ -164,6 +210,14 @@ export default function BoardMembersPage() {
     }
   };
 
+  const getDaysUntilExpiry = (termEndDate: string | null) => {
+    if (!termEndDate) return null;
+    const endDate = new Date(termEndDate);
+    const now = new Date();
+    const diffDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
   return (
     <Layout>
       <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
@@ -181,7 +235,7 @@ export default function BoardMembersPage() {
               <h1 className="text-2xl font-bold text-violet-800" data-testid="page-title">
                 أعضاء مجلس الإدارة
               </h1>
-              <p className="text-gray-600">إدارة أعضاء المجلس والمناصب والفترات</p>
+              <p className="text-gray-600">إدارة الأعضاء واللجان والتدريب والإفصاحات</p>
             </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -293,151 +347,596 @@ export default function BoardMembersPage() {
           </Dialog>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="بحث بالاسم أو البريد..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
-              data-testid="search-input"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="جميع الحالات" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">جميع الحالات</SelectItem>
-              {statuses.map((s) => (
-                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-violet-50 to-purple-50 border-violet-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-violet-600">الأعضاء النشطين</p>
+                  <p className="text-2xl font-bold text-violet-800">{activeMembers.length}</p>
+                </div>
+                <Users className="h-8 w-8 text-violet-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-amber-600">قرب انتهاء العضوية</p>
+                  <p className="text-2xl font-bold text-amber-800">{expiringMembers.length}</p>
+                </div>
+                <AlertTriangle className="h-8 w-8 text-amber-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-600">اللجان الفرعية</p>
+                  <p className="text-2xl font-bold text-blue-800">{committeeTypes.length}</p>
+                </div>
+                <Briefcase className="h-8 w-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-green-600">معدل الحضور</p>
+                  <p className="text-2xl font-bold text-green-800">85%</p>
+                </div>
+                <CalendarCheck className="h-8 w-8 text-green-500" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">العضو</TableHead>
-                  <TableHead className="text-right">المنصب</TableHead>
-                  <TableHead className="text-right">نوع العضوية</TableHead>
-                  <TableHead className="text-right">التواصل</TableHead>
-                  <TableHead className="text-right">فترة العضوية</TableHead>
-                  <TableHead className="text-right">الحالة</TableHead>
-                  <TableHead className="text-right">الإجراءات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                      جاري التحميل...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredMembers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                      لا يوجد أعضاء
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredMembers.map((member) => (
-                    <TableRow key={member.id} data-testid={`member-row-${member.id}`}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage src={member.photoUrl || undefined} />
-                            <AvatarFallback className="bg-violet-100 text-violet-600">
-                              {member.fullName.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{member.fullName}</p>
-                            <p className="text-sm text-gray-500">{member.nationality}</p>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4">
+            <TabsTrigger value="members" className="gap-2">
+              <Users className="h-4 w-4" />
+              الأعضاء
+            </TabsTrigger>
+            <TabsTrigger value="committees" className="gap-2">
+              <Briefcase className="h-4 w-4" />
+              اللجان
+            </TabsTrigger>
+            <TabsTrigger value="training" className="gap-2">
+              <GraduationCap className="h-4 w-4" />
+              التدريب
+            </TabsTrigger>
+            <TabsTrigger value="declarations" className="gap-2">
+              <FileText className="h-4 w-4" />
+              الإفصاحات
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="members" className="mt-6 space-y-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="بحث بالاسم أو البريد..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pr-10"
+                  data-testid="search-input"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="جميع الحالات" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الحالات</SelectItem>
+                  {statuses.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {expiringMembers.length > 0 && (
+              <Card className="border-2 border-amber-300 bg-amber-50">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <h3 className="font-semibold text-amber-800">تنبيه: أعضاء قرب انتهاء عضويتهم</h3>
+                  </div>
+                  <div className="grid gap-2">
+                    {expiringMembers.map((member) => {
+                      const days = getDaysUntilExpiry(member.termEndDate);
+                      return (
+                        <div key={member.id} className="flex items-center justify-between bg-white p-3 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-amber-100 text-amber-600 text-sm">
+                                {member.fullName.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">{member.fullName}</span>
                           </div>
+                          <Badge className="bg-amber-100 text-amber-800">
+                            <Clock className="h-3 w-3 ml-1" />
+                            {days} يوم متبقي
+                          </Badge>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getPositionIcon(member.position)}
-                          <span>{positions.find(p => p.value === member.position)?.label}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {memberTypes.find(t => t.value === member.memberType)?.label}
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          {member.email && (
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <Mail className="h-3 w-3" />
-                              {member.email}
-                            </div>
-                          )}
-                          {member.phone && (
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <Phone className="h-3 w-3" />
-                              {member.phone}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Calendar className="h-3 w-3 text-gray-400" />
-                          <span>{member.appointmentDate}</span>
-                          {member.termEndDate && (
-                            <>
-                              <span className="text-gray-400">→</span>
-                              <span>{member.termEndDate}</span>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={statuses.find(s => s.value === member.status)?.color}>
-                          {statuses.find(s => s.value === member.status)?.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditingMember(member);
-                              setIsDialogOpen(true);
-                            }}
-                            data-testid={`edit-member-${member.id}`}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => {
-                              if (confirm("هل تريد حذف هذا العضو؟")) {
-                                deleteMutation.mutate(member.id);
-                              }
-                            }}
-                            data-testid={`delete-member-${member.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">العضو</TableHead>
+                      <TableHead className="text-right">المنصب</TableHead>
+                      <TableHead className="text-right">نوع العضوية</TableHead>
+                      <TableHead className="text-right">التواصل</TableHead>
+                      <TableHead className="text-right">فترة العضوية</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right">الإجراءات</TableHead>
                     </TableRow>
-                  ))
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                          جاري التحميل...
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredMembers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                          لا يوجد أعضاء
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredMembers.map((member) => {
+                        const days = getDaysUntilExpiry(member.termEndDate);
+                        const isExpiring = days !== null && days > 0 && days <= 90;
+                        return (
+                          <TableRow key={member.id} className={isExpiring ? "bg-amber-50" : ""} data-testid={`member-row-${member.id}`}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar>
+                                  <AvatarImage src={member.photoUrl || undefined} />
+                                  <AvatarFallback className="bg-violet-100 text-violet-600">
+                                    {member.fullName.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium">{member.fullName}</p>
+                                  <p className="text-sm text-gray-500">{member.nationality}</p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {getPositionIcon(member.position)}
+                                <span>{positions.find(p => p.value === member.position)?.label}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {memberTypes.find(t => t.value === member.memberType)?.label}
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                {member.email && (
+                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <Mail className="h-3 w-3" />
+                                    {member.email}
+                                  </div>
+                                )}
+                                {member.phone && (
+                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <Phone className="h-3 w-3" />
+                                    {member.phone}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1 text-sm">
+                                <Calendar className="h-3 w-3 text-gray-400" />
+                                <span>{member.appointmentDate}</span>
+                                {member.termEndDate && (
+                                  <>
+                                    <span className="text-gray-400">→</span>
+                                    <span className={isExpiring ? "text-amber-600 font-medium" : ""}>{member.termEndDate}</span>
+                                  </>
+                                )}
+                              </div>
+                              {isExpiring && (
+                                <Badge className="mt-1 bg-amber-100 text-amber-800 text-xs">
+                                  {days} يوم متبقي
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={statuses.find(s => s.value === member.status)?.color}>
+                                {statuses.find(s => s.value === member.status)?.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedMember(member);
+                                    setShowMemberDetails(true);
+                                  }}
+                                  data-testid={`view-member-${member.id}`}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingMember(member);
+                                    setIsDialogOpen(true);
+                                  }}
+                                  data-testid={`edit-member-${member.id}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-500 hover:text-red-700"
+                                  onClick={() => {
+                                    if (confirm("هل تريد حذف هذا العضو؟")) {
+                                      deleteMutation.mutate(member.id);
+                                    }
+                                  }}
+                                  data-testid={`delete-member-${member.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="committees" className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {committeeTypes.map((committee) => (
+                <Card key={committee.value} className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <Badge className={committee.color}>{committee.label}</Badge>
+                      <Button variant="ghost" size="sm">
+                        <UserPlus className="h-4 w-4 ml-1" />
+                        إضافة عضو
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">عدد الأعضاء</span>
+                        <span className="font-medium">0</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">الرئيس</span>
+                        <span className="font-medium text-gray-400">غير محدد</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">الاجتماعات</span>
+                        <span className="font-medium">0</span>
+                      </div>
+                      <Progress value={0} className="h-2" />
+                      <p className="text-xs text-gray-500 text-center">لا يوجد أعضاء في هذه اللجنة</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="training" className="mt-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-violet-600" />
+                شهادات التدريب والتأهيل
+              </h3>
+              <Button className="gap-2 bg-violet-600 hover:bg-violet-700" onClick={() => setShowAddTraining(true)}>
+                <Plus className="h-4 w-4" />
+                إضافة شهادة
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {trainingTypes.map((type) => (
+                <Card key={type.value} className="bg-gradient-to-br from-gray-50 to-white">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-violet-600" />
+                      {type.label}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">شهادات مسجلة</span>
+                      <Badge variant="outline">0</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                <GraduationCap className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p>لا يوجد شهادات تدريب مسجلة</p>
+                <Button variant="link" className="mt-2" onClick={() => setShowAddTraining(true)}>
+                  إضافة شهادة جديدة
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="declarations" className="mt-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-violet-600" />
+                سجل المصالح والإفصاحات
+              </h3>
+              <Button className="gap-2 bg-violet-600 hover:bg-violet-700" onClick={() => setShowAddDeclaration(true)}>
+                <Plus className="h-4 w-4" />
+                إفصاح جديد
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-blue-600">إفصاحات سنوية</p>
+                      <p className="text-2xl font-bold text-blue-800">0</p>
+                    </div>
+                    <Calendar className="h-8 w-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-amber-600">تعارض مصالح</p>
+                      <p className="text-2xl font-bold text-amber-800">0</p>
+                    </div>
+                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-green-600">تمت المراجعة</p>
+                      <p className="text-2xl font-bold text-green-800">0</p>
+                    </div>
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p>لا يوجد إفصاحات مسجلة</p>
+                <Button variant="link" className="mt-2" onClick={() => setShowAddDeclaration(true)}>
+                  إضافة إفصاح جديد
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <Dialog open={showMemberDetails} onOpenChange={setShowMemberDetails}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>تفاصيل العضو</DialogTitle>
+            </DialogHeader>
+            {selectedMember && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16">
+                    <AvatarFallback className="bg-violet-100 text-violet-600 text-xl">
+                      {selectedMember.fullName.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h3 className="text-xl font-bold">{selectedMember.fullName}</h3>
+                    <p className="text-gray-500">{positions.find(p => p.value === selectedMember.position)?.label}</p>
+                    <Badge className={statuses.find(s => s.value === selectedMember.status)?.color}>
+                      {statuses.find(s => s.value === selectedMember.status)?.label}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">نوع العضوية</p>
+                    <p className="font-medium">{memberTypes.find(t => t.value === selectedMember.memberType)?.label}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">الجنسية</p>
+                    <p className="font-medium">{selectedMember.nationality || "غير محدد"}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">تاريخ التعيين</p>
+                    <p className="font-medium">{selectedMember.appointmentDate}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">انتهاء العضوية</p>
+                    <p className="font-medium">{selectedMember.termEndDate || "غير محدد"}</p>
+                  </div>
+                </div>
+
+                {selectedMember.qualifications && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500 mb-1">المؤهلات العلمية</p>
+                    <p className="text-sm">{selectedMember.qualifications}</p>
+                  </div>
                 )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+
+                {selectedMember.experience && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500 mb-1">الخبرات العملية</p>
+                    <p className="text-sm">{selectedMember.experience}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Card className="bg-blue-50 border-blue-200">
+                    <CardContent className="p-4 text-center">
+                      <CalendarCheck className="h-8 w-8 mx-auto text-blue-500 mb-2" />
+                      <p className="text-2xl font-bold text-blue-800">0</p>
+                      <p className="text-sm text-blue-600">اجتماعات الحضور</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-green-50 border-green-200">
+                    <CardContent className="p-4 text-center">
+                      <GraduationCap className="h-8 w-8 mx-auto text-green-500 mb-2" />
+                      <p className="text-2xl font-bold text-green-800">0</p>
+                      <p className="text-sm text-green-600">ساعات التدريب</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowMemberDetails(false)}>إغلاق</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showAddTraining} onOpenChange={setShowAddTraining}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>إضافة شهادة تدريب</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>العضو</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر العضو" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id.toString()}>{m.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>نوع التدريب</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر النوع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {trainingTypes.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>عنوان الدورة</Label>
+                <Input placeholder="أدخل عنوان الدورة" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>تاريخ البدء</Label>
+                  <Input type="date" />
+                </div>
+                <div className="space-y-2">
+                  <Label>تاريخ الانتهاء</Label>
+                  <Input type="date" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>المدة (ساعات)</Label>
+                <Input type="number" placeholder="0" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddTraining(false)}>إلغاء</Button>
+              <Button className="bg-violet-600 hover:bg-violet-700">حفظ</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showAddDeclaration} onOpenChange={setShowAddDeclaration}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>إضافة إفصاح مصالح</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>العضو</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر العضو" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id.toString()}>{m.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>نوع الإفصاح</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر النوع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="annual">إفصاح سنوي</SelectItem>
+                    <SelectItem value="transaction">معاملة</SelectItem>
+                    <SelectItem value="related_party">أطراف ذات علاقة</SelectItem>
+                    <SelectItem value="conflict">تعارض مصالح</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>الوصف</Label>
+                <Textarea placeholder="أدخل تفاصيل الإفصاح" />
+              </div>
+              <div className="space-y-2">
+                <Label>تاريخ الإفصاح</Label>
+                <Input type="date" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddDeclaration(false)}>إلغاء</Button>
+              <Button className="bg-violet-600 hover:bg-violet-700">حفظ</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
