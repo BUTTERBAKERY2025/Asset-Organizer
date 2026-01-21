@@ -481,6 +481,7 @@ export default function ResolutionsPage() {
                               const resolutionType = resolutionTypes.find(t => t.value === resolution.resolutionType)?.label || resolution.resolutionType;
                               const status = resolutionStatuses.find(s => s.value === resolution.status)?.label || resolution.status;
                               const priority = priorities.find(p => p.value === resolution.priority)?.label || resolution.priority;
+                              const category = categories.find(c => c.value === resolution.category)?.label || resolution.category;
                               const html = `
                                 <!DOCTYPE html>
                                 <html dir="rtl" lang="ar">
@@ -488,66 +489,286 @@ export default function ResolutionsPage() {
                                   <meta charset="UTF-8">
                                   <title>قرار رقم ${resolution.resolutionNumber}</title>
                                   <style>
-                                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                                    body { font-family: 'Cairo', sans-serif; padding: 30px; direction: rtl; }
-                                    .header { text-align: center; border-bottom: 3px solid #059669; padding-bottom: 20px; margin-bottom: 25px; }
-                                    .header h1 { color: #059669; margin: 0 0 5px 0; font-size: 24px; }
-                                    .header p { color: #666; margin: 0; font-size: 14px; }
-                                    .resolution-number { background: #059669; color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; margin: 15px 0; font-weight: bold; }
-                                    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; background: #f9f9f9; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-                                    .info-item { font-size: 14px; }
-                                    .info-label { color: #666; font-weight: 600; }
-                                    .info-value { color: #333; }
-                                    .section { margin-bottom: 20px; }
-                                    .section-title { color: #059669; font-size: 16px; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 12px; }
-                                    .content { line-height: 1.8; color: #333; white-space: pre-wrap; }
-                                    .votes { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
-                                    .vote-box { text-align: center; padding: 15px 25px; border-radius: 10px; }
-                                    .vote-for { background: #dcfce7; color: #166534; }
-                                    .vote-against { background: #fee2e2; color: #991b1b; }
-                                    .vote-abstain { background: #f3f4f6; color: #374151; }
-                                    .vote-number { font-size: 28px; font-weight: bold; }
-                                    .vote-label { font-size: 12px; }
-                                    .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #ddd; padding-top: 15px; }
-                                    @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+                                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+                                    @page { size: A4 portrait; margin: 20mm 15mm; }
+                                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                                    body { 
+                                      font-family: 'Cairo', sans-serif; 
+                                      padding: 0; 
+                                      direction: rtl; 
+                                      background: white;
+                                      color: #1a1a1a;
+                                      line-height: 1.6;
+                                    }
+                                    .document {
+                                      max-width: 210mm;
+                                      margin: 0 auto;
+                                      padding: 40px;
+                                      background: white;
+                                    }
+                                    .letterhead {
+                                      text-align: center;
+                                      padding-bottom: 25px;
+                                      margin-bottom: 30px;
+                                      border-bottom: 3px double #1a5f3c;
+                                    }
+                                    .company-name {
+                                      font-size: 28px;
+                                      font-weight: 800;
+                                      color: #1a5f3c;
+                                      margin-bottom: 5px;
+                                      letter-spacing: 1px;
+                                    }
+                                    .company-subtitle {
+                                      font-size: 14px;
+                                      color: #666;
+                                      margin-bottom: 15px;
+                                    }
+                                    .document-type {
+                                      display: inline-block;
+                                      background: linear-gradient(135deg, #1a5f3c 0%, #2d8f5e 100%);
+                                      color: white;
+                                      padding: 10px 40px;
+                                      font-size: 20px;
+                                      font-weight: 700;
+                                      border-radius: 5px;
+                                      margin-top: 10px;
+                                    }
+                                    .resolution-meta {
+                                      display: flex;
+                                      justify-content: space-between;
+                                      align-items: center;
+                                      background: #f8f9fa;
+                                      border: 1px solid #e9ecef;
+                                      border-radius: 8px;
+                                      padding: 20px 25px;
+                                      margin-bottom: 30px;
+                                    }
+                                    .meta-right { text-align: right; }
+                                    .meta-left { text-align: left; }
+                                    .resolution-number-box {
+                                      font-size: 18px;
+                                      font-weight: 700;
+                                      color: #1a5f3c;
+                                    }
+                                    .resolution-date {
+                                      font-size: 14px;
+                                      color: #666;
+                                      margin-top: 5px;
+                                    }
+                                    .meta-badge {
+                                      display: inline-block;
+                                      padding: 6px 15px;
+                                      border-radius: 20px;
+                                      font-size: 13px;
+                                      font-weight: 600;
+                                    }
+                                    .badge-type { background: #e8f5e9; color: #2e7d32; margin-left: 8px; }
+                                    .badge-priority { background: #fff3e0; color: #e65100; }
+                                    .main-title {
+                                      text-align: center;
+                                      margin: 30px 0;
+                                      padding: 20px;
+                                      background: linear-gradient(to left, #f8f9fa, white, #f8f9fa);
+                                      border-right: 4px solid #1a5f3c;
+                                      border-left: 4px solid #1a5f3c;
+                                    }
+                                    .main-title h2 {
+                                      font-size: 20px;
+                                      font-weight: 700;
+                                      color: #1a1a1a;
+                                      line-height: 1.5;
+                                    }
+                                    .section {
+                                      margin-bottom: 25px;
+                                    }
+                                    .section-header {
+                                      display: flex;
+                                      align-items: center;
+                                      margin-bottom: 15px;
+                                      padding-bottom: 10px;
+                                      border-bottom: 2px solid #1a5f3c;
+                                    }
+                                    .section-icon {
+                                      width: 30px;
+                                      height: 30px;
+                                      background: #1a5f3c;
+                                      color: white;
+                                      border-radius: 50%;
+                                      display: flex;
+                                      align-items: center;
+                                      justify-content: center;
+                                      margin-left: 12px;
+                                      font-weight: bold;
+                                    }
+                                    .section-title {
+                                      font-size: 16px;
+                                      font-weight: 700;
+                                      color: #1a5f3c;
+                                    }
+                                    .section-content {
+                                      padding: 20px;
+                                      background: #fafafa;
+                                      border: 1px solid #eee;
+                                      border-radius: 8px;
+                                      line-height: 2;
+                                      text-align: justify;
+                                      white-space: pre-wrap;
+                                    }
+                                    .voting-section {
+                                      margin: 35px 0;
+                                      padding: 25px;
+                                      background: #f8f9fa;
+                                      border-radius: 10px;
+                                      border: 1px solid #e9ecef;
+                                    }
+                                    .voting-title {
+                                      text-align: center;
+                                      font-size: 16px;
+                                      font-weight: 700;
+                                      color: #1a5f3c;
+                                      margin-bottom: 20px;
+                                    }
+                                    .votes-grid {
+                                      display: flex;
+                                      justify-content: center;
+                                      gap: 30px;
+                                    }
+                                    .vote-item {
+                                      text-align: center;
+                                      min-width: 100px;
+                                    }
+                                    .vote-count {
+                                      font-size: 32px;
+                                      font-weight: 800;
+                                      display: block;
+                                    }
+                                    .vote-count.for { color: #2e7d32; }
+                                    .vote-count.against { color: #c62828; }
+                                    .vote-count.abstain { color: #757575; }
+                                    .vote-type {
+                                      font-size: 14px;
+                                      color: #666;
+                                      font-weight: 600;
+                                    }
+                                    .result-box {
+                                      text-align: center;
+                                      margin-top: 20px;
+                                      padding: 15px;
+                                      background: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#e8f5e9' : resolution.status === 'rejected' ? '#ffebee' : '#fff3e0'};
+                                      border-radius: 8px;
+                                      font-size: 18px;
+                                      font-weight: 700;
+                                      color: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#2e7d32' : resolution.status === 'rejected' ? '#c62828' : '#e65100'};
+                                    }
+                                    .signatures {
+                                      margin-top: 50px;
+                                      display: grid;
+                                      grid-template-columns: 1fr 1fr;
+                                      gap: 40px;
+                                    }
+                                    .signature-box {
+                                      text-align: center;
+                                      padding-top: 60px;
+                                      border-top: 1px solid #333;
+                                    }
+                                    .signature-title {
+                                      font-size: 14px;
+                                      font-weight: 600;
+                                      color: #333;
+                                    }
+                                    .signature-name {
+                                      font-size: 12px;
+                                      color: #666;
+                                      margin-top: 5px;
+                                    }
+                                    .footer {
+                                      margin-top: 40px;
+                                      padding-top: 20px;
+                                      border-top: 1px solid #ddd;
+                                      text-align: center;
+                                      font-size: 11px;
+                                      color: #999;
+                                    }
+                                    .footer-line {
+                                      margin: 3px 0;
+                                    }
+                                    @media print {
+                                      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+                                      .document { padding: 0; }
+                                    }
                                   </style>
                                 </head>
                                 <body>
-                                  <div class="header">
-                                    <h1>نظام باتر بيكري - القرارات والتوصيات</h1>
-                                    <p>مجلس الإدارة</p>
-                                    <div class="resolution-number">${resolution.resolutionNumber}</div>
-                                  </div>
-                                  <div class="info-grid">
-                                    <div class="info-item"><span class="info-label">نوع القرار:</span> <span class="info-value">${resolutionType}</span></div>
-                                    <div class="info-item"><span class="info-label">الحالة:</span> <span class="info-value">${status}</span></div>
-                                    <div class="info-item"><span class="info-label">الأولوية:</span> <span class="info-value">${priority || '-'}</span></div>
-                                    <div class="info-item"><span class="info-label">تاريخ الإنشاء:</span> <span class="info-value">${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA') : '-'}</span></div>
-                                  </div>
-                                  <div class="section">
-                                    <div class="section-title">عنوان القرار</div>
-                                    <div class="content">${resolution.title}</div>
-                                  </div>
-                                  <div class="section">
-                                    <div class="section-title">تفاصيل القرار</div>
-                                    <div class="content">${resolution.description || 'لا توجد تفاصيل'}</div>
-                                  </div>
-                                  <div class="votes">
-                                    <div class="vote-box vote-for">
-                                      <div class="vote-number">${resolution.forVotes || 0}</div>
-                                      <div class="vote-label">موافق</div>
+                                  <div class="document">
+                                    <div class="letterhead">
+                                      <div class="company-name">شركة الزبد الأفضل التجارية</div>
+                                      <div class="company-subtitle">BUTTER BAKERY - مخبز باتر</div>
+                                      <div class="document-type">قـــرار إداري</div>
                                     </div>
-                                    <div class="vote-box vote-against">
-                                      <div class="vote-number">${resolution.againstVotes || 0}</div>
-                                      <div class="vote-label">رافض</div>
+                                    
+                                    <div class="resolution-meta">
+                                      <div class="meta-right">
+                                        <div class="resolution-number-box">رقم القرار: ${resolution.resolutionNumber}</div>
+                                        <div class="resolution-date">التاريخ: ${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                                      </div>
+                                      <div class="meta-left">
+                                        <span class="meta-badge badge-type">${resolutionType}</span>
+                                        ${priority ? `<span class="meta-badge badge-priority">${priority}</span>` : ''}
+                                      </div>
                                     </div>
-                                    <div class="vote-box vote-abstain">
-                                      <div class="vote-number">${resolution.abstainVotes || 0}</div>
-                                      <div class="vote-label">ممتنع</div>
+
+                                    <div class="main-title">
+                                      <h2>${resolution.title}</h2>
                                     </div>
-                                  </div>
-                                  <div class="footer">
-                                    <p>تم الطباعة بتاريخ: ${new Date().toLocaleDateString('ar-SA')} - نظام إدارة باتر بيكري</p>
+
+                                    <div class="section">
+                                      <div class="section-header">
+                                        <div class="section-icon">١</div>
+                                        <span class="section-title">نص القرار</span>
+                                      </div>
+                                      <div class="section-content">
+                                        ${resolution.description || 'بناءً على الصلاحيات المخولة لمجلس الإدارة، وبعد الاطلاع على الموضوع المعروض، تقرر ما يلي:\n\n' + resolution.title}
+                                      </div>
+                                    </div>
+
+                                    <div class="voting-section">
+                                      <div class="voting-title">نتيجة التصويت</div>
+                                      <div class="votes-grid">
+                                        <div class="vote-item">
+                                          <span class="vote-count for">${resolution.forVotes || 0}</span>
+                                          <span class="vote-type">موافق</span>
+                                        </div>
+                                        <div class="vote-item">
+                                          <span class="vote-count against">${resolution.againstVotes || 0}</span>
+                                          <span class="vote-type">معارض</span>
+                                        </div>
+                                        <div class="vote-item">
+                                          <span class="vote-count abstain">${resolution.abstainVotes || 0}</span>
+                                          <span class="vote-type">ممتنع</span>
+                                        </div>
+                                      </div>
+                                      <div class="result-box">
+                                        ${resolution.status === 'approved' || resolution.status === 'implemented' ? '✓ تم اعتماد القرار بالأغلبية' : resolution.status === 'rejected' ? '✗ تم رفض القرار' : '⏳ ' + status}
+                                      </div>
+                                    </div>
+
+                                    <div class="signatures">
+                                      <div class="signature-box">
+                                        <div class="signature-title">رئيس مجلس الإدارة</div>
+                                        <div class="signature-name">________________________</div>
+                                      </div>
+                                      <div class="signature-box">
+                                        <div class="signature-title">أمين سر المجلس</div>
+                                        <div class="signature-name">________________________</div>
+                                      </div>
+                                    </div>
+
+                                    <div class="footer">
+                                      <div class="footer-line">شركة الزبد الأفضل التجارية - سجل تجاري رقم: XXXXXXXXXX</div>
+                                      <div class="footer-line">المملكة العربية السعودية</div>
+                                      <div class="footer-line">تم الطباعة بتاريخ: ${new Date().toLocaleDateString('ar-SA')} | وثيقة رسمية</div>
+                                    </div>
                                   </div>
                                 </body>
                                 </html>
