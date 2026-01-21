@@ -7,7 +7,7 @@ import { Link } from "wouter";
 import { 
   Factory, Users, Clock, CheckCircle, AlertTriangle, TrendingUp, Calendar, 
   ClipboardCheck, Plus, Wallet, Package, BarChart3, Target, Gift, 
-  ChevronLeft, Activity, Boxes, RefreshCw, FileText
+  ChevronLeft, Activity, Boxes, RefreshCw, FileText, DoorOpen
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -33,8 +33,9 @@ export default function OperationsDashboardPage() {
     : 0;
 
   const operationsLinks = [
+    { title: "فتح وإغلاق الفروع", description: "قوائم التحقق اليومية مع التوثيق", href: "/branch-shifts", icon: DoorOpen, highlight: true },
     { title: "المنتجات", description: "إدارة كتالوج المنتجات", href: "/products", icon: Package, count: stats?.productsCount || 0, countLabel: "منتج" },
-    { title: "إدارة موظفي الفروع", description: "إدارة شاملة للموظفين والورديات والحضور", href: "/attendance-dashboard", icon: Clock, count: stats?.todayShifts || 0, countLabel: "وردية", highlight: true },
+    { title: "إدارة موظفي الفروع", description: "إدارة شاملة للموظفين والورديات والحضور", href: "/attendance-dashboard", icon: Clock, count: stats?.todayShifts || 0, countLabel: "وردية" },
     { title: "أوامر الإنتاج", description: "متابعة أوامر الإنتاج", href: "/production-dashboard", icon: ClipboardCheck, count: stats?.todayOrders || 0, countLabel: "أمر" },
     { title: "مراقبة الجودة", description: "فحوصات الجودة", href: "/quality-control", icon: CheckCircle, count: stats?.qualityChecks || 0, countLabel: "فحص" },
     { title: "بار العرض والهالك", description: "استلام الإنتاج ومتابعة الهالك", href: "/display-bar-waste", icon: AlertTriangle },
@@ -52,6 +53,7 @@ export default function OperationsDashboardPage() {
   ];
 
   const quickActions = [
+    { label: "فتح/إغلاق فرع", href: "/branch-shifts", icon: DoorOpen },
     { label: "يومية جديدة", href: "/cashier-journals", icon: Wallet },
     { label: "موظفي الفروع", href: "/attendance-dashboard", icon: Clock },
     { label: "أمر إنتاج", href: "/production-dashboard", icon: ClipboardCheck },

@@ -7491,3 +7491,210 @@ export const insertQuorumCalculationSchema = createInsertSchema(quorumCalculatio
 
 export type QuorumCalculation = typeof quorumCalculations.$inferSelect;
 export type InsertQuorumCalculation = z.infer<typeof insertQuorumCalculationSchema>;
+
+// ==================== نظام فتح وإغلاق الفروع ====================
+
+// قوالب قوائم التحقق - Checklist Templates
+export const checklistTemplates = pgTable("checklist_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  type: text("type").notNull(), // opening, closing
+  category: text("category").notNull(), // cleanliness, equipment, products, inventory, cashier, employees, security, waste
+  description: text("description"),
+  icon: text("icon"),
+  displayOrder: integer("display_order").default(0),
+  isActive: boolean("is_active").default(true),
+  requiresPhoto: boolean("requires_photo").default(false),
+  requiresNote: boolean("requires_note").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_checklist_templates_type").on(table.type),
+  index("idx_checklist_templates_category").on(table.category),
+]);
+
+export const insertChecklistTemplateSchema = createInsertSchema(checklistTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
+export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSchema>;
+
+// بنود قوائم التحقق - Checklist Items
+export const checklistItems = pgTable("checklist_items", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => checklistTemplates.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  displayOrder: integer("display_order").default(0),
+  requiresPhoto: boolean("requires_photo").default(false),
+  requiresNote: boolean("requires_note").default(false),
+  isCritical: boolean("is_critical").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_checklist_items_template").on(table.templateId),
+]);
+
+export const insertChecklistItemSchema = createInsertSchema(checklistItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ChecklistItem = typeof checklistItems.$inferSelect;
+export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
+
+// سجل الشفتات - Branch Shifts
+export const branchShifts = pgTable("branch_shifts", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  shiftType: text("shift_type").notNull(), // morning, evening, night
+  shiftDate: date("shift_date").notNull(),
+  status: text("status").default("in_progress"), // in_progress, completed, pending_review
+  supervisorId: varchar("supervisor_id").references(() => users.id),
+  supervisorName: text("supervisor_name"),
+  employeeCount: integer("employee_count"),
+  openingTime: timestamp("opening_time"),
+  closingTime: timestamp("closing_time"),
+  totalSales: numeric("total_sales", { precision: 12, scale: 2 }),
+  cashSales: numeric("cash_sales", { precision: 12, scale: 2 }),
+  cardSales: numeric("card_sales", { precision: 12, scale: 2 }),
+  transactionCount: integer("transaction_count"),
+  cashVariance: numeric("cash_variance", { precision: 10, scale: 2 }),
+  wasteAmount: numeric("waste_amount", { precision: 10, scale: 2 }),
+  supervisorNotes: text("supervisor_notes"),
+  customerFeedback: text("customer_feedback"),
+  teamPerformance: text("team_performance"),
+  improvements: text("improvements"),
+  issues: text("issues"),
+  openingCompleted: boolean("opening_completed").default(false),
+  closingCompleted: boolean("closing_completed").default(false),
+  openingCompletedAt: timestamp("opening_completed_at"),
+  closingCompletedAt: timestamp("closing_completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_shifts_branch").on(table.branchId),
+  index("idx_branch_shifts_date").on(table.shiftDate),
+  index("idx_branch_shifts_status").on(table.status),
+  index("idx_branch_shifts_supervisor").on(table.supervisorId),
+]);
+
+export const insertBranchShiftSchema = createInsertSchema(branchShifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BranchShift = typeof branchShifts.$inferSelect;
+export type InsertBranchShift = z.infer<typeof insertBranchShiftSchema>;
+
+// تنفيذ قوائم التحقق - Shift Checklist Responses
+export const shiftChecklistResponses = pgTable("shift_checklist_responses", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => checklistItems.id),
+  checklistType: text("checklist_type").notNull(), // opening, closing
+  isCompleted: boolean("is_completed").default(false),
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  completedByName: text("completed_by_name"),
+  notes: text("notes"),
+  photoUrl: text("photo_url"),
+  status: text("status").default("pending"), // pending, passed, failed, needs_attention
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_checklist_shift").on(table.shiftId),
+  index("idx_shift_checklist_item").on(table.itemId),
+  index("idx_shift_checklist_type").on(table.checklistType),
+]);
+
+export const insertShiftChecklistResponseSchema = createInsertSchema(shiftChecklistResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftChecklistResponse = typeof shiftChecklistResponses.$inferSelect;
+export type InsertShiftChecklistResponse = z.infer<typeof insertShiftChecklistResponseSchema>;
+
+// صور الشفت - Shift Photos
+export const shiftPhotos = pgTable("shift_photos", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  checklistResponseId: integer("checklist_response_id").references(() => shiftChecklistResponses.id, { onDelete: "cascade" }),
+  photoType: text("photo_type").notNull(), // checklist, general, issue, team
+  category: text("category"), // cleanliness, equipment, products, etc.
+  photoUrl: text("photo_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  caption: text("caption"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedByName: text("uploaded_by_name"),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_photos_shift").on(table.shiftId),
+  index("idx_shift_photos_response").on(table.checklistResponseId),
+  index("idx_shift_photos_type").on(table.photoType),
+]);
+
+export const insertShiftPhotoSchema = createInsertSchema(shiftPhotos).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type ShiftPhoto = typeof shiftPhotos.$inferSelect;
+export type InsertShiftPhoto = z.infer<typeof insertShiftPhotoSchema>;
+
+// التوقيعات الإلكترونية - Shift Signatures
+export const shiftSignatures = pgTable("shift_signatures", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  signatureType: text("signature_type").notNull(), // opening_supervisor, closing_supervisor, cashier, manager
+  signatureData: text("signature_data").notNull(), // base64 or URL
+  signedBy: varchar("signed_by").references(() => users.id),
+  signerName: text("signer_name").notNull(),
+  signerRole: text("signer_role"),
+  signedAt: timestamp("signed_at").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+}, (table) => [
+  index("idx_shift_signatures_shift").on(table.shiftId),
+  index("idx_shift_signatures_type").on(table.signatureType),
+]);
+
+export const insertShiftSignatureSchema = createInsertSchema(shiftSignatures).omit({
+  id: true,
+  signedAt: true,
+});
+
+export type ShiftSignature = typeof shiftSignatures.$inferSelect;
+export type InsertShiftSignature = z.infer<typeof insertShiftSignatureSchema>;
+
+// سجل الهدر اليومي - Daily Waste Log
+export const dailyWasteLog = pgTable("daily_waste_log", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  productName: text("product_name").notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull(),
+  unit: text("unit").default("piece"),
+  reason: text("reason").notNull(), // expired, damaged, overproduction, quality, other
+  estimatedCost: numeric("estimated_cost", { precision: 10, scale: 2 }),
+  photoUrl: text("photo_url"),
+  notes: text("notes"),
+  recordedBy: varchar("recorded_by").references(() => users.id),
+  recordedByName: text("recorded_by_name"),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_waste_shift").on(table.shiftId),
+  index("idx_daily_waste_reason").on(table.reason),
+]);
+
+export const insertDailyWasteLogSchema = createInsertSchema(dailyWasteLog).omit({
+  id: true,
+  recordedAt: true,
+});
+
+export type DailyWasteLog = typeof dailyWasteLog.$inferSelect;
+export type InsertDailyWasteLog = z.infer<typeof insertDailyWasteLogSchema>;

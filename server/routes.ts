@@ -37,9 +37,17 @@ import {
   wasteRiskRules,
   wasteRiskAlerts,
   users,
+  branches,
   COMPARISON_STATUS,
   RISK_SEVERITY,
   ALERT_STATUS,
+  checklistTemplates,
+  checklistItems,
+  branchShifts,
+  shiftChecklistResponses,
+  shiftPhotos,
+  shiftSignatures,
+  dailyWasteLog,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -19773,6 +19781,237 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error exporting travel requests:", error);
       res.status(500).json({ error: "فشل في تصدير طلبات السفر" });
+    }
+  });
+
+  // ==================== نظام فتح وإغلاق الفروع ====================
+
+  // Get checklist templates
+  app.get("/api/branch-shifts/templates", isAuthenticated, async (req, res) => {
+    try {
+      const { type } = req.query;
+      let query = db.select().from(checklistTemplates).where(eq(checklistTemplates.isActive, true));
+      if (type) {
+        query = db.select().from(checklistTemplates).where(and(eq(checklistTemplates.isActive, true), eq(checklistTemplates.type, type as string)));
+      }
+      const templates = await query.orderBy(checklistTemplates.displayOrder);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching checklist templates:", error);
+      res.status(500).json({ error: "فشل في جلب قوالب قوائم التحقق" });
+    }
+  });
+
+  // Get checklist items by template
+  app.get("/api/branch-shifts/templates/:templateId/items", isAuthenticated, async (req, res) => {
+    try {
+      const templateId = parseInt(req.params.templateId);
+      const items = await db.select().from(checklistItems)
+        .where(and(eq(checklistItems.templateId, templateId), eq(checklistItems.isActive, true)))
+        .orderBy(checklistItems.displayOrder);
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching checklist items:", error);
+      res.status(500).json({ error: "فشل في جلب بنود قائمة التحقق" });
+    }
+  });
+
+  // Get all checklist items grouped by template
+  app.get("/api/branch-shifts/all-items", isAuthenticated, async (req, res) => {
+    try {
+      const { type } = req.query;
+      let templatesQuery = db.select().from(checklistTemplates).where(eq(checklistTemplates.isActive, true));
+      if (type) {
+        templatesQuery = db.select().from(checklistTemplates).where(and(eq(checklistTemplates.isActive, true), eq(checklistTemplates.type, type as string)));
+      }
+      const templates = await templatesQuery.orderBy(checklistTemplates.displayOrder);
+      
+      const result = await Promise.all(templates.map(async (template) => {
+        const items = await db.select().from(checklistItems)
+          .where(and(eq(checklistItems.templateId, template.id), eq(checklistItems.isActive, true)))
+          .orderBy(checklistItems.displayOrder);
+        return { ...template, items };
+      }));
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching all checklist items:", error);
+      res.status(500).json({ error: "فشل في جلب جميع بنود قوائم التحقق" });
+    }
+  });
+
+  // Get branch shifts
+  app.get("/api/branch-shifts", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, date, status } = req.query;
+      let conditions = [];
+      if (branchId) conditions.push(eq(branchShifts.branchId, branchId as string));
+      if (date) conditions.push(eq(branchShifts.shiftDate, date as string));
+      if (status) conditions.push(eq(branchShifts.status, status as string));
+      
+      const shifts = conditions.length > 0
+        ? await db.select().from(branchShifts).where(and(...conditions)).orderBy(desc(branchShifts.shiftDate))
+        : await db.select().from(branchShifts).orderBy(desc(branchShifts.shiftDate));
+      
+      res.json(shifts);
+    } catch (error) {
+      console.error("Error fetching branch shifts:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الشفتات" });
+    }
+  });
+
+  // Get single branch shift with details
+  app.get("/api/branch-shifts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+      if (!shift) {
+        return res.status(404).json({ error: "الشفت غير موجود" });
+      }
+      
+      const responses = await db.select().from(shiftChecklistResponses).where(eq(shiftChecklistResponses.shiftId, shiftId));
+      const photos = await db.select().from(shiftPhotos).where(eq(shiftPhotos.shiftId, shiftId));
+      const signatures = await db.select().from(shiftSignatures).where(eq(shiftSignatures.shiftId, shiftId));
+      const waste = await db.select().from(dailyWasteLog).where(eq(dailyWasteLog.shiftId, shiftId));
+      
+      res.json({ ...shift, responses, photos, signatures, waste });
+    } catch (error) {
+      console.error("Error fetching branch shift:", error);
+      res.status(500).json({ error: "فشل في جلب تفاصيل الشفت" });
+    }
+  });
+
+  // Create new branch shift
+  app.post("/api/branch-shifts", isAuthenticated, async (req, res) => {
+    try {
+      const [shift] = await db.insert(branchShifts).values(req.body).returning();
+      res.status(201).json(shift);
+    } catch (error) {
+      console.error("Error creating branch shift:", error);
+      res.status(500).json({ error: "فشل في إنشاء الشفت" });
+    }
+  });
+
+  // Update branch shift
+  app.patch("/api/branch-shifts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const [updated] = await db.update(branchShifts)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(branchShifts.id, shiftId))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating branch shift:", error);
+      res.status(500).json({ error: "فشل في تحديث الشفت" });
+    }
+  });
+
+  // Save checklist response
+  app.post("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const responses = req.body.responses || [{ ...req.body, shiftId }];
+      const savedResponses = await db.insert(shiftChecklistResponses)
+        .values(responses.map((r: any) => ({ ...r, shiftId })))
+        .returning();
+      res.status(201).json(savedResponses);
+    } catch (error) {
+      console.error("Error saving checklist response:", error);
+      res.status(500).json({ error: "فشل في حفظ استجابة قائمة التحقق" });
+    }
+  });
+
+  // Update checklist response
+  app.patch("/api/branch-shifts/responses/:responseId", isAuthenticated, async (req, res) => {
+    try {
+      const responseId = parseInt(req.params.responseId);
+      const [updated] = await db.update(shiftChecklistResponses)
+        .set(req.body)
+        .where(eq(shiftChecklistResponses.id, responseId))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating checklist response:", error);
+      res.status(500).json({ error: "فشل في تحديث استجابة قائمة التحقق" });
+    }
+  });
+
+  // Upload shift photo
+  app.post("/api/branch-shifts/:id/photos", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const [photo] = await db.insert(shiftPhotos)
+        .values({ ...req.body, shiftId })
+        .returning();
+      res.status(201).json(photo);
+    } catch (error) {
+      console.error("Error uploading shift photo:", error);
+      res.status(500).json({ error: "فشل في رفع الصورة" });
+    }
+  });
+
+  // Save signature
+  app.post("/api/branch-shifts/:id/signatures", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const [signature] = await db.insert(shiftSignatures)
+        .values({ ...req.body, shiftId })
+        .returning();
+      res.status(201).json(signature);
+    } catch (error) {
+      console.error("Error saving signature:", error);
+      res.status(500).json({ error: "فشل في حفظ التوقيع" });
+    }
+  });
+
+  // Add waste log entry
+  app.post("/api/branch-shifts/:id/waste", isAuthenticated, async (req, res) => {
+    try {
+      const shiftId = parseInt(req.params.id);
+      const [waste] = await db.insert(dailyWasteLog)
+        .values({ ...req.body, shiftId })
+        .returning();
+      res.status(201).json(waste);
+    } catch (error) {
+      console.error("Error adding waste log:", error);
+      res.status(500).json({ error: "فشل في إضافة سجل الهدر" });
+    }
+  });
+
+  // Get today's shift status for all branches (dashboard)
+  app.get("/api/branch-shifts/dashboard/today", isAuthenticated, async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const shifts = await db.select().from(branchShifts).where(eq(branchShifts.shiftDate, today));
+      const branchList = await db.select().from(branches);
+      
+      const dashboard = branchList.map(branch => {
+        const branchShiftsToday = shifts.filter(s => s.branchId === branch.id);
+        const hasAnyShift = branchShiftsToday.length > 0;
+        const hasOpeningCompleted = branchShiftsToday.some(s => s.openingCompleted);
+        const hasClosingCompleted = branchShiftsToday.some(s => s.closingCompleted);
+        const latestShift = branchShiftsToday.length > 0 
+          ? branchShiftsToday.reduce((latest, current) => 
+              new Date(current.createdAt || 0) > new Date(latest.createdAt || 0) ? current : latest
+            )
+          : null;
+        
+        return {
+          branchId: branch.id,
+          branchName: branch.name,
+          hasShift: hasAnyShift,
+          shift: latestShift,
+          shiftsCount: branchShiftsToday.length,
+          openingStatus: hasOpeningCompleted ? 'completed' : 'pending',
+          closingStatus: hasClosingCompleted ? 'completed' : 'pending',
+        };
+      });
+      
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Error fetching dashboard:", error);
+      res.status(500).json({ error: "فشل في جلب لوحة المتابعة" });
     }
   });
 
