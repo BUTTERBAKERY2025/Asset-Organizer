@@ -30,7 +30,6 @@ import {
 interface Branch {
   id: string;
   name: string;
-  nameAr: string;
 }
 
 interface BranchShift {
@@ -159,7 +158,7 @@ export default function ShiftReportsPage() {
 
   const getBranchName = (branchId: string) => {
     const branch = branches.find((b) => b.id === branchId);
-    return branch?.nameAr || branchId;
+    return branch?.name || branchId;
   };
 
   const getShiftTypeName = (type: string) => {
@@ -238,7 +237,7 @@ export default function ShiftReportsPage() {
                     <SelectItem value="all">جميع الفروع</SelectItem>
                     {branches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
-                        {branch.nameAr}
+                        {branch.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
