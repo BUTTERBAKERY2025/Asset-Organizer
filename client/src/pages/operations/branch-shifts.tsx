@@ -551,12 +551,12 @@ export default function BranchShiftsPage() {
                 <p className="text-sm text-amber-700 mb-1">الوقت الفعلي للتسجيل</p>
                 <div className="flex items-center justify-center gap-2">
                   <Clock className="h-6 w-6 text-amber-600" />
-                  <span className="text-3xl font-bold text-amber-800 font-mono">
-                    {currentTime.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  <span className="text-3xl font-bold text-amber-800 font-mono" dir="ltr">
+                    {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
                   </span>
                 </div>
-                <p className="text-xs text-amber-600 mt-1">
-                  {currentTime.toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                <p className="text-xs text-amber-600 mt-1" dir="ltr">
+                  {currentTime.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
                 </p>
               </div>
 
@@ -588,8 +588,8 @@ export default function BranchShiftsPage() {
                   <div className="flex items-center gap-4">
                     <div className="bg-amber-100 rounded-lg px-3 py-2 flex items-center gap-2">
                       <Clock className="h-4 w-4 text-amber-600" />
-                      <span className="font-mono font-bold text-amber-800">
-                        {currentTime.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      <span className="font-mono font-bold text-amber-800" dir="ltr">
+                        {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
                       </span>
                     </div>
                     <div className="text-left">
