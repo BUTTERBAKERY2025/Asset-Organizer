@@ -120,7 +120,7 @@ export default function ShiftReportsPage() {
     queryKey: ["/api/branch-shifts/all-items"],
   });
 
-  const { data: shiftResponses = [] } = useQuery<ChecklistResponse[]>({
+  const { data: shiftResponses = [], isLoading: responsesLoading } = useQuery<ChecklistResponse[]>({
     queryKey: ["/api/branch-shifts/responses", selectedShift?.id],
     queryFn: async () => {
       if (!selectedShift) return [];
@@ -414,7 +414,12 @@ export default function ShiftReportsPage() {
 
               <Separator className="my-6" />
 
-              {filteredTemplates.map((template) => (
+              {responsesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+                  <span className="mr-2">جاري تحميل البيانات...</span>
+                </div>
+              ) : filteredTemplates.map((template) => (
                 <div key={template.id} className="mb-6">
                   <h4 className="font-semibold text-lg mb-3 text-amber-700">{template.name}</h4>
                   <table className="w-full border-collapse">
