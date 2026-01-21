@@ -227,7 +227,7 @@ export default function ExecutiveCorrespondence() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+        <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-12 w-full" />
           <div className="space-y-4">
@@ -242,7 +242,7 @@ export default function ExecutiveCorrespondence() {
 
   return (
     <Layout>
-      <div className="container mx-auto p-6 space-y-6" dir="rtl">
+      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/executive">

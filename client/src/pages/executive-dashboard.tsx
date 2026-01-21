@@ -81,7 +81,7 @@ export default function ExecutiveDashboard() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="container mx-auto p-6 space-y-6" dir="rtl">
+        <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
           <div className="flex items-center justify-between">
             <Skeleton className="h-10 w-64" />
           </div>
@@ -102,7 +102,7 @@ export default function ExecutiveDashboard() {
 
   return (
     <Layout>
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
+    <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
