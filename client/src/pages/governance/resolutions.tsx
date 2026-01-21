@@ -478,6 +478,96 @@ export default function ResolutionsPage() {
                             size="sm"
                             className="gap-1"
                             onClick={() => {
+                              const resolutionType = resolutionTypes.find(t => t.value === resolution.resolutionType)?.label || resolution.resolutionType;
+                              const status = resolutionStatuses.find(s => s.value === resolution.status)?.label || resolution.status;
+                              const priority = priorities.find(p => p.value === resolution.priority)?.label || resolution.priority;
+                              const html = `
+                                <!DOCTYPE html>
+                                <html dir="rtl" lang="ar">
+                                <head>
+                                  <meta charset="UTF-8">
+                                  <title>قرار رقم ${resolution.resolutionNumber}</title>
+                                  <style>
+                                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                                    body { font-family: 'Cairo', sans-serif; padding: 30px; direction: rtl; }
+                                    .header { text-align: center; border-bottom: 3px solid #059669; padding-bottom: 20px; margin-bottom: 25px; }
+                                    .header h1 { color: #059669; margin: 0 0 5px 0; font-size: 24px; }
+                                    .header p { color: #666; margin: 0; font-size: 14px; }
+                                    .resolution-number { background: #059669; color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; margin: 15px 0; font-weight: bold; }
+                                    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; background: #f9f9f9; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+                                    .info-item { font-size: 14px; }
+                                    .info-label { color: #666; font-weight: 600; }
+                                    .info-value { color: #333; }
+                                    .section { margin-bottom: 20px; }
+                                    .section-title { color: #059669; font-size: 16px; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 12px; }
+                                    .content { line-height: 1.8; color: #333; white-space: pre-wrap; }
+                                    .votes { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
+                                    .vote-box { text-align: center; padding: 15px 25px; border-radius: 10px; }
+                                    .vote-for { background: #dcfce7; color: #166534; }
+                                    .vote-against { background: #fee2e2; color: #991b1b; }
+                                    .vote-abstain { background: #f3f4f6; color: #374151; }
+                                    .vote-number { font-size: 28px; font-weight: bold; }
+                                    .vote-label { font-size: 12px; }
+                                    .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #ddd; padding-top: 15px; }
+                                    @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="header">
+                                    <h1>نظام باتر بيكري - القرارات والتوصيات</h1>
+                                    <p>مجلس الإدارة</p>
+                                    <div class="resolution-number">${resolution.resolutionNumber}</div>
+                                  </div>
+                                  <div class="info-grid">
+                                    <div class="info-item"><span class="info-label">نوع القرار:</span> <span class="info-value">${resolutionType}</span></div>
+                                    <div class="info-item"><span class="info-label">الحالة:</span> <span class="info-value">${status}</span></div>
+                                    <div class="info-item"><span class="info-label">الأولوية:</span> <span class="info-value">${priority || '-'}</span></div>
+                                    <div class="info-item"><span class="info-label">تاريخ الإنشاء:</span> <span class="info-value">${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA') : '-'}</span></div>
+                                  </div>
+                                  <div class="section">
+                                    <div class="section-title">عنوان القرار</div>
+                                    <div class="content">${resolution.title}</div>
+                                  </div>
+                                  <div class="section">
+                                    <div class="section-title">تفاصيل القرار</div>
+                                    <div class="content">${resolution.description || 'لا توجد تفاصيل'}</div>
+                                  </div>
+                                  <div class="votes">
+                                    <div class="vote-box vote-for">
+                                      <div class="vote-number">${resolution.forVotes || 0}</div>
+                                      <div class="vote-label">موافق</div>
+                                    </div>
+                                    <div class="vote-box vote-against">
+                                      <div class="vote-number">${resolution.againstVotes || 0}</div>
+                                      <div class="vote-label">رافض</div>
+                                    </div>
+                                    <div class="vote-box vote-abstain">
+                                      <div class="vote-number">${resolution.abstainVotes || 0}</div>
+                                      <div class="vote-label">ممتنع</div>
+                                    </div>
+                                  </div>
+                                  <div class="footer">
+                                    <p>تم الطباعة بتاريخ: ${new Date().toLocaleDateString('ar-SA')} - نظام إدارة باتر بيكري</p>
+                                  </div>
+                                </body>
+                                </html>
+                              `;
+                              const printWindow = window.open('', '_blank');
+                              if (printWindow) {
+                                printWindow.document.write(html);
+                                printWindow.document.close();
+                                printWindow.onload = () => setTimeout(() => printWindow.print(), 300);
+                              }
+                            }}
+                          >
+                            <Printer className="h-4 w-4" />
+                            طباعة
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => {
                               setSelectedResolution(resolution);
                               setShowWorkflow(true);
                             }}
