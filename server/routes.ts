@@ -19920,8 +19920,17 @@ export async function registerRoutes(
     try {
       const shiftId = parseInt(req.params.id);
       const responses = req.body.responses || [{ ...req.body, shiftId }];
+      const processedResponses = responses.map((r: any) => ({
+        shiftId,
+        itemId: r.itemId,
+        isCompleted: r.isCompleted || false,
+        status: r.status || 'pending',
+        notes: r.notes || null,
+        photoUrl: r.photoUrl || null,
+        completedAt: r.isCompleted ? new Date() : null,
+      }));
       const savedResponses = await db.insert(shiftChecklistResponses)
-        .values(responses.map((r: any) => ({ ...r, shiftId })))
+        .values(processedResponses)
         .returning();
       res.status(201).json(savedResponses);
     } catch (error) {
