@@ -158,6 +158,8 @@ export default function MeetingsPage() {
     }
   };
 
+  const filteredMeetings = getMeetingsByTab();
+
   const addAgendaItem = () => {
     if (!newAgendaItem.title) return;
     setAgendaItems([...agendaItems, { ...newAgendaItem, id: Date.now(), order: agendaItems.length + 1 }]);

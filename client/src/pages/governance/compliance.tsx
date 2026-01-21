@@ -145,14 +145,14 @@ export default function CompliancePage() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const expiryDateStr = formData.get("expiryDate") as string;
+    const expiryDateStr = formData.get("validUntil") as string;
     const data = {
-      requirementType: formData.get("requirementType") as string,
-      name: formData.get("name") as string,
+      category: formData.get("requirementType") as string,
+      title: formData.get("name") as string,
       description: formData.get("description") as string,
       regulatoryBody: formData.get("regulatoryBody") as string,
       frequency: formData.get("frequency") as string,
-      expiryDate: expiryDateStr || undefined,
+      validUntil: expiryDateStr || undefined,
       responsiblePerson: formData.get("responsiblePerson") as string,
       documentNumber: formData.get("documentNumber") as string,
     };
@@ -166,16 +166,16 @@ export default function CompliancePage() {
 
   const requirementsWithComputedStatus = requirements.map(r => ({
     ...r,
-    computedStatus: r.expiryDate ? (() => {
-      const days = Math.ceil((new Date(r.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    computedStatus: r.validUntil ? (() => {
+      const days = Math.ceil((new Date(r.validUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
       if (days < 0) return "expired";
       if (days <= 30) return "expiring_soon";
       return "valid";
-    })() : (r.status || "pending")
+    })() : (r.currentStatus || "pending")
   }));
 
   const filteredRequirements = requirementsWithComputedStatus.filter((r) => {
-    const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = r.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || r.computedStatus === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -240,12 +240,12 @@ export default function CompliancePage() {
                 <DropdownMenuItem onClick={() => {
                   const exportColumns = [
                     { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
-                    { key: "name", header: "الاسم", width: 30 },
-                    { key: "requirementType", header: "النوع", width: 12 },
+                    { key: "title", header: "الاسم", width: 30 },
+                    { key: "category", header: "النوع", width: 12 },
                     { key: "regulatoryBody", header: "الجهة", width: 15 },
                     { key: "frequency", header: "التكرار", width: 12 },
-                    { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
-                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "validUntil", header: "تاريخ الانتهاء", width: 15 },
+                    { key: "currentStatus", header: "الحالة", width: 12 },
                   ];
                   exportToExcel(filteredRequirements, exportColumns, "متطلبات_الامتثال", "الامتثال");
                 }}>
@@ -254,12 +254,12 @@ export default function CompliancePage() {
                 <DropdownMenuItem onClick={() => {
                   const exportColumns = [
                     { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
-                    { key: "name", header: "الاسم", width: 30 },
-                    { key: "requirementType", header: "النوع", width: 12 },
+                    { key: "title", header: "الاسم", width: 30 },
+                    { key: "category", header: "النوع", width: 12 },
                     { key: "regulatoryBody", header: "الجهة", width: 15 },
                     { key: "frequency", header: "التكرار", width: 12 },
-                    { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
-                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "validUntil", header: "تاريخ الانتهاء", width: 15 },
+                    { key: "currentStatus", header: "الحالة", width: 12 },
                   ];
                   exportToCSV(filteredRequirements, exportColumns, "متطلبات_الامتثال");
                 }}>
@@ -268,12 +268,12 @@ export default function CompliancePage() {
                 <DropdownMenuItem onClick={() => {
                   const exportColumns = [
                     { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
-                    { key: "name", header: "الاسم", width: 30 },
-                    { key: "requirementType", header: "النوع", width: 12 },
+                    { key: "title", header: "الاسم", width: 30 },
+                    { key: "category", header: "النوع", width: 12 },
                     { key: "regulatoryBody", header: "الجهة", width: 15 },
                     { key: "frequency", header: "التكرار", width: 12 },
-                    { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
-                    { key: "status", header: "الحالة", width: 12 },
+                    { key: "validUntil", header: "تاريخ الانتهاء", width: 15 },
+                    { key: "currentStatus", header: "الحالة", width: 12 },
                   ];
                   printAsPDF(filteredRequirements, exportColumns, "متطلبات الامتثال", "سجل التراخيص والمتطلبات التنظيمية");
                 }}>
@@ -303,7 +303,7 @@ export default function CompliancePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="requirementType">نوع المتطلب *</Label>
-                      <Select name="requirementType" defaultValue={editingRequirement?.requirementType || "license"}>
+                      <Select name="requirementType" defaultValue={editingRequirement?.category || "license"}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -329,7 +329,7 @@ export default function CompliancePage() {
                     </div>
                     <div className="space-y-2 col-span-2">
                       <Label htmlFor="name">اسم المتطلب *</Label>
-                      <Input id="name" name="name" defaultValue={editingRequirement?.name || ""} required />
+                      <Input id="name" name="name" defaultValue={editingRequirement?.title || ""} required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="documentNumber">رقم الوثيقة</Label>
@@ -349,8 +349,8 @@ export default function CompliancePage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="expiryDate">تاريخ الانتهاء</Label>
-                      <Input id="expiryDate" name="expiryDate" type="date" defaultValue={editingRequirement?.expiryDate || ""} />
+                      <Label htmlFor="validUntil">تاريخ الانتهاء</Label>
+                      <Input id="validUntil" name="validUntil" type="date" defaultValue={editingRequirement?.validUntil || ""} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="responsiblePerson">المسؤول</Label>
@@ -441,12 +441,12 @@ export default function CompliancePage() {
               </div>
               <div className="grid gap-2">
                 {requirementsWithComputedStatus.filter(r => r.computedStatus === "expiring_soon").map((req) => {
-                  const days = getDaysUntilExpiry(req.expiryDate);
+                  const days = getDaysUntilExpiry(req.validUntil);
                   return (
                     <div key={req.id} className="flex items-center justify-between bg-white p-3 rounded-lg">
                       <div className="flex items-center gap-3">
                         <Shield className="h-5 w-5 text-amber-500" />
-                        <span className="font-medium">{req.name}</span>
+                        <span className="font-medium">{req.title}</span>
                       </div>
                       <Badge className="bg-amber-100 text-amber-800">
                         <Clock className="h-3 w-3 ml-1" />
@@ -530,13 +530,13 @@ export default function CompliancePage() {
                       </TableRow>
                     ) : (
                       filteredRequirements.map((req) => {
-                        const days = getDaysUntilExpiry(req.expiryDate);
+                        const days = getDaysUntilExpiry(req.validUntil);
                         const isExpiring = days !== null && days > 0 && days <= 30;
                         return (
                           <TableRow key={req.id} className={isExpiring ? "bg-amber-50" : ""} data-testid={`requirement-row-${req.id}`}>
                             <TableCell>
                               <div>
-                                <p className="font-medium">{req.name}</p>
+                                <p className="font-medium">{req.title}</p>
                                 {req.documentNumber && (
                                   <p className="text-sm text-gray-500">{req.documentNumber}</p>
                                 )}
@@ -547,17 +547,17 @@ export default function CompliancePage() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {complianceCategories.find(c => c.value === req.requirementType)?.label}
+                                {complianceCategories.find(c => c.value === req.category)?.label}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               {frequencies.find(f => f.value === req.frequency)?.label}
                             </TableCell>
                             <TableCell>
-                              {req.expiryDate ? (
+                              {req.validUntil ? (
                                 <div className="flex items-center gap-1">
                                   <Calendar className="h-4 w-4 text-gray-400" />
-                                  <span className={isExpiring ? "text-amber-600 font-medium" : ""}>{req.expiryDate}</span>
+                                  <span className={isExpiring ? "text-amber-600 font-medium" : ""}>{req.validUntil}</span>
                                 </div>
                               ) : "-"}
                               {isExpiring && days !== null && (
@@ -681,12 +681,12 @@ export default function CompliancePage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline">
-                    {complianceCategories.find(c => c.value === selectedRequirement.requirementType)?.label}
+                    {complianceCategories.find(c => c.value === selectedRequirement.category)?.label}
                   </Badge>
-                  {getStatusBadge(selectedRequirement.status || "pending")}
+                  {getStatusBadge(selectedRequirement.currentStatus || "pending")}
                 </div>
                 
-                <h2 className="text-xl font-bold">{selectedRequirement.name}</h2>
+                <h2 className="text-xl font-bold">{selectedRequirement.title}</h2>
                 
                 {selectedRequirement.description && (
                   <p className="text-gray-600">{selectedRequirement.description}</p>
@@ -707,7 +707,7 @@ export default function CompliancePage() {
                   </div>
                   <div className="bg-gray-50 p-3 rounded-lg">
                     <p className="text-sm text-gray-500">تاريخ الانتهاء</p>
-                    <p className="font-medium">{selectedRequirement.expiryDate || "غير محدد"}</p>
+                    <p className="font-medium">{selectedRequirement.validUntil || "غير محدد"}</p>
                   </div>
                 </div>
 
