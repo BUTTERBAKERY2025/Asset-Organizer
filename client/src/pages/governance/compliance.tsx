@@ -39,6 +39,7 @@ import {
   Gavel,
 } from "lucide-react";
 import type { ComplianceRequirement } from "@shared/schema";
+import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
 const complianceCategories = [
   { value: "license", label: "ترخيص", icon: Building2 },
@@ -227,6 +228,34 @@ export default function CompliancePage() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Select onValueChange={(value) => {
+              const exportColumns = [
+                { key: "requirementNumber", header: "رقم المتطلب", width: 15 },
+                { key: "name", header: "الاسم", width: 30 },
+                { key: "requirementType", header: "النوع", width: 12 },
+                { key: "regulatoryBody", header: "الجهة", width: 15 },
+                { key: "frequency", header: "التكرار", width: 12 },
+                { key: "expiryDate", header: "تاريخ الانتهاء", width: 15 },
+                { key: "status", header: "الحالة", width: 12 },
+              ];
+              if (value === "excel") {
+                exportToExcel(filteredRequirements, exportColumns, "متطلبات_الامتثال", "الامتثال");
+              } else if (value === "csv") {
+                exportToCSV(filteredRequirements, exportColumns, "متطلبات_الامتثال");
+              } else if (value === "print") {
+                printAsPDF(filteredRequirements, exportColumns, "متطلبات الامتثال", "سجل التراخيص والمتطلبات التنظيمية");
+              }
+            }}>
+              <SelectTrigger className="w-32">
+                <Download className="h-4 w-4 ml-2" />
+                <SelectValue placeholder="تصدير" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="excel">Excel</SelectItem>
+                <SelectItem value="csv">CSV</SelectItem>
+                <SelectItem value="print">طباعة</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" className="gap-2" onClick={() => setShowChecklist(true)}>
               <ListChecks className="h-4 w-4" />
               قائمة المراجعة

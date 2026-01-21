@@ -43,6 +43,7 @@ import {
   History,
 } from "lucide-react";
 import type { GovernanceMeeting, BoardMember } from "@shared/schema";
+import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
 const meetingTypes = [
   { value: "board", label: "اجتماع مجلس الإدارة", icon: Users, color: "bg-violet-100 text-violet-800" },
@@ -203,6 +204,34 @@ export default function MeetingsPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Select onValueChange={(value) => {
+              const exportColumns = [
+                { key: "meetingNumber", header: "رقم الاجتماع", width: 15 },
+                { key: "title", header: "العنوان", width: 30 },
+                { key: "meetingType", header: "النوع", width: 15 },
+                { key: "meetingDate", header: "التاريخ", width: 12 },
+                { key: "location", header: "المكان", width: 15 },
+                { key: "status", header: "الحالة", width: 12 },
+                { key: "attendeesCount", header: "الحضور", width: 10 },
+              ];
+              if (value === "excel") {
+                exportToExcel(filteredMeetings, exportColumns, "الاجتماعات", "الاجتماعات");
+              } else if (value === "csv") {
+                exportToCSV(filteredMeetings, exportColumns, "الاجتماعات");
+              } else if (value === "print") {
+                printAsPDF(filteredMeetings, exportColumns, "سجل الاجتماعات", "اجتماعات مجلس الإدارة والجمعيات العامة");
+              }
+            }}>
+              <SelectTrigger className="w-32">
+                <Download className="h-4 w-4 ml-2" />
+                <SelectValue placeholder="تصدير" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="excel">Excel</SelectItem>
+                <SelectItem value="csv">CSV</SelectItem>
+                <SelectItem value="print">طباعة</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" className="gap-2">
               <Calendar className="h-4 w-4" />
               عرض التقويم
