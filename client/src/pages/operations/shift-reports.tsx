@@ -25,6 +25,7 @@ import {
   Filter,
   Loader2,
   AlertCircle,
+  Download,
 } from "lucide-react";
 
 interface Branch {
@@ -552,6 +553,24 @@ export default function ShiftReportsPage() {
                   <Camera className="h-5 w-5 text-amber-600" />
                   معاينة الصورة
                 </span>
+                {previewImage && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = previewImage;
+                      link.download = `صورة_${new Date().getTime()}.png`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    تحميل الصورة
+                  </Button>
+                )}
               </DialogTitle>
             </DialogHeader>
             <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
