@@ -89,11 +89,39 @@ export default function BranchShiftsPage() {
   const [showHistory, setShowHistory] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [hasSignature, setHasSignature] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // تحديث الوقت كل ثانية
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const { data: branches = [] } = useQuery<any[]>({
     queryKey: ["/api/branches"],
+  });
+
+  // جلب موظفي الفرع المختار (مشرف، مدير، مدير صالة)
+  const { data: branchSupervisors = [] } = useQuery<any[]>({
+    queryKey: ["/api/users", selectedBranch, "supervisors"],
+    queryFn: async () => {
+      const res = await fetch(`/api/users?branchId=${selectedBranch}`);
+      if (!res.ok) return [];
+      const users = await res.json();
+      // فلترة الموظفين حسب الوظيفة
+      return users.filter((u: any) => 
+        u.jobTitle && (
+          u.jobTitle.includes("مشرف") || 
+          u.jobTitle.includes("مدير") || 
+          u.jobTitle.includes("supervisor") ||
+          u.jobTitle.includes("manager")
+        )
+      );
+    },
+    enabled: !!selectedBranch,
   });
 
   const { data: templates = [], isLoading: loadingTemplates } = useQuery<TemplateWithItems[]>({
@@ -157,6 +185,7 @@ export default function BranchShiftsPage() {
     onSuccess: () => {
       toast({ title: "تم حفظ التوقيع بنجاح" });
       setShowSignature(false);
+      setHasSignature(true);
     },
   });
 
@@ -321,6 +350,12 @@ export default function BranchShiftsPage() {
       return;
     }
 
+    if (!hasSignature) {
+      toast({ title: "التوقيع إلزامي - يرجى التوقيع قبل إكمال العملية", variant: "destructive" });
+      setShowSignature(true);
+      return;
+    }
+
     const responsesArray = Object.values(responses).map((r) => ({
       itemId: r.itemId,
       checklistType: activeTab,
@@ -463,13 +498,28 @@ export default function BranchShiftsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>اسم المشرف</Label>
-                  <Input
-                    value={supervisorName}
-                    onChange={(e) => setSupervisorName(e.target.value)}
-                    placeholder="أدخل اسم المشرف"
-                    data-testid="input-supervisor"
-                  />
+                  <Label>اسم المشرف / المدير</Label>
+                  {branchSupervisors.length > 0 ? (
+                    <Select value={supervisorName} onValueChange={setSupervisorName}>
+                      <SelectTrigger data-testid="select-supervisor">
+                        <SelectValue placeholder="اختر المشرف" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branchSupervisors.map((user: any) => (
+                          <SelectItem key={user.id} value={`${user.firstName} ${user.lastName}`}>
+                            {user.firstName} {user.lastName} - {user.jobTitle}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={supervisorName}
+                      onChange={(e) => setSupervisorName(e.target.value)}
+                      placeholder="أدخل اسم المشرف"
+                      data-testid="input-supervisor"
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>عدد الموظفين</Label>
@@ -496,6 +546,20 @@ export default function BranchShiftsPage() {
                 </TabsList>
               </Tabs>
 
+              {/* عرض الوقت الفعلي */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 text-center">
+                <p className="text-sm text-amber-700 mb-1">الوقت الفعلي للتسجيل</p>
+                <div className="flex items-center justify-center gap-2">
+                  <Clock className="h-6 w-6 text-amber-600" />
+                  <span className="text-3xl font-bold text-amber-800 font-mono">
+                    {currentTime.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  </span>
+                </div>
+                <p className="text-xs text-amber-600 mt-1">
+                  {currentTime.toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                </p>
+              </div>
+
               <Button
                 className="w-full gap-2 bg-green-600 hover:bg-green-700"
                 onClick={startShift}
@@ -521,9 +585,17 @@ export default function BranchShiftsPage() {
                       {activeTab === "opening" ? "فتح الفرع" : "إغلاق الفرع"}
                     </Badge>
                   </div>
-                  <div className="text-left">
-                    <p className="text-sm text-gray-500">نسبة الإكمال</p>
-                    <p className="text-2xl font-bold">{Math.round(progressPercentage)}%</p>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-amber-100 rounded-lg px-3 py-2 flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-amber-600" />
+                      <span className="font-mono font-bold text-amber-800">
+                        {currentTime.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm text-gray-500">نسبة الإكمال</p>
+                      <p className="text-2xl font-bold">{Math.round(progressPercentage)}%</p>
+                    </div>
                   </div>
                 </div>
                 <Progress value={progressPercentage} className="h-3" />
@@ -627,11 +699,35 @@ export default function BranchShiftsPage() {
                   </Button>
                 </div>
 
+                {/* مؤشر حالة التوقيع */}
+                <div className={`flex items-center gap-2 p-3 rounded-lg ${hasSignature ? 'bg-green-100 border border-green-300' : 'bg-red-50 border border-red-200'}`}>
+                  {hasSignature ? (
+                    <>
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <span className="text-green-700 font-medium">تم التوقيع بنجاح</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="h-5 w-5 text-red-500" />
+                      <span className="text-red-600 font-medium">التوقيع إلزامي - يرجى التوقيع قبل الإكمال</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mr-auto gap-1"
+                        onClick={() => setShowSignature(true)}
+                      >
+                        <PenTool className="h-4 w-4" />
+                        توقيع
+                      </Button>
+                    </>
+                  )}
+                </div>
+
                 <div className="flex gap-4">
                   <Button
                     className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
                     onClick={completeChecklist}
-                    disabled={progressPercentage < 100 || completeShiftMutation.isPending}
+                    disabled={progressPercentage < 100 || !hasSignature || completeShiftMutation.isPending}
                     data-testid="btn-complete-checklist"
                   >
                     <CheckCircle2 className="h-4 w-4" />
