@@ -5268,6 +5268,12 @@ export default function OperationsReportsDashboardPage() {
                       const printWindow = window.open('', '_blank');
                       if (!printWindow) return;
                       
+                      // حساب عدد الأيام في الفترة
+                      const startD = new Date(filters.startDate);
+                      const endD = new Date(filters.endDate);
+                      const daysDiff = Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                      const avgDaily = deliveryAppsStats.totalDelivery / (daysDiff || 1);
+                      
                       printWindow.document.write(`
                         <!DOCTYPE html>
                         <html dir="rtl" lang="ar">
@@ -5276,183 +5282,272 @@ export default function OperationsReportsDashboardPage() {
                           <title>تقرير مبيعات تطبيقات التوصيل</title>
                           <style>
                             @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                            @page { 
+                              size: A4 landscape; 
+                              margin: 10mm;
+                            }
                             * { margin: 0; padding: 0; box-sizing: border-box; }
                             body { 
                               font-family: 'Cairo', sans-serif; 
                               direction: rtl; 
-                              padding: 20px;
+                              padding: 15px;
                               background: white;
                               color: #333;
+                              font-size: 11px;
+                            }
+                            .report-container {
+                              max-width: 100%;
                             }
                             .header { 
-                              text-align: center; 
-                              margin-bottom: 30px;
+                              display: flex;
+                              justify-content: space-between;
+                              align-items: center;
+                              margin-bottom: 15px;
                               border-bottom: 3px solid #F59E0B;
-                              padding-bottom: 20px;
+                              padding-bottom: 10px;
                             }
+                            .header-right { text-align: right; }
+                            .header-center { text-align: center; flex: 1; }
+                            .header-left { text-align: left; }
                             .header h1 { 
                               color: #F59E0B; 
-                              font-size: 24px;
-                              margin-bottom: 10px;
+                              font-size: 20px;
+                              margin-bottom: 5px;
                             }
                             .header .subtitle {
                               color: #666;
-                              font-size: 14px;
+                              font-size: 12px;
+                            }
+                            .company-logo {
+                              font-size: 24px;
+                              font-weight: bold;
+                              color: #D97706;
+                            }
+                            .report-date {
+                              font-size: 10px;
+                              color: #666;
                             }
                             .meta-info {
-                              display: flex;
-                              justify-content: space-between;
-                              background: #FEF3C7;
-                              padding: 15px;
+                              display: grid;
+                              grid-template-columns: repeat(6, 1fr);
+                              gap: 10px;
+                              background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+                              padding: 12px;
                               border-radius: 8px;
-                              margin-bottom: 25px;
+                              margin-bottom: 15px;
+                              border: 1px solid #F59E0B;
                             }
                             .meta-item { text-align: center; }
-                            .meta-label { font-size: 12px; color: #92400E; }
-                            .meta-value { font-size: 16px; font-weight: bold; color: #D97706; }
+                            .meta-label { font-size: 9px; color: #92400E; font-weight: 600; }
+                            .meta-value { font-size: 12px; font-weight: bold; color: #D97706; }
+                            .two-columns {
+                              display: grid;
+                              grid-template-columns: 1fr 1.5fr;
+                              gap: 15px;
+                              margin-bottom: 15px;
+                            }
                             .kpi-grid {
                               display: grid;
-                              grid-template-columns: repeat(4, 1fr);
-                              gap: 15px;
-                              margin-bottom: 25px;
+                              grid-template-columns: repeat(2, 1fr);
+                              gap: 8px;
                             }
                             .kpi-card {
-                              background: #FFF7ED;
+                              background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
                               border: 1px solid #FDBA74;
-                              border-radius: 8px;
-                              padding: 15px;
+                              border-radius: 6px;
+                              padding: 10px;
                               text-align: center;
                             }
-                            .kpi-value { font-size: 20px; font-weight: bold; color: #EA580C; }
-                            .kpi-label { font-size: 12px; color: #9A3412; margin-top: 5px; }
+                            .kpi-value { font-size: 16px; font-weight: bold; color: #EA580C; }
+                            .kpi-label { font-size: 9px; color: #9A3412; margin-top: 3px; }
+                            .kpi-subtitle { font-size: 8px; color: #B45309; }
                             table {
                               width: 100%;
                               border-collapse: collapse;
-                              margin-bottom: 25px;
+                              font-size: 10px;
                             }
                             th, td {
                               border: 1px solid #E5E7EB;
-                              padding: 12px;
+                              padding: 6px 8px;
                               text-align: right;
                             }
                             th {
-                              background: #F59E0B;
+                              background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
                               color: white;
                               font-weight: 600;
+                              font-size: 9px;
                             }
                             tr:nth-child(even) { background: #FEF3C7; }
+                            tr:hover { background: #FDE68A; }
                             .section-title {
-                              font-size: 18px;
+                              font-size: 13px;
                               color: #D97706;
-                              margin: 25px 0 15px;
-                              padding-bottom: 8px;
+                              margin: 12px 0 8px;
+                              padding-bottom: 5px;
                               border-bottom: 2px solid #FED7AA;
+                              display: flex;
+                              align-items: center;
+                              gap: 8px;
                             }
                             .app-color { 
                               display: inline-block; 
-                              width: 12px; 
-                              height: 12px; 
+                              width: 10px; 
+                              height: 10px; 
                               border-radius: 50%; 
-                              margin-left: 8px;
+                              margin-left: 5px;
                               vertical-align: middle;
                             }
                             .percentage-bar {
                               background: #E5E7EB;
-                              border-radius: 4px;
-                              height: 8px;
+                              border-radius: 3px;
+                              height: 6px;
                               overflow: hidden;
+                              width: 80px;
+                              display: inline-block;
+                              vertical-align: middle;
                             }
                             .percentage-fill {
                               height: 100%;
-                              border-radius: 4px;
+                              border-radius: 3px;
+                            }
+                            .badge {
+                              background: #F59E0B;
+                              color: white;
+                              padding: 1px 4px;
+                              border-radius: 3px;
+                              font-size: 8px;
+                              margin-right: 3px;
                             }
                             .footer {
-                              margin-top: 30px;
-                              text-align: center;
-                              font-size: 12px;
+                              margin-top: 15px;
+                              display: flex;
+                              justify-content: space-between;
+                              align-items: center;
+                              font-size: 9px;
                               color: #9CA3AF;
                               border-top: 1px solid #E5E7EB;
-                              padding-top: 15px;
+                              padding-top: 8px;
+                            }
+                            .watermark {
+                              position: fixed;
+                              bottom: 50%;
+                              right: 50%;
+                              transform: translate(50%, 50%) rotate(-45deg);
+                              font-size: 80px;
+                              color: rgba(249, 115, 22, 0.05);
+                              font-weight: bold;
+                              z-index: -1;
                             }
                             @media print {
-                              body { padding: 10px; }
+                              body { padding: 5px; }
                               .no-print { display: none; }
+                              .watermark { display: none; }
                             }
                           </style>
                         </head>
                         <body>
-                          <div class="header">
-                            <h1>🚗 تقرير مبيعات تطبيقات التوصيل</h1>
-                            <div class="subtitle">شركة الزبد الأفضل التجارية - باتر</div>
-                          </div>
-                          
-                          <div class="meta-info">
-                            <div class="meta-item">
-                              <div class="meta-label">الفرع</div>
-                              <div class="meta-value">${branchName}</div>
+                          <div class="watermark">BUTTER</div>
+                          <div class="report-container">
+                            <div class="header">
+                              <div class="header-right">
+                                <div class="company-logo">🧈 باتر</div>
+                                <div class="report-date">شركة الزبد الأفضل التجارية</div>
+                              </div>
+                              <div class="header-center">
+                                <h1>تقرير مبيعات تطبيقات التوصيل</h1>
+                                <div class="subtitle">Delivery Apps Sales Report</div>
+                              </div>
+                              <div class="header-left">
+                                <div class="report-date">تاريخ الطباعة</div>
+                                <div style="font-weight: bold; color: #D97706;">${new Date().toLocaleDateString('ar-SA')}</div>
+                                <div style="font-size: 9px; color: #888;">${new Date().toLocaleTimeString('ar-SA')}</div>
+                              </div>
                             </div>
-                            <div class="meta-item">
-                              <div class="meta-label">من تاريخ</div>
-                              <div class="meta-value">${filters.startDate}</div>
+                            
+                            <div class="meta-info">
+                              <div class="meta-item">
+                                <div class="meta-label">الفرع</div>
+                                <div class="meta-value">${branchName}</div>
+                              </div>
+                              <div class="meta-item">
+                                <div class="meta-label">من تاريخ</div>
+                                <div class="meta-value">${filters.startDate}</div>
+                              </div>
+                              <div class="meta-item">
+                                <div class="meta-label">إلى تاريخ</div>
+                                <div class="meta-value">${filters.endDate}</div>
+                              </div>
+                              <div class="meta-item">
+                                <div class="meta-label">عدد الأيام</div>
+                                <div class="meta-value">${daysDiff} يوم</div>
+                              </div>
+                              <div class="meta-item">
+                                <div class="meta-label">إجمالي المبيعات</div>
+                                <div class="meta-value">${formatCurrency(deliveryAppsStats.totalDelivery)}</div>
+                              </div>
+                              <div class="meta-item">
+                                <div class="meta-label">المعدل اليومي</div>
+                                <div class="meta-value">${formatCurrency(avgDaily)}</div>
+                              </div>
                             </div>
-                            <div class="meta-item">
-                              <div class="meta-label">إلى تاريخ</div>
-                              <div class="meta-value">${filters.endDate}</div>
+                            
+                            <div class="two-columns">
+                              <div>
+                                <h3 class="section-title">📊 ملخص الأداء</h3>
+                                <div class="kpi-grid">
+                                  <div class="kpi-card">
+                                    <div class="kpi-value">${formatCurrency(deliveryAppsStats.totalDelivery)}</div>
+                                    <div class="kpi-label">إجمالي مبيعات التطبيقات</div>
+                                  </div>
+                                  <div class="kpi-card">
+                                    <div class="kpi-value">${deliveryAppsStats.topApp?.label || '-'}</div>
+                                    <div class="kpi-label">التطبيق الأعلى مبيعاً</div>
+                                    <div class="kpi-subtitle">${deliveryAppsStats.topApp ? formatCurrency(deliveryAppsStats.topApp.totalSales) : ''}</div>
+                                  </div>
+                                  <div class="kpi-card">
+                                    <div class="kpi-value">${deliveryAppsStats.apps.filter(a => a.totalSales > 0).length} / ${DELIVERY_APPS.length}</div>
+                                    <div class="kpi-label">التطبيقات النشطة</div>
+                                  </div>
+                                  <div class="kpi-card">
+                                    <div class="kpi-value">${deliveryAppsStats.topBranch?.branchName || '-'}</div>
+                                    <div class="kpi-label">الفرع الأعلى توصيل</div>
+                                    <div class="kpi-subtitle">${deliveryAppsStats.topBranch ? formatCurrency(deliveryAppsStats.topBranch.totalDelivery) : ''}</div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <h3 class="section-title">📱 تفاصيل مبيعات التطبيقات</h3>
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      <th style="width: 25%;">التطبيق</th>
+                                      <th style="width: 25%;">إجمالي المبيعات</th>
+                                      <th style="width: 35%;">النسبة</th>
+                                      <th style="width: 15%;">الترتيب</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    ${deliveryAppsStats.apps.map((app, index) => `
+                                      <tr>
+                                        <td>
+                                          <span class="app-color" style="background: ${app.color}"></span>
+                                          ${app.label}
+                                        </td>
+                                        <td style="color: ${app.color}; font-weight: bold;">${formatCurrency(app.totalSales)}</td>
+                                        <td>
+                                          <div class="percentage-bar">
+                                            <div class="percentage-fill" style="width: ${app.percentage}%; background: ${app.color};"></div>
+                                          </div>
+                                          <span style="margin-right: 5px;">${app.percentage.toFixed(1)}%</span>
+                                        </td>
+                                        <td style="text-align: center;">${app.totalSales > 0 ? '<span class="badge">#' + (index + 1) + '</span>' : '-'}</td>
+                                      </tr>
+                                    `).join('')}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
-                            <div class="meta-item">
-                              <div class="meta-label">تاريخ التقرير</div>
-                              <div class="meta-value">${new Date().toLocaleDateString('ar-SA')}</div>
-                            </div>
-                          </div>
-                          
-                          <div class="kpi-grid">
-                            <div class="kpi-card">
-                              <div class="kpi-value">${formatCurrency(deliveryAppsStats.totalDelivery)}</div>
-                              <div class="kpi-label">إجمالي مبيعات التطبيقات</div>
-                            </div>
-                            <div class="kpi-card">
-                              <div class="kpi-value">${deliveryAppsStats.topApp?.label || '-'}</div>
-                              <div class="kpi-label">التطبيق الأعلى مبيعاً</div>
-                            </div>
-                            <div class="kpi-card">
-                              <div class="kpi-value">${deliveryAppsStats.apps.filter(a => a.totalSales > 0).length}</div>
-                              <div class="kpi-label">عدد التطبيقات النشطة</div>
-                            </div>
-                            <div class="kpi-card">
-                              <div class="kpi-value">${deliveryAppsStats.topBranch?.branchName || '-'}</div>
-                              <div class="kpi-label">الفرع الأعلى توصيل</div>
-                            </div>
-                          </div>
-                          
-                          <h3 class="section-title">📊 تفاصيل مبيعات كل تطبيق</h3>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>التطبيق</th>
-                                <th>إجمالي المبيعات</th>
-                                <th>النسبة</th>
-                                <th>الترتيب</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              ${deliveryAppsStats.apps.map((app, index) => `
-                                <tr>
-                                  <td>
-                                    <span class="app-color" style="background: ${app.color}"></span>
-                                    ${app.label}
-                                  </td>
-                                  <td style="color: ${app.color}; font-weight: bold;">${formatCurrency(app.totalSales)}</td>
-                                  <td>
-                                    <div class="percentage-bar">
-                                      <div class="percentage-fill" style="width: ${app.percentage}%; background: ${app.color};"></div>
-                                    </div>
-                                    <span style="font-size: 12px;">${app.percentage.toFixed(1)}%</span>
-                                  </td>
-                                  <td>${app.totalSales > 0 ? '#' + (index + 1) : '-'}</td>
-                                </tr>
-                              `).join('')}
-                            </tbody>
-                          </table>
                           
                           ${deliveryAppsStats.branches.length > 0 ? `
                             <h3 class="section-title">🏢 مبيعات التطبيقات حسب الفرع</h3>
@@ -5461,18 +5556,20 @@ export default function OperationsReportsDashboardPage() {
                                 <tr>
                                   <th>الفرع</th>
                                   <th>إجمالي التوصيل</th>
-                                  ${DELIVERY_APPS.slice(0, 5).map(app => `<th style="color: ${app.color};">${app.label}</th>`).join('')}
+                                  <th>النسبة من الإجمالي</th>
+                                  ${DELIVERY_APPS.map(app => `<th><span class="app-color" style="background: ${app.color}"></span>${app.label}</th>`).join('')}
                                 </tr>
                               </thead>
                               <tbody>
                                 ${deliveryAppsStats.branches.map((branch, index) => `
                                   <tr>
                                     <td>
+                                      ${index === 0 ? '<span class="badge">الأعلى</span>' : ''}
                                       ${branch.branchName}
-                                      ${index === 0 ? '<span style="background: #F59E0B; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 5px;">الأعلى</span>' : ''}
                                     </td>
                                     <td style="color: #EA580C; font-weight: bold;">${formatCurrency(branch.totalDelivery)}</td>
-                                    ${DELIVERY_APPS.slice(0, 5).map(app => `
+                                    <td>${deliveryAppsStats.totalDelivery > 0 ? ((branch.totalDelivery / deliveryAppsStats.totalDelivery) * 100).toFixed(1) : 0}%</td>
+                                    ${DELIVERY_APPS.map(app => `
                                       <td style="color: ${app.color};">${formatCurrency(branch.apps[app.key] || 0)}</td>
                                     `).join('')}
                                   </tr>

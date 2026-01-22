@@ -3591,19 +3591,19 @@ export async function registerRoutes(
         return res.json([]);
       }
       
-      // Fetch all payment breakdowns for these journals
-      const allBreakdowns: any[] = [];
-      for (const journalId of journalIds) {
+      // Fetch all payment breakdowns in parallel for better performance
+      const breakdownPromises = journalIds.map(async (journalId) => {
         const breakdowns = await storage.getPaymentBreakdowns(journalId);
         const journal = journals.find(j => j.id === journalId);
-        breakdowns.forEach(b => {
-          allBreakdowns.push({
-            ...b,
-            branchId: journal?.branchId,
-            journalDate: journal?.journalDate,
-          });
-        });
-      }
+        return breakdowns.map(b => ({
+          ...b,
+          branchId: journal?.branchId,
+          journalDate: journal?.journalDate,
+        }));
+      });
+      
+      const breakdownsArrays = await Promise.all(breakdownPromises);
+      const allBreakdowns = breakdownsArrays.flat();
       
       res.json(allBreakdowns);
     } catch (error) {
