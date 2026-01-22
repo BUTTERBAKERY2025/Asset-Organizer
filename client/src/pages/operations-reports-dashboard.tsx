@@ -761,7 +761,20 @@ export default function OperationsReportsDashboardPage() {
 
   const { data: cashierJournals, isLoading: cashierJournalsLoading } = useQuery<CashierSalesJournal[]>({
     queryKey: [`/api/cashier-journals?${cashierQueryString}`],
-    enabled: activeTab === 'cashier' || activeTab === 'overview' || activeTab === 'returns' || activeTab === 'discrepancies',
+    enabled: activeTab === 'cashier' || activeTab === 'overview' || activeTab === 'returns' || activeTab === 'discrepancies' || activeTab === 'apps',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Query for payment breakdowns for apps report
+  const paymentBreakdownsQueryString = new URLSearchParams({
+    ...(filters.branchId && { branchId: filters.branchId }),
+    ...(filters.startDate && { startDate: filters.startDate }),
+    ...(filters.endDate && { endDate: filters.endDate }),
+  }).toString();
+
+  const { data: allPaymentBreakdowns } = useQuery<{ paymentMethod: string; amount: number; transactionCount: number; branchId: string; journalDate: string }[]>({
+    queryKey: [`/api/cashier-payment-breakdowns?${paymentBreakdownsQueryString}`],
+    enabled: activeTab === 'apps' || filters.reportType === 'apps',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -1553,34 +1566,36 @@ export default function OperationsReportsDashboardPage() {
       appStats[app.key] = { totalSales: 0, orderCount: 0, branches: {} };
     });
     
-    // حساب مبيعات كل تطبيق من يوميات الكاشير
-    filteredCashierJournals.forEach(journal => {
-      const branchId = journal.branchId;
-      if (!branchAppStats[branchId]) branchAppStats[branchId] = {};
-      
-      // جلب تفاصيل الدفع من PaymentBreakdowns
-      if ((journal as any).paymentBreakdowns) {
-        (journal as any).paymentBreakdowns.forEach((pb: any) => {
-          const method = pb.paymentMethod;
-          if (DELIVERY_APPS.some(app => app.key === method)) {
-            if (!appStats[method]) {
-              appStats[method] = { totalSales: 0, orderCount: 0, branches: {} };
-            }
-            appStats[method].totalSales += (pb.amount || 0);
-            appStats[method].orderCount += (pb.transactionCount || 1);
-            appStats[method].branches[branchId] = (appStats[method].branches[branchId] || 0) + (pb.amount || 0);
-            branchAppStats[branchId][method] = (branchAppStats[branchId][method] || 0) + (pb.amount || 0);
+    // حساب مبيعات كل تطبيق من allPaymentBreakdowns
+    if (allPaymentBreakdowns && allPaymentBreakdowns.length > 0) {
+      allPaymentBreakdowns.forEach(pb => {
+        const method = pb.paymentMethod;
+        const branchId = pb.branchId;
+        
+        if (DELIVERY_APPS.some(app => app.key === method)) {
+          if (!appStats[method]) {
+            appStats[method] = { totalSales: 0, orderCount: 0, branches: {} };
           }
-        });
-      }
-    });
+          const amount = parseFloat(String(pb.amount)) || 0;
+          appStats[method].totalSales += amount;
+          appStats[method].orderCount += (pb.transactionCount || 1);
+          appStats[method].branches[branchId] = (appStats[method].branches[branchId] || 0) + amount;
+          
+          if (!branchAppStats[branchId]) branchAppStats[branchId] = {};
+          branchAppStats[branchId][method] = (branchAppStats[branchId][method] || 0) + amount;
+        }
+      });
+    }
+    
+    // حساب إجمالي التوصيل
+    const totalDeliveryAmount = DELIVERY_APPS.reduce((sum, app) => sum + appStats[app.key].totalSales, 0);
     
     // تحويل إلى مصفوفة مرتبة
     const sortedApps = DELIVERY_APPS.map(app => ({
       ...app,
       ...appStats[app.key],
-      percentage: paymentCategoryStats.delivery > 0 
-        ? (appStats[app.key].totalSales / paymentCategoryStats.delivery) * 100 
+      percentage: totalDeliveryAmount > 0 
+        ? (appStats[app.key].totalSales / totalDeliveryAmount) * 100 
         : 0,
     })).sort((a, b) => b.totalSales - a.totalSales);
     
@@ -1592,14 +1607,17 @@ export default function OperationsReportsDashboardPage() {
       apps,
     })).sort((a, b) => b.totalDelivery - a.totalDelivery);
     
+    // استخدم إما البيانات المحسوبة أو من paymentCategoryStats
+    const finalTotalDelivery = totalDeliveryAmount > 0 ? totalDeliveryAmount : paymentCategoryStats.delivery;
+    
     return {
       apps: sortedApps,
       branches: branchStats,
-      totalDelivery: paymentCategoryStats.delivery,
-      topApp: sortedApps[0] || null,
+      totalDelivery: finalTotalDelivery,
+      topApp: sortedApps.find(a => a.totalSales > 0) || null,
       topBranch: branchStats[0] || null,
     };
-  }, [filteredCashierJournals, paymentCategoryStats.delivery, branches]);
+  }, [allPaymentBreakdowns, paymentCategoryStats.delivery, branches]);
 
   const getVisibleTabs = () => {
     switch (filters.reportType) {

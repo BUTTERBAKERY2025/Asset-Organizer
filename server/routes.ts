@@ -3556,6 +3556,62 @@ export async function registerRoutes(
     }
   });
 
+  // Get all payment breakdowns for journals in a date range (for reports)
+  app.get("/api/cashier-payment-breakdowns", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+    try {
+      const { branchId, startDate, endDate } = req.query;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      // Get all journals first with date filter
+      let journals = await storage.getAllCashierJournals();
+      
+      // Apply branch filter
+      if (!isUserAdmin(req)) {
+        if (!mandatoryBranch) {
+          return res.json([]);
+        }
+        journals = journals.filter(j => j.branchId === mandatoryBranch);
+      } else if (branchId && typeof branchId === 'string') {
+        journals = journals.filter(j => j.branchId === branchId);
+      }
+      
+      // Apply date filter
+      if (startDate && typeof startDate === 'string') {
+        journals = journals.filter(j => j.journalDate && j.journalDate >= startDate);
+      }
+      if (endDate && typeof endDate === 'string') {
+        journals = journals.filter(j => j.journalDate && j.journalDate <= endDate);
+      }
+      
+      // Get payment breakdowns for all matching journals
+      const journalIds = journals.map(j => j.id);
+      if (journalIds.length === 0) {
+        return res.json([]);
+      }
+      
+      // Fetch all payment breakdowns for these journals
+      const allBreakdowns: any[] = [];
+      for (const journalId of journalIds) {
+        const breakdowns = await storage.getPaymentBreakdowns(journalId);
+        const journal = journals.find(j => j.id === journalId);
+        breakdowns.forEach(b => {
+          allBreakdowns.push({
+            ...b,
+            branchId: journal?.branchId,
+            journalDate: journal?.journalDate,
+          });
+        });
+      }
+      
+      res.json(allBreakdowns);
+    } catch (error) {
+      console.error("Error fetching payment breakdowns:", error);
+      res.status(500).json({ error: "Failed to fetch payment breakdowns" });
+    }
+  });
+
   // Journal Attachments - Get attachments for a journal
   app.get("/api/cashier-journals/:id/attachments", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
