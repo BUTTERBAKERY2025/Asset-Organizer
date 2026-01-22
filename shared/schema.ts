@@ -7575,6 +7575,11 @@ export const branchShifts = pgTable("branch_shifts", {
   closingCompleted: boolean("closing_completed").default(false),
   openingCompletedAt: timestamp("opening_completed_at"),
   closingCompletedAt: timestamp("closing_completed_at"),
+  // حقول الموقع الجغرافي GPS
+  openingGpsLatitude: numeric("opening_gps_latitude", { precision: 10, scale: 7 }),
+  openingGpsLongitude: numeric("opening_gps_longitude", { precision: 10, scale: 7 }),
+  closingGpsLatitude: numeric("closing_gps_latitude", { precision: 10, scale: 7 }),
+  closingGpsLongitude: numeric("closing_gps_longitude", { precision: 10, scale: 7 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -7698,3 +7703,86 @@ export const insertDailyWasteLogSchema = createInsertSchema(dailyWasteLog).omit(
 
 export type DailyWasteLog = typeof dailyWasteLog.$inferSelect;
 export type InsertDailyWasteLog = z.infer<typeof insertDailyWasteLogSchema>;
+
+// سجل تدقيق الشفتات - Shift Audit Log
+export const shiftAuditLog = pgTable("shift_audit_log", {
+  id: serial("id").primaryKey(),
+  shiftId: integer("shift_id").notNull().references(() => branchShifts.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // create, update, complete_opening, complete_closing, add_photo, add_signature
+  fieldName: text("field_name"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  gpsLatitude: numeric("gps_latitude", { precision: 10, scale: 7 }),
+  gpsLongitude: numeric("gps_longitude", { precision: 10, scale: 7 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_audit_shift").on(table.shiftId),
+  index("idx_shift_audit_action").on(table.action),
+  index("idx_shift_audit_date").on(table.createdAt),
+]);
+
+export const insertShiftAuditLogSchema = createInsertSchema(shiftAuditLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftAuditLog = typeof shiftAuditLog.$inferSelect;
+export type InsertShiftAuditLog = z.infer<typeof insertShiftAuditLogSchema>;
+
+// بنود قوائم التحقق المخصصة للفروع - Branch Custom Checklist Items
+export const branchCustomChecklistItems = pgTable("branch_custom_checklist_items", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  templateId: integer("template_id").notNull().references(() => checklistTemplates.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  description: text("description"),
+  displayOrder: integer("display_order").default(100),
+  requiresPhoto: boolean("requires_photo").default(false),
+  requiresNote: boolean("requires_note").default(false),
+  isCritical: boolean("is_critical").default(false),
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_custom_items_branch").on(table.branchId),
+  index("idx_branch_custom_items_template").on(table.templateId),
+]);
+
+export const insertBranchCustomChecklistItemSchema = createInsertSchema(branchCustomChecklistItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BranchCustomChecklistItem = typeof branchCustomChecklistItems.$inferSelect;
+export type InsertBranchCustomChecklistItem = z.infer<typeof insertBranchCustomChecklistItemSchema>;
+
+// تذكيرات الشفتات - Shift Reminders
+export const shiftReminders = pgTable("shift_reminders", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  reminderType: text("reminder_type").notNull(), // opening_not_started, opening_incomplete, closing_not_started, closing_incomplete
+  shiftDate: date("shift_date").notNull(),
+  shiftType: text("shift_type").notNull(),
+  reminderTime: timestamp("reminder_time").notNull(),
+  isSent: boolean("is_sent").default(false),
+  sentAt: timestamp("sent_at"),
+  notificationChannels: text("notification_channels").array().default(["system"]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shift_reminders_branch").on(table.branchId),
+  index("idx_shift_reminders_date").on(table.shiftDate),
+  index("idx_shift_reminders_sent").on(table.isSent),
+]);
+
+export const insertShiftReminderSchema = createInsertSchema(shiftReminders).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShiftReminder = typeof shiftReminders.$inferSelect;
+export type InsertShiftReminder = z.infer<typeof insertShiftReminderSchema>;

@@ -76,6 +76,66 @@ const categoryIcons: Record<string, any> = {
   report: FileText,
 };
 
+// دالة تشغيل الصوت
+const playNotificationSound = (type: "success" | "warning" | "error") => {
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  
+  if (type === "success") {
+    oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+    oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+    oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2); // G5
+  } else if (type === "warning") {
+    oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4
+    oscillator.frequency.setValueAtTime(349.23, audioContext.currentTime + 0.15); // F4
+  } else {
+    oscillator.frequency.setValueAtTime(261.63, audioContext.currentTime); // C4
+  }
+  
+  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+  
+  oscillator.start(audioContext.currentTime);
+  oscillator.stop(audioContext.currentTime + 0.5);
+};
+
+// دالة حفظ البيانات محلياً (Offline)
+const saveToLocalStorage = (key: string, data: any) => {
+  try {
+    localStorage.setItem(`butter_shift_${key}`, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (e) {
+    console.error("Failed to save to localStorage:", e);
+  }
+};
+
+const getFromLocalStorage = (key: string) => {
+  try {
+    const item = localStorage.getItem(`butter_shift_${key}`);
+    if (item) {
+      const parsed = JSON.parse(item);
+      // صالح لمدة 24 ساعة
+      if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+        return parsed.data;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to get from localStorage:", e);
+  }
+  return null;
+};
+
+const clearLocalStorage = (key: string) => {
+  try {
+    localStorage.removeItem(`butter_shift_${key}`);
+  } catch (e) {
+    console.error("Failed to clear localStorage:", e);
+  }
+};
+
 export default function BranchShiftsPage() {
   const [activeTab, setActiveTab] = useState<"opening" | "closing">("opening");
   const [selectedBranch, setSelectedBranch] = useState<string>("");
@@ -91,8 +151,80 @@ export default function BranchShiftsPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [hasSignature, setHasSignature] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsError, setGpsError] = useState<string>("");
+  const [pendingSync, setPendingSync] = useState<any[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // مراقبة حالة الاتصال
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      toast({ title: "تم استعادة الاتصال بالإنترنت", variant: "default" });
+      syncPendingData();
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+      toast({ title: "أنت الآن في وضع عدم الاتصال", description: "سيتم حفظ البيانات محلياً", variant: "destructive" });
+    };
+    
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // جلب الموقع الجغرافي
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setGpsLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          setGpsError("");
+        },
+        (error) => {
+          setGpsError("تعذر تحديد الموقع الجغرافي");
+          console.error("GPS Error:", error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+  }, []);
+
+  // مزامنة البيانات المعلقة عند استعادة الاتصال
+  const syncPendingData = async () => {
+    const pendingData = getFromLocalStorage("pending_shifts");
+    if (pendingData && pendingData.length > 0) {
+      for (const item of pendingData) {
+        try {
+          await fetch(item.url, {
+            method: item.method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(item.data),
+          });
+        } catch (e) {
+          console.error("Failed to sync pending data:", e);
+        }
+      }
+      clearLocalStorage("pending_shifts");
+      toast({ title: "تم مزامنة البيانات المعلقة بنجاح" });
+    }
+  };
+
+  // حفظ الاستجابات محلياً عند التغيير
+  useEffect(() => {
+    if (currentShift && Object.keys(responses).length > 0) {
+      saveToLocalStorage(`shift_${currentShift.id}_responses`, responses);
+    }
+  }, [responses, currentShift]);
 
   // تحديث الوقت كل ثانية
   useEffect(() => {
@@ -232,19 +364,64 @@ export default function BranchShiftsPage() {
 
   const completeShiftMutation = useMutation({
     mutationFn: async (data: any) => {
+      // إضافة الموقع الجغرافي للبيانات
+      const dataWithLocation = {
+        ...data,
+        gpsLatitude: gpsLocation?.lat,
+        gpsLongitude: gpsLocation?.lng,
+      };
+      
       const res = await fetch(`/api/branch-shifts/${currentShift?.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(dataWithLocation),
       });
       if (!res.ok) throw new Error("Failed to complete shift");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // تشغيل صوت النجاح
+      playNotificationSound("success");
+      
+      // إرسال إشعار للإدارة
+      try {
+        const branchName = branches.find((b: any) => b.id === currentShift?.branchId)?.name || currentShift?.branchId;
+        await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: activeTab === "opening" ? "تم فتح فرع" : "تم إغلاق فرع",
+            message: `${activeTab === "opening" ? "تم إكمال إجراءات الفتح" : "تم إكمال إجراءات الإغلاق"} لفرع ${branchName} بواسطة ${supervisorName}`,
+            type: "shift_completion",
+            priority: "normal",
+            targetRole: "admin",
+            metadata: {
+              branchId: currentShift?.branchId,
+              shiftType: currentShift?.shiftType,
+              completionType: activeTab,
+              supervisorName,
+              gpsLocation,
+            },
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to send notification:", e);
+      }
+      
+      // مسح البيانات المحفوظة محلياً
+      if (currentShift) {
+        clearLocalStorage(`shift_${currentShift.id}_responses`);
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts"] });
-      toast({ title: activeTab === "opening" ? "تم إكمال إجراءات الفتح" : "تم إكمال إجراءات الإغلاق" });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts/dashboard/today"] });
+      toast({ 
+        title: activeTab === "opening" ? "تم إكمال إجراءات الفتح بنجاح ✓" : "تم إكمال إجراءات الإغلاق بنجاح ✓",
+        description: "تم إرسال إشعار للإدارة"
+      });
       setCurrentShift(null);
       setResponses({});
+      setHasSignature(false);
     },
   });
 
@@ -587,18 +764,61 @@ export default function BranchShiftsPage() {
                 </TabsList>
               </Tabs>
 
-              {/* عرض الوقت الفعلي */}
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 text-center">
-                <p className="text-sm text-amber-700 mb-1">الوقت الفعلي للتسجيل</p>
-                <div className="flex items-center justify-center gap-2">
-                  <Clock className="h-6 w-6 text-amber-600" />
-                  <span className="text-3xl font-bold text-amber-800 font-mono" dir="ltr">
-                    {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
-                  </span>
+              {/* عرض الوقت الفعلي وحالة الاتصال والموقع */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* الوقت الفعلي */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 text-center">
+                  <p className="text-sm text-amber-700 mb-1">الوقت الفعلي للتسجيل</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Clock className="h-6 w-6 text-amber-600" />
+                    <span className="text-2xl font-bold text-amber-800 font-mono" dir="ltr">
+                      {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-600 mt-1" dir="ltr">
+                    {currentTime.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  </p>
                 </div>
-                <p className="text-xs text-amber-600 mt-1" dir="ltr">
-                  {currentTime.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-                </p>
+
+                {/* حالة الاتصال */}
+                <div className={`border rounded-lg p-4 text-center ${isOffline ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+                  <p className={`text-sm mb-1 ${isOffline ? "text-red-700" : "text-green-700"}`}>حالة الاتصال</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${isOffline ? "bg-red-500 animate-pulse" : "bg-green-500"}`}></div>
+                    <span className={`text-lg font-bold ${isOffline ? "text-red-800" : "text-green-800"}`}>
+                      {isOffline ? "غير متصل" : "متصل"}
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 ${isOffline ? "text-red-600" : "text-green-600"}`}>
+                    {isOffline ? "سيتم حفظ البيانات محلياً" : "البيانات محفوظة على السيرفر"}
+                  </p>
+                </div>
+
+                {/* الموقع الجغرافي */}
+                <div className={`border rounded-lg p-4 text-center ${gpsLocation ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}>
+                  <p className={`text-sm mb-1 ${gpsLocation ? "text-blue-700" : "text-gray-500"}`}>الموقع الجغرافي</p>
+                  <div className="flex items-center justify-center gap-2">
+                    {gpsLocation ? (
+                      <>
+                        <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="text-sm font-bold text-blue-800">تم التحديد ✓</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="h-5 w-5 text-gray-400" />
+                        <span className="text-sm text-gray-500">{gpsError || "جاري التحديد..."}</span>
+                      </>
+                    )}
+                  </div>
+                  {gpsLocation && (
+                    <p className="text-xs text-blue-600 mt-1 font-mono" dir="ltr">
+                      {gpsLocation.lat.toFixed(4)}, {gpsLocation.lng.toFixed(4)}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <Button
