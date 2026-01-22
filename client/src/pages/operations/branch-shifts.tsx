@@ -127,6 +127,29 @@ export default function BranchShiftsPage() {
     setSupervisorName("");
   }, [selectedBranch]);
 
+  // جلب عدد الموظفين من جدول الورديات تلقائياً
+  const todayDate = new Date().toISOString().split('T')[0];
+  const { data: shiftEmployeeCountData } = useQuery<{ count: number }>({
+    queryKey: ["/api/shifts/employee-count", selectedBranch, todayDate, selectedShiftType],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/shifts/employee-count?branchId=${selectedBranch}&date=${todayDate}&shiftType=${selectedShiftType}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) return { count: 0 };
+      return res.json();
+    },
+    enabled: !!selectedBranch,
+    staleTime: 0,
+  });
+
+  // تحديث عدد الموظفين تلقائياً عند تغيير الفرع أو الشفت
+  useEffect(() => {
+    if (shiftEmployeeCountData?.count && shiftEmployeeCountData.count > 0) {
+      setEmployeeCount(shiftEmployeeCountData.count);
+    }
+  }, [shiftEmployeeCountData]);
+
   // فلترة المشرفين والمدراء من موظفي الفرع
   const branchSupervisors = branchEmployees.filter((u: any) => 
     u.jobTitle && (

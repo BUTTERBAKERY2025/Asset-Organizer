@@ -6,6 +6,7 @@ import { db } from "./db";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
+import { shifts as shiftsTable } from "@shared/schema";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -2552,6 +2553,68 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting shift employee:", error);
       res.status(500).json({ error: "Failed to delete shift employee" });
+    }
+  });
+
+  // Get employee count for a shift by branch, date, and shift type
+  app.get("/api/shifts/employee-count", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, date, shiftType } = req.query;
+      if (!branchId || !date) {
+        return res.json({ count: 0 });
+      }
+      
+      // Map shift type to shift name patterns
+      const shiftNamePatterns: Record<string, string[]> = {
+        morning: ["صباحي", "morning", "صباح"],
+        evening: ["مسائي", "evening", "مساء"],
+        night: ["ليلي", "night", "ليل"],
+      };
+      
+      const patterns = shiftNamePatterns[shiftType as string] || [];
+      
+      // Get shifts for today and branch
+      const shifts = await db.select()
+        .from(shiftsTable)
+        .where(
+          and(
+            eq(shiftsTable.branchId, branchId as string),
+            sql`${shiftsTable.date}::date = ${date}::date`
+          )
+        );
+      
+      // Filter by shift type if specified
+      let matchingShifts = shifts;
+      if (shiftType && patterns.length > 0) {
+        matchingShifts = shifts.filter(s => 
+          patterns.some(p => s.name?.toLowerCase().includes(p.toLowerCase()))
+        );
+      }
+      
+      // If no matching shifts found, return 0
+      if (matchingShifts.length === 0) {
+        return res.json({ count: 0, shifts: [] });
+      }
+      
+      // Count employees in matching shifts
+      let totalCount = 0;
+      for (const shift of matchingShifts) {
+        const employees = await storage.getShiftEmployees(shift.id);
+        totalCount += employees.length;
+      }
+      
+      // If no employees found, use shift's employee_count field
+      if (totalCount === 0) {
+        totalCount = matchingShifts.reduce((sum, s) => sum + (s.employeeCount || 0), 0);
+      }
+      
+      res.json({ 
+        count: totalCount,
+        shifts: matchingShifts.map(s => ({ id: s.id, name: s.name, employeeCount: s.employeeCount }))
+      });
+    } catch (error) {
+      console.error("Error getting shift employee count:", error);
+      res.status(500).json({ error: "Failed to get employee count" });
     }
   });
 
