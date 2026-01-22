@@ -108,16 +108,24 @@ export default function BranchShiftsPage() {
 
   // جلب موظفي الفرع المختار
   const { data: branchEmployees = [] } = useQuery<any[]>({
-    queryKey: ["/api/users", selectedBranch, "employees"],
+    queryKey: ["/api/users", "branch-employees", selectedBranch],
     queryFn: async () => {
-      const res = await fetch(`/api/users?branchId=${selectedBranch}`);
+      const res = await fetch(`/api/users?branchId=${selectedBranch}`, {
+        credentials: "include",
+      });
       if (!res.ok) return [];
       const users = await res.json();
       // فلترة الموظفين النشطين للفرع
       return users.filter((u: any) => u.branchId === selectedBranch && u.isActive !== "inactive");
     },
     enabled: !!selectedBranch,
+    staleTime: 0, // إعادة جلب البيانات عند كل تغيير
   });
+
+  // إعادة تعيين اسم المشرف عند تغيير الفرع
+  useEffect(() => {
+    setSupervisorName("");
+  }, [selectedBranch]);
 
   // فلترة المشرفين والمدراء من موظفي الفرع
   const branchSupervisors = branchEmployees.filter((u: any) => 
