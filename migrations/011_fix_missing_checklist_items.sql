@@ -8,7 +8,7 @@ SELECT t.id, item.title, item.title_en, item.display_order, item.requires_photo,
 FROM checklist_templates t
 CROSS JOIN (VALUES
     ('التأكد من جاهزية المخبوزات للعرض', 'Check bakery products ready for display', 1, true, true),
-    ('ترتيب فاترينة العرض', 'Arrange display cabinet', 2, true, false),
+    ('توفر وترتيب منتجات الباستري', 'Pastry products availability and arrangement', 2, true, false),
     ('التأكد من تواريخ الصلاحية', 'Check expiry dates', 3, false, true),
     ('تسعير المنتجات بشكل صحيح', 'Check product pricing', 4, false, true),
     ('جاهزية منتجات القهوة', 'Coffee products ready', 5, false, false),
@@ -70,6 +70,12 @@ CROSS JOIN (VALUES
 ) AS item(title, title_en, display_order, requires_photo, is_critical)
 WHERE t.name = 'جرد المنتجات' AND t.type = 'closing'
 ON CONFLICT DO NOTHING;
+
+-- ===== تحديث نص البند "ترتيب فاترينة العرض" =====
+UPDATE checklist_items 
+SET title = 'توفر وترتيب منتجات الباستري', 
+    title_en = 'Pastry products availability and arrangement'
+WHERE title = 'ترتيب فاترينة العرض';
 
 -- التحقق من النتائج
 SELECT ct.name, ct.type, COUNT(ci.id) as items_count

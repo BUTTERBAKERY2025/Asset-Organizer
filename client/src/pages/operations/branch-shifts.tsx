@@ -155,6 +155,7 @@ export default function BranchShiftsPage() {
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsError, setGpsError] = useState<string>("");
   const [pendingSync, setPendingSync] = useState<any[]>([]);
+  const [supervisorNotes, setSupervisorNotes] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -568,6 +569,22 @@ export default function BranchShiftsPage() {
       return;
     }
 
+    // التحقق من رفع الصور المطلوبة
+    const filteredTemplates = templates.filter((t) => t.type === activeTab);
+    const allItems = filteredTemplates.flatMap((t) => t.items);
+    const requiredPhotoItems = allItems.filter((item) => item.requiresPhoto);
+    const missingPhotos = requiredPhotoItems.filter((item) => !responses[item.id]?.photoUrl);
+    
+    if (missingPhotos.length > 0) {
+      toast({ 
+        title: "صور مطلوبة ناقصة", 
+        description: `يرجى التقاط صور لـ: ${missingPhotos.map(i => i.title).slice(0, 3).join('، ')}${missingPhotos.length > 3 ? '...' : ''}`,
+        variant: "destructive" 
+      });
+      playNotificationSound("error");
+      return;
+    }
+
     if (!hasSignature) {
       toast({ title: "التوقيع إلزامي - يرجى التوقيع قبل إكمال العملية", variant: "destructive" });
       setShowSignature(true);
@@ -583,12 +600,12 @@ export default function BranchShiftsPage() {
       status: r.status,
     }));
 
-    await saveResponseMutation.mutateAsync({ checklistType: activeTab, responses: responsesArray });
+    await saveResponseMutation.mutateAsync({ checklistType: activeTab, responses: responsesArray, supervisorNotes });
 
     completeShiftMutation.mutate(
       activeTab === "opening"
-        ? { openingCompleted: true, openingCompletedAt: new Date() }
-        : { closingCompleted: true, closingCompletedAt: new Date(), closingTime: new Date() }
+        ? { openingCompleted: true, openingCompletedAt: new Date(), supervisorNotes }
+        : { closingCompleted: true, closingCompletedAt: new Date(), closingTime: new Date(), supervisorNotes }
     );
   };
 
@@ -918,6 +935,7 @@ export default function BranchShiftsPage() {
                               <input
                                 type="file"
                                 accept="image/*"
+                                capture="environment"
                                 className="hidden"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
@@ -925,7 +943,7 @@ export default function BranchShiftsPage() {
                                 }}
                                 data-testid={`photo-input-${item.id}`}
                               />
-                              <div className={`p-1.5 rounded-md ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : "bg-amber-100 text-amber-600 hover:bg-amber-200"}`}>
+                              <div className={`p-1.5 rounded-md ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : item.requiresPhoto ? "bg-red-100 text-red-600 hover:bg-red-200 border border-red-300" : "bg-amber-100 text-amber-600 hover:bg-amber-200"}`}>
                                 <Camera className="h-5 w-5" />
                               </div>
                             </label>
@@ -946,6 +964,22 @@ export default function BranchShiftsPage() {
                 );
               })}
             </Accordion>
+
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-amber-600" />
+                  <span className="font-medium text-amber-800">ملاحظات المشرف / المدير</span>
+                </div>
+                <Textarea
+                  placeholder="أضف أي ملاحظات أو مشاكل أو اقتراحات هنا..."
+                  value={supervisorNotes}
+                  onChange={(e) => setSupervisorNotes(e.target.value)}
+                  className="min-h-[100px] bg-white border-amber-200 focus:border-amber-400"
+                  data-testid="textarea-supervisor-notes"
+                />
+              </CardContent>
+            </Card>
 
             <Card>
               <CardContent className="p-4 space-y-4">
@@ -1011,29 +1045,74 @@ export default function BranchShiftsPage() {
         )}
 
         <Dialog open={showSignature} onOpenChange={setShowSignature}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl w-[95vw]">
             <DialogHeader>
-              <DialogTitle>التوقيع الإلكتروني</DialogTitle>
+              <DialogTitle className="text-xl text-center">التوقيع الإلكتروني</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-2">
+              <p className="text-sm text-gray-500 text-center">وقّع بإصبعك أو القلم في المنطقة أدناه</p>
+              <div className="border-2 border-amber-400 rounded-xl p-3 bg-gradient-to-b from-amber-50 to-white shadow-inner">
                 <canvas
                   ref={canvasRef}
-                  width={400}
-                  height={200}
-                  className="w-full cursor-crosshair bg-white rounded"
+                  width={600}
+                  height={300}
+                  className="w-full cursor-crosshair bg-white rounded-lg border border-gray-200 touch-none"
+                  style={{ minHeight: '250px' }}
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
                   onMouseLeave={stopDrawing}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const canvas = canvasRef.current;
+                    if (canvas) {
+                      const rect = canvas.getBoundingClientRect();
+                      const scaleX = canvas.width / rect.width;
+                      const scaleY = canvas.height / rect.height;
+                      const x = (touch.clientX - rect.left) * scaleX;
+                      const y = (touch.clientY - rect.top) * scaleY;
+                      const ctx = canvas.getContext("2d");
+                      if (ctx) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        setIsDrawing(true);
+                      }
+                    }
+                  }}
+                  onTouchMove={(e) => {
+                    e.preventDefault();
+                    if (!isDrawing) return;
+                    const touch = e.touches[0];
+                    const canvas = canvasRef.current;
+                    if (canvas) {
+                      const rect = canvas.getBoundingClientRect();
+                      const scaleX = canvas.width / rect.width;
+                      const scaleY = canvas.height / rect.height;
+                      const x = (touch.clientX - rect.left) * scaleX;
+                      const y = (touch.clientY - rect.top) * scaleY;
+                      const ctx = canvas.getContext("2d");
+                      if (ctx) {
+                        ctx.lineWidth = 3;
+                        ctx.lineCap = "round";
+                        ctx.strokeStyle = "#1a1a2e";
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                      }
+                    }
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    setIsDrawing(false);
+                  }}
                   data-testid="canvas-signature"
                 />
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={clearSignature} className="flex-1" data-testid="btn-clear-signature">
-                  مسح
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={clearSignature} className="flex-1 h-12 text-lg" data-testid="btn-clear-signature">
+                  مسح التوقيع
                 </Button>
-                <Button onClick={saveSignature} className="flex-1 bg-green-600 hover:bg-green-700" data-testid="btn-save-signature">
+                <Button onClick={saveSignature} className="flex-1 h-12 text-lg bg-green-600 hover:bg-green-700" data-testid="btn-save-signature">
                   حفظ التوقيع
                 </Button>
               </div>
