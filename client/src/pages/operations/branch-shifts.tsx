@@ -106,25 +106,33 @@ export default function BranchShiftsPage() {
     retryDelay: 1000,
   });
 
-  // جلب موظفي الفرع المختار (مشرف، مدير، مدير صالة)
-  const { data: branchSupervisors = [] } = useQuery<any[]>({
-    queryKey: ["/api/users", selectedBranch, "supervisors"],
+  // جلب موظفي الفرع المختار
+  const { data: branchEmployees = [] } = useQuery<any[]>({
+    queryKey: ["/api/users", selectedBranch, "employees"],
     queryFn: async () => {
       const res = await fetch(`/api/users?branchId=${selectedBranch}`);
       if (!res.ok) return [];
       const users = await res.json();
-      // فلترة الموظفين حسب الوظيفة
-      return users.filter((u: any) => 
-        u.jobTitle && (
-          u.jobTitle.includes("مشرف") || 
-          u.jobTitle.includes("مدير") || 
-          u.jobTitle.includes("supervisor") ||
-          u.jobTitle.includes("manager")
-        )
-      );
+      // فلترة الموظفين النشطين للفرع
+      return users.filter((u: any) => u.branchId === selectedBranch && u.isActive !== "inactive");
     },
     enabled: !!selectedBranch,
   });
+
+  // فلترة المشرفين والمدراء من موظفي الفرع
+  const branchSupervisors = branchEmployees.filter((u: any) => 
+    u.jobTitle && (
+      u.jobTitle.includes("مشرف") || 
+      u.jobTitle.includes("مدير") || 
+      u.jobTitle.includes("supervisor") ||
+      u.jobTitle.includes("manager") ||
+      u.role === "admin" ||
+      u.role === "manager"
+    )
+  );
+
+  // إذا لم يوجد مشرفين، نعرض جميع موظفي الفرع
+  const supervisorOptions = branchSupervisors.length > 0 ? branchSupervisors : branchEmployees;
 
   const { data: templates = [], isLoading: loadingTemplates } = useQuery<TemplateWithItems[]>({
     queryKey: ["/api/branch-shifts/all-items", activeTab],
@@ -501,15 +509,15 @@ export default function BranchShiftsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>اسم المشرف / المدير</Label>
-                  {branchSupervisors.length > 0 ? (
+                  {supervisorOptions.length > 0 ? (
                     <Select value={supervisorName} onValueChange={setSupervisorName}>
                       <SelectTrigger data-testid="select-supervisor">
-                        <SelectValue placeholder="اختر المشرف" />
+                        <SelectValue placeholder="اختر المشرف أو المدير" />
                       </SelectTrigger>
                       <SelectContent>
-                        {branchSupervisors.map((user: any) => (
-                          <SelectItem key={user.id} value={`${user.firstName} ${user.lastName}`}>
-                            {user.firstName} {user.lastName} - {user.jobTitle}
+                        {supervisorOptions.map((user: any) => (
+                          <SelectItem key={user.id} value={`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username}>
+                            {user.firstName || ''} {user.lastName || ''} {user.jobTitle ? `- ${user.jobTitle}` : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>
