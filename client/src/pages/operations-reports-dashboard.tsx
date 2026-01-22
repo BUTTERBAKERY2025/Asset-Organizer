@@ -78,9 +78,20 @@ const REPORT_TYPES = [
   { value: "all", label: "جميع التقارير", icon: BarChart3 },
   { value: "cashier", label: "تقارير الكاشير", icon: Wallet },
   { value: "sales", label: "تقارير المبيعات", icon: DollarSign },
+  { value: "apps", label: "مبيعات التطبيقات", icon: Truck },
   { value: "shifts", label: "تقارير الورديات", icon: Clock },
   { value: "production", label: "تقارير الإنتاج", icon: Factory },
   { value: "quality", label: "تقارير الجودة", icon: CheckCircle },
+];
+
+const DELIVERY_APPS = [
+  { key: "hunger_station", label: "هنقرستيشن", color: "#FF5A00" },
+  { key: "toyou", label: "ToYou", color: "#00B4D8" },
+  { key: "jahez", label: "جاهز", color: "#6366F1" },
+  { key: "marsool", label: "مرسول", color: "#10B981" },
+  { key: "keeta", label: "كيتا", color: "#F59E0B" },
+  { key: "the_chefs", label: "ذا شيفز", color: "#EC4899" },
+  { key: "talabat", label: "طلبات", color: "#EF4444" },
 ];
 
 const COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
@@ -1532,6 +1543,64 @@ export default function OperationsReportsDashboardPage() {
     }));
   }, [filteredCashierJournals]);
 
+  // إحصائيات مبيعات التطبيقات التفصيلية
+  const deliveryAppsStats = useMemo(() => {
+    const appStats: Record<string, { totalSales: number; orderCount: number; branches: Record<string, number> }> = {};
+    const branchAppStats: Record<string, Record<string, number>> = {};
+    
+    // تهيئة التطبيقات
+    DELIVERY_APPS.forEach(app => {
+      appStats[app.key] = { totalSales: 0, orderCount: 0, branches: {} };
+    });
+    
+    // حساب مبيعات كل تطبيق من يوميات الكاشير
+    filteredCashierJournals.forEach(journal => {
+      const branchId = journal.branchId;
+      if (!branchAppStats[branchId]) branchAppStats[branchId] = {};
+      
+      // جلب تفاصيل الدفع من PaymentBreakdowns
+      if ((journal as any).paymentBreakdowns) {
+        (journal as any).paymentBreakdowns.forEach((pb: any) => {
+          const method = pb.paymentMethod;
+          if (DELIVERY_APPS.some(app => app.key === method)) {
+            if (!appStats[method]) {
+              appStats[method] = { totalSales: 0, orderCount: 0, branches: {} };
+            }
+            appStats[method].totalSales += (pb.amount || 0);
+            appStats[method].orderCount += (pb.transactionCount || 1);
+            appStats[method].branches[branchId] = (appStats[method].branches[branchId] || 0) + (pb.amount || 0);
+            branchAppStats[branchId][method] = (branchAppStats[branchId][method] || 0) + (pb.amount || 0);
+          }
+        });
+      }
+    });
+    
+    // تحويل إلى مصفوفة مرتبة
+    const sortedApps = DELIVERY_APPS.map(app => ({
+      ...app,
+      ...appStats[app.key],
+      percentage: paymentCategoryStats.delivery > 0 
+        ? (appStats[app.key].totalSales / paymentCategoryStats.delivery) * 100 
+        : 0,
+    })).sort((a, b) => b.totalSales - a.totalSales);
+    
+    // إحصائيات الفروع
+    const branchStats = Object.entries(branchAppStats).map(([branchId, apps]) => ({
+      branchId,
+      branchName: branches?.find(b => b.id === branchId)?.name || branchId,
+      totalDelivery: Object.values(apps).reduce((sum, val) => sum + val, 0),
+      apps,
+    })).sort((a, b) => b.totalDelivery - a.totalDelivery);
+    
+    return {
+      apps: sortedApps,
+      branches: branchStats,
+      totalDelivery: paymentCategoryStats.delivery,
+      topApp: sortedApps[0] || null,
+      topBranch: branchStats[0] || null,
+    };
+  }, [filteredCashierJournals, paymentCategoryStats.delivery, branches]);
+
   const getVisibleTabs = () => {
     switch (filters.reportType) {
       case "cashier":
@@ -2619,6 +2688,218 @@ export default function OperationsReportsDashboardPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Delivery Apps Sales Report */}
+              {(filters.reportType === "all" || filters.reportType === "apps") && (
+                <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Truck className="w-5 h-5 text-orange-600" />
+                          تقرير مبيعات تطبيقات التوصيل
+                        </CardTitle>
+                        <CardDescription>تحليل شامل لمبيعات هنقرستيشن وتويو وكيتا وجميع التطبيقات</CardDescription>
+                      </div>
+                      <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-sm">
+                        إجمالي: {formatCurrency(deliveryAppsStats.totalDelivery)}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* KPI Cards for Apps */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <KPICard 
+                        title="إجمالي مبيعات التطبيقات" 
+                        value={formatCurrency(deliveryAppsStats.totalDelivery)} 
+                        icon={Truck} 
+                        color="text-orange-600" 
+                        bgColor="bg-orange-100" 
+                      />
+                      <KPICard 
+                        title="التطبيق الأعلى مبيعاً" 
+                        value={deliveryAppsStats.topApp?.label || "-"} 
+                        icon={Trophy}
+                        subtitle={deliveryAppsStats.topApp ? formatCurrency(deliveryAppsStats.topApp.totalSales) : ""}
+                        color="text-amber-600" 
+                        bgColor="bg-amber-100" 
+                      />
+                      <KPICard 
+                        title="عدد التطبيقات النشطة" 
+                        value={deliveryAppsStats.apps.filter(a => a.totalSales > 0).length} 
+                        icon={Activity}
+                        color="text-blue-600" 
+                        bgColor="bg-blue-100" 
+                      />
+                      <KPICard 
+                        title="الفرع الأعلى توصيل" 
+                        value={deliveryAppsStats.topBranch?.branchName || "-"} 
+                        icon={Building2}
+                        subtitle={deliveryAppsStats.topBranch ? formatCurrency(deliveryAppsStats.topBranch.totalDelivery) : ""}
+                        color="text-purple-600" 
+                        bgColor="bg-purple-100" 
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Apps Pie Chart */}
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">توزيع مبيعات التطبيقات</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[280px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={deliveryAppsStats.apps.filter(a => a.totalSales > 0)}
+                                  dataKey="totalSales"
+                                  nameKey="label"
+                                  cx="50%"
+                                  cy="50%"
+                                  outerRadius={90}
+                                  label={({ label, percentage }) => `${label}: ${percentage.toFixed(0)}%`}
+                                >
+                                  {deliveryAppsStats.apps.filter(a => a.totalSales > 0).map((app, index) => (
+                                    <Cell key={`cell-${index}`} fill={app.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Apps Bar Chart */}
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">مقارنة مبيعات التطبيقات</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[280px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={deliveryAppsStats.apps.filter(a => a.totalSales > 0)} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" fontSize={10} tickFormatter={(v) => formatCurrency(v)} />
+                                <YAxis type="category" dataKey="label" fontSize={11} width={80} />
+                                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                <Bar dataKey="totalSales" name="المبيعات">
+                                  {deliveryAppsStats.apps.filter(a => a.totalSales > 0).map((app, index) => (
+                                    <Cell key={`bar-${index}`} fill={app.color} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Apps Details Table */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">تفاصيل مبيعات كل تطبيق</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-muted/50">
+                                <th className="text-right py-3 px-4">التطبيق</th>
+                                <th className="text-right py-3 px-4">إجمالي المبيعات</th>
+                                <th className="text-right py-3 px-4">النسبة</th>
+                                <th className="text-right py-3 px-4">الترتيب</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {deliveryAppsStats.apps.map((app, index) => (
+                                <tr key={app.key} className="border-b hover:bg-muted/50">
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: app.color }}></span>
+                                      <span className="font-medium">{app.label}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 font-semibold" style={{ color: app.color }}>
+                                    {formatCurrency(app.totalSales)}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div 
+                                          className="h-full rounded-full" 
+                                          style={{ width: `${app.percentage}%`, backgroundColor: app.color }}
+                                        ></div>
+                                      </div>
+                                      <span className="text-xs text-muted-foreground">{app.percentage.toFixed(1)}%</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    {app.totalSales > 0 && (
+                                      <Badge variant={index === 0 ? "default" : "secondary"} className="text-xs">
+                                        #{index + 1}
+                                      </Badge>
+                                    )}
+                                    {app.totalSales === 0 && <span className="text-muted-foreground">-</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Branch Comparison for Apps */}
+                    {deliveryAppsStats.branches.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">مبيعات التطبيقات حسب الفرع</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-muted/50">
+                                  <th className="text-right py-3 px-4">الفرع</th>
+                                  <th className="text-right py-3 px-4">إجمالي التوصيل</th>
+                                  {DELIVERY_APPS.slice(0, 5).map(app => (
+                                    <th key={app.key} className="text-right py-3 px-4">
+                                      <span style={{ color: app.color }}>{app.label}</span>
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {deliveryAppsStats.branches.map((branch, index) => (
+                                  <tr key={branch.branchId} className="border-b hover:bg-muted/50">
+                                    <td className="py-3 px-4">
+                                      <div className="flex items-center gap-2">
+                                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                                        <span className="font-medium">{branch.branchName}</span>
+                                        {index === 0 && <Badge className="text-xs bg-amber-500">الأعلى</Badge>}
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-4 font-semibold text-orange-600">
+                                      {formatCurrency(branch.totalDelivery)}
+                                    </td>
+                                    {DELIVERY_APPS.slice(0, 5).map(app => (
+                                      <td key={app.key} className="py-3 px-4" style={{ color: app.color }}>
+                                        {formatCurrency(branch.apps[app.key] || 0)}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader>
