@@ -772,10 +772,10 @@ export default function OperationsReportsDashboardPage() {
     ...(filters.endDate && { endDate: filters.endDate }),
   }).toString();
 
-  const { data: allPaymentBreakdowns } = useQuery<{ paymentMethod: string; amount: number; transactionCount: number; branchId: string; journalDate: string }[]>({
+  const { data: allPaymentBreakdowns, isLoading: paymentBreakdownsLoading } = useQuery<{ paymentMethod: string; amount: number; transactionCount: number; branchId: string; journalDate: string }[]>({
     queryKey: [`/api/cashier-payment-breakdowns?${paymentBreakdownsQueryString}`],
-    enabled: activeTab === 'apps' || filters.reportType === 'apps',
-    staleTime: 5 * 60 * 1000,
+    enabled: activeTab === 'apps' || filters.reportType === 'apps' || filters.reportType === 'all',
+    staleTime: 2 * 60 * 1000,
   });
 
   // Get current month for targets
@@ -5256,9 +5256,251 @@ export default function OperationsReportsDashboardPage() {
                   <Truck className="w-5 h-5 text-orange-600" />
                   تقرير مبيعات تطبيقات التوصيل
                 </h2>
-                <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-sm">
-                  إجمالي: {formatCurrency(deliveryAppsStats.totalDelivery)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="gap-2" 
+                    data-testid="button-export-apps-pdf"
+                    onClick={() => {
+                      const branchName = filters.branchId 
+                        ? branches?.find(b => b.id === filters.branchId)?.name || 'جميع الفروع'
+                        : 'جميع الفروع';
+                      const printWindow = window.open('', '_blank');
+                      if (!printWindow) return;
+                      
+                      printWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html dir="rtl" lang="ar">
+                        <head>
+                          <meta charset="UTF-8">
+                          <title>تقرير مبيعات تطبيقات التوصيل</title>
+                          <style>
+                            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                            * { margin: 0; padding: 0; box-sizing: border-box; }
+                            body { 
+                              font-family: 'Cairo', sans-serif; 
+                              direction: rtl; 
+                              padding: 20px;
+                              background: white;
+                              color: #333;
+                            }
+                            .header { 
+                              text-align: center; 
+                              margin-bottom: 30px;
+                              border-bottom: 3px solid #F59E0B;
+                              padding-bottom: 20px;
+                            }
+                            .header h1 { 
+                              color: #F59E0B; 
+                              font-size: 24px;
+                              margin-bottom: 10px;
+                            }
+                            .header .subtitle {
+                              color: #666;
+                              font-size: 14px;
+                            }
+                            .meta-info {
+                              display: flex;
+                              justify-content: space-between;
+                              background: #FEF3C7;
+                              padding: 15px;
+                              border-radius: 8px;
+                              margin-bottom: 25px;
+                            }
+                            .meta-item { text-align: center; }
+                            .meta-label { font-size: 12px; color: #92400E; }
+                            .meta-value { font-size: 16px; font-weight: bold; color: #D97706; }
+                            .kpi-grid {
+                              display: grid;
+                              grid-template-columns: repeat(4, 1fr);
+                              gap: 15px;
+                              margin-bottom: 25px;
+                            }
+                            .kpi-card {
+                              background: #FFF7ED;
+                              border: 1px solid #FDBA74;
+                              border-radius: 8px;
+                              padding: 15px;
+                              text-align: center;
+                            }
+                            .kpi-value { font-size: 20px; font-weight: bold; color: #EA580C; }
+                            .kpi-label { font-size: 12px; color: #9A3412; margin-top: 5px; }
+                            table {
+                              width: 100%;
+                              border-collapse: collapse;
+                              margin-bottom: 25px;
+                            }
+                            th, td {
+                              border: 1px solid #E5E7EB;
+                              padding: 12px;
+                              text-align: right;
+                            }
+                            th {
+                              background: #F59E0B;
+                              color: white;
+                              font-weight: 600;
+                            }
+                            tr:nth-child(even) { background: #FEF3C7; }
+                            .section-title {
+                              font-size: 18px;
+                              color: #D97706;
+                              margin: 25px 0 15px;
+                              padding-bottom: 8px;
+                              border-bottom: 2px solid #FED7AA;
+                            }
+                            .app-color { 
+                              display: inline-block; 
+                              width: 12px; 
+                              height: 12px; 
+                              border-radius: 50%; 
+                              margin-left: 8px;
+                              vertical-align: middle;
+                            }
+                            .percentage-bar {
+                              background: #E5E7EB;
+                              border-radius: 4px;
+                              height: 8px;
+                              overflow: hidden;
+                            }
+                            .percentage-fill {
+                              height: 100%;
+                              border-radius: 4px;
+                            }
+                            .footer {
+                              margin-top: 30px;
+                              text-align: center;
+                              font-size: 12px;
+                              color: #9CA3AF;
+                              border-top: 1px solid #E5E7EB;
+                              padding-top: 15px;
+                            }
+                            @media print {
+                              body { padding: 10px; }
+                              .no-print { display: none; }
+                            }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="header">
+                            <h1>🚗 تقرير مبيعات تطبيقات التوصيل</h1>
+                            <div class="subtitle">شركة الزبد الأفضل التجارية - باتر</div>
+                          </div>
+                          
+                          <div class="meta-info">
+                            <div class="meta-item">
+                              <div class="meta-label">الفرع</div>
+                              <div class="meta-value">${branchName}</div>
+                            </div>
+                            <div class="meta-item">
+                              <div class="meta-label">من تاريخ</div>
+                              <div class="meta-value">${filters.startDate}</div>
+                            </div>
+                            <div class="meta-item">
+                              <div class="meta-label">إلى تاريخ</div>
+                              <div class="meta-value">${filters.endDate}</div>
+                            </div>
+                            <div class="meta-item">
+                              <div class="meta-label">تاريخ التقرير</div>
+                              <div class="meta-value">${new Date().toLocaleDateString('ar-SA')}</div>
+                            </div>
+                          </div>
+                          
+                          <div class="kpi-grid">
+                            <div class="kpi-card">
+                              <div class="kpi-value">${formatCurrency(deliveryAppsStats.totalDelivery)}</div>
+                              <div class="kpi-label">إجمالي مبيعات التطبيقات</div>
+                            </div>
+                            <div class="kpi-card">
+                              <div class="kpi-value">${deliveryAppsStats.topApp?.label || '-'}</div>
+                              <div class="kpi-label">التطبيق الأعلى مبيعاً</div>
+                            </div>
+                            <div class="kpi-card">
+                              <div class="kpi-value">${deliveryAppsStats.apps.filter(a => a.totalSales > 0).length}</div>
+                              <div class="kpi-label">عدد التطبيقات النشطة</div>
+                            </div>
+                            <div class="kpi-card">
+                              <div class="kpi-value">${deliveryAppsStats.topBranch?.branchName || '-'}</div>
+                              <div class="kpi-label">الفرع الأعلى توصيل</div>
+                            </div>
+                          </div>
+                          
+                          <h3 class="section-title">📊 تفاصيل مبيعات كل تطبيق</h3>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>التطبيق</th>
+                                <th>إجمالي المبيعات</th>
+                                <th>النسبة</th>
+                                <th>الترتيب</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${deliveryAppsStats.apps.map((app, index) => `
+                                <tr>
+                                  <td>
+                                    <span class="app-color" style="background: ${app.color}"></span>
+                                    ${app.label}
+                                  </td>
+                                  <td style="color: ${app.color}; font-weight: bold;">${formatCurrency(app.totalSales)}</td>
+                                  <td>
+                                    <div class="percentage-bar">
+                                      <div class="percentage-fill" style="width: ${app.percentage}%; background: ${app.color};"></div>
+                                    </div>
+                                    <span style="font-size: 12px;">${app.percentage.toFixed(1)}%</span>
+                                  </td>
+                                  <td>${app.totalSales > 0 ? '#' + (index + 1) : '-'}</td>
+                                </tr>
+                              `).join('')}
+                            </tbody>
+                          </table>
+                          
+                          ${deliveryAppsStats.branches.length > 0 ? `
+                            <h3 class="section-title">🏢 مبيعات التطبيقات حسب الفرع</h3>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>الفرع</th>
+                                  <th>إجمالي التوصيل</th>
+                                  ${DELIVERY_APPS.slice(0, 5).map(app => `<th style="color: ${app.color};">${app.label}</th>`).join('')}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                ${deliveryAppsStats.branches.map((branch, index) => `
+                                  <tr>
+                                    <td>
+                                      ${branch.branchName}
+                                      ${index === 0 ? '<span style="background: #F59E0B; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 5px;">الأعلى</span>' : ''}
+                                    </td>
+                                    <td style="color: #EA580C; font-weight: bold;">${formatCurrency(branch.totalDelivery)}</td>
+                                    ${DELIVERY_APPS.slice(0, 5).map(app => `
+                                      <td style="color: ${app.color};">${formatCurrency(branch.apps[app.key] || 0)}</td>
+                                    `).join('')}
+                                  </tr>
+                                `).join('')}
+                              </tbody>
+                            </table>
+                          ` : ''}
+                          
+                          <div class="footer">
+                            تم إنشاء هذا التقرير بواسطة نظام باتر لإدارة المخابز - ${new Date().toLocaleString('ar-SA')}
+                          </div>
+                          
+                          <script>
+                            window.onload = function() { window.print(); }
+                          </script>
+                        </body>
+                        </html>
+                      `);
+                      printWindow.document.close();
+                    }}
+                  >
+                    <FileText className="w-4 h-4" />
+                    تصدير PDF
+                  </Button>
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-sm">
+                    إجمالي: {formatCurrency(deliveryAppsStats.totalDelivery)}
+                  </Badge>
+                </div>
               </div>
 
               {deliveryAppsStats.totalDelivery > 0 || filteredCashierJournals.length > 0 ? (
