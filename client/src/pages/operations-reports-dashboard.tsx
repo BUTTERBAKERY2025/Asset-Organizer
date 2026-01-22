@@ -5450,7 +5450,7 @@ export default function OperationsReportsDashboardPage() {
                           <div class="report-container">
                             <div class="header">
                               <div class="header-right">
-                                <div class="company-logo">🧈 باتر</div>
+                                <img src="${window.location.origin}/logo-butter-bakery.png" alt="Butter Bakery" style="height: 50px; margin-bottom: 5px;" onerror="this.style.display='none'" />
                                 <div class="report-date">شركة الزبد الأفضل التجارية</div>
                               </div>
                               <div class="header-center">
