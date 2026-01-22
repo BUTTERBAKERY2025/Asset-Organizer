@@ -41,7 +41,6 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   marsool: "مرسول",
   keeta: "كيتا",
   the_chefs: "ذا شيفز",
-  talabat: "طلبات",
   other: "أخرى",
 };
 
@@ -91,7 +90,6 @@ const DELIVERY_APPS = [
   { key: "marsool", label: "مرسول", color: "#10B981" },
   { key: "keeta", label: "كيتا", color: "#F59E0B" },
   { key: "the_chefs", label: "ذا شيفز", color: "#EC4899" },
-  { key: "talabat", label: "طلبات", color: "#EF4444" },
 ];
 
 const COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
@@ -424,7 +422,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
           `).join('') : ''}
           
           <div class="category-header apps"><span>🚗 تطبيقات التوصيل</span><span>${(journal.deliveryTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          ${paymentBreakdowns ? paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'].includes(p.paymentMethod)).map(p => `
+          ${paymentBreakdowns ? paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs'].includes(p.paymentMethod)).map(p => `
           <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${(p.amount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
           `).join('') : ''}
         </div>
