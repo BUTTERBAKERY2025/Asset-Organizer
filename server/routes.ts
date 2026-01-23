@@ -527,8 +527,8 @@ export async function registerRoutes(
       }
       
       if (!isUserAdmin(req) && item.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && item.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, item.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا العنصر" });
         }
       }
@@ -1086,9 +1086,11 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Project not found" });
       }
       // SECURITY: Verify branch access for non-admins
-      const mandatoryBranch = getMandatoryBranchFilter(req);
-      if (mandatoryBranch && project.branchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مصرح بالوصول لهذا المشروع" });
+      if (!isUserAdmin(req) && project.branchId) {
+        const hasAccess = await canAccessBranch(req, project.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا المشروع" });
+        }
       }
       res.json(project);
     } catch (error) {
@@ -1124,9 +1126,9 @@ export async function registerRoutes(
       }
       // SECURITY: Verify branch access for non-admins
       const existingProject = await storage.getConstructionProject(id);
-      if (existingProject) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existingProject.branchId !== mandatoryBranch) {
+      if (existingProject && !isUserAdmin(req) && existingProject.branchId) {
+        const hasAccess = await canAccessBranch(req, existingProject.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتعديل هذا المشروع" });
         }
       }
@@ -1153,9 +1155,9 @@ export async function registerRoutes(
       }
       // SECURITY: Verify branch access for non-admins
       const existingProject = await storage.getConstructionProject(id);
-      if (existingProject) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existingProject.branchId !== mandatoryBranch) {
+      if (existingProject && !isUserAdmin(req) && existingProject.branchId) {
+        const hasAccess = await canAccessBranch(req, existingProject.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بحذف هذا المشروع" });
         }
       }
@@ -2461,8 +2463,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && shift.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && shift.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, shift.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذه الوردية" });
         }
       }
@@ -2775,8 +2777,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && order.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && order.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, order.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
         }
       }
@@ -3241,8 +3243,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && journal.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, journal.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذه اليومية" });
         }
       }
@@ -3526,8 +3528,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
       }
@@ -3572,8 +3574,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
       }
@@ -3622,8 +3624,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
       }
@@ -3823,8 +3825,8 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Cashier journal not found" });
       }
       if (!isUserAdmin(req) && journal.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, journal.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
       }
@@ -3851,8 +3853,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && journal.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, journal.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
       }
@@ -3894,8 +3896,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && journal.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, journal.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
       }
@@ -4083,8 +4085,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && closure.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && closure.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, closure.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الإغلاق" });
         }
       }
@@ -5450,9 +5452,11 @@ export async function registerRoutes(
       }
       
       // SECURITY: Verify branch access for non-admin users
-      const mandatoryBranch = getMandatoryBranchFilter(req);
-      if (mandatoryBranch && branchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
       }
       
       const progress = await storage.getBranchDailySalesProgress(branchId, yearMonth as string);
@@ -5499,9 +5503,11 @@ export async function registerRoutes(
       }
       
       // SECURITY: Verify branch access for non-admin users
-      const mandatoryBranch = getMandatoryBranchFilter(req);
-      if (mandatoryBranch && branchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
       }
       
       const performance = await storage.calculateBranchPerformance(branchId, yearMonth as string);
@@ -8103,9 +8109,12 @@ export async function registerRoutes(
         return res.status(404).json({ error: "المقارنة غير موجودة" });
       }
       
-      // Branch isolation check
-      if (mandatoryBranch && current.branchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مسموح بتعديل بيانات فرع آخر" });
+      // Branch isolation check for non-admins
+      if (!isUserAdmin(req) && current.branchId) {
+        const hasAccess = await canAccessBranch(req, current.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مسموح بتعديل بيانات فرع آخر" });
+        }
       }
       
       const previousStatus = current.status;
@@ -8150,7 +8159,6 @@ export async function registerRoutes(
   // Bulk update comparison statuses (with branch isolation)
   app.post("/api/production-comparisons/bulk-status", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
-      const mandatoryBranch = getMandatoryBranchFilter(req);
       const { ids, status, reason } = req.body;
       
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -8180,9 +8188,14 @@ export async function registerRoutes(
           
           // Skip if not found or belongs to another branch (for non-admin users)
           if (!current) continue;
-          if (mandatoryBranch && current.branchId !== mandatoryBranch) {
-            skippedCount++;
-            continue;
+          
+          // SECURITY: Verify branch access for non-admin users
+          if (!isUserAdmin(req) && current.branchId) {
+            const hasAccess = await canAccessBranch(req, current.branchId);
+            if (!hasAccess) {
+              skippedCount++;
+              continue;
+            }
           }
           
           await tx
@@ -8232,8 +8245,12 @@ export async function registerRoutes(
         return res.status(404).json({ error: "المقارنة غير موجودة" });
       }
       
-      if (mandatoryBranch && comparison.branchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مسموح بعرض سجل فرع آخر" });
+      // Branch isolation check for non-admins
+      if (!isUserAdmin(req) && comparison.branchId) {
+        const hasAccess = await canAccessBranch(req, comparison.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مسموح بعرض سجل فرع آخر" });
+        }
       }
       
       const history = await db
@@ -8582,8 +8599,11 @@ export async function registerRoutes(
       }
       
       // Branch isolation check for non-admins
-      if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مسموح بتعديل تنبيه فرع آخر" });
+      if (!isUserAdmin(req) && alert.branchId) {
+        const hasAccess = await canAccessBranch(req, alert.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مسموح بتعديل تنبيه فرع آخر" });
+        }
       }
       
       const [updated] = await db
@@ -8618,8 +8638,11 @@ export async function registerRoutes(
       }
       
       // Branch isolation check for non-admins
-      if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مسموح بحل تنبيه فرع آخر" });
+      if (!isUserAdmin(req) && alert.branchId) {
+        const hasAccess = await canAccessBranch(req, alert.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مسموح بحل تنبيه فرع آخر" });
+        }
       }
       
       const [updated] = await db
@@ -11794,8 +11817,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && target.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && target.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, target.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الهدف" });
         }
       }
@@ -11912,8 +11935,8 @@ export async function registerRoutes(
 
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتعديل هذا الهدف" });
         }
       }
@@ -11942,8 +11965,8 @@ export async function registerRoutes(
       }
       
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بحذف هذا الهدف" });
         }
       }
@@ -12023,8 +12046,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && target.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && target.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, target.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الهدف" });
         }
       }
@@ -12068,8 +12091,8 @@ export async function registerRoutes(
       }
       
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتعديل هذا الهدف" });
         }
       }
@@ -12098,8 +12121,8 @@ export async function registerRoutes(
       }
       
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بحذف هذا الهدف" });
         }
       }
@@ -12174,8 +12197,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && alert.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, alert.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا التنبيه" });
         }
       }
@@ -12216,8 +12239,8 @@ export async function registerRoutes(
       }
       
       if (!isUserAdmin(req) && alert.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, alert.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتعديل هذا التنبيه" });
         }
       }
@@ -12242,8 +12265,8 @@ export async function registerRoutes(
       }
       
       if (!isUserAdmin(req) && alert.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && alert.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, alert.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتأكيد هذا التنبيه" });
         }
       }
@@ -12351,8 +12374,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && tracking.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && tracking.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, tracking.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا التتبع" });
         }
       }
@@ -12393,8 +12416,8 @@ export async function registerRoutes(
       }
       
       if (!isUserAdmin(req) && existing.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتعديل هذا التتبع" });
         }
       }
@@ -14722,9 +14745,9 @@ export async function registerRoutes(
       if (!record) return res.status(404).json({ error: "السجل غير موجود" });
       
       // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && record.branchId !== mandatoryBranch) {
+      if (!isUserAdmin(req) && record.branchId) {
+        const hasAccess = await canAccessBranch(req, record.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا السجل" });
         }
       }
@@ -15264,8 +15287,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && report.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && report.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا التقرير" });
         }
       }
@@ -15288,8 +15311,8 @@ export async function registerRoutes(
       if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
       
       if (!isUserAdmin(req) && report.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && report.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا التقرير" });
         }
       }
@@ -15605,9 +15628,9 @@ export async function registerRoutes(
       }
       
       // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && employee.branchId !== mandatoryBranch) {
+      if (!isUserAdmin(req) && employee.branchId) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الموظف" });
         }
       }
@@ -16525,8 +16548,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && period.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && period.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, period.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذه الفترة المالية" });
         }
       }
@@ -16549,8 +16572,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && data.period.branchId) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && data.period.branchId !== mandatoryBranch) {
+        const hasAccess = await canAccessBranch(req, data.period.branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذه الفترة المالية" });
         }
       }
