@@ -259,7 +259,7 @@ export function generatePaymentRequestsPDF(
   <button class="print-btn no-print" onclick="window.print()">طباعة / حفظ PDF</button>
   
   <div class="header">
-    <img src="${logoUrl}" alt="باتر بيكري" class="logo" />
+    <img src="${logoUrl}" alt="Butter Bakery" class="logo" />
     <h1>تقرير طلبات الدفع</h1>
     <div class="date">${formatDate(dateFilter)}</div>
   </div>
@@ -379,7 +379,7 @@ export function generatePaymentRequestsPDF(
   </div>
 
   <div class="footer">
-    <p>تم إنشاء هذا التقرير بواسطة نظام إدارة المشروعات - باتر بيكري</p>
+    <p>BUTTER BAKERY SYSTEM - CEO COMMAND</p>
     <p>${new Date().toLocaleString('en-GB')}</p>
   </div>
 </body>

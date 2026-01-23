@@ -220,7 +220,7 @@ export function printAsPDF(
         </tbody>
       </table>
       <div class="footer">
-        <p>نظام إدارة باتر بيكري - ${new Date().getFullYear()}</p>
+        <p>BUTTER BAKERY SYSTEM - CEO COMMAND | ${new Date().getFullYear()}</p>
       </div>
     </body>
     </html>
@@ -365,7 +365,7 @@ export function downloadAsPDF(
         </tbody>
       </table>
       <div class="footer">
-        <p>نظام إدارة باتر بيكري - ${new Date().getFullYear()}</p>
+        <p>BUTTER BAKERY SYSTEM - CEO COMMAND | ${new Date().getFullYear()}</p>
       </div>
     </body>
     </html>

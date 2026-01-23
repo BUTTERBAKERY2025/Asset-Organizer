@@ -476,7 +476,7 @@ export default function ConstructionReportsPage() {
           </tfoot>
         </table>
         <div class="footer">
-          نظام إدارة المشروعات والأصول والصيانة - باتر
+          BUTTER BAKERY SYSTEM - CEO COMMAND
         </div>
       </body>
       </html>

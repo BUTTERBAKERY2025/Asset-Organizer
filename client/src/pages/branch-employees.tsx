@@ -1472,7 +1472,7 @@ export default function BranchEmployeesPage() {
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: "موظفي الفروع - باتر بيكري",
+    documentTitle: "موظفي الفروع - BUTTER BAKERY",
   });
 
   const exportToExcel = () => {
@@ -1596,7 +1596,7 @@ export default function BranchEmployeesPage() {
   <button class="print-btn no-print" onclick="window.print()">طباعة / حفظ PDF</button>
   
   <div class="header">
-    <img src="${logoUrl}" alt="باتر بيكري" class="logo" onerror="this.style.display='none'" />
+    <img src="${logoUrl}" alt="Butter Bakery" class="logo" onerror="this.style.display='none'" />
     <h1>تقرير موظفي الفروع</h1>
     <div class="date">التاريخ: ${currentDate}</div>
   </div>
@@ -1669,7 +1669,7 @@ export default function BranchEmployeesPage() {
   </table>
 
   <div class="footer">
-    <p>تم إنشاء هذا التقرير بواسطة نظام إدارة المشروعات - باتر بيكري</p>
+    <p>BUTTER BAKERY SYSTEM - CEO COMMAND</p>
     <p>${new Date().toLocaleString('en-GB')}</p>
   </div>
 </body>

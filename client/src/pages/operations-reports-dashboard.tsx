@@ -5577,7 +5577,7 @@ export default function OperationsReportsDashboardPage() {
                           ` : ''}
                           
                           <div class="footer">
-                            تم إنشاء هذا التقرير بواسطة نظام باتر لإدارة المخابز - ${new Date().toLocaleString('ar-SA')}
+                            BUTTER BAKERY SYSTEM - CEO COMMAND | ${new Date().toLocaleString('ar-SA')}
                           </div>
                           
                           <script>
@@ -5895,7 +5895,7 @@ export default function OperationsReportsDashboardPage() {
                         </style>
                       </head>
                       <body>
-                        <h1>التقرير التنفيذي الشامل - باتر بيكري</h1>
+                        <h1>التقرير التنفيذي الشامل - BUTTER BAKERY</h1>
                         <p>تاريخ التقرير: ${new Date(executiveSummary.reportDate).toLocaleDateString('ar-SA')}</p>
                         <p>الفترة: ${executiveSummary.period.startDate} إلى ${executiveSummary.period.endDate}</p>
                         

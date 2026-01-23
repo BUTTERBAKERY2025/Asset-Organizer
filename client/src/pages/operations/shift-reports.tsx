@@ -1084,7 +1084,7 @@ export default function ShiftReportsPage() {
               )}
 
               <div className="mt-8 pt-4 border-t text-center text-sm text-muted-foreground print:mt-12">
-                <p>تم إنشاء هذا التقرير بواسطة نظام إدارة مخبز باتر</p>
+                <p>BUTTER BAKERY SYSTEM - CEO COMMAND</p>
                 <p>{new Date().toLocaleString("ar-SA")}</p>
               </div>
             </div>

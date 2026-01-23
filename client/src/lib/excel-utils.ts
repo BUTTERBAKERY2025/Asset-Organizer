@@ -16,9 +16,9 @@ export function addBrandingSheet(workbook: XLSX.WorkBook, reportTitle: string) {
   
   const brandingData = [
     [""],
-    ["باتر بيكري - Butter Bakery"],
+    ["BUTTER BAKERY SYSTEM"],
     [""],
-    ["نظام إدارة المشروعات والأصول والصيانة"],
+    ["CEO COMMAND"],
     [""],
     [reportTitle],
     [""],
