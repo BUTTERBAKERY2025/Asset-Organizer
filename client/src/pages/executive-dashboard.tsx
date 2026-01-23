@@ -230,7 +230,7 @@ export default function ExecutiveDashboard() {
             </CardContent>
           </Card>
         </Link>
-        <Link href="/governance/board-members">
+        <Link href="/governance/board">
           <Card className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] bg-gradient-to-br from-amber-700 to-amber-800 text-white border-0 shadow-md">
             <CardContent className="flex items-center gap-4 p-5">
               <div className="p-3 rounded-xl bg-white/10 backdrop-blur">
