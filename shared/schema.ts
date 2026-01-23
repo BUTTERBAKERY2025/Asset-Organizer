@@ -886,6 +886,27 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "executive_travel",
       "executive_reports",
       "executive_notifications",
+      "executive_calendar",
+    ],
+  },
+  {
+    label: "إدارة الوثائق",
+    modules: ["documents"],
+  },
+  {
+    label: "الحوكمة المؤسسية",
+    modules: [
+      "governance",
+      "governance_board",
+      "governance_shareholders",
+      "governance_meetings",
+      "governance_resolutions",
+      "governance_compliance",
+      "governance_transfers",
+      "governance_disclosures",
+      "governance_dividends",
+      "governance_capital",
+      "governance_voting",
     ],
   },
 ];
