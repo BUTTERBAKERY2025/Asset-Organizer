@@ -181,7 +181,7 @@ const settingsSections: SettingSection[] = [
         title: "الورديات",
         description: "جدولة الورديات وتعيين المناوبات",
         icon: Clock,
-        path: "/shifts",
+        path: "/shift-management",
         keywords: ["وردية", "شفت", "دوام", "shift"],
       },
       {
@@ -216,7 +216,7 @@ const settingsSections: SettingSection[] = [
         title: "يومية الكاشير",
         description: "تسجيل المبيعات والمقبوضات اليومية",
         icon: Receipt,
-        path: "/cashier-journal",
+        path: "/cashier-journals",
         keywords: ["كاشير", "يومية", "مبيعات", "cashier"],
       },
       {
