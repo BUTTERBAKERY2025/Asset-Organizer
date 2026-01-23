@@ -17633,6 +17633,13 @@ export async function registerRoutes(
             return res.status(403).json({ error: "غير مصرح بتحويل مخزون هذا الفرع" });
           }
         }
+        // Also verify destination branch access for branch transfers
+        if (destinationType === 'branch' && destinationBranchId) {
+          const hasDestAccess = await canAccessBranch(req, destinationBranchId);
+          if (!hasDestAccess) {
+            return res.status(403).json({ error: "غير مصرح بالتحويل لهذا الفرع" });
+          }
+        }
       }
       
       // Validate destination type at route level
@@ -17670,20 +17677,29 @@ export async function registerRoutes(
 
   app.get("/api/finished-goods-transfers", isAuthenticated, async (req, res) => {
     try {
-      const filters: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string } = {};
+      const filters: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string; branchId?: string } = {};
       if (req.query.sourceBranchId) filters.sourceBranchId = req.query.sourceBranchId as string;
       if (req.query.destinationType) filters.destinationType = req.query.destinationType as string;
       if (req.query.destinationBranchId) filters.destinationBranchId = req.query.destinationBranchId as string;
       if (req.query.transferDate) filters.transferDate = req.query.transferDate as string;
       if (req.query.status) filters.status = req.query.status as string;
       
-      // SECURITY: Enforce branch filtering for non-admin users
+      // SECURITY: Enforce branch filtering for non-admin users (source OR destination)
       const mandatoryBranch = getMandatoryBranchFilter(req);
       if (!isUserAdmin(req) && mandatoryBranch) {
-        filters.sourceBranchId = mandatoryBranch;
+        // Filter by branchId to match source OR destination
+        filters.branchId = mandatoryBranch;
       }
       
-      const transfers = await storage.getFinishedGoodsTransfers(filters);
+      let transfers = await storage.getFinishedGoodsTransfers(filters);
+      
+      // Additional filter for non-admins if branchId not supported in storage
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        transfers = transfers.filter(t => 
+          t.sourceBranchId === mandatoryBranch || t.destinationBranchId === mandatoryBranch
+        );
+      }
+      
       res.json(transfers);
     } catch (error) {
       console.error("Error fetching transfers:", error);
@@ -20002,6 +20018,15 @@ export async function registerRoutes(
       if (!visitor) {
         return res.status(404).json({ error: "الزائر غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && visitor.branchId) {
+        const hasAccess = await canAccessBranch(req, visitor.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبيانات زوار هذا الفرع" });
+        }
+      }
+      
       res.json(visitor);
     } catch (error) {
       console.error("Error getting visitor:", error);
@@ -20013,6 +20038,15 @@ export async function registerRoutes(
   app.get("/api/visitors/national-id/:nationalId", isAuthenticated, async (req, res) => {
     try {
       const visitor = await storage.getVisitorByNationalId(req.params.nationalId);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (visitor && !isUserAdmin(req) && visitor.branchId) {
+        const hasAccess = await canAccessBranch(req, visitor.branchId);
+        if (!hasAccess) {
+          return res.json(null); // Return null instead of exposing cross-branch data
+        }
+      }
+      
       res.json(visitor || null);
     } catch (error) {
       console.error("Error getting visitor by national ID:", error);
@@ -20117,7 +20151,14 @@ export async function registerRoutes(
   // Get active visitors (currently checked in)
   app.get("/api/visitor-logs/active", isAuthenticated, async (req, res) => {
     try {
-      const branchId = parseQueryString(req.query.branchId);
+      let branchId = parseQueryString(req.query.branchId);
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchId = mandatoryBranch;
+      }
+      
       const logs = await storage.getActiveVisitorLogs(branchId);
       res.json(logs);
     } catch (error) {
@@ -20129,7 +20170,14 @@ export async function registerRoutes(
   // Get visitor stats
   app.get("/api/visitor-stats", isAuthenticated, async (req, res) => {
     try {
-      const branchId = parseQueryString(req.query.branchId);
+      let branchId = parseQueryString(req.query.branchId);
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchId = mandatoryBranch;
+      }
+      
       const stats = await storage.getVisitorStats(branchId);
       res.json(stats);
     } catch (error) {
@@ -20145,6 +20193,15 @@ export async function registerRoutes(
       if (!log) {
         return res.status(404).json({ error: "سجل الزيارة غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && log.branchId) {
+        const hasAccess = await canAccessBranch(req, log.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لسجل زيارات هذا الفرع" });
+        }
+      }
+      
       res.json(log);
     } catch (error) {
       console.error("Error getting visitor log:", error);
@@ -20155,6 +20212,17 @@ export async function registerRoutes(
   // Get visitor's history
   app.get("/api/visitors/:id/logs", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const visitor = await storage.getVisitor(parseInt(req.params.id));
+        if (visitor && visitor.branchId) {
+          const hasAccess = await canAccessBranch(req, visitor.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بالوصول لسجل زيارات هذا الزائر" });
+          }
+        }
+      }
+      
       const logs = await storage.getVisitorLogsByVisitor(parseInt(req.params.id));
       res.json(logs);
     } catch (error) {
@@ -20167,6 +20235,22 @@ export async function registerRoutes(
   app.post("/api/visitor-logs", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
+      
+      // SECURITY: Determine and validate branchId for non-admin users
+      let effectiveBranchId = req.body.branchId;
+      if (!isUserAdmin(req)) {
+        // If branchId not provided, derive from user's mandatory branch
+        if (!effectiveBranchId) {
+          effectiveBranchId = getMandatoryBranchFilter(req);
+        }
+        if (effectiveBranchId) {
+          const hasAccess = await canAccessBranch(req, effectiveBranchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتسجيل زوار لهذا الفرع" });
+          }
+        }
+      }
+      
       const log = await storage.createVisitorLog({
         ...req.body,
         registeredBy: user.id,
@@ -20183,6 +20267,17 @@ export async function registerRoutes(
   // Update visitor log
   app.patch("/api/visitor-logs/:id", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingLog = await storage.getVisitorLog(parseInt(req.params.id));
+        if (existingLog && existingLog.branchId) {
+          const hasAccess = await canAccessBranch(req, existingLog.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل سجل زيارات هذا الفرع" });
+          }
+        }
+      }
+      
       const log = await storage.updateVisitorLog(parseInt(req.params.id), req.body);
       if (!log) {
         return res.status(404).json({ error: "سجل الزيارة غير موجود" });
@@ -20198,6 +20293,18 @@ export async function registerRoutes(
   app.post("/api/visitor-logs/:id/checkout", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingLog = await storage.getVisitorLog(parseInt(req.params.id));
+        if (existingLog && existingLog.branchId) {
+          const hasAccess = await canAccessBranch(req, existingLog.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتسجيل خروج زوار هذا الفرع" });
+          }
+        }
+      }
+      
       const log = await storage.checkOutVisitor(
         parseInt(req.params.id),
         user.id,
@@ -20648,7 +20755,14 @@ export async function registerRoutes(
   // Export visitors to JSON
   app.get("/api/visitors/export", isAuthenticated, async (req, res) => {
     try {
-      const visitors = await storage.getVisitors();
+      // SECURITY: Enforce branch filtering for non-admin users
+      let branchId: string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchId = mandatoryBranch;
+      }
+      
+      const visitors = await storage.getVisitors(branchId);
       res.json(visitors);
     } catch (error) {
       console.error("Error exporting visitors:", error);
