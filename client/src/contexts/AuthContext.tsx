@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { usePermissions } from "@/hooks/usePermissions";
 import { Loader2 } from "lucide-react";
 
 interface AuthContextType {
@@ -23,25 +22,30 @@ interface AuthGateProps {
 
 export function AuthGate({ children }: AuthGateProps) {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
-  const { isLoading: permissionsLoading } = usePermissions();
   
   // Sticky ready flag - once true, never goes back to false
   const [hasResolved, setHasResolved] = useState(false);
 
   // Check if auth has resolved (either authenticated or not)
   const authResolved = !authLoading;
-  // For authenticated users, also wait for permissions
-  const permissionsResolved = !isAuthenticated || !permissionsLoading;
-  const currentlyReady = authResolved && permissionsResolved;
 
   // Set sticky flag when first ready
   useEffect(() => {
-    if (currentlyReady && !hasResolved) {
+    if (authResolved && !hasResolved) {
       setHasResolved(true);
     }
-  }, [currentlyReady, hasResolved]);
+  }, [authResolved, hasResolved]);
 
-  // Only show loading on first boot - never again
+  // Only show loading on first boot - never again (max 3 seconds timeout)
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!hasResolved) {
+        setHasResolved(true);
+      }
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [hasResolved]);
+
   if (!hasResolved) {
     return (
       <div 
