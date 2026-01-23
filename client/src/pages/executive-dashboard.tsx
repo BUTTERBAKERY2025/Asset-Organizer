@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Link } from "wouter";
-import { Calendar, CheckSquare, Mail, AlertTriangle, Clock, Users, ArrowLeft, ArrowRight, Plus, FileText, Plane, Bell, UserCheck, BarChart3, CalendarDays, Settings2, Eye, EyeOff } from "lucide-react";
+import { Calendar, CheckSquare, Mail, AlertTriangle, Clock, Users, ArrowLeft, ArrowRight, Plus, FileText, Plane, Bell, UserCheck, BarChart3, CalendarDays, Settings2, Eye, EyeOff, Shield, Crown, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { Layout } from "@/components/layout";
@@ -209,6 +209,38 @@ export default function ExecutiveDashboard() {
                 <p className="font-semibold text-purple-800">التقويم</p>
                 <p className="text-xs text-purple-600">عرض الجدول</p>
               </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* اختصارات الحوكمة ومجلس الإدارة */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link href="/governance">
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] bg-gradient-to-br from-slate-800 to-slate-900 text-white border-0 shadow-md">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="p-3 rounded-xl bg-white/10 backdrop-blur">
+                <Shield className="h-7 w-7 text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-lg">الحوكمة المؤسسية</p>
+                <p className="text-sm text-slate-300">السياسات والإجراءات والامتثال</p>
+              </div>
+              <ArrowLeft className="h-5 w-5 text-slate-400" />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/governance/board-members">
+          <Card className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] bg-gradient-to-br from-amber-700 to-amber-800 text-white border-0 shadow-md">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="p-3 rounded-xl bg-white/10 backdrop-blur">
+                <Crown className="h-7 w-7 text-amber-200" />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-lg">مجلس الإدارة</p>
+                <p className="text-sm text-amber-200">الأعضاء والاجتماعات والقرارات</p>
+              </div>
+              <ArrowLeft className="h-5 w-5 text-amber-300" />
             </CardContent>
           </Card>
         </Link>
