@@ -19,6 +19,15 @@ interface ModuleProtectedRouteProps {
 }
 
 function AccessDeniedPage({ message }: { message?: string }) {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      window.location.href = '/login';
+    } catch (error) {
+      window.location.href = '/login';
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4" dir="rtl" data-testid="access-denied">
       <Card className="max-w-md w-full">
@@ -28,7 +37,7 @@ function AccessDeniedPage({ message }: { message?: string }) {
           </div>
           <CardTitle className="text-xl text-destructive">غير مصرح بالوصول</CardTitle>
           <CardDescription className="text-base">
-            {message || "ليس لديك صلاحية للوصول لهذه الصفحة"}
+            {message || "ليس لديك صلاحية الوصول لهذا القسم"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -59,6 +68,14 @@ function AccessDeniedPage({ message }: { message?: string }) {
               الصفحة الرئيسية
             </Button>
           </div>
+          <Button 
+            variant="destructive" 
+            className="w-full" 
+            onClick={handleLogout}
+            data-testid="button-logout"
+          >
+            تسجيل الخروج
+          </Button>
         </CardContent>
       </Card>
     </div>
