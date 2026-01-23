@@ -121,14 +121,14 @@ export default function SharedDocumentPage() {
   const handleDownload = () => {
     if (document && shareInfo?.canDownload) {
       const filename = document.filePath.split("/").pop();
-      window.open(`/api/documents/file/${filename}`, "_blank");
+      window.open(`/api/documents/shared-file/${params.shareLink}/${filename}`, "_blank");
     }
   };
 
   const getPreviewUrl = () => {
-    if (document) {
+    if (document && params.shareLink) {
       const filename = document.filePath.split("/").pop();
-      return `/api/documents/file/${filename}`;
+      return `/api/documents/shared-file/${params.shareLink}/${filename}`;
     }
     return "";
   };

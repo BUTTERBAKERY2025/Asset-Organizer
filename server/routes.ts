@@ -19126,7 +19126,7 @@ export async function registerRoutes(
     }
   });
 
-  // Serve uploaded files
+  // Serve uploaded files (authenticated)
   app.get("/api/documents/file/:filename", isAuthenticated, async (req, res) => {
     try {
       const path = await import("path");
@@ -19142,6 +19142,44 @@ export async function registerRoutes(
       res.sendFile(path.resolve(filePath));
     } catch (error) {
       console.error("Error serving file:", error);
+      res.status(500).json({ error: "فشل في جلب الملف" });
+    }
+  });
+
+  // Serve shared files (public access via share link)
+  app.get("/api/documents/shared-file/:shareLink/:filename", async (req, res) => {
+    try {
+      const path = await import("path");
+      const fs = await import("fs");
+      
+      const share = await storage.getDocumentShareByLink(req.params.shareLink);
+      if (!share || !share.isActive) {
+        return res.status(403).json({ error: "رابط المشاركة غير صالح أو غير نشط" });
+      }
+      
+      if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+        return res.status(403).json({ error: "انتهت صلاحية رابط المشاركة" });
+      }
+      
+      const doc = await storage.getDocument(share.documentId);
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+      
+      const expectedFilename = doc.filePath.split("/").pop();
+      if (req.params.filename !== expectedFilename) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الملف" });
+      }
+      
+      const filePath = path.join("./uploads/documents", req.params.filename);
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "الملف غير موجود" });
+      }
+      
+      res.sendFile(path.resolve(filePath));
+    } catch (error) {
+      console.error("Error serving shared file:", error);
       res.status(500).json({ error: "فشل في جلب الملف" });
     }
   });
