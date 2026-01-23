@@ -14411,6 +14411,20 @@ export async function registerRoutes(
     try {
       const { periodId, employeeId, date, branchId, startDate, endDate } = req.query;
       
+      // SECURITY: Apply branch filter for non-admin users
+      let effectiveBranchId = branchId as string | undefined;
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = await getMandatoryBranchFilter(req);
+        if (mandatoryBranch) {
+          effectiveBranchId = mandatoryBranch;
+        } else if (branchId) {
+          const hasAccess = await canAccessBranch(req, branchId as string);
+          if (!hasAccess) {
+            return res.json([]);
+          }
+        }
+      }
+      
       if (periodId) {
         const schedules = await storage.getEmployeeSchedulesByPeriod(parseInt(periodId as string));
         return res.json(schedules);
@@ -14423,16 +14437,16 @@ export async function registerRoutes(
         );
         return res.json(schedules);
       }
-      if (branchId && startDate && endDate) {
+      if (effectiveBranchId && startDate && endDate) {
         const schedules = await storage.getEmployeeSchedulesByBranchAndDateRange(
-          branchId as string,
+          effectiveBranchId,
           startDate as string,
           endDate as string
         );
         return res.json(schedules);
       }
       if (date) {
-        const schedules = await storage.getEmployeeSchedulesByDate(date as string, branchId as string);
+        const schedules = await storage.getEmployeeSchedulesByDate(date as string, effectiveBranchId);
         return res.json(schedules);
       }
       
@@ -14445,6 +14459,14 @@ export async function registerRoutes(
 
   app.post("/api/employee-schedules", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء جداول لهذا الفرع" });
+        }
+      }
+      
       const validatedData = insertEmployeeScheduleSchema.parse(req.body);
       const schedule = await storage.createEmployeeSchedule(validatedData);
       res.status(201).json(schedule);
@@ -14504,6 +14526,25 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingSchedule = await storage.getEmployeeScheduleById(id);
+        if (existingSchedule?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingSchedule.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل هذا الجدول" });
+          }
+        }
+        // Check new branchId if being changed
+        if (req.body.branchId && req.body.branchId !== existingSchedule?.branchId) {
+          const hasNewAccess = await canAccessBranch(req, req.body.branchId);
+          if (!hasNewAccess) {
+            return res.status(403).json({ error: "غير مصرح بنقل الجدول لهذا الفرع" });
+          }
+        }
+      }
+      
       const partialData = insertEmployeeScheduleSchema.partial().parse(req.body);
       const schedule = await storage.updateEmployeeSchedule(id, partialData);
       if (!schedule) return res.status(404).json({ error: "الجدول غير موجود" });
@@ -14521,6 +14562,18 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingSchedule = await storage.getEmployeeScheduleById(id);
+        if (existingSchedule?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingSchedule.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بحذف هذا الجدول" });
+          }
+        }
+      }
+      
       await storage.deleteEmployeeSchedule(id);
       res.status(204).send();
     } catch (error) {

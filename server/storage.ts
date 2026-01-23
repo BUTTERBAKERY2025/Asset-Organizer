@@ -6865,6 +6865,11 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
+  async getEmployeeScheduleById(id: number): Promise<EmployeeSchedule | undefined> {
+    const [schedule] = await db.select().from(employeeSchedules).where(eq(employeeSchedules.id, id));
+    return schedule;
+  }
+
   async updateEmployeeSchedule(id: number, schedule: Partial<InsertEmployeeSchedule>): Promise<EmployeeSchedule | undefined> {
     const [updated] = await db.update(employeeSchedules).set({ ...schedule, updatedAt: new Date() }).where(eq(employeeSchedules.id, id)).returning();
     return updated;
