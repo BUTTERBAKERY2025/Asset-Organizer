@@ -183,7 +183,7 @@ function AdminPage({ component: Component, module }: { component: React.Componen
 function Router() {
   return (
     <Switch>
-      <Route path="/">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><PlatformHomePage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/">{() => <ModulePage component={PlatformHomePage} module="platform_home" />}</Route>
       <Route path="/login">
         {() => (
           <PublicOnlyRoute>
@@ -297,26 +297,30 @@ function Router() {
       <Route path="/purchasing-requests">{() => <ModulePage component={PurchasingRequestsPage} module="warehouse" />}</Route>
       
       {/* Executive Secretariat - السكرتارية التنفيذية */}
-      <Route path="/executive">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveDashboardPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/executive/meetings">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveMeetingsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/executive/tasks">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveTasksPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/executive/correspondence">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveCorrespondencePage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/documents">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DocumentsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><GovernancePage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/board">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><BoardMembersPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/shareholders">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ShareholdersPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/meetings">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><GovernanceMeetingsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/resolutions">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ResolutionsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/compliance">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><CompliancePage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/transfers">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ShareTransfersPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/disclosures">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DisclosuresPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/dividends">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><DividendsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/capital">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><CapitalPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/governance/voting">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><VotingPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/visitors">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><VisitorsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/travel-requests">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><TravelRequestsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/executive/reports">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveReportsPage /></Suspense></ProtectedRoute>}</Route>
-      <Route path="/executive/calendar">{() => <ProtectedRoute><Suspense fallback={<PageLoadingFallback />}><ExecutiveCalendarPage /></Suspense></ProtectedRoute>}</Route>
+      <Route path="/executive">{() => <ModulePage component={ExecutiveDashboardPage} module="executive_dashboard" />}</Route>
+      <Route path="/executive/meetings">{() => <ModulePage component={ExecutiveMeetingsPage} module="executive_meetings" />}</Route>
+      <Route path="/executive/tasks">{() => <ModulePage component={ExecutiveTasksPage} module="executive_tasks" />}</Route>
+      <Route path="/executive/correspondence">{() => <ModulePage component={ExecutiveCorrespondencePage} module="executive_correspondence" />}</Route>
+      <Route path="/visitors">{() => <ModulePage component={VisitorsPage} module="executive_visitors" />}</Route>
+      <Route path="/travel-requests">{() => <ModulePage component={TravelRequestsPage} module="executive_travel" />}</Route>
+      <Route path="/executive/reports">{() => <ModulePage component={ExecutiveReportsPage} module="executive_reports" />}</Route>
+      <Route path="/executive/calendar">{() => <ModulePage component={ExecutiveCalendarPage} module="executive_calendar" />}</Route>
+      
+      {/* Documents - إدارة الوثائق */}
+      <Route path="/documents">{() => <ModulePage component={DocumentsPage} module="documents" />}</Route>
+      
+      {/* Governance - الحوكمة المؤسسية */}
+      <Route path="/governance">{() => <ModulePage component={GovernancePage} module="governance" />}</Route>
+      <Route path="/governance/board">{() => <ModulePage component={BoardMembersPage} module="governance_board" />}</Route>
+      <Route path="/governance/shareholders">{() => <ModulePage component={ShareholdersPage} module="governance_shareholders" />}</Route>
+      <Route path="/governance/meetings">{() => <ModulePage component={GovernanceMeetingsPage} module="governance_meetings" />}</Route>
+      <Route path="/governance/resolutions">{() => <ModulePage component={ResolutionsPage} module="governance_resolutions" />}</Route>
+      <Route path="/governance/compliance">{() => <ModulePage component={CompliancePage} module="governance_compliance" />}</Route>
+      <Route path="/governance/transfers">{() => <ModulePage component={ShareTransfersPage} module="governance_transfers" />}</Route>
+      <Route path="/governance/disclosures">{() => <ModulePage component={DisclosuresPage} module="governance_disclosures" />}</Route>
+      <Route path="/governance/dividends">{() => <ModulePage component={DividendsPage} module="governance_dividends" />}</Route>
+      <Route path="/governance/capital">{() => <ModulePage component={CapitalPage} module="governance_capital" />}</Route>
+      <Route path="/governance/voting">{() => <ModulePage component={VotingPage} module="governance_voting" />}</Route>
       
       <Route component={NotFound} />
     </Switch>
