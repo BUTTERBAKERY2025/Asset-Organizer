@@ -14757,6 +14757,15 @@ export async function registerRoutes(
       if (!branchIdStr || !shiftTypeStr || !dateStr) {
         return res.status(400).json({ error: "الفرع والوردية والتاريخ مطلوبين" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchIdStr);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لموظفي هذا الفرع" });
+        }
+      }
+      
       const scheduledEmployees = await storage.getScheduledEmployeesForAttendance(branchIdStr, shiftTypeStr, dateStr);
       res.json(scheduledEmployees);
     } catch (error) {
@@ -14772,6 +14781,14 @@ export async function registerRoutes(
       
       if (!employeeId || !branchId) {
         return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتسجيل حضور موظفي هذا الفرع" });
+        }
       }
 
       if (signature && signature.length > 500000) {
@@ -14800,6 +14817,19 @@ export async function registerRoutes(
       if (!employeeId) {
         return res.status(400).json({ error: "معرف الموظف مطلوب" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users based on employee's branch
+      if (!isUserAdmin(req)) {
+        // Get today's attendance record to verify branch
+        const today = new Date().toISOString().split('T')[0];
+        const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, today);
+        if (existingRecord?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingRecord.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتسجيل انصراف موظفي هذا الفرع" });
+          }
+        }
+      }
 
       if (signature && signature.length > 500000) {
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
@@ -14820,6 +14850,18 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingRecord = await storage.getAttendanceRecord(id);
+      if (!existingRecord) return res.status(404).json({ error: "السجل غير موجود" });
+      
+      if (!isUserAdmin(req) && existingRecord.branchId) {
+        const hasAccess = await canAccessBranch(req, existingRecord.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح باعتماد سجلات حضور هذا الفرع" });
+        }
+      }
+      
       const currentUser = getCurrentUser(req);
       const record = await storage.approveAttendance(id, currentUser?.id);
       if (!record) return res.status(404).json({ error: "السجل غير موجود" });
