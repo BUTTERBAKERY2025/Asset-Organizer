@@ -14163,6 +14163,15 @@ export async function registerRoutes(
   app.get("/api/shift-profiles/:branchId", isAuthenticated, async (req, res) => {
     try {
       const { branchId } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لإعدادات هذا الفرع" });
+        }
+      }
+      
       const profiles = await storage.getBranchShiftProfiles(branchId);
       res.json(profiles);
     } catch (error) {
@@ -14174,6 +14183,15 @@ export async function registerRoutes(
   app.get("/api/shift-profiles/:branchId/:shiftCode", isAuthenticated, async (req, res) => {
     try {
       const { branchId, shiftCode } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لإعدادات هذا الفرع" });
+        }
+      }
+      
       const profile = await storage.getBranchShiftProfileByCode(branchId, shiftCode);
       if (!profile) return res.status(404).json({ error: "إعدادات الوردية غير موجودة" });
       res.json(profile);
@@ -14189,6 +14207,15 @@ export async function registerRoutes(
       if (!branchId || !shiftCode || !displayName || !startTime || !endTime) {
         return res.status(400).json({ error: "البيانات المطلوبة غير مكتملة" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء إعدادات وردية لهذا الفرع" });
+        }
+      }
+      
       const profile = await storage.createBranchShiftProfile({
         branchId,
         shiftCode,
@@ -14215,6 +14242,15 @@ export async function registerRoutes(
       if (!Array.isArray(profiles)) {
         return res.status(400).json({ error: "البيانات غير صالحة" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل إعدادات ورديات هذا الفرع" });
+        }
+      }
+      
       const updated = await storage.upsertBranchShiftProfiles(branchId, profiles);
       res.json(updated);
     } catch (error) {
@@ -14227,6 +14263,18 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingProfile = await storage.getBranchShiftProfile(id);
+      if (!existingProfile) return res.status(404).json({ error: "إعدادات الوردية غير موجودة" });
+      
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existingProfile.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل إعدادات هذا الفرع" });
+        }
+      }
+      
       const profile = await storage.updateBranchShiftProfile(id, req.body);
       if (!profile) return res.status(404).json({ error: "إعدادات الوردية غير موجودة" });
       res.json(profile);
@@ -14240,6 +14288,18 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingProfile = await storage.getBranchShiftProfile(id);
+      if (!existingProfile) return res.status(404).json({ error: "إعدادات الوردية غير موجودة" });
+      
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existingProfile.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف إعدادات هذا الفرع" });
+        }
+      }
+      
       await storage.deleteBranchShiftProfile(id);
       res.status(204).send();
     } catch (error) {
