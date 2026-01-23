@@ -10019,9 +10019,24 @@ export async function registerRoutes(
       res.set('Expires', '0');
       
       const { branchId, date, destination, status, chefId, category } = req.query;
-      console.log("Fetching batches with filters:", { branchId, date, destination, status, chefId, category });
+      
+      // SECURITY: Apply branch filter for non-admin users
+      let effectiveBranchId = branchId as string;
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = await getMandatoryBranchFilter(req);
+        if (mandatoryBranch) {
+          effectiveBranchId = mandatoryBranch;
+        } else if (branchId) {
+          const hasAccess = await canAccessBranch(req, branchId as string);
+          if (!hasAccess) {
+            return res.json([]);
+          }
+        }
+      }
+      
+      console.log("Fetching batches with filters:", { branchId: effectiveBranchId, date, destination, status, chefId, category });
       const batches = await storage.getAllDailyProductionBatches({
-        branchId: branchId as string,
+        branchId: effectiveBranchId,
         date: date as string,
         destination: destination as string,
         status: status as string,
@@ -10044,7 +10059,22 @@ export async function registerRoutes(
       res.set('Expires', '0');
       
       const { branchId } = req.query;
-      const batches = await storage.getUnfinishedBatches(branchId as string);
+      
+      // SECURITY: Apply branch filter for non-admin users
+      let effectiveBranchId = branchId as string;
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = await getMandatoryBranchFilter(req);
+        if (mandatoryBranch) {
+          effectiveBranchId = mandatoryBranch;
+        } else if (branchId) {
+          const hasAccess = await canAccessBranch(req, branchId as string);
+          if (!hasAccess) {
+            return res.json([]);
+          }
+        }
+      }
+      
+      const batches = await storage.getUnfinishedBatches(effectiveBranchId);
       res.json(batches);
     } catch (error) {
       console.error("Error fetching unfinished batches:", error);
@@ -10059,6 +10089,18 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingBatch = await storage.getDailyProductionBatch(id);
+        if (existingBatch?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingBatch.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بإكمال هذه الدفعة" });
+          }
+        }
+      }
+      
       const batch = await storage.finishBatch(id);
       if (!batch) {
         return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
@@ -10077,6 +10119,18 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingBatch = await storage.getDailyProductionBatch(id);
+        if (existingBatch?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingBatch.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بترحيل هذه الدفعة" });
+          }
+        }
+      }
+      
       const { newDate, additionalQuantity } = req.body;
       if (!newDate) {
         return res.status(400).json({ error: "التاريخ الجديد مطلوب" });
@@ -10103,6 +10157,15 @@ export async function registerRoutes(
       if (!batch) {
         return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && batch.branchId) {
+        const hasAccess = await canAccessBranch(req, batch.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه الدفعة" });
+        }
+      }
+      
       res.json(batch);
     } catch (error) {
       console.error("Error fetching batch:", error);
@@ -10119,6 +10182,14 @@ export async function registerRoutes(
       // Validate required fields
       if (!branchId || typeof branchId !== 'string') {
         return res.status(400).json({ error: "الفرع مطلوب" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء دفعات لهذا الفرع" });
+        }
       }
       if (!productName || typeof productName !== 'string') {
         return res.status(400).json({ error: "اسم المنتج مطلوب" });
@@ -10177,6 +10248,17 @@ export async function registerRoutes(
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingBatch = await storage.getDailyProductionBatch(id);
+        if (existingBatch?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingBatch.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل هذه الدفعة" });
+          }
+        }
       }
       
       // Validate allowed update fields
