@@ -106,6 +106,13 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Modular Design**: Distinct modules for construction, operations, and cashier functions.
 - **Scalability**: Designed to handle multi-branch operations and large datasets with pagination.
 - **Branch-Level Security**: Strict branch-level data isolation for non-admin users enforced via backend filters and frontend component logic.
+  - **Security Pattern**: All GET/PUT/DELETE by ID endpoints use `canAccessBranch()` function instead of `getMandatoryBranchFilter()` to ensure proper access control even when user has no active branch set.
+  - **Security Statistics** (as of Jan 2026):
+    - Total API endpoints: 707
+    - Authenticated endpoints: 706 (1 public for file sharing)
+    - canAccessBranch usage: 169
+    - isUserAdmin checks: 233
+  - **Secured Modules**: Inventory, Production, Cashier Journals, Warehouse, Documents, Executive Secretariat, Construction Projects, Branch Employees, Attendance, Financial Periods, Asset Transfers, Performance Alerts, Shift Tracking, Schedule Templates, Schedule Periods, Purchasing Requests, Travel Requests, Advanced Production Orders.
 
 ## External Dependencies
 

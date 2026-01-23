@@ -792,10 +792,13 @@ export async function registerRoutes(
       if (!transfer) {
         return res.status(404).json({ error: "Transfer not found" });
       }
-      // SECURITY: Verify branch access for non-admins
-      const mandatoryBranch = getMandatoryBranchFilter(req);
-      if (mandatoryBranch && transfer.fromBranchId !== mandatoryBranch && transfer.toBranchId !== mandatoryBranch) {
-        return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
+      // SECURITY: Verify branch access for non-admins (must have access to either source or destination branch)
+      if (!isUserAdmin(req)) {
+        const hasFromAccess = transfer.fromBranchId ? await canAccessBranch(req, transfer.fromBranchId) : false;
+        const hasToAccess = transfer.toBranchId ? await canAccessBranch(req, transfer.toBranchId) : false;
+        if (!hasFromAccess && !hasToAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
+        }
       }
       res.json(transfer);
     } catch (error) {
@@ -813,9 +816,10 @@ export async function registerRoutes(
       }
       // SECURITY: Verify branch access for non-admins
       const transfer = await storage.getAssetTransfer(id);
-      if (transfer) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && transfer.fromBranchId !== mandatoryBranch && transfer.toBranchId !== mandatoryBranch) {
+      if (transfer && !isUserAdmin(req)) {
+        const hasFromAccess = transfer.fromBranchId ? await canAccessBranch(req, transfer.fromBranchId) : false;
+        const hasToAccess = transfer.toBranchId ? await canAccessBranch(req, transfer.toBranchId) : false;
+        if (!hasFromAccess && !hasToAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
         }
       }
@@ -872,11 +876,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid transfer ID" });
       }
       
-      // SECURITY: Verify branch access for non-admins
+      // SECURITY: Verify branch access for non-admins (must have access to either source or destination branch)
       const transfer = await storage.getAssetTransfer(id);
-      if (transfer) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && transfer.fromBranchId !== mandatoryBranch && transfer.toBranchId !== mandatoryBranch) {
+      if (transfer && !isUserAdmin(req)) {
+        const hasFromAccess = transfer.fromBranchId ? await canAccessBranch(req, transfer.fromBranchId) : false;
+        const hasToAccess = transfer.toBranchId ? await canAccessBranch(req, transfer.toBranchId) : false;
+        if (!hasFromAccess && !hasToAccess) {
           return res.status(403).json({ error: "غير مصرح بالموافقة على هذا التحويل" });
         }
       }
@@ -903,11 +908,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid transfer ID" });
       }
       
-      // SECURITY: Verify branch access for non-admins
+      // SECURITY: Verify branch access for non-admins (only destination branch can confirm)
       const existingTransfer = await storage.getAssetTransfer(id);
-      if (existingTransfer) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existingTransfer.toBranchId !== mandatoryBranch) {
+      if (existingTransfer && !isUserAdmin(req) && existingTransfer.toBranchId) {
+        const hasToAccess = await canAccessBranch(req, existingTransfer.toBranchId);
+        if (!hasToAccess) {
           return res.status(403).json({ error: "فقط الفرع المستلم يمكنه تأكيد الاستلام" });
         }
       }
@@ -940,11 +945,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid transfer ID" });
       }
       
-      // SECURITY: Verify branch access for non-admins
+      // SECURITY: Verify branch access for non-admins (only source branch can cancel)
       const existingTransfer = await storage.getAssetTransfer(id);
-      if (existingTransfer) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && existingTransfer.fromBranchId !== mandatoryBranch) {
+      if (existingTransfer && !isUserAdmin(req) && existingTransfer.fromBranchId) {
+        const hasFromAccess = await canAccessBranch(req, existingTransfer.fromBranchId);
+        if (!hasFromAccess) {
           return res.status(403).json({ error: "فقط الفرع المرسل يمكنه إلغاء التحويل" });
         }
       }
@@ -6937,10 +6942,11 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Order not found" });
       }
       
-      // SECURITY: Verify branch access for non-admin users
+      // SECURITY: Verify branch access for non-admin users (must have access to either source or target branch)
       if (!isUserAdmin(req)) {
-        const mandatoryBranch = getMandatoryBranchFilter(req);
-        if (mandatoryBranch && result.order.sourceBranchId !== mandatoryBranch && result.order.targetBranchId !== mandatoryBranch) {
+        const hasSourceAccess = result.order.sourceBranchId ? await canAccessBranch(req, result.order.sourceBranchId) : false;
+        const hasTargetAccess = result.order.targetBranchId ? await canAccessBranch(req, result.order.targetBranchId) : false;
+        if (!hasSourceAccess && !hasTargetAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الأمر" });
         }
       }
@@ -7016,6 +7022,19 @@ export async function registerRoutes(
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid order ID" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingOrder = await storage.getAdvancedProductionOrder(id);
+      if (!existingOrder) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasSourceAccess = existingOrder.sourceBranchId ? await canAccessBranch(req, existingOrder.sourceBranchId) : false;
+        const hasTargetAccess = existingOrder.targetBranchId ? await canAccessBranch(req, existingOrder.targetBranchId) : false;
+        if (!hasSourceAccess && !hasTargetAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا الأمر" });
+        }
       }
       
       const { items, ...updateData } = req.body;
@@ -14389,6 +14408,15 @@ export async function registerRoutes(
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const template = await storage.getScheduleTemplate(id);
       if (!template) return res.status(404).json({ error: "القالب غير موجود" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && template.branchId) {
+        const hasAccess = await canAccessBranch(req, template.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا القالب" });
+        }
+      }
+      
       res.json(template);
     } catch (error) {
       console.error("Error fetching schedule template:", error);
@@ -14418,9 +14446,19 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingTemplate = await storage.getScheduleTemplate(id);
+      if (!existingTemplate) return res.status(404).json({ error: "القالب غير موجود" });
+      if (!isUserAdmin(req) && existingTemplate.branchId) {
+        const hasAccess = await canAccessBranch(req, existingTemplate.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا القالب" });
+        }
+      }
+      
       const partialData = insertScheduleTemplateSchema.partial().parse(req.body);
       const template = await storage.updateScheduleTemplate(id, partialData);
-      if (!template) return res.status(404).json({ error: "القالب غير موجود" });
       res.json(template);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -14435,6 +14473,17 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingTemplate = await storage.getScheduleTemplate(id);
+      if (!existingTemplate) return res.status(404).json({ error: "القالب غير موجود" });
+      if (!isUserAdmin(req) && existingTemplate.branchId) {
+        const hasAccess = await canAccessBranch(req, existingTemplate.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا القالب" });
+        }
+      }
+      
       await storage.deleteScheduleTemplate(id);
       res.status(204).send();
     } catch (error) {
@@ -14461,6 +14510,15 @@ export async function registerRoutes(
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const period = await storage.getSchedulePeriod(id);
       if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, period.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه الفترة" });
+        }
+      }
+      
       res.json(period);
     } catch (error) {
       console.error("Error fetching schedule period:", error);
@@ -14490,9 +14548,19 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingPeriod = await storage.getSchedulePeriod(id);
+      if (!existingPeriod) return res.status(404).json({ error: "الفترة غير موجودة" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existingPeriod.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذه الفترة" });
+        }
+      }
+      
       const partialData = insertSchedulePeriodSchema.partial().parse(req.body);
       const period = await storage.updateSchedulePeriod(id, partialData);
-      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
       res.json(period);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -14507,9 +14575,19 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingPeriod = await storage.getSchedulePeriod(id);
+      if (!existingPeriod) return res.status(404).json({ error: "الفترة غير موجودة" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existingPeriod.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بنشر هذه الفترة" });
+        }
+      }
+      
       const currentUser = getCurrentUser(req);
       const period = await storage.publishSchedulePeriod(id, currentUser?.id);
-      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
       res.json(period);
     } catch (error) {
       console.error("Error publishing schedule period:", error);
@@ -14521,6 +14599,17 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify branch access for non-admin users
+      const existingPeriod = await storage.getSchedulePeriod(id);
+      if (!existingPeriod) return res.status(404).json({ error: "الفترة غير موجودة" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existingPeriod.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذه الفترة" });
+        }
+      }
+      
       await storage.deleteSchedulePeriod(id);
       res.status(204).send();
     } catch (error) {
@@ -18470,6 +18559,15 @@ export async function registerRoutes(
       if (!result) {
         return res.status(404).json({ error: "طلب المشتريات غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, result.request.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
+        }
+      }
+      
       res.json(result);
     } catch (error) {
       console.error("Error fetching purchasing request:", error);
@@ -18541,6 +18639,18 @@ export async function registerRoutes(
 
   app.put("/api/purchasing/requests/:id/status", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      const existingRequest = await storage.getPurchasingRequest(parseInt(req.params.id));
+      if (!existingRequest) {
+        return res.status(404).json({ error: "طلب المشتريات غير موجود" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existingRequest.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتحديث حالة هذا الطلب" });
+        }
+      }
+      
       const statusUpdateSchema = z.object({
         status: z.enum(["pending", "approved", "rejected", "ordered", "received", "cancelled"]),
         vendorName: z.string().optional(),
@@ -20467,6 +20577,15 @@ export async function registerRoutes(
       if (!request) {
         return res.status(404).json({ error: "طلب السفر غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && request.branchId) {
+        const hasAccess = await canAccessBranch(req, request.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
+        }
+      }
+      
       res.json(request);
     } catch (error) {
       console.error("Error getting travel request:", error);
@@ -20494,10 +20613,19 @@ export async function registerRoutes(
   // Update travel request
   app.patch("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
     try {
-      const request = await storage.updateTravelRequest(parseInt(req.params.id), req.body);
-      if (!request) {
+      // SECURITY: Verify branch access for non-admin users
+      const existingRequest = await storage.getTravelRequest(parseInt(req.params.id));
+      if (!existingRequest) {
         return res.status(404).json({ error: "طلب السفر غير موجود" });
       }
+      if (!isUserAdmin(req) && existingRequest.branchId) {
+        const hasAccess = await canAccessBranch(req, existingRequest.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل هذا الطلب" });
+        }
+      }
+      
+      const request = await storage.updateTravelRequest(parseInt(req.params.id), req.body);
       res.json(request);
     } catch (error) {
       console.error("Error updating travel request:", error);
@@ -20508,6 +20636,18 @@ export async function registerRoutes(
   // Delete travel request
   app.delete("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      const existingRequest = await storage.getTravelRequest(parseInt(req.params.id));
+      if (!existingRequest) {
+        return res.status(404).json({ error: "طلب السفر غير موجود" });
+      }
+      if (!isUserAdmin(req) && existingRequest.branchId) {
+        const hasAccess = await canAccessBranch(req, existingRequest.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف هذا الطلب" });
+        }
+      }
+      
       await storage.deleteTravelRequest(parseInt(req.params.id));
       res.json({ success: true });
     } catch (error) {
