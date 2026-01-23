@@ -582,6 +582,23 @@ export const SYSTEM_MODULES = [
   "executive_travel",
   "executive_reports",
   "executive_notifications",
+  "executive_calendar",
+  
+  // إدارة الوثائق
+  "documents",
+  
+  // الحوكمة المؤسسية
+  "governance",
+  "governance_board",
+  "governance_shareholders",
+  "governance_meetings",
+  "governance_resolutions",
+  "governance_compliance",
+  "governance_transfers",
+  "governance_disclosures",
+  "governance_dividends",
+  "governance_capital",
+  "governance_voting",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -727,6 +744,23 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   executive_travel: "إدارة السفر",
   executive_reports: "تقارير السكرتارية",
   executive_notifications: "التنبيهات",
+  executive_calendar: "التقويم التنفيذي",
+  
+  // إدارة الوثائق
+  documents: "إدارة الوثائق",
+  
+  // الحوكمة المؤسسية
+  governance: "الحوكمة المؤسسية",
+  governance_board: "مجلس الإدارة",
+  governance_shareholders: "المساهمين",
+  governance_meetings: "اجتماعات الحوكمة",
+  governance_resolutions: "القرارات",
+  governance_compliance: "الامتثال",
+  governance_transfers: "تحويلات الأسهم",
+  governance_disclosures: "الإفصاحات",
+  governance_dividends: "توزيعات الأرباح",
+  governance_capital: "رأس المال",
+  governance_voting: "التصويت",
 };
 
 // Action labels for UI display (Arabic)
