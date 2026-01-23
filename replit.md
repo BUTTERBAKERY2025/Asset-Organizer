@@ -110,9 +110,10 @@ The system uses a modern web architecture with a React-based frontend and a Node
   - **Security Statistics** (as of Jan 2026):
     - Total API endpoints: 707
     - Authenticated endpoints: 706 (1 public for file sharing)
-    - canAccessBranch usage: 169
-    - isUserAdmin checks: 233
+    - canAccessBranch usage: 173
+    - isUserAdmin checks: 237
   - **Secured Modules**: Inventory, Production, Cashier Journals, Warehouse, Documents, Executive Secretariat, Construction Projects, Branch Employees, Attendance, Financial Periods, Asset Transfers, Performance Alerts, Shift Tracking, Schedule Templates, Schedule Periods, Purchasing Requests, Travel Requests, Advanced Production Orders.
+  - **Central Data (No Branch Isolation)**: Users, Products, Contractors, Branches, Filters, Backups, Integrations, Notification Templates, Accounting Exports, Contracts, Work Items, Budget Allocations, Contract Items, Payment Requests, Org Job Roles, Employee Settings, Target Profiles, Target Monthly, Incentive Tiers, Seasons/Holidays, Commission Rates, Security Alerts, RBAC Role Templates, Marketing Campaigns/Goals/Expenses.
 
 ## External Dependencies
 

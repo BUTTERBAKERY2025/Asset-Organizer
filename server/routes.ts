@@ -4307,12 +4307,6 @@ export async function registerRoutes(
   app.delete("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const user = getCurrentUser(req);
-      
-      // Only admins can delete
-      if (user.role !== 'admin') {
-        return res.status(403).json({ error: "غير مصرح بالحذف" });
-      }
       
       const [closure] = await db.select()
         .from(branchDailyClosures)
@@ -4320,6 +4314,16 @@ export async function registerRoutes(
       
       if (!closure) {
         return res.status(404).json({ error: "Closure not found" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        if (closure.branchId) {
+          const hasAccess = await canAccessBranch(req, closure.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بحذف هذا الإغلاق" });
+          }
+        }
       }
       
       if (closure.status === 'closed') {
@@ -9321,6 +9325,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Plan not found" });
       }
       
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && plan.branchId) {
+        const hasAccess = await canAccessBranch(req, plan.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه الخطة" });
+        }
+      }
+      
       // Get branch name
       const branch = await storage.getBranch(plan.branchId);
       const branchName = branch?.name || plan.branchId;
@@ -9732,6 +9744,15 @@ export async function registerRoutes(
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid upload ID" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      const upload = await storage.getSalesDataUpload(id);
+      if (upload && !isUserAdmin(req) && upload.branchId) {
+        const hasAccess = await canAccessBranch(req, upload.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه البيانات" });
+        }
       }
       
       const analytics = await storage.getProductSalesAnalytics(id);
@@ -10400,6 +10421,14 @@ export async function registerRoutes(
       const existing = await storage.getDailyProductionBatch(id);
       if (!existing) {
         return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && existing.branchId) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بحذف دفعة إنتاج هذا الفرع" });
+        }
       }
       
       await storage.deleteDailyProductionBatch(id);
