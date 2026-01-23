@@ -17679,8 +17679,12 @@ export async function registerRoutes(
   // Warehouse Dashboard Stats
   app.get("/api/warehouse/dashboard-stats", isAuthenticated, async (req, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
-      const stats = await storage.getWarehouseDashboardStats(branchId);
+      // SECURITY: Enforce branch filtering for non-admin users
+      const queryBranchId = req.query.branchId as string | undefined;
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const effectiveBranchId = isUserAdmin(req) ? queryBranchId : mandatoryBranch;
+      
+      const stats = await storage.getWarehouseDashboardStats(effectiveBranchId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching warehouse dashboard stats:", error);
@@ -17756,7 +17760,17 @@ export async function registerRoutes(
   // Branch Stock
   app.get("/api/warehouse/branch-stock/:branchId", isAuthenticated, async (req, res) => {
     try {
-      const stock = await storage.getBranchStock(req.params.branchId);
+      const { branchId } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لمخزون هذا الفرع" });
+        }
+      }
+      
+      const stock = await storage.getBranchStock(branchId);
       res.json(stock);
     } catch (error) {
       console.error("Error fetching branch stock:", error);
@@ -17766,10 +17780,20 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/branch-stock/:branchId/:itemId", isAuthenticated, async (req, res) => {
     try {
+      const { branchId } = req.params;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل مخزون هذا الفرع" });
+        }
+      }
+      
       const user = req.user as any;
       const { quantity, dailyConsumption } = req.body;
       const stock = await storage.updateBranchStock(
-        req.params.branchId,
+        branchId,
         parseInt(req.params.itemId),
         quantity,
         dailyConsumption,
@@ -17793,6 +17817,12 @@ export async function registerRoutes(
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.startDate) filters.startDate = req.query.startDate as string;
       if (req.query.endDate) filters.endDate = req.query.endDate as string;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        filters.branchId = mandatoryBranch;
+      }
       
       const transfers = await storage.getMaterialTransfers(filters);
       
@@ -17823,6 +17853,17 @@ export async function registerRoutes(
       if (!result) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && 
+            result.transfer.sourceBranchId !== mandatoryBranch && 
+            result.transfer.destinationBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا التحويل" });
+        }
+      }
+      
       res.json(result);
     } catch (error) {
       console.error("Error fetching material transfer:", error);
@@ -17837,6 +17878,17 @@ export async function registerRoutes(
       if (!result) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && 
+            result.transfer.sourceBranchId !== mandatoryBranch && 
+            result.transfer.destinationBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبنود هذا التحويل" });
+        }
+      }
+      
       res.json(result.items || []);
     } catch (error) {
       console.error("Error fetching transfer items:", error);
@@ -17848,6 +17900,14 @@ export async function registerRoutes(
     try {
       const user = req.user as any;
       const { items, ...transferData } = req.body;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && transferData.sourceBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "لا يمكنك إنشاء تحويل من فرع غير فرعك" });
+        }
+      }
       
       const transferNumber = await storage.generateMaterialTransferNumber();
       
@@ -17872,6 +17932,19 @@ export async function registerRoutes(
       
       if (!['pending', 'approved', 'rejected', 'in_transit', 'delivered', 'cancelled'].includes(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
+        if (existingTransfer) {
+          const mandatoryBranch = getMandatoryBranchFilter(req);
+          if (mandatoryBranch && 
+              existingTransfer.transfer.sourceBranchId !== mandatoryBranch && 
+              existingTransfer.transfer.destinationBranchId !== mandatoryBranch) {
+            return res.status(403).json({ error: "غير مصرح بتعديل حالة هذا التحويل" });
+          }
+        }
       }
       
       const updateData: any = { ...additionalData };
@@ -17957,6 +18030,18 @@ export async function registerRoutes(
         return res.status(400).json({ error: "يجب توفير بيانات التعديل" });
       }
       
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
+        if (existingTransfer) {
+          const mandatoryBranch = getMandatoryBranchFilter(req);
+          if (mandatoryBranch && 
+              existingTransfer.transfer.sourceBranchId !== mandatoryBranch) {
+            return res.status(403).json({ error: "غير مصرح بتعديل كميات هذا التحويل" });
+          }
+        }
+      }
+      
       // Validate all quantities are positive
       for (const mod of modifications) {
         if (mod.newQuantity < 0) {
@@ -18003,6 +18088,17 @@ export async function registerRoutes(
       // receivedItems: [{ itemId: number, receivedQuantity: number, discrepancyNotes?: string }]
       if (!receivedItems || !Array.isArray(receivedItems)) {
         return res.status(400).json({ error: "يجب توفير بيانات الاستلام" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users (only destination branch can confirm)
+      if (!isUserAdmin(req)) {
+        const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
+        if (existingTransfer) {
+          const mandatoryBranch = getMandatoryBranchFilter(req);
+          if (mandatoryBranch && existingTransfer.transfer.destinationBranchId !== mandatoryBranch) {
+            return res.status(403).json({ error: "فقط الفرع المستلم يمكنه تأكيد الاستلام" });
+          }
+        }
       }
       
       const transfer = await storage.confirmMaterialTransferDelivery(
