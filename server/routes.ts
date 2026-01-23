@@ -17549,6 +17549,12 @@ export async function registerRoutes(
       if (req.query.productionDate) filters.productionDate = req.query.productionDate as string;
       if (req.query.category) filters.category = req.query.category as string;
       
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        filters.branchId = mandatoryBranch;
+      }
+      
       const inventory = await storage.getFinishedGoodsInventory(filters);
       res.json(inventory);
     } catch (error) {
@@ -17563,6 +17569,15 @@ export async function registerRoutes(
       if (!item) {
         return res.status(404).json({ error: "العنصر غير موجود" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, item.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لمخزون هذا الفرع" });
+        }
+      }
+      
       res.json(item);
     } catch (error) {
       console.error("Error fetching inventory item:", error);
@@ -17609,6 +17624,17 @@ export async function registerRoutes(
         return res.status(400).json({ error: "يجب تحديد نوع الوجهة" });
       }
       
+      // SECURITY: Verify branch access for non-admin users (source branch)
+      if (!isUserAdmin(req)) {
+        const item = await storage.getFinishedGoodsInventoryItem(inventoryId);
+        if (item) {
+          const hasAccess = await canAccessBranch(req, item.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتحويل مخزون هذا الفرع" });
+          }
+        }
+      }
+      
       // Validate destination type at route level
       const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض'];
       if (!validDestinationTypes.includes(destinationType)) {
@@ -17651,6 +17677,12 @@ export async function registerRoutes(
       if (req.query.transferDate) filters.transferDate = req.query.transferDate as string;
       if (req.query.status) filters.status = req.query.status as string;
       
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        filters.sourceBranchId = mandatoryBranch;
+      }
+      
       const transfers = await storage.getFinishedGoodsTransfers(filters);
       res.json(transfers);
     } catch (error) {
@@ -17665,6 +17697,12 @@ export async function registerRoutes(
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
       if (req.query.productId) filters.productId = parseInt(req.query.productId as string);
       if (req.query.movementType) filters.movementType = req.query.movementType as string;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        filters.branchId = mandatoryBranch;
+      }
       
       const logs = await storage.getProductionInventoryLogs(filters);
       res.json(logs);
@@ -19902,7 +19940,14 @@ export async function registerRoutes(
   // Get visitors
   app.get("/api/visitors", isAuthenticated, async (req, res) => {
     try {
-      const branchId = parseQueryString(req.query.branchId);
+      let branchId = parseQueryString(req.query.branchId);
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchId = mandatoryBranch;
+      }
+      
       const visitors = await storage.getVisitors(branchId);
       res.json(visitors);
     } catch (error) {
@@ -19915,7 +19960,14 @@ export async function registerRoutes(
   app.get("/api/visitors/search", isAuthenticated, async (req, res) => {
     try {
       const query = parseQueryString(req.query.q) || "";
-      const branchId = parseQueryString(req.query.branchId);
+      let branchId = parseQueryString(req.query.branchId);
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchId = mandatoryBranch;
+      }
+      
       const visitors = await storage.searchVisitors(query, branchId);
       res.json(visitors);
     } catch (error) {
@@ -19927,7 +19979,14 @@ export async function registerRoutes(
   // Get blacklisted visitors
   app.get("/api/visitors/blacklist", isAuthenticated, async (req, res) => {
     try {
-      const branchId = parseQueryString(req.query.branchId);
+      let branchId = parseQueryString(req.query.branchId);
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchId = mandatoryBranch;
+      }
+      
       const visitors = await storage.getBlacklistedVisitors(branchId);
       res.json(visitors);
     } catch (error) {
@@ -19965,6 +20024,15 @@ export async function registerRoutes(
   app.post("/api/visitors", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإضافة زوار لهذا الفرع" });
+        }
+      }
+      
       const visitor = await storage.createVisitor({
         ...req.body,
         createdBy: user.id,
@@ -19979,6 +20047,17 @@ export async function registerRoutes(
   // Update visitor
   app.patch("/api/visitors/:id", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingVisitor = await storage.getVisitor(parseInt(req.params.id));
+        if (existingVisitor && existingVisitor.branchId) {
+          const hasAccess = await canAccessBranch(req, existingVisitor.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل زوار هذا الفرع" });
+          }
+        }
+      }
+      
       const visitor = await storage.updateVisitor(parseInt(req.params.id), req.body);
       if (!visitor) {
         return res.status(404).json({ error: "الزائر غير موجود" });
@@ -19993,6 +20072,17 @@ export async function registerRoutes(
   // Delete visitor
   app.delete("/api/visitors/:id", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingVisitor = await storage.getVisitor(parseInt(req.params.id));
+        if (existingVisitor && existingVisitor.branchId) {
+          const hasAccess = await canAccessBranch(req, existingVisitor.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بحذف زوار هذا الفرع" });
+          }
+        }
+      }
+      
       await storage.deleteVisitor(parseInt(req.params.id));
       res.json({ success: true });
     } catch (error) {
@@ -20006,9 +20096,16 @@ export async function registerRoutes(
   // Get visitor logs
   app.get("/api/visitor-logs", isAuthenticated, async (req, res) => {
     try {
-      const branchId = parseQueryString(req.query.branchId);
+      let branchId = parseQueryString(req.query.branchId);
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchId = mandatoryBranch;
+      }
+      
       const logs = await storage.getVisitorLogs(branchId, startDate, endDate);
       res.json(logs);
     } catch (error) {
