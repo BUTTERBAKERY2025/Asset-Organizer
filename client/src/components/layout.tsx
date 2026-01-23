@@ -13,7 +13,8 @@ import {
   ClipboardList, CheckCircle, BarChart3, Target, Gift, TrendingUp, Brain, Upload, 
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
-  PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck
+  PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
+  Sparkles, Crown
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -332,44 +333,65 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <Link key={item.href} href={item.href}>
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors cursor-pointer text-[13px]",
-          inGroup && !item.isHeader && "mr-6 text-[12px]",
-          inGroup && item.isHeader && "mr-3 font-semibold",
-          item.indent && "mr-8 text-[12px] border-r-2 border-muted pr-2",
+          "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer text-[13px] group",
+          inGroup && !item.isHeader && "mr-4 text-[12px]",
+          inGroup && item.isHeader && "mr-2 font-semibold",
+          item.indent && "mr-6 text-[12px] border-r-2 border-primary/20 pr-3",
           location === item.href
-            ? "bg-primary/10 text-primary font-medium"
-            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+            ? "bg-gradient-to-l from-primary/15 via-primary/10 to-transparent text-primary font-medium shadow-sm border-l-2 border-primary"
+            : "text-muted-foreground hover:bg-gradient-to-l hover:from-secondary/80 hover:to-transparent hover:text-foreground hover:translate-x-1"
         )}
         data-testid={`nav-link-${item.href.replace(/\//g, '') || 'home'}`}
         onMouseEnter={() => handleLinkHover(item.href)}
       >
-        <item.icon className={cn("flex-shrink-0", item.indent ? "w-3.5 h-3.5" : "w-4 h-4")} />
-        <span>{item.label}</span>
+        <div className={cn(
+          "p-1.5 rounded-md transition-colors",
+          location === item.href ? "bg-primary/20 text-primary" : "bg-muted/50 group-hover:bg-primary/10 group-hover:text-primary"
+        )}>
+          <item.icon className={cn("flex-shrink-0", item.indent ? "w-3 h-3" : "w-3.5 h-3.5")} />
+        </div>
+        <span className="flex-1">{item.label}</span>
+        {location === item.href && (
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+        )}
       </div>
     </Link>
   );
 
   return (
     <div className="min-h-screen bg-background flex">
-      <aside className="w-64 bg-card border-l border-border hidden md:flex flex-col sticky top-0 h-screen">
-        <div className="p-4 flex flex-col items-center border-b border-border/50">
-          <div className="w-full px-2 mb-2 flex items-center justify-between">
-            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-20" />
+      <aside className="w-72 bg-gradient-to-b from-card via-card to-card/95 border-l border-border/50 hidden md:flex flex-col sticky top-0 h-screen shadow-lg">
+        <div className="p-4 flex flex-col items-center bg-gradient-to-b from-primary/5 to-transparent border-b border-border/30">
+          <div className="w-full px-2 mb-3 flex items-center justify-center relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent rounded-xl" />
+            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16 relative z-10" />
           </div>
-          <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center gap-3 w-full justify-center mb-2">
+            <div className="flex flex-col items-center gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <Crown className="w-3 h-3 text-amber-500" />
+                <p className="text-[11px] font-bold text-foreground text-center leading-tight">{t("platformName")}</p>
+              </div>
+              <p className="text-[9px] text-primary font-medium tracking-wider flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5" />
+                {t("systemSubtitle")}
+              </p>
+            </div>
             {isAuthenticated && <NotificationsDropdown />}
-            <p className="text-[10px] font-bold text-foreground text-center leading-tight">{t("platformName")}</p>
-            <p className="text-[9px] text-primary font-medium tracking-wider">{t("systemSubtitle")}</p>
           </div>
           {isAuthenticated && (
-            <div className="mt-2 w-full">
+            <div className="w-full">
               <GlobalSearch />
             </div>
           )}
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
           {standaloneItems.map(item => renderNavItem(item))}
+          
+          <div className="pt-2">
+            <div className="h-px bg-gradient-to-l from-transparent via-border to-transparent mb-3" />
+          </div>
 
           {navGroups.map(({ key, group }) => (
             <Collapsible
@@ -380,81 +402,104 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <CollapsibleTrigger asChild>
                 <div
                   className={cn(
-                    "flex items-center justify-between gap-2 px-3 py-1.5 rounded-md transition-colors cursor-pointer mt-1.5 text-[13px]",
+                    "flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer mt-1 text-[13px] group",
                     isGroupActive(group.items)
-                      ? "bg-primary/5 text-primary"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      ? "bg-gradient-to-l from-primary/15 via-primary/8 to-primary/3 text-primary shadow-sm border border-primary/20"
+                      : "text-muted-foreground hover:bg-gradient-to-l hover:from-muted/60 hover:to-transparent hover:text-foreground"
                   )}
                   data-testid={`nav-group-${key}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <group.icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="font-medium">{group.label}</span>
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-2 rounded-lg transition-all duration-200",
+                      isGroupActive(group.items) 
+                        ? "bg-primary/20 text-primary shadow-inner" 
+                        : "bg-muted/60 group-hover:bg-primary/15 group-hover:text-primary"
+                    )}>
+                      <group.icon className="w-4 h-4 flex-shrink-0" />
+                    </div>
+                    <span className="font-semibold">{group.label}</span>
                   </div>
-                  {openGroups[key] ? (
+                  <div className={cn(
+                    "p-1 rounded-full transition-all duration-200",
+                    openGroups[key] ? "bg-primary/20 rotate-0" : "bg-muted/50 -rotate-90"
+                  )}>
                     <ChevronDown className="w-3.5 h-3.5" />
-                  ) : (
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  )}
+                  </div>
                 </div>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-0.5 mt-0.5">
+              <CollapsibleContent className="space-y-0.5 mt-1 mr-2 pr-1 border-r-2 border-primary/10">
                 {group.items.map(item => renderNavItem(item, true))}
               </CollapsibleContent>
             </Collapsible>
           ))}
         </nav>
 
-        <div className="p-3 border-t border-border/50">
+        <div className="p-3 border-t border-border/30 bg-gradient-to-t from-muted/30 to-transparent">
           {isLoading ? (
-            <div className="flex items-center justify-center py-2">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-3">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
             </div>
           ) : isAuthenticated && user ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 px-1">
-                <Avatar className="h-8 w-8">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-2 rounded-xl bg-gradient-to-l from-primary/10 to-transparent border border-primary/10">
+                <Avatar className="h-10 w-10 ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
                   <AvatarImage src={user.profileImageUrl || undefined} style={{ objectFit: 'cover' }} />
-                  <AvatarFallback className="text-xs">{user.firstName?.[0] || user.phone?.[0] || 'U'}</AvatarFallback>
+                  <AvatarFallback className="text-sm bg-primary/20 text-primary font-semibold">
+                    {user.firstName?.[0] || user.phone?.[0] || 'U'}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium truncate">{user.firstName || user.phone}</p>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t(ROLE_KEYS[user.role]) || user.role}</Badge>
+                  <p className="text-[13px] font-semibold truncate text-foreground">{user.firstName || user.phone}</p>
+                  <Badge className="text-[10px] px-2 py-0.5 bg-primary/15 text-primary hover:bg-primary/20 border-0">
+                    {t(ROLE_KEYS[user.role]) || user.role}
+                  </Badge>
                 </div>
               </div>
-              <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-muted-foreground hover:text-destructive cursor-pointer transition-colors rounded-md hover:bg-destructive/10"
-                data-testid="button-logout"
-              >
-                {isLoggingOut ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <LogOut className="w-4 h-4" />
-                )}
-                <span>{t("logout")}</span>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-[12px] text-muted-foreground hover:text-destructive cursor-pointer transition-all duration-200 rounded-lg hover:bg-destructive/10 border border-transparent hover:border-destructive/20"
+                  data-testid="button-logout"
+                >
+                  {isLoggingOut ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <LogOut className="w-4 h-4" />
+                  )}
+                  <span>{t("logout")}</span>
+                </button>
+                <button
+                  onClick={() => changeLanguage(currentLang === "ar" ? "en" : "ar")}
+                  className="flex items-center justify-center gap-2 px-3 py-2 text-[12px] text-muted-foreground hover:text-primary cursor-pointer transition-all duration-200 rounded-lg hover:bg-primary/10 border border-transparent hover:border-primary/20"
+                  data-testid="button-language-toggle"
+                >
+                  <Languages className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ) : (
-            <Link href="/login">
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-primary hover:text-primary/80 cursor-pointer transition-colors rounded-md hover:bg-primary/10"
-                data-testid="button-login"
+            <div className="space-y-2">
+              <Link href="/login">
+                <div
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-[13px] text-white bg-gradient-to-l from-primary to-primary/80 cursor-pointer transition-all duration-200 rounded-xl hover:shadow-lg hover:shadow-primary/25 font-medium"
+                  data-testid="button-login"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>{t("login")}</span>
+                </div>
+              </Link>
+              <button
+                onClick={() => changeLanguage(currentLang === "ar" ? "en" : "ar")}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[12px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors rounded-lg hover:bg-secondary"
+                data-testid="button-language-toggle"
               >
-                <LogIn className="w-4 h-4" />
-                <span>{t("login")}</span>
-              </div>
-            </Link>
+                <Languages className="w-4 h-4" />
+                <span>{t("switchLanguage")}</span>
+              </button>
+            </div>
           )}
-          <button
-            onClick={() => changeLanguage(currentLang === "ar" ? "en" : "ar")}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors rounded-md hover:bg-secondary mt-2"
-            data-testid="button-language-toggle"
-          >
-            <Languages className="w-4 h-4" />
-            <span>{t("switchLanguage")}</span>
-          </button>
         </div>
       </aside>
 

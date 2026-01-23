@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
 import { db } from "./db";
+import * as NotificationService from "./notification-service";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
@@ -3191,6 +3192,23 @@ export async function registerRoutes(
         storage.getPaymentBreakdowns(journal.id),
         storage.getCashierSignatures(journal.id),
       ]);
+      
+      // Create notification for cashier journal
+      try {
+        const branchData = await db.select().from(branches).where(eq(branches.id, journal.branchId)).limit(1);
+        const branchName = branchData[0]?.name || "الفرع";
+        const totalSales = parseFloat(String(journal.totalSales)) || 0;
+        await NotificationService.notifyCashierJournalSubmitted(
+          journal.id,
+          journal.branchId,
+          branchName,
+          totalSales,
+          journal.journalDate,
+          req.currentUser?.id || ""
+        );
+      } catch (notifyError) {
+        console.error("Error creating cashier notification:", notifyError);
+      }
       
       res.status(201).json({ ...journal, paymentBreakdowns: createdBreakdowns, signatures });
     } catch (error) {
@@ -20003,6 +20021,7 @@ export async function registerRoutes(
   // Create new branch shift
   app.post("/api/branch-shifts", isAuthenticated, async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const { shiftDate, openingTime, closingTime, ...rest } = req.body;
       const shiftData = {
         ...rest,
@@ -20012,6 +20031,23 @@ export async function registerRoutes(
         createdAt: new Date(),
       };
       const [shift] = await db.insert(branchShifts).values(shiftData).returning();
+      
+      // Create notification for branch shift
+      try {
+        const branchData = await db.select().from(branches).where(eq(branches.id, shift.branchId)).limit(1);
+        const branchName = branchData[0]?.name || "الفرع";
+        const shiftType = shift.shiftType || "opening";
+        await NotificationService.notifyBranchShiftOpened(
+          shift.id,
+          shift.branchId,
+          branchName,
+          shiftType,
+          user.id
+        );
+      } catch (notifyError) {
+        console.error("Error creating shift notification:", notifyError);
+      }
+      
       res.status(201).json(shift);
     } catch (error) {
       console.error("Error creating branch shift:", error);
