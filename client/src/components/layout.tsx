@@ -59,7 +59,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { t, i18n } = useTranslation("platformHome");
   const currentLang = i18n.language;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    hr: true,
+    hr: false,
     production: false,
     operations: false,
     sales: false,
@@ -333,7 +333,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <Link key={item.href} href={item.href}>
       <div
         className={cn(
-          "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer text-[13px] group",
+          "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 cursor-pointer text-[12px] group",
           inGroup && !item.isHeader && "mr-4 text-[12px]",
           inGroup && item.isHeader && "mr-2 font-semibold",
           item.indent && "mr-6 text-[12px] border-r-2 border-primary/20 pr-3",
@@ -386,11 +386,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+        <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
           {standaloneItems.map(item => renderNavItem(item))}
           
-          <div className="pt-2">
-            <div className="h-px bg-gradient-to-l from-transparent via-border to-transparent mb-3" />
+          <div className="pt-1">
+            <div className="h-px bg-gradient-to-l from-transparent via-border to-transparent mb-1.5" />
           </div>
 
           {navGroups.map(({ key, group }) => (
@@ -402,7 +402,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <CollapsibleTrigger asChild>
                 <div
                   className={cn(
-                    "flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer mt-1 text-[13px] group",
+                    "flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer text-[13px] group",
                     isGroupActive(group.items)
                       ? "bg-gradient-to-l from-primary/15 via-primary/8 to-primary/3 text-primary shadow-sm border border-primary/20"
                       : "text-muted-foreground hover:bg-gradient-to-l hover:from-muted/60 hover:to-transparent hover:text-foreground"
@@ -428,7 +428,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </div>
                 </div>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-0.5 mt-1 mr-2 pr-1 border-r-2 border-primary/10">
+              <CollapsibleContent className="space-y-0 mt-0.5 mr-2 pr-1 border-r-2 border-primary/10">
                 {group.items.map(item => renderNavItem(item, true))}
               </CollapsibleContent>
             </Collapsible>
