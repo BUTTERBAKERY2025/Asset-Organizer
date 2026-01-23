@@ -2183,7 +2183,7 @@ export default function OperationsReportsDashboardPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[300px]">
+                    <div className="h-[350px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -2191,17 +2191,28 @@ export default function OperationsReportsDashboardPage() {
                             dataKey="amount"
                             nameKey="method"
                             cx="50%"
-                            cy="50%"
-                            outerRadius={100}
-                            label={({ method, percent }) => 
-                              `${PAYMENT_METHOD_LABELS[method] || method}: ${(percent * 100).toFixed(0)}%`
-                            }
+                            cy="45%"
+                            innerRadius={50}
+                            outerRadius={90}
+                            paddingAngle={2}
+                            label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                            labelLine={false}
                           >
                             {report.salesReport.paymentMethodBreakdown.map((_, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Tooltip 
+                            formatter={(value: number, name: string) => [formatCurrency(value), PAYMENT_METHOD_LABELS[name] || name]} 
+                            contentStyle={{ textAlign: 'right', direction: 'rtl' }}
+                          />
+                          <Legend 
+                            layout="horizontal" 
+                            align="center" 
+                            verticalAlign="bottom"
+                            formatter={(value: string) => PAYMENT_METHOD_LABELS[value] || value}
+                            wrapperStyle={{ paddingTop: '15px' }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -2267,16 +2278,36 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader><CardTitle className="text-lg">توزيع طرق الدفع</CardTitle></CardHeader>
                   <CardContent>
-                    <div className="h-[300px]">
+                    <div className="h-[350px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={report.salesReport.paymentMethodBreakdown} dataKey="amount" nameKey="method" cx="50%" cy="50%" outerRadius={100}
-                            label={({ method, percent }) => `${PAYMENT_METHOD_LABELS[method] || method}: ${(percent * 100).toFixed(0)}%`}>
+                          <Pie 
+                            data={report.salesReport.paymentMethodBreakdown} 
+                            dataKey="amount" 
+                            nameKey="method" 
+                            cx="50%" 
+                            cy="45%" 
+                            innerRadius={50}
+                            outerRadius={90}
+                            paddingAngle={2}
+                            label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                            labelLine={false}
+                          >
                             {report.salesReport.paymentMethodBreakdown.map((_, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Tooltip 
+                            formatter={(value: number, name: string) => [formatCurrency(value), PAYMENT_METHOD_LABELS[name] || name]}
+                            contentStyle={{ textAlign: 'right', direction: 'rtl' }}
+                          />
+                          <Legend 
+                            layout="horizontal" 
+                            align="center" 
+                            verticalAlign="bottom"
+                            formatter={(value: string) => PAYMENT_METHOD_LABELS[value] || value}
+                            wrapperStyle={{ paddingTop: '15px' }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
