@@ -20243,16 +20243,19 @@ export async function registerRoutes(
         if (!effectiveBranchId) {
           effectiveBranchId = getMandatoryBranchFilter(req);
         }
-        if (effectiveBranchId) {
-          const hasAccess = await canAccessBranch(req, effectiveBranchId);
-          if (!hasAccess) {
-            return res.status(403).json({ error: "غير مصرح بتسجيل زوار لهذا الفرع" });
-          }
+        // Require branchId for non-admin users
+        if (!effectiveBranchId) {
+          return res.status(400).json({ error: "يجب تحديد الفرع لتسجيل الزيارة" });
+        }
+        const hasAccess = await canAccessBranch(req, effectiveBranchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتسجيل زوار لهذا الفرع" });
         }
       }
       
       const log = await storage.createVisitorLog({
         ...req.body,
+        branchId: effectiveBranchId || req.body.branchId,
         registeredBy: user.id,
         registeredByName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
         status: 'checked_in',
