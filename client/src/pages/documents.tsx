@@ -56,6 +56,7 @@ import {
   ExternalLink,
   Calendar,
   CheckCircle,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -332,6 +333,26 @@ export default function DocumentsPage() {
       toast({ title: "فشل في استعادة الوثيقة", variant: "destructive" });
     },
   });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/documents/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/stats"] });
+      toast({ title: "تم حذف الوثيقة بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حذف الوثيقة", variant: "destructive" });
+    },
+  });
+
+  const handleDeleteDocument = (doc: Document) => {
+    if (confirm(`هل أنت متأكد من حذف الوثيقة "${doc.title}"؟\nسيتم حذف الملف نهائياً.`)) {
+      deleteDocumentMutation.mutate(doc.id);
+    }
+  };
 
   const navigateToFolder = (folder: DocumentFolder) => {
     setCurrentFolderId(folder.id);
@@ -1189,6 +1210,13 @@ export default function DocumentsPage() {
                                 استعادة
                               </DropdownMenuItem>
                             ) : null}
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteDocument(doc)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 ml-2" />
+                              حذف
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -1272,6 +1300,13 @@ export default function DocumentsPage() {
                                   استعادة
                                 </DropdownMenuItem>
                               ) : null}
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteDocument(doc)}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 ml-2" />
+                                حذف
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
