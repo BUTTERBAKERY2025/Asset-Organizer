@@ -18602,6 +18602,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: "الاجتماع غير موجود" });
       }
       
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && meeting.branchId) {
+        const hasAccess = await canAccessBranch(req, meeting.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الاجتماع" });
+        }
+      }
+      
       const attendees = await storage.getExecMeetingAttendees(meeting.id);
       res.json({ ...meeting, attendees });
     } catch (error) {
@@ -18782,6 +18790,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: "المهمة غير موجودة" });
       }
       
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && task.branchId) {
+        const hasAccess = await canAccessBranch(req, task.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه المهمة" });
+        }
+      }
+      
       const comments = await storage.getExecTaskComments(task.id);
       res.json({ ...task, comments });
     } catch (error) {
@@ -18951,6 +18967,15 @@ export async function registerRoutes(
       if (!corr) {
         return res.status(404).json({ error: "المراسلة غير موجودة" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && corr.branchId) {
+        const hasAccess = await canAccessBranch(req, corr.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه المراسلة" });
+        }
+      }
+      
       res.json(corr);
     } catch (error) {
       console.error("Error fetching correspondence:", error);
@@ -19392,6 +19417,14 @@ export async function registerRoutes(
       const doc = await storage.getDocument(parseInt(req.params.id));
       if (!doc) {
         return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && doc.branchId) {
+        const hasAccess = await canAccessBranch(req, doc.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه الوثيقة" });
+        }
       }
 
       // Log access and increment view count
