@@ -19923,32 +19923,19 @@ export async function registerRoutes(
     }
   });
 
-  // Upload Document File
+  // Upload Document File - Uses Object Storage for permanent storage
   app.post("/api/documents/upload", isAuthenticated, async (req, res) => {
     try {
       const multer = (await import("multer")).default;
       const path = await import("path");
-      const fs = await import("fs");
       const crypto = await import("crypto");
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
 
-      const uploadsDir = "./uploads/documents";
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-
-      const storage_multer = multer.diskStorage({
-        destination: (_req, _file, cb) => {
-          cb(null, uploadsDir);
-        },
-        filename: (_req, file, cb) => {
-          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-          const ext = path.extname(file.originalname);
-          cb(null, `doc-${uniqueSuffix}${ext}`);
-        },
-      });
+      const objectStorageService = new ObjectStorageService();
 
       const upload = multer({
-        storage: storage_multer,
+        storage: multer.memoryStorage(),
         limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
         fileFilter: (_req, file, cb) => {
           const allowedTypes = [
@@ -19990,21 +19977,47 @@ export async function registerRoutes(
           return res.status(400).json({ error: "لم يتم تحديد ملف للرفع" });
         }
 
-        // Calculate file checksum
-        const fileBuffer = fs.readFileSync(file.path);
-        const checksum = crypto.createHash("md5").update(fileBuffer).digest("hex");
+        try {
+          // Calculate file checksum
+          const checksum = crypto.createHash("md5").update(file.buffer).digest("hex");
 
-        // Extract file type from extension
-        const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
+          // Extract file type from extension
+          const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
+          
+          // Generate unique filename
+          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const objectName = `documents/doc-${uniqueSuffix}.${ext}`;
+          
+          // Upload to Object Storage
+          const privateDir = objectStorageService.getPrivateObjectDir();
+          const fullPath = `${privateDir}/${objectName}`;
+          const pathParts = fullPath.split("/").filter(p => p);
+          const bucketName = pathParts[0];
+          const objectPath = pathParts.slice(1).join("/");
+          
+          const bucket = objectStorageClient.bucket(bucketName);
+          const blob = bucket.file(objectPath);
+          
+          await blob.save(file.buffer, {
+            contentType: file.mimetype,
+            metadata: {
+              originalName: file.originalname,
+              checksum: checksum,
+            },
+          });
 
-        res.json({
-          fileName: file.originalname,
-          fileType: ext,
-          fileSize: file.size,
-          filePath: file.path,
-          mimeType: file.mimetype,
-          checksum: checksum,
-        });
+          res.json({
+            fileName: file.originalname,
+            fileType: ext,
+            fileSize: file.size,
+            filePath: `/objects/${objectName}`,
+            mimeType: file.mimetype,
+            checksum: checksum,
+          });
+        } catch (uploadError) {
+          console.error("Object Storage upload error:", uploadError);
+          res.status(500).json({ error: "فشل في رفع الملف إلى التخزين السحابي" });
+        }
       });
     } catch (error) {
       console.error("Error uploading document:", error);
@@ -20012,32 +20025,54 @@ export async function registerRoutes(
     }
   });
 
-  // Serve uploaded files (authenticated)
+  // Serve uploaded files (authenticated) - From Object Storage
   app.get("/api/documents/file/:filename", isAuthenticated, async (req, res) => {
     try {
-      const path = await import("path");
-      const fs = await import("fs");
+      const { ObjectStorageService, ObjectNotFoundError } = await import("./replit_integrations/object_storage");
+      const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
       
+      const objectStorageService = new ObjectStorageService();
       const filename = req.params.filename;
-      const filePath = path.join("./uploads/documents", filename);
       
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: "الملف غير موجود" });
+      // Try Object Storage first
+      try {
+        const privateDir = objectStorageService.getPrivateObjectDir();
+        const fullPath = `${privateDir}/documents/${filename}`;
+        const pathParts = fullPath.split("/").filter(p => p);
+        const bucketName = pathParts[0];
+        const objectPath = pathParts.slice(1).join("/");
+        
+        const bucket = objectStorageClient.bucket(bucketName);
+        const blob = bucket.file(objectPath);
+        const [exists] = await blob.exists();
+        
+        if (exists) {
+          await objectStorageService.downloadObject(blob, res);
+          return;
+        }
+      } catch (storageError) {
+        console.log("Object Storage lookup failed, trying local fallback:", storageError);
       }
       
-      res.sendFile(path.resolve(filePath));
+      // Fallback to local storage for old files
+      const path = await import("path");
+      const fs = await import("fs");
+      const filePath = path.join("./uploads/documents", filename);
+      
+      if (fs.existsSync(filePath)) {
+        return res.sendFile(path.resolve(filePath));
+      }
+      
+      return res.status(404).json({ error: "الملف غير موجود" });
     } catch (error) {
       console.error("Error serving file:", error);
       res.status(500).json({ error: "فشل في جلب الملف" });
     }
   });
 
-  // Serve shared files (public access via share link)
+  // Serve shared files (public access via share link) - From Object Storage
   app.get("/api/documents/shared-file/:shareLink/:filename", async (req, res) => {
     try {
-      const path = await import("path");
-      const fs = await import("fs");
-      
       const share = await storage.getDocumentShareByLink(req.params.shareLink);
       if (!share || !share.isActive) {
         return res.status(403).json({ error: "رابط المشاركة غير صالح أو غير نشط" });
@@ -20057,13 +20092,40 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الملف" });
       }
       
-      const filePath = path.join("./uploads/documents", req.params.filename);
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
+      const objectStorageService = new ObjectStorageService();
       
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: "الملف غير موجود" });
+      // Try Object Storage first
+      try {
+        const privateDir = objectStorageService.getPrivateObjectDir();
+        const fullPath = `${privateDir}/documents/${req.params.filename}`;
+        const pathParts = fullPath.split("/").filter(p => p);
+        const bucketName = pathParts[0];
+        const objectPath = pathParts.slice(1).join("/");
+        
+        const bucket = objectStorageClient.bucket(bucketName);
+        const blob = bucket.file(objectPath);
+        const [exists] = await blob.exists();
+        
+        if (exists) {
+          await objectStorageService.downloadObject(blob, res);
+          return;
+        }
+      } catch (storageError) {
+        console.log("Object Storage lookup failed, trying local fallback");
       }
       
-      res.sendFile(path.resolve(filePath));
+      // Fallback to local storage for old files
+      const path = await import("path");
+      const fs = await import("fs");
+      const filePath = path.join("./uploads/documents", req.params.filename);
+      
+      if (fs.existsSync(filePath)) {
+        return res.sendFile(path.resolve(filePath));
+      }
+      
+      return res.status(404).json({ error: "الملف غير موجود" });
     } catch (error) {
       console.error("Error serving shared file:", error);
       res.status(500).json({ error: "فشل في جلب الملف" });
