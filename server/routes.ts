@@ -322,19 +322,31 @@ export async function registerRoutes(
   app.get("/api/branches", isAuthenticated, async (req, res) => {
     try {
       const branches = await getCachedBranches();
+      const user = req.currentUser;
       
-      // SECURITY: Filter branches based on user role
+      // SECURITY: Filter branches based on user role and branch access
       if (isUserAdmin(req)) {
         // Admins can see all branches
         res.json(branches);
-      } else {
-        // Non-admins only see their assigned branch
-        const userBranchId = req.currentUser?.branchId;
-        if (!userBranchId) {
+      } else if (user) {
+        // Get user's allowed branches from user_branch_access table
+        const userBranchAccess = await storage.getUserBranchAccess(user.id);
+        
+        if (userBranchAccess.length > 0) {
+          // User has specific branch access - filter by those branches
+          const allowedBranchIds = userBranchAccess.map(ba => ba.branchId);
+          const filteredBranches = branches.filter((b: any) => allowedBranchIds.includes(b.id));
+          res.json(filteredBranches);
+        } else if (user.branchId) {
+          // Fallback to user's default branch from users table
+          const filteredBranches = branches.filter((b: any) => b.id === user.branchId);
+          res.json(filteredBranches);
+        } else {
+          // No branch access at all
           return res.json([]);
         }
-        const filteredBranches = branches.filter((b: any) => b.id === userBranchId);
-        res.json(filteredBranches);
+      } else {
+        return res.json([]);
       }
     } catch (error) {
       console.error("Error fetching branches:", error);
@@ -345,11 +357,12 @@ export async function registerRoutes(
   app.get("/api/branches/:id", isAuthenticated, async (req, res) => {
     try {
       const branchId = req.params.id;
+      const user = req.currentUser;
       
       // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
-        const userBranchId = req.currentUser?.branchId;
-        if (!userBranchId || userBranchId !== branchId) {
+      if (!isUserAdmin(req) && user) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
         }
       }
