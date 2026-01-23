@@ -50,6 +50,7 @@ import {
   shiftPhotos,
   shiftSignatures,
   dailyWasteLog,
+  shiftEmployees,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -2508,6 +2509,13 @@ export async function registerRoutes(
             return res.status(403).json({ error: "غير مصرح بتعديل هذه الوردية" });
           }
         }
+        // Also check if trying to move to a different branch
+        if (req.body.branchId && req.body.branchId !== existingShift?.branchId) {
+          const hasNewAccess = await canAccessBranch(req, req.body.branchId);
+          if (!hasNewAccess) {
+            return res.status(403).json({ error: "غير مصرح بنقل الوردية لهذا الفرع" });
+          }
+        }
       }
       
       const shift = await storage.updateShift(id, req.body);
@@ -2601,6 +2609,22 @@ export async function registerRoutes(
   app.patch("/api/shift-employees/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        // Get shift employee to find its shift, then check branch access
+        const [shiftEmployee] = await db.select().from(shiftEmployees).where(eq(shiftEmployees.id, id));
+        if (shiftEmployee?.shiftId) {
+          const shift = await storage.getShift(shiftEmployee.shiftId);
+          if (shift?.branchId) {
+            const hasAccess = await canAccessBranch(req, shift.branchId);
+            if (!hasAccess) {
+              return res.status(403).json({ error: "غير مصرح بتعديل موظف هذه الوردية" });
+            }
+          }
+        }
+      }
+      
       const employee = await storage.updateShiftEmployee(id, req.body);
       if (!employee) {
         return res.status(404).json({ error: "Employee not found" });
@@ -2615,6 +2639,22 @@ export async function registerRoutes(
   app.delete("/api/shift-employees/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        // Get shift employee to find its shift, then check branch access
+        const [shiftEmployee] = await db.select().from(shiftEmployees).where(eq(shiftEmployees.id, id));
+        if (shiftEmployee?.shiftId) {
+          const shift = await storage.getShift(shiftEmployee.shiftId);
+          if (shift?.branchId) {
+            const hasAccess = await canAccessBranch(req, shift.branchId);
+            if (!hasAccess) {
+              return res.status(403).json({ error: "غير مصرح بحذف موظف هذه الوردية" });
+            }
+          }
+        }
+      }
+      
       const deleted = await storage.deleteShiftEmployee(id);
       if (!deleted) {
         return res.status(404).json({ error: "Employee not found" });
